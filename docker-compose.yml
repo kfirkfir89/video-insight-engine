@@ -1,0 +1,173 @@
+version: '3.8'
+
+# ============================================
+# Video Insight Engine - Development
+# ============================================
+
+services:
+  # ----------------------------------------
+  # Infrastructure
+  # ----------------------------------------
+
+  vie-mongodb:
+    image: mongo:7
+    container_name: vie-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - vie_mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: video-insight-engine
+    networks:
+      - vie-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  vie-rabbitmq:
+    image: rabbitmq:3-management
+    container_name: vie-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - vie_rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
+    networks:
+      - vie-network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ----------------------------------------
+  # Application Services
+  # ----------------------------------------
+
+  vie-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: vie-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./api/src:/app/src:ro
+      - /app/node_modules
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
+      RABBITMQ_URI: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@vie-rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-change-in-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+    networks:
+      - vie-network
+    depends_on:
+      vie-mongodb:
+        condition: service_healthy
+      vie-rabbitmq:
+        condition: service_healthy
+
+  vie-summarizer:
+    build:
+      context: ./workers/summarizer
+      dockerfile: Dockerfile
+    container_name: vie-summarizer
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./workers/summarizer/src:/app/src:ro
+    environment:
+      PYTHONUNBUFFERED: 1
+      MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
+      RABBITMQ_URI: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@vie-rabbitmq:5672
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+    networks:
+      - vie-network
+    depends_on:
+      vie-mongodb:
+        condition: service_healthy
+      vie-rabbitmq:
+        condition: service_healthy
+
+  vie-explainer:
+    build:
+      context: ./workers/explainer
+      dockerfile: Dockerfile
+    container_name: vie-explainer
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./workers/explainer/src:/app/src:ro
+    environment:
+      PYTHONUNBUFFERED: 1
+      PORT: 8001
+      MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
+      RABBITMQ_URI: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@vie-rabbitmq:5672
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+    networks:
+      - vie-network
+    depends_on:
+      vie-mongodb:
+        condition: service_healthy
+      vie-rabbitmq:
+        condition: service_healthy
+
+  vie-web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: vie-web
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./apps/web/src:/app/src:ro
+      - ./apps/web/public:/app/public:ro
+      - /app/node_modules
+    environment:
+      VITE_API_URL: http://localhost:3000/api
+      VITE_WS_URL: ws://localhost:3000/ws
+    networks:
+      - vie-network
+    depends_on:
+      - vie-api
+
+# ----------------------------------------
+# Networks
+# ----------------------------------------
+
+networks:
+  vie-network:
+    driver: bridge
+    name: vie-network
+
+# ----------------------------------------
+# Volumes
+# ----------------------------------------
+
+volumes:
+  vie_mongodb_data:
+    name: vie_mongodb_data
+  vie_rabbitmq_data:
+    name: vie_rabbitmq_data

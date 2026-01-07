@@ -1,0 +1,174 @@
+version: '3.8'
+
+# ============================================
+# Video Insight Engine - Production
+# ============================================
+
+services:
+  # ----------------------------------------
+  # Infrastructure
+  # ----------------------------------------
+
+  vie-mongodb:
+    image: mongo:7
+    container_name: vie-mongodb
+    restart: always
+    volumes:
+      - vie_mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: video-insight-engine
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASS}
+    networks:
+      - vie-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  vie-rabbitmq:
+    image: rabbitmq:3-management
+    container_name: vie-rabbitmq
+    restart: always
+    volumes:
+      - vie_rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    networks:
+      - vie-network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ----------------------------------------
+  # Application Services
+  # ----------------------------------------
+
+  vie-gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile.prod
+    container_name: vie-gateway
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASS}@vie-mongodb:27017/video-insight-engine?authSource=admin
+      RABBITMQ_URI: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@vie-rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+    networks:
+      - vie-network
+    depends_on:
+      vie-mongodb:
+        condition: service_healthy
+      vie-rabbitmq:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  vie-summarizer:
+    build:
+      context: ./summarizer
+      dockerfile: Dockerfile.prod
+    container_name: vie-summarizer
+    restart: always
+    environment:
+      PYTHONUNBUFFERED: 1
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASS}@vie-mongodb:27017/video-insight-engine?authSource=admin
+      RABBITMQ_URI: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@vie-rabbitmq:5672
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
+      LOG_LEVEL: info
+    networks:
+      - vie-network
+    depends_on:
+      vie-mongodb:
+        condition: service_healthy
+      vie-rabbitmq:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  vie-explainer:
+    build:
+      context: ./explainer
+      dockerfile: Dockerfile.prod
+    container_name: vie-explainer
+    restart: always
+    environment:
+      PYTHONUNBUFFERED: 1
+      PORT: 8001
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASS}@vie-mongodb:27017/video-insight-engine?authSource=admin
+      RABBITMQ_URI: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@vie-rabbitmq:5672
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
+      LOG_LEVEL: info
+    networks:
+      - vie-network
+    depends_on:
+      vie-mongodb:
+        condition: service_healthy
+      vie-rabbitmq:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  vie-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_WS_URL: ${VITE_WS_URL}
+    container_name: vie-frontend
+    restart: always
+    ports:
+      - "80:80"
+    networks:
+      - vie-network
+    depends_on:
+      - vie-gateway
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+# ----------------------------------------
+# Networks
+# ----------------------------------------
+
+networks:
+  vie-network:
+    driver: bridge
+    name: vie-network
+
+# ----------------------------------------
+# Volumes
+# ----------------------------------------
+
+volumes:
+  vie_mongodb_data:
+    name: vie_mongodb_data
+  vie_rabbitmq_data:
+    name: vie_rabbitmq_data
