@@ -7,6 +7,10 @@ const createVideoSchema = z.object({
   folderId: z.string().optional(),
 });
 
+const moveVideoSchema = z.object({
+  folderId: z.string().nullable(),
+});
+
 export async function videosRoutes(fastify: FastifyInstance) {
   const videoService = new VideoService(fastify.mongo.db);
 
@@ -46,5 +50,14 @@ export async function videosRoutes(fastify: FastifyInstance) {
     const { id } = req.params as { id: string };
     await videoService.deleteVideo(req.user.userId, id);
     return reply.code(204).send();
+  });
+
+  // PATCH /api/videos/:id/move - Move video to a folder
+  fastify.patch('/:id/move', {
+    preHandler: [fastify.authenticate],
+  }, async (req) => {
+    const { id } = req.params as { id: string };
+    const { folderId } = moveVideoSchema.parse(req.body);
+    return videoService.moveToFolder(req.user.userId, id, folderId);
   });
 }

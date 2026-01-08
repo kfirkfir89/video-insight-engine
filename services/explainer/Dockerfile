@@ -9,5 +9,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source
 COPY src/ ./src/
 
-# Run MCP server
-CMD ["python", "-m", "src.server"]
+# Run HTTP server
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8001"]

@@ -1,8 +1,8 @@
 FROM node:20-alpine AS builder
 
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci
+COPY package.json ./
+RUN rm -f package-lock.json && npm install && npm install typescript @types/node @types/bcrypt @types/ws tsx
 COPY . .
 RUN npm run build
 

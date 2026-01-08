@@ -3,9 +3,11 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWebSocket } from "@/hooks/use-websocket";
 import { LoginPage } from "@/pages/LoginPage";
 import { RegisterPage } from "@/pages/RegisterPage";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { VideoDetailPage } from "@/pages/VideoDetailPage";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -30,6 +32,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
   const checkAuth = useAuthStore((s) => s.checkAuth);
 
+  // Connect to WebSocket for real-time updates
+  useWebSocket();
+
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
@@ -43,6 +48,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/video/:id"
+        element={
+          <ProtectedRoute>
+            <VideoDetailPage />
           </ProtectedRoute>
         }
       />

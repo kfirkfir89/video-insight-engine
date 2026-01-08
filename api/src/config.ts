@@ -10,6 +10,10 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   FRONTEND_URL: z.string().default('http://localhost:5173'),
+  // Explainer service URL (HTTP API)
+  EXPLAINER_URL: z.string().default('http://vie-explainer:8001'),
+  // Shared secret for internal service-to-service auth
+  INTERNAL_SECRET: z.string().min(16).default('dev-internal-secret-change-me'),
 });
 
 export const config = envSchema.parse(process.env);

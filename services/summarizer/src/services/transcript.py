@@ -8,6 +8,9 @@ from youtube_transcript_api._errors import (
 
 from src.models.schemas import ErrorCode
 
+# Create API instance (new API style)
+ytt_api = YouTubeTranscriptApi()
+
 
 class TranscriptError(Exception):
     def __init__(self, message: str, code: ErrorCode):
@@ -23,7 +26,8 @@ def get_transcript(video_id: str) -> tuple[list[dict], str, str]:
         (segments, full_text, transcript_type)
     """
     try:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        # New API: use instance method .list() instead of class method .list_transcripts()
+        transcript_list = ytt_api.list(video_id)
 
         # Prefer manual captions
         transcript = None
@@ -44,7 +48,15 @@ def get_transcript(video_id: str) -> tuple[list[dict], str, str]:
         if not transcript:
             raise TranscriptError("No transcript available", ErrorCode.NO_TRANSCRIPT)
 
-        segments = transcript.fetch()
+        # Fetch transcript and convert to dict format
+        fetched = transcript.fetch()
+        # New API returns FetchedTranscript object, convert to raw data
+        segments = fetched.to_raw_data() if hasattr(fetched, 'to_raw_data') else list(fetched)
+
+        # Handle both old dict format and new snippet format
+        if segments and hasattr(segments[0], 'text'):
+            segments = [{"text": s.text, "start": s.start, "duration": s.duration} for s in segments]
+
         full_text = " ".join([s["text"] for s in segments])
 
         return segments, full_text, transcript_type

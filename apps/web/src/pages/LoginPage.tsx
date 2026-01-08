@@ -76,6 +76,18 @@ export function LoginPage() {
               {loading ? "Signing in..." : "Sign In"}
             </Button>
 
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={async () => {
+                await login("admin@admin.com", "Admin123");
+                navigate("/");
+              }}
+            >
+              Admin Login
+            </Button>
+
             <p className="text-center text-sm text-muted-foreground">
               Don't have an account?{" "}
               <Link to="/register" className="text-primary hover:underline">

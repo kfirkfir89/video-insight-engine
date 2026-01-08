@@ -14,6 +14,7 @@ import { foldersRoutes } from './routes/folders.routes.js';
 import { videosRoutes } from './routes/videos.routes.js';
 import { memorizeRoutes } from './routes/memorize.routes.js';
 import { explainRoutes } from './routes/explain.routes.js';
+import { internalRoutes } from './routes/internal.routes.js';
 
 const fastify = Fastify({
   logger: {
@@ -34,6 +35,7 @@ await fastify.register(foldersRoutes, { prefix: '/api/folders' });
 await fastify.register(videosRoutes, { prefix: '/api/videos' });
 await fastify.register(memorizeRoutes, { prefix: '/api/memorize' });
 await fastify.register(explainRoutes, { prefix: '/api/explain' });
+await fastify.register(internalRoutes, { prefix: '/internal' });
 
 // Health check
 fastify.get('/health', async () => ({

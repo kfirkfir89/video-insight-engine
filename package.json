@@ -10,6 +10,7 @@
     "types:build": "pnpm --filter @vie/types build"
   },
   "devDependencies": {
-    "concurrently": "^8.2.0"
+    "concurrently": "^8.2.0",
+    "ws": "^8.18.0"
   }
 }

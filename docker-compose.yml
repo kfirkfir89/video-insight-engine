@@ -48,11 +48,13 @@ services:
       PORT: 3000
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
       SUMMARIZER_URL: http://vie-summarizer:8000
+      EXPLAINER_URL: http://vie-explainer:8001
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-change-in-production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
     networks:
       - vie-network
     depends_on:
@@ -75,6 +77,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
       LOG_LEVEL: ${LOG_LEVEL:-debug}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
     networks:
       - vie-network
     depends_on:
@@ -106,8 +109,8 @@ services:
 
   vie-web:
     build:
-      context: ./apps/web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./apps/web/Dockerfile
     container_name: vie-web
     restart: unless-stopped
     ports:

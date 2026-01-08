@@ -1,4 +1,8 @@
-# MCP Server
+# Web Framework (HTTP API)
+fastapi>=0.109.0
+uvicorn>=0.27.0
+
+# MCP Server (kept for reference)
 mcp>=1.0.0
 
 # LLM

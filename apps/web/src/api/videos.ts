@@ -26,4 +26,11 @@ export const videosApi = {
   async delete(id: string): Promise<void> {
     await request(`/videos/${id}`, { method: "DELETE" });
   },
+
+  async moveToFolder(id: string, folderId: string | null): Promise<{ success: boolean }> {
+    return request(`/videos/${id}/move`, {
+      method: "PATCH",
+      body: JSON.stringify({ folderId }),
+    });
+  },
 };
