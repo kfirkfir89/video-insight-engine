@@ -13,7 +13,10 @@ export const queryKeys = {
   // Folders
   folders: {
     all: ["folders"] as const,
-    list: () => [...queryKeys.folders.all, "list"] as const,
+    lists: () => [...queryKeys.folders.all, "list"] as const,
+    list: (type?: string) => [...queryKeys.folders.lists(), { type }] as const,
+    details: () => [...queryKeys.folders.all, "detail"] as const,
+    detail: (id: string) => [...queryKeys.folders.details(), id] as const,
   },
 
   // User

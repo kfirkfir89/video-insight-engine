@@ -37,13 +37,13 @@ export class VideoService {
       };
     }
 
-    if (cached?.status === 'processing') {
-      // Already processing
+    if (cached?.status === 'processing' || cached?.status === 'pending') {
+      // Already processing or pending
       const userVideo = await this.db.collection('userVideos').insertOne({
         userId: new ObjectId(userId),
         videoSummaryId: cached._id,
         youtubeId,
-        status: 'processing',
+        status: cached.status,
         folderId: folderId ? new ObjectId(folderId) : null,
         addedAt: new Date(),
         createdAt: new Date(),
@@ -51,7 +51,41 @@ export class VideoService {
       });
 
       return {
-        video: { id: userVideo.insertedId.toString(), status: 'processing' },
+        video: { id: userVideo.insertedId.toString(), status: cached.status },
+        cached: false,
+      };
+    }
+
+    if (cached?.status === 'failed') {
+      // Previous attempt failed - retry summarization
+      await this.db.collection('videoSummaryCache').updateOne(
+        { _id: cached._id },
+        {
+          $set: { status: 'pending', updatedAt: new Date() },
+          $inc: { retryCount: 1 },
+        }
+      );
+
+      triggerSummarization({
+        videoSummaryId: cached._id.toString(),
+        youtubeId,
+        url,
+        userId,
+      });
+
+      const userVideo = await this.db.collection('userVideos').insertOne({
+        userId: new ObjectId(userId),
+        videoSummaryId: cached._id,
+        youtubeId,
+        status: 'pending',
+        folderId: folderId ? new ObjectId(folderId) : null,
+        addedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      return {
+        video: { id: userVideo.insertedId.toString(), status: 'pending' },
         cached: false,
       };
     }
@@ -98,25 +132,35 @@ export class VideoService {
   }
 
   async getVideos(userId: string, folderId?: string) {
-    const query: Record<string, unknown> = { userId: new ObjectId(userId) };
+    const matchStage: Record<string, unknown> = { userId: new ObjectId(userId) };
     if (folderId) {
-      query.folderId = new ObjectId(folderId);
+      matchStage.folderId = new ObjectId(folderId);
     }
 
-    const videos = await this.db.collection('userVideos')
-      .find(query)
-      .sort({ createdAt: -1 })
-      .toArray();
+    // Join with videoSummaryCache to get title/channel/thumbnailUrl
+    const videos = await this.db.collection('userVideos').aggregate([
+      { $match: matchStage },
+      { $sort: { createdAt: -1 } },
+      {
+        $lookup: {
+          from: 'videoSummaryCache',
+          localField: 'videoSummaryId',
+          foreignField: '_id',
+          as: 'cache',
+        },
+      },
+      { $unwind: { path: '$cache', preserveNullAndEmptyArrays: true } },
+    ]).toArray();
 
     return videos.map(v => ({
       id: v._id.toString(),
       videoSummaryId: v.videoSummaryId.toString(),
       youtubeId: v.youtubeId,
-      title: v.title,
-      channel: v.channel,
-      duration: v.duration,
-      thumbnailUrl: v.thumbnailUrl,
-      status: v.status,
+      title: v.title || v.cache?.title,
+      channel: v.channel || v.cache?.channel,
+      duration: v.duration || v.cache?.duration,
+      thumbnailUrl: v.thumbnailUrl || v.cache?.thumbnailUrl,
+      status: v.cache?.status || v.status,
       folderId: v.folderId?.toString() || null,
       createdAt: v.createdAt.toISOString(),
     }));
@@ -160,5 +204,26 @@ export class VideoService {
     if (result.deletedCount === 0) {
       throw { code: 'NOT_FOUND', status: 404 };
     }
+  }
+
+  async moveToFolder(userId: string, videoId: string, folderId: string | null) {
+    const result = await this.db.collection('userVideos').updateOne(
+      {
+        _id: new ObjectId(videoId),
+        userId: new ObjectId(userId),
+      },
+      {
+        $set: {
+          folderId: folderId ? new ObjectId(folderId) : null,
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      throw { code: 'NOT_FOUND', status: 404 };
+    }
+
+    return { success: true };
   }
 }

@@ -1,82 +1,77 @@
-import { useState } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { VideoGrid } from "@/components/videos/VideoGrid";
-import { AddVideoDialog } from "@/components/videos/AddVideoDialog";
-import { Button } from "@/components/ui/button";
-import { useVideos, useAddVideo } from "@/hooks/use-videos";
+import { useAllVideos, useVideos } from "@/hooks/use-videos";
+import { useFolders } from "@/hooks/use-folders";
 import { useUIStore } from "@/stores/ui-store";
-import { Plus, FolderOpen, Brain } from "lucide-react";
-
-type Tab = "summarized" | "memorized";
+import { Brain, FolderOpen } from "lucide-react";
 
 export function DashboardPage() {
-  const [activeTab, setActiveTab] = useState<Tab>("summarized");
+  // UI state from store (controlled by sidebar)
+  const activeSection = useUIStore((s) => s.activeSection);
+  const selectedFolderId = useUIStore((s) => s.selectedFolderId);
 
-  // UI state
-  const addVideoDialogOpen = useUIStore((s) => s.addVideoDialogOpen);
-  const openAddVideoDialog = useUIStore((s) => s.openAddVideoDialog);
-  const closeAddVideoDialog = useUIStore((s) => s.closeAddVideoDialog);
+  // Fetch all videos and folders for the summarized section
+  const { data: allVideosData, isLoading: allVideosLoading } = useAllVideos();
+  const { data: filteredVideosData, isLoading: filteredLoading } = useVideos(
+    selectedFolderId ?? undefined
+  );
+  const { data: foldersData, isLoading: foldersLoading } = useFolders("summarized");
 
-  // Remote state
-  const { data: videosData, isLoading } = useVideos();
-  const addVideo = useAddVideo();
+  // Determine which videos to show
+  const isShowingAll = selectedFolderId === null;
+  const videos = isShowingAll
+    ? allVideosData?.videos || []
+    : filteredVideosData?.videos || [];
+  const isLoading = isShowingAll
+    ? allVideosLoading || foldersLoading
+    : filteredLoading;
 
-  const handleAddVideo = async (url: string) => {
-    await addVideo.mutateAsync(url);
-    closeAddVideoDialog();
-  };
+  // Get folder name for header when a specific folder is selected
+  const selectedFolder = selectedFolderId
+    ? foldersData?.folders.find((f) => f.id === selectedFolderId)
+    : null;
 
   return (
-    <Layout>
-      {/* Tabs */}
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex gap-2">
-          <Button
-            variant={activeTab === "summarized" ? "default" : "outline"}
-            onClick={() => setActiveTab("summarized")}
-          >
-            <FolderOpen size={16} className="mr-2" />
-            Summarized
-          </Button>
-          <Button
-            variant={activeTab === "memorized" ? "default" : "outline"}
-            onClick={() => setActiveTab("memorized")}
-          >
-            <Brain size={16} className="mr-2" />
-            Memorized
-          </Button>
+    <Layout showSidebar>
+      {activeSection === "summarized" ? (
+        <div>
+          {/* Header */}
+          <div className="mb-6 flex items-center gap-3">
+            <FolderOpen className="h-6 w-6 text-muted-foreground" />
+            <h1 className="text-2xl font-bold">
+              {selectedFolder ? selectedFolder.name : "All Videos"}
+            </h1>
+          </div>
+
+          {/* Video Grid - grouped by folder when showing all */}
+          <VideoGrid
+            videos={videos}
+            folders={foldersData?.folders || []}
+            isLoading={isLoading}
+            groupByFolder={isShowingAll}
+          />
         </div>
-
-        {activeTab === "summarized" && (
-          <Button onClick={openAddVideoDialog}>
-            <Plus size={16} className="mr-2" />
-            Add Video
-          </Button>
-        )}
-      </div>
-
-      {/* Content */}
-      {activeTab === "summarized" ? (
-        <VideoGrid videos={videosData?.videos || []} isLoading={isLoading} />
       ) : (
-        <div className="rounded-lg border border-dashed border-border p-12 text-center">
-          <Brain size={48} className="mx-auto mb-4 text-muted-foreground" />
-          <h3 className="text-lg font-medium">No memorized items yet</h3>
-          <p className="text-muted-foreground">
-            Memorize sections and concepts from your videos to build your
-            knowledge base
-          </p>
+        <div>
+          {/* Header */}
+          <div className="mb-6 flex items-center gap-3">
+            <Brain className="h-6 w-6 text-muted-foreground" />
+            <h1 className="text-2xl font-bold">
+              {selectedFolderId ? "Memorized Items" : "All Memorized"}
+            </h1>
+          </div>
+
+          {/* Placeholder for Memorized content */}
+          <div className="rounded-lg border border-dashed border-border p-12 text-center">
+            <Brain size={48} className="mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-medium">No memorized items yet</h3>
+            <p className="text-muted-foreground">
+              Memorize sections and concepts from your videos to build your
+              knowledge base
+            </p>
+          </div>
         </div>
       )}
-
-      {/* Add Video Dialog */}
-      <AddVideoDialog
-        open={addVideoDialogOpen}
-        onClose={closeAddVideoDialog}
-        onSubmit={handleAddVideo}
-        isLoading={addVideo.isPending}
-        error={addVideo.error?.message}
-      />
     </Layout>
   );
 }
