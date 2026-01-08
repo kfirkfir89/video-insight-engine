@@ -1,0 +1,198 @@
+{
+  "version": "2.0.0",
+  "description": "Skill activation triggers for Video Insight Engine monorepo.",
+  "skills": {
+    "backend-node": {
+      "type": "domain",
+      "enforcement": "suggest",
+      "priority": "high",
+      "description": "Node.js/Fastify backend patterns for vie-api and shared packages",
+      "skillPath": ".claude/skills/backend-node/SKILL.md",
+      "promptTriggers": {
+        "keywords": [
+          "api", "route", "endpoint", "controller", "service", "fastify",
+          "jwt", "auth", "middleware", "mongodb", "mongoose", "database",
+          "vie-api", "rate limit", "refresh token", "cors", "security",
+          "authentication", "authorization", "error handling", "validation",
+          "retry", "dead letter queue", "openapi", "swagger", "rest api",
+          "pagination", "websocket", "socket.io", "real-time", "file upload",
+          "s3", "multer", "streaming", "llm", "openai", "claude",
+          "ai integration", "rag", "embeddings", "vector", "mcp client",
+          "agents", "shared types", "@vie/types", "@vie/utils", "packages"
+        ],
+        "intentPatterns": [
+          "(create|add|implement|build|fix).*?(route|endpoint|api|controller|service)",
+          "(how to|best practice).*?(backend|api|route|node)",
+          "(fix|debug|handle).*?(error|exception|backend)",
+          "(implement|add|configure).*?(rate limit|jwt|cors|auth|security)",
+          "(handle|implement).*?(error|retry|validation)",
+          "(upload|stream).*?(file|image|video)",
+          "(integrate|use|call).*?(openai|claude|llm|ai)",
+          "(build|create|implement).*?(rag|agent|mcp)",
+          "(create|add|update).*?(shared|types|utils)"
+        ]
+      },
+      "fileTriggers": {
+        "pathPatterns": [
+          "api/**/*.ts",
+          "api/src/**/*",
+          "packages/**/*.ts",
+          "packages/types/**/*",
+          "packages/utils/**/*"
+        ],
+        "contentPatterns": [
+          "fastify",
+          "import.*from.*'@fastify",
+          "router\\.(get|post|put|delete)",
+          "export.*Controller"
+        ]
+      },
+      "resourceMapping": {
+        "fastify|route|endpoint|middleware|plugin": "fastify.md",
+        "service|repository|business logic": "services.md",
+        "mongodb|mongoose|schema|model|database": "mongodb.md",
+        "jwt|auth|rbac|permission|role": "auth.md",
+        "error|exception|logging|sentry": "errors.md",
+        "redis|queue|docker|infrastructure": "infrastructure.md",
+        "test|jest|mock|integration test": "testing.md",
+        "rest|openapi|swagger|pagination|versioning": "api-design.md",
+        "security|xss|injection|helmet|validation|owasp": "security.md",
+        "llm|openai|claude|streaming|completion|token": "ai-integration.md",
+        "rag|mcp|agent|embedding|vector|guardrail": "ai-patterns.md",
+        "upload|s3|file|image|presigned|multer": "file-uploads.md",
+        "websocket|socket|real-time|room|presence": "websockets.md"
+      },
+      "additionalDocs": [
+        "docs/SECURITY.md",
+        "docs/ERROR-HANDLING.md",
+        "docs/API-REST.md"
+      ]
+    },
+    "backend-python": {
+      "type": "domain",
+      "enforcement": "suggest",
+      "priority": "high",
+      "description": "Python/FastAPI patterns for vie-summarizer and vie-explainer workers",
+      "skillPath": ".claude/skills/backend-python/SKILL.md",
+      "promptTriggers": {
+        "keywords": [
+          "python", "fastapi", "summarizer", "transcript", "youtube",
+          "rabbitmq", "worker", "pydantic", "async", "vie-summarizer",
+          "vie-explainer", "retry", "backoff", "dead letter", "dlq",
+          "celery", "motor", "beanie", "pytest", "no transcript",
+          "video too long", "edge case", "llm", "openai", "anthropic",
+          "claude api", "ai integration", "rag", "embeddings", "pinecone",
+          "pgvector", "mcp server", "mcp tool", "explain_auto", "explain_chat",
+          "agents"
+        ],
+        "intentPatterns": [
+          "(create|add|implement).*?(python|summarizer|worker|transcript|fastapi|explainer)",
+          "(how to|best practice).*?(python|fastapi|async|pydantic|mcp)",
+          "(fix|debug).*?(python|summarizer|worker|explainer)",
+          "(handle|implement).*?(retry|error|edge case|dlq)",
+          "(integrate|use|call).*?(openai|claude|anthropic|llm)",
+          "(build|create|implement).*?(rag|agent|mcp|embedding|tool)"
+        ]
+      },
+      "fileTriggers": {
+        "pathPatterns": [
+          "workers/summarizer/**/*.py",
+          "workers/summarizer/src/**/*",
+          "workers/explainer/**/*.py",
+          "workers/explainer/src/**/*"
+        ],
+        "contentPatterns": [
+          "from fastapi",
+          "import fastapi",
+          "from pydantic",
+          "async def",
+          "from mcp",
+          "@server.tool"
+        ]
+      },
+      "resourceMapping": {
+        "fastapi|route|endpoint|middleware|router": "fastapi.md",
+        "service|repository|business logic": "services.md",
+        "mongodb|motor|beanie|database": "mongodb.md",
+        "jwt|auth|oauth|permission": "auth.md",
+        "error|exception|logging|structlog": "errors.md",
+        "redis|celery|docker|infrastructure|rabbitmq": "infrastructure.md",
+        "test|pytest|mock|fixture": "testing.md",
+        "rest|openapi|pagination|versioning": "api-design.md",
+        "security|validation|injection|cors|owasp": "security.md",
+        "llm|openai|anthropic|claude|streaming|completion": "ai-integration.md",
+        "rag|mcp|agent|embedding|vector|guardrail|tool": "ai-patterns.md",
+        "upload|file|image|storage": "file-uploads.md",
+        "websocket|socket|real-time|ws": "websockets.md"
+      },
+      "additionalDocs": [
+        "docs/ERROR-HANDLING.md",
+        "docs/API-MCP-EXPLAINER.md",
+        "docs/SERVICE-SUMMARIZER.md",
+        "docs/SERVICE-EXPLAINER.md"
+      ]
+    },
+    "react-vite": {
+      "type": "domain",
+      "enforcement": "suggest",
+      "priority": "high",
+      "description": "React/TypeScript frontend patterns for vie-web application",
+      "skillPath": ".claude/skills/react-vite/SKILL.md",
+      "promptTriggers": {
+        "keywords": [
+          "component", "react", "frontend", "ui", "page", "hook",
+          "shadcn", "tailwind", "react query", "tanstack", "zustand",
+          "vie-web", "vite", "form", "react hook form", "zod",
+          "validation", "routing", "performance", "lazy load", "suspense",
+          "accessibility", "a11y", "aria", "keyboard", "i18n",
+          "translation", "internationalization", "chat ui", "streaming",
+          "ai sdk", "useChat"
+        ],
+        "intentPatterns": [
+          "(create|add|build|update|modify).*?(component|page|ui|modal|dialog|form)",
+          "(how to|best practice).*?(component|react|frontend|hook)",
+          "(style|design|layout).*?(component|ui|page)",
+          "(implement|add).*?(form|validation|routing)",
+          "(optimize|improve).*?(performance|loading|bundle)",
+          "(make|add).*?(accessible|a11y|keyboard)",
+          "(add|implement).*?(translation|i18n|language)",
+          "(build|create).*?(chat|ai|streaming)"
+        ]
+      },
+      "fileTriggers": {
+        "pathPatterns": [
+          "apps/web/**/*.tsx",
+          "apps/web/**/*.ts",
+          "apps/web/src/**/*"
+        ],
+        "contentPatterns": [
+          "import.*from.*'react'",
+          "import.*from.*'@tanstack",
+          "import.*from.*'@/components"
+        ]
+      },
+      "resourceMapping": {
+        "component|hook|context|ref|effect": "react.md",
+        "state|zustand|react query|tanstack|server state": "state.md",
+        "tailwind|css|style|theme|dark mode|shadcn": "styling.md",
+        "performance|lazy|suspense|memo|optimization": "performance.md",
+        "route|router|navigation|link": "routing.md",
+        "test|vitest|testing library|mock": "testing.md",
+        "form|validation|zod|react hook form": "forms.md",
+        "security|xss|token|csrf|sanitize": "security.md",
+        "chat|ai|streaming|useChat|completion|vercel": "ai-integration.md",
+        "accessible|a11y|aria|keyboard|screen reader|focus": "accessibility.md",
+        "i18n|translation|language|locale|intl|rtl": "i18n.md"
+      },
+      "additionalDocs": [
+        "docs/SERVICE-WEB.md",
+        "docs/API-WEBSOCKET.md"
+      ]
+    }
+  },
+  "globalSettings": {
+    "maxSkillsPerPrompt": 2,
+    "showResourceHints": true,
+    "logActivations": true
+  }
+}
