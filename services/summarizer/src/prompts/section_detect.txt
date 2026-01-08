@@ -1,0 +1,22 @@
+Analyze this video transcript and identify logical sections.
+
+TRANSCRIPT:
+{transcript}
+
+Return JSON only (no other text):
+{{
+  "sections": [
+    {{
+      "title": "Section title",
+      "startSeconds": 0,
+      "endSeconds": 180
+    }}
+  ]
+}}
+
+Rules:
+- Identify 3-8 sections based on topic changes
+- Each section should be a coherent topic
+- Use actual timestamps from content flow
+- Sections must be sequential with no gaps
+- Title should be descriptive (3-6 words)

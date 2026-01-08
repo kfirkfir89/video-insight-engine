@@ -1,0 +1,23 @@
+Extract key concepts, terms, and definitions from this transcript.
+
+TRANSCRIPT:
+{transcript}
+
+Return JSON only (no other text):
+{{
+  "concepts": [
+    {{
+      "name": "Concept name",
+      "definition": "Brief definition from video or null",
+      "timestamp": "MM:SS or null"
+    }}
+  ]
+}}
+
+Focus on:
+- Technical terms and jargon
+- Important concepts explained in the video
+- Named frameworks, tools, or methodologies
+- Key ideas that a viewer should remember
+
+Include 5-15 concepts maximum.
