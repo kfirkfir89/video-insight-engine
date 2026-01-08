@@ -1,0 +1,95 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /* ═══════════════════════════════════════════════════
+     DESIGN TOKENS - Video Insight Engine Theme
+     ═══════════════════════════════════════════════════ */
+
+  /* Base Colors (OKLCH for better color mixing) */
+  --color-background: oklch(100% 0 0);
+  --color-foreground: oklch(14.1% 0.005 285.82);
+
+  /* Card & Popover */
+  --color-card: oklch(100% 0 0);
+  --color-card-foreground: oklch(14.1% 0.005 285.82);
+  --color-popover: oklch(100% 0 0);
+  --color-popover-foreground: oklch(14.1% 0.005 285.82);
+
+  /* Primary - Brand color */
+  --color-primary: oklch(20.5% 0.015 285.82);
+  --color-primary-foreground: oklch(98.5% 0 0);
+
+  /* Secondary */
+  --color-secondary: oklch(96.7% 0.001 285.82);
+  --color-secondary-foreground: oklch(21% 0.006 285.82);
+
+  /* Muted */
+  --color-muted: oklch(96.7% 0.001 285.82);
+  --color-muted-foreground: oklch(55.2% 0.014 285.82);
+
+  /* Accent */
+  --color-accent: oklch(96.7% 0.001 285.82);
+  --color-accent-foreground: oklch(21% 0.006 285.82);
+
+  /* Semantic Colors */
+  --color-destructive: oklch(57.7% 0.245 27.33);
+  --color-success: oklch(59.6% 0.145 163.22);
+  --color-warning: oklch(79.5% 0.184 86.05);
+  --color-info: oklch(62.3% 0.214 259.53);
+
+  /* Border & Input */
+  --color-border: oklch(91.4% 0.004 285.82);
+  --color-input: oklch(91.4% 0.004 285.82);
+  --color-ring: oklch(20.5% 0.015 285.82);
+
+  /* Radius */
+  --radius: 0.625rem;
+}
+
+/* ═══════════════════════════════════════════════════
+   DARK MODE
+   ═══════════════════════════════════════════════════ */
+.dark {
+  --color-background: oklch(14.1% 0.005 285.82);
+  --color-foreground: oklch(98.5% 0 0);
+
+  --color-card: oklch(14.1% 0.005 285.82);
+  --color-card-foreground: oklch(98.5% 0 0);
+  --color-popover: oklch(14.1% 0.005 285.82);
+  --color-popover-foreground: oklch(98.5% 0 0);
+
+  --color-primary: oklch(98.5% 0 0);
+  --color-primary-foreground: oklch(20.5% 0.015 285.82);
+
+  --color-secondary: oklch(26.9% 0.006 285.82);
+  --color-secondary-foreground: oklch(98.5% 0 0);
+
+  --color-muted: oklch(26.9% 0.006 285.82);
+  --color-muted-foreground: oklch(71.2% 0.013 285.82);
+
+  --color-accent: oklch(26.9% 0.006 285.82);
+  --color-accent-foreground: oklch(98.5% 0 0);
+
+  --color-destructive: oklch(65.4% 0.222 17.57);
+
+  --color-border: oklch(26.9% 0.006 285.82);
+  --color-input: oklch(26.9% 0.006 285.82);
+  --color-ring: oklch(83.9% 0.021 285.82);
+}
+
+/* ═══════════════════════════════════════════════════
+   BASE STYLES
+   ═══════════════════════════════════════════════════ */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}

@@ -1,0 +1,28 @@
+You are creating detailed documentation for a video section.
+
+VIDEO: {video_title}
+SECTION: {title} ({timestamp})
+
+SUMMARY:
+{summary}
+
+KEY POINTS:
+{bullets}
+
+---
+
+Generate comprehensive documentation that:
+
+1. **Explains the concepts** in depth with clear language
+2. **Provides practical examples** that demonstrate usage
+3. **Includes code snippets** if relevant (with comments)
+4. **Connects to related concepts** the viewer should know
+5. **Adds tips and best practices** from real-world experience
+
+Format as clean Markdown with:
+- Clear headings (##, ###)
+- Code blocks with syntax highlighting
+- Bullet points for lists
+- Bold for key terms
+
+Be thorough but focused. Aim for 500-1000 words.
