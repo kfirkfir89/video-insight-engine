@@ -9,7 +9,7 @@ Guidelines for work that spans multiple services.
 Use this guide when your task involves:
 
 - Frontend + Backend changes (new API endpoint + UI)
-- vie-api + vie-summarizer (queue jobs, status updates)
+- vie-api + vie-summarizer (HTTP calls, status updates)
 - vie-api + vie-explainer (MCP tool calls)
 - Any change affecting multiple services
 
@@ -109,27 +109,32 @@ vie-web
 
 ## Service Communication Patterns
 
-### vie-api ↔ vie-summarizer (Async via RabbitMQ)
+### vie-api ↔ vie-summarizer (Async via HTTP)
 
 ```
-┌─────────┐    publish    ┌──────────┐    consume    ┌──────────────┐
-│ vie-api │──────────────▶│ RabbitMQ │──────────────▶│vie-summarizer│
-└─────────┘               └──────────┘               └──────┬───────┘
-     ▲                          │                          │
-     │         publish          │        consume           │
-     └──────────────────────────┼──────────────────────────┘
-                            status updates
+┌─────────┐    POST /summarize    ┌──────────────┐
+│ vie-api │──────────────────────▶│vie-summarizer│
+└─────────┘                       └──────┬───────┘
+     │                                   │
+     │ Returns to user                   │
+     │ immediately                       │ Background
+     ▼                                   │ task runs
+  User sees                              │
+  "processing"                           │
+                                         │ Updates DB
+     Frontend polls ◀────────────────────┘
 ```
 
 **Pattern:**
-1. vie-api publishes job to `summarize.jobs` queue
-2. vie-summarizer consumes and processes
-3. vie-summarizer publishes status to `job.status` exchange
-4. vie-api broadcasts via WebSocket to user
+1. vie-api sends POST request to vie-summarizer with job details
+2. vie-summarizer immediately returns 202 Accepted
+3. vie-summarizer processes in background (FastAPI BackgroundTasks)
+4. vie-summarizer updates MongoDB status directly
+5. Frontend polls for status or receives WebSocket update
 
 **Key files:**
-- `api/src/plugins/rabbitmq.ts`
-- `workers/summarizer/src/services/rabbitmq.py`
+- `api/src/services/summarizer-client.ts`
+- `services/summarizer/src/main.py`
 - `docs/API-WEBSOCKET.md`
 
 ### vie-api ↔ vie-explainer (Sync via MCP)
@@ -149,7 +154,7 @@ vie-web
 
 **Key files:**
 - `api/src/plugins/mcp.ts`
-- `workers/explainer/src/server.py`
+- `services/explainer/src/server.py`
 - `docs/API-MCP-EXPLAINER.md`
 
 ---
@@ -178,12 +183,12 @@ import { VideoSummary } from '@vie/types';
 Define Pydantic models, generate JSON schema if needed:
 
 ```python
-# workers/summarizer/src/models/schemas.py
-class SummarizeJob(BaseModel):
-    video_summary_id: str
-    youtube_id: str
+# services/summarizer/src/models/schemas.py
+class SummarizeRequest(BaseModel):
+    videoSummaryId: str
+    youtubeId: str
     url: str
-    user_id: str
+    userId: str | None = None
 ```
 
 ### Type Sync Checklist
@@ -204,10 +209,10 @@ When adding a new type:
 vie-web          vie-api           vie-summarizer
    │                │                    │
    │   request      │                    │
-   ├───────────────▶│    queue job       │
+   ├───────────────▶│    HTTP POST       │
    │                ├───────────────────▶│
    │                │                    │ error occurs
-   │                │    error status    │
+   │                │    (updates DB)    │
    │                │◀───────────────────┤
    │   websocket    │                    │
    │◀───────────────┤                    │
@@ -254,8 +259,8 @@ Unit Tests           Integration Tests           E2E Tests
      │                     │                         │
      │                     │                         │
 vie-api tests        vie-api + MongoDB         vie-web + vie-api +
-vie-web tests        vie-api + RabbitMQ        vie-summarizer +
-vie-summarizer       vie-api + MCP             MongoDB + RabbitMQ
+vie-web tests        vie-api + Summarizer      vie-summarizer +
+vie-summarizer                                 MongoDB
 tests
 ```
 
@@ -276,13 +281,13 @@ describe('POST /api/explain/:id/section/:sectionId', () => {
   it('returns expansion from MCP', async () => {
     // Mock MCP client
     mockMcp.explainAuto.mockResolvedValue('# Expansion content');
-    
+
     const response = await app.inject({
       method: 'GET',
       url: '/api/explain/123/section/456',
       headers: { Authorization: `Bearer ${token}` },
     });
-    
+
     expect(response.statusCode).toBe(200);
     expect(response.json().expansion).toContain('# Expansion');
   });
@@ -298,11 +303,10 @@ describe('POST /api/explain/:id/section/:sectionId', () => {
 ```yaml
 # Startup order matters!
 1. vie-mongodb      # Database first
-2. vie-rabbitmq     # Queue second
-3. vie-summarizer   # Workers can start
-4. vie-explainer    # MCP server ready
-5. vie-api          # API connects to all
-6. vie-web          # Frontend last
+2. vie-summarizer   # Service can start
+3. vie-explainer    # MCP server ready
+4. vie-api          # API connects to all
+5. vie-web          # Frontend last
 ```
 
 ### Health Checks
@@ -313,13 +317,12 @@ Each service should verify its dependencies:
 // vie-api health check
 fastify.get('/health', async () => {
   const mongoOk = await checkMongo();
-  const rabbitOk = await checkRabbit();
   const mcpOk = await checkMcp();
-  
-  if (!mongoOk || !rabbitOk || !mcpOk) {
-    return reply.code(503).send({ status: 'unhealthy', mongo: mongoOk, rabbit: rabbitOk, mcp: mcpOk });
+
+  if (!mongoOk || !mcpOk) {
+    return reply.code(503).send({ status: 'unhealthy', mongo: mongoOk, mcp: mcpOk });
   }
-  
+
   return { status: 'healthy' };
 });
 ```

@@ -142,7 +142,6 @@ video-insight-engine/
 │       ├── config.ts                 # Environment config
 │       ├── plugins/                  # Fastify plugins
 │       │   ├── mongodb.ts
-│       │   ├── rabbitmq.ts
 │       │   ├── jwt.ts
 │       │   ├── websocket.ts
 │       │   ├── mcp.ts                # MCP client to explainer
@@ -160,7 +159,8 @@ video-insight-engine/
 │       │   ├── folder.service.ts
 │       │   ├── video.service.ts
 │       │   ├── memorize.service.ts
-│       │   └── cache.service.ts
+│       │   ├── cache.service.ts
+│       │   └── summarizer-client.ts  # HTTP client for summarizer
 │       ├── schemas/                  # Zod validation schemas
 │       │   ├── auth.schema.ts
 │       │   ├── folder.schema.ts
@@ -171,7 +171,7 @@ video-insight-engine/
 │       └── types/
 │           └── index.ts
 │
-├── workers/                          # Background workers & internal services
+├── services/                         # Backend services
 │   │
 │   ├── summarizer/                   # vie-summarizer (Python + FastAPI)
 │   │   ├── Dockerfile
@@ -179,8 +179,7 @@ video-insight-engine/
 │   │   ├── requirements.txt
 │   │   └── src/
 │   │       ├── __init__.py
-│   │       ├── main.py               # FastAPI health endpoint
-│   │       ├── worker.py             # RabbitMQ consumer entry
+│   │       ├── main.py               # FastAPI app + routes
 │   │       ├── config.py             # Settings
 │   │       ├── services/
 │   │       │   ├── __init__.py
@@ -188,8 +187,7 @@ video-insight-engine/
 │   │       │   ├── metadata.py       # Video metadata (oEmbed)
 │   │       │   ├── cleaner.py        # Text normalization
 │   │       │   ├── summarizer.py     # LLM orchestration
-│   │       │   ├── mongodb.py        # Database ops
-│   │       │   └── rabbitmq.py       # Queue ops
+│   │       │   └── mongodb.py        # Database ops
 │   │       ├── prompts/
 │   │       │   ├── section_detect.txt
 │   │       │   ├── section_summary.txt
@@ -330,7 +328,7 @@ video-insight-engine/
 | Folder      | Purpose                           | Contains                               |
 | ----------- | --------------------------------- | -------------------------------------- |
 | `api/`      | **Main gateway** - the front door | Node.js + Fastify REST API             |
-| `workers/`  | **Background processors**         | Python workers (summarizer, explainer) |
+| `services/` | **Backend services**              | Python services (summarizer, explainer)|
 | `apps/`     | **User-facing apps**              | React frontend                         |
 | `packages/` | **Shared code**                   | Types, utilities                       |
 | `docs/`     | **Documentation**                 | All project docs                       |
@@ -374,7 +372,7 @@ video-insight-engine/
 packages:
   - "packages/*"
   - "api"
-  - "workers/*"
+  - "services/*"
   - "apps/*"
 ```
 
@@ -400,11 +398,11 @@ services:
     ports: ["3000:3000"]
 
   vie-summarizer:
-    build: ./workers/summarizer
+    build: ./services/summarizer
     ports: ["8000:8000"]
 
   vie-explainer:
-    build: ./workers/explainer
+    build: ./services/explainer
     ports: ["8001:8001"]
 
   vie-web:
@@ -414,19 +412,15 @@ services:
   vie-mongodb:
     image: mongo:7
     ports: ["27017:27017"]
-
-  vie-rabbitmq:
-    image: rabbitmq:3-management
-    ports: ["5672:5672", "15672:15672"]
 ```
 
 ---
 
 ## Why This Structure?
 
-| Decision                   | Reason                                     |
-| -------------------------- | ------------------------------------------ |
-| `api/` at root             | It's THE gateway - visually prominent      |
-| `workers/` not `services/` | Clearer purpose - background processors    |
-| `apps/` for frontend       | Standard convention, room for mobile/admin |
-| `packages/` for shared     | Explicit sharing between TS projects       |
+| Decision               | Reason                                     |
+| ---------------------- | ------------------------------------------ |
+| `api/` at root         | It's THE gateway - visually prominent      |
+| `services/` for Python | Backend services (summarizer, explainer)   |
+| `apps/` for frontend   | Standard convention, room for mobile/admin |
+| `packages/` for shared | Explicit sharing between TS projects       |

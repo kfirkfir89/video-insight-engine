@@ -21,7 +21,7 @@
 - [ ] Create root directories
 
 ```bash
-mkdir -p video-insight-engine/{api,apps/web,workers/summarizer,workers/explainer}
+mkdir -p video-insight-engine/{api,apps/web,services/summarizer,services/explainer}
 mkdir -p video-insight-engine/{packages/types,packages/utils}
 mkdir -p video-insight-engine/{docs,dev/active,scripts}
 mkdir -p video-insight-engine/.claude/{skills,agents,commands,hooks}
@@ -63,10 +63,8 @@ NODE_ENV=development
 # MongoDB
 MONGODB_URI=mongodb://vie-mongodb:27017/video-insight-engine
 
-# RabbitMQ
-RABBITMQ_URI=amqp://guest:guest@vie-rabbitmq:5672
-RABBITMQ_USER=guest
-RABBITMQ_PASS=guest
+# Internal Service URLs
+SUMMARIZER_URL=http://localhost:8000
 
 # Frontend
 VITE_API_URL=http://localhost:3000/api
@@ -112,26 +110,6 @@ services:
       timeout: 5s
       retries: 5
 
-  vie-rabbitmq:
-    image: rabbitmq:3-management
-    container_name: vie-rabbitmq
-    restart: unless-stopped
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      - vie_rabbitmq_data:/var/lib/rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
-    networks:
-      - vie-network
-    healthcheck:
-      test: rabbitmq-diagnostics -q ping
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # ═══════════════════════════════════════════════════
   # APPLICATION SERVICES (uncomment as implemented)
   # ═══════════════════════════════════════════════════
@@ -147,8 +125,6 @@ services:
   #   depends_on:
   #     vie-mongodb:
   #       condition: service_healthy
-  #     vie-rabbitmq:
-  #       condition: service_healthy
 
   # vie-web:
   #   build: ./apps/web
@@ -160,7 +136,7 @@ services:
   #     - vie-network
 
   # vie-summarizer:
-  #   build: ./workers/summarizer
+  #   build: ./services/summarizer
   #   container_name: vie-summarizer
   #   ports:
   #     - "8000:8000"
@@ -170,11 +146,9 @@ services:
   #   depends_on:
   #     vie-mongodb:
   #       condition: service_healthy
-  #     vie-rabbitmq:
-  #       condition: service_healthy
 
   # vie-explainer:
-  #   build: ./workers/explainer
+  #   build: ./services/explainer
   #   container_name: vie-explainer
   #   ports:
   #     - "8001:8001"
@@ -191,7 +165,6 @@ networks:
 
 volumes:
   vie_mongodb_data:
-  vie_rabbitmq_data:
 ```
 
 ---
@@ -439,10 +412,10 @@ print('✅ All indexes created');
 
 ### 0.6 Start Infrastructure
 
-- [ ] Start MongoDB and RabbitMQ
+- [ ] Start MongoDB
 
 ```bash
-docker-compose up -d vie-mongodb vie-rabbitmq
+docker-compose up -d vie-mongodb
 ```
 
 - [ ] Verify health
@@ -453,9 +426,6 @@ sleep 10
 
 # Check MongoDB
 docker exec vie-mongodb mongosh --eval "db.runCommand('ping')"
-
-# Check RabbitMQ
-curl -u guest:guest http://localhost:15672/api/healthchecks/node
 ```
 
 - [ ] Run MongoDB setup
@@ -495,6 +465,7 @@ packages:
   - 'packages/*'
   - 'api'
   - 'apps/*'
+  - 'services/*'
 ```
 
 ---
@@ -506,17 +477,13 @@ Run these commands to verify Phase 0 is complete:
 ```bash
 # 1. Docker services running
 docker-compose ps
-# Expected: vie-mongodb and vie-rabbitmq both "Up (healthy)"
+# Expected: vie-mongodb "Up (healthy)"
 
 # 2. MongoDB accessible
 docker exec vie-mongodb mongosh --eval "db.videoSummaryCache.getIndexes()"
 # Expected: Shows youtubeId index
 
-# 3. RabbitMQ UI accessible
-curl -s -o /dev/null -w "%{http_code}" http://guest:guest@localhost:15672/api/overview
-# Expected: 200
-
-# 4. Types package builds
+# 3. Types package builds
 cd packages/types && pnpm build
 # Expected: dist/ folder created with .js and .d.ts files
 ```

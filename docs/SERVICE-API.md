@@ -15,7 +15,6 @@ Node.js backend service. REST API + MCP client + WebSocket.
 | @fastify/jwt              | Authentication    |
 | @fastify/websocket        | Real-time updates |
 | mongodb                   | Database driver   |
-| amqplib                   | RabbitMQ client   |
 | @modelcontextprotocol/sdk | MCP client        |
 
 ---
@@ -33,7 +32,6 @@ api/
     │
     ├── plugins/
     │   ├── mongodb.ts            # Database connection
-    │   ├── rabbitmq.ts           # Queue connection
     │   ├── jwt.ts                # Authentication
     │   ├── websocket.ts          # Real-time updates
     │   └── mcp.ts                # MCP client to explainer
@@ -50,7 +48,8 @@ api/
     │   ├── folder.service.ts
     │   ├── video.service.ts
     │   ├── memorize.service.ts
-    │   └── cache.service.ts
+    │   ├── cache.service.ts
+    │   └── summarizer-client.ts  # HTTP client for summarizer
     │
     ├── schemas/
     │   ├── auth.schema.ts
@@ -69,7 +68,7 @@ api/
 ```bash
 PORT=3000
 MONGODB_URI=mongodb://vie-mongodb:27017/video-insight-engine
-RABBITMQ_URI=amqp://guest:guest@vie-rabbitmq:5672
+SUMMARIZER_URL=http://vie-summarizer:8000
 JWT_SECRET=your-secret-here
 JWT_EXPIRES_IN=7d
 ```
@@ -85,7 +84,6 @@ JWT_EXPIRES_IN=7d
 import Fastify from "fastify";
 import { config } from "./config";
 import { mongodbPlugin } from "./plugins/mongodb";
-import { rabbitmqPlugin } from "./plugins/rabbitmq";
 import { jwtPlugin } from "./plugins/jwt";
 import { websocketPlugin } from "./plugins/websocket";
 import { mcpPlugin } from "./plugins/mcp";
@@ -99,7 +97,6 @@ const fastify = Fastify({ logger: true });
 
 // Plugins
 await fastify.register(mongodbPlugin);
-await fastify.register(rabbitmqPlugin);
 await fastify.register(jwtPlugin);
 await fastify.register(websocketPlugin);
 await fastify.register(mcpPlugin);
@@ -117,10 +114,42 @@ fastify.get("/health", async () => ({ status: "ok" }));
 await fastify.listen({ port: config.port, host: "0.0.0.0" });
 ```
 
+### Summarizer HTTP Client
+
+```typescript
+// src/services/summarizer-client.ts
+
+import { config } from "../config";
+
+interface SummarizeRequest {
+  videoSummaryId: string;
+  youtubeId: string;
+  url: string;
+  userId?: string;
+}
+
+export async function triggerSummarization(
+  request: SummarizeRequest
+): Promise<void> {
+  const summarizerUrl = config.summarizerUrl || "http://vie-summarizer:8000";
+
+  // Fire and forget - don't await the processing
+  fetch(`${summarizerUrl}/summarize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  }).catch((err) => {
+    console.error("Failed to trigger summarization:", err);
+  });
+}
+```
+
 ### Cache-First Video Submission
 
 ```typescript
 // src/services/video.service.ts
+
+import { triggerSummarization } from "./summarizer-client";
 
 export async function createVideo(
   userId: string,
@@ -169,7 +198,7 @@ export async function createVideo(
     return { video: userVideo, cached: false };
   }
 
-  // Cache MISS - create cache entry and queue job
+  // Cache MISS - create cache entry and trigger summarization
   const cacheEntry = await db.collection("videoSummaryCache").insertOne({
     youtubeId,
     url,
@@ -179,8 +208,8 @@ export async function createVideo(
     updatedAt: new Date(),
   });
 
-  // Publish job to queue
-  await rabbitmq.publish("summarize.jobs", {
+  // Trigger summarization via HTTP (fire and forget)
+  triggerSummarization({
     videoSummaryId: cacheEntry.insertedId.toString(),
     youtubeId,
     url,

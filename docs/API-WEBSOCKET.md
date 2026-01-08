@@ -55,8 +55,8 @@ Video processing status update.
 
 **Status flow:**
 
-1. `pending` → Job queued
-2. `processing` → Worker picked up job
+1. `pending` → Job created, HTTP POST sent to summarizer
+2. `processing` → Summarizer started processing
 3. `completed` → Summary ready
 4. `failed` → Error occurred
 
@@ -241,36 +241,60 @@ export async function websocketPlugin(fastify: FastifyInstance) {
 
 ---
 
-## RabbitMQ Integration
+## HTTP Callback Integration
 
-Status updates flow from workers through RabbitMQ:
+Status updates flow from summarizer via HTTP callback:
 
 ```
 vie-summarizer
       │
-      │ Publish to job.status exchange
+      │ HTTP POST to /internal/status
       ▼
-vie-rabbitmq ──────▶ vie-api
-                        │
-                        │ Broadcast via WebSocket
-                        ▼
-                    vie-web (user's browser)
+vie-api
+      │
+      │ Broadcast via WebSocket
+      ▼
+vie-web (user's browser)
 ```
 
 ```typescript
-// vie-api subscribing to status updates
+// vie-api internal status endpoint
 
-channel.assertExchange("job.status", "fanout");
-const q = await channel.assertQueue("", { exclusive: true });
-channel.bindQueue(q.queue, "job.status", "");
+fastify.post('/internal/status', async (request, reply) => {
+  const event = request.body as StatusEvent;
 
-channel.consume(q.queue, (msg) => {
-  const event = JSON.parse(msg.content.toString());
+  // Broadcast to user
+  fastify.broadcast(event.payload.userId, event);
 
-  // Find user and broadcast
-  const userId = event.payload.userId;
-  fastify.broadcast(userId, event);
-
-  channel.ack(msg);
+  return { received: true };
 });
+```
+
+```python
+# vie-summarizer sending status updates
+
+async def send_status_update(
+    video_summary_id: str,
+    user_id: str,
+    status: str,
+    progress: int,
+    message: str = None,
+    error: str = None,
+):
+    """Send status update to API for WebSocket broadcast."""
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            f"{settings.API_URL}/internal/status",
+            json={
+                "type": "video.status",
+                "payload": {
+                    "videoSummaryId": video_summary_id,
+                    "userId": user_id,
+                    "status": status,
+                    "progress": progress,
+                    "message": message,
+                    "error": error,
+                }
+            }
+        )
 ```

@@ -13,7 +13,7 @@
 │                                                                 │
 │   • Docker Compose setup                                        │
 │   • Environment configuration                                   │
-│   • MongoDB + RabbitMQ infrastructure                           │
+│   • MongoDB infrastructure                                      │
 │   • Shared types package                                        │
 └─────────────────────────────────────────────────────────────────┘
                               │
@@ -23,7 +23,7 @@
         ▼                     ▼                     ▼
 ┌───────────────┐   ┌───────────────┐   ┌───────────────┐
 │   TRACK 1     │   │   TRACK 2     │   │   TRACK 3     │
-│   vie-api     │   │   vie-web     │   │  vie-workers  │
+│   vie-api     │   │   vie-web     │   │ vie-services  │
 │  (Node.js)    │   │   (React)     │   │  (Python)     │
 │               │   │               │   │               │
 │ IMPL-01-API   │   │ IMPL-02-WEB   │   │ IMPL-03/04    │
@@ -78,14 +78,14 @@ After all tracks show ✅:
 
 ## Implementation Files
 
-| File                                               | Service        | Tech Stack                   | Dependencies |
-| -------------------------------------------------- | -------------- | ---------------------------- | ------------ |
-| [IMPL-00-SHARED.md](./IMPL-00-SHARED.md)           | Infrastructure | Docker, MongoDB, RabbitMQ    | None         |
-| [IMPL-01-API.md](./IMPL-01-API.md)                 | vie-api        | Node.js, Fastify, TypeScript | Phase 0      |
-| [IMPL-02-WEB.md](./IMPL-02-WEB.md)                 | vie-web        | React, Vite, TypeScript      | Phase 0      |
-| [IMPL-03-SUMMARIZER.md](./IMPL-03-SUMMARIZER.md)   | vie-summarizer | Python, FastAPI, RabbitMQ    | Phase 0      |
-| [IMPL-04-EXPLAINER.md](./IMPL-04-EXPLAINER.md)     | vie-explainer  | Python, MCP SDK              | Phase 0      |
-| [IMPL-05-INTEGRATION.md](./IMPL-05-INTEGRATION.md) | Testing        | All services                 | All tracks   |
+| File                                               | Service        | Tech Stack                       | Dependencies |
+| -------------------------------------------------- | -------------- | -------------------------------- | ------------ |
+| [IMPL-00-SHARED.md](./IMPL-00-SHARED.md)           | Infrastructure | Docker, MongoDB                  | None         |
+| [IMPL-01-API.md](./IMPL-01-API.md)                 | vie-api        | Node.js, Fastify, TypeScript     | Phase 0      |
+| [IMPL-02-WEB.md](./IMPL-02-WEB.md)                 | vie-web        | React, Vite, TypeScript          | Phase 0      |
+| [IMPL-03-SUMMARIZER.md](./IMPL-03-SUMMARIZER.md)   | vie-summarizer | Python, FastAPI, BackgroundTasks | Phase 0      |
+| [IMPL-04-EXPLAINER.md](./IMPL-04-EXPLAINER.md)     | vie-explainer  | Python, MCP SDK                  | Phase 0      |
+| [IMPL-05-INTEGRATION.md](./IMPL-05-INTEGRATION.md) | Testing        | All services                     | All tracks   |
 
 ---
 
@@ -98,7 +98,7 @@ After all tracks show ✅:
 ```
 Phases:
 1. Project Setup (package.json, TypeScript)
-2. Core Infrastructure (MongoDB, RabbitMQ plugins)
+2. Core Infrastructure (MongoDB plugin)
 3. Auth Routes (register, login, refresh, logout)
 4. Videos Routes (cache-first submission)
 5. Folders & Memorize Routes
@@ -148,9 +148,9 @@ Phases:
 1. Project Setup (requirements.txt)
 2. Configuration (settings)
 3. Models (Pydantic schemas)
-4. Services (MongoDB, RabbitMQ, transcript, LLM)
+4. Services (MongoDB, transcript, LLM)
 5. Prompts (section detection, summarization)
-6. Worker Entry Point
+6. HTTP Service (FastAPI + BackgroundTasks)
 7. Dockerfile
 ```
 
@@ -252,26 +252,21 @@ curl -X POST http://localhost:3000/api/videos \
   -d '{"url":"https://youtube.com/watch?v=dQw4w9WgXcQ"}'
 ```
 
-### 3. Test Workers Independently
+### 3. Test Services Independently
 
-Publish test messages to RabbitMQ:
+Trigger summarization via HTTP:
 
-```python
-# Quick test script
-import pika
-import json
-
-connection = pika.BlockingConnection(pika.URLParameters('amqp://localhost'))
-channel = connection.channel()
-channel.basic_publish(
-    exchange='',
-    routing_key='summarize.jobs',
-    body=json.dumps({
-        'videoSummaryId': 'test123',
-        'youtubeId': 'dQw4w9WgXcQ',
-        'url': 'https://youtube.com/watch?v=dQw4w9WgXcQ'
-    })
-)
+```bash
+# Test summarizer directly
+curl -X POST http://localhost:8000/summarize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "videoSummaryId": "test123",
+    "youtubeId": "dQw4w9WgXcQ",
+    "url": "https://youtube.com/watch?v=dQw4w9WgXcQ",
+    "userId": "user123"
+  }'
+# Expected: 202 Accepted
 ```
 
 ---
@@ -284,7 +279,6 @@ Use this checklist to track progress across sessions:
 
 - [ ] Docker Compose running
 - [ ] MongoDB healthy
-- [ ] RabbitMQ healthy
 - [ ] Shared types built
 
 ### Track 1: vie-api ⬜
@@ -308,7 +302,7 @@ Use this checklist to track progress across sessions:
 - [ ] Project setup
 - [ ] Transcript fetching
 - [ ] LLM pipeline
-- [ ] RabbitMQ consumer
+- [ ] HTTP endpoint + BackgroundTasks
 - [ ] Docker build passes
 
 ### Track 4: vie-explainer ⬜
@@ -341,11 +335,11 @@ docker-compose logs vie-api
 docker-compose ps
 ```
 
-### Can't connect to MongoDB/RabbitMQ
+### Can't connect to MongoDB
 
 ```bash
 # Make sure infrastructure is running
-docker-compose up -d vie-mongodb vie-rabbitmq
+docker-compose up -d vie-mongodb
 
 # Wait for health checks
 docker-compose ps

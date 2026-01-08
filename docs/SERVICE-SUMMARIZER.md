@@ -1,8 +1,8 @@
 # Service: vie-summarizer
 
-Python worker that processes YouTube videos into structured summaries.
+Python service that processes YouTube videos into structured summaries.
 
-**Type:** Traditional service (RabbitMQ consumer)
+**Type:** HTTP service (FastAPI + BackgroundTasks)
 
 ---
 
@@ -11,11 +11,10 @@ Python worker that processes YouTube videos into structured summaries.
 | Technology | Purpose |
 |------------|---------|
 | Python 3.11+ | Runtime |
-| FastAPI | Health endpoint |
+| FastAPI | Web framework + background tasks |
 | youtube-transcript-api | Fetch transcripts |
 | anthropic | Claude API |
 | pymongo | MongoDB driver |
-| pika | RabbitMQ client |
 | Pydantic | Validation |
 
 ---
@@ -23,14 +22,13 @@ Python worker that processes YouTube videos into structured summaries.
 ## Project Structure
 
 ```
-summarizer/
+services/summarizer/
 ├── Dockerfile
 ├── requirements.txt
 ├── pyproject.toml
 └── src/
     ├── __init__.py
-    ├── main.py                   # FastAPI health endpoint
-    ├── worker.py                 # RabbitMQ consumer (entry)
+    ├── main.py                   # FastAPI app + routes
     ├── config.py                 # Settings
     │
     ├── services/
@@ -56,7 +54,6 @@ summarizer/
 
 ```bash
 MONGODB_URI=mongodb://vie-mongodb:27017/video-insight-engine
-RABBITMQ_URI=amqp://guest:guest@vie-rabbitmq:5672
 ANTHROPIC_API_KEY=sk-ant-...
 ANTHROPIC_MODEL=claude-sonnet-4-20250514
 LOG_LEVEL=debug
@@ -67,99 +64,126 @@ LOG_LEVEL=debug
 ## Processing Pipeline
 
 ```
- 1. CONSUME JOB
-    └─▶ Read from summarize.jobs queue
+ 1. RECEIVE HTTP REQUEST
+    └─▶ POST /summarize
     └─▶ { videoSummaryId, youtubeId, url, userId }
 
- 2. UPDATE STATUS
-    └─▶ Set videoSummaryCache.status = "processing"
-    └─▶ Publish status event (WebSocket)
+ 2. RETURN 202 ACCEPTED
+    └─▶ Background task queued
+    └─▶ Return immediately to caller
 
- 3. FETCH METADATA
+ 3. UPDATE STATUS (background)
+    └─▶ Set videoSummaryCache.status = "processing"
+
+ 4. FETCH METADATA
     └─▶ YouTube oEmbed API
     └─▶ Get: title, channel, thumbnail
 
- 4. FETCH TRANSCRIPT
+ 5. FETCH TRANSCRIPT
     └─▶ youtube-transcript-api
     └─▶ Handle: manual > auto-generated
     └─▶ Output: list of segments with timestamps
 
- 5. CLEAN TRANSCRIPT
+ 6. CLEAN TRANSCRIPT
     └─▶ Remove [Music], [Applause], etc.
     └─▶ Merge fragmented sentences
     └─▶ Normalize spacing
 
- 6. DETECT SECTIONS (LLM)
+ 7. DETECT SECTIONS (LLM)
     └─▶ Identify 3-8 logical sections
     └─▶ Output: boundaries + titles
 
- 7. SUMMARIZE SECTIONS (LLM)
+ 8. SUMMARIZE SECTIONS (LLM)
     └─▶ One call per section
     └─▶ Generate: summary + bullets
 
- 8. EXTRACT CONCEPTS (LLM)
+ 9. EXTRACT CONCEPTS (LLM)
     └─▶ Identify key terms
     └─▶ Extract definitions
     └─▶ Map to timestamps
 
- 9. SYNTHESIZE (LLM)
+10. SYNTHESIZE (LLM)
     └─▶ Generate TLDR
     └─▶ Identify key takeaways
 
-10. SAVE TO CACHE
+11. SAVE TO CACHE
     └─▶ Update videoSummaryCache
     └─▶ Set status = "completed"
-
-11. PUBLISH STATUS
-    └─▶ Send to job.status exchange
 ```
 
 ---
 
 ## Key Implementations
 
-### Worker Entry Point
+### FastAPI Application
 
 ```python
-# src/worker.py
+# src/main.py
 
-import pika
-import json
-from config import settings
-from services.summarizer import process_video
-from services.mongodb import db, update_status
-from services.rabbitmq import publish_status
+from fastapi import FastAPI, BackgroundTasks, HTTPException
+from pydantic import BaseModel
+from .config import settings
+from .services.summarizer import process_video
+from .services.mongodb import db, update_status
+import logging
 
-def callback(ch, method, properties, body):
-    job = json.loads(body)
-    video_summary_id = job['videoSummaryId']
-    user_id = job.get('userId')
-    
+app = FastAPI(title="Video Summarizer Service")
+logger = logging.getLogger(__name__)
+
+class SummarizeRequest(BaseModel):
+    videoSummaryId: str
+    youtubeId: str
+    url: str
+    userId: str | None = None
+
+class SummarizeResponse(BaseModel):
+    status: str
+    videoSummaryId: str
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "service": "summarizer"}
+
+@app.post("/summarize", response_model=SummarizeResponse, status_code=202)
+async def summarize(request: SummarizeRequest, background_tasks: BackgroundTasks):
+    """
+    Trigger video summarization.
+    Returns immediately, processing happens in background.
+    """
+    background_tasks.add_task(
+        run_summarization,
+        request.videoSummaryId,
+        request.youtubeId,
+        request.url,
+        request.userId
+    )
+
+    return SummarizeResponse(
+        status="accepted",
+        videoSummaryId=request.videoSummaryId
+    )
+
+async def run_summarization(
+    video_summary_id: str,
+    youtube_id: str,
+    url: str,
+    user_id: str | None
+):
+    """Background task to process video."""
     try:
-        # Update status
+        # Update status to processing
         update_status(video_summary_id, 'processing')
-        publish_status('video.status', {
-            'videoSummaryId': video_summary_id,
-            'userId': user_id,
-            'status': 'processing',
-            'progress': 0
-        })
-        
-        # Process video
+
+        logger.info(f"Processing video {youtube_id} (id: {video_summary_id})")
+
+        # Process video (all LLM calls)
         result = process_video(
             video_summary_id=video_summary_id,
-            youtube_id=job['youtubeId'],
-            url=job['url'],
-            on_progress=lambda p, m: publish_status('video.status', {
-                'videoSummaryId': video_summary_id,
-                'userId': user_id,
-                'status': 'processing',
-                'progress': p,
-                'message': m
-            })
+            youtube_id=youtube_id,
+            url=url
         )
-        
-        # Save result
+
+        # Save result to cache
         db.videoSummaryCache.update_one(
             {'_id': ObjectId(video_summary_id)},
             {'$set': {
@@ -174,43 +198,12 @@ def callback(ch, method, properties, body):
                 'updatedAt': datetime.utcnow()
             }}
         )
-        
-        # Notify completion
-        publish_status('video.status', {
-            'videoSummaryId': video_summary_id,
-            'userId': user_id,
-            'status': 'completed',
-            'progress': 100
-        })
-        
-        ch.basic_ack(delivery_tag=method.delivery_tag)
-        
+
+        logger.info(f"Completed video {youtube_id}")
+
     except Exception as e:
+        logger.error(f"Failed to process video {youtube_id}: {str(e)}")
         update_status(video_summary_id, 'failed', str(e))
-        publish_status('video.status', {
-            'videoSummaryId': video_summary_id,
-            'userId': user_id,
-            'status': 'failed',
-            'error': str(e)
-        })
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-
-def main():
-    connection = pika.BlockingConnection(
-        pika.URLParameters(settings.RABBITMQ_URI)
-    )
-    channel = connection.channel()
-    channel.queue_declare(queue='summarize.jobs', durable=True)
-    channel.basic_qos(prefetch_count=1)
-    channel.basic_consume(
-        queue='summarize.jobs',
-        on_message_callback=callback
-    )
-    print('Summarizer worker started')
-    channel.start_consuming()
-
-if __name__ == '__main__':
-    main()
 ```
 
 ### Transcript Fetching
@@ -235,7 +228,7 @@ def get_transcript(video_id: str) -> tuple[list[dict], str]:
     """
     try:
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-        
+
         # Prefer manual captions
         try:
             transcript = transcript_list.find_manually_created_transcript(['en'])
@@ -245,12 +238,12 @@ def get_transcript(video_id: str) -> tuple[list[dict], str]:
             except:
                 # Try any available language
                 transcript = transcript_list.find_transcript(['en', 'en-US'])
-        
+
         segments = transcript.fetch()
         full_text = ' '.join([s['text'] for s in segments])
-        
+
         return segments, full_text
-        
+
     except TranscriptsDisabled:
         raise TranscriptError("Captions are disabled for this video")
     except NoTranscriptFound:
@@ -273,7 +266,7 @@ client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 def detect_sections(transcript: str, segments: list[dict]) -> list[dict]:
     """Detect logical sections in transcript."""
-    
+
     prompt = f"""Analyze this video transcript and identify logical sections.
 
 TRANSCRIPT:
@@ -301,12 +294,12 @@ Rules:
         max_tokens=2000,
         messages=[{"role": "user", "content": prompt}]
     )
-    
+
     return parse_json_response(response.content[0].text)['sections']
 
 def summarize_section(section_text: str, title: str) -> dict:
     """Generate summary and bullets for a section."""
-    
+
     prompt = f"""Summarize this video section.
 
 SECTION: {title}
@@ -324,12 +317,12 @@ Return JSON only:
         max_tokens=1000,
         messages=[{"role": "user", "content": prompt}]
     )
-    
+
     return parse_json_response(response.content[0].text)
 
 def extract_concepts(transcript: str) -> list[dict]:
     """Extract key concepts/terms from transcript."""
-    
+
     prompt = f"""Extract key concepts, terms, and definitions from this transcript.
 
 TRANSCRIPT:
@@ -356,16 +349,16 @@ Focus on:
         max_tokens=2000,
         messages=[{"role": "user", "content": prompt}]
     )
-    
+
     return parse_json_response(response.content[0].text)['concepts']
 
 def synthesize_summary(sections: list[dict], concepts: list[dict]) -> dict:
     """Generate TLDR and key takeaways."""
-    
+
     sections_text = "\n".join([
         f"- {s['title']}: {s['summary']}" for s in sections
     ])
-    
+
     prompt = f"""Create a high-level summary of this video.
 
 SECTIONS:
@@ -384,7 +377,7 @@ Return JSON only:
         max_tokens=1000,
         messages=[{"role": "user", "content": prompt}]
     )
-    
+
     return parse_json_response(response.content[0].text)
 ```
 
@@ -433,8 +426,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ ./src/
 
-# Run worker by default
-CMD ["python", "-m", "src.worker"]
+# Run FastAPI server
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 ---
@@ -442,13 +435,51 @@ CMD ["python", "-m", "src.worker"]
 ## Commands
 
 ```bash
-# Run worker
-python -m src.worker
+# Run server
+uvicorn src.main:app --host 0.0.0.0 --port 8000
 
-# Run health endpoint
-uvicorn src.main:app --port 8000
+# Development with auto-reload
+uvicorn src.main:app --reload --port 8000
 
-# Development
+# Run tests
 pip install -e ".[dev]"
 pytest
+```
+
+---
+
+## API Reference
+
+### POST /summarize
+
+Trigger video summarization (async).
+
+**Request:**
+```json
+{
+  "videoSummaryId": "507f1f77bcf86cd799439011",
+  "youtubeId": "dQw4w9WgXcQ",
+  "url": "https://youtube.com/watch?v=dQw4w9WgXcQ",
+  "userId": "507f1f77bcf86cd799439012"
+}
+```
+
+**Response (202 Accepted):**
+```json
+{
+  "status": "accepted",
+  "videoSummaryId": "507f1f77bcf86cd799439011"
+}
+```
+
+### GET /health
+
+Health check endpoint.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "service": "summarizer"
+}
 ```

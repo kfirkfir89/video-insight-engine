@@ -6,14 +6,13 @@ Docker setup, networking, and environment configuration.
 
 ## Services Overview
 
-| Service        | Image/Build           | Port        | Purpose           |
-| -------------- | --------------------- | ----------- | ----------------- |
-| vie-web        | ./web                 | 5173        | React frontend    |
-| vie-api        | ./api                 | 3000        | Node.js backend   |
-| vie-summarizer | ./summarizer          | 8000        | Python worker     |
-| vie-explainer  | ./explainer           | 8001        | Python MCP server |
-| vie-mongodb    | mongo:7               | 27017       | Database          |
-| vie-rabbitmq   | rabbitmq:3-management | 5672, 15672 | Message queue     |
+| Service        | Image/Build             | Port  | Purpose           |
+| -------------- | ----------------------- | ----- | ----------------- |
+| vie-web        | ./apps/web              | 5173  | React frontend    |
+| vie-api        | ./api                   | 3000  | Node.js backend   |
+| vie-summarizer | ./services/summarizer   | 8000  | Python service    |
+| vie-explainer  | ./services/explainer    | 8001  | Python MCP server |
+| vie-mongodb    | mongo:7                 | 27017 | Database          |
 
 ---
 
@@ -45,26 +44,6 @@ services:
       timeout: 5s
       retries: 5
 
-  vie-rabbitmq:
-    image: rabbitmq:3-management
-    container_name: vie-rabbitmq
-    restart: unless-stopped
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      - vie_rabbitmq_data:/var/lib/rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
-    networks:
-      - vie-network
-    healthcheck:
-      test: rabbitmq-diagnostics -q ping
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # ═══════════════════════════════════════════════
   # APPLICATION SERVICES
   # ═══════════════════════════════════════════════
@@ -81,7 +60,7 @@ services:
       NODE_ENV: development
       PORT: 3000
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
-      RABBITMQ_URI: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@vie-rabbitmq:5672
+      SUMMARIZER_URL: http://vie-summarizer:8000
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
     networks:
@@ -89,14 +68,12 @@ services:
     depends_on:
       vie-mongodb:
         condition: service_healthy
-      vie-rabbitmq:
-        condition: service_healthy
       vie-explainer:
         condition: service_started
 
   vie-summarizer:
     build:
-      context: ./summarizer
+      context: ./services/summarizer
       dockerfile: Dockerfile
     container_name: vie-summarizer
     restart: unless-stopped
@@ -105,7 +82,6 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
-      RABBITMQ_URI: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@vie-rabbitmq:5672
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
     networks:
@@ -113,12 +89,10 @@ services:
     depends_on:
       vie-mongodb:
         condition: service_healthy
-      vie-rabbitmq:
-        condition: service_healthy
 
   vie-explainer:
     build:
-      context: ./explainer
+      context: ./services/explainer
       dockerfile: Dockerfile
     container_name: vie-explainer
     restart: unless-stopped
@@ -137,7 +111,7 @@ services:
 
   vie-web:
     build:
-      context: ./web
+      context: ./apps/web
       dockerfile: Dockerfile
     container_name: vie-web
     restart: unless-stopped
@@ -157,7 +131,6 @@ networks:
 
 volumes:
   vie_mongodb_data:
-  vie_rabbitmq_data:
 ```
 
 ---
@@ -185,10 +158,9 @@ JWT_SECRET=change-this-to-a-long-random-string
 JWT_EXPIRES_IN=7d
 
 # ────────────────────────────────────────────────────
-# RabbitMQ (optional - defaults work for dev)
+# Internal Service URLs
 # ────────────────────────────────────────────────────
-RABBITMQ_USER=guest
-RABBITMQ_PASS=guest
+SUMMARIZER_URL=http://localhost:8000
 
 # ────────────────────────────────────────────────────
 # Frontend URLs (for production)
@@ -207,12 +179,10 @@ RABBITMQ_PASS=guest
 │                                                                  │
 │  External Access:                                                │
 │  ├── :5173 → vie-web (Frontend)                                 │
-│  ├── :3000 → vie-api (API)                                      │
-│  └── :15672 → vie-rabbitmq (Management UI - dev only)           │
+│  └── :3000 → vie-api (API)                                      │
 │                                                                  │
 │  Internal Only:                                                  │
 │  ├── vie-mongodb:27017                                          │
-│  ├── vie-rabbitmq:5672                                          │
 │  ├── vie-summarizer:8000                                        │
 │  └── vie-explainer:8001                                          │
 │                                                                  │
@@ -227,7 +197,7 @@ RABBITMQ_PASS=guest
 vie-mongodb ─────┬─────────────────────────────────┐
                  │                                 │
                  ▼                                 ▼
-vie-rabbitmq ───► vie-api ◄─────────────── vie-explainer
+           vie-api ◄─────────────────────── vie-explainer
                  │
                  ├──────────► vie-web
                  │
@@ -237,10 +207,10 @@ vie-rabbitmq ───► vie-api ◄──────────────�
 
 Startup order:
 
-1. vie-mongodb, vie-rabbitmq (parallel)
+1. vie-mongodb
 2. vie-explainer (needs MongoDB)
-3. vie-api (needs all above)
-4. vie-summarizer (needs MongoDB, RabbitMQ)
+3. vie-api (needs MongoDB, Explainer)
+4. vie-summarizer (needs MongoDB)
 5. vie-web (needs vie-api)
 
 ---
@@ -280,9 +250,6 @@ curl http://localhost:8000/health
 
 # MongoDB
 docker exec vie-mongodb mongosh --eval "db.runCommand('ping')"
-
-# RabbitMQ
-curl -u guest:guest http://localhost:15672/api/healthchecks/node
 ```
 
 ---
@@ -321,34 +288,17 @@ db.userChats.createIndex({ userId: 1, memorizedItemId: 1 })
 
 ---
 
-## RabbitMQ Setup
-
-Queues and exchanges are created by services on startup:
-
-```javascript
-// Queues
-summarize.jobs; // Durable, for video processing
-
-// Exchanges
-job.status; // Fanout, for status updates
-```
-
-Access management UI: http://localhost:15672 (guest/guest)
-
----
-
 ## Production Considerations
 
 ### Security
 
 - Change JWT_SECRET to a strong random string
-- Use environment-specific RabbitMQ credentials
-- Don't expose MongoDB/RabbitMQ ports externally
+- Don't expose MongoDB port externally
 - Use HTTPS for vie-api and vie-web
 
 ### Scaling
 
-- vie-summarizer: Can run multiple instances (competing consumers)
+- vie-summarizer: Can run multiple instances (load balanced)
 - vie-api: Can run multiple instances (add load balancer)
 - vie-explainer: One instance per vie-api (MCP connection)
 
@@ -356,5 +306,4 @@ Access management UI: http://localhost:15672 (guest/guest)
 
 - Add health check endpoints to all services
 - Set up log aggregation
-- Monitor RabbitMQ queue depths
 - Track LLM API usage and costs

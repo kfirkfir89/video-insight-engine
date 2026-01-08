@@ -20,59 +20,46 @@ System overview and data flows.
 │                               Port: 3000                                     │
 │                                                                              │
 │  • REST API for frontend                                                     │
-│  • MCP Client (connects to vie-explainer)                                     │
-│  • Publishes jobs to RabbitMQ                                                │
+│  • MCP Client (connects to vie-explainer)                                    │
+│  • HTTP calls to vie-summarizer                                              │
 │  • WebSocket for real-time updates                                           │
-└──────────┬────────────────────────┬────────────────────────┬────────────────┘
-           │                        │                        │
-           │ MongoDB                │ RabbitMQ               │ MCP Protocol
-           ▼                        ▼                        ▼
-┌────────────────────┐  ┌────────────────────┐  ┌─────────────────────────────┐
-│   vie-mongodb      │  │   vie-rabbitmq     │  │      vie-explainer           │
-│    MongoDB 7       │  │    RabbitMQ 3      │  │    Python + MCP SDK         │
-│   Port: 27017      │  │   Port: 5672       │  │      Port: 8001             │
-│                    │  │                    │  │                             │
-│ System Cache:      │  │ Queues:            │  │ MCP Tools:                  │
-│ • videoSummaryCache│  │ • summarize.jobs   │  │ • explain_auto (cached)      │
-│ • systemExpansion  │  │                    │  │ • explain_chat (per-user)    │
-│   Cache            │  │ Exchanges:         │  │                             │
-│                    │  │ • job.status       │  │                             │
-│ User Data:         │  │                    │  │                             │
-│ • users            │  │                    │  │                             │
-│ • folders          │  │                    │  │                             │
-│ • userVideos       │  │                    │  │                             │
-│ • memorizedItems   │  │                    │  │                             │
-│ • userChats        │  │                    │  │                             │
-└────────────────────┘  └─────────┬──────────┘  └─────────────────────────────┘
-                                  │
-                                  │ Consumes jobs
-                                  ▼
-                       ┌────────────────────┐
-                       │   vie-summarizer   │
-                       │  Python + FastAPI  │
-                       │    Port: 8000      │
-                       │                    │
-                       │ • Fetch transcript │
-                       │ • Process with LLM │
-                       │ • Save to cache    │
-                       └────────────────────┘
+└──────────┬─────────────────────────────────────────────────┬────────────────┘
+           │                                                  │
+           │ HTTP POST                                        │ MCP Protocol
+           ▼                                                  ▼
+┌────────────────────┐  ┌───────────────────┐  ┌─────────────────────────────┐
+│   vie-summarizer   │  │   vie-mongodb     │  │      vie-explainer           │
+│  Python + FastAPI  │  │    MongoDB 7      │  │    Python + MCP SDK         │
+│    Port: 8000      │  │   Port: 27017     │  │      Port: 8001             │
+│                    │  │                   │  │                             │
+│ • Receive HTTP req │  │ System Cache:     │  │ MCP Tools:                  │
+│ • Fetch transcript │  │ • videoSummaryCache│ │ • explain_auto (cached)      │
+│ • Process with LLM │  │ • systemExpansion │  │ • explain_chat (per-user)    │
+│ • Save to cache    │  │   Cache           │  │                             │
+│                    │  │                   │  │                             │
+└─────────┬──────────┘  │ User Data:        │  └─────────────────────────────┘
+          │             │ • users           │
+          │             │ • folders         │
+          │             │ • userVideos      │
+          │             │ • memorizedItems  │
+          │             │ • userChats       │
+          └────────────►└───────────────────┘
 ```
 
 ---
 
 ## Service Communication
 
-| From           | To            | Protocol       | Purpose                   |
-| -------------- | ------------- | -------------- | ------------------------- |
-| vie-web        | vie-api       | HTTP/WS        | API calls, status updates |
-| vie-api        | vie-mongodb   | MongoDB driver | Data operations           |
-| vie-api        | vie-rabbitmq  | AMQP           | Publish jobs              |
-| vie-api        | vie-explainer | **MCP**        | Call explain tools        |
-| vie-summarizer | vie-rabbitmq  | AMQP           | Consume jobs              |
-| vie-summarizer | vie-mongodb   | MongoDB driver | Save to cache             |
-| vie-summarizer | Claude API    | HTTP           | LLM generation            |
-| vie-explainer  | vie-mongodb   | MongoDB driver | Cache + chats             |
-| vie-explainer  | Claude API    | HTTP           | LLM generation            |
+| From           | To             | Protocol       | Purpose                     |
+| -------------- | -------------- | -------------- | --------------------------- |
+| vie-web        | vie-api        | HTTP/WS        | API calls, status updates   |
+| vie-api        | vie-mongodb    | MongoDB driver | Data operations             |
+| vie-api        | vie-summarizer | HTTP POST      | Trigger summarization       |
+| vie-api        | vie-explainer  | **MCP**        | Call explain tools          |
+| vie-summarizer | vie-mongodb    | MongoDB driver | Save to cache               |
+| vie-summarizer | Claude API     | HTTP           | LLM generation              |
+| vie-explainer  | vie-mongodb    | MongoDB driver | Cache + chats               |
+| vie-explainer  | Claude API     | HTTP           | LLM generation              |
 
 ---
 
@@ -94,9 +81,9 @@ User submits YouTube URL
   HIT           MISS
     │             │
     ▼             ▼
- Create       Publish to
- userVideo    summarize.jobs
- reference         │
+ Create      POST /summarize
+ userVideo   to vie-summarizer
+ reference        │
     │             ▼
     │    ┌────────────────┐
     │    │ vie-summarizer │
@@ -106,12 +93,14 @@ User submits YouTube URL
     │    │ 3. Save cache  │
     │    └───────┬────────┘
     │            │
-    │     WebSocket: done
+    │     Status: done
+    │     (DB update)
     │            │
     └─────┬──────┘
           │
           ▼
     User sees summary
+    (via polling or WebSocket)
 ```
 
 ### 2. Explain Auto (Cached)
@@ -205,16 +194,14 @@ User clicks "Memorize"
 │        │              │               │                │        │
 │        └──────────────┼───────────────┼────────────────┘        │
 │                       │               │                         │
-│              ┌────────┴───────┐       │                         │
-│              │                │       │                         │
-│        ┌─────┴─────┐   ┌──────┴──────┐                          │
-│        │vie-mongodb│   │vie-rabbitmq │                          │
-│        │  :27017   │   │   :5672     │                          │
-│        └───────────┘   └─────────────┘                          │
+│                       ▼               │                         │
+│                ┌─────────────┐        │                         │
+│                │ vie-mongodb │◄───────┘                         │
+│                │   :27017    │                                   │
+│                └─────────────┘                                   │
 └─────────────────────────────────────────────────────────────────┘
 
 Exposed ports:
   - 5173  → Frontend
   - 3000  → API
-  - 15672 → RabbitMQ UI (dev only)
 ```
