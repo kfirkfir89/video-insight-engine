@@ -1,0 +1,18 @@
+Create a high-level summary of this video.
+
+SECTIONS:
+{sections}
+
+KEY CONCEPTS: {concepts}
+
+Return JSON only (no other text):
+{{
+  "tldr": "1-2 sentence overview of the entire video",
+  "keyTakeaways": ["takeaway 1", "takeaway 2", "takeaway 3"]
+}}
+
+Guidelines:
+- TLDR should be understandable without watching the video
+- Key takeaways should be actionable insights
+- Include 3-5 key takeaways
+- Be specific, not generic
