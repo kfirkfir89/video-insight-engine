@@ -21,13 +21,13 @@
 ### 1.1 Create Project Structure
 
 ```bash
-mkdir -p workers/explainer/src/{tools,services,prompts}
-cd workers/explainer
+mkdir -p services/explainer/src/{tools,services,prompts}
+cd services/explainer
 ```
 
 ### 1.2 Create Requirements
 
-- [ ] Create `workers/explainer/requirements.txt`
+- [ ] Create `services/explainer/requirements.txt`
 
 ```txt
 # MCP
@@ -49,7 +49,7 @@ python-dotenv>=1.0.0
 
 ### 1.3 Create pyproject.toml
 
-- [ ] Create `workers/explainer/pyproject.toml`
+- [ ] Create `services/explainer/pyproject.toml`
 
 ```toml
 [project]
@@ -71,7 +71,7 @@ select = ["E", "F", "I"]
 
 ### 2.1 Settings
 
-- [ ] Create `workers/explainer/src/config.py`
+- [ ] Create `services/explainer/src/config.py`
 
 ```python
 from pydantic_settings import BaseSettings
@@ -98,7 +98,7 @@ settings = Settings()
 
 ### 3.1 MongoDB Service
 
-- [ ] Create `workers/explainer/src/services/mongodb.py`
+- [ ] Create `services/explainer/src/services/mongodb.py`
 
 ```python
 from datetime import datetime
@@ -215,7 +215,7 @@ def add_messages(chat_id: str, messages: list[dict]) -> None:
 
 ### 3.2 LLM Service
 
-- [ ] Create `workers/explainer/src/services/llm.py`
+- [ ] Create `services/explainer/src/services/llm.py`
 
 ```python
 from pathlib import Path
@@ -266,7 +266,7 @@ def chat_completion(system_prompt: str, messages: list[dict]) -> str:
 
 ### 4.1 Explain Section Prompt
 
-- [ ] Create `workers/explainer/src/prompts/explain_section.txt`
+- [ ] Create `services/explainer/src/prompts/explain_section.txt`
 
 ```
 You are creating detailed documentation for a video section.
@@ -303,7 +303,7 @@ Be thorough but focused. Aim for 500-1000 words.
 
 ### 4.2 Explain Concept Prompt
 
-- [ ] Create `workers/explainer/src/prompts/explain_concept.txt`
+- [ ] Create `services/explainer/src/prompts/explain_concept.txt`
 
 ```
 You are creating detailed documentation for a concept from a video.
@@ -336,7 +336,7 @@ Be thorough but focused. Aim for 400-800 words.
 
 ### 4.3 Chat System Prompt
 
-- [ ] Create `workers/explainer/src/prompts/chat_system.txt`
+- [ ] Create `services/explainer/src/prompts/chat_system.txt`
 
 ```
 You are a helpful tutor discussing content the user has saved.
@@ -375,7 +375,7 @@ Keep responses focused and helpful. Use Markdown for formatting.
 
 ### 5.1 Explain Auto Tool
 
-- [ ] Create `workers/explainer/src/tools/explain_auto.py`
+- [ ] Create `services/explainer/src/tools/explain_auto.py`
 
 ```python
 from src.services import mongodb, llm
@@ -460,7 +460,7 @@ async def explain_auto(
 
 ### 5.2 Explain Chat Tool
 
-- [ ] Create `workers/explainer/src/tools/explain_chat.py`
+- [ ] Create `services/explainer/src/tools/explain_chat.py`
 
 ```python
 import json
@@ -573,7 +573,7 @@ async def explain_chat(
 
 ### 6.1 Server Entry Point
 
-- [ ] Create `workers/explainer/src/server.py`
+- [ ] Create `services/explainer/src/server.py`
 
 ```python
 import asyncio
@@ -660,7 +660,7 @@ if __name__ == "__main__":
 
 ### 6.2 Health Endpoint (Optional HTTP)
 
-- [ ] Create `workers/explainer/src/main.py`
+- [ ] Create `services/explainer/src/main.py`
 
 ```python
 from fastapi import FastAPI
@@ -692,7 +692,7 @@ async def root():
 
 ## Phase 7: Dockerfile
 
-- [ ] Create `workers/explainer/Dockerfile`
+- [ ] Create `services/explainer/Dockerfile`
 
 ```dockerfile
 FROM python:3.11-slim
@@ -724,7 +724,7 @@ Update `docker-compose.yml` to add:
 
 ```yaml
 vie-explainer:
-  build: ./workers/explainer
+  build: ./services/explainer
   container_name: vie-explainer
   restart: unless-stopped
   ports:
@@ -764,7 +764,7 @@ export async function mcpPlugin(fastify: FastifyInstance) {
   const transport = new StdioClientTransport({
     command: 'python',
     args: ['-m', 'src.server'],
-    cwd: process.env.EXPLAINER_PATH || '../workers/explainer',
+    cwd: process.env.EXPLAINER_PATH || '../services/explainer',
   });
 
   const client = new Client({
@@ -818,7 +818,7 @@ export async function mcpPlugin(fastify: FastifyInstance) {
 
 ```bash
 # 1. Install dependencies
-cd workers/explainer
+cd services/explainer
 pip install -r requirements.txt
 
 # 2. Test MCP server starts

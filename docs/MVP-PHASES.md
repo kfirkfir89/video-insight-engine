@@ -107,10 +107,10 @@ curl http://localhost:8000/health   # Summarizer placeholder
   - Concept extraction prompt
   - Global synthesis prompt
 
-- [ ] Implement RabbitMQ consumer
+- [ ] Implement HTTP endpoint (FastAPI + BackgroundTasks)
 
-  - Consume from `summarize.jobs`
-  - Publish to `job.status`
+  - POST `/summarize` endpoint
+  - Send status updates via HTTP callback
 
 - [ ] Implement MongoDB operations
   - Update `videoSummaryCache`
@@ -130,8 +130,8 @@ Read [docs/ERROR-HANDLING.md](./ERROR-HANDLING.md) for details.
 - [ ] Retry logic with exponential backoff
   - 3 attempts: [5s, 15s, 60s]
   - Fallback to Haiku for retries
-- [ ] Dead letter queue for failed jobs
-  - Configure RabbitMQ DLQ
+- [ ] Failed job tracking in MongoDB
+  - Mark status as "failed" with error details
   - Log failed job details
 - [ ] Manual retry endpoint
   - `POST /api/videos/:id/retry`
@@ -139,7 +139,11 @@ Read [docs/ERROR-HANDLING.md](./ERROR-HANDLING.md) for details.
 ### Verification
 
 ```bash
-# Manually publish job to RabbitMQ
+# Trigger summarization via HTTP
+curl -X POST http://localhost:8000/summarize \
+  -H "Content-Type: application/json" \
+  -d '{"videoSummaryId":"test","youtubeId":"dQw4w9WgXcQ","url":"...","userId":"test"}'
+
 # Check videoSummaryCache for result
 docker exec vie-mongodb mongosh --eval \
   "db.videoSummaryCache.find().pretty()"
@@ -170,9 +174,9 @@ docker exec vie-mongodb mongosh --eval \
 - [ ] Implement plugins
 
   - MongoDB connection
-  - RabbitMQ connection
   - JWT authentication
   - WebSocket
+  - Summarizer HTTP client
 
 - [ ] Implement auth routes
 
@@ -191,7 +195,7 @@ docker exec vie-mongodb mongosh --eval \
   - List, get, delete
 
 - [ ] Implement WebSocket
-  - Subscribe to `job.status`
+  - Internal status endpoint for summarizer callbacks
   - Broadcast to connected users
 
 ### Verification

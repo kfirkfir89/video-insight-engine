@@ -137,13 +137,12 @@ open http://localhost:5173
 
 ## Tech Stack
 
-| Layer          | Technology                                |
-| -------------- | ----------------------------------------- |
-| **Frontend**   | React + TypeScript + Tailwind + shadcn/ui |
-| **Backend**    | Node.js + Fastify                         |
-| **AI Workers** | Python + Claude API                       |
-| **Database**   | MongoDB                                   |
-| **Queue**      | RabbitMQ                                  |
+| Layer            | Technology                                |
+| ---------------- | ----------------------------------------- |
+| **Frontend**     | React + TypeScript + Tailwind + shadcn/ui |
+| **Backend**      | Node.js + Fastify                         |
+| **AI Services**  | Python + FastAPI + Claude API             |
+| **Database**     | MongoDB                                   |
 
 ---
 

@@ -34,10 +34,9 @@ Personal video knowledge management system.
 | ------------------ | ------------------------------ | ----- |
 | **vie-api**        | Node.js + Fastify + TypeScript | 3000  |
 | **vie-web**        | React + Vite + TypeScript      | 5173  |
-| **vie-summarizer** | Python + FastAPI (worker)      | 8000  |
-| **vie-explainer**  | Python + MCP SDK (server)      | 8001  |
+| **vie-summarizer** | Python + FastAPI               | 8000  |
+| **vie-explainer**  | Python + MCP SDK               | 8001  |
 | **vie-mongodb**    | MongoDB 7                      | 27017 |
-| **vie-rabbitmq**   | RabbitMQ 3                     | 5672  |
 
 ---
 
@@ -82,7 +81,7 @@ video-insight-engine/
 ├── dev/            # Task planning (survives context resets)
 ├── packages/       # Shared code (@vie/types, @vie/utils)
 ├── api/            # vie-api - MAIN GATEWAY (Node.js + Fastify)
-├── workers/        # Background processors (summarizer, explainer)
+├── services/       # Backend services (summarizer, explainer)
 ├── apps/           # Frontend (web)
 └── scripts/        # Utility scripts
 ```

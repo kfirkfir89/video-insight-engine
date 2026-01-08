@@ -42,14 +42,12 @@
     "@fastify/rate-limit": "^9.1.0",
     "@fastify/websocket": "^10.0.0",
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "amqplib": "^0.10.0",
     "bcrypt": "^5.1.0",
     "fastify": "^4.26.0",
     "mongodb": "^6.3.0",
     "zod": "^3.22.0"
   },
   "devDependencies": {
-    "@types/amqplib": "^0.10.0",
     "@types/bcrypt": "^5.0.0",
     "@types/node": "^20.11.0",
     "tsx": "^4.7.0",
@@ -99,11 +97,12 @@ api/src/
 ├── config.ts             # Environment config
 ├── plugins/
 │   ├── mongodb.ts        # Database connection
-│   ├── rabbitmq.ts       # Queue connection
 │   ├── jwt.ts            # Authentication
 │   ├── cors.ts           # CORS config
 │   ├── rate-limit.ts     # Rate limiting
 │   └── websocket.ts      # Real-time updates
+├── services/
+│   ├── summarizer-client.ts  # HTTP client for summarizer
 ├── routes/
 │   ├── auth.routes.ts
 │   ├── folders.routes.ts
@@ -141,7 +140,7 @@ const envSchema = z.object({
   PORT: z.string().default('3000').transform(Number),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   MONGODB_URI: z.string(),
-  RABBITMQ_URI: z.string(),
+  SUMMARIZER_URL: z.string().default('http://vie-summarizer:8000'),
   JWT_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_EXPIRES_IN: z.string().default('15m'),
@@ -164,7 +163,6 @@ import { config } from './config.js';
 
 // Plugins
 import { mongodbPlugin } from './plugins/mongodb.js';
-import { rabbitmqPlugin } from './plugins/rabbitmq.js';
 import { jwtPlugin } from './plugins/jwt.js';
 import { corsPlugin } from './plugins/cors.js';
 import { rateLimitPlugin } from './plugins/rate-limit.js';
@@ -187,7 +185,6 @@ const fastify = Fastify({
 await fastify.register(corsPlugin);
 await fastify.register(rateLimitPlugin);
 await fastify.register(mongodbPlugin);
-await fastify.register(rabbitmqPlugin);
 await fastify.register(jwtPlugin);
 await fastify.register(websocketPlugin);
 
@@ -255,55 +252,7 @@ export const mongodbPlugin = fp(mongodb);
 
 ---
 
-### 2.4 RabbitMQ Plugin
-
-- [ ] Create `api/src/plugins/rabbitmq.ts`
-
-```typescript
-import { FastifyInstance } from 'fastify';
-import fp from 'fastify-plugin';
-import amqp, { Channel, Connection } from 'amqplib';
-import { config } from '../config.js';
-
-declare module 'fastify' {
-  interface FastifyInstance {
-    rabbitmq: {
-      channel: Channel;
-      publish: (queue: string, message: object) => Promise<void>;
-    };
-  }
-}
-
-async function rabbitmq(fastify: FastifyInstance) {
-  const connection: Connection = await amqp.connect(config.RABBITMQ_URI);
-  const channel: Channel = await connection.createChannel();
-  
-  // Ensure queues exist
-  await channel.assertQueue('summarize.jobs', { durable: true });
-  await channel.assertExchange('job.status', 'fanout', { durable: true });
-  
-  const publish = async (queue: string, message: object) => {
-    channel.sendToQueue(queue, Buffer.from(JSON.stringify(message)), {
-      persistent: true,
-    });
-  };
-  
-  fastify.decorate('rabbitmq', { channel, publish });
-  
-  fastify.addHook('onClose', async () => {
-    await channel.close();
-    await connection.close();
-  });
-  
-  fastify.log.info('✅ RabbitMQ connected');
-}
-
-export const rabbitmqPlugin = fp(rabbitmq);
-```
-
----
-
-### 2.5 JWT Plugin
+### 2.4 JWT Plugin
 
 - [ ] Create `api/src/plugins/jwt.ts`
 
@@ -350,7 +299,7 @@ export const jwtPlugin = fp(jwt);
 
 ---
 
-### 2.6 Rate Limit Plugin
+### 2.5 Rate Limit Plugin
 
 - [ ] Create `api/src/plugins/rate-limit.ts`
 
@@ -380,7 +329,7 @@ export { rateLimitPlugin };
 
 ---
 
-### 2.7 CORS Plugin
+### 2.6 CORS Plugin
 
 - [ ] Create `api/src/plugins/cors.ts`
 
@@ -661,20 +610,45 @@ export function isValidYoutubeUrl(url: string): boolean {
 
 ---
 
-### 4.2 Video Service
+### 4.2 Summarizer Client
+
+- [ ] Create `api/src/services/summarizer-client.ts`
+
+```typescript
+import { config } from '../config.js';
+
+interface SummarizeRequest {
+  videoSummaryId: string;
+  youtubeId: string;
+  url: string;
+  userId?: string;
+}
+
+export async function triggerSummarization(request: SummarizeRequest): Promise<void> {
+  // Fire and forget - don't await the processing
+  fetch(`${config.SUMMARIZER_URL}/summarize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  }).catch((err) => {
+    console.error('Failed to trigger summarization:', err);
+  });
+}
+```
+
+---
+
+### 4.3 Video Service
 
 - [ ] Create `api/src/services/video.service.ts`
 
 ```typescript
 import { Db, ObjectId } from 'mongodb';
 import { extractYoutubeId } from '../utils/youtube.js';
-
-interface RabbitMQ {
-  publish: (queue: string, message: object) => Promise<void>;
-}
+import { triggerSummarization } from './summarizer-client.js';
 
 export class VideoService {
-  constructor(private db: Db, private rabbitmq: RabbitMQ) {}
+  constructor(private db: Db) {}
 
   async createVideo(userId: string, url: string, folderId?: string) {
     const youtubeId = extractYoutubeId(url);
@@ -727,7 +701,7 @@ export class VideoService {
       };
     }
 
-    // Cache MISS - create entry and queue job
+    // Cache MISS - create entry and trigger summarization via HTTP
     const cacheEntry = await this.db.collection('videoSummaryCache').insertOne({
       youtubeId,
       url,
@@ -738,7 +712,8 @@ export class VideoService {
       updatedAt: new Date(),
     });
 
-    await this.rabbitmq.publish('summarize.jobs', {
+    // Trigger summarization via HTTP (fire and forget)
+    triggerSummarization({
       videoSummaryId: cacheEntry.insertedId.toString(),
       youtubeId,
       url,
@@ -836,7 +811,7 @@ export class VideoService {
 
 ---
 
-### 4.3 Videos Routes
+### 4.4 Videos Routes
 
 - [ ] Create `api/src/routes/videos.routes.ts`
 
@@ -851,7 +826,7 @@ const createVideoSchema = z.object({
 });
 
 export async function videosRoutes(fastify: FastifyInstance) {
-  const videoService = new VideoService(fastify.mongo.db, fastify.rabbitmq);
+  const videoService = new VideoService(fastify.mongo.db);
 
   // GET /api/videos
   fastify.get('/', {
@@ -1113,8 +1088,7 @@ This track integrates with:
 | Service | Integration | Status |
 |---------|-------------|--------|
 | vie-mongodb | Direct connection | ✅ Phase 2 |
-| vie-rabbitmq | Publish jobs | ✅ Phase 4 |
-| vie-summarizer | Via RabbitMQ | 🔄 Needs summarizer |
+| vie-summarizer | Via HTTP | 🔄 Needs summarizer |
 | vie-explainer | Via MCP | 🔄 Needs explainer |
 | vie-web | REST + WebSocket | 🔄 Needs web |
 

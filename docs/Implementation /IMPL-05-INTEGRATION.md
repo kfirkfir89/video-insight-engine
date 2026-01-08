@@ -11,7 +11,7 @@ This track validates that all services work together correctly.
 
 | Phase | What | Tests |
 |-------|------|-------|
-| 1 | Infrastructure | MongoDB, RabbitMQ up |
+| 1 | Infrastructure | MongoDB up |
 | 2 | Service Health | All services responding |
 | 3 | Auth Flow | Register → Login → Token refresh |
 | 4 | Video Flow | Submit → Process → Summary |
@@ -39,7 +39,6 @@ docker-compose ps
 ```
 NAME            STATUS                   PORTS
 vie-mongodb     Up (healthy)             27017
-vie-rabbitmq    Up (healthy)             5672, 15672
 vie-api         Up                       3000
 vie-web         Up                       5173
 vie-summarizer  Up                       8000
@@ -52,10 +51,6 @@ vie-explainer   Up                       8001
 # MongoDB
 docker exec vie-mongodb mongosh --eval "db.runCommand('ping')"
 # Expected: { ok: 1 }
-
-# RabbitMQ
-curl -s -u guest:guest http://localhost:15672/api/overview | jq '.node'
-# Expected: "rabbit@..."
 
 # Check indexes exist
 docker exec vie-mongodb mongosh video-insight-engine --eval "db.videoSummaryCache.getIndexes()"
@@ -505,7 +500,6 @@ hey -n 100 -c 10 \
 
 ### ✅ Infrastructure
 - [ ] MongoDB healthy and indexes created
-- [ ] RabbitMQ healthy and queues exist
 - [ ] All services start without errors
 
 ### ✅ Auth Flow
@@ -516,8 +510,8 @@ hey -n 100 -c 10 \
 
 ### ✅ Video Flow
 - [ ] Submit video creates cache entry
-- [ ] Job published to RabbitMQ
-- [ ] Summarizer processes job
+- [ ] HTTP POST triggers summarizer
+- [ ] Summarizer processes job (BackgroundTasks)
 - [ ] Status updates via WebSocket
 - [ ] Summary saved to cache
 - [ ] Cache hit on duplicate submit
@@ -552,11 +546,11 @@ docker-compose restart <service-name>
 ### Processing Stuck
 
 ```bash
-# Check RabbitMQ queue
-curl -s -u guest:guest http://localhost:15672/api/queues/%2F/summarize.jobs | jq
-
 # Check summarizer logs
 docker-compose logs -f vie-summarizer
+
+# Check if summarizer is healthy
+curl http://localhost:8000/health
 ```
 
 ### Cache Not Working
@@ -584,7 +578,7 @@ docker exec vie-explainer python -m src.server
 
 Integration is complete when:
 
-1. ✅ All 6 services running and healthy
+1. ✅ All 5 services running and healthy
 2. ✅ User can register and login
 3. ✅ Video submission triggers processing
 4. ✅ Summary appears after processing

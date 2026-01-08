@@ -77,13 +77,13 @@ See [docs/SECURITY.md](./SECURITY.md#rate-limiting) for implementation.
 
 ### Server Errors (500)
 
-| Code                  | Message                         | When              |
-| --------------------- | ------------------------------- | ----------------- |
-| `INTERNAL_ERROR`      | Something went wrong            | Unexpected error  |
-| `SERVICE_UNAVAILABLE` | Service temporarily unavailable | Dependency down   |
-| `LLM_ERROR`           | AI service error                | Claude API failed |
-| `DATABASE_ERROR`      | Database error                  | MongoDB failed    |
-| `QUEUE_ERROR`         | Queue service error             | RabbitMQ failed   |
+| Code                  | Message                         | When                  |
+| --------------------- | ------------------------------- | --------------------- |
+| `INTERNAL_ERROR`      | Something went wrong            | Unexpected error      |
+| `SERVICE_UNAVAILABLE` | Service temporarily unavailable | Dependency down       |
+| `LLM_ERROR`           | AI service error                | Claude API failed     |
+| `DATABASE_ERROR`      | Database error                  | MongoDB failed        |
+| `SUMMARIZER_ERROR`    | Summarizer service error        | Summarizer unreachable |
 
 ---
 
@@ -125,7 +125,7 @@ URL submitted
 └────────┬────────┘     Restricted ► VIDEO_RESTRICTED
          │
          ▼
-   Queue for processing
+   HTTP POST to summarizer
 ```
 
 ### Implementation
@@ -184,37 +184,43 @@ async def validate_video(youtube_id: str) -> VideoValidation:
 
 ### Automatic Retries (Internal)
 
-```typescript
-// RabbitMQ job retry
-const RETRY_CONFIG = {
-  maxRetries: 3,
-  backoff: [5000, 15000, 60000], // 5s, 15s, 60s
-  retryableErrors: [
-    "LLM_ERROR", // Claude API timeout
-    "DATABASE_ERROR", // MongoDB connection
-    "NETWORK_ERROR", // Transcript fetch
-  ],
-};
+```python
+# summarizer retry config
+RETRY_CONFIG = {
+    "max_retries": 3,
+    "backoff": [5, 15, 60],  # seconds
+    "retryable_errors": [
+        "LLM_ERROR",        # Claude API timeout
+        "DATABASE_ERROR",   # MongoDB connection
+        "NETWORK_ERROR",    # Transcript fetch
+    ],
+}
 ```
 
 ```python
-# summarizer/src/worker.py
+# services/summarizer/src/services/summarizer.py
 
-async def process_job(job: SummarizeJob):
+async def run_summarization(
+    video_summary_id: str,
+    youtube_id: str,
+    url: str,
+    user_id: str,
+):
     """Process with retry logic."""
 
-    for attempt in range(RETRY_CONFIG['maxRetries']):
+    for attempt in range(RETRY_CONFIG["max_retries"]):
         try:
-            result = await summarize_video(job.youtube_id)
+            result = await summarize_video(youtube_id)
             return result
 
         except RetryableError as e:
-            if attempt < RETRY_CONFIG['maxRetries'] - 1:
-                delay = RETRY_CONFIG['backoff'][attempt]
-                logger.warning(f"Retry {attempt + 1}, waiting {delay}ms")
-                await asyncio.sleep(delay / 1000)
+            if attempt < RETRY_CONFIG["max_retries"] - 1:
+                delay = RETRY_CONFIG["backoff"][attempt]
+                logger.warning(f"Retry {attempt + 1}, waiting {delay}s")
+                await asyncio.sleep(delay)
             else:
-                # Max retries reached - send to DLQ
+                # Max retries reached - mark as failed
+                await update_status(video_summary_id, "failed", error=str(e))
                 raise
 ```
 
@@ -278,7 +284,7 @@ fastify.post("/videos/:id/retry", async (req, reply) => {
     });
   }
 
-  // Reset and re-queue
+  // Reset and re-trigger
   await updateVideoCache(video.videoSummaryId, {
     status: "pending",
     errorMessage: null,
@@ -286,7 +292,13 @@ fastify.post("/videos/:id/retry", async (req, reply) => {
     retryCount: video.retryCount + 1,
   });
 
-  await queueJob({ videoSummaryId: video.videoSummaryId });
+  // Trigger summarizer via HTTP
+  await triggerSummarization({
+    videoSummaryId: video.videoSummaryId,
+    youtubeId: video.youtubeId,
+    url: video.url,
+    userId: req.user.id,
+  });
 
   return {
     video: {
@@ -300,61 +312,61 @@ fastify.post("/videos/:id/retry", async (req, reply) => {
 
 ---
 
-## Dead Letter Queue
+## Failed Jobs Tracking
 
-Failed jobs after max retries go to DLQ:
+Failed jobs after max retries are tracked in MongoDB:
 
-```typescript
-// summarizer/src/queue.py
+```python
+# services/summarizer/src/services/mongodb.py
 
-# RabbitMQ setup
-channel.queue_declare(
-    queue='summarize.jobs.dlq',
-    durable=True
-)
-
-channel.queue_declare(
-    queue='summarize.jobs',
-    durable=True,
-    arguments={
-        'x-dead-letter-exchange': '',
-        'x-dead-letter-routing-key': 'summarize.jobs.dlq'
-    }
-)
+async def mark_job_failed(
+    video_summary_id: str,
+    error_code: str,
+    error_message: str,
+    attempts: int,
+):
+    """Mark job as failed after max retries."""
+    await db.videoSummaryCache.update_one(
+        {"_id": ObjectId(video_summary_id)},
+        {
+            "$set": {
+                "status": "failed",
+                "errorCode": error_code,
+                "errorMessage": error_message,
+                "attempts": attempts,
+                "failedAt": datetime.utcnow(),
+            }
+        }
+    )
 ```
 
-DLQ message format:
+Failed job record:
 
 ```json
 {
-  "originalJob": {
-    "videoSummaryId": "...",
-    "youtubeId": "...",
-    "url": "..."
-  },
-  "error": {
-    "code": "LLM_ERROR",
-    "message": "Rate limit exceeded",
-    "stack": "..."
-  },
+  "_id": "507f1f77bcf86cd799439020",
+  "youtubeId": "dQw4w9WgXcQ",
+  "status": "failed",
+  "errorCode": "LLM_ERROR",
+  "errorMessage": "Rate limit exceeded",
   "attempts": 3,
   "failedAt": "2024-01-15T10:00:00Z"
 }
 ```
 
-### Monitoring DLQ
+### Monitoring Failed Jobs
 
-```typescript
-// Check DLQ depth
-async function getDLQDepth(): Promise<number> {
-  const { messageCount } = await channel.checkQueue("summarize.jobs.dlq");
-  return messageCount;
-}
+```python
+# Query failed jobs
+async def get_failed_jobs_count() -> int:
+    return await db.videoSummaryCache.count_documents({
+        "status": "failed",
+        "failedAt": {"$gte": datetime.utcnow() - timedelta(hours=24)}
+    })
 
-// Alert if DLQ backs up
-if ((await getDLQDepth()) > 10) {
-  await sendAlert("DLQ has more than 10 messages");
-}
+# Alert if too many failures
+if await get_failed_jobs_count() > 10:
+    await send_alert("More than 10 failed jobs in last 24h")
 ```
 
 ---
@@ -525,13 +537,12 @@ export function logError(error: Error, context: object) {
 
 ### Alert Thresholds
 
-| Metric              | Threshold | Action |
-| ------------------- | --------- | ------ |
-| Error rate > 5%     | 5 min     | Alert  |
-| LLM errors > 10/min | Immediate | Alert  |
-| Queue depth > 100   | 5 min     | Alert  |
-| Failed jobs > 20%   | 1 hour    | Alert  |
-| DLQ depth > 10      | Immediate | Alert  |
+| Metric               | Threshold | Action |
+| -------------------- | --------- | ------ |
+| Error rate > 5%      | 5 min     | Alert  |
+| LLM errors > 10/min  | Immediate | Alert  |
+| Failed jobs > 20%    | 1 hour    | Alert  |
+| Failed jobs > 10/24h | Immediate | Alert  |
 
 ---
 
@@ -543,8 +554,8 @@ Before deploying:
 - [ ] Validation errors include field-level details
 - [ ] Rate limit responses include Retry-After header
 - [ ] Frontend handles 401 with token refresh
-- [ ] Video edge cases detected before queuing
+- [ ] Video edge cases detected before processing
 - [ ] Retry logic with exponential backoff
-- [ ] Dead letter queue configured
+- [ ] Failed jobs tracked in MongoDB
 - [ ] Error logging with request context
 - [ ] Alerts configured for critical thresholds
