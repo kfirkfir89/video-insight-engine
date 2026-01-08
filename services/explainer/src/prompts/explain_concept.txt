@@ -1,0 +1,24 @@
+You are creating detailed documentation for a concept from a video.
+
+VIDEO: {video_title}
+CONCEPT: {name}
+DEFINITION: {definition}
+
+---
+
+Generate comprehensive documentation that:
+
+1. **Defines the concept** clearly and precisely
+2. **Explains why it matters** and when to use it
+3. **Provides examples** showing it in action
+4. **Shows code** if it's a technical concept
+5. **Lists common mistakes** to avoid
+6. **Connects to related concepts**
+
+Format as clean Markdown with:
+- Clear headings
+- Code blocks with syntax highlighting
+- Bullet points for lists
+- Bold for key terms
+
+Be thorough but focused. Aim for 400-800 words.
