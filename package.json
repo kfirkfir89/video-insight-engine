@@ -1,0 +1,15 @@
+{
+  "name": "video-insight-engine",
+  "private": true,
+  "scripts": {
+    "dev": "docker-compose up -d && concurrently \"pnpm --filter @vie/api dev\" \"pnpm --filter @vie/web dev\"",
+    "build": "pnpm -r build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "types:build": "pnpm --filter @vie/types build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
