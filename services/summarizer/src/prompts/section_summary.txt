@@ -1,0 +1,17 @@
+Summarize this video section.
+
+SECTION: {title}
+CONTENT:
+{content}
+
+Return JSON only (no other text):
+{{
+  "summary": "2-3 sentence summary of the section",
+  "bullets": ["key point 1", "key point 2", "key point 3"]
+}}
+
+Guidelines:
+- Summary should capture the main idea
+- Bullets should be specific and actionable
+- Include 3-5 bullet points
+- Use clear, concise language
