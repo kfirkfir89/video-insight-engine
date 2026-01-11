@@ -1,38 +1,49 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { VideoService } from '../services/video.service.js';
+import { idParamSchema, objectIdSchema } from '../utils/validation.js';
 
 const createVideoSchema = z.object({
   url: z.string().url(),
-  folderId: z.string().optional(),
+  folderId: objectIdSchema.optional(),
 });
 
 const moveVideoSchema = z.object({
-  folderId: z.string().nullable(),
+  folderId: objectIdSchema.nullable(),
+});
+
+const videosQuerySchema = z.object({
+  folderId: objectIdSchema.optional(),
 });
 
 export async function videosRoutes(fastify: FastifyInstance) {
   const videoService = new VideoService(fastify.mongo.db);
 
   // GET /api/videos
-  fastify.get('/', {
+  fastify.get<{
+    Querystring: z.infer<typeof videosQuerySchema>;
+  }>('/', {
     preHandler: [fastify.authenticate],
   }, async (req) => {
-    const { folderId } = req.query as { folderId?: string };
+    const { folderId } = videosQuerySchema.parse(req.query);
     const videos = await videoService.getVideos(req.user.userId, folderId);
     return { videos };
   });
 
   // GET /api/videos/:id
-  fastify.get('/:id', {
+  fastify.get<{
+    Params: z.infer<typeof idParamSchema>;
+  }>('/:id', {
     preHandler: [fastify.authenticate],
   }, async (req) => {
-    const { id } = req.params as { id: string };
+    const { id } = idParamSchema.parse(req.params);
     return videoService.getVideo(req.user.userId, id);
   });
 
   // POST /api/videos
-  fastify.post('/', {
+  fastify.post<{
+    Body: z.infer<typeof createVideoSchema>;
+  }>('/', {
     preHandler: [fastify.authenticate],
     config: {
       rateLimit: { max: 10, timeWindow: '24 hours' },
@@ -44,19 +55,24 @@ export async function videosRoutes(fastify: FastifyInstance) {
   });
 
   // DELETE /api/videos/:id
-  fastify.delete('/:id', {
+  fastify.delete<{
+    Params: z.infer<typeof idParamSchema>;
+  }>('/:id', {
     preHandler: [fastify.authenticate],
   }, async (req, reply) => {
-    const { id } = req.params as { id: string };
+    const { id } = idParamSchema.parse(req.params);
     await videoService.deleteVideo(req.user.userId, id);
     return reply.code(204).send();
   });
 
   // PATCH /api/videos/:id/move - Move video to a folder
-  fastify.patch('/:id/move', {
+  fastify.patch<{
+    Params: z.infer<typeof idParamSchema>;
+    Body: z.infer<typeof moveVideoSchema>;
+  }>('/:id/move', {
     preHandler: [fastify.authenticate],
   }, async (req) => {
-    const { id } = req.params as { id: string };
+    const { id } = idParamSchema.parse(req.params);
     const { folderId } = moveVideoSchema.parse(req.body);
     return videoService.moveToFolder(req.user.userId, id, folderId);
   });

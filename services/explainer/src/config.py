@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     # Anthropic
     ANTHROPIC_API_KEY: str
     ANTHROPIC_MODEL: str = "claude-sonnet-4-20250514"
+    LLM_TIMEOUT_SECONDS: float = 60.0
 
     # Logging
     LOG_LEVEL: str = "debug"

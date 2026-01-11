@@ -1,4 +1,15 @@
-"""vie-explainer MCP server entry point."""
+"""vie-explainer MCP server entry point.
+
+DEPRECATED: This file is a reference implementation for MCP server mode.
+The production deployment uses main.py (HTTP server via FastAPI) on port 8001.
+
+This file is kept for:
+1. Future MCP integration if needed
+2. Reference for MCP server patterns
+3. Testing MCP tools directly
+
+For production use, see main.py instead.
+"""
 
 import asyncio
 import json

@@ -3,7 +3,7 @@ import { useState, createContext, useContext } from "react";
 import {
   DndContext,
   DragOverlay,
-  closestCenter,
+  pointerWithin,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -16,6 +16,7 @@ import type {
 } from "@dnd-kit/core";
 import { Film, Folder } from "lucide-react";
 import { useMoveVideo } from "@/hooks/use-videos";
+import { useMoveFolder } from "@/hooks/use-folders";
 
 interface DndProviderProps {
   children: ReactNode;
@@ -38,6 +39,7 @@ export function DndProvider({ children }: DndProviderProps) {
   const [activeItem, setActiveItem] = useState<DragData | null>(null);
   const [overFolderId, setOverFolderId] = useState<string | null>(null);
   const moveVideo = useMoveVideo();
+  const moveFolder = useMoveFolder();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -63,18 +65,49 @@ export function DndProvider({ children }: DndProviderProps) {
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (over && active.data.current?.type === "video") {
-      const videoId = active.id as string;
-      const targetId = over.id as string;
+    const cleanup = () => {
+      setActiveItem(null);
+      setOverFolderId(null);
+    };
 
-      // Handle drop on folder or "root" (null folderId)
-      const folderId = targetId.startsWith("root-") ? null : targetId;
-
-      moveVideo.mutate({ id: videoId, folderId });
+    if (!over) {
+      cleanup();
+      return;
     }
 
-    setActiveItem(null);
-    setOverFolderId(null);
+    const dragType = active.data.current?.type;
+    const targetId = over.id as string;
+
+    // Extract actual folder ID from prefixed targetId
+    let targetFolderId: string | null = null;
+    if (targetId.startsWith("root-")) {
+      targetFolderId = null;
+    } else if (targetId.startsWith("folder-")) {
+      targetFolderId = targetId.replace("folder-", "");
+    } else {
+      // Fallback for unprefixed IDs
+      targetFolderId = targetId;
+    }
+
+    if (dragType === "video") {
+      // Extract actual video ID from data
+      const videoId = active.data.current?.id as string;
+      moveVideo.mutate({ id: videoId, folderId: targetFolderId });
+    } else if (dragType === "folder") {
+      // Extract actual folder ID from data
+      const sourceFolderId = active.data.current?.id as string;
+
+      // Prevent dropping folder into itself
+      if (sourceFolderId === targetFolderId) {
+        cleanup();
+        return;
+      }
+
+      // Move folder to new parent
+      moveFolder.mutate({ id: sourceFolderId, parentId: targetFolderId });
+    }
+
+    cleanup();
   };
 
   const handleDragCancel = () => {
@@ -85,7 +118,7 @@ export function DndProvider({ children }: DndProviderProps) {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}

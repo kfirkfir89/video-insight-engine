@@ -1,4 +1,5 @@
-import { Db, ObjectId } from 'mongodb';
+import { Db, ObjectId, AnyBulkWriteOperation } from 'mongodb';
+import { FolderNotFoundError, ParentFolderNotFoundError } from '../utils/errors.js';
 
 export interface Folder {
   _id: ObjectId;
@@ -77,7 +78,11 @@ export async function getFolderById(db: Db, userId: string, folderId: string) {
     userId: new ObjectId(userId),
   });
 
-  return folder ? toFolderResponse(folder) : null;
+  if (!folder) {
+    throw new FolderNotFoundError();
+  }
+
+  return toFolderResponse(folder);
 }
 
 export async function createFolder(db: Db, input: CreateFolderInput) {
@@ -95,7 +100,7 @@ export async function createFolder(db: Db, input: CreateFolderInput) {
     });
 
     if (!parent) {
-      throw new Error('Parent folder not found');
+      throw new ParentFolderNotFoundError();
     }
 
     path = `${parent.path}/${input.name}`;
@@ -151,7 +156,7 @@ export async function updateFolder(
   });
 
   if (!existing) {
-    return null;
+    throw new FolderNotFoundError();
   }
 
   const updates: Partial<Folder> & { updatedAt: Date } = {
@@ -172,6 +177,17 @@ export async function updateFolder(
   if (input.parentId !== undefined) {
     const newParentId = input.parentId ? new ObjectId(input.parentId) : null;
 
+    // Prevent moving folder into itself or its descendants
+    if (newParentId) {
+      const descendants = await getAllDescendantFolderIds(db, userObjectId, folderObjectId);
+      if (newParentId.equals(folderObjectId) || descendants.some(d => d.equals(newParentId))) {
+        throw new Error('Cannot move folder into itself or its descendants');
+      }
+    }
+
+    const oldPath = existing.path;
+    const oldLevel = existing.level;
+
     if (newParentId) {
       const parent = await db.collection<Folder>(COLLECTION).findOne({
         _id: newParentId,
@@ -179,7 +195,7 @@ export async function updateFolder(
       });
 
       if (!parent) {
-        throw new Error('Parent folder not found');
+        throw new ParentFolderNotFoundError();
       }
 
       updates.parentId = newParentId;
@@ -190,49 +206,121 @@ export async function updateFolder(
       updates.path = `/${input.name ?? existing.name}`;
       updates.level = 1;
     }
+
+    const newPath = updates.path!;
+    const levelDelta = updates.level! - oldLevel;
+
+    // Update this folder
+    await db.collection<Folder>(COLLECTION).updateOne(
+      { _id: folderObjectId },
+      { $set: updates }
+    );
+
+    // Batch update all descendants' paths and levels using bulkWrite
+    if (oldPath !== newPath || levelDelta !== 0) {
+      const descendants = await db.collection<Folder>(COLLECTION).find({
+        userId: userObjectId,
+        path: { $regex: `^${oldPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/` },
+      }).toArray();
+
+      if (descendants.length > 0) {
+        const bulkOps: AnyBulkWriteOperation<Folder>[] = descendants.map((descendant) => ({
+          updateOne: {
+            filter: { _id: descendant._id },
+            update: {
+              $set: {
+                path: descendant.path.replace(oldPath, newPath),
+                level: descendant.level + levelDelta,
+                updatedAt: new Date(),
+              },
+            },
+          },
+        }));
+
+        await db.collection<Folder>(COLLECTION).bulkWrite(bulkOps);
+      }
+    }
   } else if (input.name !== undefined && input.name !== existing.name) {
-    // Name changed but parent didn't - update path
+    // Name changed but parent didn't - update path for this folder and descendants
+    const oldPath = existing.path;
     const pathParts = existing.path.split('/');
     pathParts[pathParts.length - 1] = input.name;
     updates.path = pathParts.join('/');
-  }
+    const newPath = updates.path;
 
-  await db.collection<Folder>(COLLECTION).updateOne(
-    { _id: folderObjectId },
-    { $set: updates }
-  );
+    await db.collection<Folder>(COLLECTION).updateOne(
+      { _id: folderObjectId },
+      { $set: updates }
+    );
+
+    // Batch update descendants' paths using bulkWrite
+    const descendants = await db.collection<Folder>(COLLECTION).find({
+      userId: userObjectId,
+      path: { $regex: `^${oldPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/` },
+    }).toArray();
+
+    if (descendants.length > 0) {
+      const bulkOps: AnyBulkWriteOperation<Folder>[] = descendants.map((descendant) => ({
+        updateOne: {
+          filter: { _id: descendant._id },
+          update: {
+            $set: {
+              path: descendant.path.replace(oldPath, newPath),
+              updatedAt: new Date(),
+            },
+          },
+        },
+      }));
+
+      await db.collection<Folder>(COLLECTION).bulkWrite(bulkOps);
+    }
+  } else {
+    // No path-affecting changes, just update the folder
+    await db.collection<Folder>(COLLECTION).updateOne(
+      { _id: folderObjectId },
+      { $set: updates }
+    );
+  }
 
   const updated = await db.collection<Folder>(COLLECTION).findOne({
     _id: folderObjectId,
   });
 
-  return updated ? toFolderResponse(updated) : null;
+  if (!updated) {
+    throw new FolderNotFoundError();
+  }
+
+  return toFolderResponse(updated);
 }
 
 /**
- * Get all descendant folder IDs recursively using BFS
+ * Get all descendant folder IDs using MongoDB $graphLookup for O(1) queries instead of N
  */
 async function getAllDescendantFolderIds(
   db: Db,
   userId: ObjectId,
   parentFolderId: ObjectId
 ): Promise<ObjectId[]> {
-  const allDescendants: ObjectId[] = [];
-  const queue: ObjectId[] = [parentFolderId];
+  const result = await db.collection<Folder>(COLLECTION).aggregate<{ descendants: { _id: ObjectId }[] }>([
+    { $match: { _id: parentFolderId, userId } },
+    {
+      $graphLookup: {
+        from: COLLECTION,
+        startWith: '$_id',
+        connectFromField: '_id',
+        connectToField: 'parentId',
+        as: 'descendants',
+        restrictSearchWithMatch: { userId },
+      },
+    },
+    { $project: { descendants: { _id: 1 } } },
+  ]).toArray();
 
-  while (queue.length > 0) {
-    const currentParentId = queue.shift()!;
-    const children = await db.collection<Folder>(COLLECTION).find({
-      userId,
-      parentId: currentParentId,
-    }).toArray();
-
-    for (const child of children) {
-      allDescendants.push(child._id);
-      queue.push(child._id);
-    }
+  if (result.length === 0 || !result[0].descendants) {
+    return [];
   }
-  return allDescendants;
+
+  return result[0].descendants.map(d => d._id);
 }
 
 /**
@@ -245,7 +333,7 @@ export async function deleteFolder(
   userId: string,
   folderId: string,
   deleteContent: boolean = false
-): Promise<boolean> {
+): Promise<void> {
   const userObjectId = new ObjectId(userId);
   const folderObjectId = new ObjectId(folderId);
 
@@ -255,7 +343,7 @@ export async function deleteFolder(
   });
 
   if (!folder) {
-    return false;
+    throw new FolderNotFoundError();
   }
 
   // Get ALL descendant folder IDs (recursive)
@@ -315,6 +403,4 @@ export async function deleteFolder(
     _id: { $in: allFolderIds },
     userId: userObjectId,
   });
-
-  return true;
 }

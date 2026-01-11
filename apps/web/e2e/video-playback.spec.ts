@@ -119,21 +119,18 @@ test.describe("Video Playback - Gallery", () => {
 
 test.describe("Video Playback - Detail Page", () => {
   test.beforeEach(async ({ authenticatedPage: page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/video/video-1");
     // Wait for page to load
     await page.waitForSelector("h1", { timeout: 10000 });
   });
 
-  test("displays embedded YouTube player instead of thumbnail", async ({
+  test("displays embedded YouTube player in sidebar", async ({
     authenticatedPage: page,
   }) => {
-    // Should have YouTube player iframe
-    const youtubePlayer = page.locator('iframe[src*="youtube.com"]');
+    // Should have YouTube player iframe in collapsible section
+    const youtubePlayer = page.locator('[data-slot="collapsible-video"] iframe[src*="youtube.com"]');
     await expect(youtubePlayer).toBeVisible();
-
-    // Should NOT have a static thumbnail image in header
-    const thumbnailImg = page.locator("#video-player img");
-    await expect(thumbnailImg).toHaveCount(0);
   });
 
   test("displays video title and metadata", async ({ authenticatedPage: page }) => {
@@ -143,9 +140,10 @@ test.describe("Video Playback - Detail Page", () => {
 
   test("displays video summary sections", async ({ authenticatedPage: page }) => {
     // Wait for summary to load
-    await page.waitForSelector('text=TL;DR');
+    await page.waitForSelector('[data-slot="tldr-hero"]');
 
     // TLDR section
+    await expect(page.locator('[data-slot="tldr-hero"]')).toBeVisible();
     await expect(page.locator("text=TL;DR")).toBeVisible();
 
     // Key Takeaways
@@ -158,45 +156,36 @@ test.describe("Video Playback - Detail Page", () => {
     await expect(page.locator("h3", { hasText: "Conclusion" })).toBeVisible();
   });
 
-  test("section timestamps are clickable buttons", async ({
+  test("section cards have clickable play buttons with timestamps", async ({
     authenticatedPage: page,
   }) => {
     // Wait for sections to load
-    await page.waitForSelector('text=Sections');
+    await page.waitForSelector('[data-slot="section-card"]');
 
-    // Find timestamp buttons
-    const timestampButtons = page.locator('button[aria-label*="Jump to"]');
+    // Find timestamp play buttons in section cards
+    const timestampButtons = page.locator('[data-slot="section-card"] button[aria-label*="Play from"]');
     await expect(timestampButtons).toHaveCount(3);
 
     // First timestamp should show "0:00"
     await expect(timestampButtons.first()).toContainText("0:00");
-
-    // Timestamps should be styled as buttons
-    const firstTimestamp = timestampButtons.first();
-    await expect(firstTimestamp).toHaveClass(/cursor-pointer/);
   });
 
-  test("clicking timestamp scrolls to player", async ({ authenticatedPage: page }) => {
+  test("clicking play button in section card triggers video", async ({ authenticatedPage: page }) => {
     // Wait for sections
-    await page.waitForSelector('text=Sections');
+    await page.waitForSelector('[data-slot="section-card"]');
 
-    // Scroll down so player is out of view
-    await page.evaluate(() => window.scrollTo(0, 1000));
-
-    // Click a timestamp button
-    const timestampButton = page.locator('button[aria-label="Jump to 0:30"]');
+    // Click a timestamp button in the section card specifically
+    const sectionCard = page.locator('[data-slot="section-card"]').nth(1); // Main Content section
+    const timestampButton = sectionCard.locator('button[aria-label="Play from 0:30"]');
     await timestampButton.click();
 
-    // Wait for smooth scroll animation
-    await page.waitForTimeout(500);
-
-    // Player should be in viewport (scrolled into view)
-    const player = page.locator("#video-player");
-    await expect(player).toBeInViewport();
+    // Video player should be visible
+    const player = page.locator('[data-slot="collapsible-video"]');
+    await expect(player).toBeVisible();
   });
 
   test("back button navigates to dashboard", async ({ authenticatedPage: page }) => {
-    const backButton = page.locator('text=Back');
+    const backButton = page.locator('button:has-text("Back")');
     await backButton.click();
 
     await expect(page).toHaveURL("/");
@@ -204,38 +193,6 @@ test.describe("Video Playback - Detail Page", () => {
 });
 
 test.describe("Video Playback - Edge Cases", () => {
-  test("handles video without youtubeId gracefully", async ({
-    authenticatedPage: page,
-  }) => {
-    // Mock a video without youtubeId
-    await page.route("**/api/videos/video-no-youtube", (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          video: {
-            ...mockVideos[0],
-            id: "video-no-youtube",
-            youtubeId: null,
-            thumbnailUrl: "https://example.com/thumb.jpg",
-          },
-          summary: mockVideoSummary,
-        }),
-      });
-    });
-
-    await page.goto("/video/video-no-youtube");
-    await page.waitForSelector("h1");
-
-    // Should show thumbnail fallback instead of player
-    const thumbnail = page.locator('#video-player img[alt="Never Gonna Give You Up"]');
-    await expect(thumbnail).toBeVisible();
-
-    // Should NOT have YouTube iframe
-    const youtubePlayer = page.locator('iframe[src*="youtube.com"]');
-    await expect(youtubePlayer).toHaveCount(0);
-  });
-
   test("handles video still processing (no summary)", async ({
     authenticatedPage: page,
   }) => {
@@ -278,18 +235,19 @@ test.describe("Video Playback - Accessibility", () => {
     await expect(dialogTitle).toBeAttached();
   });
 
-  test("timestamp buttons have accessible labels", async ({
+  test("section play buttons have accessible labels", async ({
     authenticatedPage: page,
   }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/video/video-1");
-    await page.waitForSelector('text=Sections');
+    await page.waitForSelector('[data-slot="section-card"]');
 
-    const timestampButtons = page.locator('button[aria-label*="Jump to"]');
+    const timestampButtons = page.locator('[data-slot="section-card"] button[aria-label*="Play from"]');
     const count = await timestampButtons.count();
 
     for (let i = 0; i < count; i++) {
       const label = await timestampButtons.nth(i).getAttribute("aria-label");
-      expect(label).toMatch(/Jump to \d+:\d+/);
+      expect(label).toMatch(/Play from \d+:\d+/);
     }
   });
 

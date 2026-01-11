@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     # Limits
     MAX_VIDEO_DURATION_MINUTES: int = 180
     MIN_VIDEO_DURATION_SECONDS: int = 60
+    LLM_TIMEOUT_SECONDS: float = 60.0
+
+    # Token limits for LLM prompts
+    MAX_TRANSCRIPT_CHARS: int = 15000
+    MAX_SECTION_CHARS: int = 8000
 
     class Config:
         env_file = ".env"

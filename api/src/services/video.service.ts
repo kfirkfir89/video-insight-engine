@@ -1,6 +1,7 @@
 import { Db, ObjectId } from 'mongodb';
 import { extractYoutubeId } from '../utils/youtube.js';
 import { triggerSummarization } from './summarizer-client.js';
+import { InvalidYouTubeUrlError, VideoNotFoundError } from '../utils/errors.js';
 
 export class VideoService {
   constructor(private db: Db) {}
@@ -8,7 +9,7 @@ export class VideoService {
   async createVideo(userId: string, url: string, folderId?: string) {
     const youtubeId = extractYoutubeId(url);
     if (!youtubeId) {
-      throw { code: 'INVALID_YOUTUBE_URL', status: 400 };
+      throw new InvalidYouTubeUrlError();
     }
 
     // Check cache
@@ -131,7 +132,12 @@ export class VideoService {
     };
   }
 
-  async getVideos(userId: string, folderId?: string) {
+  async getVideos(
+    userId: string,
+    folderId?: string,
+    options: { limit?: number; offset?: number } = {}
+  ) {
+    const { limit = 50, offset = 0 } = options;
     const matchStage: Record<string, unknown> = { userId: new ObjectId(userId) };
     if (folderId) {
       matchStage.folderId = new ObjectId(folderId);
@@ -141,6 +147,8 @@ export class VideoService {
     const videos = await this.db.collection('userVideos').aggregate([
       { $match: matchStage },
       { $sort: { createdAt: -1 } },
+      { $skip: offset },
+      { $limit: limit },
       {
         $lookup: {
           from: 'videoSummaryCache',
@@ -173,7 +181,7 @@ export class VideoService {
     });
 
     if (!video) {
-      throw { code: 'NOT_FOUND', status: 404 };
+      throw new VideoNotFoundError();
     }
 
     const summary = await this.db.collection('videoSummaryCache').findOne({
@@ -202,7 +210,7 @@ export class VideoService {
     });
 
     if (result.deletedCount === 0) {
-      throw { code: 'NOT_FOUND', status: 404 };
+      throw new VideoNotFoundError();
     }
   }
 
@@ -221,7 +229,7 @@ export class VideoService {
     );
 
     if (result.matchedCount === 0) {
-      throw { code: 'NOT_FOUND', status: 404 };
+      throw new VideoNotFoundError();
     }
 
     return { success: true };

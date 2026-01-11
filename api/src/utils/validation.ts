@@ -1,4 +1,5 @@
 import { ObjectId } from 'mongodb';
+import { z } from 'zod';
 
 /**
  * Validates if a string is a valid MongoDB ObjectId format
@@ -16,3 +17,15 @@ export function toObjectId(id: string): ObjectId | null {
   }
   return new ObjectId(id);
 }
+
+/**
+ * Zod schema for validating MongoDB ObjectId strings
+ */
+export const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid ID format');
+
+/**
+ * Common route param schemas
+ */
+export const idParamSchema = z.object({
+  id: objectIdSchema,
+});

@@ -4,16 +4,13 @@ import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import {
   Film,
-  Loader2,
-  CheckCircle,
-  AlertCircle,
-  Clock,
   MoreVertical,
   FolderInput,
   Folder,
   FolderX,
   Trash2,
 } from "lucide-react";
+import { StatusIcon } from "@/components/ui/status-icon";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,7 +23,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { DeleteVideoDialog } from "@/components/dialogs/DeleteVideoDialog";
 import { cn } from "@/lib/utils";
+import { getFolderColorStyle } from "@/lib/style-utils";
 import { useMoveVideo, useDeleteVideo } from "@/hooks/use-videos";
+import { useSidebarTextClasses } from "@/hooks/use-sidebar-text-size";
 import type { Video, Folder as FolderType } from "@/types";
 
 interface VideoItemProps {
@@ -42,10 +41,11 @@ export function VideoItem({ video, level, folders = [] }: VideoItemProps) {
   const moveVideo = useMoveVideo();
   const deleteVideo = useDeleteVideo();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const textClasses = useSidebarTextClasses();
 
-  // DnD draggable
+  // DnD draggable - use prefixed ID to ensure uniqueness
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: video.id,
+    id: `video-${video.id}`,
     data: {
       type: "video",
       id: video.id,
@@ -61,13 +61,6 @@ export function VideoItem({ video, level, folders = [] }: VideoItemProps) {
 
   // Use consistent padding with FolderItem (level already includes +1 from parent)
   const paddingLeft = BASE_PADDING + level * INDENT_PER_LEVEL;
-
-  const statusIcon = {
-    pending: <Clock className="h-3 w-3 text-yellow-500" />,
-    processing: <Loader2 className="h-3 w-3 animate-spin text-blue-500" />,
-    completed: <CheckCircle className="h-3 w-3 text-green-500" />,
-    failed: <AlertCircle className="h-3 w-3 text-red-500" />,
-  };
 
   const handleMoveToFolder = (folderId: string | null) => {
     moveVideo.mutate({ id: video.id, folderId });
@@ -104,7 +97,7 @@ export function VideoItem({ video, level, folders = [] }: VideoItemProps) {
       {/* Video link */}
       <Link
         to={`/video/${video.id}`}
-        className="ml-2 text-sm truncate flex-1 cursor-pointer"
+        className={cn("ml-2 truncate flex-1 cursor-pointer", textClasses.mainText)}
         onClick={(e) => isDragging && e.preventDefault()}
       >
         {video.title || "Loading..."}
@@ -112,14 +105,14 @@ export function VideoItem({ video, level, folders = [] }: VideoItemProps) {
 
       {/* Status icon on hover */}
       <span className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-        {statusIcon[video.status]}
+        <StatusIcon status={video.status} size={12} />
       </span>
 
       {/* Context menu */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
-            className="ml-1 p-0.5 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity shrink-0"
+            className="ml-1 p-0.5 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity shrink-0 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
             onClick={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
           >
@@ -153,7 +146,7 @@ export function VideoItem({ video, level, folders = [] }: VideoItemProps) {
                   >
                     <Folder
                       className="h-4 w-4"
-                      style={folder.color ? { color: folder.color } : undefined}
+                      style={getFolderColorStyle(folder.color)}
                     />
                     <span>{folder.name}</span>
                   </DropdownMenuItem>
