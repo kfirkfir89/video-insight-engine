@@ -29,4 +29,20 @@ export type Video = VideoResponse;
 export type Folder = FolderResponse;
 
 // Import the type for use in alias
-import type { VideoResponse, FolderResponse } from "@vie/types";
+import type { VideoResponse, FolderResponse, FolderType } from "@vie/types";
+
+// Folder input types (used by API layer)
+export interface CreateFolderInput {
+  name: string;
+  type: FolderType;
+  parentId?: string | null;
+  color?: string | null;
+  icon?: string | null;
+}
+
+export interface UpdateFolderInput {
+  name?: string;
+  parentId?: string | null;
+  color?: string | null;
+  icon?: string | null;
+}

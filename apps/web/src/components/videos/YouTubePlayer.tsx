@@ -26,16 +26,17 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
   ) {
     const iframeRef = useRef<HTMLIFrameElement>(null);
 
+    // TODO: Implement YouTube IFrame API for proper player control
+    // Current implementation is a stub - iframe postMessage API required for seekTo/play/pause
     useImperativeHandle(ref, () => ({
-      seekTo: (seconds: number) => {
-        // For iframe-based player, would need YouTube IFrame API
-        console.log("seekTo:", seconds);
+      seekTo: (_seconds: number) => {
+        // Requires YouTube IFrame API postMessage implementation
       },
       playVideo: () => {
-        console.log("playVideo called");
+        // Requires YouTube IFrame API postMessage implementation
       },
       pauseVideo: () => {
-        console.log("pauseVideo called");
+        // Requires YouTube IFrame API postMessage implementation
       },
       getCurrentTime: () => {
         return 0;

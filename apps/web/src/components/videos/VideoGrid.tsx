@@ -1,26 +1,50 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
 import type { Video, Folder } from "@/types";
-import { Card } from "@/components/ui/card";
-import { Loader2, CheckCircle, AlertCircle, Clock, Folder as FolderIcon, Play } from "lucide-react";
-import { VideoPlayerModal } from "./VideoPlayerModal";
+import { Loader2, Folder as FolderIcon, Play } from "lucide-react";
+import { FolderCard } from "./FolderCard";
+import { VideoCard } from "./VideoCard";
 import { useUIStore } from "@/stores/ui-store";
+import { getFolderColorStyle } from "@/lib/style-utils";
+
+/**
+ * Context object for folder-related display options.
+ * Groups related folder props into a single object for cleaner API.
+ */
+export interface FolderContext {
+  /** Currently selected folder ID (null = root/all) */
+  currentFolderId: string | null;
+  /** Direct children folders of the current folder */
+  subfolders: Folder[];
+  /** All folders in the hierarchy (for grouping and navigation) */
+  allFolders: Folder[];
+  /** All videos (for counting in FolderCard) */
+  allVideos: Video[];
+}
 
 interface VideoGridProps {
+  /** Videos to display */
   videos: Video[];
-  folders?: Folder[];
+  /** Loading state */
   isLoading: boolean;
+  /** Group videos by folder (for "All Videos" view) */
   groupByFolder?: boolean;
+  /** Folder context for navigation and display */
+  folderContext?: FolderContext;
 }
 
 export function VideoGrid({
   videos,
-  folders = [],
   isLoading,
   groupByFolder = false,
+  folderContext,
 }: VideoGridProps) {
+  // Extract folder context with defaults
+  const currentFolderId = folderContext?.currentFolderId ?? null;
+  const subfolders = folderContext?.subfolders ?? [];
+  const folders = folderContext?.allFolders ?? [];
+  const allVideos = folderContext?.allVideos ?? [];
   const setSelectedFolder = useUIStore((s) => s.setSelectedFolder);
   const setActiveSection = useUIStore((s) => s.setActiveSection);
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -29,18 +53,83 @@ export function VideoGrid({
     );
   }
 
-  if (videos.length === 0) {
+  // Handler for clicking on a folder card
+  const handleFolderClick = (folderId: string) => {
+    setSelectedFolder(folderId);
+    setActiveSection("summarized");
+  };
+
+  // Check if we have any content (videos or subfolders)
+  const hasContent = videos.length > 0 || subfolders.length > 0;
+
+  if (!hasContent) {
     return (
       <div className="rounded-lg border border-dashed border-border p-12 text-center">
-        <h3 className="text-lg font-medium">No videos yet</h3>
+        <FolderIcon size={48} className="mx-auto mb-4 text-muted-foreground" />
+        <h3 className="text-lg font-medium">
+          {currentFolderId ? "This folder is empty" : "No videos yet"}
+        </h3>
         <p className="text-muted-foreground">
-          Add your first YouTube video to get started
+          {currentFolderId
+            ? "Add videos or create subfolders to organize your content"
+            : "Add your first YouTube video to get started"}
         </p>
       </div>
     );
   }
 
-  // If not grouping by folder, render flat grid
+  // If viewing a specific folder (not grouped mode), show subfolders + videos
+  if (!groupByFolder && currentFolderId !== null) {
+    return (
+      <div className="space-y-6">
+        {/* Subfolders section */}
+        {subfolders.length > 0 && (
+          <section>
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <FolderIcon className="h-5 w-5 text-muted-foreground" />
+              Folders
+              <span className="text-sm text-muted-foreground font-normal">
+                ({subfolders.length})
+              </span>
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {subfolders.map((folder) => (
+                <FolderCard
+                  key={folder.id}
+                  folder={folder}
+                  allFolders={folders}
+                  allVideos={allVideos}
+                  onClick={handleFolderClick}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Videos section */}
+        {videos.length > 0 && (
+          <section>
+            {subfolders.length > 0 && (
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Play className="h-5 w-5 text-muted-foreground" />
+                Videos
+                <span className="text-sm text-muted-foreground font-normal">
+                  ({videos.length})
+                </span>
+              </h2>
+            )}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {videos.map((video) => (
+                <VideoCard key={video.id} video={video} />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    );
+  }
+
+  // If not grouping by folder (flat view without folder context)
   if (!groupByFolder) {
     return (
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -89,7 +178,7 @@ export function VideoGrid({
           <section key={folderId || "uncategorized"}>
             {/* Folder Header - clickable to navigate to folder view */}
             <div
-              className="flex items-center gap-2 mb-4 pb-2 border-b border-border cursor-pointer hover:bg-accent/50 -mx-2 px-2 py-1 rounded transition-colors"
+              className="flex items-center gap-2 cursor-pointer hover:bg-accent/30 -mx-2 px-2 py-2 rounded-lg transition-colors"
               onClick={() => {
                 if (folder) {
                   setSelectedFolder(folder.id);
@@ -98,14 +187,16 @@ export function VideoGrid({
               }}
             >
               <FolderIcon
-                className="h-5 w-5 text-muted-foreground"
-                style={folder?.color ? { color: folder.color } : undefined}
+                className="h-5 w-5 shrink-0"
+                style={getFolderColorStyle(folder?.color)}
               />
               <h2 className="text-lg font-semibold">{folderName}</h2>
               <span className="text-sm text-muted-foreground">
-                ({folderVideos.length} video{folderVideos.length !== 1 ? "s" : ""})
+                ({folderVideos.length})
               </span>
             </div>
+            {/* Subtle separator */}
+            <div className="border-b border-border/30 -mx-2 mb-4" />
 
             {/* Videos Grid */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -120,80 +211,4 @@ export function VideoGrid({
   );
 }
 
-function VideoCard({ video }: { video: Video }) {
-  const [showPlayer, setShowPlayer] = useState(false);
-
-  const statusIcon = {
-    pending: <Clock className="text-yellow-500" size={16} />,
-    processing: <Loader2 className="animate-spin text-blue-500" size={16} />,
-    completed: <CheckCircle className="text-green-500" size={16} />,
-    failed: <AlertCircle className="text-red-500" size={16} />,
-  };
-
-  const handlePlayClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setShowPlayer(true);
-  };
-
-  return (
-    <>
-      <Link to={`/video/${video.id}`}>
-        <Card className="overflow-hidden transition-shadow hover:shadow-md">
-          {/* Thumbnail with Play Button Overlay */}
-          <div className="aspect-video bg-muted relative group">
-            {video.thumbnailUrl ? (
-              <img
-                src={video.thumbnailUrl}
-                alt={video.title || "Video thumbnail"}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-4xl">
-                Video
-              </div>
-            )}
-
-            {/* Play Button Overlay - Only show for completed videos */}
-            {video.status === "completed" && video.youtubeId && (
-              <button
-                onClick={handlePlayClick}
-                className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
-                aria-label={`Play ${video.title}`}
-              >
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/90 text-primary-foreground hover:bg-primary transition-colors">
-                  <Play className="h-8 w-8 ml-1" fill="currentColor" />
-                </div>
-              </button>
-            )}
-          </div>
-
-          {/* Info */}
-          <div className="p-4">
-            <div className="mb-2 flex items-center gap-2">
-              {statusIcon[video.status]}
-              <span className="text-xs capitalize text-muted-foreground">
-                {video.status}
-              </span>
-            </div>
-            <h3 className="line-clamp-2 font-medium">
-              {video.title || "Loading..."}
-            </h3>
-            {video.channel && (
-              <p className="mt-1 text-sm text-muted-foreground">
-                {video.channel}
-              </p>
-            )}
-          </div>
-        </Card>
-      </Link>
-
-      {/* Modal for video playback */}
-      <VideoPlayerModal
-        video={video}
-        open={showPlayer}
-        onClose={() => setShowPlayer(false)}
-      />
-    </>
-  );
-}
+// VideoCard component has been extracted to ./VideoCard.tsx

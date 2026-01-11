@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 type ActiveSection = "summarized" | "memorized";
+export type SidebarTextSize = "small" | "medium" | "large";
 
 interface UIState {
   // Sidebar visibility
@@ -18,6 +19,9 @@ interface UIState {
   // Folder expansion state (persisted as array, used as Set in memory)
   expandedFolderIds: string[];
 
+  // Sidebar text size preference
+  sidebarTextSize: SidebarTextSize;
+
   // Legacy (keep for AddVideoDialog if needed elsewhere)
   addVideoDialogOpen: boolean;
 
@@ -30,9 +34,11 @@ interface UIState {
   toggleFolderExpansion: (folderId: string) => void;
   expandFolder: (folderId: string) => void;
   collapseFolder: (folderId: string) => void;
+  collapseAllFolders: () => void;
   isFolderExpanded: (folderId: string) => boolean;
   openAddVideoDialog: () => void;
   closeAddVideoDialog: () => void;
+  setSidebarTextSize: (size: SidebarTextSize) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -45,6 +51,7 @@ export const useUIStore = create<UIState>()(
       summarizedSectionOpen: true,
       memorizedSectionOpen: true,
       expandedFolderIds: [],
+      sidebarTextSize: "medium",
       addVideoDialogOpen: false,
 
       // Actions
@@ -75,9 +82,11 @@ export const useUIStore = create<UIState>()(
         set((s) => ({
           expandedFolderIds: s.expandedFolderIds.filter((id) => id !== folderId),
         })),
+      collapseAllFolders: () => set({ expandedFolderIds: [] }),
       isFolderExpanded: (folderId) => get().expandedFolderIds.includes(folderId),
       openAddVideoDialog: () => set({ addVideoDialogOpen: true }),
       closeAddVideoDialog: () => set({ addVideoDialogOpen: false }),
+      setSidebarTextSize: (size) => set({ sidebarTextSize: size }),
     }),
     {
       name: "vie-ui-store",
@@ -87,6 +96,7 @@ export const useUIStore = create<UIState>()(
         summarizedSectionOpen: state.summarizedSectionOpen,
         memorizedSectionOpen: state.memorizedSectionOpen,
         expandedFolderIds: state.expandedFolderIds,
+        sidebarTextSize: state.sidebarTextSize,
       }),
     }
   )
@@ -96,3 +106,4 @@ export const useUIStore = create<UIState>()(
 export const useSidebarOpen = () => useUIStore((s) => s.sidebarOpen);
 export const useSelectedFolder = () => useUIStore((s) => s.selectedFolderId);
 export const useActiveSection = () => useUIStore((s) => s.activeSection);
+export const useSidebarTextSize = () => useUIStore((s) => s.sidebarTextSize);

@@ -7,65 +7,53 @@ import {
   deleteFolder,
   getFolderById,
 } from '../services/folder.service.js';
+import { idParamSchema, objectIdSchema } from '../utils/validation.js';
 
 const folderTypeSchema = z.enum(['summarized', 'memorized']);
+
+const foldersQuerySchema = z.object({
+  type: folderTypeSchema.optional(),
+});
 
 const createFolderSchema = z.object({
   name: z.string().min(1).max(100),
   type: folderTypeSchema,
-  parentId: z.string().optional().nullable(),
+  parentId: objectIdSchema.optional().nullable(),
   color: z.string().optional().nullable(),
   icon: z.string().optional().nullable(),
 });
 
 const updateFolderSchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  parentId: z.string().optional().nullable(),
+  parentId: objectIdSchema.optional().nullable(),
   color: z.string().optional().nullable(),
   icon: z.string().optional().nullable(),
+});
+
+const deleteFolderQuerySchema = z.object({
+  deleteContent: z.enum(['true', 'false']).optional(),
 });
 
 export async function foldersRoutes(fastify: FastifyInstance) {
   // GET /api/folders
   fastify.get<{
-    Querystring: { type?: string };
+    Querystring: z.infer<typeof foldersQuerySchema>;
   }>('/', {
     preHandler: [fastify.authenticate],
-  }, async (req, reply) => {
-    const typeParam = req.query.type;
-
-    let type: 'summarized' | 'memorized' | undefined;
-    if (typeParam) {
-      const parsed = folderTypeSchema.safeParse(typeParam);
-      if (!parsed.success) {
-        return reply.status(400).send({
-          error: 'Bad Request',
-          message: 'type must be "summarized" or "memorized"',
-        });
-      }
-      type = parsed.data;
-    }
-
+  }, async (req) => {
+    const { type } = foldersQuerySchema.parse(req.query);
     const folders = await listFolders(fastify.mongo.db, req.user.userId, type);
     return { folders };
   });
 
   // GET /api/folders/:id
   fastify.get<{
-    Params: { id: string };
+    Params: z.infer<typeof idParamSchema>;
   }>('/:id', {
     preHandler: [fastify.authenticate],
-  }, async (req, reply) => {
-    const folder = await getFolderById(fastify.mongo.db, req.user.userId, req.params.id);
-
-    if (!folder) {
-      return reply.status(404).send({
-        error: 'Not Found',
-        message: 'Folder not found',
-      });
-    }
-
-    return folder;
+  }, async (req) => {
+    const { id } = idParamSchema.parse(req.params);
+    return getFolderById(fastify.mongo.db, req.user.userId, id);
   });
 
   // POST /api/folders
@@ -74,98 +62,37 @@ export async function foldersRoutes(fastify: FastifyInstance) {
   }>('/', {
     preHandler: [fastify.authenticate],
   }, async (req, reply) => {
-    const parsed = createFolderSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: 'Bad Request',
-        message: parsed.error.errors[0]?.message || 'Invalid request body',
-      });
-    }
-
-    try {
-      const folder = await createFolder(fastify.mongo.db, {
-        userId: req.user.userId,
-        ...parsed.data,
-      });
-
-      return reply.status(201).send(folder);
-    } catch (error) {
-      if (error instanceof Error && error.message === 'Parent folder not found') {
-        return reply.status(400).send({
-          error: 'Bad Request',
-          message: 'Parent folder not found',
-        });
-      }
-      throw error;
-    }
+    const input = createFolderSchema.parse(req.body);
+    const folder = await createFolder(fastify.mongo.db, {
+      userId: req.user.userId,
+      ...input,
+    });
+    return reply.status(201).send(folder);
   });
 
   // PATCH /api/folders/:id
   fastify.patch<{
-    Params: { id: string };
+    Params: z.infer<typeof idParamSchema>;
     Body: z.infer<typeof updateFolderSchema>;
   }>('/:id', {
     preHandler: [fastify.authenticate],
-  }, async (req, reply) => {
-    const parsed = updateFolderSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: 'Bad Request',
-        message: parsed.error.errors[0]?.message || 'Invalid request body',
-      });
-    }
-
-    try {
-      const folder = await updateFolder(
-        fastify.mongo.db,
-        req.user.userId,
-        req.params.id,
-        parsed.data
-      );
-
-      if (!folder) {
-        return reply.status(404).send({
-          error: 'Not Found',
-          message: 'Folder not found',
-        });
-      }
-
-      return folder;
-    } catch (error) {
-      if (error instanceof Error && error.message === 'Parent folder not found') {
-        return reply.status(400).send({
-          error: 'Bad Request',
-          message: 'Parent folder not found',
-        });
-      }
-      throw error;
-    }
+  }, async (req) => {
+    const { id } = idParamSchema.parse(req.params);
+    const input = updateFolderSchema.parse(req.body);
+    return updateFolder(fastify.mongo.db, req.user.userId, id, input);
   });
 
   // DELETE /api/folders/:id
   // Query param: deleteContent=true to delete all content, otherwise moves content to root
   fastify.delete<{
-    Params: { id: string };
-    Querystring: { deleteContent?: string };
+    Params: z.infer<typeof idParamSchema>;
+    Querystring: z.infer<typeof deleteFolderQuerySchema>;
   }>('/:id', {
     preHandler: [fastify.authenticate],
   }, async (req, reply) => {
-    const deleteContent = req.query.deleteContent === 'true';
-
-    const deleted = await deleteFolder(
-      fastify.mongo.db,
-      req.user.userId,
-      req.params.id,
-      deleteContent
-    );
-
-    if (!deleted) {
-      return reply.status(404).send({
-        error: 'Not Found',
-        message: 'Folder not found',
-      });
-    }
-
+    const { id } = idParamSchema.parse(req.params);
+    const { deleteContent } = deleteFolderQuerySchema.parse(req.query);
+    await deleteFolder(fastify.mongo.db, req.user.userId, id, deleteContent === 'true');
     return reply.status(204).send();
   });
 }

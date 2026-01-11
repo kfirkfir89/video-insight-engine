@@ -1,7 +1,7 @@
 [project]
 name = "vie-explainer"
 version = "0.1.0"
-description = "MCP server with explain_auto and explain_chat tools"
+description = "Video content explanation service with HTTP endpoints"
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.0.0",
@@ -10,10 +10,36 @@ dependencies = [
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
     "python-dotenv>=1.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
+    "httpx>=0.24.0",
 ]
 
 [project.scripts]
 vie-explainer = "src.server:main"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["src/__init__.py", "tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
 
 [tool.ruff]
 line-length = 100

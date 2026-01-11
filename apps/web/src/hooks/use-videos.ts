@@ -14,7 +14,7 @@ export function useAllVideos() {
 export function useVideos(folderId?: string) {
   return useQuery({
     queryKey: queryKeys.videos.list(folderId),
-    queryFn: () => videosApi.list(folderId),
+    queryFn: () => videosApi.list({ folderId }),
   });
 }
 

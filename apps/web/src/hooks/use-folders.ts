@@ -1,13 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { foldersApi, type CreateFolderInput, type UpdateFolderInput } from "@/api/folders";
+import { foldersApi } from "@/api/folders";
 import { queryKeys } from "@/lib/query-keys";
-import type { FolderType } from "@/types";
+import type { FolderType, CreateFolderInput, UpdateFolderInput } from "@/types";
 
 // Fetch folders list
 export function useFolders(type?: FolderType) {
   return useQuery({
     queryKey: queryKeys.folders.list(type),
-    queryFn: () => foldersApi.list(type),
+    queryFn: () => foldersApi.list({ type }),
   });
 }
 
@@ -56,6 +56,22 @@ export function useDeleteFolder() {
       // Invalidate folder queries
       queryClient.invalidateQueries({ queryKey: queryKeys.folders.lists() });
       // CRITICAL: Also invalidate video queries since videos are moved/deleted
+      queryClient.invalidateQueries({ queryKey: queryKeys.videos.lists() });
+    },
+  });
+}
+
+// Move folder to a new parent
+export function useMoveFolder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, parentId }: { id: string; parentId: string | null }) =>
+      foldersApi.update(id, { parentId }),
+    onSuccess: () => {
+      // Invalidate folder queries (paths and levels change)
+      queryClient.invalidateQueries({ queryKey: queryKeys.folders.lists() });
+      // Also invalidate video queries to refresh UI
       queryClient.invalidateQueries({ queryKey: queryKeys.videos.lists() });
     },
   });

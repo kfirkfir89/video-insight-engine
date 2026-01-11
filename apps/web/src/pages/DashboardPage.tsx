@@ -1,14 +1,18 @@
+import { useMemo } from "react";
 import { Layout } from "@/components/layout/Layout";
-import { VideoGrid } from "@/components/videos/VideoGrid";
+import { VideoGrid, type FolderContext } from "@/components/videos/VideoGrid";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { useAllVideos, useVideos } from "@/hooks/use-videos";
 import { useFolders } from "@/hooks/use-folders";
 import { useUIStore } from "@/stores/ui-store";
+import { buildBreadcrumbPath, getSubfolders } from "@/lib/folder-utils";
 import { Brain, FolderOpen } from "lucide-react";
 
 export function DashboardPage() {
   // UI state from store (controlled by sidebar)
   const activeSection = useUIStore((s) => s.activeSection);
   const selectedFolderId = useUIStore((s) => s.selectedFolderId);
+  const setSelectedFolder = useUIStore((s) => s.setSelectedFolder);
 
   // Fetch all videos and folders for the summarized section
   const { data: allVideosData, isLoading: allVideosLoading } = useAllVideos();
@@ -26,39 +30,65 @@ export function DashboardPage() {
     ? allVideosLoading || foldersLoading
     : filteredLoading;
 
-  // Get folder name for header when a specific folder is selected
+  // Get folder for breadcrumb when a specific folder is selected
   const selectedFolder = selectedFolderId
     ? foldersData?.folders.find((f) => f.id === selectedFolderId)
     : null;
+
+  // Build breadcrumb items
+  const breadcrumbItems = buildBreadcrumbPath(
+    selectedFolder ?? null,
+    foldersData?.folders || []
+  );
+
+  // Get subfolders of the current folder
+  const subfolders = getSubfolders(
+    selectedFolderId,
+    foldersData?.folders || []
+  );
+
+  // Build folder context for VideoGrid (memoized to avoid unnecessary re-renders)
+  const folderContext: FolderContext = useMemo(() => ({
+    currentFolderId: selectedFolderId,
+    subfolders,
+    allFolders: foldersData?.folders || [],
+    allVideos: allVideosData?.videos || [],
+  }), [selectedFolderId, subfolders, foldersData?.folders, allVideosData?.videos]);
 
   return (
     <Layout showSidebar>
       {activeSection === "summarized" ? (
         <div>
-          {/* Header */}
+          {/* Header with Breadcrumb */}
           <div className="mb-6 flex items-center gap-3">
-            <FolderOpen className="h-6 w-6 text-muted-foreground" />
-            <h1 className="text-2xl font-bold">
-              {selectedFolder ? selectedFolder.name : "All Videos"}
-            </h1>
+            <FolderOpen className="h-6 w-6 text-muted-foreground shrink-0" />
+            <Breadcrumb
+              items={breadcrumbItems}
+              onNavigate={setSelectedFolder}
+            />
           </div>
 
-          {/* Video Grid - grouped by folder when showing all */}
+          {/* Video Grid - grouped by folder when showing all, with subfolder support */}
           <VideoGrid
             videos={videos}
-            folders={foldersData?.folders || []}
             isLoading={isLoading}
             groupByFolder={isShowingAll}
+            folderContext={folderContext}
           />
         </div>
       ) : (
         <div>
-          {/* Header */}
+          {/* Header with Breadcrumb for Memorized */}
           <div className="mb-6 flex items-center gap-3">
-            <Brain className="h-6 w-6 text-muted-foreground" />
-            <h1 className="text-2xl font-bold">
-              {selectedFolderId ? "Memorized Items" : "All Memorized"}
-            </h1>
+            <Brain className="h-6 w-6 text-muted-foreground shrink-0" />
+            <Breadcrumb
+              items={buildBreadcrumbPath(
+                selectedFolder ?? null,
+                foldersData?.folders || [],
+                "All Memorized"
+              )}
+              onNavigate={setSelectedFolder}
+            />
           </div>
 
           {/* Placeholder for Memorized content */}

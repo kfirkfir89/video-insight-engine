@@ -1,25 +1,26 @@
 import { request } from "./client";
-import type { Folder, FolderType } from "@/types";
+import type {
+  Folder,
+  FolderType,
+  CreateFolderInput,
+  UpdateFolderInput,
+} from "@/types";
 
-export interface CreateFolderInput {
-  name: string;
-  type: FolderType;
-  parentId?: string | null;
-  color?: string | null;
-  icon?: string | null;
-}
-
-export interface UpdateFolderInput {
-  name?: string;
-  parentId?: string | null;
-  color?: string | null;
-  icon?: string | null;
+export interface ListFoldersParams {
+  type?: FolderType;
+  limit?: number;
+  offset?: number;
 }
 
 export const foldersApi = {
-  async list(type?: FolderType): Promise<{ folders: Folder[] }> {
-    const params = type ? `?type=${type}` : "";
-    return request(`/folders${params}`);
+  async list(params: ListFoldersParams = {}): Promise<{ folders: Folder[] }> {
+    const searchParams = new URLSearchParams();
+    if (params.type) searchParams.set("type", params.type);
+    if (params.limit) searchParams.set("limit", String(params.limit));
+    if (params.offset) searchParams.set("offset", String(params.offset));
+
+    const query = searchParams.toString();
+    return request(`/folders${query ? `?${query}` : ""}`);
   },
 
   async get(id: string): Promise<Folder> {
@@ -41,7 +42,12 @@ export const foldersApi = {
   },
 
   async delete(id: string, deleteContent?: boolean): Promise<void> {
-    const params = deleteContent ? '?deleteContent=true' : '';
-    await request(`/folders/${id}${params}`, { method: "DELETE" });
+    const searchParams = new URLSearchParams();
+    if (deleteContent) searchParams.set("deleteContent", "true");
+
+    const query = searchParams.toString();
+    await request(`/folders/${id}${query ? `?${query}` : ""}`, {
+      method: "DELETE",
+    });
   },
 };

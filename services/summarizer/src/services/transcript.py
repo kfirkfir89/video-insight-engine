@@ -1,4 +1,5 @@
 import re
+import asyncio
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import (
     TranscriptsDisabled,
@@ -7,24 +8,19 @@ from youtube_transcript_api._errors import (
 )
 
 from src.models.schemas import ErrorCode
-
-# Create API instance (new API style)
-ytt_api = YouTubeTranscriptApi()
+from src.exceptions import TranscriptError
 
 
-class TranscriptError(Exception):
-    def __init__(self, message: str, code: ErrorCode):
-        super().__init__(message)
-        self.code = code
-
-
-def get_transcript(video_id: str) -> tuple[list[dict], str, str]:
+def _fetch_transcript_sync(video_id: str) -> tuple[list[dict], str, str]:
     """
-    Fetch transcript from YouTube.
+    Fetch transcript from YouTube (synchronous internal function).
 
     Returns:
         (segments, full_text, transcript_type)
     """
+    # Create API instance per call (thread-safe)
+    ytt_api = YouTubeTranscriptApi()
+
     try:
         # New API: use instance method .list() instead of class method .list_transcripts()
         transcript_list = ytt_api.list(video_id)
@@ -84,3 +80,22 @@ def clean_transcript(text: str) -> str:
     text = re.sub(r"\s+", " ", text)
 
     return text.strip()
+
+
+async def get_transcript(video_id: str) -> tuple[list[dict], str, str]:
+    """
+    Fetch transcript from YouTube (async wrapper).
+
+    Runs the blocking YouTube API call in a thread pool to avoid
+    blocking the event loop.
+
+    Args:
+        video_id: YouTube video ID
+
+    Returns:
+        (segments, full_text, transcript_type)
+
+    Raises:
+        TranscriptError: If transcript cannot be fetched
+    """
+    return await asyncio.to_thread(_fetch_transcript_sync, video_id)

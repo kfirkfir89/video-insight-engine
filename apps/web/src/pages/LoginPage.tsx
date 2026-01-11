@@ -76,17 +76,19 @@ export function LoginPage() {
               {loading ? "Signing in..." : "Sign In"}
             </Button>
 
-            <Button
-              type="button"
-              variant="secondary"
-              className="w-full"
-              onClick={async () => {
-                await login("admin@admin.com", "Admin123");
-                navigate("/");
-              }}
-            >
-              Admin Login
-            </Button>
+            {(import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_LOGIN === "true") && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={async () => {
+                  await login("admin@admin.com", "Admin123");
+                  navigate("/");
+                }}
+              >
+                Admin Login (Dev Only)
+              </Button>
+            )}
 
             <p className="text-center text-sm text-muted-foreground">
               Don't have an account?{" "}

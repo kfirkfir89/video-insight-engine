@@ -1,4 +1,5 @@
 import { Db, ObjectId } from 'mongodb';
+import { MemorizedItemNotFoundError } from '../utils/errors.js';
 
 export interface MemorizedItem {
   _id: ObjectId;
@@ -148,8 +149,10 @@ function toItemDetailResponse(item: MemorizedItem) {
 export async function listMemorizedItems(
   db: Db,
   userId: string,
-  folderId?: string
+  folderId?: string,
+  options: { limit?: number; offset?: number } = {}
 ) {
+  const { limit = 50, offset = 0 } = options;
   const query: { userId: ObjectId; folderId?: ObjectId | null } = {
     userId: new ObjectId(userId),
   };
@@ -162,6 +165,8 @@ export async function listMemorizedItems(
     .collection<MemorizedItem>(COLLECTION)
     .find(query)
     .sort({ createdAt: -1 })
+    .skip(offset)
+    .limit(limit)
     .toArray();
 
   return items.map(toItemListResponse);
@@ -177,7 +182,11 @@ export async function getMemorizedItemById(
     userId: new ObjectId(userId),
   });
 
-  return item ? toItemDetailResponse(item) : null;
+  if (!item) {
+    throw new MemorizedItemNotFoundError();
+  }
+
+  return toItemDetailResponse(item);
 }
 
 export async function createMemorizedItem(
@@ -295,7 +304,7 @@ export async function updateMemorizedItem(
   });
 
   if (!existing) {
-    return null;
+    throw new MemorizedItemNotFoundError();
   }
 
   const updates: Partial<MemorizedItem> & { updatedAt: Date } = {
@@ -324,14 +333,18 @@ export async function updateMemorizedItem(
     _id: itemObjectId,
   });
 
-  return updated ? toItemDetailResponse(updated) : null;
+  if (!updated) {
+    throw new MemorizedItemNotFoundError();
+  }
+
+  return toItemDetailResponse(updated);
 }
 
 export async function deleteMemorizedItem(
   db: Db,
   userId: string,
   itemId: string
-) {
+): Promise<void> {
   const userObjectId = new ObjectId(userId);
   const itemObjectId = new ObjectId(itemId);
 
@@ -341,7 +354,7 @@ export async function deleteMemorizedItem(
   });
 
   if (result.deletedCount === 0) {
-    return false;
+    throw new MemorizedItemNotFoundError();
   }
 
   // Delete associated chats
@@ -349,8 +362,6 @@ export async function deleteMemorizedItem(
     userId: userObjectId,
     memorizedItemId: itemObjectId,
   });
-
-  return true;
 }
 
 export async function listChatsForItem(

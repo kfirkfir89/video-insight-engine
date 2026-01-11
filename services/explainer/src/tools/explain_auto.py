@@ -1,6 +1,7 @@
 """explain_auto tool: Generate cached documentation for video sections or concepts."""
 
 from src.config import settings
+from src.exceptions import ResourceNotFoundError, ValidationError
 from src.services import mongodb
 from src.services.llm import generate_expansion
 
@@ -23,7 +24,8 @@ async def explain_auto(
         Markdown documentation
 
     Raises:
-        ValueError: If video summary, section, or concept not found
+        ResourceNotFoundError: If video summary, section, or concept not found
+        ValidationError: If target_type is invalid
     """
     # 1. Check cache first
     cached = mongodb.get_expansion(video_summary_id, target_type, target_id)
@@ -33,7 +35,7 @@ async def explain_auto(
     # 2. Load video summary
     video_summary = mongodb.get_video_summary(video_summary_id)
     if not video_summary:
-        raise ValueError("Video summary not found")
+        raise ResourceNotFoundError("Video summary not found", resource_type="video_summary")
 
     summary = video_summary.get("summary", {})
 
@@ -43,7 +45,7 @@ async def explain_auto(
         target = next((s for s in sections if s["id"] == target_id), None)
 
         if not target:
-            raise ValueError("Section not found")
+            raise ResourceNotFoundError("Section not found", resource_type="section")
 
         context = {
             "video_title": video_summary.get("title", "Unknown"),
@@ -60,7 +62,7 @@ async def explain_auto(
         target = next((c for c in concepts if c["id"] == target_id), None)
 
         if not target:
-            raise ValueError("Concept not found")
+            raise ResourceNotFoundError("Concept not found", resource_type="concept")
 
         context = {
             "video_title": video_summary.get("title", "Unknown"),
@@ -71,7 +73,7 @@ async def explain_auto(
         template = "explain_concept"
 
     else:
-        raise ValueError(f"Invalid target type: {target_type}")
+        raise ValidationError(f"Invalid target type: {target_type}")
 
     # 4. Generate with LLM
     content = await generate_expansion(template, context)

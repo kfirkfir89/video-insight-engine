@@ -1,17 +1,46 @@
 """vie-explainer HTTP server - wraps MCP tools as REST endpoints."""
 
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Optional
 
+from src.exceptions import (
+    ExplainerError,
+    ResourceNotFoundError,
+    UnauthorizedError,
+    ValidationError,
+)
 from src.tools.explain_auto import explain_auto
 from src.tools.explain_chat import explain_chat
+from src.services.mongodb import close_connection
 from src.config import settings
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler for startup/shutdown."""
+    # Startup
+    logger.info("Starting vie-explainer service")
+    yield
+    # Shutdown
+    logger.info("Shutting down vie-explainer service")
+    close_connection()
+
 
 app = FastAPI(
     title="vie-explainer",
     description="Video content explanation service",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 
@@ -27,7 +56,7 @@ class ExplainChatRequest(BaseModel):
     memorizedItemId: str
     userId: str
     message: str
-    chatId: Optional[str] = None
+    chatId: str | None = None
 
 
 class ExplainAutoResponse(BaseModel):
@@ -73,10 +102,7 @@ async def explain_auto_endpoint(request: ExplainAutoRequest):
     """
     try:
         if request.targetType not in ["section", "concept"]:
-            raise HTTPException(
-                status_code=400,
-                detail="targetType must be 'section' or 'concept'",
-            )
+            raise ValidationError("targetType must be 'section' or 'concept'")
 
         expansion = await explain_auto(
             video_summary_id=request.videoSummaryId,
@@ -86,9 +112,14 @@ async def explain_auto_endpoint(request: ExplainAutoRequest):
 
         return ExplainAutoResponse(expansion=expansion)
 
-    except ValueError as e:
+    except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ExplainerError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
+        logger.exception("Unexpected error in explain_auto")
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 
@@ -111,7 +142,12 @@ async def explain_chat_endpoint(request: ExplainChatRequest):
             chatId=result["chatId"],
         )
 
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except UnauthorizedError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ExplainerError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
+        logger.exception("Unexpected error in explain_chat")
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")

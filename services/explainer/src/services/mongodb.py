@@ -1,23 +1,48 @@
 """MongoDB service for vie-explainer."""
 
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from bson import ObjectId
 from pymongo import MongoClient
+from pymongo.database import Database
 
 from src.config import settings
 
-# Database connection (singleton pattern)
+logger = logging.getLogger(__name__)
+
+
+def _utc_now() -> datetime:
+    """Get current UTC time in timezone-aware format."""
+    return datetime.now(timezone.utc)
+
+
+# Database connection (singleton pattern with lifecycle management)
 _client: MongoClient | None = None
 
 
-def get_database():
-    """Get database instance, creating connection if needed."""
+def get_mongo_client() -> MongoClient:
+    """Get or create MongoDB client."""
     global _client
     if _client is None:
+        logger.info("Creating MongoDB client connection")
         _client = MongoClient(settings.MONGODB_URI)
-    return _client.get_default_database()
+    return _client
+
+
+def get_database() -> Database:
+    """Get database instance, creating connection if needed."""
+    return get_mongo_client().get_default_database()
+
+
+def close_connection() -> None:
+    """Close MongoDB connection (call on shutdown)."""
+    global _client
+    if _client is not None:
+        logger.info("Closing MongoDB client connection")
+        _client.close()
+        _client = None
 
 
 # ============================================================
@@ -91,7 +116,7 @@ def save_expansion(
         ObjectId string of the inserted document
     """
     db = get_database()
-    now = datetime.utcnow()
+    now = _utc_now()
     result = db.systemExpansionCache.insert_one(
         {
             "videoSummaryId": ObjectId(video_summary_id),
@@ -168,7 +193,7 @@ def create_chat(user_id: str, memorized_item_id: str) -> str:
         ObjectId string of the created chat
     """
     db = get_database()
-    now = datetime.utcnow()
+    now = _utc_now()
     result = db.userChats.insert_one(
         {
             "userId": ObjectId(user_id),
@@ -194,6 +219,6 @@ def add_messages(chat_id: str, messages: list[dict]) -> None:
         {"_id": ObjectId(chat_id)},
         {
             "$push": {"messages": {"$each": messages}},
-            "$set": {"updatedAt": datetime.utcnow()},
+            "$set": {"updatedAt": _utc_now()},
         },
     )

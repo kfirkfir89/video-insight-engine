@@ -1,9 +1,15 @@
 """explain_chat tool: Interactive conversation about memorized items."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
+from src.exceptions import ResourceNotFoundError, UnauthorizedError
 from src.services import mongodb
 from src.services.llm import chat_completion, load_prompt
+
+
+def _utc_now() -> datetime:
+    """Get current UTC time in timezone-aware format."""
+    return datetime.now(timezone.utc)
 
 
 def format_content(source: dict) -> str:
@@ -85,18 +91,19 @@ async def explain_chat(
         Dict with response text and chat ID
 
     Raises:
-        ValueError: If memorized item or chat not found/unauthorized
+        UnauthorizedError: If memorized item not owned by user
+        ResourceNotFoundError: If chat not found
     """
     # 1. Load memorized item (verify user ownership)
     item = mongodb.get_memorized_item(memorized_item_id, user_id)
     if not item:
-        raise ValueError("Memorized item not found or unauthorized")
+        raise UnauthorizedError("Memorized item not found or unauthorized")
 
     # 2. Load or create chat
     if chat_id:
         chat = mongodb.get_chat(chat_id, user_id)
         if not chat:
-            raise ValueError("Chat not found")
+            raise ResourceNotFoundError("Chat not found", resource_type="chat")
     else:
         chat_id = mongodb.create_chat(user_id, memorized_item_id)
         chat = {"messages": []}
@@ -124,7 +131,7 @@ async def explain_chat(
     response = await chat_completion(system_prompt, messages)
 
     # 5. Save messages to chat
-    now = datetime.utcnow()
+    now = _utc_now()
     mongodb.add_messages(
         chat_id,
         [
