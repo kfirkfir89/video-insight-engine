@@ -9,6 +9,7 @@ from src.dependencies import get_video_repository, get_llm_service
 from src.repositories.mongodb_repository import MongoDBVideoRepository
 from src.services.llm import LLMService
 from src.services.summarizer_service import SummarizeService
+from src.routes.stream import router as stream_router
 
 # Configure logging
 logging.basicConfig(
@@ -18,6 +19,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="vie-summarizer")
+
+# Register routers
+app.include_router(stream_router)
 
 
 @app.get("/health")

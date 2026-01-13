@@ -1,3 +1,5 @@
+import { useAuthStore } from "@/stores/auth-store";
+
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 const REQUEST_TIMEOUT_MS = 30000;
 
@@ -26,7 +28,7 @@ export function getAccessToken(): string | null {
   return localStorage.getItem("accessToken");
 }
 
-async function refreshToken(): Promise<boolean> {
+export async function refreshToken(): Promise<boolean> {
   try {
     const res = await fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
@@ -37,9 +39,10 @@ async function refreshToken(): Promise<boolean> {
 
     const data = await res.json();
     setAccessToken(data.accessToken);
+    // Also update Zustand store to sync streaming hooks
+    useAuthStore.getState().setToken(data.accessToken);
     return true;
-  } catch (error) {
-    console.error("Token refresh failed:", error);
+  } catch {
     return false;
   }
 }
@@ -76,7 +79,9 @@ export async function request<T>(
       if (refreshed) {
         return request(endpoint, options, true);
       }
-      setAccessToken(null);
+      // Refresh failed - force logout and redirect to login
+      useAuthStore.getState().forceLogout("Session expired. Please log in again.");
+      throw new ApiError(401, "Session expired", "SESSION_EXPIRED");
     }
 
     if (!res.ok) {

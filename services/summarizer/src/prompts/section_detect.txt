@@ -1,5 +1,7 @@
 Analyze this video transcript and identify logical sections.
 
+VIDEO DURATION: {duration} seconds ({duration_formatted})
+
 TRANSCRIPT:
 {transcript}
 
@@ -17,6 +19,7 @@ Return JSON only (no other text):
 Rules:
 - Identify 3-8 sections based on topic changes
 - Each section should be a coherent topic
-- Use actual timestamps from content flow
+- IMPORTANT: All timestamps MUST be between 0 and {duration} seconds
 - Sections must be sequential with no gaps
+- Last section endSeconds must equal {duration}
 - Title should be descriptive (3-6 words)

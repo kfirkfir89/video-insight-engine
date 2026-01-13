@@ -78,6 +78,8 @@ services:
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
       LOG_LEVEL: ${LOG_LEVEL:-debug}
       INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
+      WEBSHARE_PROXY_USERNAME: ${WEBSHARE_PROXY_USERNAME:-}
+      WEBSHARE_PROXY_PASSWORD: ${WEBSHARE_PROXY_PASSWORD:-}
     networks:
       - vie-network
     depends_on:

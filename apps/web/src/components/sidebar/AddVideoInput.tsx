@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ export function AddVideoInput() {
   const selectedFolderId = useUIStore((s) => s.selectedFolderId);
   const activeSection = useUIStore((s) => s.activeSection);
   const addVideo = useAddVideo();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,8 +26,13 @@ export function AddVideoInput() {
 
     try {
       setError(null);
-      await addVideo.mutateAsync({ url: url.trim(), folderId: selectedFolderId });
+      const result = await addVideo.mutateAsync({ url: url.trim(), folderId: selectedFolderId });
       setUrl("");
+
+      // Navigate to video detail page to show streaming progress
+      if (result?.video?.id) {
+        navigate(`/video/${result.video.id}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add video");
     }

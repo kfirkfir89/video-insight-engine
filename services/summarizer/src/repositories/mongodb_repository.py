@@ -48,49 +48,75 @@ class MongoDBVideoRepository:
         )
 
     def save_result(self, video_summary_id: str, result: dict) -> None:
-        """Save processing result to cache."""
+        """Save processing result to cache.
+
+        New fields (progressive summarization):
+        - chapters: Creator-defined or AI-detected sections
+        - chapterSource: "creator" | "description" | "ai_detected"
+        - descriptionAnalysis: Links, resources, related videos, timestamps, social links
+        """
+        update_data: dict[str, Any] = {
+            "title": result["title"],
+            "channel": result.get("channel"),
+            "duration": result.get("duration"),
+            "thumbnailUrl": result.get("thumbnail_url"),
+            "transcript": result["transcript"],
+            "transcriptType": result["transcript_type"],
+            "summary": {
+                "tldr": result["summary"]["tldr"],
+                "keyTakeaways": result["summary"]["key_takeaways"],
+                "sections": [
+                    {
+                        "id": s["id"],
+                        "timestamp": s["timestamp"],
+                        "startSeconds": s["start_seconds"],
+                        "endSeconds": s["end_seconds"],
+                        "title": s["title"],
+                        "summary": s["summary"],
+                        "bullets": s["bullets"],
+                    }
+                    for s in result["summary"]["sections"]
+                ],
+                "concepts": [
+                    {
+                        "id": c["id"],
+                        "name": c["name"],
+                        "definition": c.get("definition"),
+                        "timestamp": c.get("timestamp"),
+                    }
+                    for c in result["summary"]["concepts"]
+                ],
+            },
+            "status": ProcessingStatus.COMPLETED.value,
+            "processedAt": _utc_now(),
+            "processingTimeMs": result.get("processing_time_ms"),
+            "tokenUsage": result.get("token_usage"),
+            "updatedAt": _utc_now(),
+        }
+
+        # Add chapters if present (progressive summarization)
+        if "chapters" in result:
+            update_data["chapters"] = [
+                {
+                    "startSeconds": ch["startSeconds"],
+                    "endSeconds": ch["endSeconds"],
+                    "title": ch["title"],
+                    "isCreatorChapter": ch.get("isCreatorChapter", False),
+                }
+                for ch in result["chapters"]
+            ]
+
+        # Add chapter source if present
+        if "chapter_source" in result:
+            update_data["chapterSource"] = result["chapter_source"]
+
+        # Add description analysis if present (progressive summarization)
+        if "description_analysis" in result:
+            update_data["descriptionAnalysis"] = result["description_analysis"]
+
         self._collection.update_one(
             {"_id": ObjectId(video_summary_id)},
-            {
-                "$set": {
-                    "title": result["title"],
-                    "channel": result.get("channel"),
-                    "duration": result.get("duration"),
-                    "thumbnailUrl": result.get("thumbnail_url"),
-                    "transcript": result["transcript"],
-                    "transcriptType": result["transcript_type"],
-                    "summary": {
-                        "tldr": result["summary"]["tldr"],
-                        "keyTakeaways": result["summary"]["key_takeaways"],
-                        "sections": [
-                            {
-                                "id": s["id"],
-                                "timestamp": s["timestamp"],
-                                "startSeconds": s["start_seconds"],
-                                "endSeconds": s["end_seconds"],
-                                "title": s["title"],
-                                "summary": s["summary"],
-                                "bullets": s["bullets"],
-                            }
-                            for s in result["summary"]["sections"]
-                        ],
-                        "concepts": [
-                            {
-                                "id": c["id"],
-                                "name": c["name"],
-                                "definition": c.get("definition"),
-                                "timestamp": c.get("timestamp"),
-                            }
-                            for c in result["summary"]["concepts"]
-                        ],
-                    },
-                    "status": ProcessingStatus.COMPLETED.value,
-                    "processedAt": _utc_now(),
-                    "processingTimeMs": result.get("processing_time_ms"),
-                    "tokenUsage": result.get("token_usage"),
-                    "updatedAt": _utc_now(),
-                }
-            }
+            {"$set": update_data}
         )
 
     def increment_retry(self, video_summary_id: str) -> int:

@@ -1,11 +1,34 @@
 """LLM service for vie-explainer using Anthropic Claude."""
 
 import asyncio
+import atexit
+import concurrent.futures
+import logging
 from pathlib import Path
 
 import anthropic
 
 from src.config import settings
+
+logger = logging.getLogger(__name__)
+
+# Bounded thread pool to prevent exhaustion from concurrent streams.
+# Max workers and timeout are configurable via environment variables.
+_stream_executor = concurrent.futures.ThreadPoolExecutor(
+    max_workers=settings.LLM_STREAM_MAX_WORKERS,
+    thread_name_prefix="llm_stream"
+)
+
+
+def _shutdown_executor():
+    """Shutdown the thread pool executor on process exit."""
+    logger.info("Shutting down LLM stream executor...")
+    _stream_executor.shutdown(wait=True, cancel_futures=True)
+    logger.info("LLM stream executor shutdown complete")
+
+
+# Register cleanup on process exit to prevent thread leaks
+atexit.register(_shutdown_executor)
 
 # Prompts directory
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
@@ -107,6 +130,63 @@ class LLMService:
                 messages,
             )
 
+    async def chat_completion_stream(
+        self,
+        system_prompt: str,
+        messages: list[dict],
+    ):
+        """Stream chat completion tokens.
+
+        Args:
+            system_prompt: System prompt with context about the memorized item
+            messages: List of message dicts with 'role' and 'content'
+
+        Yields:
+            String tokens as they are generated
+
+        This uses the Anthropic streaming API for real-time token delivery.
+        """
+        kwargs = {
+            "model": self._model,
+            "max_tokens": 2000,
+            "messages": messages,
+            "system": system_prompt,
+        }
+
+        # Issue #8: Use bounded thread pool instead of creating new threads
+        import queue
+
+        q: queue.Queue[str | None] = queue.Queue()
+
+        def producer():
+            """Stream tokens from LLM into queue."""
+            try:
+                with self._client.messages.stream(**kwargs) as stream:
+                    for text in stream.text_stream:
+                        q.put(text)
+            finally:
+                q.put(None)  # Signal completion
+
+        # Submit to bounded executor instead of creating unbounded threads
+        _stream_executor.submit(producer)
+
+        token_timeout = settings.LLM_STREAM_TOKEN_TIMEOUT_SECONDS
+        while True:
+            try:
+                item = await asyncio.to_thread(q.get, timeout=token_timeout)
+                if item is None:
+                    break
+                yield item
+            except (TimeoutError, asyncio.TimeoutError, queue.Empty):
+                # Timeout waiting for next token - stream is done or stalled
+                logger.warning(
+                    f"Stream token timeout after {token_timeout}s - stream may be stalled"
+                )
+                break
+            except asyncio.CancelledError:
+                # Task was cancelled - clean exit
+                break
+
 
 # Global instance for backward compatibility
 # Will be replaced with DI in main.py
@@ -131,3 +211,9 @@ async def generate_expansion(template_name: str, context: dict) -> str:
 async def chat_completion(system_prompt: str, messages: list[dict]) -> str:
     """Complete chat (backward compatible wrapper)."""
     return await get_llm_service().chat_completion(system_prompt, messages)
+
+
+async def chat_completion_stream(system_prompt: str, messages: list[dict]):
+    """Stream chat completion (backward compatible wrapper)."""
+    async for token in get_llm_service().chat_completion_stream(system_prompt, messages):
+        yield token

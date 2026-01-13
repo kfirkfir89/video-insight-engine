@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { explainAuto, explainChat } from '../services/explainer-client.js';
+import { explainAuto, explainChat, explainChatStream } from '../services/explainer-client.js';
+import { setSSECorsHeaders, setSSEResponseHeaders } from '../utils/cors.js';
 
 const explainAutoParamsSchema = z.object({
   videoSummaryId: z.string().min(1),
@@ -73,6 +74,62 @@ export async function explainRoutes(fastify: FastifyInstance) {
         message: 'An unexpected error occurred. Please try again.',
         requestId: req.id,
       });
+    }
+  });
+
+  // POST /api/explain/chat/stream - SSE streaming endpoint
+  fastify.post<{
+    Body: { memorizedItemId: string; message: string; chatId?: string };
+  }>('/chat/stream', {
+    preHandler: [fastify.authenticate],
+  }, async (req, reply) => {
+    const parsed = explainChatBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Bad Request',
+        message: parsed.error.errors[0]?.message || 'Invalid request body',
+      });
+    }
+
+    const userId = req.user.userId;
+
+    try {
+      // Set CORS and SSE headers (reply.raw bypasses Fastify CORS plugin)
+      setSSECorsHeaders(req, reply);
+      setSSEResponseHeaders(reply);
+
+      // Stream from explainer service
+      const response = await explainChatStream({
+        ...parsed.data,
+        userId,
+      });
+
+      // Pipe the SSE stream to client
+      if (response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        // Handle client disconnect
+        req.raw.on('close', () => {
+          reader.cancel();
+        });
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            reply.raw.write(decoder.decode(value, { stream: true }));
+          }
+        } finally {
+          reader.cancel();
+        }
+      }
+
+      reply.raw.end();
+    } catch (error) {
+      fastify.log.error(error, 'explain_chat_stream failed');
+      reply.raw.write(`data: ${JSON.stringify({ event: 'error', message: 'Stream failed' })}\n\n`);
+      reply.raw.end();
     }
   });
 }

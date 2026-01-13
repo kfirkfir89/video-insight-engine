@@ -50,6 +50,53 @@ export interface VideoSummary {
 }
 
 // ─────────────────────────────────────────────────────
+// Progressive Summarization Types (New)
+// ─────────────────────────────────────────────────────
+
+export type ChapterSource = 'creator' | 'description' | 'ai_detected';
+
+export interface Chapter {
+  startSeconds: number;
+  endSeconds: number;
+  title: string;
+  isCreatorChapter: boolean;
+}
+
+export interface DescriptionLink {
+  url: string;
+  type: 'github' | 'documentation' | 'article' | 'tool' | 'course' | 'other';
+  label: string;
+}
+
+export interface Resource {
+  name: string;
+  url: string;
+}
+
+export interface RelatedVideo {
+  title: string;
+  url: string;
+}
+
+export interface DescriptionTimestamp {
+  time: string;
+  label: string;
+}
+
+export interface SocialLink {
+  platform: 'twitter' | 'discord' | 'github' | 'linkedin' | 'patreon' | 'other';
+  url: string;
+}
+
+export interface DescriptionAnalysis {
+  links: DescriptionLink[];
+  resources: Resource[];
+  relatedVideos: RelatedVideo[];
+  timestamps: DescriptionTimestamp[];
+  socialLinks: SocialLink[];
+}
+
+// ─────────────────────────────────────────────────────
 // API Response Types
 // ─────────────────────────────────────────────────────
 
@@ -74,6 +121,10 @@ export interface VideoResponse {
   status: ProcessingStatus;
   folderId: string | null;
   createdAt: string;
+  // Progressive summarization fields (optional for backward compat)
+  chapters?: Chapter[];
+  chapterSource?: ChapterSource;
+  descriptionAnalysis?: DescriptionAnalysis;
 }
 
 export interface FolderResponse {
@@ -116,6 +167,94 @@ export interface ExpansionStatusEvent {
 }
 
 export type WebSocketEvent = VideoStatusEvent | ExpansionStatusEvent;
+
+// ─────────────────────────────────────────────────────
+// SSE Stream Event Types (Progressive Summarization)
+// ─────────────────────────────────────────────────────
+
+export type SummaryStreamPhase =
+  | 'metadata'
+  | 'transcript'
+  | 'parallel_analysis'
+  | 'section_detect'
+  | 'section_summaries'
+  | 'concepts';
+
+export interface SSEMetadataEvent {
+  event: 'metadata';
+  title: string;
+  channel: string | null;
+  thumbnailUrl: string | null;
+  duration: number;
+}
+
+export interface SSEChaptersEvent {
+  event: 'chapters';
+  chapters: Chapter[];
+  isCreatorChapters: boolean;
+}
+
+export interface SSEDescriptionAnalysisEvent {
+  event: 'description_analysis';
+  links: DescriptionLink[];
+  resources: Resource[];
+  relatedVideos: RelatedVideo[];
+  timestamps: DescriptionTimestamp[];
+  socialLinks: SocialLink[];
+}
+
+export interface SSESynthesisCompleteEvent {
+  event: 'synthesis_complete';
+  tldr: string;
+  keyTakeaways: string[];
+}
+
+export interface SSESectionReadyEvent {
+  event: 'section_ready';
+  index: number;
+  section: Section;
+}
+
+export interface SSEConceptsCompleteEvent {
+  event: 'concepts_complete';
+  concepts: Concept[];
+}
+
+export interface SSEDoneEvent {
+  event: 'done';
+  videoSummaryId: string;
+  processingTimeMs?: number;
+  cached?: boolean;
+}
+
+export interface SSEPhaseEvent {
+  event: 'phase';
+  phase: SummaryStreamPhase;
+}
+
+export interface SSETokenEvent {
+  event: 'token';
+  phase: string;
+  token: string;
+}
+
+export interface SSEErrorEvent {
+  event: 'error';
+  message: string;
+  code?: string;
+}
+
+export type SSEStreamEvent =
+  | SSEMetadataEvent
+  | SSEChaptersEvent
+  | SSEDescriptionAnalysisEvent
+  | SSESynthesisCompleteEvent
+  | SSESectionReadyEvent
+  | SSEConceptsCompleteEvent
+  | SSEDoneEvent
+  | SSEPhaseEvent
+  | SSETokenEvent
+  | SSEErrorEvent;
 
 // ─────────────────────────────────────────────────────
 // Error Types

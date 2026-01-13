@@ -2,11 +2,29 @@
   "name": "video-insight-engine",
   "private": true,
   "scripts": {
-    "dev": "docker-compose up -d && concurrently \"pnpm --filter @vie/api dev\" \"pnpm --filter @vie/web dev\"",
+    "dev": "docker-compose up -d && concurrently \"pnpm --filter @vie/api dev\" \"pnpm --filter web dev\"",
     "build": "pnpm -r build",
+
+    "dev:api": "pnpm --filter @vie/api dev",
+    "dev:web": "pnpm --filter web dev",
+
+    "build:api": "pnpm --filter @vie/api build",
+    "build:web": "pnpm --filter web build",
+    "build:types": "pnpm --filter @vie/types build",
+
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",
+    "docker:build": "docker-compose build",
+    "docker:build:api": "docker-compose build vie-api",
+    "docker:build:web": "docker-compose build vie-web",
+    "docker:build:summarizer": "docker-compose build vie-summarizer",
+    "docker:build:explainer": "docker-compose build vie-explainer",
+    "docker:rebuild": "docker-compose build --no-cache",
+    "docker:rebuild:api": "docker-compose build --no-cache vie-api",
+    "docker:rebuild:web": "docker-compose build --no-cache vie-web",
+    "docker:restart": "docker-compose down && docker-compose up -d",
+
     "types:build": "pnpm --filter @vie/types build"
   },
   "devDependencies": {

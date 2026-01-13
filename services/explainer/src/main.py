@@ -1,9 +1,11 @@
 """vie-explainer HTTP server - wraps MCP tools as REST endpoints."""
 
+import json
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from src.exceptions import (
@@ -14,6 +16,7 @@ from src.exceptions import (
 )
 from src.tools.explain_auto import explain_auto
 from src.tools.explain_chat import explain_chat
+from src.tools.explain_chat_stream import explain_chat_stream
 from src.services.mongodb import close_connection
 from src.config import settings
 
@@ -150,4 +153,39 @@ async def explain_chat_endpoint(request: ExplainChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.exception("Unexpected error in explain_chat")
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
+@app.post("/explain/chat/stream")
+async def explain_chat_stream_endpoint(request: ExplainChatRequest):
+    """
+    Stream chat response via Server-Sent Events (SSE).
+    Tokens are streamed in real-time as they are generated.
+    """
+    try:
+        async def generate():
+            async for token, chat_id in explain_chat_stream(
+                memorized_item_id=request.memorizedItemId,
+                user_id=request.userId,
+                message=request.message,
+                chat_id=request.chatId,
+            ):
+                yield f"data: {json.dumps({'token': token, 'chatId': chat_id})}\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            },
+        )
+
+    except UnauthorizedError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception("Unexpected error in explain_chat_stream")
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")

@@ -6,16 +6,17 @@ React frontend application.
 
 ## Tech Stack
 
-| Technology   | Purpose      |
-| ------------ | ------------ |
-| Vite 5       | Build tool   |
-| React 18     | UI framework |
-| TypeScript   | Language     |
-| Tailwind CSS | Styling      |
-| shadcn/ui    | Components   |
-| React Query  | Server state |
-| Zustand      | Client state |
-| React Router | Routing      |
+| Technology      | Purpose           |
+| --------------- | ----------------- |
+| Vite 7          | Build tool        |
+| React 19        | UI framework      |
+| TypeScript 5.9  | Language          |
+| Tailwind CSS 4  | Styling           |
+| shadcn/ui       | Components        |
+| React Query 5   | Server state      |
+| Zustand 5       | Client state      |
+| React Router    | Routing           |
+| Vercel AI SDK   | LLM streaming     |
 
 ---
 
@@ -485,4 +486,77 @@ npm run preview
 
 # Type check
 npm run typecheck
+```
+
+---
+
+## AI Integration
+
+### Vercel AI SDK
+
+The frontend uses the Vercel AI SDK for streaming LLM responses. This provides a ChatGPT-like experience where text appears character-by-character.
+
+**Key Components:**
+
+| Component | Purpose |
+| --------- | ------- |
+| `useExplainerChat` | Hook for streaming chat with memorized items |
+| `StreamingText` | Display streaming text with animated cursor |
+| `StreamingMarkdown` | Display streaming markdown content |
+
+**Usage Example:**
+
+```tsx
+import { useExplainerChat } from "@/hooks/use-streaming-chat";
+import { StreamingText } from "@/components/ui/streaming-text";
+
+function ChatComponent({ memorizedItemId }: { memorizedItemId: string }) {
+  const { messages, input, handleInputChange, handleSubmit, isLoading } =
+    useExplainerChat({
+      memorizedItemId,
+      onFinish: (message) => console.log("Response complete:", message),
+    });
+
+  return (
+    <div>
+      {messages.map((m) => (
+        <div key={m.id}>
+          {m.role === "assistant" ? (
+            <StreamingText content={m.content} isLoading={isLoading} />
+          ) : (
+            m.content
+          )}
+        </div>
+      ))}
+      <form onSubmit={handleSubmit}>
+        <input value={input} onChange={handleInputChange} />
+        <button type="submit">Send</button>
+      </form>
+    </div>
+  );
+}
+```
+
+### WebSocket Connection
+
+The app maintains a WebSocket connection for real-time updates with automatic reconnection using exponential backoff.
+
+```tsx
+import { useWebSocket } from "@/hooks/use-websocket";
+
+function App() {
+  const { connectionState } = useWebSocket();
+
+  // connectionState: "connecting" | "connected" | "disconnected"
+
+  return (
+    <div>
+      {connectionState !== "connected" && (
+        <Badge variant="outline">
+          {connectionState === "connecting" ? "Reconnecting..." : "Offline"}
+        </Badge>
+      )}
+    </div>
+  );
+}
 ```

@@ -46,7 +46,15 @@ export async function videosRoutes(fastify: FastifyInstance) {
   }>('/', {
     preHandler: [fastify.authenticate],
     config: {
-      rateLimit: { max: 10, timeWindow: '24 hours' },
+      rateLimit: {
+        max: 10,
+        timeWindow: '24 hours',
+        errorResponseBuilder: () => ({
+          error: 'RATE_LIMITED',
+          message: 'Daily video limit reached (10 videos per 24 hours). Try again tomorrow.',
+          statusCode: 429,
+        }),
+      },
     },
   }, async (req, reply) => {
     const input = createVideoSchema.parse(req.body);

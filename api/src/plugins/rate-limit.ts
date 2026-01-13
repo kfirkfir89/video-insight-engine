@@ -1,12 +1,14 @@
 import { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import rateLimit from '@fastify/rate-limit';
+import { config } from '../config.js';
 
 async function rateLimitSetup(fastify: FastifyInstance) {
+  // Issue #16: Use configurable rate limits from environment
   await fastify.register(rateLimit, {
     global: true,
-    max: 100,
-    timeWindow: '1 minute',
+    max: config.RATE_LIMIT_MAX,
+    timeWindow: config.RATE_LIMIT_WINDOW,
     keyGenerator: (req) => {
       return req.user?.userId || req.ip;
     },

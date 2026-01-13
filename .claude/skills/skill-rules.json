@@ -96,10 +96,11 @@
       },
       "fileTriggers": {
         "pathPatterns": [
-          "workers/summarizer/**/*.py",
-          "workers/summarizer/src/**/*",
-          "workers/explainer/**/*.py",
-          "workers/explainer/src/**/*"
+          "services/**/*",
+          "services/summarizer/**/*.py",
+          "services/summarizer/src/**/*",
+          "services/explainer/**/*.py",
+          "services/explainer/src/**/*"
         ],
         "contentPatterns": [
           "from fastapi",
@@ -140,7 +141,7 @@
       "skillPath": ".claude/skills/react-vite/SKILL.md",
       "promptTriggers": {
         "keywords": [
-          "component", "react", "frontend", "ui", "page", "hook",
+          "component", "react", "frontend", "ui", "ux","page", "hook",
           "shadcn", "tailwind", "react query", "tanstack", "zustand",
           "vie-web", "vite", "form", "react hook form", "zod",
           "validation", "routing", "performance", "lazy load", "suspense",

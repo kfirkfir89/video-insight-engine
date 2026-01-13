@@ -13,25 +13,49 @@ import { SectionCard } from "./SectionCard";
 import { StickyChapterNav } from "./StickyChapterNav";
 import { MobileChapterNav } from "./MobileChapterNav";
 import { ConceptsGrid } from "./ConceptsGrid";
+import { ChapterList } from "./ChapterList";
+import { ResourcesPanel } from "./ResourcesPanel";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import type { VideoResponse, VideoSummary } from "@vie/types";
+import type { StreamState, Chapter, DescriptionAnalysis } from "@/hooks/use-summary-stream";
 
 interface VideoDetailLayoutProps {
   video: VideoResponse;
   summary: VideoSummary | null;
+  isStreaming?: boolean;
+  streamingState?: StreamState;
+  // Progressive summarization fields
+  chapters?: Chapter[];
+  isCreatorChapters?: boolean;
+  descriptionAnalysis?: DescriptionAnalysis | null;
 }
 
-export function VideoDetailLayout({ video, summary }: VideoDetailLayoutProps) {
+export function VideoDetailLayout({
+  video,
+  summary,
+  isStreaming = false,
+  streamingState,
+  chapters = [],
+  isCreatorChapters = false,
+  descriptionAnalysis = null,
+}: VideoDetailLayoutProps) {
+  // Use chapters from props or from streaming state
+  const effectiveChapters = chapters.length > 0 ? chapters : streamingState?.chapters || [];
+  const effectiveIsCreatorChapters = chapters.length > 0 ? isCreatorChapters : streamingState?.isCreatorChapters || false;
+  const effectiveDescriptionAnalysis = descriptionAnalysis || streamingState?.descriptionAnalysis || null;
   const playerRef = useRef<YouTubePlayerRef>(null);
   const isDesktop = useIsDesktop();
 
+  // Use a stable dependency based on section IDs to prevent unnecessary re-renders during streaming
+  const sectionIdsString = summary?.sections.map((s) => s.id).join(",") ?? "";
   const sectionIds = useMemo(
     () => summary?.sections.map((s) => s.id) ?? [],
-    [summary?.sections]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sectionIdsString]
   );
 
   const { activeId, scrollToSection } = useActiveSection(sectionIds);
@@ -95,11 +119,30 @@ export function VideoDetailLayout({ video, summary }: VideoDetailLayoutProps) {
       </div>
 
       {!summary ? (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            Summary not available yet. Video may still be processing.
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          {/* Show chapters immediately even before summary is ready */}
+          {effectiveChapters.length > 0 && (
+            <ChapterList
+              chapters={effectiveChapters}
+              isCreatorChapters={effectiveIsCreatorChapters}
+              onSeek={handlePlayFromSection}
+            />
+          )}
+
+          {/* Show description analysis if available */}
+          {effectiveDescriptionAnalysis && (
+            <ResourcesPanel analysis={effectiveDescriptionAnalysis} />
+          )}
+
+          {/* Placeholder when nothing is available yet */}
+          {effectiveChapters.length === 0 && !effectiveDescriptionAnalysis && (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                Summary not available yet. Video may still be processing.
+              </CardContent>
+            </Card>
+          )}
+        </div>
       ) : isDesktop ? (
         /* Desktop Layout: Two-Column with Sticky Sidebar */
         <div className="flex gap-8">
@@ -115,16 +158,32 @@ export function VideoDetailLayout({ video, summary }: VideoDetailLayoutProps) {
 
           {/* Main Content */}
           <main className="flex-1 max-w-3xl space-y-6 pb-12">
-            <TldrHero tldr={summary.tldr} />
+            <TldrHero tldr={summary.tldr} isStreaming={isStreaming} />
             <KeyTakeawaysList takeaways={summary.keyTakeaways} />
+
+            {/* Show chapters while sections are loading during streaming */}
+            {isStreaming && effectiveChapters.length > 0 && summary.sections.length === 0 && (
+              <ChapterList
+                chapters={effectiveChapters}
+                isCreatorChapters={effectiveIsCreatorChapters}
+                onSeek={handlePlayFromSection}
+              />
+            )}
+
             {renderSections()}
+
+            {/* Resources from description analysis */}
+            {effectiveDescriptionAnalysis && (
+              <ResourcesPanel analysis={effectiveDescriptionAnalysis} />
+            )}
+
             <ConceptsGrid concepts={summary.concepts} />
           </main>
         </div>
       ) : (
         /* Mobile Layout: Single Column + Bottom Navigation */
         <div className="pb-24">
-          <TldrHero tldr={summary.tldr} />
+          <TldrHero tldr={summary.tldr} isStreaming={isStreaming} />
 
           {/* Collapsible Video Section */}
           {video.youtubeId && (
@@ -155,7 +214,23 @@ export function VideoDetailLayout({ video, summary }: VideoDetailLayoutProps) {
 
           <div className="space-y-6 mt-6">
             <KeyTakeawaysList takeaways={summary.keyTakeaways} />
+
+            {/* Show chapters while sections are loading during streaming */}
+            {isStreaming && effectiveChapters.length > 0 && summary.sections.length === 0 && (
+              <ChapterList
+                chapters={effectiveChapters}
+                isCreatorChapters={effectiveIsCreatorChapters}
+                onSeek={handlePlayFromSection}
+              />
+            )}
+
             {renderSections()}
+
+            {/* Resources from description analysis */}
+            {effectiveDescriptionAnalysis && (
+              <ResourcesPanel analysis={effectiveDescriptionAnalysis} />
+            )}
+
             <ConceptsGrid concepts={summary.concepts} />
           </div>
 
