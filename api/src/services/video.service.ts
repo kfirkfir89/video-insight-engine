@@ -191,13 +191,18 @@ export class VideoService {
     return {
       video: {
         id: video._id.toString(),
+        videoSummaryId: video.videoSummaryId.toString(),
         youtubeId: video.youtubeId,
         title: video.title || summary?.title,
         channel: video.channel || summary?.channel,
         duration: video.duration || summary?.duration,
         thumbnailUrl: video.thumbnailUrl || summary?.thumbnailUrl,
-        status: video.status,
+        status: summary?.status || video.status,
         folderId: video.folderId?.toString() || null,
+        // Progressive summarization fields
+        chapters: summary?.chapters || null,
+        chapterSource: summary?.chapterSource || null,
+        descriptionAnalysis: summary?.descriptionAnalysis || null,
       },
       summary: summary?.summary || null,
     };

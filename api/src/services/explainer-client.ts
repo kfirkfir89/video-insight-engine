@@ -118,3 +118,47 @@ export async function explainChat(
     throw new ServiceUnavailableError('Explainer');
   }
 }
+
+/**
+ * Call explain_chat streaming endpoint for real-time SSE responses.
+ * Returns raw Response to allow streaming to client.
+ */
+export async function explainChatStream(
+  request: ExplainChatRequest
+): Promise<Response> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), EXPLAINER_TIMEOUT_MS);
+
+    const response = await fetch(
+      `${config.EXPLAINER_URL}/explain/chat/stream`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          memorizedItemId: request.memorizedItemId,
+          userId: request.userId,
+          message: request.message,
+          ...(request.chatId && { chatId: request.chatId }),
+        }),
+        signal: controller.signal,
+      }
+    );
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new ServiceUnavailableError(`Explainer streaming: ${response.status}`);
+    }
+
+    return response;
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new ServiceTimeoutError('Explainer streaming');
+    }
+    if (err instanceof ServiceUnavailableError || err instanceof ServiceTimeoutError) {
+      throw err;
+    }
+    throw new ServiceUnavailableError('Explainer streaming');
+  }
+}

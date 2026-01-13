@@ -1,11 +1,17 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 interface TldrHeroProps {
   tldr: string;
+  isStreaming?: boolean;
 }
 
-export function TldrHero({ tldr }: TldrHeroProps) {
+export function TldrHero({ tldr, isStreaming = false }: TldrHeroProps) {
+  const showSkeleton = !tldr && isStreaming;
+  const showCursor = isStreaming && tldr;
+
   return (
     <Card
       data-slot="tldr-hero"
@@ -18,7 +24,25 @@ export function TldrHero({ tldr }: TldrHeroProps) {
         <Badge variant="secondary" className="mb-3 font-medium">
           TL;DR
         </Badge>
-        <p className="text-lg leading-relaxed text-foreground">{tldr}</p>
+        {showSkeleton ? (
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-full" />
+            <Skeleton className="h-5 w-4/5" />
+            <Skeleton className="h-5 w-3/5" />
+          </div>
+        ) : (
+          <p className="text-lg leading-relaxed text-foreground">
+            {tldr}
+            {showCursor && (
+              <span
+                className={cn(
+                  "inline-block w-0.5 h-5 ml-0.5 bg-primary align-middle",
+                  "animate-pulse"
+                )}
+              />
+            )}
+          </p>
+        )}
       </CardContent>
     </Card>
   );

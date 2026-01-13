@@ -4,6 +4,7 @@ uvicorn>=0.27.0
 
 # YouTube
 youtube-transcript-api>=0.6.2
+yt-dlp>=2024.1.0
 
 # LLM
 anthropic>=0.18.0
@@ -18,3 +19,4 @@ pydantic-settings>=2.1.0
 # Utils
 python-dotenv>=1.0.0
 httpx>=0.26.0
+tenacity>=8.2.0

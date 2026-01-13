@@ -1,0 +1,17 @@
+Generate a concise summary of this video transcript.
+
+VIDEO DURATION: {duration_formatted}
+
+TRANSCRIPT:
+{transcript}
+
+Return JSON only (no other text):
+{{
+  "tldr": "1-2 sentence overview of the entire video",
+  "keyTakeaways": ["takeaway 1", "takeaway 2", "takeaway 3"]
+}}
+
+Guidelines:
+- TLDR should capture the main point/thesis
+- Key takeaways should be actionable insights (3-5 max)
+- Be specific to this content, not generic

@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     # Anthropic
     ANTHROPIC_API_KEY: str
     ANTHROPIC_MODEL: str = "claude-sonnet-4-20250514"
+    ANTHROPIC_HAIKU_MODEL: str = "claude-3-5-haiku-20241022"
 
     # API callback
     API_URL: str = "http://vie-api:3000"
@@ -21,6 +22,13 @@ class Settings(BaseSettings):
     # Token limits for LLM prompts
     MAX_TRANSCRIPT_CHARS: int = 15000
     MAX_SECTION_CHARS: int = 8000
+
+    # Issue #18: Configurable batch size for parallel section processing
+    SECTION_BATCH_SIZE: int = 3
+
+    # Webshare proxy (optional - for bypassing YouTube IP blocks)
+    WEBSHARE_PROXY_USERNAME: str | None = None
+    WEBSHARE_PROXY_PASSWORD: str | None = None
 
     class Config:
         env_file = ".env"

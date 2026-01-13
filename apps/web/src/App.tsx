@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { LoginPage } from "@/pages/LoginPage";
@@ -31,6 +32,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function AppRoutes() {
   const checkAuth = useAuthStore((s) => s.checkAuth);
+  const logoutReason = useAuthStore((s) => s.logoutReason);
+  const clearLogoutReason = useAuthStore((s) => s.clearLogoutReason);
 
   // Connect to WebSocket for real-time updates
   useWebSocket();
@@ -38,6 +41,14 @@ function AppRoutes() {
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
+
+  // Show toast when session expires and user is redirected to login
+  useEffect(() => {
+    if (logoutReason) {
+      toast.error(logoutReason);
+      clearLogoutReason();
+    }
+  }, [logoutReason, clearLogoutReason]);
 
   return (
     <Routes>

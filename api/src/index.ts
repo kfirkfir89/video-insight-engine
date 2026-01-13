@@ -17,6 +17,7 @@ import { videosRoutes } from './routes/videos.routes.js';
 import { memorizeRoutes } from './routes/memorize.routes.js';
 import { explainRoutes } from './routes/explain.routes.js';
 import { internalRoutes } from './routes/internal.routes.js';
+import { streamRoutes } from './routes/stream.routes.js';
 
 const fastify = Fastify({
   logger: {
@@ -75,6 +76,7 @@ fastify.setErrorHandler((error, request, reply) => {
 await fastify.register(authRoutes, { prefix: '/api/auth' });
 await fastify.register(foldersRoutes, { prefix: '/api/folders' });
 await fastify.register(videosRoutes, { prefix: '/api/videos' });
+await fastify.register(streamRoutes, { prefix: '/api/videos' });  // Streaming SSE route
 await fastify.register(memorizeRoutes, { prefix: '/api/memorize' });
 await fastify.register(explainRoutes, { prefix: '/api/explain' });
 await fastify.register(internalRoutes, { prefix: '/internal' });
@@ -88,7 +90,7 @@ fastify.get('/health', async () => ({
 // Start server
 try {
   await fastify.listen({ port: config.PORT, host: '0.0.0.0' });
-  console.log(`vie-api running on port ${config.PORT}`);
+  fastify.log.info(`vie-api running on port ${config.PORT}`);
 } catch (err) {
   fastify.log.error(err);
   process.exit(1);

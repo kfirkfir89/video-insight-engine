@@ -1,12 +1,14 @@
 import re
 import asyncio
 from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api.proxies import WebshareProxyConfig
 from youtube_transcript_api._errors import (
     TranscriptsDisabled,
     NoTranscriptFound,
     VideoUnavailable,
 )
 
+from src.config import settings
 from src.models.schemas import ErrorCode
 from src.exceptions import TranscriptError
 
@@ -18,8 +20,16 @@ def _fetch_transcript_sync(video_id: str) -> tuple[list[dict], str, str]:
     Returns:
         (segments, full_text, transcript_type)
     """
-    # Create API instance per call (thread-safe)
-    ytt_api = YouTubeTranscriptApi()
+    # Configure proxy if credentials are available
+    proxy_config = None
+    if settings.WEBSHARE_PROXY_USERNAME and settings.WEBSHARE_PROXY_PASSWORD:
+        proxy_config = WebshareProxyConfig(
+            proxy_username=settings.WEBSHARE_PROXY_USERNAME,
+            proxy_password=settings.WEBSHARE_PROXY_PASSWORD,
+        )
+
+    # Create API instance with optional proxy
+    ytt_api = YouTubeTranscriptApi(proxy_config=proxy_config)
 
     try:
         # New API: use instance method .list() instead of class method .list_transcripts()
@@ -32,10 +42,10 @@ def _fetch_transcript_sync(video_id: str) -> tuple[list[dict], str, str]:
         try:
             transcript = transcript_list.find_manually_created_transcript(["en"])
             transcript_type = "manual"
-        except Exception:
+        except (NoTranscriptFound, TranscriptsDisabled):
             try:
                 transcript = transcript_list.find_generated_transcript(["en"])
-            except Exception:
+            except (NoTranscriptFound, TranscriptsDisabled):
                 # Try any available
                 for t in transcript_list:
                     transcript = t

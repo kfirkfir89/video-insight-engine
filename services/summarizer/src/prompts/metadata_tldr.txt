@@ -1,0 +1,24 @@
+Generate a concise summary based on this video's metadata only.
+
+TITLE: {title}
+
+DESCRIPTION (first 500 chars):
+{description}
+
+CHAPTERS:
+{chapters}
+
+Return JSON only:
+{{
+  "tldr": "1-2 sentence overview of what this video covers",
+  "keyTakeaways": ["takeaway 1", "takeaway 2", "takeaway 3"]
+}}
+
+RULES:
+- Infer the video's main topic and purpose from the title
+- Use chapter titles to understand the content flow
+- Key takeaways should reflect what viewers will learn
+- Be specific to this content, not generic
+- Keep TLDR to 1-2 sentences max
+- Provide exactly 3 key takeaways
+- If chapters are not available, focus on the title and description

@@ -7,3 +7,6 @@ export { CollapsibleVideoPlayer } from "./CollapsibleVideoPlayer";
 export { StickyChapterNav } from "./StickyChapterNav";
 export { MobileChapterNav } from "./MobileChapterNav";
 export { ConceptsGrid } from "./ConceptsGrid";
+export { StreamingIndicator } from "./StreamingIndicator";
+export { ChapterList } from "./ChapterList";
+export { ResourcesPanel } from "./ResourcesPanel";

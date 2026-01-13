@@ -9,12 +9,16 @@ interface AuthState {
   accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  logoutReason: string | null;
 
   // Actions
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => void;
+  forceLogout: (reason?: string) => void;
+  clearLogoutReason: () => void;
   checkAuth: () => Promise<void>;
+  setToken: (token: string | null) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -24,6 +28,7 @@ export const useAuthStore = create<AuthState>()(
       accessToken: null,
       isAuthenticated: false,
       isLoading: true,
+      logoutReason: null,
 
       login: async (email, password) => {
         const { user, accessToken } = await authApi.login(email, password);
@@ -47,6 +52,20 @@ export const useAuthStore = create<AuthState>()(
         set({ user: null, accessToken: null, isAuthenticated: false });
       },
 
+      forceLogout: (reason?: string) => {
+        setAccessToken(null);
+        set({
+          user: null,
+          accessToken: null,
+          isAuthenticated: false,
+          logoutReason: reason || null,
+        });
+      },
+
+      clearLogoutReason: () => {
+        set({ logoutReason: null });
+      },
+
       checkAuth: async () => {
         const { accessToken } = get();
         if (!accessToken) {
@@ -67,6 +86,11 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
           });
         }
+      },
+
+      setToken: (token) => {
+        setAccessToken(token);
+        set({ accessToken: token });
       },
     }),
     {

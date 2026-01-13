@@ -25,11 +25,16 @@ async function jwt(fastify: FastifyInstance) {
     sign: { expiresIn: config.JWT_EXPIRES_IN },
   });
 
+  // Issue #9: Standardized error response format per ERROR-HANDLING.md
   fastify.decorate('authenticate', async (req: FastifyRequest, reply: FastifyReply) => {
     try {
       await req.jwtVerify();
     } catch (err) {
-      reply.code(401).send({ error: 'UNAUTHORIZED', message: 'Invalid token' });
+      return reply.code(401).send({
+        error: 'UNAUTHORIZED',
+        message: 'Invalid or expired token',
+        statusCode: 401
+      });
     }
   });
 }
