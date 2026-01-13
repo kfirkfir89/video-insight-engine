@@ -4,10 +4,12 @@ SECTION: {title}
 CONTENT:
 {content}
 
+{extra_instruction}
+
 Return JSON only (no other text):
 {{
   "summary": "2-3 sentence summary of the section",
-  "bullets": ["key point 1", "key point 2", "key point 3"]
+  "bullets": ["key point 1", "key point 2", "key point 3"]{generated_title_field}
 }}
 
 Guidelines:

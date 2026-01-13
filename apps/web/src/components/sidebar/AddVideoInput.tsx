@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/stores/ui-store";
 import { useAddVideo } from "@/hooks/use-videos";
+import { useFolders } from "@/hooks/use-folders";
+import { FolderSelector } from "./FolderSelector";
 
 export function AddVideoInput() {
   const [url, setUrl] = useState("");
@@ -13,6 +15,25 @@ export function AddVideoInput() {
   const activeSection = useUIStore((s) => s.activeSection);
   const addVideo = useAddVideo();
   const navigate = useNavigate();
+
+  // Fetch folders for the selector
+  const { data: foldersData } = useFolders("summarized");
+
+  // Track if user has explicitly selected a folder (vs using sidebar selection)
+  const userHasSelected = useRef(false);
+  const [targetFolderId, setTargetFolderId] = useState<string | null>(selectedFolderId);
+
+  // Only sync from sidebar selection if user hasn't made an explicit choice
+  useEffect(() => {
+    if (!userHasSelected.current) {
+      setTargetFolderId(selectedFolderId);
+    }
+  }, [selectedFolderId]);
+
+  const handleFolderSelect = (folderId: string | null) => {
+    userHasSelected.current = true;
+    setTargetFolderId(folderId);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,8 +47,10 @@ export function AddVideoInput() {
 
     try {
       setError(null);
-      const result = await addVideo.mutateAsync({ url: url.trim(), folderId: selectedFolderId });
+      const result = await addVideo.mutateAsync({ url: url.trim(), folderId: targetFolderId });
       setUrl("");
+      // Reset folder selection tracking so next add follows sidebar selection again
+      userHasSelected.current = false;
 
       // Navigate to video detail page to show streaming progress
       if (result?.video?.id) {
@@ -48,6 +71,12 @@ export function AddVideoInput() {
         }}
         placeholder="Paste YouTube URL..."
         className="text-sm h-9"
+        disabled={addVideo.isPending}
+      />
+      <FolderSelector
+        folders={foldersData?.folders || []}
+        selectedFolderId={targetFolderId}
+        onSelect={handleFolderSelect}
         disabled={addVideo.isPending}
       />
       <Button

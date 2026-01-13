@@ -24,18 +24,16 @@ import {
 import { DeleteVideoDialog } from "@/components/dialogs/DeleteVideoDialog";
 import { cn } from "@/lib/utils";
 import { getFolderColorStyle } from "@/lib/style-utils";
+import { SIDEBAR_LAYOUT } from "@/lib/layout-constants";
 import { useMoveVideo, useDeleteVideo } from "@/hooks/use-videos";
 import { useSidebarTextClasses } from "@/hooks/use-sidebar-text-size";
-import type { Video, Folder as FolderType } from "@/types";
+import type { Video, Folder as FolderData } from "@/types";
 
 interface VideoItemProps {
   video: Video;
   level: number;
-  folders?: FolderType[];
+  folders?: FolderData[];
 }
-
-const INDENT_PER_LEVEL = 12;
-const BASE_PADDING = 8;
 
 export function VideoItem({ video, level, folders = [] }: VideoItemProps) {
   const moveVideo = useMoveVideo();
@@ -60,7 +58,7 @@ export function VideoItem({ video, level, folders = [] }: VideoItemProps) {
     : undefined;
 
   // Use consistent padding with FolderItem (level already includes +1 from parent)
-  const paddingLeft = BASE_PADDING + level * INDENT_PER_LEVEL;
+  const paddingLeft = SIDEBAR_LAYOUT.BASE_PADDING + level * SIDEBAR_LAYOUT.INDENT_PER_LEVEL;
 
   const handleMoveToFolder = (folderId: string | null) => {
     moveVideo.mutate({ id: video.id, folderId });
@@ -82,7 +80,8 @@ export function VideoItem({ video, level, folders = [] }: VideoItemProps) {
       ref={setNodeRef}
       style={{ ...style, paddingLeft: `${paddingLeft}px`, paddingRight: "8px" }}
       className={cn(
-        "group flex items-center h-7 hover:bg-accent/50 rounded-sm transition-colors",
+        "group flex items-center hover:bg-accent/50 rounded-sm transition-colors",
+        textClasses.rowHeight,
         isDragging && "opacity-50 z-50"
       )}
       {...attributes}
@@ -91,8 +90,8 @@ export function VideoItem({ video, level, folders = [] }: VideoItemProps) {
       {/* Spacer for chevron alignment (16px) */}
       <span className="w-4 shrink-0" />
 
-      {/* Film Icon - 16px */}
-      <Film className="h-4 w-4 shrink-0 text-muted-foreground" />
+      {/* Film Icon */}
+      <Film className={cn(textClasses.iconSize, "shrink-0 text-muted-foreground")} />
 
       {/* Video link */}
       <Link
@@ -116,7 +115,7 @@ export function VideoItem({ video, level, folders = [] }: VideoItemProps) {
             onClick={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+            <MoreVertical className={cn(textClasses.smallIconSize, "text-muted-foreground")} />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">

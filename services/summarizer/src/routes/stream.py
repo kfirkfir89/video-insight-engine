@@ -26,6 +26,12 @@ from src.services.llm import LLMService, seconds_to_timestamp
 from src.services import transcript
 from src.services.youtube import extract_video_data
 from src.services.description_analyzer import analyze_description, DescriptionAnalysis
+from src.services.sponsorblock import (
+    get_sponsor_segments,
+    filter_transcript_segments,
+    sponsor_segments_to_dict,
+    SponsorSegment,
+)
 from src.exceptions import TranscriptError
 
 logger = logging.getLogger(__name__)
@@ -100,6 +106,16 @@ async def stream_summarization(
             "duration": video_data.duration,
         })
 
+        # ===== Fetch Sponsor Segments (SponsorBlock API) =====
+        sponsor_segments: list[SponsorSegment] = await get_sponsor_segments(youtube_id)
+        if sponsor_segments:
+            yield sse_event("sponsor_segments", {
+                "segments": sponsor_segments_to_dict(sponsor_segments),
+                "totalDurationRemoved": sum(
+                    s.end_seconds - s.start_seconds for s in sponsor_segments
+                ),
+            })
+
         # Send chapters immediately if available (creator-defined)
         use_creator_chapters = video_data.has_chapters
         if use_creator_chapters:
@@ -145,6 +161,17 @@ async def stream_summarization(
 
         yield sse_event("transcript_ready", {"duration": duration})
 
+        # ===== Filter Sponsor Segments from Transcript =====
+        if sponsor_segments:
+            original_count = len(segments)
+            segments = filter_transcript_segments(segments, sponsor_segments)
+            # Rebuild raw transcript from filtered segments
+            raw_transcript = " ".join(seg["text"] for seg in segments)
+            logger.info(
+                f"Filtered transcript: {original_count} -> {len(segments)} segments "
+                f"(removed {original_count - len(segments)} sponsor segments)"
+            )
+
         clean_text = transcript.clean_transcript(raw_transcript)
 
         # ===== PHASE 2: PARALLEL - Description + TLDR + First Section =====
@@ -178,7 +205,11 @@ async def stream_summarization(
             first_section_text = video_data.get_chapter_transcript(0)
             if first_section_text:
                 parallel_tasks["first_section"] = asyncio.create_task(
-                    llm_service.summarize_section(first_section_text, first_chapter.title),
+                    llm_service.summarize_section(
+                        first_section_text,
+                        first_chapter.title,
+                        has_creator_title=True,
+                    ),
                     name="first_section"
                 )
 
@@ -190,29 +221,20 @@ async def stream_summarization(
         for coro in asyncio.as_completed(list(parallel_tasks.values())):
             try:
                 result = await coro
-                # Find which task completed
-                task_name = None
-                for name, task in parallel_tasks.items():
-                    if task.done() and not task.cancelled():
-                        try:
-                            if task.result() == result:
-                                task_name = name
-                                break
-                        except Exception:
-                            pass
 
+                # Identify result by type (more reliable than task comparison)
                 if isinstance(result, DescriptionAnalysis):
-                    task_name = "description"
                     description_analysis = result
                     if result.has_content:
                         yield sse_event("description_analysis", result.to_dict())
-                elif task_name == "tldr" or (isinstance(result, dict) and "tldr" in result):
+                elif isinstance(result, dict) and "tldr" in result:
                     synthesis = result
                     yield sse_event("synthesis_complete", {
                         "tldr": synthesis.get("tldr", ""),
                         "keyTakeaways": synthesis.get("keyTakeaways", []),
                     })
-                elif task_name == "first_section":
+                elif isinstance(result, dict) and "summary" in result:
+                    # First section result (has summary and bullets)
                     first_section_result = result
 
             except Exception as e:
@@ -244,6 +266,9 @@ async def stream_summarization(
                     "start_seconds": int(first_ch.start_time),
                     "end_seconds": int(first_ch.end_time),
                     "title": first_ch.title,
+                    "original_title": first_ch.title,
+                    "generated_title": first_section_result.get("generatedTitle"),
+                    "is_creator_chapter": True,
                     "summary": first_section_result.get("summary", ""),
                     "bullets": first_section_result.get("bullets", []),
                 }
@@ -263,7 +288,11 @@ async def stream_summarization(
                     section_text = video_data.get_chapter_transcript(idx)
                     if section_text:
                         batch_tasks.append((idx, raw, asyncio.create_task(
-                            llm_service.summarize_section(section_text, raw["title"])
+                            llm_service.summarize_section(
+                                section_text,
+                                raw["title"],
+                                has_creator_title=True,
+                            )
                         )))
 
                 # Wait for batch to complete
@@ -276,6 +305,9 @@ async def stream_summarization(
                             "start_seconds": raw["startSeconds"],
                             "end_seconds": raw["endSeconds"],
                             "title": raw["title"],
+                            "original_title": raw["title"],
+                            "generated_title": summary_data.get("generatedTitle"),
+                            "is_creator_chapter": True,
                             "summary": summary_data.get("summary", ""),
                             "bullets": summary_data.get("bullets", []),
                         }
@@ -332,6 +364,7 @@ async def stream_summarization(
                             "start_seconds": start,
                             "end_seconds": end,
                             "title": raw["title"],
+                            "is_creator_chapter": False,
                             "summary": summary_data.get("summary", ""),
                             "bullets": summary_data.get("bullets", []),
                         }
@@ -398,6 +431,10 @@ async def stream_summarization(
         # Add description analysis if available
         if description_analysis and description_analysis.has_content:
             result["description_analysis"] = description_analysis.to_dict()
+
+        # Add sponsor segments if detected
+        if sponsor_segments:
+            result["sponsor_segments"] = sponsor_segments_to_dict(sponsor_segments)
 
         repository.save_result(video_summary_id, result)
 

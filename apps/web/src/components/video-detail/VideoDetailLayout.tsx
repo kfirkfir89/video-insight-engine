@@ -1,6 +1,6 @@
 import { useRef, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Clock, CheckCircle, ChevronDown, Play } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle, ChevronDown, Play, StopCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Layout } from "@/components/layout/Layout";
@@ -32,6 +32,8 @@ interface VideoDetailLayoutProps {
   chapters?: Chapter[];
   isCreatorChapters?: boolean;
   descriptionAnalysis?: DescriptionAnalysis | null;
+  // Stop summarization callback
+  onStopSummarization?: () => void;
 }
 
 export function VideoDetailLayout({
@@ -42,6 +44,7 @@ export function VideoDetailLayout({
   chapters = [],
   isCreatorChapters = false,
   descriptionAnalysis = null,
+  onStopSummarization,
 }: VideoDetailLayoutProps) {
   // Use chapters from props or from streaming state
   const effectiveChapters = chapters.length > 0 ? chapters : streamingState?.chapters || [];
@@ -54,6 +57,8 @@ export function VideoDetailLayout({
   const sectionIdsString = summary?.sections.map((s) => s.id).join(",") ?? "";
   const sectionIds = useMemo(
     () => summary?.sections.map((s) => s.id) ?? [],
+    // Issue #21: Using sectionIdsString (serialized IDs) instead of summary?.sections
+    // to prevent re-renders during streaming while sections array reference changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [sectionIdsString]
   );
@@ -115,6 +120,18 @@ export function VideoDetailLayout({
             <CheckCircle className="h-4 w-4 text-status-success" />
             {video.status}
           </span>
+          {/* Stop button when streaming */}
+          {isStreaming && onStopSummarization && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onStopSummarization}
+              className="gap-1.5 text-destructive hover:bg-destructive/10"
+            >
+              <StopCircle className="h-4 w-4" />
+              Stop
+            </Button>
+          )}
         </div>
       </div>
 

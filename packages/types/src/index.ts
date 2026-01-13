@@ -31,6 +31,9 @@ export interface Section {
   startSeconds: number;
   endSeconds: number;
   title: string;
+  originalTitle?: string;      // Creator's original chapter title
+  generatedTitle?: string;     // AI-generated explanation subtitle
+  isCreatorChapter?: boolean;  // Flag for dual-title display
   summary: string;
   bullets: string[];
 }
@@ -97,6 +100,18 @@ export interface DescriptionAnalysis {
 }
 
 // ─────────────────────────────────────────────────────
+// Sponsor Detection Types
+// ─────────────────────────────────────────────────────
+
+export type SponsorCategory = 'sponsor' | 'selfpromo' | 'intro' | 'outro' | 'interaction';
+
+export interface SponsorSegment {
+  startSeconds: number;
+  endSeconds: number;
+  category: SponsorCategory;
+}
+
+// ─────────────────────────────────────────────────────
 // API Response Types
 // ─────────────────────────────────────────────────────
 
@@ -125,6 +140,7 @@ export interface VideoResponse {
   chapters?: Chapter[];
   chapterSource?: ChapterSource;
   descriptionAnalysis?: DescriptionAnalysis;
+  sponsorSegments?: SponsorSegment[];
 }
 
 export interface FolderResponse {
@@ -136,6 +152,8 @@ export interface FolderResponse {
   level: number;
   color: string | null;
   icon: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ─────────────────────────────────────────────────────

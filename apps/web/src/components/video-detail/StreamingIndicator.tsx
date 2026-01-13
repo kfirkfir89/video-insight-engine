@@ -18,6 +18,7 @@ const phaseLabels: Record<StreamPhase, string> = {
   concepts: "Extracting key concepts...",
   synthesis: "Generating summary...",
   done: "Complete!",
+  cancelled: "Summarization cancelled",
   error: "Error occurred",
 };
 

@@ -1,4 +1,5 @@
 import type { Folder, Video } from "@/types";
+import type { SortOption } from "@/stores/ui-store";
 
 export interface FolderNode {
   id: string;
@@ -6,14 +7,40 @@ export interface FolderNode {
   icon: string | null;
   color: string | null;
   level: number;
+  createdAt: string;
   children: FolderNode[];
+}
+
+/**
+ * Gets a sort comparator function for folder nodes based on the sort option.
+ */
+function getFolderSortFn(
+  sortOption: SortOption
+): (a: FolderNode, b: FolderNode) => number {
+  switch (sortOption) {
+    case "name-asc":
+      return (a, b) => a.name.localeCompare(b.name);
+    case "name-desc":
+      return (a, b) => b.name.localeCompare(a.name);
+    case "created-asc":
+      return (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    case "created-desc":
+      return (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    default:
+      return (a, b) => a.name.localeCompare(b.name);
+  }
 }
 
 /**
  * Converts a flat list of folders into a nested tree structure.
  * Uses parentId to determine hierarchy.
  */
-export function buildFolderTree(folders: Folder[]): FolderNode[] {
+export function buildFolderTree(
+  folders: Folder[],
+  sortOption: SortOption = "name-asc"
+): FolderNode[] {
   const map = new Map<string, FolderNode>();
   const roots: FolderNode[] = [];
 
@@ -25,6 +52,7 @@ export function buildFolderTree(folders: Folder[]): FolderNode[] {
       icon: folder.icon,
       color: folder.color,
       level: folder.level,
+      createdAt: folder.createdAt,
       children: [],
     });
   }
@@ -39,9 +67,10 @@ export function buildFolderTree(folders: Folder[]): FolderNode[] {
     }
   }
 
-  // Sort children by name at each level
+  // Sort children at each level using the selected sort option
+  const sortFn = getFolderSortFn(sortOption);
   const sortChildren = (nodes: FolderNode[]) => {
-    nodes.sort((a, b) => a.name.localeCompare(b.name));
+    nodes.sort(sortFn);
     for (const node of nodes) {
       sortChildren(node.children);
     }
@@ -108,4 +137,79 @@ export function getFolderItemCount(
   const subfolderCount = allFolders.filter((f) => f.parentId === folderId).length;
   const videoCount = allVideos.filter((v) => v.folderId === folderId).length;
   return { subfolderCount, videoCount, total: subfolderCount + videoCount };
+}
+
+/**
+ * Sorts videos based on the sort option.
+ */
+export function sortVideos(videos: Video[], sortOption: SortOption): Video[] {
+  return [...videos].sort((a, b) => {
+    switch (sortOption) {
+      case "name-asc":
+        return (a.title || "").localeCompare(b.title || "");
+      case "name-desc":
+        return (b.title || "").localeCompare(a.title || "");
+      case "created-asc":
+        return (
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+      case "created-desc":
+        return (
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      default:
+        return (a.title || "").localeCompare(b.title || "");
+    }
+  });
+}
+
+/**
+ * Filters folders and videos by search query.
+ * Folders are kept if their name matches OR they have matching descendants.
+ * Videos are kept if their title or channel matches.
+ */
+export function filterBySearch(
+  folders: FolderNode[],
+  videos: Video[],
+  searchQuery: string
+): { folders: FolderNode[]; videos: Video[] } {
+  if (!searchQuery.trim()) {
+    return { folders, videos };
+  }
+
+  const query = searchQuery.toLowerCase().trim();
+
+  // Filter videos by title or channel
+  const filteredVideos = videos.filter(
+    (v) =>
+      (v.title || "").toLowerCase().includes(query) ||
+      (v.channel || "").toLowerCase().includes(query)
+  );
+
+  // Create a set of folder IDs that have matching videos
+  const folderIdsWithMatchingVideos = new Set(
+    filteredVideos.filter((v) => v.folderId).map((v) => v.folderId)
+  );
+
+  // Filter folder tree - keep folder if name matches OR has matching descendants
+  const filterFolderTree = (nodes: FolderNode[]): FolderNode[] => {
+    return nodes
+      .map((node) => {
+        const filteredChildren = filterFolderTree(node.children);
+        const nameMatches = node.name.toLowerCase().includes(query);
+        const hasMatchingChildren = filteredChildren.length > 0;
+        const hasMatchingVideos = folderIdsWithMatchingVideos.has(node.id);
+
+        if (nameMatches || hasMatchingChildren || hasMatchingVideos) {
+          return { ...node, children: filteredChildren };
+        }
+        return null;
+      })
+      .filter((n): n is FolderNode => n !== null);
+  };
+
+  return {
+    folders: filterFolderTree(folders),
+    videos: filteredVideos,
+  };
 }
