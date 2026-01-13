@@ -17,6 +17,7 @@ import {
   validateSynthesisComplete,
   validateDoneEvent,
   validateErrorEvent,
+  validatePhaseEvent,
 } from "@/lib/sse-validators";
 
 // Issue #12: Import shared types from @vie/types, re-export for consumers
@@ -58,6 +59,7 @@ export type StreamPhase =
   | "concepts"
   | "synthesis"
   | "done"
+  | "cancelled"
   | "error";
 
 // Local types not in shared package
@@ -120,7 +122,7 @@ export function useSummaryStream({
   enabled,
   onComplete,
   onError,
-}: UseSummaryStreamOptions): StreamState & { retry: () => void } {
+}: UseSummaryStreamOptions): StreamState & { retry: () => void; stop: () => void } {
   const [state, setState] = useState<StreamState>(initialState);
   const abortControllerRef = useRef<AbortController | null>(null);
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -254,6 +256,16 @@ export function useSummaryStream({
     connect();
   }, [connect]);
 
+  const stop = useCallback(() => {
+    abortControllerRef.current?.abort();
+    isConnectingRef.current = false;
+    setState((prev) => ({
+      ...prev,
+      phase: "cancelled",
+      error: "Summarization cancelled by user",
+    }));
+  }, []);
+
   // Track the last videoSummaryId we started connecting for
   const lastConnectedIdRef = useRef<string | null>(null);
 
@@ -287,7 +299,7 @@ export function useSummaryStream({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, videoSummaryId, accessToken]);
 
-  return { ...state, retry };
+  return { ...state, retry, stop };
 }
 
 function processEvent(
@@ -302,10 +314,15 @@ function processEvent(
       setState((prev) => ({ ...prev, isCached: true }));
       break;
 
-    case "phase":
-      streamingTextRef.current = "";
-      setState((prev) => ({ ...prev, phase: event.phase as StreamPhase }));
+    case "phase": {
+      // Issue #11: Runtime validation for phase events
+      const phase = validatePhaseEvent(event);
+      if (phase) {
+        streamingTextRef.current = "";
+        setState((prev) => ({ ...prev, phase }));
+      }
       break;
+    }
 
     case "metadata": {
       // Issue #11: Runtime validation for SSE events

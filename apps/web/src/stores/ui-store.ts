@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 
 type ActiveSection = "summarized" | "memorized";
 export type SidebarTextSize = "small" | "medium" | "large";
+export type SortOption = "name-asc" | "name-desc" | "created-asc" | "created-desc";
 
 interface UIState {
   // Sidebar visibility
@@ -22,6 +23,12 @@ interface UIState {
   // Sidebar text size preference
   sidebarTextSize: SidebarTextSize;
 
+  // Sort preference (persisted)
+  sidebarSortOption: SortOption;
+
+  // Search query (not persisted, cleared on reload)
+  sidebarSearchQuery: string;
+
   // Legacy (keep for AddVideoDialog if needed elsewhere)
   addVideoDialogOpen: boolean;
 
@@ -39,6 +46,9 @@ interface UIState {
   openAddVideoDialog: () => void;
   closeAddVideoDialog: () => void;
   setSidebarTextSize: (size: SidebarTextSize) => void;
+  setSidebarSortOption: (option: SortOption) => void;
+  setSidebarSearchQuery: (query: string) => void;
+  clearSidebarSearch: () => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -52,6 +62,8 @@ export const useUIStore = create<UIState>()(
       memorizedSectionOpen: true,
       expandedFolderIds: [],
       sidebarTextSize: "medium",
+      sidebarSortOption: "name-asc",
+      sidebarSearchQuery: "",
       addVideoDialogOpen: false,
 
       // Actions
@@ -87,6 +99,9 @@ export const useUIStore = create<UIState>()(
       openAddVideoDialog: () => set({ addVideoDialogOpen: true }),
       closeAddVideoDialog: () => set({ addVideoDialogOpen: false }),
       setSidebarTextSize: (size) => set({ sidebarTextSize: size }),
+      setSidebarSortOption: (option) => set({ sidebarSortOption: option }),
+      setSidebarSearchQuery: (query) => set({ sidebarSearchQuery: query }),
+      clearSidebarSearch: () => set({ sidebarSearchQuery: "" }),
     }),
     {
       name: "vie-ui-store",
@@ -97,6 +112,7 @@ export const useUIStore = create<UIState>()(
         memorizedSectionOpen: state.memorizedSectionOpen,
         expandedFolderIds: state.expandedFolderIds,
         sidebarTextSize: state.sidebarTextSize,
+        sidebarSortOption: state.sidebarSortOption,
       }),
     }
   )
@@ -107,3 +123,5 @@ export const useSidebarOpen = () => useUIStore((s) => s.sidebarOpen);
 export const useSelectedFolder = () => useUIStore((s) => s.selectedFolderId);
 export const useActiveSection = () => useUIStore((s) => s.activeSection);
 export const useSidebarTextSize = () => useUIStore((s) => s.sidebarTextSize);
+export const useSidebarSortOption = () => useUIStore((s) => s.sidebarSortOption);
+export const useSidebarSearchQuery = () => useUIStore((s) => s.sidebarSearchQuery);

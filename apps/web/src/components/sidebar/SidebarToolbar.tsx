@@ -7,6 +7,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useUIStore, type SidebarTextSize } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
+import { SearchInput } from "./SearchInput";
+import { SortDropdown } from "./SortDropdown";
 
 const SIZE_OPTIONS: { value: SidebarTextSize; label: string }[] = [
   { value: "small", label: "Small" },
@@ -23,51 +25,70 @@ export function SidebarToolbar() {
   const setSidebarTextSize = useUIStore((s) => s.setSidebarTextSize);
   const collapseAllFolders = useUIStore((s) => s.collapseAllFolders);
   const expandedFolderIds = useUIStore((s) => s.expandedFolderIds);
+  const sortOption = useUIStore((s) => s.sidebarSortOption);
+  const setSortOption = useUIStore((s) => s.setSidebarSortOption);
+  const searchQuery = useUIStore((s) => s.sidebarSearchQuery);
+  const setSearchQuery = useUIStore((s) => s.setSidebarSearchQuery);
+  const clearSearch = useUIStore((s) => s.clearSidebarSearch);
 
   const hasExpandedFolders = expandedFolderIds.length > 0;
 
   return (
-    <div className="flex items-center justify-end gap-1 px-3 py-1.5 border-b border-border/50 bg-muted/30">
-      {/* Collapse All Folders */}
-      <button
-        onClick={collapseAllFolders}
-        disabled={!hasExpandedFolders}
-        className={cn(
-          "p-1.5 rounded-sm hover:bg-accent transition-colors",
-          !hasExpandedFolders && "opacity-40 cursor-not-allowed"
-        )}
-        title="Collapse all folders"
-        aria-label="Collapse all folders"
-      >
-        <ChevronsDownUp className="h-4 w-4 text-muted-foreground" />
-      </button>
+    <div className="flex flex-col gap-1.5 px-3 py-1.5 border-b border-border/50 bg-muted/30">
+      {/* Search input row */}
+      <SearchInput
+        value={searchQuery}
+        onChange={setSearchQuery}
+        onClear={clearSearch}
+        placeholder="Search folders and videos..."
+      />
 
-      {/* Text Size Toggle */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            className="p-1.5 rounded-sm hover:bg-accent transition-colors"
-            title={`Text size: ${currentSize}`}
-            aria-label="Change text size"
-          >
-            <Type className="h-4 w-4 text-muted-foreground" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-32">
-          {SIZE_OPTIONS.map((option) => (
-            <DropdownMenuItem
-              key={option.value}
-              onClick={() => setSidebarTextSize(option.value)}
-              className="flex items-center justify-between"
+      {/* Controls row */}
+      <div className="flex items-center justify-end gap-1">
+        {/* Collapse All Folders */}
+        <button
+          onClick={collapseAllFolders}
+          disabled={!hasExpandedFolders}
+          className={cn(
+            "p-1.5 rounded-sm hover:bg-accent transition-colors",
+            !hasExpandedFolders && "opacity-40 cursor-not-allowed"
+          )}
+          title="Collapse all folders"
+          aria-label="Collapse all folders"
+        >
+          <ChevronsDownUp className="h-4 w-4 text-muted-foreground" />
+        </button>
+
+        {/* Sort Dropdown */}
+        <SortDropdown value={sortOption} onChange={setSortOption} />
+
+        {/* Text Size Toggle */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="p-1.5 rounded-sm hover:bg-accent transition-colors"
+              title={`Text size: ${currentSize}`}
+              aria-label="Change text size"
             >
-              <span>{option.label}</span>
-              {currentSize === option.value && (
-                <Check className="h-4 w-4 text-primary" />
-              )}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+              <Type className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-32">
+            {SIZE_OPTIONS.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onClick={() => setSidebarTextSize(option.value)}
+                className="flex items-center justify-between"
+              >
+                <span>{option.label}</span>
+                {currentSize === option.value && (
+                  <Check className="h-4 w-4 text-primary" />
+                )}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   );
 }

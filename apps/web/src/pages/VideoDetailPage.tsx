@@ -123,6 +123,7 @@ export function VideoDetailPage() {
           chapters={isProcessing ? streamState.chapters : undefined}
           isCreatorChapters={isProcessing ? streamState.isCreatorChapters : undefined}
           descriptionAnalysis={isProcessing ? streamState.descriptionAnalysis : undefined}
+          onStopSummarization={isStreaming ? streamState.stop : undefined}
         />
       </ErrorBoundary>
     </>

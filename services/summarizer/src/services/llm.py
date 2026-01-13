@@ -153,11 +153,36 @@ class LLMService:
             "endSeconds": duration or 0
         }]
 
-    async def summarize_section(self, section_text: str, title: str) -> dict:
-        """Generate summary and bullets for a section."""
+    async def summarize_section(
+        self,
+        section_text: str,
+        title: str,
+        has_creator_title: bool = False,
+    ) -> dict:
+        """Generate summary and bullets for a section.
+
+        Args:
+            section_text: The transcript text for this section
+            title: The section title (either creator's chapter title or AI-generated)
+            has_creator_title: If True, also generates an explanatory subtitle
+        """
+        # Build dynamic prompt parts based on whether we need an explanation title
+        if has_creator_title:
+            extra_instruction = (
+                "Also generate a short explanatory title that describes what the viewer "
+                "will learn from this section (e.g., 'How to configure authentication' "
+                "or 'Understanding the caching strategy')."
+            )
+            generated_title_field = ',\n  "generatedTitle": "short explanatory title for this section"'
+        else:
+            extra_instruction = ""
+            generated_title_field = ""
+
         prompt = load_prompt("section_summary").format(
             title=title,
-            content=section_text[:settings.MAX_SECTION_CHARS]
+            content=section_text[:settings.MAX_SECTION_CHARS],
+            extra_instruction=extra_instruction,
+            generated_title_field=generated_title_field,
         )
 
         text = await self._call_llm(prompt, max_tokens=1000)
@@ -324,8 +349,8 @@ class LLMService:
             else:
                 result = data
 
-        # Process the result
-        if result and result.get("sections"):
+        # Process the result (type guard for dict access)
+        if isinstance(result, dict) and result.get("sections"):
             sections = result["sections"]
         else:
             # Fallback: single section
@@ -355,11 +380,14 @@ class LLMService:
             if event_type == "token":
                 yield (event_type, data)
             else:
-                # Ensure we have required fields
-                summary_data = {
-                    "summary": data.get("summary", ""),
-                    "bullets": data.get("bullets", [])
-                }
+                # Ensure we have required fields (type guard for dict)
+                if isinstance(data, dict):
+                    summary_data = {
+                        "summary": data.get("summary", ""),
+                        "bullets": data.get("bullets", [])
+                    }
+                else:
+                    summary_data = {"summary": "", "bullets": []}
                 yield ("complete", summary_data)
 
     async def stream_extract_concepts(
@@ -379,7 +407,11 @@ class LLMService:
             if event_type == "token":
                 yield (event_type, data)
             else:
-                concepts = data.get("concepts", [])
+                # Type guard for dict access
+                if isinstance(data, dict):
+                    concepts = data.get("concepts", [])
+                else:
+                    concepts = []
                 yield ("complete", concepts)
 
     async def stream_synthesize_summary(
@@ -405,10 +437,14 @@ class LLMService:
             if event_type == "token":
                 yield (event_type, data)
             else:
-                result = {
-                    "tldr": data.get("tldr", ""),
-                    "keyTakeaways": data.get("keyTakeaways", [])
-                }
+                # Type guard for dict access
+                if isinstance(data, dict):
+                    result = {
+                        "tldr": data.get("tldr", ""),
+                        "keyTakeaways": data.get("keyTakeaways", [])
+                    }
+                else:
+                    result = {"tldr": "", "keyTakeaways": []}
                 yield ("complete", result)
 
     async def stream_quick_synthesis(
@@ -433,10 +469,14 @@ class LLMService:
             if event_type == "token":
                 yield (event_type, data)
             else:
-                result = {
-                    "tldr": data.get("tldr", ""),
-                    "keyTakeaways": data.get("keyTakeaways", [])
-                }
+                # Type guard for dict access
+                if isinstance(data, dict):
+                    result = {
+                        "tldr": data.get("tldr", ""),
+                        "keyTakeaways": data.get("keyTakeaways", [])
+                    }
+                else:
+                    result = {"tldr": "", "keyTakeaways": []}
                 yield ("complete", result)
 
     async def generate_metadata_tldr(

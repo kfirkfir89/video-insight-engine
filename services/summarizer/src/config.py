@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     # Issue #18: Configurable batch size for parallel section processing
     SECTION_BATCH_SIZE: int = 3
 
+    # SponsorBlock API timeout
+    SPONSORBLOCK_TIMEOUT: float = 5.0
+
     # Webshare proxy (optional - for bypassing YouTube IP blocks)
     WEBSHARE_PROXY_USERNAME: str | None = None
     WEBSHARE_PROXY_PASSWORD: str | None = None

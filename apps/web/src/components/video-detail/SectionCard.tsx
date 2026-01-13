@@ -9,6 +9,9 @@ interface SectionCardProps {
 }
 
 export function SectionCard({ section, onPlay }: SectionCardProps) {
+  // Check if this is a creator chapter with dual titles
+  const hasCreatorChapter = section.isCreatorChapter && section.originalTitle;
+
   return (
     <Card
       id={`section-${section.id}`}
@@ -16,7 +19,16 @@ export function SectionCard({ section, onPlay }: SectionCardProps) {
       className="group transition-all hover:shadow-md"
     >
       <CardHeader className="flex flex-row items-center justify-between gap-4 pb-3">
-        <h3 className="font-semibold text-lg leading-tight">{section.title}</h3>
+        {hasCreatorChapter ? (
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-lg leading-tight">{section.originalTitle}</h3>
+            {section.generatedTitle && (
+              <p className="text-sm text-muted-foreground mt-1">{section.generatedTitle}</p>
+            )}
+          </div>
+        ) : (
+          <h3 className="font-semibold text-lg leading-tight">{section.title}</h3>
+        )}
         <Button
           size="sm"
           variant="ghost"

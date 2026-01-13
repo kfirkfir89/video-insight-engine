@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import { sseLogger } from './sse-logger';
 import type {
   Chapter,
   Section,
@@ -30,9 +31,17 @@ export const chapterSchema = z.object({
 export const sectionSchema = z.object({
   id: z.string(),
   timestamp: z.string(),
-  startSeconds: z.number(),
-  endSeconds: z.number(),
+  startSeconds: z.number().optional(),
+  start_seconds: z.number().optional(),  // Backend compatibility
+  endSeconds: z.number().optional(),
+  end_seconds: z.number().optional(),    // Backend compatibility
   title: z.string(),
+  originalTitle: z.string().optional(),
+  original_title: z.string().optional(), // Backend compatibility
+  generatedTitle: z.string().optional().nullable(),
+  generated_title: z.string().optional().nullable(), // Backend compatibility
+  isCreatorChapter: z.boolean().optional(),
+  is_creator_chapter: z.boolean().optional(), // Backend compatibility
   summary: z.string(),
   bullets: z.array(z.string()),
 });
@@ -81,7 +90,7 @@ export const socialLinkSchema = z.object({
 export function validateChapters(data: unknown): Chapter[] {
   const result = z.array(chapterSchema).safeParse(data);
   if (!result.success) {
-    console.warn('[SSE] Invalid chapters data:', result.error.message);
+    sseLogger.warn('Invalid chapters data:', result.error.message);
     return [];
   }
   return result.data as Chapter[];
@@ -90,14 +99,28 @@ export function validateChapters(data: unknown): Chapter[] {
 /**
  * Validate section from SSE event.
  * Returns null if validation fails.
+ * Normalizes snake_case to camelCase for backend compatibility.
  */
 export function validateSection(data: unknown): Section | null {
   const result = sectionSchema.safeParse(data);
   if (!result.success) {
-    console.warn('[SSE] Invalid section data:', result.error.message);
+    sseLogger.warn('Invalid section data:', result.error.message);
     return null;
   }
-  return result.data as Section;
+  const d = result.data;
+  // Normalize snake_case to camelCase
+  return {
+    id: d.id,
+    timestamp: d.timestamp,
+    startSeconds: d.startSeconds ?? d.start_seconds ?? 0,
+    endSeconds: d.endSeconds ?? d.end_seconds ?? 0,
+    title: d.title,
+    originalTitle: d.originalTitle ?? d.original_title,
+    generatedTitle: d.generatedTitle ?? d.generated_title ?? undefined,
+    isCreatorChapter: d.isCreatorChapter ?? d.is_creator_chapter,
+    summary: d.summary,
+    bullets: d.bullets,
+  };
 }
 
 /**
@@ -107,7 +130,7 @@ export function validateSection(data: unknown): Section | null {
 export function validateConcepts(data: unknown): Concept[] {
   const result = z.array(conceptSchema).safeParse(data);
   if (!result.success) {
-    console.warn('[SSE] Invalid concepts data:', result.error.message);
+    sseLogger.warn('Invalid concepts data:', result.error.message);
     return [];
   }
   return result.data.map(c => ({
@@ -137,7 +160,7 @@ export function validateDescriptionAnalysis(data: unknown): {
 
   const result = schema.safeParse(data);
   if (!result.success) {
-    console.warn('[SSE] Invalid description analysis:', result.error.message);
+    sseLogger.warn('Invalid description analysis:', result.error.message);
     return null;
   }
   // Cast to expected type - Zod validates structure, runtime handles flexible string types
@@ -176,7 +199,7 @@ const metadataEventSchema = z.object({
 export function validateMetadataEvent(data: unknown): VideoMetadata {
   const result = metadataEventSchema.safeParse(data);
   if (!result.success) {
-    console.warn('[SSE] Invalid metadata event:', result.error.message);
+    sseLogger.warn('Invalid metadata event:', result.error.message);
     return {};
   }
   return {
@@ -205,7 +228,7 @@ interface SynthesisResult {
 export function validateSynthesisComplete(data: unknown): SynthesisResult {
   const result = synthesisCompleteEventSchema.safeParse(data);
   if (!result.success) {
-    console.warn('[SSE] Invalid synthesis_complete event:', result.error.message);
+    sseLogger.warn('Invalid synthesis_complete event:', result.error.message);
     return { tldr: '', keyTakeaways: [] };
   }
   return {
@@ -226,7 +249,7 @@ const doneEventSchema = z.object({
 export function validateDoneEvent(data: unknown): number | null {
   const result = doneEventSchema.safeParse(data);
   if (!result.success) {
-    console.warn('[SSE] Invalid done event:', result.error.message);
+    sseLogger.warn('Invalid done event:', result.error.message);
     return null;
   }
   return result.data.processingTimeMs ?? null;
@@ -250,7 +273,7 @@ interface ErrorEventResult {
 export function validateErrorEvent(data: unknown): ErrorEventResult {
   const result = errorEventSchema.safeParse(data);
   if (!result.success) {
-    console.warn('[SSE] Invalid error event:', result.error.message);
+    sseLogger.warn('Invalid error event:', result.error.message);
     return { message: 'Unknown error' };
   }
   return {
@@ -277,11 +300,48 @@ interface ChaptersEventResult {
 export function validateChaptersEvent(data: unknown): ChaptersEventResult {
   const result = chaptersEventSchema.safeParse(data);
   if (!result.success) {
-    console.warn('[SSE] Invalid chapters event:', result.error.message);
+    sseLogger.warn('Invalid chapters event:', result.error.message);
     return { chapters: [], isCreatorChapters: false };
   }
   return {
     chapters: result.data.chapters as Chapter[],
     isCreatorChapters: result.data.isCreatorChapters,
   };
+}
+
+// ─────────────────────────────────────────────────────
+// Phase Event Validation
+// ─────────────────────────────────────────────────────
+
+/**
+ * Valid stream phases for SSE streaming.
+ * These come from the backend and represent processing stages.
+ */
+const VALID_SSE_PHASES = [
+  'metadata',
+  'transcript',
+  'parallel_analysis',
+  'section_detect',
+  'section_summaries',
+  'concepts',
+] as const;
+
+type SSEPhase = typeof VALID_SSE_PHASES[number];
+
+const phaseEventSchema = z.object({
+  event: z.literal('phase'),
+  phase: z.enum(VALID_SSE_PHASES),
+});
+
+/**
+ * Validate a phase event from SSE stream.
+ * Returns the validated phase or null if invalid.
+ */
+export function validatePhaseEvent(data: unknown): SSEPhase | null {
+  const result = phaseEventSchema.safeParse(data);
+  if (!result.success) {
+    sseLogger.warn('Invalid phase event:', result.error.message);
+    return null;
+  }
+  return result.data.phase;
 }

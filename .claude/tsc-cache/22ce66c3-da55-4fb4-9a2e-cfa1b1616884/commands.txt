@@ -1,0 +1,2 @@
+packages/types:build:cd /home/kfir/projects/video-insight-engine/packages/types && npm run build
+packages/types:tsc:cd /home/kfir/projects/video-insight-engine/packages/types && npx tsc --noEmit

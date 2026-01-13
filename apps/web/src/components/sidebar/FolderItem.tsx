@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { DeleteFolderDialog } from "@/components/dialogs/DeleteFolderDialog";
 import { cn } from "@/lib/utils";
 import { getFolderColorStyle } from "@/lib/style-utils";
+import { SIDEBAR_LAYOUT } from "@/lib/layout-constants";
 import { useUIStore } from "@/stores/ui-store";
 import { useDeleteFolder } from "@/hooks/use-folders";
 import { useSidebarTextClasses } from "@/hooks/use-sidebar-text-size";
@@ -23,9 +24,6 @@ interface FolderItemProps {
   videos: Video[];
   allFolders: FolderData[];
 }
-
-const INDENT_PER_LEVEL = 12;
-const BASE_PADDING = 8;
 
 export function FolderItem({ folder, type, level, videos, allFolders }: FolderItemProps) {
   const navigate = useNavigate();
@@ -48,7 +46,7 @@ export function FolderItem({ folder, type, level, videos, allFolders }: FolderIt
 
   // Styling
   const textClasses = useSidebarTextClasses();
-  const paddingLeft = BASE_PADDING + level * INDENT_PER_LEVEL;
+  const paddingLeft = SIDEBAR_LAYOUT.BASE_PADDING + level * SIDEBAR_LAYOUT.INDENT_PER_LEVEL;
 
   // Drag & Drop
   const { setNodeRef, isOver, isDragging, attributes, listeners, dragStyle } =
@@ -115,7 +113,8 @@ export function FolderItem({ folder, type, level, videos, allFolders }: FolderIt
       {/* Main folder row */}
       <div
         className={cn(
-          "group flex items-center h-7 cursor-pointer hover:bg-accent/50 rounded-sm transition-colors",
+          "group flex items-center cursor-pointer hover:bg-accent/50 rounded-sm transition-colors",
+          textClasses.rowHeight,
           isSelected && "bg-accent",
           isOver && !isDragging && "bg-primary/20 ring-1 ring-primary/50",
           isDragging && "opacity-50"
@@ -133,7 +132,8 @@ export function FolderItem({ folder, type, level, videos, allFolders }: FolderIt
           >
             <ChevronRight
               className={cn(
-                "h-3.5 w-3.5 text-muted-foreground transition-transform",
+                textClasses.smallIconSize,
+                "text-muted-foreground transition-transform",
                 isExpanded && "rotate-90"
               )}
             />
@@ -144,7 +144,7 @@ export function FolderItem({ folder, type, level, videos, allFolders }: FolderIt
 
         {/* Folder Icon */}
         <Folder
-          className="h-4 w-4 shrink-0 text-muted-foreground"
+          className={cn(textClasses.iconSize, "shrink-0 text-muted-foreground")}
           style={getFolderColorStyle(folder.color)}
         />
 
@@ -175,7 +175,7 @@ export function FolderItem({ folder, type, level, videos, allFolders }: FolderIt
             onClick={handleAddSubfolderClick}
             title="Create subfolder"
           >
-            <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+            <Plus className={cn(textClasses.smallIconSize, "text-muted-foreground")} />
           </button>
         )}
 
@@ -194,7 +194,7 @@ export function FolderItem({ folder, type, level, videos, allFolders }: FolderIt
           parentFolder={folder}
           type={type}
           paddingLeft={paddingLeft}
-          indentPerLevel={INDENT_PER_LEVEL}
+          indentPerLevel={SIDEBAR_LAYOUT.INDENT_PER_LEVEL}
           onComplete={() => setShowSubfolderInput(false)}
           onExpand={ensureExpanded}
         />
