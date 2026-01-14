@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
-import { useState, createContext, useContext } from "react";
+import { useState } from "react";
 import {
   DndContext,
   DragOverlay,
-  pointerWithin,
+  rectIntersection,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -14,25 +14,40 @@ import type {
   DragEndEvent,
   DragOverEvent,
 } from "@dnd-kit/core";
-import { Film, Folder } from "lucide-react";
-import { useMoveVideo } from "@/hooks/use-videos";
-import { useMoveFolder } from "@/hooks/use-folders";
+import { Film, Folder, Files } from "lucide-react";
+import { useMoveVideo, useBulkMoveVideos } from "@/hooks/use-videos";
+import { useMoveFolder, useBulkMoveFolders } from "@/hooks/use-folders";
+import { useUIStore } from "@/stores/ui-store";
+import { DndStateContext } from "./dnd-context";
 
 interface DndProviderProps {
   children: ReactNode;
 }
 
 interface DragData {
-  type: "video" | "folder";
+  type: "video" | "folder" | "multi";
   id: string;
   title: string;
+  selectedVideoIds?: string[];
+  selectedFolderIds?: string[];
 }
 
-// Context to share overFolderId state
-const DndStateContext = createContext<string | null>(null);
+/** Type guard to check if data matches DragData structure */
+function isDragData(data: unknown): data is DragData {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "type" in data &&
+    "id" in data &&
+    "title" in data
+  );
+}
 
-export function useOverFolderId() {
-  return useContext(DndStateContext);
+/** Safely extract string array from unknown data */
+function getStringArray(value: unknown): string[] {
+  return Array.isArray(value) && value.every((v) => typeof v === "string")
+    ? value
+    : [];
 }
 
 export function DndProvider({ children }: DndProviderProps) {
@@ -40,6 +55,9 @@ export function DndProvider({ children }: DndProviderProps) {
   const [overFolderId, setOverFolderId] = useState<string | null>(null);
   const moveVideo = useMoveVideo();
   const moveFolder = useMoveFolder();
+  const bulkMoveVideos = useBulkMoveVideos();
+  const bulkMoveFolders = useBulkMoveFolders();
+  const exitSelectionMode = useUIStore((s) => s.exitSelectionMode);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -51,8 +69,8 @@ export function DndProvider({ children }: DndProviderProps) {
   );
 
   const handleDragStart = (event: DragStartEvent) => {
-    const data = event.active.data.current as DragData | undefined;
-    if (data) {
+    const data = event.active.data.current;
+    if (isDragData(data)) {
       setActiveItem(data);
     }
   };
@@ -89,13 +107,32 @@ export function DndProvider({ children }: DndProviderProps) {
       targetFolderId = targetId;
     }
 
-    if (dragType === "video") {
+    if (dragType === "multi") {
+      // Multi-drag: move all selected items
+      const data = active.data.current;
+      const videoIds = getStringArray(data?.selectedVideoIds);
+      const folderIds = getStringArray(data?.selectedFolderIds);
+
+      if (videoIds.length > 0) {
+        bulkMoveVideos.mutate({ videoIds, folderId: targetFolderId });
+      }
+      if (folderIds.length > 0) {
+        // Filter out any folder being dropped into itself
+        const validFolderIds = folderIds.filter((id) => id !== targetFolderId);
+        if (validFolderIds.length > 0) {
+          bulkMoveFolders.mutate({ folderIds: validFolderIds, parentId: targetFolderId });
+        }
+      }
+      exitSelectionMode();
+    } else if (dragType === "video") {
       // Extract actual video ID from data
-      const videoId = active.data.current?.id as string;
-      moveVideo.mutate({ id: videoId, folderId: targetFolderId });
+      const videoId = String(active.data.current?.id ?? "");
+      if (videoId) {
+        moveVideo.mutate({ id: videoId, folderId: targetFolderId });
+      }
     } else if (dragType === "folder") {
       // Extract actual folder ID from data
-      const sourceFolderId = active.data.current?.id as string;
+      const sourceFolderId = String(active.data.current?.id ?? "");
 
       // Prevent dropping folder into itself
       if (sourceFolderId === targetFolderId) {
@@ -118,7 +155,7 @@ export function DndProvider({ children }: DndProviderProps) {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={pointerWithin}
+      collisionDetection={rectIntersection}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
@@ -131,13 +168,17 @@ export function DndProvider({ children }: DndProviderProps) {
       <DragOverlay>
         {activeItem ? (
           <div className="flex items-center gap-2 px-2 py-1 bg-card border rounded-md shadow-lg">
-            {activeItem.type === "video" ? (
+            {activeItem.type === "multi" ? (
+              <Files className="h-4 w-4 text-muted-foreground" />
+            ) : activeItem.type === "video" ? (
               <Film className="h-4 w-4 text-muted-foreground" />
             ) : (
               <Folder className="h-4 w-4 text-muted-foreground" />
             )}
             <span className="text-sm truncate max-w-[200px]">
-              {activeItem.title}
+              {activeItem.type === "multi"
+                ? `${(activeItem.selectedVideoIds?.length || 0) + (activeItem.selectedFolderIds?.length || 0)} items`
+                : activeItem.title}
             </span>
           </div>
         ) : null}

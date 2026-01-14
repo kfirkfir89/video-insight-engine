@@ -182,7 +182,6 @@ test.describe("Video Detail - Mobile Layout", () => {
   }) => {
     // Video player should be collapsed initially (iframe not in DOM or hidden)
     const youtubeIframe = page.locator('iframe[src*="youtube.com"]');
-    const initialCount = await youtubeIframe.count();
 
     // Click to expand
     const watchButton = page.locator('button:has-text("Watch Video")');
@@ -386,8 +385,8 @@ test.describe("Video Detail - Responsive Transitions", () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.waitForTimeout(100);
 
-    let stickyNav = page.locator('[data-slot="sticky-chapter-nav"]');
-    let mobileNav = page.locator('[data-slot="mobile-chapter-nav"]');
+    const stickyNav = page.locator('[data-slot="sticky-chapter-nav"]');
+    const mobileNav = page.locator('[data-slot="mobile-chapter-nav"]');
 
     await expect(stickyNav).toBeVisible();
     await expect(mobileNav).not.toBeVisible();

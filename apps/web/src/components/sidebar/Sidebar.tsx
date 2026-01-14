@@ -1,28 +1,44 @@
-import { memo } from "react";
+import { memo, useEffect } from "react";
 import { AddVideoInput } from "./AddVideoInput";
 import { SidebarToolbar } from "./SidebarToolbar";
 import { SidebarSection } from "./SidebarSection";
+import { SelectionToolbar } from "./SelectionToolbar";
 import { DndProvider } from "./DndProvider";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { useUIStore, useSelectionMode } from "@/stores/ui-store";
 
 export const Sidebar = memo(function Sidebar() {
+  const selectionMode = useSelectionMode();
+  const exitSelectionMode = useUIStore((s) => s.exitSelectionMode);
+
+  // Handle Escape key to exit selection mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectionMode) {
+        exitSelectionMode();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectionMode, exitSelectionMode]);
+
   return (
-    <aside className="h-full w-full flex flex-col bg-card border-r overflow-hidden">
+    <aside className="h-full w-full flex flex-col bg-card border-r overflow-hidden relative">
       {/* Add Video Input at top */}
       <AddVideoInput />
 
       {/* Toolbar for sidebar controls */}
       <SidebarToolbar />
 
-      {/* Folder sections with DnD context */}
+      {/* Folder sections with DnD context - each section scrolls independently */}
       <DndProvider>
-        <ScrollArea className="flex-1">
-          <div className="py-2">
-            <SidebarSection type="summarized" label="Summaries" />
-            <SidebarSection type="memorized" label="Memorized" />
-          </div>
-        </ScrollArea>
+        <div className="flex-1 flex flex-col min-h-0 py-2">
+          <SidebarSection type="summarized" label="Summaries" />
+          <SidebarSection type="memorized" label="Memorized" />
+        </div>
       </DndProvider>
+
+      {/* Selection toolbar at bottom when in selection mode */}
+      <SelectionToolbar />
     </aside>
   );
 });

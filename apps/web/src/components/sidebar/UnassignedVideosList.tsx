@@ -1,4 +1,6 @@
+import { useDroppable } from "@dnd-kit/core";
 import { VideoItem } from "./VideoItem";
+import { cn } from "@/lib/utils";
 import type { Video, Folder } from "@/types";
 
 interface UnassignedVideosListProps {
@@ -9,14 +11,35 @@ interface UnassignedVideosListProps {
 /**
  * List of videos that are not assigned to any folder.
  * Displayed at root level in the summarized section.
+ * Also acts as a drop target to move items to root level.
  */
 export function UnassignedVideosList({ videos, folders }: UnassignedVideosListProps) {
+  const { isOver, setNodeRef } = useDroppable({
+    id: "root-summarized-unassigned",
+    data: { type: "root", folderId: null },
+  });
+
+  // Show a minimal drop zone even when empty
   if (videos.length === 0) {
-    return null;
+    return (
+      <div
+        ref={setNodeRef}
+        className={cn(
+          "py-2 mx-2 rounded-sm transition-colors min-h-[32px]",
+          isOver && "bg-primary/10 ring-1 ring-primary/30"
+        )}
+      />
+    );
   }
 
   return (
-    <div className="py-1">
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "py-1 transition-colors",
+        isOver && "bg-primary/10"
+      )}
+    >
       {videos.map((video) => (
         <VideoItem
           key={video.id}

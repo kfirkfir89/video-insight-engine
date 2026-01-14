@@ -13,15 +13,15 @@ export function KeyTakeawaysList({ takeaways }: KeyTakeawaysListProps) {
       <CardHeader className="pb-3">
         <CardTitle className="text-base font-semibold">Key Takeaways</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="grid gap-3 sm:grid-cols-2">
+      <CardContent className="pt-0">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           {takeaways.map((takeaway, index) => (
             <div
               key={index}
-              className="flex items-start gap-2.5 text-sm"
+              className="flex items-start gap-2 text-sm"
             >
-              <CheckCircle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span className="text-muted-foreground">{takeaway}</span>
+              <CheckCircle className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+              <span className="text-muted-foreground text-xs leading-relaxed">{takeaway}</span>
             </div>
           ))}
         </div>

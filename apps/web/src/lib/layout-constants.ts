@@ -12,3 +12,17 @@ export const SIDEBAR_LAYOUT = {
   /** Base padding for sidebar items (left padding at level 0) */
   BASE_PADDING: 8,
 } as const;
+
+/**
+ * Sidebar selection constants for click detection and selection mode.
+ * Centralized to avoid magic strings scattered across components.
+ */
+export const SIDEBAR_SELECTION = {
+  /** Data attribute name for sidebar items (folders/videos) */
+  ITEM_ATTR: "data-sidebar-item",
+  /** CSS selector for sidebar items */
+  ITEM_SELECTOR: "[data-sidebar-item]",
+  /** CSS selector for all interactive elements that should NOT exit selection mode when clicked */
+  INTERACTIVE_SELECTOR:
+    "[data-sidebar-item], button, a, input, textarea, [role='button'], [data-slot='checkbox']",
+} as const;

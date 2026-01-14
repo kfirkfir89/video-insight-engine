@@ -76,3 +76,51 @@ export function useMoveFolder() {
     },
   });
 }
+
+// Bulk delete folders mutation
+export function useBulkDeleteFolders() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      folderIds,
+      deleteContent,
+    }: {
+      folderIds: string[];
+      deleteContent: boolean;
+    }) => {
+      // Delete folders in parallel
+      await Promise.all(
+        folderIds.map((id) => foldersApi.delete(id, deleteContent))
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.folders.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.videos.lists() });
+    },
+  });
+}
+
+// Bulk move folders to a new parent
+export function useBulkMoveFolders() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      folderIds,
+      parentId,
+    }: {
+      folderIds: string[];
+      parentId: string | null;
+    }) => {
+      // Move folders in parallel
+      await Promise.all(
+        folderIds.map((id) => foldersApi.update(id, { parentId }))
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.folders.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.videos.lists() });
+    },
+  });
+}

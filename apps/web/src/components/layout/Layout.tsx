@@ -12,7 +12,7 @@ interface LayoutProps {
 
 export function Layout({ children, showSidebar = true }: LayoutProps) {
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
-  const [sidebarWidth, setSidebarWidth] = useState(340);
+  const [sidebarWidth, setSidebarWidth] = useState(380);
   const [isResizing, setIsResizing] = useState(false);
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -24,7 +24,7 @@ export function Layout({ children, showSidebar = true }: LayoutProps) {
 
     const handleMouseMove = (e: MouseEvent) => {
       const newWidth = startWidth + (e.clientX - startX);
-      if (newWidth >= 200 && newWidth <= 500) {
+      if (newWidth >= 200 && newWidth <= 600) {
         setSidebarWidth(newWidth);
       }
     };

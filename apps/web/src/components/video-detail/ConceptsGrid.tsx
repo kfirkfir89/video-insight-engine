@@ -3,15 +3,16 @@ import type { Concept } from "@vie/types";
 
 interface ConceptsGridProps {
   concepts: Concept[];
+  title?: string;
 }
 
-export function ConceptsGrid({ concepts }: ConceptsGridProps) {
+export function ConceptsGrid({ concepts, title = "Concepts" }: ConceptsGridProps) {
   if (concepts.length === 0) return null;
 
   return (
     <Card data-slot="concepts-grid">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base font-semibold">Concepts</CardTitle>
+        <CardTitle className="text-base font-semibold">{title}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid gap-4 sm:grid-cols-2">

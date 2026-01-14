@@ -67,3 +67,43 @@ export function useMoveVideo() {
     },
   });
 }
+
+// Bulk delete videos mutation
+export function useBulkDeleteVideos() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (videoIds: string[]) => {
+      // Delete videos in parallel
+      await Promise.all(videoIds.map((id) => videosApi.delete(id)));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.videos.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.folders.lists() });
+    },
+  });
+}
+
+// Bulk move videos to folder mutation
+export function useBulkMoveVideos() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      videoIds,
+      folderId,
+    }: {
+      videoIds: string[];
+      folderId: string | null;
+    }) => {
+      // Move videos in parallel
+      await Promise.all(
+        videoIds.map((id) => videosApi.moveToFolder(id, folderId))
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.videos.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.folders.lists() });
+    },
+  });
+}

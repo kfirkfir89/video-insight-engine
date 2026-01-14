@@ -1,30 +1,27 @@
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 
 /**
  * Hook to detect if a CSS media query matches.
- * Returns true if the media query matches, false otherwise.
+ * Uses useSyncExternalStore for proper sync with browser media query API.
  */
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.matchMedia(query).matches;
-    }
-    return false;
-  });
-
-  useEffect(() => {
+  // Use useSyncExternalStore for proper external subscription
+  const subscribe = (callback: () => void) => {
     const mediaQuery = window.matchMedia(query);
-    setMatches(mediaQuery.matches);
+    mediaQuery.addEventListener("change", callback);
+    return () => mediaQuery.removeEventListener("change", callback);
+  };
 
-    const handler = (event: MediaQueryListEvent) => {
-      setMatches(event.matches);
-    };
+  const getSnapshot = () => {
+    return window.matchMedia(query).matches;
+  };
 
-    mediaQuery.addEventListener("change", handler);
-    return () => mediaQuery.removeEventListener("change", handler);
-  }, [query]);
+  const getServerSnapshot = () => {
+    // Default to false on server
+    return false;
+  };
 
-  return matches;
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
 /**

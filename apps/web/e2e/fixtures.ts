@@ -179,6 +179,7 @@ export const test = base.extend<{ authenticatedPage: Page }>({
     // Navigate to dashboard - this picks up the localStorage state
     await page.goto("/", { waitUntil: "networkidle" });
 
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not React hook
     await use(page);
   },
 });

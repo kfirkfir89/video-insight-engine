@@ -213,3 +213,22 @@ export function filterBySearch(
     videos: filteredVideos,
   };
 }
+
+/**
+ * Gets all descendant folder IDs of a given folder.
+ * Useful for excluding folders when moving a folder (can't move into itself or descendants).
+ */
+export function getDescendantFolderIds(
+  folderId: string,
+  allFolders: Folder[]
+): string[] {
+  const descendants: string[] = [];
+  const children = allFolders.filter((f) => f.parentId === folderId);
+
+  for (const child of children) {
+    descendants.push(child.id);
+    descendants.push(...getDescendantFolderIds(child.id, allFolders));
+  }
+
+  return descendants;
+}
