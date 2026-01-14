@@ -1,7 +1,9 @@
-Extract key concepts, terms, and definitions from this transcript.
+Extract key concepts from this timestamped transcript.
 
 TRANSCRIPT:
 {transcript}
+
+Each line starts with a timestamp like [MM:SS] indicating when that text occurs in the video.
 
 Return JSON only (no other text):
 {{
@@ -9,10 +11,19 @@ Return JSON only (no other text):
     {{
       "name": "Concept name",
       "definition": "Brief definition from video or null",
-      "timestamp": "MM:SS or null"
+      "timestamp": "M:SS or MM:SS - the timestamp from the transcript line where this concept is first mentioned"
     }}
   ]
 }}
+
+CRITICAL: For each concept, find the [MM:SS] timestamp at the START of the line where that concept is FIRST mentioned or explained. Copy that timestamp exactly (without brackets).
+
+Example:
+If transcript contains:
+[5:30] Let me explain dependency injection. It's a design pattern where objects receive their dependencies from external sources.
+
+Then return:
+{{"name": "dependency injection", "definition": "A design pattern where objects receive their dependencies from external sources", "timestamp": "5:30"}}
 
 Focus on:
 - Technical terms and jargon

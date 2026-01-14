@@ -26,7 +26,7 @@ class SummarizeService:
         self,
         video_summary_id: str,
         youtube_id: str,
-        url: str,
+        _url: str,
         user_id: str | None = None,
         on_progress: Callable[[int, str], None] | None = None,
     ) -> None:
@@ -36,7 +36,7 @@ class SummarizeService:
         Args:
             video_summary_id: Database ID for the video summary cache entry
             youtube_id: YouTube video ID
-            url: Full YouTube URL
+            _url: Full YouTube URL (unused, kept for API compatibility)
             user_id: Optional user ID for WebSocket notifications
             on_progress: Optional callback for progress updates
         """
@@ -142,7 +142,7 @@ class SummarizeService:
             "transcript_type": transcript_type,
             "summary": summary,
             "processing_time_ms": processing_time,
-            "token_usage": {},  # TODO: Track token usage
+            "token_usage": {},  # Token usage tracking deferred - not needed for MVP
         }
 
     async def _notify_progress(

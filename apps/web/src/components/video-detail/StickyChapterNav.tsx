@@ -1,35 +1,61 @@
-import { forwardRef } from "react";
+import { useEffect, useRef } from "react";
 import { ChapterNavItem } from "./ChapterNavItem";
-import { CollapsibleVideoPlayer } from "./CollapsibleVideoPlayer";
-import type { YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
-import type { Section } from "@vie/types";
+import type { Section, Concept } from "@vie/types";
 
 interface StickyChapterNavProps {
-  youtubeId: string;
   sections: Section[];
+  conceptsBySection: Map<string, Concept[]>;
   activeSection: string | null;
+  activePlaySection: string | null;
   onScrollToSection: (sectionId: string) => void;
-  onPlayFromSection: (startSeconds: number) => void;
+  onPlayFromSection: (sectionId: string, startSeconds: number) => void;
+  onStopSection: () => void;
 }
 
-export const StickyChapterNav = forwardRef<
-  YouTubePlayerRef,
-  StickyChapterNavProps
->(function StickyChapterNav(
-  { youtubeId, sections, activeSection, onScrollToSection, onPlayFromSection },
-  ref
-) {
+export function StickyChapterNav({
+  sections,
+  conceptsBySection,
+  activeSection,
+  activePlaySection,
+  onScrollToSection,
+  onPlayFromSection,
+  onStopSection,
+}: StickyChapterNavProps) {
+  const navRef = useRef<HTMLElement>(null);
+
+  // Auto-scroll the chapters list to keep active chapter visible
+  useEffect(() => {
+    if (!activeSection || !navRef.current) return;
+
+    // Check if this is the first section
+    const isFirstSection = sections.length > 0 && sections[0].id === activeSection;
+
+    if (isFirstSection) {
+      // For first section, scroll nav to top to show "Chapters" heading
+      navRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      const activeElement = navRef.current.querySelector(
+        `[data-section-id="${activeSection}"]`
+      );
+      if (activeElement) {
+        // Scroll the active chapter into view within the nav container
+        activeElement.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+      }
+    }
+  }, [activeSection, sections]);
+
   return (
     <aside
       data-slot="sticky-chapter-nav"
-      className="sticky top-6 h-[calc(100vh-6rem)] flex flex-col gap-4 w-[260px] shrink-0"
+      className="h-[calc(100vh-4rem)] w-full"
     >
-      {/* Collapsible Video Player */}
-      <CollapsibleVideoPlayer ref={ref} youtubeId={youtubeId} />
-
       {/* Chapter List */}
       <nav
-        className="flex-1 overflow-y-auto scrollbar-hide"
+        ref={navRef}
+        className="h-full overflow-y-auto scrollbar-hide"
         aria-label="Chapters"
       >
         <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 px-3">
@@ -40,13 +66,17 @@ export const StickyChapterNav = forwardRef<
             <ChapterNavItem
               key={section.id}
               section={section}
+              concepts={conceptsBySection.get(section.id) || []}
               isActive={activeSection === section.id}
+              isPlaying={activePlaySection === section.id}
               onScrollTo={() => onScrollToSection(section.id)}
-              onPlay={() => onPlayFromSection(section.startSeconds)}
+              onPlay={() => onPlayFromSection(section.id, section.startSeconds)}
+              onStop={onStopSection}
+              dataSectionId={section.id}
             />
           ))}
         </div>
       </nav>
     </aside>
   );
-});
+}

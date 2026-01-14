@@ -1,11 +1,11 @@
-import { Check, Type, ChevronsDownUp } from "lucide-react";
+import { Check, ALargeSmall, ChevronsDownUp, CheckSquare } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useUIStore, type SidebarTextSize } from "@/stores/ui-store";
+import { useUIStore, useSelectionMode, type SidebarTextSize } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
 import { SearchInput } from "./SearchInput";
 import { SortDropdown } from "./SortDropdown";
@@ -31,7 +31,20 @@ export function SidebarToolbar() {
   const setSearchQuery = useUIStore((s) => s.setSidebarSearchQuery);
   const clearSearch = useUIStore((s) => s.clearSidebarSearch);
 
+  // Selection mode
+  const selectionMode = useSelectionMode();
+  const enterSelectionMode = useUIStore((s) => s.enterSelectionMode);
+  const exitSelectionMode = useUIStore((s) => s.exitSelectionMode);
+
   const hasExpandedFolders = expandedFolderIds.length > 0;
+
+  const handleSelectionToggle = () => {
+    if (selectionMode) {
+      exitSelectionMode();
+    } else {
+      enterSelectionMode();
+    }
+  };
 
   return (
     <div className="flex flex-col gap-1.5 px-3 py-1.5 border-b border-border/50 bg-muted/30">
@@ -45,6 +58,19 @@ export function SidebarToolbar() {
 
       {/* Controls row */}
       <div className="flex items-center justify-end gap-1">
+        {/* Multi-select toggle */}
+        <button
+          onClick={handleSelectionToggle}
+          className={cn(
+            "p-1.5 rounded-sm hover:bg-accent transition-colors",
+            selectionMode && "bg-accent text-primary"
+          )}
+          title={selectionMode ? "Exit selection mode" : "Select multiple items"}
+          aria-label={selectionMode ? "Exit selection mode" : "Select multiple items"}
+        >
+          <CheckSquare className={cn("h-4 w-4", selectionMode ? "text-primary" : "text-muted-foreground")} />
+        </button>
+
         {/* Collapse All Folders */}
         <button
           onClick={collapseAllFolders}
@@ -70,7 +96,7 @@ export function SidebarToolbar() {
               title={`Text size: ${currentSize}`}
               aria-label="Change text size"
             >
-              <Type className="h-4 w-4 text-muted-foreground" />
+              <ALargeSmall className="h-4 w-4 text-muted-foreground" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-32">

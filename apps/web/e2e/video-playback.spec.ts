@@ -1,4 +1,4 @@
-import { test, expect, mockVideos, mockVideoSummary } from "./fixtures";
+import { test, expect } from "./fixtures";
 
 test.describe("Video Playback - Gallery", () => {
   test.beforeEach(async ({ authenticatedPage: page }) => {

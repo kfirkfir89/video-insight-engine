@@ -23,7 +23,11 @@ from src.dependencies import get_video_repository, get_llm_service
 from src.models.schemas import ProcessingStatus, ErrorCode
 from src.repositories.mongodb_repository import MongoDBVideoRepository
 from src.services.llm import LLMService, seconds_to_timestamp
-from src.services import transcript
+from src.services.transcript import (
+    get_transcript,
+    clean_transcript,
+    format_transcript_with_timestamps,
+)
 from src.services.youtube import extract_video_data
 from src.services.description_analyzer import analyze_description, DescriptionAnalysis
 from src.services.sponsorblock import (
@@ -157,7 +161,7 @@ async def stream_summarization(
         else:
             logger.info("yt-dlp subtitles not available, falling back to youtube-transcript-api")
             yield sse_event("phase", {"phase": "transcript"})
-            segments, raw_transcript, transcript_type = await transcript.get_transcript(youtube_id)
+            segments, raw_transcript, transcript_type = await get_transcript(youtube_id)
 
         yield sse_event("transcript_ready", {"duration": duration})
 
@@ -172,7 +176,13 @@ async def stream_summarization(
                 f"(removed {original_count - len(segments)} sponsor segments)"
             )
 
-        clean_text = transcript.clean_transcript(raw_transcript)
+        clean_text = clean_transcript(raw_transcript)
+
+        # Create timestamped transcript for concept extraction
+        # This allows the LLM to reference actual video timestamps
+        timestamped_transcript = format_transcript_with_timestamps(segments)
+        logger.debug(f"Timestamped transcript length: {len(timestamped_transcript)} chars")
+        logger.debug(f"First 500 chars of timestamped transcript: {timestamped_transcript[:500]}")
 
         # ===== PHASE 2: PARALLEL - Description + TLDR + First Section =====
         yield sse_event("phase", {"phase": "parallel_analysis"})
@@ -377,11 +387,16 @@ async def stream_summarization(
         yield sse_event("phase", {"phase": "concepts"})
 
         raw_concepts: list[dict[str, Any]] = []
-        async for event_type, data in llm_service.stream_extract_concepts(clean_text):
+        # Use timestamped transcript so LLM can reference actual video timestamps
+        async for event_type, data in llm_service.stream_extract_concepts(timestamped_transcript):
             if event_type == "token":
                 yield sse_token("concepts", str(data))
             else:
                 raw_concepts = data if isinstance(data, list) else []
+
+        # Debug logging for concept extraction (verbose - use debug level)
+        logger.debug(f"Extracted {len(raw_concepts)} concepts: {[c.get('name') for c in raw_concepts]}")
+        logger.debug(f"Concept timestamps: {[c.get('timestamp') for c in raw_concepts]}")
 
         concepts = [
             {

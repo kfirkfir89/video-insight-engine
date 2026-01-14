@@ -85,9 +85,15 @@ export function VideoDetailPage() {
     );
   }
 
-  // Show streaming indicator when processing
-  const showStreamingIndicator = isProcessing && streamState.phase !== "done" && streamState.phase !== "error";
-  const isStreaming = isProcessing && streamState.phase !== "done";
+  // Show streaming indicator when processing (not done, cancelled, or error)
+  const showStreamingIndicator = isProcessing &&
+    streamState.phase !== "done" &&
+    streamState.phase !== "error" &&
+    streamState.phase !== "cancelled";
+  const isStreaming = isProcessing &&
+    streamState.phase !== "done" &&
+    streamState.phase !== "cancelled" &&
+    streamState.phase !== "error";
 
   // Issue #13: Error boundary fallback for rendering errors from malformed streaming state
   const errorFallback = (
@@ -120,9 +126,9 @@ export function VideoDetailPage() {
           summary={summary}
           isStreaming={isStreaming}
           streamingState={isProcessing ? streamState : undefined}
-          chapters={isProcessing ? streamState.chapters : undefined}
-          isCreatorChapters={isProcessing ? streamState.isCreatorChapters : undefined}
-          descriptionAnalysis={isProcessing ? streamState.descriptionAnalysis : undefined}
+          chapters={isProcessing ? streamState.chapters : video?.chapters}
+          isCreatorChapters={isProcessing ? streamState.isCreatorChapters : video?.chapterSource === "creator"}
+          descriptionAnalysis={isProcessing ? streamState.descriptionAnalysis : video?.descriptionAnalysis}
           onStopSummarization={isStreaming ? streamState.stop : undefined}
         />
       </ErrorBoundary>

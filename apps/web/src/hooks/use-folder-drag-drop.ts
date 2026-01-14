@@ -6,6 +6,12 @@ interface UseFolderDragDropOptions {
   folderId: string;
   folderName: string;
   level: number;
+  /** Disables dragging (but not dropping) */
+  disabled?: boolean;
+  // Multi-drag support
+  isMultiDrag?: boolean;
+  selectedVideoIds?: string[];
+  selectedFolderIds?: string[];
 }
 
 interface UseFolderDragDropResult {
@@ -30,8 +36,13 @@ export function useFolderDragDrop({
   folderId,
   folderName,
   level,
+  disabled = false,
+  isMultiDrag = false,
+  selectedVideoIds = [],
+  selectedFolderIds = [],
 }: UseFolderDragDropOptions): UseFolderDragDropResult {
   // Droppable - use prefixed ID to ensure uniqueness
+  // Never disabled - folders should always accept drops even in selection mode
   const { isOver, setNodeRef: setDropRef } = useDroppable({
     id: `folder-${folderId}`,
     data: { type: "folder", folderId, level },
@@ -47,10 +58,13 @@ export function useFolderDragDrop({
   } = useDraggable({
     id: `drag-folder-${folderId}`,
     data: {
-      type: "folder",
+      type: isMultiDrag ? "multi" : "folder",
       id: folderId,
       title: folderName,
+      selectedVideoIds: isMultiDrag ? selectedVideoIds : [],
+      selectedFolderIds: isMultiDrag ? selectedFolderIds : [folderId],
     },
+    disabled,
   });
 
   // Combine refs for both droppable and draggable

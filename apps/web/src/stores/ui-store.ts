@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 type ActiveSection = "summarized" | "memorized";
+
 export type SidebarTextSize = "small" | "medium" | "large";
 export type SortOption = "name-asc" | "name-desc" | "created-asc" | "created-desc";
 
@@ -32,6 +33,15 @@ interface UIState {
   // Legacy (keep for AddVideoDialog if needed elsewhere)
   addVideoDialogOpen: boolean;
 
+  // Selection mode state (for bulk operations)
+  selectionMode: boolean;
+  selectedVideoIds: string[];
+  selectedFolderIds: string[];
+
+  // Range selection state
+  lastClickedItemId: string | null;  // Anchor for Shift+Click
+  itemOrder: string[];  // Flat list of item IDs in display order (prefix: v_ for videos, f_ for folders)
+
   // Actions
   toggleSidebar: () => void;
   setActiveSection: (section: ActiveSection) => void;
@@ -49,6 +59,20 @@ interface UIState {
   setSidebarSortOption: (option: SortOption) => void;
   setSidebarSearchQuery: (query: string) => void;
   clearSidebarSearch: () => void;
+
+  // Selection mode actions
+  enterSelectionMode: (initialVideoId?: string, initialFolderId?: string) => void;
+  exitSelectionMode: () => void;
+  toggleVideoSelection: (videoId: string) => void;
+  toggleFolderSelection: (folderId: string) => void;
+  clearSelection: () => void;
+  isVideoSelected: (videoId: string) => boolean;
+  isFolderSelected: (folderId: string) => boolean;
+
+  // Range selection actions
+  setItemOrder: (items: string[]) => void;
+  handleVideoSelection: (videoId: string, shiftKey: boolean, ctrlKey: boolean) => void;
+  handleFolderSelection: (folderId: string, shiftKey: boolean, ctrlKey: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -65,6 +89,15 @@ export const useUIStore = create<UIState>()(
       sidebarSortOption: "name-asc",
       sidebarSearchQuery: "",
       addVideoDialogOpen: false,
+
+      // Selection mode state
+      selectionMode: false,
+      selectedVideoIds: [],
+      selectedFolderIds: [],
+
+      // Range selection state
+      lastClickedItemId: null,
+      itemOrder: [],
 
       // Actions
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
@@ -102,6 +135,163 @@ export const useUIStore = create<UIState>()(
       setSidebarSortOption: (option) => set({ sidebarSortOption: option }),
       setSidebarSearchQuery: (query) => set({ sidebarSearchQuery: query }),
       clearSidebarSearch: () => set({ sidebarSearchQuery: "" }),
+
+      // Selection mode actions
+      enterSelectionMode: (initialVideoId, initialFolderId) =>
+        set({
+          selectionMode: true,
+          selectedVideoIds: initialVideoId ? [initialVideoId] : [],
+          selectedFolderIds: initialFolderId ? [initialFolderId] : [],
+        }),
+      exitSelectionMode: () =>
+        set({
+          selectionMode: false,
+          selectedVideoIds: [],
+          selectedFolderIds: [],
+        }),
+      toggleVideoSelection: (videoId) =>
+        set((s) => {
+          const ids = s.selectedVideoIds;
+          if (ids.includes(videoId)) {
+            return { selectedVideoIds: ids.filter((id) => id !== videoId) };
+          } else {
+            return { selectedVideoIds: [...ids, videoId] };
+          }
+        }),
+      toggleFolderSelection: (folderId) =>
+        set((s) => {
+          const ids = s.selectedFolderIds;
+          if (ids.includes(folderId)) {
+            return { selectedFolderIds: ids.filter((id) => id !== folderId) };
+          } else {
+            return { selectedFolderIds: [...ids, folderId] };
+          }
+        }),
+      clearSelection: () =>
+        set({ selectedVideoIds: [], selectedFolderIds: [] }),
+      isVideoSelected: (videoId) => get().selectedVideoIds.includes(videoId),
+      isFolderSelected: (folderId) => get().selectedFolderIds.includes(folderId),
+
+      // Range selection actions
+      setItemOrder: (items) => set({ itemOrder: items }),
+
+      handleVideoSelection: (videoId, shiftKey, ctrlKey) => {
+        const state = get();
+        const itemId = `v_${videoId}`;
+
+        // If not in selection mode, enter it
+        if (!state.selectionMode) {
+          set({
+            selectionMode: true,
+            selectedVideoIds: [videoId],
+            selectedFolderIds: [],
+            lastClickedItemId: itemId,
+          });
+          return;
+        }
+
+        // Shift+Click: range selection
+        if (shiftKey && state.lastClickedItemId && state.itemOrder.length > 0) {
+          const result = computeRangeSelection(
+            state.itemOrder,
+            state.lastClickedItemId,
+            itemId,
+            ctrlKey, // preserveExisting
+            state.selectedVideoIds,
+            state.selectedFolderIds
+          );
+          if (result) {
+            set({
+              selectedVideoIds: result.videoIds,
+              selectedFolderIds: result.folderIds,
+            });
+            return;
+          }
+        }
+
+        // Ctrl+Click: toggle selection
+        if (ctrlKey) {
+          const ids = state.selectedVideoIds;
+          if (ids.includes(videoId)) {
+            set({
+              selectedVideoIds: ids.filter((id) => id !== videoId),
+              lastClickedItemId: itemId,
+            });
+          } else {
+            set({
+              selectedVideoIds: [...ids, videoId],
+              lastClickedItemId: itemId,
+            });
+          }
+          return;
+        }
+
+        // Normal click: single selection
+        set({
+          selectedVideoIds: [videoId],
+          selectedFolderIds: [],
+          lastClickedItemId: itemId,
+        });
+      },
+
+      handleFolderSelection: (folderId, shiftKey, ctrlKey) => {
+        const state = get();
+        const itemId = `f_${folderId}`;
+
+        // If not in selection mode, enter it
+        if (!state.selectionMode) {
+          set({
+            selectionMode: true,
+            selectedVideoIds: [],
+            selectedFolderIds: [folderId],
+            lastClickedItemId: itemId,
+          });
+          return;
+        }
+
+        // Shift+Click: range selection
+        if (shiftKey && state.lastClickedItemId && state.itemOrder.length > 0) {
+          const result = computeRangeSelection(
+            state.itemOrder,
+            state.lastClickedItemId,
+            itemId,
+            ctrlKey, // preserveExisting
+            state.selectedVideoIds,
+            state.selectedFolderIds
+          );
+          if (result) {
+            set({
+              selectedVideoIds: result.videoIds,
+              selectedFolderIds: result.folderIds,
+            });
+            return;
+          }
+        }
+
+        // Ctrl+Click: toggle selection
+        if (ctrlKey) {
+          const ids = state.selectedFolderIds;
+          if (ids.includes(folderId)) {
+            set({
+              selectedFolderIds: ids.filter((id) => id !== folderId),
+              lastClickedItemId: itemId,
+            });
+          } else {
+            set({
+              selectedFolderIds: [...ids, folderId],
+              lastClickedItemId: itemId,
+            });
+          }
+          return;
+        }
+
+        // Normal click: single selection
+        set({
+          selectedVideoIds: [],
+          selectedFolderIds: [folderId],
+          lastClickedItemId: itemId,
+        });
+      },
     }),
     {
       name: "vie-ui-store",
@@ -125,3 +315,10 @@ export const useActiveSection = () => useUIStore((s) => s.activeSection);
 export const useSidebarTextSize = () => useUIStore((s) => s.sidebarTextSize);
 export const useSidebarSortOption = () => useUIStore((s) => s.sidebarSortOption);
 export const useSidebarSearchQuery = () => useUIStore((s) => s.sidebarSearchQuery);
+
+// Selection mode selectors
+export const useSelectionMode = () => useUIStore((s) => s.selectionMode);
+export const useSelectedVideoIds = () => useUIStore((s) => s.selectedVideoIds);
+export const useSelectedFolderIds = () => useUIStore((s) => s.selectedFolderIds);
+export const useSelectionCount = () =>
+  useUIStore((s) => s.selectedVideoIds.length + s.selectedFolderIds.length);
