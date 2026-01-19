@@ -1,6 +1,57 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+/**
+ * Compute range selection between anchor and target in item order.
+ * Returns video and folder IDs in the selected range.
+ */
+function computeRangeSelection(
+  itemOrder: string[],
+  anchorId: string,
+  targetId: string,
+  preserveExisting: boolean,
+  existingVideoIds: string[],
+  existingFolderIds: string[]
+): { videoIds: string[]; folderIds: string[] } | null {
+  const anchorIndex = itemOrder.indexOf(anchorId);
+  const targetIndex = itemOrder.indexOf(targetId);
+
+  if (anchorIndex === -1 || targetIndex === -1) {
+    return null;
+  }
+
+  const startIndex = Math.min(anchorIndex, targetIndex);
+  const endIndex = Math.max(anchorIndex, targetIndex);
+
+  const rangeItems = itemOrder.slice(startIndex, endIndex + 1);
+
+  const rangeVideoIds: string[] = [];
+  const rangeFolderIds: string[] = [];
+
+  for (const itemId of rangeItems) {
+    if (itemId.startsWith("v_")) {
+      rangeVideoIds.push(itemId.slice(2));
+    } else if (itemId.startsWith("f_")) {
+      rangeFolderIds.push(itemId.slice(2));
+    }
+  }
+
+  if (preserveExisting) {
+    // Merge with existing selection
+    const videoSet = new Set([...existingVideoIds, ...rangeVideoIds]);
+    const folderSet = new Set([...existingFolderIds, ...rangeFolderIds]);
+    return {
+      videoIds: Array.from(videoSet),
+      folderIds: Array.from(folderSet),
+    };
+  }
+
+  return {
+    videoIds: rangeVideoIds,
+    folderIds: rangeFolderIds,
+  };
+}
+
 type ActiveSection = "summarized" | "memorized";
 
 export type SidebarTextSize = "small" | "medium" | "large";

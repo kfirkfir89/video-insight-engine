@@ -3,6 +3,9 @@ import { useState, useEffect, useCallback } from "react";
 /** Scroll position threshold (px) from top to trigger first section selection */
 const SCROLL_TOP_THRESHOLD = 100;
 
+/** Scroll position threshold (px) from bottom to trigger last section selection */
+const SCROLL_BOTTOM_THRESHOLD = 100;
+
 /**
  * Tracks which section is currently visible in the viewport using IntersectionObserver.
  * Returns the active section ID and a function to manually set the active section.
@@ -18,20 +21,40 @@ export function useActiveSection(sectionIds: string[]) {
     // Find the scrollable main container - sections scroll within <main>
     const scrollContainer = document.querySelector("main");
 
-    // Handle scroll events to detect when at top (select first section)
+    // Handle scroll events to detect when at top or bottom
     const handleScroll = () => {
-      if (scrollContainer && scrollContainer.scrollTop < SCROLL_TOP_THRESHOLD) {
-        // When near top, always select first section
+      if (!scrollContainer) return;
+
+      // When near top, always select first section
+      if (scrollContainer.scrollTop < SCROLL_TOP_THRESHOLD) {
         setActiveId(sectionIds[0]);
+        return;
+      }
+
+      // When near bottom, always select last section
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      if (distanceFromBottom < SCROLL_BOTTOM_THRESHOLD) {
+        setActiveId(sectionIds[sectionIds.length - 1]);
       }
     };
 
     const observer = new IntersectionObserver(
       (entries) => {
+        if (!scrollContainer) return;
+
         // Skip if near top - scroll handler takes precedence
-        if (scrollContainer && scrollContainer.scrollTop < SCROLL_TOP_THRESHOLD) {
+        if (scrollContainer.scrollTop < SCROLL_TOP_THRESHOLD) {
           return;
         }
+
+        // Skip if near bottom - scroll handler takes precedence
+        const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+        if (distanceFromBottom < SCROLL_BOTTOM_THRESHOLD) {
+          return;
+        }
+
         // Find the first visible entry
         const visibleEntry = entries.find((entry) => entry.isIntersecting);
         if (visibleEntry) {

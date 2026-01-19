@@ -223,33 +223,48 @@ async def stream_summarization(
                     name="first_section"
                 )
 
-        # Stream results as they complete
+        # Run parallel tasks with asyncio.gather for reliable error tracking
+        # return_exceptions=True ensures all tasks complete and exceptions are returned as values
         description_analysis: DescriptionAnalysis | None = None
         synthesis: dict[str, Any] = {"tldr": "", "keyTakeaways": []}
         first_section_result: dict[str, Any] | None = None
+        failed_parallel_tasks: list[str] = []
 
-        for coro in asyncio.as_completed(list(parallel_tasks.values())):
-            try:
-                result = await coro
+        # Get task names and tasks in consistent order
+        task_names = list(parallel_tasks.keys())
+        tasks = list(parallel_tasks.values())
 
-                # Identify result by type (more reliable than task comparison)
-                if isinstance(result, DescriptionAnalysis):
-                    description_analysis = result
-                    if result.has_content:
-                        yield sse_event("description_analysis", result.to_dict())
-                elif isinstance(result, dict) and "tldr" in result:
-                    synthesis = result
-                    yield sse_event("synthesis_complete", {
-                        "tldr": synthesis.get("tldr", ""),
-                        "keyTakeaways": synthesis.get("keyTakeaways", []),
-                    })
-                elif isinstance(result, dict) and "summary" in result:
-                    # First section result (has summary and bullets)
-                    first_section_result = result
+        # Gather all results (exceptions returned as values, not raised)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            except Exception as e:
-                logger.error(f"Parallel task error: {e}")
-                # Continue with other tasks
+        # Process results in order, matching each result to its task name
+        for task_name, result in zip(task_names, results):
+            if isinstance(result, BaseException):
+                # Task failed - log and track
+                failed_parallel_tasks.append(task_name)
+                logger.error(f"Parallel task '{task_name}' failed: {result}")
+                continue
+
+            # Process successful result based on task name
+            if task_name == "description" and isinstance(result, DescriptionAnalysis):
+                description_analysis = result
+                if result.has_content:
+                    yield sse_event("description_analysis", result.to_dict())
+            elif task_name == "tldr" and isinstance(result, dict):
+                synthesis = result
+                yield sse_event("synthesis_complete", {
+                    "tldr": synthesis.get("tldr", ""),
+                    "keyTakeaways": synthesis.get("keyTakeaways", []),
+                })
+            elif task_name == "first_section" and isinstance(result, dict):
+                first_section_result = result
+
+        # Emit warning if some parallel tasks failed
+        if failed_parallel_tasks:
+            yield sse_event("warning", {
+                "message": f"Some analyses failed: {', '.join(failed_parallel_tasks)}",
+                "failedTasks": failed_parallel_tasks,
+            })
 
         # ===== PHASE 3: Section Processing =====
         yield sse_event("phase", {"phase": "section_summaries"})
@@ -279,6 +294,7 @@ async def stream_summarization(
                     "original_title": first_ch.title,
                     "generated_title": first_section_result.get("generatedTitle"),
                     "is_creator_chapter": True,
+                    "content": first_section_result.get("content", []),
                     "summary": first_section_result.get("summary", ""),
                     "bullets": first_section_result.get("bullets", []),
                 }
@@ -318,6 +334,7 @@ async def stream_summarization(
                             "original_title": raw["title"],
                             "generated_title": summary_data.get("generatedTitle"),
                             "is_creator_chapter": True,
+                            "content": summary_data.get("content", []),
                             "summary": summary_data.get("summary", ""),
                             "bullets": summary_data.get("bullets", []),
                         }
@@ -375,6 +392,7 @@ async def stream_summarization(
                             "end_seconds": end,
                             "title": raw["title"],
                             "is_creator_chapter": False,
+                            "content": summary_data.get("content", []),
                             "summary": summary_data.get("summary", ""),
                             "bullets": summary_data.get("bullets", []),
                         }

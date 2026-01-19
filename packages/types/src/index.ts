@@ -25,6 +25,65 @@ export type TargetType = 'section' | 'concept';
 // Video Summary Types
 // ─────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────
+// Content Block Types (Dynamic Section Content)
+// ─────────────────────────────────────────────────────
+
+export interface ParagraphBlock {
+  type: 'paragraph';
+  text: string;
+}
+
+export interface BulletsBlock {
+  type: 'bullets';
+  items: string[];
+}
+
+export interface NumberedBlock {
+  type: 'numbered';
+  items: string[];
+}
+
+export interface DoDoNotBlock {
+  type: 'do_dont';
+  do: string[];
+  dont: string[];
+}
+
+export interface ExampleBlock {
+  type: 'example';
+  title?: string;
+  code: string;
+  explanation?: string;
+}
+
+export type CalloutStyle = 'tip' | 'warning' | 'note';
+
+export interface CalloutBlock {
+  type: 'callout';
+  style: CalloutStyle;
+  text: string;
+}
+
+export interface DefinitionBlock {
+  type: 'definition';
+  term: string;
+  meaning: string;
+}
+
+export type ContentBlock =
+  | ParagraphBlock
+  | BulletsBlock
+  | NumberedBlock
+  | DoDoNotBlock
+  | ExampleBlock
+  | CalloutBlock
+  | DefinitionBlock;
+
+// ─────────────────────────────────────────────────────
+// Section Type
+// ─────────────────────────────────────────────────────
+
 export interface Section {
   id: string;
   timestamp: string;
@@ -34,8 +93,9 @@ export interface Section {
   originalTitle?: string;      // Creator's original chapter title
   generatedTitle?: string;     // AI-generated explanation subtitle
   isCreatorChapter?: boolean;  // Flag for dual-title display
-  summary: string;
-  bullets: string[];
+  content?: ContentBlock[];    // Dynamic content blocks
+  summary: string;             // Legacy fallback
+  bullets: string[];           // Legacy fallback
 }
 
 export interface Concept {

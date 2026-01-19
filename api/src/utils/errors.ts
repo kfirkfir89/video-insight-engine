@@ -97,6 +97,14 @@ export class ParentFolderNotFoundError extends AppError {
   }
 }
 
+// Database/Transaction errors
+export class VersionCreationError extends AppError {
+  constructor(message = 'Failed to create new video version') {
+    super('VERSION_CREATION_FAILED', 500, message);
+    this.name = 'VersionCreationError';
+  }
+}
+
 // External service errors
 export class ServiceTimeoutError extends AppError {
   constructor(service: string) {

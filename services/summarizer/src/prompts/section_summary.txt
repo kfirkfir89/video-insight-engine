@@ -1,4 +1,4 @@
-Summarize this video section.
+You are an expert author transforming video content into a readable article section.
 
 SECTION: {title}
 CONTENT:
@@ -6,14 +6,95 @@ CONTENT:
 
 {extra_instruction}
 
+YOUR MISSION: Transform this section into content that reads like part of a well-crafted article. Choose the format that BEST serves this specific content - don't default to the same format every time.
+
 Return JSON only (no other text):
 {{
-  "summary": "2-3 sentence summary of the section",
-  "bullets": ["key point 1", "key point 2", "key point 3"]{generated_title_field}
+  "content": [
+    // Array of content blocks - use 1-4 blocks as needed
+    // Mix and match types based on what the content needs
+  ]{generated_title_field}
 }}
 
-Guidelines:
-- Summary should capture the main idea
-- Bullets should be specific and actionable
-- Include 3-5 bullet points
-- Use clear, concise language
+AVAILABLE CONTENT BLOCK TYPES:
+
+1. "paragraph" - For explanations, context, transitions, conclusions
+   {{"type": "paragraph", "text": "Your prose here..."}}
+   Use when: Introducing ideas, explaining concepts, connecting thoughts, concluding
+
+2. "bullets" - For lists of items, features, options, benefits
+   {{"type": "bullets", "items": ["item 1", "item 2", "item 3"]}}
+   Use when: Content naturally lists multiple equal items
+
+3. "numbered" - For sequential steps, processes, rankings
+   {{"type": "numbered", "items": ["First step", "Second step", "Third step"]}}
+   Use when: Order matters, there's a process to follow
+
+4. "do_dont" - For best practices, comparisons, common mistakes
+   {{"type": "do_dont", "do": ["good practice 1"], "dont": ["bad practice 1"]}}
+   Use when: Comparing right vs wrong approaches
+
+5. "example" - For code, commands, concrete demonstrations
+   {{"type": "example", "title": "Optional title", "code": "the example content", "explanation": "Why this works"}}
+   Use when: Showing specific implementations or examples
+
+6. "callout" - For tips, warnings, important notes
+   {{"type": "callout", "style": "tip|warning|note", "text": "Important information"}}
+   Use when: Something deserves special attention
+
+7. "definition" - For key terms being introduced
+   {{"type": "definition", "term": "Term name", "meaning": "What it means"}}
+   Use when: A new concept is being defined
+
+AUTHOR'S MINDSET:
+
+Think about WHAT this section is trying to accomplish:
+- Is it INTRODUCING a concept? → Start with engaging paragraph, maybe add definition
+- Is it EXPLAINING how something works? → Paragraph with example
+- Is it LISTING options or features? → Bullets with brief intro paragraph
+- Is it TEACHING a process? → Numbered steps with callout for common pitfall
+- Is it WARNING about mistakes? → do_dont with callout
+- Is it COMPARING approaches? → do_dont or bullets showing contrast
+
+ARTICLE FLOW RULES:
+- Don't start with "This section..." or "In this part..."
+- Write as if the reader is flowing from the previous section
+- End in a way that naturally leads to the next topic
+- Each section should feel like part of ONE cohesive article
+
+WRITING QUALITY:
+- Be specific and concrete - include actual numbers, names, code when mentioned
+- No meta-commentary about "the video" or "the presenter"
+- Write directly to the reader as if teaching them
+- Make every sentence earn its place - no fluff
+
+EXAMPLES OF GOOD OUTPUT:
+
+For a section about common mistakes:
+{{
+  "content": [
+    {{"type": "paragraph", "text": "Configuration sprawl sneaks up on teams gradually. What starts as a simple config file grows into a tangled mess of environment-specific overrides and undocumented settings."}},
+    {{"type": "do_dont", "do": ["Keep all configs in one directory with clear naming (config/dev.yaml, config/prod.yaml)", "Document every non-obvious setting inline"], "dont": ["Scatter configs across multiple directories", "Use magic values without explanation"]}},
+    {{"type": "callout", "style": "warning", "text": "If your config file exceeds 200 lines, it's time to split it into logical modules."}}
+  ]
+}}
+
+For a section explaining a concept:
+{{
+  "content": [
+    {{"type": "definition", "term": "Convention over Configuration", "meaning": "A design principle where frameworks provide sensible defaults, eliminating the need for explicit configuration when following standard patterns."}},
+    {{"type": "paragraph", "text": "Rails pioneered this approach in 2004. Instead of configuring which controller handles /users, Rails automatically routes it to UsersController. Instead of specifying database column mappings, it infers them from class names."}},
+    {{"type": "example", "title": "Rails Convention in Action", "code": "class User < ApplicationRecord\n  # No config needed - Rails knows:\n  # - Table: users\n  # - Primary key: id\n  # - Controller: UsersController", "explanation": "This single line gives you a fully functional model with zero configuration."}}
+  ]
+}}
+
+For a section with actionable steps:
+{{
+  "content": [
+    {{"type": "paragraph", "text": "Implementing CoC in an existing project requires careful migration. Rushing this process creates more chaos than it solves."}},
+    {{"type": "numbered", "items": ["Audit current configs - list every config file and what it controls", "Identify candidates - configs that follow predictable patterns are easiest to convert", "Create conventions document - write down the rules before implementing", "Migrate incrementally - one config type at a time, with tests"]}},
+    {{"type": "callout", "style": "tip", "text": "Start with configs that developers complain about most. Quick wins build momentum for the harder migrations."}}
+  ]
+}}
+
+CRITICAL: Your output must be valid JSON. Use 1-4 content blocks. Choose types that BEST serve THIS specific content - variety across sections makes the article engaging.

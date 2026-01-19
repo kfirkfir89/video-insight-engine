@@ -1,10 +1,9 @@
 import { useEffect, useRef } from "react";
 import { ChapterNavItem } from "./ChapterNavItem";
-import type { Section, Concept } from "@vie/types";
+import type { Section } from "@vie/types";
 
 interface StickyChapterNavProps {
   sections: Section[];
-  conceptsBySection: Map<string, Concept[]>;
   activeSection: string | null;
   activePlaySection: string | null;
   onScrollToSection: (sectionId: string) => void;
@@ -14,7 +13,6 @@ interface StickyChapterNavProps {
 
 export function StickyChapterNav({
   sections,
-  conceptsBySection,
   activeSection,
   activePlaySection,
   onScrollToSection,
@@ -66,7 +64,6 @@ export function StickyChapterNav({
             <ChapterNavItem
               key={section.id}
               section={section}
-              concepts={conceptsBySection.get(section.id) || []}
               isActive={activeSection === section.id}
               isPlaying={activePlaySection === section.id}
               onScrollTo={() => onScrollToSection(section.id)}

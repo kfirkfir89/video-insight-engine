@@ -1,4 +1,4 @@
-Generate a concise summary of this video transcript.
+Extract the core knowledge from this video transcript and present it as direct teaching.
 
 VIDEO DURATION: {duration_formatted}
 
@@ -7,11 +7,41 @@ TRANSCRIPT:
 
 Return JSON only (no other text):
 {{
-  "tldr": "1-2 sentence overview of the entire video",
-  "keyTakeaways": ["takeaway 1", "takeaway 2", "takeaway 3"]
+  "tldr": "1-2 sentence standalone statement of the core knowledge",
+  "keyTakeaways": ["actionable takeaway 1", "actionable takeaway 2", "actionable takeaway 3"]
 }}
 
-Guidelines:
-- TLDR should capture the main point/thesis
-- Key takeaways should be actionable insights (3-5 max)
-- Be specific to this content, not generic
+CRITICAL RULES:
+
+FORBIDDEN (never use these patterns):
+- "This video covers/explains/teaches..."
+- "The presenter/speaker discusses..."
+- "You will learn about..."
+- "The content explores..."
+- Generic advice like "follow best practices"
+- Vague phrases like "important concepts are discussed"
+
+REQUIRED FOR TLDR:
+- State the core knowledge as a fact or teaching
+- Reader should understand the main point WITHOUT watching the video
+- Include specific "what" and "why"
+- Be concrete with numbers, methods, or examples when available
+
+REQUIRED FOR KEY TAKEAWAYS:
+- Each must be actionable (reader can DO something with it)
+- Include specific tools, steps, numbers, or methods
+- No "learn about X" - instead state the actual knowledge
+- Stand alone as useful information
+
+EXAMPLES:
+
+BAD tldr: "This video covers tips for better programming productivity."
+GOOD tldr: "Programming productivity increases 2-3x by following three rules: automate repetitive tasks (use scripts, not manual processes), eliminate context switching (batch similar tasks), and document decisions as you make them (saves future debugging time)."
+
+BAD takeaway: "Understand the importance of testing"
+GOOD takeaway: "Write tests for business logic first, UI last - business logic tests are stable, UI tests break with every redesign"
+
+BAD takeaway: "Learn about API design"
+GOOD takeaway: "Design APIs with nouns for resources (/users, /orders) and HTTP verbs for actions (GET=read, POST=create, PUT=update, DELETE=remove)"
+
+Include 3-5 key takeaways. After reading this summary, the viewer should have gained actual knowledge.

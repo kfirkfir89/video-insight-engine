@@ -11,6 +11,7 @@ import type {
   Chapter,
   Section,
   Concept,
+  ContentBlock,
   DescriptionLink,
   Resource,
   RelatedVideo,
@@ -28,6 +29,17 @@ export const chapterSchema = z.object({
   title: z.string(),
 });
 
+// Content block schemas for dynamic section content
+export const contentBlockSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('paragraph'), text: z.string() }),
+  z.object({ type: z.literal('bullets'), items: z.array(z.string()) }),
+  z.object({ type: z.literal('numbered'), items: z.array(z.string()) }),
+  z.object({ type: z.literal('do_dont'), do: z.array(z.string()), dont: z.array(z.string()) }),
+  z.object({ type: z.literal('example'), title: z.string().optional(), code: z.string(), explanation: z.string().optional() }),
+  z.object({ type: z.literal('callout'), style: z.enum(['tip', 'warning', 'note']), text: z.string() }),
+  z.object({ type: z.literal('definition'), term: z.string(), meaning: z.string() }),
+]);
+
 export const sectionSchema = z.object({
   id: z.string(),
   timestamp: z.string(),
@@ -42,6 +54,7 @@ export const sectionSchema = z.object({
   generated_title: z.string().optional().nullable(), // Backend compatibility
   isCreatorChapter: z.boolean().optional(),
   is_creator_chapter: z.boolean().optional(), // Backend compatibility
+  content: z.array(contentBlockSchema).optional(), // Dynamic content blocks
   summary: z.string(),
   bullets: z.array(z.string()),
 });
@@ -97,6 +110,28 @@ export function validateChapters(data: unknown): Chapter[] {
 }
 
 /**
+ * Validate and filter content blocks, returning only valid blocks.
+ * Invalid blocks are logged and filtered out rather than failing validation.
+ */
+function validateContentBlocks(blocks: unknown[] | undefined): ContentBlock[] | undefined {
+  if (!blocks || !Array.isArray(blocks) || blocks.length === 0) {
+    return undefined;
+  }
+
+  const validBlocks: ContentBlock[] = [];
+  for (const block of blocks) {
+    const result = contentBlockSchema.safeParse(block);
+    if (result.success) {
+      validBlocks.push(result.data as ContentBlock);
+    } else {
+      sseLogger.warn('Invalid content block filtered out:', result.error.message);
+    }
+  }
+
+  return validBlocks.length > 0 ? validBlocks : undefined;
+}
+
+/**
  * Validate section from SSE event.
  * Returns null if validation fails.
  * Normalizes snake_case to camelCase for backend compatibility.
@@ -118,6 +153,7 @@ export function validateSection(data: unknown): Section | null {
     originalTitle: d.originalTitle ?? d.original_title,
     generatedTitle: d.generatedTitle ?? d.generated_title ?? undefined,
     isCreatorChapter: d.isCreatorChapter ?? d.is_creator_chapter,
+    content: validateContentBlocks(d.content), // Validated dynamic content blocks
     summary: d.summary,
     bullets: d.bullets,
   };

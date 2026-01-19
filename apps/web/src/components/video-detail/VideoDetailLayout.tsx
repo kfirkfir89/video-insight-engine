@@ -1,16 +1,16 @@
-import { useRef, useCallback, useMemo, useState } from "react";
+import { useRef, useCallback, useMemo, useState, Fragment } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Clock, CheckCircle, StopCircle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { Layout } from "@/components/layout/Layout";
 import type { YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
 import { useActiveSection } from "@/hooks/use-active-section";
 import { useIsDesktop } from "@/hooks/use-media-query";
 import { matchConceptsToSections } from "@/lib/timestamp-utils";
 import { TldrHero } from "./TldrHero";
-import { KeyTakeawaysList } from "./KeyTakeawaysList";
-import { SectionCard } from "./SectionCard";
+import { ArticleSection } from "./ArticleSection";
 import { StickyChapterNav } from "./StickyChapterNav";
 import { MobileChapterNav } from "./MobileChapterNav";
 import { ConceptsGrid } from "./ConceptsGrid";
@@ -141,23 +141,25 @@ export function VideoDetailLayout({
     ? `https://youtube.com/watch?v=${video.youtubeId}`
     : null;
 
-  // Shared content sections
+  // Shared content sections - article-style layout with horizontal dividers
   const renderSections = () => (
     <>
       {summary && summary.sections.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Sections</h2>
-          {summary.sections.map((section) => (
-            <SectionCard
-              key={section.id}
-              section={section}
-              onPlay={() => handlePlayFromSection(section.id, section.startSeconds)}
-              onStop={handleStopSection}
-              isVideoActive={activePlaySection === section.id}
-              playerRef={playerRef}
-              youtubeId={video.youtubeId}
-              startSeconds={section.startSeconds}
-            />
+        <div>
+          {summary.sections.map((section, index) => (
+            <Fragment key={section.id}>
+              {index > 0 && <Separator className="my-3 opacity-40" />}
+              <ArticleSection
+                section={section}
+                onPlay={() => handlePlayFromSection(section.id, section.startSeconds)}
+                onStop={handleStopSection}
+                isVideoActive={activePlaySection === section.id}
+                concepts={conceptMatchResult.bySection.get(section.id) || []}
+                playerRef={playerRef}
+                youtubeId={video.youtubeId}
+                startSeconds={section.startSeconds}
+              />
+            </Fragment>
           ))}
         </div>
       )}
@@ -289,16 +291,19 @@ export function VideoDetailLayout({
 
                 {renderHeader()}
 
-                {/* TLDR + Key Takeaways stacked vertically */}
-                <div className="space-y-4 px-[60px] pb-10">
-                  <TldrHero tldr={summary.tldr} isStreaming={isStreaming} />
-                  <KeyTakeawaysList takeaways={summary.keyTakeaways} />
+                {/* TLDR with Key Takeaways */}
+                <div className="px-25 pb-10">
+                  <TldrHero
+                    tldr={summary.tldr}
+                    keyTakeaways={summary.keyTakeaways}
+                    isStreaming={isStreaming}
+                  />
                 </div>
               </div>
             </div>
 
             {/* Sections */}
-            <div className="space-y-6 pb-12 px-[60px]">
+            <div className="space-y-6 pb-12 px-25">
               {/* Show chapters while sections are loading during streaming */}
               {isStreaming && effectiveChapters.length > 0 && summary.sections.length === 0 && (
                 <ChapterList
@@ -322,7 +327,6 @@ export function VideoDetailLayout({
             <div className="sticky top-6">
               <StickyChapterNav
                 sections={summary.sections}
-                conceptsBySection={conceptMatchResult.bySection}
                 activeSection={activeId}
                 activePlaySection={activePlaySection}
                 onScrollToSection={scrollToSection}
@@ -343,12 +347,14 @@ export function VideoDetailLayout({
           </Link>
           {renderHeader()}
 
-          {/* TLDR */}
-          <TldrHero tldr={summary.tldr} isStreaming={isStreaming} />
+          {/* TLDR with Key Takeaways */}
+          <TldrHero
+            tldr={summary.tldr}
+            keyTakeaways={summary.keyTakeaways}
+            isStreaming={isStreaming}
+          />
 
           <div className="space-y-6 mt-6">
-            <KeyTakeawaysList takeaways={summary.keyTakeaways} />
-
             {/* Show chapters while sections are loading during streaming */}
             {isStreaming && effectiveChapters.length > 0 && summary.sections.length === 0 && (
               <ChapterList

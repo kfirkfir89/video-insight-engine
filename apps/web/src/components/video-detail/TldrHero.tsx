@@ -1,3 +1,4 @@
+import { CheckCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -5,10 +6,11 @@ import { cn } from "@/lib/utils";
 
 interface TldrHeroProps {
   tldr: string;
+  keyTakeaways: string[];
   isStreaming?: boolean;
 }
 
-export function TldrHero({ tldr, isStreaming = false }: TldrHeroProps) {
+export function TldrHero({ tldr, keyTakeaways, isStreaming = false }: TldrHeroProps) {
   const showSkeleton = !tldr && isStreaming;
   const showCursor = isStreaming && tldr;
 
@@ -42,6 +44,18 @@ export function TldrHero({ tldr, isStreaming = false }: TldrHeroProps) {
               />
             )}
           </p>
+        )}
+
+        {/* Key takeaways as bullets */}
+        {keyTakeaways.length > 0 && (
+          <ul className="mt-6 space-y-2">
+            {keyTakeaways.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm">
+                <CheckCircle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <span className="text-muted-foreground">{item}</span>
+              </li>
+            ))}
+          </ul>
         )}
       </CardContent>
     </Card>

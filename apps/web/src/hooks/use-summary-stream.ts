@@ -88,6 +88,8 @@ export interface StreamState {
   isCreatorChapters: boolean;
   descriptionAnalysis: DescriptionAnalysis | null;
   sectionStatuses: Record<number, "pending" | "processing" | "completed">;
+  // Warning state for partial failures (e.g., some analyses failed)
+  warnings: string[];
 }
 
 interface UseSummaryStreamOptions {
@@ -115,6 +117,7 @@ const initialState: StreamState = {
   isCreatorChapters: false,
   descriptionAnalysis: null,
   sectionStatuses: {},
+  warnings: [],
 };
 
 export function useSummaryStream({
@@ -486,6 +489,22 @@ function processEvent(
         phase: "error",
         error: message,
       }));
+      break;
+    }
+
+    case "warning": {
+      // Handle partial failures - some analyses may have failed but processing continues
+      const message = (event.message as string) || "Some operations completed with warnings";
+      const failedTasks = (event.failedTasks as string[]) || [];
+      const warningText = failedTasks.length > 0
+        ? `${message} (failed: ${failedTasks.join(", ")})`
+        : message;
+      setState((prev) => ({
+        ...prev,
+        warnings: [...prev.warnings, warningText],
+      }));
+      // Log for debugging but don't interrupt the stream
+      console.warn("[SSE Warning]", warningText);
       break;
     }
   }
