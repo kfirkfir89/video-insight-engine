@@ -1,4 +1,4 @@
-import { Db, ObjectId, MongoClient } from 'mongodb';
+import { Db, ObjectId } from 'mongodb';
 import { extractYoutubeId } from '../utils/youtube.js';
 import { triggerSummarization } from './summarizer-client.js';
 import { InvalidYouTubeUrlError, VideoNotFoundError, VersionCreationError } from '../utils/errors.js';
@@ -12,27 +12,8 @@ const logger = {
 // Maximum versions to keep per video (prevents unbounded storage growth)
 const MAX_VERSIONS_PER_VIDEO = 5;
 
-// Type for bypassCache transaction result
-interface BypassCacheResult {
-  video: {
-    id: string;
-    videoSummaryId: string;
-    youtubeId: string;
-    status: string;
-    version?: number;
-    previousVersion?: number;
-  };
-  cached: boolean;
-  newVersion: boolean;
-}
-
 export class VideoService {
-  private client: MongoClient;
-
-  constructor(private db: Db) {
-    // Get the client from the db for transaction support
-    this.client = db.client as MongoClient;
-  }
+  constructor(private db: Db) {}
 
   async createVideo(userId: string, url: string, folderId?: string, bypassCache = false) {
     const youtubeId = extractYoutubeId(url);
@@ -41,129 +22,111 @@ export class VideoService {
     }
 
     // Handle cache bypass - create new version instead of deleting (for A/B testing prompts)
-    // Uses transaction to prevent race conditions when multiple requests arrive simultaneously
+    // Uses atomic findOneAndUpdate to avoid transaction requirement (works with standalone MongoDB)
     if (bypassCache) {
-      const session = this.client.startSession();
-
       try {
-        let result: BypassCacheResult | null = null;
+        // 1. Atomically find and mark old version as not latest
+        const previousLatest = await this.db.collection('videoSummaryCache').findOneAndUpdate(
+          { youtubeId, isLatest: true },
+          { $set: { isLatest: false, updatedAt: new Date() } },
+          { returnDocument: 'before' }
+        );
 
-        await session.withTransaction(async () => {
-          // Reset result at start of each transaction attempt (handles retries)
-          result = null;
+        // Determine new version number
+        let newVersion: number;
+        let previousVersion: number | undefined;
 
-          // Find current latest version within transaction
-          const currentLatest = await this.db.collection('videoSummaryCache').findOne(
-            { youtubeId, isLatest: true },
-            { session }
-          );
+        if (previousLatest) {
+          // Had a latest version, use it to determine new version
+          newVersion = (previousLatest.version || 1) + 1;
+          previousVersion = previousLatest.version || 1;
+        } else {
+          // No isLatest found - check if any versions exist (edge case: orphaned versions)
+          const highestVersion = await this.db.collection('videoSummaryCache')
+            .findOne({ youtubeId }, { sort: { version: -1 }, projection: { version: 1 } });
 
-          if (currentLatest) {
-            // Mark old version as not latest (keep for comparison)
-            await this.db.collection('videoSummaryCache').updateOne(
-              { _id: currentLatest._id },
-              { $set: { isLatest: false, updatedAt: new Date() } },
-              { session }
-            );
-
-            // Delete user's video entry so they get the new version
-            await this.db.collection('userVideos').deleteOne(
-              {
-                userId: new ObjectId(userId),
-                youtubeId,
-                folderId: folderId ? new ObjectId(folderId) : null,
-              },
-              { session }
-            );
-
-            // Create new version entry
-            const newVersion = (currentLatest.version || 1) + 1;
-            const cacheEntry = await this.db.collection('videoSummaryCache').insertOne(
-              {
-                youtubeId,
-                url,
-                status: 'pending',
-                version: newVersion,
-                isLatest: true,
-                retryCount: 0,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-              { session }
-            );
-
-            const userVideo = await this.db.collection('userVideos').insertOne(
-              {
-                userId: new ObjectId(userId),
-                videoSummaryId: cacheEntry.insertedId,
-                youtubeId,
-                status: 'pending',
-                folderId: folderId ? new ObjectId(folderId) : null,
-                addedAt: new Date(),
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-              { session }
-            );
-
-            result = {
-              video: {
-                id: userVideo.insertedId.toString(),
-                videoSummaryId: cacheEntry.insertedId.toString(),
-                youtubeId,
-                status: 'pending',
-                version: newVersion,
-                previousVersion: currentLatest.version || 1,
-              },
-              cached: false,
-              newVersion: true,
-            };
-
-            // Cleanup old versions (keep only MAX_VERSIONS_PER_VIDEO)
-            // Done within transaction to maintain consistency
-            if (newVersion > MAX_VERSIONS_PER_VIDEO) {
-              const oldVersionsToDelete = await this.db.collection('videoSummaryCache')
-                .find(
-                  { youtubeId, version: { $lt: newVersion - MAX_VERSIONS_PER_VIDEO + 1 } },
-                  { session, projection: { _id: 1 } }
-                )
-                .toArray();
-
-              if (oldVersionsToDelete.length > 0) {
-                await this.db.collection('videoSummaryCache').deleteMany(
-                  { _id: { $in: oldVersionsToDelete.map(v => v._id) } },
-                  { session }
-                );
-              }
-            }
+          if (highestVersion) {
+            // Orphaned versions exist, create next version
+            newVersion = (highestVersion.version || 1) + 1;
+            previousVersion = highestVersion.version || 1;
+          } else {
+            // No existing versions at all, fall through to normal flow
+            // (This allows normal cache logic to handle it)
           }
-        });
+        }
 
-        // If transaction completed and we have a result, trigger summarization
-        // (done outside transaction to avoid blocking)
-        // Note: TypeScript can't track mutation inside async callbacks, so we cast explicitly
-        const finalResult = result as BypassCacheResult | null;
-        if (finalResult !== null) {
+        // Only proceed if we determined a version to create
+        if (newVersion! > 0) {
+          // 2. Create new version entry
+          const cacheEntry = await this.db.collection('videoSummaryCache').insertOne({
+            youtubeId,
+            url,
+            status: 'pending',
+            version: newVersion!,
+            isLatest: true,
+            retryCount: 0,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+
+          // 3. Delete user's old video entry so they get the new version
+          await this.db.collection('userVideos').deleteOne({
+            userId: new ObjectId(userId),
+            youtubeId,
+            folderId: folderId ? new ObjectId(folderId) : null,
+          });
+
+          // 4. Create new user video entry
+          const userVideo = await this.db.collection('userVideos').insertOne({
+            userId: new ObjectId(userId),
+            videoSummaryId: cacheEntry.insertedId,
+            youtubeId,
+            status: 'pending',
+            folderId: folderId ? new ObjectId(folderId) : null,
+            addedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+
+          // 5. Cleanup old versions (non-blocking to avoid slowing down the request)
+          this.cleanupOldVersions(youtubeId, newVersion!).catch(err => {
+            logger.warn('Failed to cleanup old versions', { youtubeId, error: err });
+          });
+
+          // 6. Trigger summarization
           triggerSummarization({
-            videoSummaryId: finalResult.video.videoSummaryId,
+            videoSummaryId: cacheEntry.insertedId.toString(),
             youtubeId,
             url,
             userId,
           });
-          return finalResult;
+
+          return {
+            video: {
+              id: userVideo.insertedId.toString(),
+              videoSummaryId: cacheEntry.insertedId.toString(),
+              youtubeId,
+              status: 'pending',
+              version: newVersion!,
+              previousVersion,
+            },
+            cached: false,
+            newVersion: true,
+          };
         }
-        // If no existing cache, fall through to normal flow
+        // If no existing versions, fall through to normal flow
       } catch (error) {
-        // Log transaction failure with context for debugging
-        logger.error('Transaction failed in bypassCache version creation', {
+        // Handle duplicate key error (race condition where two requests try to create same version)
+        if (error instanceof Error && 'code' in error && (error as { code: number }).code === 11000) {
+          throw new VersionCreationError('Version conflict - please retry');
+        }
+        // Log and rethrow other errors
+        logger.error('Failed in bypassCache version creation', {
           youtubeId,
           userId,
           error: error instanceof Error ? error.message : String(error),
         });
-        // Throw a user-friendly error instead of falling through
         throw new VersionCreationError();
-      } finally {
-        await session.endSession();
       }
     }
 
@@ -487,5 +450,25 @@ export class VideoService {
       errorCode: v.errorCode,
       errorMessage: v.errorMessage,
     }));
+  }
+
+  /**
+   * Cleanup old versions to prevent unbounded storage growth.
+   * Keeps only MAX_VERSIONS_PER_VIDEO most recent versions.
+   * Called asynchronously after version creation.
+   */
+  private async cleanupOldVersions(youtubeId: string, currentVersion: number): Promise<void> {
+    if (currentVersion <= MAX_VERSIONS_PER_VIDEO) return;
+
+    const toDelete = await this.db.collection('videoSummaryCache')
+      .find({ youtubeId, version: { $lt: currentVersion - MAX_VERSIONS_PER_VIDEO + 1 } })
+      .project({ _id: 1 })
+      .toArray();
+
+    if (toDelete.length > 0) {
+      await this.db.collection('videoSummaryCache').deleteMany({
+        _id: { $in: toDelete.map(v => v._id) }
+      });
+    }
   }
 }
