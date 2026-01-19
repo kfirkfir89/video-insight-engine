@@ -1,4 +1,4 @@
-Extract key concepts from this timestamped transcript.
+Extract key concepts from this timestamped transcript with their actual definitions.
 
 TRANSCRIPT:
 {transcript}
@@ -10,25 +10,47 @@ Return JSON only (no other text):
   "concepts": [
     {{
       "name": "Concept name",
-      "definition": "Brief definition from video or null",
+      "definition": "The actual definition or explanation from the video",
       "timestamp": "M:SS or MM:SS - the timestamp from the transcript line where this concept is first mentioned"
     }}
   ]
 }}
 
-CRITICAL: For each concept, find the [MM:SS] timestamp at the START of the line where that concept is FIRST mentioned or explained. Copy that timestamp exactly (without brackets).
+CRITICAL RULES:
+
+FOR DEFINITIONS:
+- Extract the ACTUAL definition or explanation given in the video
+- Include specific details, not vague descriptions
+- If no definition is given, write a concise one based on context
+- Never write "A concept related to X" - write what it actually IS
+
+BAD definition: "A programming concept that is important for code organization"
+GOOD definition: "A design pattern where objects receive their dependencies from external sources rather than creating them internally, enabling easier testing and loose coupling"
+
+BAD definition: "Something discussed in relation to API development"
+GOOD definition: "A constraint requiring servers to not store client session data between requests, making each request self-contained with all needed information"
+
+FOR TIMESTAMPS:
+- Find the [MM:SS] timestamp at the START of the line where the concept is FIRST mentioned
+- Copy that timestamp exactly (without brackets)
 
 Example:
 If transcript contains:
 [5:30] Let me explain dependency injection. It's a design pattern where objects receive their dependencies from external sources.
 
 Then return:
-{{"name": "dependency injection", "definition": "A design pattern where objects receive their dependencies from external sources", "timestamp": "5:30"}}
+{{"name": "Dependency Injection", "definition": "A design pattern where objects receive their dependencies from external sources rather than creating them internally", "timestamp": "5:30"}}
 
-Focus on:
-- Technical terms and jargon
-- Important concepts explained in the video
-- Named frameworks, tools, or methodologies
-- Key ideas that a viewer should remember
+WHAT TO EXTRACT:
+- Technical terms with their definitions
+- Frameworks, tools, or methodologies mentioned
+- Key principles or rules explained
+- Patterns or anti-patterns described
+- Named techniques with how they work
 
-Include 5-15 concepts maximum.
+WHAT TO SKIP:
+- Generic terms without specific meaning in context
+- Concepts only mentioned in passing without explanation
+- Common words that don't add value (e.g., "code", "programming")
+
+Include 5-15 concepts maximum. Prioritize concepts that have clear definitions or explanations in the video.

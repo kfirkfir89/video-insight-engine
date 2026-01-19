@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { YouTubePlayer, type YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
 import { cn } from "@/lib/utils";
+import { ContentBlocks } from "./ContentBlocks";
 import type { Section } from "@vie/types";
 
 interface SectionCardProps {
@@ -99,19 +100,24 @@ export function SectionCard({
       </CardHeader>
 
       <CardContent className="pt-0">
-        <p className="text-muted-foreground mb-4 leading-relaxed">
-          {section.summary}
-        </p>
-
-        {section.bullets && section.bullets.length > 0 && (
-          <ul className="space-y-2">
-            {section.bullets.map((bullet, index) => (
-              <li key={index} className="flex gap-2.5 text-sm">
-                <span className="text-primary mt-0.5 shrink-0">&#8226;</span>
-                <span className="text-muted-foreground">{bullet}</span>
-              </li>
-            ))}
-          </ul>
+        {section.content && section.content.length > 0 ? (
+          <ContentBlocks blocks={section.content} />
+        ) : (
+          <>
+            <p className="text-muted-foreground mb-4 leading-relaxed">
+              {section.summary}
+            </p>
+            {section.bullets && section.bullets.length > 0 && (
+              <ul className="space-y-2">
+                {section.bullets.map((bullet, index) => (
+                  <li key={index} className="flex gap-2.5 text-sm">
+                    <span className="text-primary mt-0.5 shrink-0">&#8226;</span>
+                    <span className="text-muted-foreground">{bullet}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </CardContent>
     </Card>

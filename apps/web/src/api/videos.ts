@@ -32,11 +32,12 @@ export const videosApi = {
 
   async create(
     url: string,
-    folderId?: string
+    folderId?: string,
+    bypassCache?: boolean
   ): Promise<{ video: Video; cached: boolean }> {
     return request("/videos", {
       method: "POST",
-      body: JSON.stringify({ url, folderId }),
+      body: JSON.stringify({ url, folderId, bypassCache }),
     });
   },
 

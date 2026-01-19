@@ -46,6 +46,76 @@ def _parse_json_response(text: str, fallback: dict | None = None) -> dict:
     return fallback or {}
 
 
+def _extract_summary_from_content(content: list) -> str:
+    """Extract summary text from dynamic content blocks for backward compatibility.
+
+    Priority: paragraphs > definitions > callouts > first bullet item.
+    Ensures backward compatibility by always returning meaningful text when content exists.
+    """
+    paragraphs = []
+    definitions = []
+    callouts = []
+    first_bullet = None
+
+    for block in content:
+        if isinstance(block, dict):
+            block_type = block.get("type")
+            if block_type == "paragraph":
+                text = block.get("text", "")
+                if text:
+                    paragraphs.append(text)
+            elif block_type == "definition":
+                term = block.get("term", "")
+                meaning = block.get("meaning", "")
+                if term and meaning:
+                    definitions.append(f"{term}: {meaning}")
+            elif block_type == "callout":
+                text = block.get("text", "")
+                if text:
+                    callouts.append(text)
+            elif block_type in ("bullets", "numbered") and first_bullet is None:
+                items = block.get("items", [])
+                if items:
+                    first_bullet = items[0]
+
+    # Return in priority order
+    if paragraphs:
+        return " ".join(paragraphs)
+    if definitions:
+        return " ".join(definitions)
+    if callouts:
+        return " ".join(callouts)
+    if first_bullet:
+        return first_bullet
+    return ""
+
+
+def _extract_bullets_from_content(content: list) -> list[str]:
+    """Extract bullet points from dynamic content blocks for backward compatibility.
+
+    Collects items from bullets, numbered lists, do/dont blocks, etc.
+    """
+    bullets = []
+    for block in content:
+        if isinstance(block, dict):
+            block_type = block.get("type")
+            if block_type == "bullets":
+                bullets.extend(block.get("items", []))
+            elif block_type == "numbered":
+                bullets.extend(block.get("items", []))
+            elif block_type == "do_dont":
+                for do_item in block.get("do", []):
+                    bullets.append(f"Do: {do_item}")
+                for dont_item in block.get("dont", []):
+                    bullets.append(f"Don't: {dont_item}")
+            elif block_type == "callout":
+                style = block.get("style", "note").capitalize()
+                text = block.get("text", "")
+                if text:
+                    bullets.append(f"{style}: {text}")
+    return bullets
+
+
 class LLMService:
     """Service for LLM-based video processing.
 
@@ -159,12 +229,19 @@ class LLMService:
         title: str,
         has_creator_title: bool = False,
     ) -> dict:
-        """Generate summary and bullets for a section.
+        """Generate dynamic content blocks for a section.
 
         Args:
             section_text: The transcript text for this section
             title: The section title (either creator's chapter title or AI-generated)
             has_creator_title: If True, also generates an explanatory subtitle
+
+        Returns:
+            dict with:
+            - "content": array of content blocks
+            - "summary": extracted text for backward compatibility
+            - "bullets": extracted list items for backward compatibility
+            - "generatedTitle": optional explanatory subtitle
         """
         # Build dynamic prompt parts based on whether we need an explanation title
         if has_creator_title:
@@ -185,8 +262,21 @@ class LLMService:
             generated_title_field=generated_title_field,
         )
 
-        text = await self._call_llm(prompt, max_tokens=1000)
-        return _parse_json_response(text, {"summary": text, "bullets": []})
+        text = await self._call_llm(prompt, max_tokens=1500)
+        result = _parse_json_response(text, {"content": []})
+
+        # Ensure content is always an array
+        content = result.get("content", [])
+        if not isinstance(content, list):
+            content = []
+
+        # Return with legacy fields for backward compatibility
+        return {
+            "content": content,
+            "summary": _extract_summary_from_content(content),
+            "bullets": _extract_bullets_from_content(content),
+            "generatedTitle": result.get("generatedTitle"),
+        }
 
     async def extract_concepts(self, transcript: str) -> list[dict]:
         """Extract key concepts from transcript."""
@@ -258,8 +348,10 @@ class LLMService:
                 "start_seconds": start,
                 "end_seconds": end,
                 "title": raw["title"],
-                "summary": summary_data.get("summary", ""),
-                "bullets": summary_data.get("bullets", []),
+                "content": summary_data.get("content", []),
+                # Legacy fields for backward compatibility
+                "summary": _extract_summary_from_content(summary_data.get("content", [])),
+                "bullets": _extract_bullets_from_content(summary_data.get("content", [])),
             })
 
             if on_progress:
@@ -369,25 +461,32 @@ class LLMService:
 
         Yields:
             ("token", str) for each token
-            ("complete", dict) with summary and bullets
+            ("complete", dict) with content blocks and legacy summary/bullets
         """
         prompt = load_prompt("section_summary").format(
             title=title,
-            content=section_text[:settings.MAX_SECTION_CHARS]
+            content=section_text[:settings.MAX_SECTION_CHARS],
+            extra_instruction="",
+            generated_title_field="",
         )
 
-        async for event_type, data in self._stream_and_parse(prompt, max_tokens=1000):
+        async for event_type, data in self._stream_and_parse(prompt, max_tokens=1500):
             if event_type == "token":
                 yield (event_type, data)
             else:
                 # Ensure we have required fields (type guard for dict)
                 if isinstance(data, dict):
+                    content = data.get("content", [])
+                    if not isinstance(content, list):
+                        content = []
                     summary_data = {
-                        "summary": data.get("summary", ""),
-                        "bullets": data.get("bullets", [])
+                        "content": content,
+                        # Legacy fields for backward compatibility
+                        "summary": _extract_summary_from_content(content),
+                        "bullets": _extract_bullets_from_content(content),
                     }
                 else:
-                    summary_data = {"summary": "", "bullets": []}
+                    summary_data = {"content": [], "summary": "", "bullets": []}
                 yield ("complete", summary_data)
 
     async def stream_extract_concepts(

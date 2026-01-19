@@ -32,8 +32,8 @@ export function useAddVideo() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ url, folderId }: { url: string; folderId?: string | null }) =>
-      videosApi.create(url, folderId ?? undefined),
+    mutationFn: ({ url, folderId, bypassCache }: { url: string; folderId?: string | null; bypassCache?: boolean }) =>
+      videosApi.create(url, folderId ?? undefined, bypassCache),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.videos.lists() });
     },
