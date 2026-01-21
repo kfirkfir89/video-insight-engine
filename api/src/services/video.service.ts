@@ -355,6 +355,8 @@ export class VideoService {
         chapters: summary?.chapters || null,
         chapterSource: summary?.chapterSource || null,
         descriptionAnalysis: summary?.descriptionAnalysis || null,
+        // Video context for persona-aware rendering
+        context: summary?.context || null,
       },
       summary: summary?.summary || null,
     };

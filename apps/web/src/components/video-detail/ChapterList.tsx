@@ -5,6 +5,7 @@
  * Each chapter is clickable to seek to that timestamp.
  */
 
+import { memo } from "react";
 import { cn } from "@/lib/utils";
 import type { Chapter } from "@/hooks/use-summary-stream";
 
@@ -22,7 +23,7 @@ function formatTimestamp(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
-export function ChapterList({
+export const ChapterList = memo(function ChapterList({
   chapters,
   isCreatorChapters,
   currentTime = 0,
@@ -87,6 +88,6 @@ export function ChapterList({
       </div>
     </div>
   );
-}
+});
 
 export default ChapterList;

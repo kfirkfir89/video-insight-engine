@@ -1,0 +1,38 @@
+{
+  "personas": {
+    "code": {
+      "keywords": [
+        "programming", "coding", "code", "javascript", "python", "react",
+        "tutorial", "github", "api", "developer", "typescript", "node",
+        "software", "web development", "frontend", "backend", "devops",
+        "algorithm", "data structure", "machine learning", "ai"
+      ],
+      "categories": ["Science & Technology", "Education"]
+    },
+    "recipe": {
+      "keywords": [
+        "recipe", "cooking", "food", "cook", "chef", "meal", "kitchen",
+        "bake", "ingredient", "cuisine", "dish", "restaurant", "delicious",
+        "tasty", "homemade", "breakfast", "lunch", "dinner"
+      ],
+      "categories": ["Howto & Style", "People & Blogs"]
+    },
+    "interview": {
+      "keywords": [
+        "interview", "podcast", "conversation", "guest", "host", "talk",
+        "discussion", "q&a", "questions", "answers", "speaker", "fireside",
+        "chat", "dialogue", "story", "experience", "journey"
+      ],
+      "categories": ["People & Blogs", "Entertainment", "News & Politics"]
+    },
+    "review": {
+      "keywords": [
+        "review", "unboxing", "comparison", "versus", "vs", "test", "rating",
+        "hands-on", "first look", "impressions", "analysis", "breakdown",
+        "pros", "cons", "benchmark", "performance", "worth it"
+      ],
+      "categories": ["Science & Technology", "Gaming", "Autos & Vehicles"]
+    }
+  },
+  "default_persona": "standard"
+}

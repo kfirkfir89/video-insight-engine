@@ -1,26 +1,72 @@
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "@/components/ui/sonner";
-import { toast } from "sonner";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWebSocket } from "@/hooks/use-websocket";
-import { LoginPage } from "@/pages/LoginPage";
-import { RegisterPage } from "@/pages/RegisterPage";
-import { DashboardPage } from "@/pages/DashboardPage";
-import { VideoDetailPage } from "@/pages/VideoDetailPage";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
+
+// Lazy load toast components - not needed for initial render
+const Toaster = lazy(() =>
+  import("@/components/ui/sonner").then((m) => ({ default: m.Toaster }))
+);
+const toastModule = () => import("sonner");
+
+// Lazy load route components for code splitting
+const LoginPage = lazy(() =>
+  import("@/pages/LoginPage").then((m) => ({ default: m.LoginPage }))
+);
+const RegisterPage = lazy(() =>
+  import("@/pages/RegisterPage").then((m) => ({ default: m.RegisterPage }))
+);
+const DashboardPage = lazy(() =>
+  import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage }))
+);
+const VideoDetailPage = lazy(() =>
+  import("@/pages/VideoDetailPage").then((m) => ({ default: m.VideoDetailPage }))
+);
+
+// Loading fallback for lazy-loaded routes with ARIA live region
+function RouteLoadingFallback() {
+  return (
+    <div
+      className="flex min-h-screen items-center justify-center"
+      role="status"
+      aria-live="polite"
+    >
+      <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+      <span className="sr-only">Loading page...</span>
+    </div>
+  );
+}
+
+// Error fallback for chunk loading failures
+function ChunkLoadError() {
+  const handleReload = () => window.location.reload();
+
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-4 text-center">
+      <AlertTriangle className="h-12 w-12 text-destructive" aria-hidden="true" />
+      <h1 className="text-xl font-semibold">Failed to load page</h1>
+      <p className="text-muted-foreground max-w-md">
+        There was a problem loading this page. This might be due to a network issue or a new version being deployed.
+      </p>
+      <button
+        onClick={handleReload}
+        className="mt-2 rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+      >
+        Reload Page
+      </button>
+    </div>
+  );
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <RouteLoadingFallback />;
   }
 
   if (!isAuthenticated) {
@@ -45,33 +91,40 @@ function AppRoutes() {
   // Show toast when session expires and user is redirected to login
   useEffect(() => {
     if (logoutReason) {
-      toast.error(logoutReason);
+      // Dynamically import toast to avoid bundling in initial load
+      toastModule().then(({ toast }) => {
+        toast.error(logoutReason);
+      });
       clearLogoutReason();
     }
   }, [logoutReason, clearLogoutReason]);
 
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <DashboardPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/video/:id"
-        element={
-          <ProtectedRoute>
-            <VideoDetailPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <ErrorBoundary fallback={<ChunkLoadError />}>
+      <Suspense fallback={<RouteLoadingFallback />}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/video/:id"
+            element={
+              <ProtectedRoute>
+                <VideoDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 
@@ -81,7 +134,9 @@ function App() {
       <BrowserRouter>
         <AppRoutes />
       </BrowserRouter>
-      <Toaster />
+      <Suspense fallback={null}>
+        <Toaster />
+      </Suspense>
     </ThemeProvider>
   );
 }

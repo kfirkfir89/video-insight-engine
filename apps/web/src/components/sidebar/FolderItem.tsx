@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo, memo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronRight, Folder, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -34,7 +34,8 @@ interface FolderItemProps {
   allFolders: FolderData[];
 }
 
-export function FolderItem({ folder, type, level, videos, allFolders }: FolderItemProps) {
+// Memoized to prevent cascading re-renders in sidebar tree
+export const FolderItem = memo(function FolderItem({ folder, type, level, videos, allFolders }: FolderItemProps) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -354,4 +355,4 @@ export function FolderItem({ folder, type, level, videos, allFolders }: FolderIt
       />
     </div>
   );
-}
+});

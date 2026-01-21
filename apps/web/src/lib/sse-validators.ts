@@ -17,6 +17,7 @@ import type {
   RelatedVideo,
   DescriptionTimestamp,
   SocialLink,
+  VideoContext,
 } from '@vie/types';
 
 // ─────────────────────────────────────────────────────
@@ -31,13 +32,36 @@ export const chapterSchema = z.object({
 
 // Content block schemas for dynamic section content
 export const contentBlockSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('paragraph'), text: z.string() }),
-  z.object({ type: z.literal('bullets'), items: z.array(z.string()) }),
-  z.object({ type: z.literal('numbered'), items: z.array(z.string()) }),
+  z.object({ type: z.literal('paragraph'), variant: z.string().optional(), text: z.string() }),
+  z.object({ type: z.literal('bullets'), variant: z.string().optional(), items: z.array(z.string()) }),
+  z.object({ type: z.literal('numbered'), variant: z.string().optional(), items: z.array(z.string()) }),
   z.object({ type: z.literal('do_dont'), do: z.array(z.string()), dont: z.array(z.string()) }),
-  z.object({ type: z.literal('example'), title: z.string().optional(), code: z.string(), explanation: z.string().optional() }),
-  z.object({ type: z.literal('callout'), style: z.enum(['tip', 'warning', 'note']), text: z.string() }),
-  z.object({ type: z.literal('definition'), term: z.string(), meaning: z.string() }),
+  z.object({ type: z.literal('example'), variant: z.string().optional(), title: z.string().optional(), code: z.string(), explanation: z.string().optional() }),
+  z.object({ type: z.literal('callout'), variant: z.string().optional(), style: z.enum(['tip', 'warning', 'note', 'chef_tip', 'security']), text: z.string() }),
+  z.object({ type: z.literal('definition'), variant: z.string().optional(), term: z.string(), meaning: z.string() }),
+  // Block types for video context enhancement
+  z.object({ type: z.literal('keyvalue'), variant: z.string().optional(), items: z.array(z.object({ key: z.string(), value: z.string() })) }),
+  z.object({ type: z.literal('comparison'), variant: z.string().optional(), left: z.object({ label: z.string(), items: z.array(z.string()) }), right: z.object({ label: z.string(), items: z.array(z.string()) }) }),
+  z.object({ type: z.literal('timestamp'), time: z.string(), seconds: z.number(), label: z.string() }),
+  // Quote block for speaker quotes and testimonials
+  z.object({
+    type: z.literal('quote'),
+    variant: z.enum(['speaker', 'testimonial', 'highlight']).optional(),
+    text: z.string(),
+    attribution: z.string().optional(),
+    timestamp: z.number().optional(),
+  }),
+  // Statistic block for metrics and data points
+  z.object({
+    type: z.literal('statistic'),
+    variant: z.enum(['metric', 'percentage', 'trend']).optional(),
+    items: z.array(z.object({
+      value: z.string(),
+      label: z.string(),
+      context: z.string().optional(),
+      trend: z.enum(['up', 'down', 'neutral']).optional(),
+    })),
+  }),
 ]);
 
 export const sectionSchema = z.object({
@@ -213,11 +237,20 @@ export function validateDescriptionAnalysis(data: unknown): {
 // Event-Level Validators (for full SSE event objects)
 // ─────────────────────────────────────────────────────
 
+// Video context schema for persona-aware rendering
+export const videoContextSchema = z.object({
+  youtubeCategory: z.string(),
+  persona: z.enum(['code', 'recipe', 'standard', 'interview', 'review']),
+  tags: z.array(z.string()),
+  displayTags: z.array(z.string()),
+});
+
 interface VideoMetadata {
   title?: string;
   channel?: string;
   thumbnailUrl?: string;
   duration?: number;
+  context?: VideoContext;
 }
 
 const metadataEventSchema = z.object({
@@ -226,6 +259,7 @@ const metadataEventSchema = z.object({
   channel: z.string().optional(),
   thumbnailUrl: z.string().optional(),
   duration: z.number().optional(),
+  context: videoContextSchema.optional(),
 });
 
 /**
@@ -243,6 +277,8 @@ export function validateMetadataEvent(data: unknown): VideoMetadata {
     channel: result.data.channel,
     thumbnailUrl: result.data.thumbnailUrl,
     duration: result.data.duration,
+    // Zod schema already validates and types the context correctly
+    context: result.data.context,
   };
 }
 

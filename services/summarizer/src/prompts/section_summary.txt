@@ -6,13 +6,17 @@ CONTENT:
 
 {extra_instruction}
 
-YOUR MISSION: Transform this section into content that reads like part of a well-crafted article. Choose the format that BEST serves this specific content - don't default to the same format every time.
+PERSONA CONTEXT:
+{persona_guidelines}
+
+YOUR MISSION: Transform this section into content that reads like part of a well-crafted article. Choose the format that BEST serves this specific content - don't default to the same format every time. Use the persona context above to guide your block type and variant choices.
 
 Return JSON only (no other text):
 {{
   "content": [
     // Array of content blocks - use 1-4 blocks as needed
     // Mix and match types based on what the content needs
+    // Use variants appropriate to the persona when applicable
   ]{generated_title_field}
 }}
 
@@ -24,37 +28,91 @@ AVAILABLE CONTENT BLOCK TYPES:
 
 2. "bullets" - For lists of items, features, options, benefits
    {{"type": "bullets", "items": ["item 1", "item 2", "item 3"]}}
+   {{"type": "bullets", "variant": "ingredients", "items": ["2 cups flour", "1 tsp salt"]}}
+   {{"type": "bullets", "variant": "checklist", "items": ["Set up environment", "Install dependencies"]}}
+   Variants: "ingredients" (for recipe content), "checklist" (for todo/action items)
    Use when: Content naturally lists multiple equal items
 
 3. "numbered" - For sequential steps, processes, rankings
    {{"type": "numbered", "items": ["First step", "Second step", "Third step"]}}
+   {{"type": "numbered", "variant": "cooking_steps", "items": ["Preheat oven", "Mix ingredients"]}}
+   Variants: "cooking_steps" (for recipe content)
    Use when: Order matters, there's a process to follow
 
-4. "do_dont" - For best practices, comparisons, common mistakes
+4. "do_dont" - For best practices, comparisons, common mistakes (LEGACY - prefer "comparison" for new content)
    {{"type": "do_dont", "do": ["good practice 1"], "dont": ["bad practice 1"]}}
    Use when: Comparing right vs wrong approaches
 
 5. "example" - For code, commands, concrete demonstrations
    {{"type": "example", "title": "Optional title", "code": "the example content", "explanation": "Why this works"}}
+   {{"type": "example", "variant": "terminal_command", "code": "npm install", "explanation": "Install dependencies"}}
+   Variants: "terminal_command" (for CLI commands in code content)
    Use when: Showing specific implementations or examples
 
 6. "callout" - For tips, warnings, important notes
-   {{"type": "callout", "style": "tip|warning|note", "text": "Important information"}}
+   {{"type": "callout", "style": "tip|warning|note|security", "text": "Important information"}}
+   {{"type": "callout", "variant": "chef_tip", "style": "tip", "text": "Let dough rest for better texture"}}
+   {{"type": "callout", "style": "security", "text": "Never commit API keys to version control"}}
+   Variants: "chef_tip" (for recipe cooking tips)
+   Styles: "tip" (pro tips), "warning" (cautions), "note" (info), "security" (security warnings for code content)
    Use when: Something deserves special attention
 
 7. "definition" - For key terms being introduced
    {{"type": "definition", "term": "Term name", "meaning": "What it means"}}
    Use when: A new concept is being defined
 
+8. "keyvalue" - For key-value pairs like specs, info, costs, metadata
+   {{"type": "keyvalue", "items": [{{"key": "Duration", "value": "45 min"}}, {{"key": "Difficulty", "value": "Medium"}}]}}
+   {{"type": "keyvalue", "variant": "info", "items": [{{"key": "Prep Time", "value": "15 min"}}, {{"key": "Servings", "value": "4"}}]}}
+   Variants: "info" (for recipe/general info), "specs" (for technical specifications), "costs" (for pricing info)
+   Use when: Presenting structured metadata, specifications, or attribute-value pairs
+
+9. "comparison" - For side-by-side comparisons
+   {{"type": "comparison", "left": {{"label": "Option A", "items": ["Pro 1", "Pro 2"]}}, "right": {{"label": "Option B", "items": ["Pro 1", "Pro 2"]}}}}
+   {{"type": "comparison", "variant": "dos_donts", "left": {{"label": "Do", "items": ["Use const"]}}, "right": {{"label": "Don't", "items": ["Use var"]}}}}
+   {{"type": "comparison", "variant": "pros_cons", "left": {{"label": "Pros", "items": ["Fast", "Easy"]}}, "right": {{"label": "Cons", "items": ["Limited"]}}}}
+   Variants: "dos_donts" (best practices), "pros_cons" (advantages/disadvantages), "versus" (comparing two options)
+   Use when: Comparing two options, approaches, or categories side-by-side
+
+10. "timestamp" - For referencing specific moments in the video
+    {{"type": "timestamp", "time": "5:23", "seconds": 323, "label": "Setting up the config"}}
+    Use when: Pointing to a key demonstration, technique, or important moment in the video
+    Note: "time" is MM:SS format, "seconds" is the total seconds from video start
+
+11. "quote" - For direct quotes from speakers or important statements
+    {{"type": "quote", "text": "The quote text here", "attribution": "Speaker Name"}}
+    {{"type": "quote", "variant": "speaker", "text": "Important statement", "attribution": "Expert Name", "timestamp": 323}}
+    {{"type": "quote", "variant": "testimonial", "text": "This product changed my life", "attribution": "User"}}
+    {{"type": "quote", "variant": "highlight", "text": "Key insight without quotes"}}
+    Variants: "speaker" (default, with attribution), "testimonial" (star icon, reviews), "highlight" (bold, no quotes)
+    Use when: Capturing memorable statements, expert opinions, key insights worth highlighting
+
+12. "statistic" - For key numbers, metrics, and data points
+    {{"type": "statistic", "items": [{{"value": "85%", "label": "Success rate"}}]}}
+    {{"type": "statistic", "variant": "trend", "items": [{{"value": "3x", "label": "Faster", "trend": "up", "context": "vs competitors"}}]}}
+    {{"type": "statistic", "items": [{{"value": "$1.2M", "label": "Revenue", "trend": "up"}}, {{"value": "50%", "label": "Cost reduction", "trend": "down"}}]}}
+    Variants: "metric" (neutral), "percentage" (circular feel), "trend" (emphasizes change)
+    Trends: "up" (green arrow), "down" (red arrow), "neutral" (gray dash)
+    Use when: Presenting performance metrics, survey results, financial figures, comparison data points
+
+PERSONA-SPECIFIC EXAMPLES:
+{variant_examples}
+
 AUTHOR'S MINDSET:
 
 Think about WHAT this section is trying to accomplish:
-- Is it INTRODUCING a concept? → Start with engaging paragraph, maybe add definition
-- Is it EXPLAINING how something works? → Paragraph with example
-- Is it LISTING options or features? → Bullets with brief intro paragraph
-- Is it TEACHING a process? → Numbered steps with callout for common pitfall
-- Is it WARNING about mistakes? → do_dont with callout
-- Is it COMPARING approaches? → do_dont or bullets showing contrast
+- Is it INTRODUCING a concept? -> Start with engaging paragraph, maybe add definition
+- Is it EXPLAINING how something works? -> Paragraph with example
+- Is it LISTING options or features? -> Bullets with brief intro paragraph
+- Is it TEACHING a process? -> Numbered steps with callout for common pitfall
+- Is it WARNING about mistakes? -> comparison (dos_donts) with callout
+- Is it COMPARING approaches? -> comparison block showing contrast
+- Does it have METADATA like prep time, specs? -> keyvalue block
+- Are there KEY MOMENTS to reference? -> timestamp blocks
+- Is someone being QUOTED directly? -> quote block with attribution
+- Are there KEY METRICS or NUMBERS? -> statistic block with trends
+- Does it have ACTION ITEMS or todos? -> bullets with checklist variant
+- Is there a SECURITY concern? -> callout with security style
 
 ARTICLE FLOW RULES:
 - Don't start with "This section..." or "In this part..."
@@ -74,7 +132,7 @@ For a section about common mistakes:
 {{
   "content": [
     {{"type": "paragraph", "text": "Configuration sprawl sneaks up on teams gradually. What starts as a simple config file grows into a tangled mess of environment-specific overrides and undocumented settings."}},
-    {{"type": "do_dont", "do": ["Keep all configs in one directory with clear naming (config/dev.yaml, config/prod.yaml)", "Document every non-obvious setting inline"], "dont": ["Scatter configs across multiple directories", "Use magic values without explanation"]}},
+    {{"type": "comparison", "variant": "dos_donts", "left": {{"label": "Do", "items": ["Keep all configs in one directory with clear naming (config/dev.yaml, config/prod.yaml)", "Document every non-obvious setting inline"]}}, "right": {{"label": "Don't", "items": ["Scatter configs across multiple directories", "Use magic values without explanation"]}}}},
     {{"type": "callout", "style": "warning", "text": "If your config file exceeds 200 lines, it's time to split it into logical modules."}}
   ]
 }}
@@ -97,4 +155,49 @@ For a section with actionable steps:
   ]
 }}
 
-CRITICAL: Your output must be valid JSON. Use 1-4 content blocks. Choose types that BEST serve THIS specific content - variety across sections makes the article engaging.
+For a recipe section with metadata:
+{{
+  "content": [
+    {{"type": "keyvalue", "variant": "info", "items": [{{"key": "Prep Time", "value": "15 min"}}, {{"key": "Cook Time", "value": "30 min"}}, {{"key": "Servings", "value": "4"}}, {{"key": "Difficulty", "value": "Easy"}}]}},
+    {{"type": "bullets", "variant": "ingredients", "items": ["2 cups all-purpose flour", "1 tsp baking powder", "1/2 tsp salt", "1 cup butter, softened"]}},
+    {{"type": "timestamp", "time": "3:45", "seconds": 225, "label": "Proper kneading technique demonstration"}}
+  ]
+}}
+
+For a code tutorial with key moments:
+{{
+  "content": [
+    {{"type": "example", "variant": "terminal_command", "code": "npm init -y && npm install express", "explanation": "Initialize project and install Express framework"}},
+    {{"type": "timestamp", "time": "2:15", "seconds": 135, "label": "Setting up the basic server structure"}},
+    {{"type": "comparison", "variant": "dos_donts", "left": {{"label": "Do", "items": ["Use environment variables for config", "Validate all user input"]}}, "right": {{"label": "Don't", "items": ["Hardcode secrets in source", "Trust user input blindly"]}}}}
+  ]
+}}
+
+For an interview with memorable quotes:
+{{
+  "content": [
+    {{"type": "quote", "variant": "speaker", "text": "The people who are crazy enough to think they can change the world are the ones who do.", "attribution": "Steve Jobs", "timestamp": 323}},
+    {{"type": "paragraph", "text": "Jobs emphasized the importance of thinking differently, a philosophy that became central to Apple's identity."}},
+    {{"type": "bullets", "items": ["Challenge conventional wisdom", "Embrace bold ideas", "Stay focused on your vision"]}}
+  ]
+}}
+
+For a product review with statistics:
+{{
+  "content": [
+    {{"type": "statistic", "variant": "trend", "items": [{{"value": "4.8/5", "label": "Rating", "context": "from 1,200 reviews"}}, {{"value": "85%", "label": "Would recommend", "trend": "up"}}]}},
+    {{"type": "comparison", "variant": "pros_cons", "left": {{"label": "Pros", "items": ["Excellent battery life", "Premium build quality", "Fast charging"]}}, "right": {{"label": "Cons", "items": ["Higher price point", "Limited color options"]}}}},
+    {{"type": "quote", "variant": "testimonial", "text": "Best laptop I've ever owned. The battery lasts all day.", "attribution": "Verified Buyer"}}
+  ]
+}}
+
+For code security best practices:
+{{
+  "content": [
+    {{"type": "callout", "style": "security", "text": "Never commit API keys or secrets to version control. Use environment variables and a secrets manager instead."}},
+    {{"type": "bullets", "variant": "checklist", "items": ["Add .env to .gitignore", "Use process.env for all secrets", "Rotate keys regularly", "Audit access permissions"]}},
+    {{"type": "example", "variant": "terminal_command", "code": "git secrets --install", "explanation": "Install git-secrets to prevent committing credentials"}}
+  ]
+}}
+
+CRITICAL: Your output must be valid JSON. Use 1-4 content blocks. Choose types and variants that BEST serve THIS specific content based on the persona context - variety across sections makes the article engaging.

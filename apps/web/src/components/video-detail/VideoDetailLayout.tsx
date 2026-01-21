@@ -16,6 +16,7 @@ import { MobileChapterNav } from "./MobileChapterNav";
 import { ConceptsGrid } from "./ConceptsGrid";
 import { ChapterList } from "./ChapterList";
 import { ResourcesPanel } from "./ResourcesPanel";
+import { VideoTags } from "./VideoTags";
 import type { VideoResponse, VideoSummary } from "@vie/types";
 import type { StreamState, Chapter, DescriptionAnalysis } from "@/hooks/use-summary-stream";
 
@@ -49,8 +50,9 @@ export function VideoDetailLayout({
   const playerRef = useRef<YouTubePlayerRef>(null);
   const isDesktop = useIsDesktop();
 
-  // Track which section has the video player collapsed under it
+  // Track which section has the video player collapsed under it, and the start time
   const [activePlaySection, setActivePlaySection] = useState<string | null>(null);
+  const [activeStartSeconds, setActiveStartSeconds] = useState<number>(0);
 
   // Use a stable dependency based on section IDs to prevent unnecessary re-renders during streaming
   const sectionIdsString = summary?.sections.map((s) => s.id).join(",") ?? "";
@@ -77,6 +79,7 @@ export function VideoDetailLayout({
     if (isDesktop) {
       // Desktop: collapse video under the section
       setActivePlaySection(sectionId);
+      setActiveStartSeconds(startSeconds);
 
       // Scroll to section after delay to let React render the player
       // Using 150ms to ensure iframe is rendered before calculating scroll position
@@ -142,6 +145,7 @@ export function VideoDetailLayout({
     : null;
 
   // Shared content sections - article-style layout with horizontal dividers
+  // Pass stable callbacks to allow ArticleSection memoization to work
   const renderSections = () => (
     <>
       {summary && summary.sections.length > 0 && (
@@ -151,13 +155,14 @@ export function VideoDetailLayout({
               {index > 0 && <Separator className="my-3 opacity-40" />}
               <ArticleSection
                 section={section}
-                onPlay={() => handlePlayFromSection(section.id, section.startSeconds)}
+                onPlay={handlePlayFromSection}
                 onStop={handleStopSection}
                 isVideoActive={activePlaySection === section.id}
                 concepts={conceptMatchResult.bySection.get(section.id) || []}
                 playerRef={playerRef}
                 youtubeId={video.youtubeId}
-                startSeconds={section.startSeconds}
+                startSeconds={activePlaySection === section.id ? activeStartSeconds : section.startSeconds}
+                persona={video.context?.persona}
               />
             </Fragment>
           ))}
@@ -188,6 +193,11 @@ export function VideoDetailLayout({
 
         {video.channel && (
           <p className="text-muted-foreground mb-2">{video.channel}</p>
+        )}
+
+        {/* YouTube-style tags display */}
+        {video.context?.displayTags && video.context.displayTags.length > 0 && (
+          <VideoTags tags={video.context.displayTags} className="mb-3" />
         )}
 
         <div className="flex items-center gap-4 text-sm text-muted-foreground">

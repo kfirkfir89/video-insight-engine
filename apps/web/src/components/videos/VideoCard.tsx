@@ -1,23 +1,31 @@
-import { useState } from "react";
+import { useState, memo, useCallback, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import type { Video } from "@/types";
 import { Card } from "@/components/ui/card";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { Play } from "lucide-react";
-import { VideoPlayerModal } from "./VideoPlayerModal";
+
+// Lazy load VideoPlayerModal - only needed when user clicks play
+const VideoPlayerModal = lazy(() =>
+  import("./VideoPlayerModal").then((m) => ({ default: m.VideoPlayerModal }))
+);
 
 interface VideoCardProps {
   video: Video;
 }
 
-export function VideoCard({ video }: VideoCardProps) {
+export const VideoCard = memo(function VideoCard({ video }: VideoCardProps) {
   const [showPlayer, setShowPlayer] = useState(false);
 
-  const handlePlayClick = (e: React.MouseEvent) => {
+  const handlePlayClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setShowPlayer(true);
-  };
+  }, []);
+
+  const handleClosePlayer = useCallback(() => {
+    setShowPlayer(false);
+  }, []);
 
   return (
     <>
@@ -30,6 +38,8 @@ export function VideoCard({ video }: VideoCardProps) {
                 src={video.thumbnailUrl}
                 alt={video.title || "Video thumbnail"}
                 className="h-full w-full object-cover"
+                loading="lazy"
+                decoding="async"
               />
             ) : (
               <div className="flex h-full items-center justify-center text-4xl">
@@ -71,12 +81,16 @@ export function VideoCard({ video }: VideoCardProps) {
         </Card>
       </Link>
 
-      {/* Modal for video playback */}
-      <VideoPlayerModal
-        video={video}
-        open={showPlayer}
-        onClose={() => setShowPlayer(false)}
-      />
+      {/* Modal for video playback - lazy loaded */}
+      {showPlayer && (
+        <Suspense fallback={null}>
+          <VideoPlayerModal
+            video={video}
+            open={showPlayer}
+            onClose={handleClosePlayer}
+          />
+        </Suspense>
+      )}
     </>
   );
-}
+});

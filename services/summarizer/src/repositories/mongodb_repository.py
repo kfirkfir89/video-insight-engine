@@ -69,9 +69,13 @@ class MongoDBVideoRepository:
                     {
                         "id": s["id"],
                         "timestamp": s["timestamp"],
-                        "startSeconds": s["start_seconds"],
-                        "endSeconds": s["end_seconds"],
+                        "startSeconds": s.get("startSeconds") or s.get("start_seconds", 0),
+                        "endSeconds": s.get("endSeconds") or s.get("end_seconds", 0),
                         "title": s["title"],
+                        "originalTitle": s.get("originalTitle") or s.get("original_title"),
+                        "generatedTitle": s.get("generatedTitle") or s.get("generated_title"),
+                        "isCreatorChapter": s.get("isCreatorChapter") or s.get("is_creator_chapter"),
+                        "content": s.get("content"),  # Dynamic content blocks
                         "summary": s["summary"],
                         "bullets": s["bullets"],
                     }
@@ -113,6 +117,10 @@ class MongoDBVideoRepository:
         # Add description analysis if present (progressive summarization)
         if "description_analysis" in result:
             update_data["descriptionAnalysis"] = result["description_analysis"]
+
+        # Add video context if present (persona-aware summarization)
+        if "context" in result and result["context"]:
+            update_data["context"] = result["context"]
 
         self._collection.update_one(
             {"_id": ObjectId(video_summary_id)},

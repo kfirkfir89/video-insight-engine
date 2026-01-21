@@ -1,0 +1,5 @@
+{"type": "keyvalue", "variant": "info", "items": [{"key": "Prep Time", "value": "15 min"}, {"key": "Servings", "value": "4"}]}
+{"type": "bullets", "variant": "ingredients", "items": ["2 cups flour", "1 tsp salt"]}
+{"type": "numbered", "variant": "cooking_steps", "items": ["Preheat oven to 350F", "Mix dry ingredients"]}
+{"type": "callout", "variant": "chef_tip", "style": "tip", "text": "Let dough rest 10 min"}
+{"type": "timestamp", "time": "3:45", "seconds": 225, "label": "Kneading technique"}

@@ -1,0 +1,5 @@
+{"type": "example", "variant": "terminal_command", "code": "npm install", "explanation": "Install dependencies"}
+{"type": "comparison", "variant": "dos_donts", "left": {"label": "Do", "items": ["Use const for constants"]}, "right": {"label": "Don't", "items": ["Use var"]}}
+{"type": "callout", "style": "security", "text": "Never commit API keys to version control"}
+{"type": "bullets", "variant": "checklist", "items": ["Set up environment", "Install dependencies", "Run tests"]}
+{"type": "timestamp", "time": "5:23", "seconds": 323, "label": "Setting up the config"}

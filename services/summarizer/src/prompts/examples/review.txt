@@ -1,0 +1,4 @@
+{"type": "keyvalue", "variant": "specs", "items": [{"key": "Display", "value": "6.7 OLED"}, {"key": "Battery", "value": "5000mAh"}]}
+{"type": "comparison", "variant": "pros_cons", "left": {"label": "Pros", "items": ["Great battery", "Fast performance"]}, "right": {"label": "Cons", "items": ["High price", "No headphone jack"]}}
+{"type": "statistic", "variant": "trend", "items": [{"value": "4.5/5", "label": "Rating", "trend": "up"}, {"value": "92%", "label": "Recommend"}]}
+{"type": "quote", "variant": "testimonial", "text": "Best purchase I made this year", "attribution": "Verified Buyer"}

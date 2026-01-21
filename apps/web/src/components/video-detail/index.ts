@@ -22,6 +22,11 @@ export { CollapsibleVideoPlayer } from "./CollapsibleVideoPlayer";
 // Additional Content
 export { ConceptsGrid } from "./ConceptsGrid";
 export { ResourcesPanel } from "./ResourcesPanel";
+export { VideoTags } from "./VideoTags";
 
 // UI Feedback
 export { StreamingIndicator } from "./StreamingIndicator";
+
+// Content Block Renderers
+export { ContentBlockRenderer } from "./ContentBlockRenderer";
+export * from "./blocks";
