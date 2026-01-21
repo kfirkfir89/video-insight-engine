@@ -1,23 +1,27 @@
-import { type RefObject, useState } from "react";
+import { type RefObject, useState, memo, useCallback, useMemo } from "react";
 import { Play, StopCircle, Lightbulb, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { YouTubePlayer, type YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
 import { cn } from "@/lib/utils";
-import { ContentBlocks } from "./ContentBlocks";
+import { CodeView, RecipeView, StandardView } from "./views";
 import type { Section, Concept } from "@vie/types";
 
 interface ArticleSectionProps {
   section: Section;
-  onPlay: () => void;
+  /** Stable callback - receives sectionId and startSeconds to avoid closure recreation */
+  onPlay: (sectionId: string, startSeconds: number) => void;
   onStop?: () => void;
   isVideoActive?: boolean;
   concepts?: Concept[];
   playerRef?: RefObject<YouTubePlayerRef | null>;
   youtubeId?: string;
   startSeconds?: number;
+  /** Content persona for specialized view rendering */
+  persona?: 'code' | 'recipe' | 'interview' | 'review' | 'standard';
 }
 
-export function ArticleSection({
+// Memoized to prevent re-renders when parent re-renders with same props
+export const ArticleSection = memo(function ArticleSection({
   section,
   onPlay,
   onStop,
@@ -26,6 +30,7 @@ export function ArticleSection({
   playerRef,
   youtubeId,
   startSeconds,
+  persona = 'standard',
 }: ArticleSectionProps) {
   // Check if this is a creator chapter with dual titles
   const hasCreatorChapter = section.isCreatorChapter && section.originalTitle;
@@ -34,7 +39,7 @@ export function ArticleSection({
   // Track expanded concepts
   const [expandedConcepts, setExpandedConcepts] = useState<Set<string>>(new Set());
 
-  const toggleConcept = (conceptId: string) => {
+  const toggleConcept = useCallback((conceptId: string) => {
     setExpandedConcepts((prev) => {
       const next = new Set(prev);
       if (next.has(conceptId)) {
@@ -44,7 +49,36 @@ export function ArticleSection({
       }
       return next;
     });
-  };
+  }, []);
+
+  // Memoized callback to avoid recreating on every render
+  const handleBlockPlay = useCallback(
+    (seconds: number) => onPlay(section.id, seconds),
+    [onPlay, section.id]
+  );
+
+  // Memoized persona view with stable dependencies
+  const personaView = useMemo(() => {
+    const viewProps = {
+      section,
+      onPlay: handleBlockPlay,
+      onStop,
+      isVideoActive,
+      activeStartSeconds: startSeconds,
+    };
+
+    switch (persona) {
+      case 'code':
+        return <CodeView {...viewProps} />;
+      case 'recipe':
+        return <RecipeView {...viewProps} />;
+      case 'interview':
+      case 'review':
+      case 'standard':
+      default:
+        return <StandardView {...viewProps} />;
+    }
+  }, [persona, section, handleBlockPlay, onStop, isVideoActive, startSeconds]);
 
   return (
     <article
@@ -80,18 +114,18 @@ export function ArticleSection({
             className="w-fit gap-1.5 text-destructive hover:bg-destructive/10 -ml-2"
             aria-label="Stop video"
           >
-            <StopCircle className="h-4 w-4" />
+            <StopCircle className="h-4 w-4" aria-hidden="true" />
             <span className="font-mono text-xs">Stop</span>
           </Button>
         ) : (
           <Button
             size="sm"
             variant="ghost"
-            onClick={onPlay}
+            onClick={() => onPlay(section.id, section.startSeconds)}
             className="w-fit gap-1.5 text-primary hover:bg-primary/10 -ml-2"
             aria-label={`Play from ${section.timestamp}`}
           >
-            <Play className="h-4 w-4" />
+            <Play className="h-4 w-4" aria-hidden="true" />
             <span className="font-mono text-xs">{section.timestamp}</span>
           </Button>
         )}
@@ -100,7 +134,7 @@ export function ArticleSection({
         {hasConcepts && (
           <div className="pt-2 space-y-1.5">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
-              <Lightbulb className="h-3 w-3" />
+              <Lightbulb className="h-3 w-3" aria-hidden="true" />
               <span>Concepts</span>
             </div>
             <ul className="space-y-0.5">
@@ -113,10 +147,12 @@ export function ArticleSection({
                 return (
                   <li key={concept.id}>
                     <button
+                      id={`concept-btn-${concept.id}`}
                       type="button"
                       onClick={() => hasDefinition && toggleConcept(concept.id)}
                       className={cn(
-                        "flex items-start gap-1 text-xs text-muted-foreground/80 leading-tight text-left w-full",
+                        "flex items-start gap-1 text-xs text-muted-foreground/80 leading-tight text-left w-full rounded-sm",
+                        "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1",
                         hasDefinition && "hover:text-muted-foreground cursor-pointer"
                       )}
                       disabled={!hasDefinition}
@@ -168,14 +204,7 @@ export function ArticleSection({
       <div className="flex-1 lg:border-l lg:border-border lg:pl-6 min-w-0">
         {/* Video player at top of content when active */}
         {youtubeId && isVideoActive && (
-          <div
-            className={cn(
-              "grid transition-[grid-template-rows,opacity] duration-500 ease-out mb-4",
-              isVideoActive
-                ? "grid-rows-[1fr] opacity-100"
-                : "grid-rows-[0fr] opacity-0"
-            )}
-          >
+          <div className="grid grid-rows-[1fr] opacity-100 transition-[grid-template-rows,opacity] duration-500 ease-out mb-4">
             <div className="overflow-hidden min-h-0">
               <YouTubePlayer
                 ref={playerRef}
@@ -188,9 +217,9 @@ export function ArticleSection({
           </div>
         )}
 
-        {/* Section content */}
+        {/* Section content - uses specialized view based on persona */}
         {section.content && section.content.length > 0 ? (
-          <ContentBlocks blocks={section.content} />
+          personaView
         ) : (
           <div className="pl-2 pr-8">
             <p className="text-muted-foreground mb-4 leading-relaxed">
@@ -211,4 +240,4 @@ export function ArticleSection({
       </div>
     </article>
   );
-}
+});

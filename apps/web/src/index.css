@@ -9,22 +9,22 @@
 :root {
   /* Light mode - YouTube-inspired with red accents */
   --background: oklch(99% 0 0);
-  --foreground: oklch(15% 0 0);
+  --foreground: oklch(3% 0 0);
   --card: oklch(100% 0 0);
-  --card-foreground: oklch(15% 0 0);
+  --card-foreground: oklch(3% 0 0);
   --popover: oklch(100% 0 0);
-  --popover-foreground: oklch(15% 0 0);
+  --popover-foreground: oklch(3% 0 0);
   --primary: oklch(55% 0.25 29);
   --primary-foreground: oklch(100% 0 0);
   --secondary: oklch(95% 0 0);
-  --secondary-foreground: oklch(20% 0 0);
+  --secondary-foreground: oklch(5% 0 0);
   --muted: oklch(96% 0 0);
-  --muted-foreground: oklch(45% 0 0);
+  --muted-foreground: oklch(25% 0 0);
   --accent: oklch(96% 0.02 29);
-  --accent-foreground: oklch(20% 0 0);
+  --accent-foreground: oklch(5% 0 0);
   --destructive: oklch(55% 0.25 27);
-  --border: oklch(90% 0 0);
-  --input: oklch(90% 0 0);
+  --border: oklch(85% 0 0);
+  --input: oklch(85% 0 0);
   --ring: oklch(55% 0.25 29);
   --radius: 0.625rem;
 
@@ -123,4 +123,24 @@
   .safe-area-inset-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0);
   }
+}
+
+/* ═══════════════════════════════════════════════════
+   PERFORMANCE OPTIMIZATIONS
+   CSS containment to isolate repaint/reflow
+   ═══════════════════════════════════════════════════ */
+
+/* Article sections in video detail - isolate layout calculations */
+[data-slot="article-section"] {
+  contain: layout style;
+}
+
+/* Sticky chapter nav - isolate from main content reflows */
+[data-slot="sticky-chapter-nav"] {
+  contain: layout style;
+}
+
+/* Sidebar items - contain paint for better scroll performance */
+[data-sidebar-item] {
+  contain: layout style paint;
 }

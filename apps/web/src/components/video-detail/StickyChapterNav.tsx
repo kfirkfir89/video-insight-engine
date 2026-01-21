@@ -20,30 +20,45 @@ export function StickyChapterNav({
   onStopSection,
 }: StickyChapterNavProps) {
   const navRef = useRef<HTMLElement>(null);
+  // Store sections ref to avoid dependency in effect
+  const sectionsRef = useRef(sections);
+
+  // Update ref in effect, not during render (React rules)
+  useEffect(() => {
+    sectionsRef.current = sections;
+  }, [sections]);
 
   // Auto-scroll the chapters list to keep active chapter visible
+  // Debounced to reduce layout thrashing during streaming
   useEffect(() => {
     if (!activeSection || !navRef.current) return;
 
-    // Check if this is the first section
-    const isFirstSection = sections.length > 0 && sections[0].id === activeSection;
+    const timeout = setTimeout(() => {
+      if (!navRef.current) return;
 
-    if (isFirstSection) {
-      // For first section, scroll nav to top to show "Chapters" heading
-      navRef.current.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
-      const activeElement = navRef.current.querySelector(
-        `[data-section-id="${activeSection}"]`
-      );
-      if (activeElement) {
-        // Scroll the active chapter into view within the nav container
-        activeElement.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest",
-        });
+      // Check if this is the first section using ref to avoid deps
+      const currentSections = sectionsRef.current;
+      const isFirstSection = currentSections.length > 0 && currentSections[0].id === activeSection;
+
+      if (isFirstSection) {
+        // For first section, scroll nav to top to show "Chapters" heading
+        navRef.current.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        const activeElement = navRef.current.querySelector(
+          `[data-section-id="${activeSection}"]`
+        );
+        if (activeElement) {
+          // Scroll the active chapter into view within the nav container
+          activeElement.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest",
+          });
+        }
       }
-    }
-  }, [activeSection, sections]);
+    }, 100); // Debounce scroll to reduce layout thrashing
+
+    return () => clearTimeout(timeout);
+  }, [activeSection]); // Removed sections from deps - use ref instead
 
   return (
     <aside

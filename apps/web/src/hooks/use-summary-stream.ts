@@ -31,6 +31,7 @@ import type {
   DescriptionTimestamp,
   SocialLink,
   DescriptionAnalysis,
+  VideoContext,
 } from "@vie/types";
 
 // Re-export types for backward compatibility with existing consumers
@@ -44,6 +45,7 @@ export type {
   DescriptionTimestamp,
   SocialLink,
   DescriptionAnalysis,
+  VideoContext,
 };
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
@@ -68,6 +70,7 @@ export interface VideoMetadata {
   channel?: string;
   thumbnailUrl?: string;
   duration?: number;
+  context?: VideoContext;
 }
 
 export interface StreamState {
@@ -120,6 +123,9 @@ const initialState: StreamState = {
   warnings: [],
 };
 
+// Batch interval for token updates (ms) - balance between responsiveness and performance
+const TOKEN_BATCH_INTERVAL = 50;
+
 export function useSummaryStream({
   videoSummaryId,
   enabled,
@@ -143,6 +149,52 @@ export function useSummaryStream({
   // Store accessToken in ref to use in cleanup without triggering re-connection
   const accessTokenRef = useRef(accessToken);
   accessTokenRef.current = accessToken;
+
+  // Track mounted state to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+
+  // Batching refs for token updates - reduces re-renders from 100+ to ~20
+  const pendingTokenUpdateRef = useRef<{
+    phase: string;
+    text: string;
+    index: number;
+  } | null>(null);
+  const batchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Flush pending token updates to state
+  const flushTokenUpdate = useCallback(() => {
+    // Prevent state updates after unmount
+    if (!isMountedRef.current) return;
+
+    const pending = pendingTokenUpdateRef.current;
+    if (!pending) return;
+
+    pendingTokenUpdateRef.current = null;
+    if (batchTimeoutRef.current) {
+      clearTimeout(batchTimeoutRef.current);
+      batchTimeoutRef.current = null;
+    }
+
+    if (pending.phase === "section_summary") {
+      setState((prev) => ({
+        ...prev,
+        currentSectionText: pending.text,
+        currentSectionIndex: pending.index,
+      }));
+    } else if (pending.phase === "synthesis") {
+      setState((prev) => ({ ...prev, tldr: pending.text }));
+    }
+  }, []);
+
+  // Schedule batched token update
+  const scheduleTokenUpdate = useCallback((phase: string, text: string, index: number) => {
+    pendingTokenUpdateRef.current = { phase, text, index };
+
+    // Only schedule if not already scheduled
+    if (!batchTimeoutRef.current) {
+      batchTimeoutRef.current = setTimeout(flushTokenUpdate, TOKEN_BATCH_INTERVAL);
+    }
+  }, [flushTokenUpdate]);
 
   const connect = useCallback(async (tokenOverride?: string) => {
     // Prevent duplicate connections
@@ -217,7 +269,7 @@ export function useSummaryStream({
 
           try {
             const event = JSON.parse(data);
-            processEvent(event, setState, streamingTextRef);
+            processEvent(event, setState, streamingTextRef, scheduleTokenUpdate, flushTokenUpdate);
           } catch {
             // Ignore parse errors for incomplete chunks
           }
@@ -250,7 +302,7 @@ export function useSummaryStream({
       // Note: Removed automatic retry to prevent infinite loops.
       // User can manually retry using the retry() function.
     }
-  }, [videoSummaryId, accessToken]);
+  }, [videoSummaryId, accessToken, scheduleTokenUpdate, flushTokenUpdate]);
 
   const retry = useCallback(() => {
     retryCountRef.current = 0;
@@ -273,6 +325,9 @@ export function useSummaryStream({
   const lastConnectedIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // Reset mounted state on effect run (handles dependency changes)
+    isMountedRef.current = true;
+
     // Only connect if:
     // 1. Streaming is enabled
     // 2. We have a valid videoSummaryId and accessToken
@@ -291,9 +346,15 @@ export function useSummaryStream({
       lastConnectedIdRef.current = null;
     }
 
-    // Cleanup: abort any in-flight request when dependencies change or unmount
+    // Cleanup: abort any in-flight request and clear batch timeout when dependencies change or unmount
     return () => {
+      isMountedRef.current = false;
       abortControllerRef.current?.abort();
+      pendingTokenUpdateRef.current = null;
+      if (batchTimeoutRef.current) {
+        clearTimeout(batchTimeoutRef.current);
+        batchTimeoutRef.current = null;
+      }
     };
     // Issue #10: Intentionally limited deps to prevent infinite loops
     // - connect() uses refs for latest values (accessTokenRef.current)
@@ -308,7 +369,9 @@ export function useSummaryStream({
 function processEvent(
   event: Record<string, unknown>,
   setState: React.Dispatch<React.SetStateAction<StreamState>>,
-  streamingTextRef: React.MutableRefObject<string>
+  streamingTextRef: React.RefObject<string>,
+  scheduleTokenUpdate: (phase: string, text: string, index: number) => void,
+  flushTokenUpdate: () => void
 ): void {
   const eventType = event.event as string;
 
@@ -373,18 +436,12 @@ function processEvent(
     case "token": {
       const phase = event.phase as string;
       const token = event.token as string;
+      // Use mutable ref pattern for performance - streamingTextRef.current is a string
       streamingTextRef.current += token;
       const currentText = streamingTextRef.current;
 
-      if (phase === "section_summary") {
-        setState((prev) => ({
-          ...prev,
-          currentSectionText: currentText,
-          currentSectionIndex: event.index as number,
-        }));
-      } else if (phase === "synthesis") {
-        setState((prev) => ({ ...prev, tldr: currentText }));
-      }
+      // Batch token updates to reduce re-renders (50ms interval)
+      scheduleTokenUpdate(phase, currentText, event.index as number);
       break;
     }
 
@@ -393,6 +450,8 @@ function processEvent(
       break;
 
     case "section_start":
+      // Flush any pending token updates before starting new section
+      flushTokenUpdate();
       streamingTextRef.current = "";
       setState((prev) => ({
         ...prev,
@@ -402,6 +461,8 @@ function processEvent(
       break;
 
     case "section_complete": {
+      // Flush pending token updates before completing section
+      flushTokenUpdate();
       // Issue #11: Runtime validation for SSE events
       const section = validateSection(event.section);
       if (!section) break;
@@ -416,6 +477,8 @@ function processEvent(
     }
 
     case "section_ready": {
+      // Flush pending token updates before section is ready
+      flushTokenUpdate();
       // Issue #11: Runtime validation for SSE events
       const index = event.index as number;
       const section = validateSection(event.section);
@@ -460,6 +523,8 @@ function processEvent(
     }
 
     case "synthesis_complete": {
+      // Flush pending token updates before synthesis completes
+      flushTokenUpdate();
       // Issue #11: Runtime validation for SSE events
       const { tldr, keyTakeaways } = validateSynthesisComplete(event);
       setState((prev) => ({

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { Video, Folder } from "@/types";
 import { Loader2, Folder as FolderIcon, Play } from "lucide-react";
 import { FolderCard } from "./FolderCard";
@@ -31,7 +32,7 @@ interface VideoGridProps {
   folderContext?: FolderContext;
 }
 
-export function VideoGrid({
+export const VideoGrid = memo(function VideoGrid({
   videos,
   isLoading,
   groupByFolder = false,
@@ -209,6 +210,6 @@ export function VideoGrid({
       })}
     </div>
   );
-}
+});
 
 // VideoCard component has been extracted to ./VideoCard.tsx

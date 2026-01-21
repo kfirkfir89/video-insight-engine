@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Concept } from "@vie/types";
 
@@ -6,7 +7,7 @@ interface ConceptsGridProps {
   title?: string;
 }
 
-export function ConceptsGrid({ concepts, title = "Concepts" }: ConceptsGridProps) {
+export const ConceptsGrid = memo(function ConceptsGrid({ concepts, title = "Concepts" }: ConceptsGridProps) {
   if (concepts.length === 0) return null;
 
   return (
@@ -38,4 +39,4 @@ export function ConceptsGrid({ concepts, title = "Concepts" }: ConceptsGridProps
       </CardContent>
     </Card>
   );
-}
+});

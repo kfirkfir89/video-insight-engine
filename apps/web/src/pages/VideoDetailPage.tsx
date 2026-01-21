@@ -55,6 +55,8 @@ export function VideoDetailPage() {
       channel: streamState.metadata?.channel || video.channel,
       thumbnailUrl: streamState.metadata?.thumbnailUrl || video.thumbnailUrl,
       duration: streamState.duration || video.duration,
+      // Use streamed context or fall back to video context
+      context: streamState.metadata?.context || video.context,
     };
   }, [video, streamState.metadata, streamState.duration]);
 
@@ -155,6 +157,10 @@ function buildSummaryFromStream(state: StreamState): VideoSummary | null {
       startSeconds: s.startSeconds,
       endSeconds: s.endSeconds,
       title: s.title,
+      originalTitle: s.originalTitle,
+      generatedTitle: s.generatedTitle,
+      isCreatorChapter: s.isCreatorChapter,
+      content: s.content, // Dynamic content blocks
       summary: s.summary,
       bullets: s.bullets,
     })),

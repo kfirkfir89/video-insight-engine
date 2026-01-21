@@ -3,7 +3,15 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from src.services.llm import LLMService, load_prompt, seconds_to_timestamp
+from src.services.llm import (
+    LLMService,
+    load_prompt,
+    load_persona,
+    load_examples,
+    seconds_to_timestamp,
+    VALID_PERSONAS,
+)
+from src.services.youtube import _load_persona_rules
 
 
 class TestSecondsToTimestamp:
@@ -184,3 +192,156 @@ class TestLLMService:
         assert "sections" in result
         assert "concepts" in result
         assert len(result["sections"]) > 0
+
+
+class TestLoadPersona:
+    """Tests for load_persona helper."""
+
+    def test_load_valid_persona_code(self):
+        """Test loading a valid 'code' persona returns content."""
+        result = load_persona("code")
+        assert isinstance(result, str)
+        assert len(result) > 0
+        # Code persona should mention technical concepts
+        assert "code" in result.lower() or "developer" in result.lower()
+
+    def test_load_valid_persona_recipe(self):
+        """Test loading a valid 'recipe' persona returns content."""
+        result = load_persona("recipe")
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_load_valid_persona_standard(self):
+        """Test loading a valid 'standard' persona returns content."""
+        result = load_persona("standard")
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_load_invalid_persona_falls_back_to_standard(self):
+        """Test that invalid persona names fall back to 'standard'."""
+        # Clear cache to ensure fresh load
+        load_persona.cache_clear()
+
+        # Test path traversal attempt
+        result_traversal = load_persona("../../../etc/passwd")
+        standard = load_persona("standard")
+        assert result_traversal == standard
+
+        # Test random invalid name
+        load_persona.cache_clear()
+        result_invalid = load_persona("nonexistent_persona")
+        assert result_invalid == standard
+
+    def test_all_valid_personas_exist(self):
+        """Test that all personas in VALID_PERSONAS can be loaded."""
+        load_persona.cache_clear()
+        for persona in VALID_PERSONAS:
+            result = load_persona(persona)
+            assert isinstance(result, str)
+            assert len(result) > 0, f"Persona '{persona}' returned empty content"
+
+
+class TestLoadExamples:
+    """Tests for load_examples helper."""
+
+    def test_load_valid_examples_code(self):
+        """Test loading valid 'code' examples returns content."""
+        result = load_examples("code")
+        assert isinstance(result, str)
+        assert len(result) > 0
+        # Examples should contain JSON-like content
+        assert "{" in result or "[" in result
+
+    def test_load_valid_examples_recipe(self):
+        """Test loading valid 'recipe' examples returns content."""
+        result = load_examples("recipe")
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_load_valid_examples_standard(self):
+        """Test loading valid 'standard' examples returns content."""
+        result = load_examples("standard")
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_load_invalid_examples_falls_back_to_standard(self):
+        """Test that invalid example names fall back to 'standard'."""
+        # Clear cache to ensure fresh load
+        load_examples.cache_clear()
+
+        # Test path traversal attempt
+        result_traversal = load_examples("../../../etc/passwd")
+        standard = load_examples("standard")
+        assert result_traversal == standard
+
+        # Test random invalid name
+        load_examples.cache_clear()
+        result_invalid = load_examples("nonexistent_examples")
+        assert result_invalid == standard
+
+    def test_all_valid_examples_exist(self):
+        """Test that all examples in VALID_PERSONAS can be loaded."""
+        load_examples.cache_clear()
+        for persona in VALID_PERSONAS:
+            result = load_examples(persona)
+            assert isinstance(result, str)
+            assert len(result) > 0, f"Examples for '{persona}' returned empty content"
+
+
+class TestLoadPersonaRules:
+    """Tests for _load_persona_rules helper."""
+
+    def test_persona_rules_structure(self):
+        """Test that persona_rules.json has the expected structure."""
+        # Clear cache to ensure fresh load
+        _load_persona_rules.cache_clear()
+        rules = _load_persona_rules()
+
+        # Check top-level keys
+        assert "personas" in rules
+        assert "default_persona" in rules
+        assert rules["default_persona"] == "standard"
+
+    def test_persona_rules_has_required_personas(self):
+        """Test that required personas are defined in rules."""
+        rules = _load_persona_rules()
+        personas = rules["personas"]
+
+        # Check that key personas exist
+        assert "code" in personas
+        assert "recipe" in personas
+        # interview and review are optional but should exist
+        assert "interview" in personas
+        assert "review" in personas
+
+    def test_persona_config_structure(self):
+        """Test that each persona config has keywords and categories."""
+        rules = _load_persona_rules()
+
+        for persona_name, config in rules["personas"].items():
+            assert "keywords" in config, f"'{persona_name}' missing 'keywords'"
+            assert "categories" in config, f"'{persona_name}' missing 'categories'"
+            assert isinstance(config["keywords"], list), f"'{persona_name}' keywords should be list"
+            assert isinstance(config["categories"], list), f"'{persona_name}' categories should be list"
+            assert len(config["keywords"]) > 0, f"'{persona_name}' should have at least one keyword"
+            assert len(config["categories"]) > 0, f"'{persona_name}' should have at least one category"
+
+    def test_code_persona_has_expected_keywords(self):
+        """Test that code persona includes programming-related keywords."""
+        rules = _load_persona_rules()
+        keywords = rules["personas"]["code"]["keywords"]
+
+        # Check for some expected programming keywords
+        keyword_set = set(k.lower() for k in keywords)
+        assert "python" in keyword_set or "programming" in keyword_set
+        assert "code" in keyword_set or "coding" in keyword_set
+
+    def test_recipe_persona_has_expected_keywords(self):
+        """Test that recipe persona includes food-related keywords."""
+        rules = _load_persona_rules()
+        keywords = rules["personas"]["recipe"]["keywords"]
+
+        # Check for some expected food keywords
+        keyword_set = set(k.lower() for k in keywords)
+        assert "recipe" in keyword_set or "cooking" in keyword_set
+        assert "food" in keyword_set or "chef" in keyword_set

@@ -103,11 +103,25 @@ async def stream_summarization(
 
         video_data = await extract_video_data(youtube_id)
 
+        # Extract video context for persona-aware summarization
+        context_dict = None
+        persona = "standard"
+        if video_data.context:
+            context_dict = {
+                "youtubeCategory": video_data.context.youtube_category or "Unknown",
+                "persona": video_data.context.persona,
+                "tags": video_data.context.tags,
+                "displayTags": video_data.context.display_tags,
+            }
+            persona = video_data.context.persona
+            logger.info(f"Video context: persona={persona}, tags={len(video_data.context.display_tags)}")
+
         yield sse_event("metadata", {
             "title": video_data.title,
             "channel": video_data.channel,
             "thumbnailUrl": video_data.thumbnail_url,
             "duration": video_data.duration,
+            "context": context_dict,
         })
 
         # ===== Fetch Sponsor Segments (SponsorBlock API) =====
@@ -219,6 +233,7 @@ async def stream_summarization(
                         first_section_text,
                         first_chapter.title,
                         has_creator_title=True,
+                        persona=persona,
                     ),
                     name="first_section"
                 )
@@ -318,6 +333,7 @@ async def stream_summarization(
                                 section_text,
                                 raw["title"],
                                 has_creator_title=True,
+                                persona=persona,
                             )
                         )))
 
@@ -379,7 +395,7 @@ async def stream_summarization(
                     section_text = " ".join([s["text"] for s in section_segments])
 
                     batch_tasks.append((idx, raw, start, end, asyncio.create_task(
-                        llm_service.summarize_section(section_text, raw["title"])
+                        llm_service.summarize_section(section_text, raw["title"], persona=persona)
                     )))
 
                 for idx, raw, start, end, task in batch_tasks:
@@ -469,6 +485,10 @@ async def stream_summarization(
         if sponsor_segments:
             result["sponsor_segments"] = sponsor_segments_to_dict(sponsor_segments)
 
+        # Add video context if available
+        if context_dict:
+            result["context"] = context_dict
+
         repository.save_result(video_summary_id, result)
 
         yield sse_event("done", {
@@ -532,6 +552,7 @@ async def stream_summary(
                 "channel": entry.get("channel"),
                 "thumbnailUrl": entry.get("thumbnail_url"),
                 "duration": entry.get("duration"),
+                "context": entry.get("context"),
             })
 
             # Send chapters if available

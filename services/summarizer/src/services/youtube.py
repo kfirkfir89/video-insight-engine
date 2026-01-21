@@ -5,13 +5,17 @@ This module provides a single-call extraction of all video data:
 - Chapters (creator-defined timestamps)
 - Description (full text)
 - Subtitles/captions with timestamps
+- Video context (category, persona, tags)
 """
 
 import asyncio
+import json
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, TypedDict
 
 import tenacity
 import yt_dlp  # type: ignore[import-untyped]
@@ -22,6 +26,204 @@ from src.exceptions import TranscriptError
 
 logger = logging.getLogger(__name__)
 
+# Path to persona detection rules
+PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+
+
+# -----------------------------------------------------------------------------
+# Video Context Extraction (Phase 1)
+# -----------------------------------------------------------------------------
+
+class PersonaConfig(TypedDict):
+    """Configuration for a single persona detection rule."""
+    keywords: list[str]
+    categories: list[str]
+
+
+class PersonaRules(TypedDict):
+    """Structure of persona_rules.json."""
+    personas: dict[str, PersonaConfig]
+    default_persona: str
+
+
+@lru_cache(maxsize=1)
+def _load_persona_rules() -> PersonaRules:
+    """Load persona detection rules from JSON file.
+
+    Returns:
+        Dict with 'personas' containing keyword/category rules,
+        and 'default_persona' for fallback.
+
+    Note:
+        Results are cached to avoid repeated disk reads.
+    """
+    path = PROMPTS_DIR / "detection" / "persona_rules.json"
+    return json.loads(path.read_text())
+
+
+@dataclass
+class VideoContext:
+    """Context information extracted from video metadata.
+
+    Used to determine appropriate summarization persona and display tags.
+
+    Attributes:
+        youtube_category: The YouTube category of the video (e.g., "Science & Technology")
+        persona: Determined content type - "code", "recipe", or "standard"
+        tags: Raw tags from video metadata
+        display_tags: Cleaned, deduplicated tags for UI display (max 6)
+    """
+    youtube_category: str | None
+    persona: str  # "code", "recipe", or "standard"
+    tags: list[str]
+    display_tags: list[str]
+
+
+def _extract_hashtags(description: str) -> list[str]:
+    """Extract hashtags from video description.
+
+    Args:
+        description: The video description text
+
+    Returns:
+        List of hashtags (without the # symbol), lowercased
+    """
+    if not description:
+        return []
+    return re.findall(r'#(\w+)', description.lower())
+
+
+def _determine_persona(
+    category: str | None,
+    tags: list[str],
+    hashtags: list[str],
+) -> str:
+    """Determine the video persona based on category, tags, and hashtags.
+
+    The persona affects how the video is summarized:
+    - "code": Technical/programming content - emphasizes code examples, APIs
+    - "recipe": Food/cooking content - emphasizes ingredients, steps
+    - "standard": General content - balanced summarization
+
+    Rules are loaded from prompts/detection/persona_rules.json.
+
+    Args:
+        category: YouTube category name (e.g., "Science & Technology")
+        tags: Video tags from metadata
+        hashtags: Hashtags extracted from description
+
+    Returns:
+        Persona string: "code", "recipe", or "standard"
+    """
+    rules = _load_persona_rules()
+
+    # Combine tags and hashtags for keyword matching
+    all_terms = set(t.lower() for t in tags) | set(hashtags)
+
+    # Check each persona defined in rules
+    for persona_name, config in rules.get("personas", {}).items():
+        keywords = set(config.get("keywords", []))
+        categories = set(config.get("categories", []))
+
+        # Must be in matching category AND have matching keywords
+        is_matching_category = category in categories if category else False
+        has_matching_keywords = bool(all_terms & keywords)
+
+        if is_matching_category and has_matching_keywords:
+            return persona_name
+
+    # Default to standard persona
+    return rules.get("default_persona", "standard")
+
+
+def _build_display_tags(
+    tags: list[str],
+    hashtags: list[str],
+    max_tags: int = 6,
+    min_length: int = 3,
+) -> list[str]:
+    """Build cleaned, deduplicated display tags for UI.
+
+    Merges video tags and hashtags, removes duplicates, filters by length,
+    and limits to a reasonable number for display.
+
+    Args:
+        tags: Video tags from metadata
+        hashtags: Hashtags extracted from description
+        max_tags: Maximum number of tags to return (default 6)
+        min_length: Minimum character length for tags (default 3)
+
+    Returns:
+        List of cleaned display tags, limited to max_tags
+    """
+    # Normalize and deduplicate
+    seen: set[str] = set()
+    display_tags: list[str] = []
+
+    # Process tags first (they're usually more relevant)
+    for tag in tags:
+        normalized = tag.lower().strip()
+        if len(normalized) >= min_length and normalized not in seen:
+            seen.add(normalized)
+            # Keep original casing for display
+            display_tags.append(tag.strip())
+
+    # Then add hashtags that aren't duplicates
+    for hashtag in hashtags:
+        normalized = hashtag.lower().strip()
+        if len(normalized) >= min_length and normalized not in seen:
+            seen.add(normalized)
+            # Capitalize first letter for display consistency
+            display_tags.append(hashtag.capitalize())
+
+    return display_tags[:max_tags]
+
+
+def extract_video_context(info: dict[str, Any], description: str) -> VideoContext:
+    """Extract video context from yt-dlp info dict.
+
+    Analyzes video metadata to determine content type (persona) and
+    build display-ready tags.
+
+    Args:
+        info: The yt-dlp info dictionary
+        description: Video description text (for hashtag extraction)
+
+    Returns:
+        VideoContext with category, persona, and tags
+    """
+    # Extract category (yt-dlp returns categories as a list)
+    categories = info.get('categories', [])
+    youtube_category = categories[0] if categories else None
+
+    # Extract tags
+    tags = info.get('tags', []) or []
+
+    # Extract hashtags from description
+    hashtags = _extract_hashtags(description)
+
+    # Determine persona based on category and keywords
+    persona = _determine_persona(youtube_category, tags, hashtags)
+
+    # Build display tags
+    display_tags = _build_display_tags(tags, hashtags)
+
+    logger.debug(
+        f"Video context: category={youtube_category}, persona={persona}, "
+        f"tags_count={len(tags)}, hashtags_count={len(hashtags)}"
+    )
+
+    return VideoContext(
+        youtube_category=youtube_category,
+        persona=persona,
+        tags=tags,
+        display_tags=display_tags,
+    )
+
+
+# -----------------------------------------------------------------------------
+# Video Data Classes
+# -----------------------------------------------------------------------------
 
 @dataclass
 class Chapter:
@@ -41,7 +243,20 @@ class SubtitleSegment:
 
 @dataclass
 class VideoData:
-    """Complete video data extracted from yt-dlp."""
+    """Complete video data extracted from yt-dlp.
+
+    Attributes:
+        video_id: YouTube video ID
+        title: Video title
+        channel: Channel/uploader name
+        duration: Video duration in seconds
+        thumbnail_url: URL to video thumbnail
+        description: Full video description text
+        chapters: Creator-defined chapters with timestamps
+        subtitles: Subtitle segments with timestamps
+        upload_date: Upload date in YYYYMMDD format
+        context: Video context with category, persona, and tags
+    """
     video_id: str
     title: str
     channel: str
@@ -51,6 +266,7 @@ class VideoData:
     chapters: list[Chapter] = field(default_factory=list)
     subtitles: list[SubtitleSegment] = field(default_factory=list)
     upload_date: str | None = None           # YYYYMMDD format
+    context: VideoContext | None = None      # Phase 1: Video context extraction
 
     @property
     def has_chapters(self) -> bool:
@@ -204,6 +420,7 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
     - Creator-defined chapters
     - Full description text
     - Subtitles with timestamps
+    - Video context (category, persona, tags)
 
     Args:
         video_id: YouTube video ID
@@ -306,6 +523,10 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
     else:
         logger.warning(f"Video {video_id}: no subtitles URL found")
 
+    # Phase 1: Extract video context (category, persona, tags)
+    context = extract_video_context(info, description)
+    logger.info(f"Video {video_id}: persona={context.persona}, tags={len(context.display_tags)}")
+
     return VideoData(
         video_id=video_id,
         title=title,
@@ -316,6 +537,7 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
         chapters=chapters,
         subtitles=subtitles,
         upload_date=upload_date,
+        context=context,
     )
 
 
@@ -331,6 +553,7 @@ async def extract_video_data(video_id: str) -> VideoData:
     - Creator-defined chapters (timestamps + titles)
     - Full description text
     - Subtitles/captions with timestamps
+    - Video context (category, persona, tags)
 
     Args:
         video_id: YouTube video ID

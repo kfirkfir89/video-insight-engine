@@ -1,0 +1,3 @@
+{"type": "bullets", "items": ["Key point 1", "Key point 2"]}
+{"type": "callout", "style": "tip", "text": "Important insight"}
+{"type": "timestamp", "time": "2:30", "seconds": 150, "label": "Key moment"}

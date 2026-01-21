@@ -4,10 +4,43 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>web</title>
+    <title>Video Insight Engine</title>
+    <!-- Critical CSS - minimal styles for loading overlay only -->
+    <style>
+      *,::before,::after{box-sizing:border-box;border-width:0;border-style:solid}
+      html,body{margin:0;padding:0;width:100%;height:100%}
+      body{font-family:system-ui,-apple-system,sans-serif;line-height:1.5}
+      #root{width:100%;min-height:100vh}
+      /* Loading overlay only - Tailwind handles all other colors */
+      .loading-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background-color:#fafafa;z-index:9999}
+      .loading-spinner{width:2rem;height:2rem;border:3px solid #e5e5e5;border-top-color:#dc2626;border-radius:50%;animation:spin 1s linear infinite}
+      @keyframes spin{to{transform:rotate(360deg)}}
+      .dark .loading-overlay{background-color:#1a1a1a}
+      .dark .loading-spinner{border-color:#404040;border-top-color:#ef4444}
+    </style>
+    <!--
+      Preconnect to API server - NOTE: These are development-only hints.
+      In production, set up preconnect in your reverse proxy or CDN config.
+      Using environment-specific URLs via build-time replacement is also an option.
+    -->
+    <!-- Preconnect to YouTube domains for faster video loading -->
+    <link rel="preconnect" href="https://www.youtube.com" crossorigin />
+    <link rel="preconnect" href="https://i.ytimg.com" crossorigin />
+    <link rel="dns-prefetch" href="https://img.youtube.com" />
   </head>
   <body>
+    <!-- Instant theme application to prevent flash -->
+    <script>
+      (function() {
+        var theme = localStorage.getItem('vie-theme');
+        // Only apply .dark class if explicitly set to 'dark'
+        // CSS @media query handles 'system' preference automatically
+        if (theme === 'dark') document.documentElement.classList.add('dark');
+        if (theme === 'light') document.documentElement.classList.add('light');
+      })();
+    </script>
     <div id="root"></div>
+    <div class="loading-overlay" id="loading-overlay"><div class="loading-spinner"></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

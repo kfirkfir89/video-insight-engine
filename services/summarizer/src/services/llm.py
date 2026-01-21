@@ -5,6 +5,7 @@ import json
 import logging
 import queue
 import uuid
+from functools import lru_cache
 from pathlib import Path
 from typing import AsyncGenerator, Callable, Literal
 
@@ -15,6 +16,13 @@ from src.config import settings
 logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+PERSONAS_DIR = PROMPTS_DIR / "personas"
+EXAMPLES_DIR = PROMPTS_DIR / "examples"
+
+# Valid persona names - whitelist to prevent path traversal attacks
+VALID_PERSONAS: frozenset[str] = frozenset([
+    'code', 'recipe', 'interview', 'review', 'standard'
+])
 
 # Streaming event types
 StreamEventType = Literal["token", "complete"]
@@ -25,6 +33,56 @@ def load_prompt(name: str) -> str:
     """Load prompt template from file."""
     path = PROMPTS_DIR / f"{name}.txt"
     return path.read_text()
+
+
+@lru_cache(maxsize=8)
+def load_persona(name: str) -> str:
+    """Load persona guidelines from file.
+
+    Args:
+        name: Persona name ('code', 'recipe', 'interview', 'review', 'standard')
+
+    Returns:
+        Persona guidelines text. Falls back to 'standard' if invalid or not found.
+
+    Note:
+        Results are cached to avoid repeated disk reads.
+        Validates name against whitelist to prevent path traversal.
+    """
+    # Validate against whitelist to prevent path traversal
+    if name not in VALID_PERSONAS:
+        logger.warning(f"Invalid persona name '{name}', falling back to 'standard'")
+        name = 'standard'
+
+    path = PERSONAS_DIR / f"{name}.txt"
+    if path.exists():
+        return path.read_text()
+    return (PERSONAS_DIR / "standard.txt").read_text()
+
+
+@lru_cache(maxsize=8)
+def load_examples(name: str) -> str:
+    """Load persona-specific JSON examples from file.
+
+    Args:
+        name: Persona name ('code', 'recipe', 'interview', 'review', 'standard')
+
+    Returns:
+        JSON examples text. Falls back to 'standard' if invalid or not found.
+
+    Note:
+        Results are cached to avoid repeated disk reads.
+        Validates name against whitelist to prevent path traversal.
+    """
+    # Validate against whitelist to prevent path traversal
+    if name not in VALID_PERSONAS:
+        logger.warning(f"Invalid persona name '{name}', falling back to 'standard'")
+        name = 'standard'
+
+    path = EXAMPLES_DIR / f"{name}.txt"
+    if path.exists():
+        return path.read_text()
+    return (EXAMPLES_DIR / "standard.txt").read_text()
 
 
 def seconds_to_timestamp(seconds: int) -> str:
@@ -228,6 +286,7 @@ class LLMService:
         section_text: str,
         title: str,
         has_creator_title: bool = False,
+        persona: str = 'standard',
     ) -> dict:
         """Generate dynamic content blocks for a section.
 
@@ -235,6 +294,7 @@ class LLMService:
             section_text: The transcript text for this section
             title: The section title (either creator's chapter title or AI-generated)
             has_creator_title: If True, also generates an explanatory subtitle
+            persona: Content persona for styling ('code', 'recipe', 'standard')
 
         Returns:
             dict with:
@@ -255,11 +315,17 @@ class LLMService:
             extra_instruction = ""
             generated_title_field = ""
 
+        # Get persona-specific guidelines and examples from files
+        persona_guidelines = load_persona(persona)
+        variant_examples = load_examples(persona)
+
         prompt = load_prompt("section_summary").format(
             title=title,
             content=section_text[:settings.MAX_SECTION_CHARS],
             extra_instruction=extra_instruction,
             generated_title_field=generated_title_field,
+            persona_guidelines=persona_guidelines,
+            variant_examples=variant_examples,
         )
 
         text = await self._call_llm(prompt, max_tokens=1500)
@@ -455,19 +521,30 @@ class LLMService:
         yield ("complete", sections)
 
     async def stream_summarize_section(
-        self, section_text: str, title: str
+        self, section_text: str, title: str, persona: str = 'standard'
     ) -> AsyncGenerator[StreamEvent, None]:
         """Stream section summary with tokens and final result.
+
+        Args:
+            section_text: The transcript text for this section
+            title: The section title
+            persona: Content persona for styling ('code', 'recipe', 'standard')
 
         Yields:
             ("token", str) for each token
             ("complete", dict) with content blocks and legacy summary/bullets
         """
+        # Get persona-specific guidelines and examples from files
+        persona_guidelines = load_persona(persona)
+        variant_examples = load_examples(persona)
+
         prompt = load_prompt("section_summary").format(
             title=title,
             content=section_text[:settings.MAX_SECTION_CHARS],
             extra_instruction="",
             generated_title_field="",
+            persona_guidelines=persona_guidelines,
+            variant_examples=variant_examples,
         )
 
         async for event_type, data in self._stream_and_parse(prompt, max_tokens=1500):

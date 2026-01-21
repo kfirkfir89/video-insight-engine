@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, memo } from "react";
 import { Link } from "react-router-dom";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
@@ -27,13 +27,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { DeleteVideoDialog } from "@/components/dialogs/DeleteVideoDialog";
-import { FolderTreeSelect } from "./FolderTreeSelect";
 import { cn } from "@/lib/utils";
+
 import { SIDEBAR_LAYOUT } from "@/lib/layout-constants";
 import { useMoveVideo, useDeleteVideo } from "@/hooks/use-videos";
 import { useSidebarTextClasses } from "@/hooks/use-sidebar-text-size";
 import { useUIStore, useSelectionMode } from "@/stores/ui-store";
+
 import type { Video, Folder as FolderData } from "@/types";
+import { FolderTreeSelect } from "./FolderTreeSelect";
 
 const LONG_PRESS_DELAY = 500; // milliseconds
 
@@ -43,7 +45,7 @@ interface VideoItemProps {
   folders?: FolderData[];
 }
 
-export function VideoItem({ video, level, folders = [] }: VideoItemProps) {
+export const VideoItem = memo(function VideoItem({ video, level, folders = [] }: VideoItemProps) {
   const moveVideo = useMoveVideo();
   const deleteVideo = useDeleteVideo();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -267,4 +269,4 @@ export function VideoItem({ video, level, folders = [] }: VideoItemProps) {
       />
     </div>
   );
-}
+});

@@ -9,6 +9,7 @@ export type {
   VideoSummary,
   AuthResponse,
   VideoResponse,
+  VideoContext,
   FolderResponse,
   VideoStatusEvent,
   ExpansionStatusEvent,

@@ -22,6 +22,19 @@ export type SourceType =
 export type TargetType = 'section' | 'concept';
 
 // ─────────────────────────────────────────────────────
+// Video Context Types
+// ─────────────────────────────────────────────────────
+
+export type VideoPersona = 'code' | 'recipe' | 'standard' | 'interview' | 'review';
+
+export interface VideoContext {
+  youtubeCategory: string;
+  persona: VideoPersona;
+  tags: string[];
+  displayTags: string[];
+}
+
+// ─────────────────────────────────────────────────────
 // Video Summary Types
 // ─────────────────────────────────────────────────────
 
@@ -31,16 +44,19 @@ export type TargetType = 'section' | 'concept';
 
 export interface ParagraphBlock {
   type: 'paragraph';
+  variant?: string;
   text: string;
 }
 
 export interface BulletsBlock {
   type: 'bullets';
+  variant?: 'ingredients' | 'checklist' | string;
   items: string[];
 }
 
 export interface NumberedBlock {
   type: 'numbered';
+  variant?: 'cooking_steps' | string;
   items: string[];
 }
 
@@ -52,23 +68,67 @@ export interface DoDoNotBlock {
 
 export interface ExampleBlock {
   type: 'example';
+  variant?: 'terminal_command' | string;
   title?: string;
   code: string;
   explanation?: string;
 }
 
-export type CalloutStyle = 'tip' | 'warning' | 'note';
+export type CalloutStyle = 'tip' | 'warning' | 'note' | 'chef_tip' | 'security';
 
 export interface CalloutBlock {
   type: 'callout';
+  variant?: 'chef_tip' | string;
   style: CalloutStyle;
   text: string;
 }
 
 export interface DefinitionBlock {
   type: 'definition';
+  variant?: string;
   term: string;
   meaning: string;
+}
+
+// ===== NEW BLOCK TYPES =====
+
+export interface KeyValueBlock {
+  type: 'keyvalue';
+  variant?: 'specs' | 'cost' | 'stats' | 'info' | 'location';
+  items: { key: string; value: string }[];
+}
+
+export interface ComparisonBlock {
+  type: 'comparison';
+  variant?: 'dos_donts' | 'pros_cons' | 'versus' | 'before_after';
+  left: { label: string; items: string[] };
+  right: { label: string; items: string[] };
+}
+
+export interface TimestampBlock {
+  type: 'timestamp';
+  time: string;       // "5:23" format
+  seconds: number;    // For video seeking
+  label: string;
+}
+
+export interface QuoteBlock {
+  type: 'quote';
+  variant?: 'speaker' | 'testimonial' | 'highlight';
+  text: string;
+  attribution?: string;  // "Steve Jobs"
+  timestamp?: number;    // seconds for video seek
+}
+
+export interface StatisticBlock {
+  type: 'statistic';
+  variant?: 'metric' | 'percentage' | 'trend';
+  items: {
+    value: string;       // "85%", "$1.2M", "3x"
+    label: string;       // "Performance gain"
+    context?: string;    // "vs previous version"
+    trend?: 'up' | 'down' | 'neutral';
+  }[];
 }
 
 export type ContentBlock =
@@ -78,7 +138,12 @@ export type ContentBlock =
   | DoDoNotBlock
   | ExampleBlock
   | CalloutBlock
-  | DefinitionBlock;
+  | DefinitionBlock
+  | KeyValueBlock
+  | ComparisonBlock
+  | TimestampBlock
+  | QuoteBlock
+  | StatisticBlock;
 
 // ─────────────────────────────────────────────────────
 // Section Type
@@ -201,6 +266,8 @@ export interface VideoResponse {
   chapterSource?: ChapterSource;
   descriptionAnalysis?: DescriptionAnalysis;
   sponsorSegments?: SponsorSegment[];
+  // Video context for persona-based rendering
+  context?: VideoContext;
 }
 
 export interface FolderResponse {
@@ -264,6 +331,7 @@ export interface SSEMetadataEvent {
   channel: string | null;
   thumbnailUrl: string | null;
   duration: number;
+  context?: VideoContext;
 }
 
 export interface SSEChaptersEvent {

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { FolderItem } from "./FolderItem";
 import type { FolderNode } from "@/lib/folder-utils";
 import type { FolderType, Video, Folder } from "@/types";
@@ -9,7 +10,7 @@ interface FolderTreeProps {
   allFolders: Folder[];
 }
 
-export function FolderTree({ folders, type, videos, allFolders }: FolderTreeProps) {
+export const FolderTree = memo(function FolderTree({ folders, type, videos, allFolders }: FolderTreeProps) {
   if (folders.length === 0) {
     return (
       <div className="px-4 py-2 text-xs text-muted-foreground">
@@ -32,4 +33,4 @@ export function FolderTree({ folders, type, videos, allFolders }: FolderTreeProp
       ))}
     </div>
   );
-}
+});
