@@ -83,18 +83,15 @@ video-insight-engine/
 │       └── api-tester.md
 │
 ├── docs/                             # Project documentation
-│   ├── ARCHITECTURE.md               # System diagram, data flows
-│   ├── DATA-MODELS.md                # MongoDB schemas
+│   ├── ARCHITECTURE.md               # System diagram, persona detection, SSE pipeline
+│   ├── DATA-MODELS.md                # MongoDB schemas, ContentBlock types
 │   ├── CACHING.md                    # Cache strategy
 │   ├── SECURITY.md                   # Auth, rate limiting
 │   ├── ERROR-HANDLING.md             # Error patterns
-│   ├── INFRASTRUCTURE.md             # Docker, networking
-│   ├── MVP-PHASES.md                 # Implementation roadmap
-│   ├── API-REST.md                   # REST endpoints
-│   ├── API-WEBSOCKET.md              # WebSocket events
-│   ├── API-MCP-EXPLAINER.md          # MCP tools
+│   ├── INFRASTRUCTURE.md             # Docker, networking, implementation history
+│   ├── API-REFERENCE.md              # REST, WebSocket, MCP, SSE APIs
+│   ├── FRONTEND.md                   # React/Vite, components, styling, state
 │   ├── SERVICE-API.md                # vie-api details
-│   ├── SERVICE-WEB.md                # vie-web details
 │   ├── SERVICE-SUMMARIZER.md         # vie-summarizer details
 │   └── SERVICE-EXPLAINER.md          # vie-explainer details
 │

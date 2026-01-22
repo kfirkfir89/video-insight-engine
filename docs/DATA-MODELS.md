@@ -25,6 +25,164 @@ MongoDB collections and schemas.
 
 ---
 
+# ContentBlock Types
+
+Dynamic content blocks that LLM returns for article-like summaries. Each block has a `type` and optional `variant` for specialized styling.
+
+## Block Type Reference
+
+| Type | Purpose | Fields |
+|------|---------|--------|
+| `paragraph` | Prose text, explanations, transitions | `text`, `variant?` |
+| `bullets` | Unordered lists | `items[]`, `variant?` |
+| `numbered` | Sequential steps, processes | `items[]`, `variant?` |
+| `do_dont` | Best practices, comparisons | `do[]`, `dont[]` |
+| `example` | Code snippets, demonstrations | `title?`, `code`, `explanation?`, `variant?` |
+| `callout` | Tips, warnings, important notes | `style` (tip/warning/note), `text`, `variant?` |
+| `definition` | Key term introductions | `term`, `meaning` |
+| `keyvalue` | Specs, costs, stats, metadata | `items[]` (key/value pairs), `variant?` |
+| `comparison` | Side-by-side comparisons | `left`, `right`, `variant?` |
+| `timestamp` | Video navigation links | `time`, `seconds`, `label` |
+
+## TypeScript Interfaces
+
+```typescript
+// ===== BASE BLOCKS (Original 7) =====
+
+interface ParagraphBlock {
+  type: 'paragraph';
+  variant?: string;
+  text: string;
+}
+
+interface BulletsBlock {
+  type: 'bullets';
+  variant?: 'ingredients' | string;  // Recipe: "ingredients"
+  items: string[];
+}
+
+interface NumberedBlock {
+  type: 'numbered';
+  variant?: 'cooking_steps' | string;  // Recipe: "cooking_steps"
+  items: string[];
+}
+
+interface DoDoNotBlock {
+  type: 'do_dont';
+  do: string[];
+  dont: string[];
+}
+
+interface ExampleBlock {
+  type: 'example';
+  variant?: 'terminal_command' | string;  // Code: "terminal_command"
+  title?: string;
+  code: string;
+  explanation?: string;
+}
+
+interface CalloutBlock {
+  type: 'callout';
+  variant?: 'chef_tip' | string;  // Recipe: "chef_tip"
+  style: 'tip' | 'warning' | 'note';
+  text: string;
+}
+
+interface DefinitionBlock {
+  type: 'definition';
+  term: string;
+  meaning: string;
+}
+
+// ===== NEW BLOCKS (3 additions) =====
+
+interface KeyValueBlock {
+  type: 'keyvalue';
+  variant?: 'specs' | 'cost' | 'stats' | 'info' | 'location';
+  items: { key: string; value: string }[];
+}
+
+interface ComparisonBlock {
+  type: 'comparison';
+  variant?: 'dos_donts' | 'pros_cons' | 'versus' | 'before_after';
+  left: { label: string; items: string[] };
+  right: { label: string; items: string[] };
+}
+
+interface TimestampBlock {
+  type: 'timestamp';
+  time: string;       // "5:23"
+  seconds: number;    // 323 (for video seeking)
+  label: string;      // "Setting up the project"
+}
+
+// ===== UNION TYPE =====
+
+type ContentBlock =
+  | ParagraphBlock
+  | BulletsBlock
+  | NumberedBlock
+  | DoDoNotBlock
+  | ExampleBlock
+  | CalloutBlock
+  | DefinitionBlock
+  | KeyValueBlock
+  | ComparisonBlock
+  | TimestampBlock;
+```
+
+## Variant Examples by Persona
+
+### Code Persona
+```json
+{"type": "example", "variant": "terminal_command", "code": "npm install", "explanation": "..."}
+{"type": "comparison", "variant": "dos_donts", "left": {"label": "Do", "items": [...]}, "right": {"label": "Don't", "items": [...]}}
+{"type": "timestamp", "time": "5:23", "seconds": 323, "label": "Setting up the config"}
+```
+
+### Recipe Persona
+```json
+{"type": "keyvalue", "variant": "info", "items": [{"key": "Prep Time", "value": "15 min"}, {"key": "Servings", "value": "4"}]}
+{"type": "bullets", "variant": "ingredients", "items": ["2 cups flour", "1 tsp salt"]}
+{"type": "numbered", "variant": "cooking_steps", "items": ["Preheat oven to 350°F", ...]}
+{"type": "callout", "variant": "chef_tip", "style": "tip", "text": "Let dough rest 10 min"}
+```
+
+### Review Persona
+```json
+{"type": "keyvalue", "variant": "specs", "items": [{"key": "Battery", "value": "14hrs"}, {"key": "Weight", "value": "1.2kg"}]}
+{"type": "comparison", "variant": "pros_cons", "left": {"label": "Pros", "items": [...]}, "right": {"label": "Cons", "items": [...]}}
+```
+
+---
+
+# VideoContext
+
+Metadata extracted from YouTube to enable content-aware summarization with specialized UI views.
+
+```typescript
+interface VideoContext {
+  youtubeCategory: string;     // "Science & Technology" - for LLM context
+  persona: 'code' | 'recipe' | 'standard' | 'tech' | 'educational';
+  tags: string[];              // Raw tags from YouTube (max 15)
+  displayTags: string[];       // Cleaned for UI display (max 6)
+}
+```
+
+## Persona Detection
+
+Persona is determined from YouTube metadata (NOT LLM), using category + keyword matching:
+
+| Category | Keywords Matched | Persona |
+|----------|-----------------|---------|
+| Science & Technology | programming, coding, react, python... | `code` |
+| Science & Technology | (no code keywords) | `tech` |
+| Howto & Style | recipe, cooking, food, chef... | `recipe` |
+| Education | (any) | `educational` |
+| (other) | (any) | `standard` |
+
+---
+
 # System Cache Collections
 
 ## videoSummaryCache
@@ -34,43 +192,52 @@ One entry per YouTube video. Shared across all users.
 ```javascript
 {
   _id: ObjectId,
-  
+
   // YouTube identification
   youtubeId: string,              // "dQw4w9WgXcQ" - UNIQUE
   url: string,
-  
+
   // Metadata
   title: string,
   channel: string | null,
   duration: number | null,        // seconds
   thumbnailUrl: string | null,
   language: string | null,        // ISO 639-1 ("en", "es", etc.)
-  
+
+  // Video context (persona + tags)
+  context: {
+    youtubeCategory: string,
+    persona: "code" | "recipe" | "standard" | "tech" | "educational",
+    tags: string[],
+    displayTags: string[]
+  } | null,
+
   // Processing state
   status: "pending" | "processing" | "completed" | "failed",
   errorMessage: string | null,
   errorCode: string | null,       // "NO_TRANSCRIPT", "VIDEO_TOO_LONG", etc.
   retryCount: number,             // Default: 0
-  
+
   // Content
   transcript: string | null,
   transcriptType: "manual" | "auto-generated" | null,
-  
+
   // Processed summary
   summary: {
     tldr: string,
     keyTakeaways: string[],
-    
+
     sections: [{
       id: string,                 // UUID
       timestamp: string,          // "03:45"
       startSeconds: number,
       endSeconds: number,
       title: string,
-      summary: string,
-      bullets: string[]
+      content: ContentBlock[],    // Dynamic content blocks
+      summary: string,            // Legacy: kept for backward compat
+      bullets: string[]           // Legacy: kept for backward compat
     }],
-    
+
     concepts: [{
       id: string,                 // UUID
       name: string,
@@ -78,19 +245,19 @@ One entry per YouTube video. Shared across all users.
       timestamp: string | null
     }]
   } | null,
-  
+
   // Cache metadata
   version: number,
   processedAt: Date | null,
   processingTimeMs: number | null,  // How long it took
-  
+
   // Cost tracking
   tokenUsage: {
     input: number,
     output: number,
     cost: number                    // USD
   } | null,
-  
+
   createdAt: Date,
   updatedAt: Date
 }

@@ -41,9 +41,10 @@ You watch a 2-hour tutorial, learn amazing things, and a week later... it's gone
 
 Paste a YouTube URL → Get a structured summary in seconds.
 
+- **Persona-aware** - Code tutorials get syntax highlighting, recipes get ingredient lists
 - **Sections** with timestamps (click to jump)
 - **Key concepts** extracted and explained
-- **Prerequisites** you need to understand it
+- **Dynamic content blocks** - prose, bullets, code examples, callouts, and more
 - **Organize** into folders by topic
 
 #### 2. 🧠 Memorize
@@ -193,9 +194,10 @@ open http://localhost:5173
 
 Quick links:
 
-- [Architecture](./docs/ARCHITECTURE.md) - System design
-- [API Reference](./docs/API-REST.md) - Endpoints
-- [Data Models](./docs/DATA-MODELS.md) - Database schemas
+- [Architecture](./docs/ARCHITECTURE.md) - System design, persona detection, SSE pipeline
+- [API Reference](./docs/API-REFERENCE.md) - REST, WebSocket, MCP, SSE APIs
+- [Data Models](./docs/DATA-MODELS.md) - MongoDB schemas, ContentBlock types
+- [Frontend](./docs/FRONTEND.md) - React/Vite, components, styling
 
 ---
 

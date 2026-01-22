@@ -663,6 +663,6 @@ For THIS project's specifics, see the docs/ folder:
 | ------------------- | --------------------------------------------------------- |
 | System architecture | [docs/ARCHITECTURE.md](../../../docs/ARCHITECTURE.md)     |
 | Data models         | [docs/DATA-MODELS.md](../../../docs/DATA-MODELS.md)       |
-| API endpoints       | [docs/API-REST.md](../../../docs/API-REST.md)             |
+| API endpoints       | [docs/API-REFERENCE.md](../../../docs/API-REFERENCE.md)   |
 | Error handling      | [docs/ERROR-HANDLING.md](../../../docs/ERROR-HANDLING.md) |
 | Security            | [docs/SECURITY.md](../../../docs/SECURITY.md)             |

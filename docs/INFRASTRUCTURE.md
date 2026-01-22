@@ -307,3 +307,112 @@ db.userChats.createIndex({ userId: 1, memorizedItemId: 1 })
 - Add health check endpoints to all services
 - Set up log aggregation
 - Track LLM API usage and costs
+
+---
+
+## Implementation History
+
+This section documents the MVP implementation phases that were followed to build the system.
+
+### Phase Overview
+
+| Phase | Focus           | Status |
+| ----- | --------------- | ------ |
+| 1     | Infrastructure  | Done |
+| 2     | Summarizer      | Done |
+| 3     | API             | Done |
+| 4     | Frontend Core   | Done |
+| 5     | EXPLAINER MCP   | Done |
+| 6     | Memorize + Chat | Done |
+
+### Phase 1: Infrastructure
+
+**Goal:** All containers running and communicating.
+
+- Created project structure with api/, web/, summarizer/, explainer/
+- Set up Docker Compose with all services
+- Implemented security middleware:
+  - Rate limiting (10/day per user for videos, 10/min per IP for auth)
+  - JWT refresh token flow (15 min access, 7 day refresh)
+  - CORS configuration
+  - Password validation
+  - Security headers via helmet
+
+### Phase 2: Summarizer Service
+
+**Goal:** YouTube URL → Summary in cache.
+
+- Python FastAPI service with SSE streaming
+- Transcript fetching via yt-dlp
+- Metadata and chapter extraction
+- LLM pipeline with parallel processing
+- Persona detection from YouTube metadata
+- Error handling for video edge cases:
+  - NO_TRANSCRIPT, VIDEO_TOO_LONG, VIDEO_TOO_SHORT
+  - VIDEO_UNAVAILABLE, VIDEO_RESTRICTED, LIVE_STREAM
+- Retry logic with exponential backoff
+
+### Phase 3: API Service
+
+**Goal:** REST API with auth, videos, folders.
+
+- Node.js Fastify service with TypeScript
+- MongoDB connection and JWT authentication
+- WebSocket for real-time updates
+- Auth, folders, videos, explain, memorize routes
+- MCP client connection to explainer
+
+### Phase 4: Frontend Core
+
+**Goal:** Two-tab interface with folders and videos.
+
+- React + Vite + TypeScript
+- Tailwind CSS v4 with shadcn/ui
+- React Query for server state
+- Auth flow with token refresh
+- Folder tree with drag-and-drop
+- Video submission with SSE streaming
+- Real-time status updates
+
+### Phase 5: EXPLAINER MCP
+
+**Goal:** MCP server with explain_auto and explain_chat tools.
+
+- Python MCP SDK server
+- explain_auto: cached documentation generation
+- explain_chat: interactive conversations
+- System expansion cache for shared results
+- API integration as MCP client
+
+### Phase 6: Memorize + Chat
+
+**Goal:** Complete memorize workflow with chat.
+
+- Memorize API routes (CRUD)
+- Chat with streaming responses
+- Memorized items grid and detail view
+- Notes editing with auto-save
+- Chat history with continuation
+
+### Success Criteria (All Achieved)
+
+- [x] Register and login
+- [x] Submit YouTube URL
+- [x] View cached/new summary with progressive loading
+- [x] Browse videos in folders
+- [x] Explain sections and concepts
+- [x] Memorize any content
+- [x] Chat about memorized items
+- [x] Organize with folders
+- [x] Add notes to items
+
+### Post-MVP Features (Planned)
+
+| Feature     | Priority | Description                        |
+| ----------- | -------- | ---------------------------------- |
+| Export      | High     | Export memorized items as markdown |
+| Search      | High     | Full-text search across content    |
+| Tags        | Medium   | Tag-based organization             |
+| Bulk import | Medium   | Import from YouTube playlists      |
+| Sharing     | Low      | Share memorized items              |
+| Mobile      | Low      | Responsive design / native app     |

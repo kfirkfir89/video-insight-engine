@@ -181,6 +181,133 @@ User clicks "Memorize"
 
 ---
 
+## Persona Detection Flow
+
+Persona is determined **immediately from yt-dlp metadata** (NOT from LLM). This is fast, consistent, and free.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         PERSONA DETECTION FLOW                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. yt-dlp extracts video metadata                                         │
+│     │                                                                       │
+│     ├── title: "React Tutorial for Beginners"                              │
+│     ├── description: "#react #javascript #webdev..."                       │
+│     ├── categories: ["Science & Technology"]                               │
+│     └── tags: ["react", "javascript", "tutorial", "coding"]                │
+│                                                                             │
+│  2. extract_video_context() is called                                      │
+│     │                                                                       │
+│     ├── _extract_hashtags(description) → ["react", "javascript", "webdev"] │
+│     │                                                                       │
+│     └── _determine_persona(category, tags, hashtags)                       │
+│         │                                                                   │
+│         ├── Load rules from: prompts/detection/persona_rules.json          │
+│         │                                                                   │
+│         ├── Check CODE persona:                                            │
+│         │   - Category "Science & Technology" matches? ✓                   │
+│         │   - Tags/hashtags match keywords? ✓ ("react", "javascript")      │
+│         │   - RESULT: "code" persona                                       │
+│         │                                                                   │
+│         └── Return: "code"                                                  │
+│                                                                             │
+│  3. VideoContext created and passed to LLM prompts                         │
+│     VideoContext(persona="code", displayTags=["React", "JavaScript"...])   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Persona Mapping Rules
+
+| Category | Keywords | Persona |
+|----------|----------|---------|
+| Science & Technology | programming, coding, react, python, api, github... | `code` |
+| Science & Technology | (no code keywords) | `tech` |
+| Howto & Style | recipe, cooking, food, chef, meal, kitchen... | `recipe` |
+| Education | (any) | `educational` |
+| (other) | (any) | `standard` |
+
+---
+
+## SSE Streaming Pipeline
+
+The summarization pipeline uses Server-Sent Events (SSE) to stream results progressively.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    STREAMING PHASES (SSE Events)                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  PHASE 1: INSTANT (~1-3 seconds)                                           │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  yt-dlp Extraction (single call, no LLM)                            │   │
+│  │                                                                      │   │
+│  │  Output events:                                                      │   │
+│  │    - metadata (title, channel, thumbnail, duration)                 │   │
+│  │    - chapters (if creator chapters exist)                            │   │
+│  │    - sponsor_segments (SponsorBlock API)                             │   │
+│  │    - transcript_ready                                                │   │
+│  │    - VideoContext with PERSONA (code/recipe/standard)                │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  PHASE 2: PARALLEL ANALYSIS (~2-5 seconds)                                 │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  Three tasks run simultaneously using asyncio.gather():              │   │
+│  │                                                                      │   │
+│  │  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐     │   │
+│  │  │ Task A: Desc     │ │ Task B: TLDR     │ │ Task C: First    │     │   │
+│  │  │ Analysis         │ │ Generation       │ │ Section          │     │   │
+│  │  │ (Haiku ~1-2s)    │ │ (Sonnet ~2-3s)   │ │ (Sonnet ~3-5s)   │     │   │
+│  │  └──────────────────┘ └──────────────────┘ └──────────────────┘     │   │
+│  │                                                                      │   │
+│  │  Output events: description_analysis, synthesis_complete,            │   │
+│  │                 section_ready (index 0)                              │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  PHASE 3: SECTION SUMMARIES (progressive, ~3-5s per batch)                 │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  Process remaining sections in batches (SECTION_BATCH_SIZE = 3)     │   │
+│  │                                                                      │   │
+│  │  Batch 1: Sections 2-4 (parallel) → section_ready events            │   │
+│  │  Batch 2: Sections 5-7 (parallel) → section_ready events            │   │
+│  │  ...                                                                 │   │
+│  │                                                                      │   │
+│  │  Each section uses PERSONA for content block styling                 │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  PHASE 4: CONCEPTS (~3-5 seconds)                                          │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  Extract key concepts from timestamped transcript                   │   │
+│  │  Output event: concepts_complete                                     │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  PHASE 5: SAVE & DONE                                                      │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  - Save complete result to MongoDB                                  │   │
+│  │  - Emit "done" event with processingTimeMs                          │   │
+│  │  - Emit "[DONE]" to close SSE stream                                │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### LLM Calls Summary
+
+For a typical 10-section video:
+
+| Phase | Model | Calls | Parallel? |
+|-------|-------|-------|-----------|
+| Phase 2 | Haiku | 1 (description) | Yes |
+| Phase 2 | Sonnet | 1 (TLDR) | Yes |
+| Phase 2 | Sonnet | 1 (first section) | Yes |
+| Phase 3 | Sonnet | 9 (remaining sections) | Batched (3) |
+| Phase 4 | Sonnet | 1 (concepts) | No |
+
+**Total: ~13 LLM calls, ~20-30 seconds**
+
+---
+
 ## Network Topology
 
 ```

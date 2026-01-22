@@ -18,13 +18,12 @@ Personal video knowledge management system.
 
 ## ⚠️ Critical Docs (Read First)
 
-| Topic              | Document                                           | When to Read                  |
-| ------------------ | -------------------------------------------------- | ----------------------------- |
-| **Security**       | [docs/SECURITY.md](./docs/SECURITY.md)             | Auth, rate limiting, CORS     |
-| **Error Handling** | [docs/ERROR-HANDLING.md](./docs/ERROR-HANDLING.md) | Error codes, retry, DLQ       |
-| **Data Models**    | [docs/DATA-MODELS.md](./docs/DATA-MODELS.md)       | MongoDB schemas               |
-| **MVP Phases**     | [docs/MVP-PHASES.md](./docs/MVP-PHASES.md)         | Implementation order          |
-| **Cross-Cutting**  | [docs/CROSS-CUTTING.md](./docs/CROSS-CUTTING.md)   | Multi-service work, contracts |
+| Topic              | Document                                           | When to Read                        |
+| ------------------ | -------------------------------------------------- | ----------------------------------- |
+| **Security**       | [docs/SECURITY.md](./docs/SECURITY.md)             | Auth, rate limiting, CORS           |
+| **Error Handling** | [docs/ERROR-HANDLING.md](./docs/ERROR-HANDLING.md) | Error codes, retry, DLQ             |
+| **Data Models**    | [docs/DATA-MODELS.md](./docs/DATA-MODELS.md)       | MongoDB schemas, ContentBlock types |
+| **Cross-Cutting**  | [docs/CROSS-CUTTING.md](./docs/CROSS-CUTTING.md)   | Multi-service work, contracts       |
 
 ---
 
@@ -64,7 +63,7 @@ If task exists, read the `plan.md`, `context.md`, `tasks.md`.
 | Service        | Documentation                                              |
 | -------------- | ---------------------------------------------------------- |
 | vie-api        | [docs/SERVICE-API.md](./docs/SERVICE-API.md)               |
-| vie-web        | [docs/SERVICE-WEB.md](./docs/SERVICE-WEB.md)               |
+| vie-web        | [docs/FRONTEND.md](./docs/FRONTEND.md)                     |
 | vie-summarizer | [docs/SERVICE-SUMMARIZER.md](./docs/SERVICE-SUMMARIZER.md) |
 | vie-explainer  | [docs/SERVICE-EXPLAINER.md](./docs/SERVICE-EXPLAINER.md)   |
 
@@ -172,8 +171,8 @@ open http://localhost:5173
 
 ### System
 
-- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) - System diagram, data flows
-- [docs/DATA-MODELS.md](./docs/DATA-MODELS.md) - MongoDB schemas
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) - System diagram, persona detection, SSE pipeline
+- [docs/DATA-MODELS.md](./docs/DATA-MODELS.md) - MongoDB schemas, ContentBlock types, VideoContext
 - [docs/CACHING.md](./docs/CACHING.md) - Cache strategy
 - [docs/CROSS-CUTTING.md](./docs/CROSS-CUTTING.md) - Multi-service work
 
@@ -182,20 +181,17 @@ open http://localhost:5173
 - [docs/SECURITY.md](./docs/SECURITY.md) - Auth, rate limiting, CORS
 - [docs/ERROR-HANDLING.md](./docs/ERROR-HANDLING.md) - Error codes, retry, DLQ
 
-### API Contracts
+### API & Services
 
-- [docs/API-REST.md](./docs/API-REST.md) - REST endpoints
-- [docs/API-MCP-EXPLAINER.md](./docs/API-MCP-EXPLAINER.md) - MCP tools
-- [docs/API-WEBSOCKET.md](./docs/API-WEBSOCKET.md) - WebSocket events
-
-### Service Guides
-
+- [docs/API-REFERENCE.md](./docs/API-REFERENCE.md) - REST, WebSocket, MCP, SSE APIs
 - [docs/SERVICE-API.md](./docs/SERVICE-API.md) - vie-api implementation
-- [docs/SERVICE-WEB.md](./docs/SERVICE-WEB.md) - vie-web implementation
 - [docs/SERVICE-SUMMARIZER.md](./docs/SERVICE-SUMMARIZER.md) - vie-summarizer implementation
 - [docs/SERVICE-EXPLAINER.md](./docs/SERVICE-EXPLAINER.md) - vie-explainer MCP implementation
 
+### Frontend
+
+- [docs/FRONTEND.md](./docs/FRONTEND.md) - React/Vite, components, styling, state
+
 ### Infrastructure
 
-- [docs/INFRASTRUCTURE.md](./docs/INFRASTRUCTURE.md) - Docker, networking
-- [docs/MVP-PHASES.md](./docs/MVP-PHASES.md) - Implementation roadmap
+- [docs/INFRASTRUCTURE.md](./docs/INFRASTRUCTURE.md) - Docker, networking, implementation history

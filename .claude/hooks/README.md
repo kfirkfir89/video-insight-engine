@@ -161,12 +161,9 @@ chmod +x your-project/.claude/hooks/post-tool-use-tracker.sh
 
 **When setting up hooks for a user:**
 
-1. **Read [CLAUDE_INTEGRATION_GUIDE.md](../../CLAUDE_INTEGRATION_GUIDE.md)** first
-2. **Always start with the two essential hooks**
-3. **Ask before adding Stop hooks** - they can block if misconfigured
-4. **Verify after setup:**
+1. **Always start with the two essential hooks**
+2. **Ask before adding Stop hooks** - they can block if misconfigured
+3. **Verify after setup:**
    ```bash
    ls -la .claude/hooks/*.sh | grep rwx
    ```
-
-**Questions?** See [CLAUDE_INTEGRATION_GUIDE.md](../../CLAUDE_INTEGRATION_GUIDE.md)
