@@ -664,10 +664,8 @@ For implementation details on specific technologies:
 
 For THIS project's specifics, see the docs/ folder:
 
-| Need                | Reference                                             |
-| ------------------- | ----------------------------------------------------- |
-| System architecture | [docs/ARCHITECTURE.md](../../../docs/ARCHITECTURE.md) |
-| Component library   | [docs/COMPONENTS.md](../../../docs/COMPONENTS.md)     |
-| API integration     | [docs/API-REST.md](../../../docs/API-REST.md)         |
-| State management    | [docs/STATE.md](../../../docs/STATE.md)               |
-| Styling guide       | [docs/STYLING.md](../../../docs/STYLING.md)           |
+| Need                | Reference                                               |
+| ------------------- | ------------------------------------------------------- |
+| System architecture | [docs/ARCHITECTURE.md](../../../docs/ARCHITECTURE.md)   |
+| Frontend guide      | [docs/FRONTEND.md](../../../docs/FRONTEND.md)           |
+| API integration     | [docs/API-REFERENCE.md](../../../docs/API-REFERENCE.md) |

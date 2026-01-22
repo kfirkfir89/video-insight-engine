@@ -504,5 +504,4 @@ styles/
 
 For framework-specific implementation:
 
-- **Tailwind CSS:** See [docs/STYLING.md](../../../docs/STYLING.md)
-- **Component Library:** See [docs/COMPONENTS.md](../../../docs/COMPONENTS.md)
+- **Frontend Guide:** See [docs/FRONTEND.md](../../../docs/FRONTEND.md) - Tailwind CSS, components, state management

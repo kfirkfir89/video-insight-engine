@@ -68,9 +68,7 @@ None (empty body)
 ```
 
 **Where to document:**
-- REST endpoints → `docs/API-REST.md`
-- WebSocket events → `docs/API-WEBSOCKET.md`
-- MCP tools → `docs/API-MCP-EXPLAINER.md`
+- All API contracts → `docs/API-REFERENCE.md` (REST, WebSocket, MCP, SSE)
 
 ### Step 2: Build Backend First
 
@@ -135,7 +133,7 @@ vie-web
 **Key files:**
 - `api/src/services/summarizer-client.ts`
 - `services/summarizer/src/main.py`
-- `docs/API-WEBSOCKET.md`
+- `docs/API-REFERENCE.md`
 
 ### vie-api ↔ vie-explainer (Sync via MCP)
 
@@ -155,7 +153,7 @@ vie-web
 **Key files:**
 - `api/src/plugins/mcp.ts`
 - `services/explainer/src/server.py`
-- `docs/API-MCP-EXPLAINER.md`
+- `docs/API-REFERENCE.md`
 
 ---
 
@@ -344,8 +342,6 @@ fastify.get('/health', async () => {
 
 | Need | Document |
 |------|----------|
-| REST endpoint spec | [docs/API-REST.md](./API-REST.md) |
-| WebSocket events | [docs/API-WEBSOCKET.md](./API-WEBSOCKET.md) |
-| MCP tool spec | [docs/API-MCP-EXPLAINER.md](./API-MCP-EXPLAINER.md) |
+| API contracts (REST, WebSocket, MCP, SSE) | [docs/API-REFERENCE.md](./API-REFERENCE.md) |
 | Error codes | [docs/ERROR-HANDLING.md](./ERROR-HANDLING.md) |
 | Data models | [docs/DATA-MODELS.md](./DATA-MODELS.md) |

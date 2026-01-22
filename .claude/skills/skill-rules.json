@@ -65,7 +65,7 @@
       "additionalDocs": [
         "docs/SECURITY.md",
         "docs/ERROR-HANDLING.md",
-        "docs/API-REST.md"
+        "docs/API-REFERENCE.md"
       ]
     },
     "backend-python": {
@@ -128,7 +128,7 @@
       },
       "additionalDocs": [
         "docs/ERROR-HANDLING.md",
-        "docs/API-MCP-EXPLAINER.md",
+        "docs/API-REFERENCE.md",
         "docs/SERVICE-SUMMARIZER.md",
         "docs/SERVICE-EXPLAINER.md"
       ]
@@ -186,8 +186,8 @@
         "i18n|translation|language|locale|intl|rtl": "i18n.md"
       },
       "additionalDocs": [
-        "docs/SERVICE-WEB.md",
-        "docs/API-WEBSOCKET.md"
+        "docs/FRONTEND.md",
+        "docs/API-REFERENCE.md"
       ]
     }
   },
