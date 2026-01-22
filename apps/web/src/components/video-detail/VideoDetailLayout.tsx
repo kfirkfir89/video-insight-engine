@@ -1,6 +1,6 @@
 import { useRef, useCallback, useMemo, useState, Fragment } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Clock, CheckCircle, StopCircle, ExternalLink } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle, StopCircle, ExternalLink, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -17,6 +17,7 @@ import { ConceptsGrid } from "./ConceptsGrid";
 import { ChapterList } from "./ChapterList";
 import { ResourcesPanel } from "./ResourcesPanel";
 import { VideoTags } from "./VideoTags";
+import { MasterSummaryModal } from "./MasterSummaryModal";
 import type { VideoResponse, VideoSummary } from "@vie/types";
 import type { StreamState, Chapter, DescriptionAnalysis } from "@/hooks/use-summary-stream";
 
@@ -53,6 +54,9 @@ export function VideoDetailLayout({
   // Track which section has the video player collapsed under it, and the start time
   const [activePlaySection, setActivePlaySection] = useState<string | null>(null);
   const [activeStartSeconds, setActiveStartSeconds] = useState<number>(0);
+
+  // Master summary modal state
+  const [showMasterSummary, setShowMasterSummary] = useState(false);
 
   // Use a stable dependency based on section IDs to prevent unnecessary re-renders during streaming
   const sectionIdsString = summary?.sections.map((s) => s.id).join(",") ?? "";
@@ -211,6 +215,18 @@ export function VideoDetailLayout({
             <CheckCircle className="h-4 w-4 text-status-success" />
             {video.status}
           </span>
+          {/* Quick Read button - show when master summary is available */}
+          {summary?.masterSummary && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowMasterSummary(true)}
+              className="gap-1.5"
+            >
+              <FileText className="h-4 w-4" />
+              Quick Read
+            </Button>
+          )}
           {/* Stop button when streaming */}
           {isStreaming && onStopSummarization && (
             <Button
@@ -392,6 +408,16 @@ export function VideoDetailLayout({
             onScrollToSection={scrollToSection}
           />
         </div>
+      )}
+
+      {/* Master Summary Modal */}
+      {summary?.masterSummary && (
+        <MasterSummaryModal
+          open={showMasterSummary}
+          onOpenChange={setShowMasterSummary}
+          title={video.title}
+          content={summary.masterSummary}
+        />
       )}
     </Layout>
   );

@@ -698,3 +698,89 @@ class LLMService:
             "tldr": result.get("tldr", ""),
             "keyTakeaways": result.get("keyTakeaways", [])
         }
+
+    async def generate_master_summary(
+        self,
+        title: str,
+        channel: str,
+        duration: int,
+        persona: str,
+        tldr: str,
+        key_takeaways: list[str],
+        sections: list[dict],
+        concepts: list[dict],
+    ) -> str:
+        """Generate comprehensive master summary from all video data.
+
+        This is the final summarization step that synthesizes all processed
+        data into a dense, AI-optimized knowledge document.
+
+        Args:
+            title: Video title
+            channel: Channel name
+            duration: Video duration in seconds
+            persona: Content persona ('code', 'recipe', 'standard', etc.)
+            tldr: Current TLDR text
+            key_takeaways: List of key takeaways
+            sections: List of processed sections with content blocks
+            concepts: List of extracted concepts with definitions
+
+        Returns:
+            Markdown string containing the master summary (500-800 words)
+        """
+        # Format duration
+        mins = duration // 60
+        secs = duration % 60
+        duration_formatted = f"{mins}:{secs:02d}"
+
+        # Format key takeaways
+        if key_takeaways:
+            takeaways_text = "\n".join([f"• {t}" for t in key_takeaways])
+        else:
+            takeaways_text = "Not available"
+
+        # Format sections - include title, summary, and key bullets
+        sections_parts = []
+        for i, section in enumerate(sections, 1):
+            section_title = section.get("title", f"Section {i}")
+            section_summary = section.get("summary", "")
+            section_bullets = section.get("bullets", [])
+
+            part = f"### {section_title}\n{section_summary}"
+            if section_bullets:
+                bullets_text = "\n".join([f"  - {b}" for b in section_bullets[:5]])
+                part += f"\n{bullets_text}"
+            sections_parts.append(part)
+
+        sections_detailed = "\n\n".join(sections_parts) if sections_parts else "No sections available"
+
+        # Format concepts
+        if concepts:
+            concepts_parts = []
+            for c in concepts:
+                name = c.get("name", "Unknown")
+                definition = c.get("definition", "")
+                if definition:
+                    concepts_parts.append(f"• **{name}**: {definition}")
+                else:
+                    concepts_parts.append(f"• **{name}**")
+            concepts_detailed = "\n".join(concepts_parts)
+        else:
+            concepts_detailed = "No key concepts extracted"
+
+        prompt = load_prompt("master_summary").format(
+            title=title,
+            channel=channel or "Unknown",
+            duration_formatted=duration_formatted,
+            persona=persona,
+            tldr=tldr or "Not available",
+            key_takeaways=takeaways_text,
+            sections_detailed=sections_detailed,
+            concepts_detailed=concepts_detailed,
+        )
+
+        # Use higher max_tokens for comprehensive summary
+        text = await self._call_llm(prompt, max_tokens=2000)
+
+        # Return raw markdown - no JSON parsing needed
+        return text.strip()

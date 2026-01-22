@@ -55,6 +55,7 @@ class VideoSummary(BaseModel):
     key_takeaways: list[str]
     sections: list[Section]
     concepts: list[Concept]
+    master_summary: Optional[str] = None
 
 
 class ProcessingResult(BaseModel):

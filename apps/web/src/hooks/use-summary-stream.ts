@@ -59,6 +59,7 @@ export type StreamPhase =
   | "section_detect"
   | "section_summaries"
   | "concepts"
+  | "master_summary"
   | "synthesis"
   | "done"
   | "cancelled"
@@ -83,6 +84,7 @@ export interface StreamState {
   concepts: Concept[];
   tldr: string;
   keyTakeaways: string[];
+  masterSummary: string | null;
   error: string | null;
   isCached: boolean;
   processingTimeMs: number | null;
@@ -112,6 +114,7 @@ const initialState: StreamState = {
   concepts: [],
   tldr: "",
   keyTakeaways: [],
+  masterSummary: null,
   error: null,
   isCached: false,
   processingTimeMs: null,
@@ -518,6 +521,15 @@ function processEvent(
       setState((prev) => ({
         ...prev,
         concepts,
+      }));
+      break;
+    }
+
+    case "master_summary_complete": {
+      const masterSummary = (event.masterSummary as string) || null;
+      setState((prev) => ({
+        ...prev,
+        masterSummary,
       }));
       break;
     }

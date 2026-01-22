@@ -175,6 +175,7 @@ export interface VideoSummary {
   keyTakeaways: string[];
   sections: Section[];
   concepts: Concept[];
+  masterSummary?: string;
 }
 
 // ─────────────────────────────────────────────────────
@@ -323,7 +324,8 @@ export type SummaryStreamPhase =
   | 'parallel_analysis'
   | 'section_detect'
   | 'section_summaries'
-  | 'concepts';
+  | 'concepts'
+  | 'master_summary';
 
 export interface SSEMetadataEvent {
   event: 'metadata';
@@ -366,6 +368,11 @@ export interface SSEConceptsCompleteEvent {
   concepts: Concept[];
 }
 
+export interface SSEMasterSummaryCompleteEvent {
+  event: 'master_summary_complete';
+  masterSummary: string;
+}
+
 export interface SSEDoneEvent {
   event: 'done';
   videoSummaryId: string;
@@ -397,6 +404,7 @@ export type SSEStreamEvent =
   | SSESynthesisCompleteEvent
   | SSESectionReadyEvent
   | SSEConceptsCompleteEvent
+  | SSEMasterSummaryCompleteEvent
   | SSEDoneEvent
   | SSEPhaseEvent
   | SSETokenEvent

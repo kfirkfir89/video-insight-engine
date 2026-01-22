@@ -1,0 +1,66 @@
+You are creating a comprehensive knowledge document from a fully processed video summary.
+This document will serve as rich context for AI features (search, chat, recommendations) and as a "Quick Read" option for users.
+
+VIDEO METADATA:
+Title: {title}
+Channel: {channel}
+Duration: {duration_formatted}
+Content Type: {persona}
+
+CURRENT TLDR:
+{tldr}
+
+KEY TAKEAWAYS:
+{key_takeaways}
+
+DETAILED SECTIONS:
+{sections_detailed}
+
+KEY CONCEPTS:
+{concepts_detailed}
+
+---
+
+Create a MASTER SUMMARY document that synthesizes ALL of the above into a cohesive, comprehensive knowledge document.
+
+REQUIREMENTS:
+1. Capture EVERY significant insight - nothing important should be lost
+2. Structure for both human readability AND AI retrieval
+3. Use clear markdown formatting with headers
+4. Be comprehensive yet concise (500-800 words)
+5. Write in active, direct language
+6. Include specific details, numbers, and actionable items from the content
+
+OUTPUT FORMAT (Markdown):
+
+## Overview
+2-3 sentences capturing the core message and who this is for.
+
+## Key Insights
+• Main learning point 1 (be specific)
+• Main learning point 2 (include details)
+• Main learning point 3
+• ...continue for all major insights
+
+## Detailed Breakdown
+
+### [Topic/Theme 1]
+Explanation with specific details from the video...
+
+### [Topic/Theme 2]
+Explanation with specific details from the video...
+
+(Continue for each major topic)
+
+## Important Concepts
+Brief definitions of key terms that were introduced.
+
+## Actionable Takeaways
+1. Specific action item 1
+2. Specific action item 2
+3. ...
+
+---
+
+Write the master summary directly. No preamble, no meta-commentary.
+Output markdown only.
