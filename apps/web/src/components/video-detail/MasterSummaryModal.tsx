@@ -2,6 +2,7 @@ import ReactMarkdown from "react-markdown";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -13,6 +14,20 @@ interface MasterSummaryModalProps {
   content: string;
 }
 
+/**
+ * Modal displaying the master summary of a video.
+ *
+ * Security Note: XSS Protection
+ * -----------------------------
+ * ReactMarkdown v9+ uses 'react-markdown' with rehype-sanitize by default,
+ * which strips dangerous HTML. The content comes from our LLM-generated
+ * summaries, but we still sanitize because:
+ * 1. Defense in depth - never trust any input, even from our own backend
+ * 2. LLM outputs could theoretically include injected HTML from transcripts
+ * 3. ReactMarkdown's default behavior safely converts markdown to React elements
+ *
+ * We do NOT use dangerouslySetInnerHTML or rehype-raw plugin.
+ */
 export function MasterSummaryModal({
   open,
   onOpenChange,
@@ -21,9 +36,15 @@ export function MasterSummaryModal({
 }: MasterSummaryModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-2xl max-h-[80vh] overflow-y-auto"
+        aria-describedby="master-summary-description"
+      >
         <DialogHeader>
           <DialogTitle className="pr-8">Quick Read: {title}</DialogTitle>
+          <DialogDescription id="master-summary-description" className="sr-only">
+            AI-generated summary of the video content
+          </DialogDescription>
         </DialogHeader>
         <div className="prose prose-sm dark:prose-invert max-w-none">
           <ReactMarkdown

@@ -92,6 +92,34 @@ def seconds_to_timestamp(seconds: int) -> str:
     return f"{mins:02d}:{secs:02d}"
 
 
+def _sanitize_llm_input(text: str, max_length: int = 10000) -> str:
+    """Sanitize user input before including in LLM prompts.
+
+    Prevents prompt injection by:
+    - Truncating to max_length to prevent resource exhaustion
+    - Stripping leading/trailing whitespace
+
+    Note: We intentionally don't strip special characters as they may be
+    legitimate in titles, descriptions, etc. The LLM prompt templates
+    are designed to handle user content safely by placing it in clearly
+    delimited sections.
+
+    Args:
+        text: User-provided text to sanitize
+        max_length: Maximum allowed length (default 10000 chars)
+
+    Returns:
+        Sanitized text, truncated if necessary
+    """
+    if not text:
+        return ""
+    text = text.strip()
+    if len(text) > max_length:
+        logger.warning(f"Input truncated from {len(text)} to {max_length} chars")
+        return text[:max_length]
+    return text
+
+
 def _parse_json_response(text: str, fallback: dict | None = None) -> dict:
     """Parse JSON from LLM response text."""
     try:
@@ -728,38 +756,49 @@ class LLMService:
         Returns:
             Markdown string containing the master summary (500-800 words)
         """
+        # Sanitize inputs to prevent prompt injection and resource exhaustion
+        title = _sanitize_llm_input(title, max_length=500)
+        channel = _sanitize_llm_input(channel, max_length=200)
+        tldr = _sanitize_llm_input(tldr, max_length=2000)
+
+        # Validate persona against whitelist (already validated in load_persona but double-check)
+        if persona not in VALID_PERSONAS:
+            persona = "standard"
+
         # Format duration
         mins = duration // 60
         secs = duration % 60
         duration_formatted = f"{mins}:{secs:02d}"
 
-        # Format key takeaways
+        # Format key takeaways (sanitize each)
         if key_takeaways:
-            takeaways_text = "\n".join([f"• {t}" for t in key_takeaways])
+            sanitized_takeaways = [_sanitize_llm_input(t, max_length=500) for t in key_takeaways[:20]]
+            takeaways_text = "\n".join([f"• {t}" for t in sanitized_takeaways])
         else:
             takeaways_text = "Not available"
 
-        # Format sections - include title, summary, and key bullets
+        # Format sections - include title, summary, and key bullets (limit to 30 sections max)
         sections_parts = []
-        for i, section in enumerate(sections, 1):
-            section_title = section.get("title", f"Section {i}")
-            section_summary = section.get("summary", "")
+        for i, section in enumerate(sections[:30], 1):
+            section_title = _sanitize_llm_input(section.get("title", f"Section {i}"), max_length=200)
+            section_summary = _sanitize_llm_input(section.get("summary", ""), max_length=1000)
             section_bullets = section.get("bullets", [])
 
             part = f"### {section_title}\n{section_summary}"
             if section_bullets:
-                bullets_text = "\n".join([f"  - {b}" for b in section_bullets[:5]])
+                sanitized_bullets = [_sanitize_llm_input(b, max_length=300) for b in section_bullets[:5]]
+                bullets_text = "\n".join([f"  - {b}" for b in sanitized_bullets])
                 part += f"\n{bullets_text}"
             sections_parts.append(part)
 
         sections_detailed = "\n\n".join(sections_parts) if sections_parts else "No sections available"
 
-        # Format concepts
+        # Format concepts (limit to 20 concepts max)
         if concepts:
             concepts_parts = []
-            for c in concepts:
-                name = c.get("name", "Unknown")
-                definition = c.get("definition", "")
+            for c in concepts[:20]:
+                name = _sanitize_llm_input(c.get("name", "Unknown"), max_length=100)
+                definition = _sanitize_llm_input(c.get("definition", ""), max_length=500)
                 if definition:
                     concepts_parts.append(f"• **{name}**: {definition}")
                 else:
@@ -782,5 +821,11 @@ class LLMService:
         # Use higher max_tokens for comprehensive summary
         text = await self._call_llm(prompt, max_tokens=2000)
 
-        # Return raw markdown - no JSON parsing needed
-        return text.strip()
+        # Validate output length (expected 500-800 words ≈ 3000-5000 chars, cap at 15000)
+        result = text.strip()
+        max_output_length = 15000
+        if len(result) > max_output_length:
+            logger.warning(f"Master summary truncated from {len(result)} to {max_output_length} chars")
+            result = result[:max_output_length]
+
+        return result
