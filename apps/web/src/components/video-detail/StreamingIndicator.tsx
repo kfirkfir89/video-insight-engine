@@ -16,6 +16,7 @@ const phaseLabels: Record<StreamPhase, string> = {
   section_detect: "Analyzing video structure...",
   section_summaries: "Summarizing sections...",
   concepts: "Extracting key concepts...",
+  master_summary: "Creating quick read...",
   synthesis: "Generating summary...",
   done: "Complete!",
   cancelled: "Summarization cancelled",

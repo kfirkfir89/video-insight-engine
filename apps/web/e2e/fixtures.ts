@@ -49,6 +49,8 @@ export const mockVideos = [
 export const mockVideoSummary = {
   tldr: "This is a summary of the video content.",
   keyTakeaways: ["Key point 1", "Key point 2", "Key point 3"],
+  masterSummary:
+    "This is the complete master summary of the video. It provides a comprehensive overview of all the key points discussed, including the introduction, main content, and conclusion. The video covers important concepts and provides actionable takeaways for the viewer.",
   sections: [
     {
       id: "section-1",
@@ -88,9 +90,16 @@ export const mockVideoSummary = {
   ],
 };
 
+// Summary without masterSummary for testing null case
+export const mockVideoSummaryNoMaster = {
+  ...mockVideoSummary,
+  masterSummary: null,
+};
+
 // Setup API mocks
 async function setupApiMocks(page: Page) {
-  await page.route("**/api/auth/me", (route) => {
+  // Use regex pattern to reliably match the auth/me endpoint
+  await page.route(/\/api\/auth\/me$/, (route) => {
     route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -117,13 +126,20 @@ async function setupApiMocks(page: Page) {
 
     if (route.request().method() === "GET") {
       if (video) {
+        // Use different summaries based on video ID
+        // video-1: full summary with masterSummary
+        // video-2: summary without masterSummary (for testing Quick Read hidden)
+        // video-3: no summary (processing)
+        const summary =
+          video.status === "completed"
+            ? videoId === "video-2"
+              ? mockVideoSummaryNoMaster
+              : mockVideoSummary
+            : null;
         route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({
-            video,
-            summary: video.status === "completed" ? mockVideoSummary : null,
-          }),
+          body: JSON.stringify({ video, summary }),
         });
       } else {
         route.fulfill({
@@ -151,17 +167,24 @@ async function setupApiMocks(page: Page) {
 }
 
 // Extended test fixture with authentication
+// Sets up API mocks and injects auth state for all tests.
 export const test = base.extend<{ authenticatedPage: Page }>({
   authenticatedPage: async ({ page }, use) => {
-    // Set up API mocks first
+    // Set up API mocks FIRST, before any navigation
     await setupApiMocks(page);
 
-    // Navigate to login to establish origin for localStorage
-    await page.goto("/login");
-    await page.waitForLoadState("domcontentloaded");
+    // Mock auth refresh endpoint
+    await page.route(/\/api\/auth\/refresh/, (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ accessToken: "mock-token-123" }),
+      });
+    });
 
-    // Set localStorage with auth state (Zustand persist format)
-    await page.evaluate(() => {
+    // Inject auth state and mock WebSocket BEFORE any page script runs
+    await page.addInitScript(() => {
+      // Zustand persist format for auth store (only accessToken and user are hydrated)
       const authState = {
         state: {
           accessToken: "mock-token-123",
@@ -174,10 +197,51 @@ export const test = base.extend<{ authenticatedPage: Page }>({
         version: 0,
       };
       localStorage.setItem("vie-auth", JSON.stringify(authState));
+      localStorage.setItem("accessToken", "mock-token-123");
+
+      // Mock WebSocket to prevent real connection attempts
+      // The real backend would reject our mock token and trigger forceLogout()
+      class MockWebSocket {
+        static CONNECTING = 0;
+        static OPEN = 1;
+        static CLOSING = 2;
+        static CLOSED = 3;
+
+        readyState = MockWebSocket.OPEN;
+        onopen: ((ev: Event) => void) | null = null;
+        onclose: ((ev: CloseEvent) => void) | null = null;
+        onmessage: ((ev: MessageEvent) => void) | null = null;
+        onerror: ((ev: Event) => void) | null = null;
+
+        constructor(_url: string) {
+          // Simulate successful connection after a tick
+          setTimeout(() => {
+            if (this.onopen) {
+              this.onopen(new Event("open"));
+            }
+          }, 10);
+        }
+
+        send(_data: string) {
+          // No-op for tests
+        }
+
+        close() {
+          this.readyState = MockWebSocket.CLOSED;
+        }
+      }
+
+      // Replace WebSocket globally
+      (window as unknown as { WebSocket: typeof MockWebSocket }).WebSocket = MockWebSocket;
     });
 
-    // Navigate to dashboard - this picks up the localStorage state
-    await page.goto("/", { waitUntil: "networkidle" });
+    // Navigate directly to home page
+    // The app will hydrate auth from localStorage, then checkAuth() validates via mocked /api/auth/me
+    await page.goto("/");
+
+    // Wait for auth check to complete and dashboard to render
+    // The sidebar (complementary) or main content should appear once authenticated
+    await page.waitForSelector('[role="complementary"], main', { timeout: 15000 });
 
     // eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not React hook
     await use(page);

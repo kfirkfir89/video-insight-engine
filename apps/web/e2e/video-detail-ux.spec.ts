@@ -47,17 +47,18 @@ test.describe("Video Detail - Sticky Navigation (Desktop)", () => {
     const mainContentChapter = page
       .locator('[data-slot="chapter-nav-item"]')
       .filter({ hasText: "Main Content" });
-    await mainContentChapter.click();
+    const clickableArea = mainContentChapter.locator('[role="button"]');
+    await clickableArea.click();
 
-    // Wait for scroll animation
+    // Wait for scroll animation to complete
     await page.waitForTimeout(500);
 
-    // Section should be in viewport
+    // The "Main Content" section should be in viewport after click
     const section = page.locator("#section-section-2");
-    await expect(section).toBeInViewport();
+    await expect(section).toBeInViewport({ timeout: 3000 });
   });
 
-  test("clicking play button in nav seeks video", async ({
+  test("clicking play button in nav triggers video playback", async ({
     authenticatedPage: page,
   }) => {
     // Wait for chapters to load
@@ -72,54 +73,58 @@ test.describe("Video Detail - Sticky Navigation (Desktop)", () => {
     await expect(playButton).toBeVisible();
     await playButton.click();
 
-    // Video player should be present (we can't verify actual playback in mocked tests)
-    const videoPlayer = page.locator('[data-slot="collapsible-video"]');
-    await expect(videoPlayer).toBeVisible();
+    // Video should now be embedded in the corresponding section (YouTube iframe appears)
+    const youtubeIframe = page.locator('iframe[src*="youtube.com"]');
+    await expect(youtubeIframe).toBeVisible({ timeout: 5000 });
   });
 
-  test("clicking chapter nav scrolls to corresponding section", async ({
+  test("clicking chapter nav activates corresponding chapter", async ({
     authenticatedPage: page,
   }) => {
     // Wait for chapters to load
     await page.waitForSelector('[data-slot="chapter-nav-item"]');
 
-    // Initially first section should be active
+    // Initially first chapter should be active
     const firstChapter = page.locator('[data-slot="chapter-nav-item"]').first();
     await expect(firstChapter).toHaveAttribute("data-active", "true");
 
-    // Click on Conclusion chapter to scroll
-    const thirdChapter = page
+    // Click on Conclusion chapter
+    const conclusionChapter = page
       .locator('[data-slot="chapter-nav-item"]')
       .filter({ hasText: "Conclusion" });
-    await thirdChapter.click();
+    await conclusionChapter.click();
 
-    // Wait for scroll animation
-    await page.waitForTimeout(600);
+    // Wait for activation
+    await page.waitForTimeout(800);
 
-    // Third section should now be in viewport
-    const thirdSection = page.locator("#section-section-3");
-    await expect(thirdSection).toBeInViewport();
+    // Conclusion chapter should now be active
+    await expect(conclusionChapter).toHaveAttribute("data-active", "true");
   });
 
-  test("collapsible video player expands and collapses", async ({
+  test("video can be played and stopped from section", async ({
     authenticatedPage: page,
   }) => {
-    const videoPlayer = page.locator('[data-slot="collapsible-video"]');
-    await expect(videoPlayer).toBeVisible();
+    // Wait for sections to load
+    await page.waitForSelector('[data-slot="article-section"]');
 
-    // Find expand button
-    const expandButton = videoPlayer.locator('button[aria-label*="Expand"]');
-    await expandButton.click();
+    // Click play button on first section
+    const firstSection = page.locator('[data-slot="article-section"]').first();
+    const playButton = firstSection.locator('button[aria-label*="Play from"]');
+    await playButton.click();
 
-    // Button should now say "Collapse"
-    const collapseButton = videoPlayer.locator('button[aria-label*="Collapse"]');
-    await expect(collapseButton).toBeVisible();
+    // Video iframe should appear
+    const youtubeIframe = page.locator('iframe[src*="youtube.com"]');
+    await expect(youtubeIframe).toBeVisible({ timeout: 5000 });
 
-    // Click to collapse
-    await collapseButton.click();
+    // Stop button should appear
+    const stopButton = firstSection.locator('button[aria-label="Stop video"]');
+    await expect(stopButton).toBeVisible();
 
-    // Button should say "Expand" again
-    await expect(expandButton).toBeVisible();
+    // Click stop
+    await stopButton.click();
+
+    // Video should be removed
+    await expect(youtubeIframe).not.toBeVisible({ timeout: 3000 });
   });
 });
 
@@ -177,21 +182,21 @@ test.describe("Video Detail - Mobile Layout", () => {
     await expect(section).toBeInViewport();
   });
 
-  test("collapsible video section works on mobile", async ({
+  test("play buttons are accessible on mobile", async ({
     authenticatedPage: page,
   }) => {
-    // Video player should be collapsed initially (iframe not in DOM or hidden)
-    const youtubeIframe = page.locator('iframe[src*="youtube.com"]');
+    // Wait for page content to load
+    await page.waitForSelector("h1", { timeout: 10000 });
 
-    // Click to expand
-    const watchButton = page.locator('button:has-text("Watch Video")');
-    await watchButton.click();
+    // Play buttons should be in the DOM (sections exist)
+    const playButtons = page.locator('button[aria-label*="Play from"]');
+    await expect(playButtons).toHaveCount(3);
 
-    // Wait for animation and content to appear
-    await page.waitForTimeout(500);
-
-    // Video should now be in DOM
-    await expect(youtubeIframe).toBeAttached();
+    // Each button should have proper aria-label
+    for (let i = 0; i < 3; i++) {
+      const label = await playButtons.nth(i).getAttribute("aria-label");
+      expect(label).toMatch(/Play from \d+:\d+/);
+    }
   });
 });
 
@@ -208,46 +213,58 @@ test.describe("Video Detail - Content Display", () => {
     await expect(tldrHero).toContainText("This is a summary of the video content");
   });
 
-  test("displays key takeaways", async ({ authenticatedPage: page }) => {
-    const takeaways = page.locator('[data-slot="key-takeaways"]');
-    await expect(takeaways).toBeVisible();
-    await expect(takeaways).toContainText("Key Takeaways");
-    await expect(takeaways).toContainText("Key point 1");
-    await expect(takeaways).toContainText("Key point 2");
+  test("displays key takeaways in TL;DR section", async ({ authenticatedPage: page }) => {
+    // Key takeaways are displayed within the TL;DR hero component
+    const tldrHero = page.locator('[data-slot="tldr-hero"]');
+    await expect(tldrHero).toBeVisible();
+
+    // Should contain the key takeaways as bullet points
+    await expect(tldrHero).toContainText("Key point 1");
+    await expect(tldrHero).toContainText("Key point 2");
+    await expect(tldrHero).toContainText("Key point 3");
   });
 
-  test("displays section cards with content", async ({
+  test("displays section articles with content", async ({
     authenticatedPage: page,
   }) => {
-    const sectionCards = page.locator('[data-slot="section-card"]');
-    await expect(sectionCards).toHaveCount(3);
+    const sections = page.locator('[data-slot="article-section"]');
+    await expect(sections).toHaveCount(3);
 
     // First section should have title and content
-    const firstSection = sectionCards.first();
+    const firstSection = sections.first();
     await expect(firstSection).toContainText("Introduction");
     await expect(firstSection).toContainText("The video starts with an introduction");
     await expect(firstSection).toContainText("Opening remarks");
   });
 
-  test("section cards have play buttons with timestamps", async ({
+  test("sections have play buttons with timestamps", async ({
     authenticatedPage: page,
   }) => {
-    const sectionCards = page.locator('[data-slot="section-card"]');
+    const sections = page.locator('[data-slot="article-section"]');
 
     // Each section should have a play button
-    const playButtons = sectionCards.locator('button[aria-label*="Play from"]');
+    const playButtons = sections.locator('button[aria-label*="Play from"]');
     await expect(playButtons).toHaveCount(3);
 
     // Buttons should show timestamps
     await expect(playButtons.first()).toContainText("0:00");
   });
 
-  test("displays concepts grid", async ({ authenticatedPage: page }) => {
-    const conceptsGrid = page.locator('[data-slot="concepts-grid"]');
-    await expect(conceptsGrid).toBeVisible();
-    await expect(conceptsGrid).toContainText("Concepts");
-    await expect(conceptsGrid).toContainText("Main Concept");
-    await expect(conceptsGrid).toContainText("Definition of the main concept");
+  test("displays concepts inline with sections", async ({ authenticatedPage: page }) => {
+    // On desktop, concepts are shown inline within section articles
+    const sections = page.locator('[data-slot="article-section"]');
+
+    // The Main Content section (second section) should contain the concept
+    const mainContentSection = sections.nth(1);
+    await expect(mainContentSection).toContainText("Concepts");
+    await expect(mainContentSection).toContainText("Main Concept");
+
+    // Click to expand concept definition
+    const conceptButton = mainContentSection.locator('button:has-text("Main Concept")');
+    await conceptButton.click();
+
+    // Definition should be visible
+    await expect(mainContentSection).toContainText("Definition of the main concept");
   });
 });
 
@@ -285,13 +302,10 @@ test.describe("Video Detail - Accessibility", () => {
     // Wait for chapters
     await page.waitForSelector('[data-slot="chapter-nav-item"]');
 
-    // Tab to first chapter item
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Tab"); // Skip back button
-
-    // Focus first chapter item
-    const firstChapter = page.locator('[data-slot="chapter-nav-item"]').first();
-    await firstChapter.focus();
+    // Focus the second chapter item's clickable area (role="button")
+    const secondChapter = page.locator('[data-slot="chapter-nav-item"]').nth(1);
+    const clickableArea = secondChapter.locator('[role="button"]');
+    await clickableArea.focus();
 
     // Press Enter to activate
     await page.keyboard.press("Enter");
@@ -299,9 +313,9 @@ test.describe("Video Detail - Accessibility", () => {
     // Wait for scroll
     await page.waitForTimeout(500);
 
-    // First section should be in viewport
-    const section = page.locator("#section-section-1");
-    await expect(section).toBeInViewport();
+    // Second section should be in viewport after keyboard activation
+    const section = page.locator("#section-section-2");
+    await expect(section).toBeInViewport({ timeout: 3000 });
   });
 
   test("sections have proper heading structure", async ({
@@ -312,25 +326,25 @@ test.describe("Video Detail - Accessibility", () => {
     await expect(h1).toBeVisible();
     await expect(h1).toContainText("Never Gonna Give You Up");
 
-    // H2 for sections header
-    const h2 = page.locator("h2").filter({ hasText: "Sections" });
+    // H2 for chapters nav header
+    const h2 = page.locator("h2").filter({ hasText: "Chapters" });
     await expect(h2).toBeVisible();
 
-    // H3 for section titles
-    const h3s = page.locator('[data-slot="section-card"] h3');
+    // H3 for section titles within articles
+    const h3s = page.locator('[data-slot="article-section"] h3');
     await expect(h3s).toHaveCount(3);
   });
 
-  test("collapsible video has aria-expanded state", async ({
+  test("concept expansion has aria-expanded state", async ({
     authenticatedPage: page,
   }) => {
-    const expandButton = page.locator('button[aria-label*="Expand video"]');
-    await expect(expandButton).toHaveAttribute("aria-expanded", "false");
+    // Find a concept button that has aria-expanded
+    const conceptButton = page.locator('button[aria-expanded]').filter({ hasText: "Main Concept" });
+    await expect(conceptButton).toHaveAttribute("aria-expanded", "false");
 
-    await expandButton.click();
+    await conceptButton.click();
 
-    const collapseButton = page.locator('button[aria-label*="Collapse video"]');
-    await expect(collapseButton).toHaveAttribute("aria-expanded", "true");
+    await expect(conceptButton).toHaveAttribute("aria-expanded", "true");
   });
 });
 
@@ -348,6 +362,43 @@ test.describe("Video Detail - Edge Cases", () => {
     // Should NOT show chapter nav for processing videos
     const chapterNav = page.locator('[data-slot="sticky-chapter-nav"]');
     await expect(chapterNav).not.toBeVisible();
+  });
+
+  test("Quick Read button is hidden when masterSummary is null", async ({
+    authenticatedPage: page,
+  }) => {
+    // video-2 has summary without masterSummary
+    await page.goto("/video/video-2");
+    await page.waitForSelector("h1");
+
+    // Quick Read button should NOT be visible when masterSummary is null
+    const quickReadButton = page.locator('button:has-text("Quick Read")');
+    await expect(quickReadButton).toHaveCount(0);
+  });
+
+  test("Quick Read button opens master summary modal", async ({
+    authenticatedPage: page,
+  }) => {
+    // video-1 has full summary with masterSummary
+    await page.goto("/video/video-1");
+    await page.waitForSelector("h1");
+
+    // Quick Read button should be visible
+    const quickReadButton = page.locator('button:has-text("Quick Read")');
+    await expect(quickReadButton).toBeVisible();
+
+    // Click Quick Read button
+    await quickReadButton.click();
+
+    // Modal should open with master summary content
+    const modal = page.locator('[role="dialog"]');
+    await expect(modal).toBeVisible();
+    await expect(modal).toContainText("master summary");
+
+    // Close modal using the dialog close button (has data-slot="dialog-close")
+    const closeButton = modal.locator('[data-slot="dialog-close"]');
+    await closeButton.click();
+    await expect(modal).not.toBeVisible();
   });
 
   test("back button navigates to dashboard", async ({

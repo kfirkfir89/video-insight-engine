@@ -90,6 +90,7 @@ class MongoDBVideoRepository:
                     }
                     for c in result["summary"]["concepts"]
                 ],
+                "masterSummary": result["summary"].get("master_summary"),
             },
             "status": ProcessingStatus.COMPLETED.value,
             "processedAt": _utc_now(),

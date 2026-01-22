@@ -396,6 +396,7 @@ const VALID_SSE_PHASES = [
   'section_detect',
   'section_summaries',
   'concepts',
+  'master_summary',
 ] as const;
 
 type SSEPhase = typeof VALID_SSE_PHASES[number];

@@ -125,12 +125,20 @@ test.describe("Video Playback - Detail Page", () => {
     await page.waitForSelector("h1", { timeout: 10000 });
   });
 
-  test("displays embedded YouTube player in sidebar", async ({
+  test("clicking play in section displays YouTube player", async ({
     authenticatedPage: page,
   }) => {
-    // Should have YouTube player iframe in collapsible section
-    const youtubePlayer = page.locator('[data-slot="collapsible-video"] iframe[src*="youtube.com"]');
-    await expect(youtubePlayer).toBeVisible();
+    // Wait for sections
+    await page.waitForSelector('[data-slot="article-section"]');
+
+    // Click play button on first section
+    const firstSection = page.locator('[data-slot="article-section"]').first();
+    const playButton = firstSection.locator('button[aria-label*="Play from"]');
+    await playButton.click();
+
+    // YouTube iframe should appear within the section
+    const youtubePlayer = page.locator('iframe[src*="youtube.com"]');
+    await expect(youtubePlayer).toBeVisible({ timeout: 5000 });
   });
 
   test("displays video title and metadata", async ({ authenticatedPage: page }) => {
@@ -146,42 +154,41 @@ test.describe("Video Playback - Detail Page", () => {
     await expect(page.locator('[data-slot="tldr-hero"]')).toBeVisible();
     await expect(page.locator("text=TL;DR")).toBeVisible();
 
-    // Key Takeaways
-    await expect(page.locator("text=Key Takeaways")).toBeVisible();
+    // Key Takeaways are within TL;DR hero
+    await expect(page.locator('[data-slot="tldr-hero"]')).toContainText("Key point 1");
 
-    // Sections - use h3 headings specifically
-    await expect(page.locator("text=Sections")).toBeVisible();
+    // Sections - use h3 headings specifically (in article sections)
     await expect(page.locator("h3", { hasText: "Introduction" })).toBeVisible();
     await expect(page.locator("h3", { hasText: "Main Content" })).toBeVisible();
     await expect(page.locator("h3", { hasText: "Conclusion" })).toBeVisible();
   });
 
-  test("section cards have clickable play buttons with timestamps", async ({
+  test("section articles have clickable play buttons with timestamps", async ({
     authenticatedPage: page,
   }) => {
     // Wait for sections to load
-    await page.waitForSelector('[data-slot="section-card"]');
+    await page.waitForSelector('[data-slot="article-section"]');
 
-    // Find timestamp play buttons in section cards
-    const timestampButtons = page.locator('[data-slot="section-card"] button[aria-label*="Play from"]');
+    // Find timestamp play buttons in article sections
+    const timestampButtons = page.locator('[data-slot="article-section"] button[aria-label*="Play from"]');
     await expect(timestampButtons).toHaveCount(3);
 
     // First timestamp should show "0:00"
     await expect(timestampButtons.first()).toContainText("0:00");
   });
 
-  test("clicking play button in section card triggers video", async ({ authenticatedPage: page }) => {
+  test("clicking play button in section triggers video", async ({ authenticatedPage: page }) => {
     // Wait for sections
-    await page.waitForSelector('[data-slot="section-card"]');
+    await page.waitForSelector('[data-slot="article-section"]');
 
-    // Click a timestamp button in the section card specifically
-    const sectionCard = page.locator('[data-slot="section-card"]').nth(1); // Main Content section
-    const timestampButton = sectionCard.locator('button[aria-label="Play from 0:30"]');
+    // Click a timestamp button in the article section
+    const section = page.locator('[data-slot="article-section"]').nth(1); // Main Content section
+    const timestampButton = section.locator('button[aria-label="Play from 0:30"]');
     await timestampButton.click();
 
-    // Video player should be visible
-    const player = page.locator('[data-slot="collapsible-video"]');
-    await expect(player).toBeVisible();
+    // YouTube iframe should appear
+    const youtubePlayer = page.locator('iframe[src*="youtube.com"]');
+    await expect(youtubePlayer).toBeVisible({ timeout: 5000 });
   });
 
   test("back button navigates to dashboard", async ({ authenticatedPage: page }) => {
@@ -240,9 +247,9 @@ test.describe("Video Playback - Accessibility", () => {
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/video/video-1");
-    await page.waitForSelector('[data-slot="section-card"]');
+    await page.waitForSelector('[data-slot="article-section"]');
 
-    const timestampButtons = page.locator('[data-slot="section-card"] button[aria-label*="Play from"]');
+    const timestampButtons = page.locator('[data-slot="article-section"] button[aria-label*="Play from"]');
     const count = await timestampButtons.count();
 
     for (let i = 0; i < count; i++) {

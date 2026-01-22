@@ -444,6 +444,27 @@ async def stream_summarization(
 
         yield sse_event("concepts_complete", {"concepts": concepts})
 
+        # ===== PHASE 5: Master Summary =====
+        yield sse_event("phase", {"phase": "master_summary"})
+
+        master_summary: str | None = None
+        try:
+            master_summary = await llm_service.generate_master_summary(
+                title=video_data.title,
+                channel=video_data.channel or "",
+                duration=duration,
+                persona=persona,
+                tldr=synthesis.get("tldr", ""),
+                key_takeaways=synthesis.get("keyTakeaways", []),
+                sections=sections,
+                concepts=concepts,
+            )
+            yield sse_event("master_summary_complete", {"masterSummary": master_summary})
+            logger.info(f"Master summary generated: {len(master_summary)} chars")
+        except Exception as e:
+            logger.error(f"Master summary generation failed: {e}")
+            # Non-fatal - continue without master summary
+
         # ===== SAVE RESULTS =====
         processing_time = int((time.time() - start_time) * 1000)
 
@@ -459,6 +480,7 @@ async def stream_summarization(
                 "key_takeaways": synthesis.get("keyTakeaways", []),
                 "sections": sections,
                 "concepts": concepts,
+                "master_summary": master_summary,
             },
             "processing_time_ms": processing_time,
             "token_usage": {},
@@ -578,6 +600,12 @@ async def stream_summary(
                 yield sse_event("section_ready", {"index": i, "section": section})
 
             yield sse_event("concepts_complete", {"concepts": summary.get("concepts", [])})
+
+            # Send master summary if available
+            master_summary = summary.get("master_summary")
+            if master_summary:
+                yield sse_event("master_summary_complete", {"masterSummary": master_summary})
+
             yield sse_event("done", {
                 "videoSummaryId": video_summary_id,
                 "cached": True,
