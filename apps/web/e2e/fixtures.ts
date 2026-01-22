@@ -1,5 +1,8 @@
 import { test as base, Page } from "@playwright/test";
 
+// Auth timeout configurable via environment variable (default 15s)
+const AUTH_TIMEOUT = parseInt(process.env.E2E_AUTH_TIMEOUT || "15000", 10);
+
 // Mock data for tests
 export const mockUser = {
   id: "user-123",
@@ -166,8 +169,22 @@ async function setupApiMocks(page: Page) {
   });
 }
 
-// Extended test fixture with authentication
-// Sets up API mocks and injects auth state for all tests.
+/**
+ * Extended test fixture with authentication.
+ * Sets up API mocks and injects auth state for all tests.
+ *
+ * SECURITY NOTE (Test Environment Only):
+ * --------------------------------------
+ * This fixture stores mock tokens in localStorage for e2e testing purposes.
+ * In production, tokens are stored in httpOnly cookies and managed by the
+ * auth service. The localStorage approach here is safe because:
+ * 1. These are mock tokens that don't grant any real access
+ * 2. The backend is completely mocked via route handlers
+ * 3. No real API calls are made during tests
+ *
+ * DO NOT copy this pattern for production code. See docs/SECURITY.md for
+ * the actual auth token storage implementation.
+ */
 export const test = base.extend<{ authenticatedPage: Page }>({
   authenticatedPage: async ({ page }, use) => {
     // Set up API mocks FIRST, before any navigation
@@ -183,6 +200,7 @@ export const test = base.extend<{ authenticatedPage: Page }>({
     });
 
     // Inject auth state and mock WebSocket BEFORE any page script runs
+    // SECURITY: Mock tokens for testing only - see note above
     await page.addInitScript(() => {
       // Zustand persist format for auth store (only accessToken and user are hydrated)
       const authState = {
@@ -241,7 +259,7 @@ export const test = base.extend<{ authenticatedPage: Page }>({
 
     // Wait for auth check to complete and dashboard to render
     // The sidebar (complementary) or main content should appear once authenticated
-    await page.waitForSelector('[role="complementary"], main', { timeout: 15000 });
+    await page.waitForSelector('[role="complementary"], main', { timeout: AUTH_TIMEOUT });
 
     // eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not React hook
     await use(page);
