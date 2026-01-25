@@ -37,7 +37,7 @@ from src.services.sponsorblock import (
     SponsorSegment,
 )
 from src.exceptions import TranscriptError
-import anthropic
+import litellm
 
 logger = logging.getLogger(__name__)
 
@@ -462,16 +462,16 @@ async def stream_summarization(
             )
             yield sse_event("master_summary_complete", {"masterSummary": master_summary})
             logger.debug(f"Master summary generated: {len(master_summary)} chars")
-        except anthropic.RateLimitError as e:
+        except litellm.exceptions.RateLimitError as e:
             logger.warning(f"Master summary skipped (rate limited): {e}")
             # Non-fatal - continue without master summary
-        except anthropic.AuthenticationError as e:
+        except litellm.exceptions.AuthenticationError as e:
             logger.error(f"Master summary failed (auth error): {e}")
             # Critical config issue but non-fatal for this request
-        except anthropic.APIConnectionError as e:
+        except litellm.exceptions.APIConnectionError as e:
             logger.warning(f"Master summary skipped (connection error): {e}")
             # Network issue - continue without master summary
-        except anthropic.APIError as e:
+        except litellm.exceptions.APIError as e:
             logger.error(f"Master summary failed (API error): {e}")
             # Other API errors - log and continue
         except TimeoutError:

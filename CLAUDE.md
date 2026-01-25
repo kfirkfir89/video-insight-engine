@@ -29,13 +29,13 @@ Personal video knowledge management system.
 
 ## Tech Stack
 
-| Service            | Technology                           | Port  |
-| ------------------ | ------------------------------------ | ----- |
-| **vie-api**        | Node.js + Fastify + TypeScript + AI  | 3000  |
-| **vie-web**        | React + Vite + TypeScript + AI SDK   | 5173  |
-| **vie-summarizer** | Python + FastAPI (SSE Streaming)     | 8000  |
-| **vie-explainer**  | Python + MCP SDK (SSE Streaming)     | 8001  |
-| **vie-mongodb**    | MongoDB 7                            | 27017 |
+| Service            | Technology                                   | Port  |
+| ------------------ | -------------------------------------------- | ----- |
+| **vie-api**        | Node.js + Fastify + TypeScript + AI          | 3000  |
+| **vie-web**        | React + Vite + TypeScript + AI SDK           | 5173  |
+| **vie-summarizer** | Python + FastAPI + LiteLLM (Multi-Provider)  | 8000  |
+| **vie-explainer**  | Python + FastAPI + LiteLLM (Multi-Provider)  | 8001  |
+| **vie-mongodb**    | MongoDB 7                                    | 27017 |
 
 ---
 

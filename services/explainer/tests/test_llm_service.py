@@ -1,7 +1,7 @@
-"""Tests for LLMService."""
+"""Tests for LLMService with LiteLLM multi-provider support."""
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, AsyncMock, patch
 
 from src.services.llm import LLMService, load_prompt
 
@@ -24,20 +24,21 @@ class TestLoadPrompt:
 
 
 class TestLLMService:
-    """Tests for LLMService class."""
+    """Tests for LLMService class with LLMProvider."""
 
-    def test_init(self, mock_anthropic_client):
-        """Test service initialization."""
-        service = LLMService(mock_anthropic_client)
-        assert service._client is mock_anthropic_client
+    def test_init(self, mock_llm_provider):
+        """Test service initialization with LLMProvider."""
+        service = LLMService(mock_llm_provider)
+        assert service._provider is mock_llm_provider
 
-    async def test_generate_expansion_success(self, mock_anthropic_client):
+    @pytest.mark.asyncio
+    async def test_generate_expansion_success(self, mock_llm_provider):
         """Test successful expansion generation."""
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="# Detailed Documentation\n\nContent here.")]
-        mock_anthropic_client.messages.create.return_value = mock_response
+        mock_llm_provider.complete = AsyncMock(
+            return_value="# Detailed Documentation\n\nContent here."
+        )
 
-        service = LLMService(mock_anthropic_client)
+        service = LLMService(mock_llm_provider)
 
         context = {
             "video_title": "Test Video",
@@ -53,15 +54,14 @@ class TestLLMService:
             result = await service.generate_expansion("explain_section", context)
 
         assert result == "# Detailed Documentation\n\nContent here."
-        mock_anthropic_client.messages.create.assert_called_once()
+        mock_llm_provider.complete.assert_called_once()
 
-    async def test_generate_expansion_formats_bullets(self, mock_anthropic_client):
+    @pytest.mark.asyncio
+    async def test_generate_expansion_formats_bullets(self, mock_llm_provider):
         """Test that bullets list is formatted correctly."""
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="Response")]
-        mock_anthropic_client.messages.create.return_value = mock_response
+        mock_llm_provider.complete = AsyncMock(return_value="Response")
 
-        service = LLMService(mock_anthropic_client)
+        service = LLMService(mock_llm_provider)
 
         context = {
             "bullets": ["First", "Second", "Third"],
@@ -71,15 +71,16 @@ class TestLLMService:
             await service.generate_expansion("explain_section", context)
 
         # Verify the call was made (bullets should have been formatted)
-        mock_anthropic_client.messages.create.assert_called_once()
+        mock_llm_provider.complete.assert_called_once()
 
-    async def test_chat_completion_success(self, mock_anthropic_client):
+    @pytest.mark.asyncio
+    async def test_chat_completion_success(self, mock_llm_provider):
         """Test successful chat completion."""
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="This is the assistant response.")]
-        mock_anthropic_client.messages.create.return_value = mock_response
+        mock_llm_provider.complete_with_messages = AsyncMock(
+            return_value="This is the assistant response."
+        )
 
-        service = LLMService(mock_anthropic_client)
+        service = LLMService(mock_llm_provider)
 
         messages = [
             {"role": "user", "content": "What is this video about?"},
@@ -89,19 +90,22 @@ class TestLLMService:
         result = await service.chat_completion(system_prompt, messages)
 
         assert result == "This is the assistant response."
-        mock_anthropic_client.messages.create.assert_called_once()
+        mock_llm_provider.complete_with_messages.assert_called_once()
 
-        # Verify system prompt was passed
-        call_kwargs = mock_anthropic_client.messages.create.call_args.kwargs
-        assert call_kwargs.get("system") == system_prompt
+        # Verify system message was prepended
+        call_args = mock_llm_provider.complete_with_messages.call_args
+        messages_arg = call_args[0][0]
+        assert messages_arg[0]["role"] == "system"
+        assert messages_arg[0]["content"] == system_prompt
 
-    async def test_chat_completion_with_history(self, mock_anthropic_client):
+    @pytest.mark.asyncio
+    async def test_chat_completion_with_history(self, mock_llm_provider):
         """Test chat completion with conversation history."""
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="Follow-up response.")]
-        mock_anthropic_client.messages.create.return_value = mock_response
+        mock_llm_provider.complete_with_messages = AsyncMock(
+            return_value="Follow-up response."
+        )
 
-        service = LLMService(mock_anthropic_client)
+        service = LLMService(mock_llm_provider)
 
         messages = [
             {"role": "user", "content": "First question"},
@@ -111,17 +115,28 @@ class TestLLMService:
 
         await service.chat_completion("System prompt", messages)
 
-        call_kwargs = mock_anthropic_client.messages.create.call_args.kwargs
-        assert len(call_kwargs["messages"]) == 3
+        call_args = mock_llm_provider.complete_with_messages.call_args
+        messages_arg = call_args[0][0]
+        # 1 system message + 3 conversation messages
+        assert len(messages_arg) == 4
 
-    def test_create_message_sync(self, mock_anthropic_client):
-        """Test synchronous message creation."""
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="Sync response")]
-        mock_anthropic_client.messages.create.return_value = mock_response
+    @pytest.mark.asyncio
+    async def test_chat_completion_stream(self, mock_llm_provider):
+        """Test streaming chat completion."""
+        # Create async generator mock
+        async def mock_stream(*args, **kwargs):
+            yield "Hello "
+            yield "world"
 
-        service = LLMService(mock_anthropic_client)
-        result = service._create_message_sync("Test prompt", max_tokens=1000)
+        mock_llm_provider.stream_with_messages = mock_stream
 
-        assert result == "Sync response"
-        mock_anthropic_client.messages.create.assert_called_once()
+        service = LLMService(mock_llm_provider)
+
+        messages = [{"role": "user", "content": "Hi"}]
+        system_prompt = "You are helpful."
+
+        tokens = []
+        async for token in service.chat_completion_stream(system_prompt, messages):
+            tokens.append(token)
+
+        assert tokens == ["Hello ", "world"]

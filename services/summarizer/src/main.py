@@ -29,7 +29,7 @@ async def health():
     return {
         "status": "healthy",
         "service": "vie-summarizer",
-        "model": settings.ANTHROPIC_MODEL,
+        "model": settings.llm_model,
     }
 
 
