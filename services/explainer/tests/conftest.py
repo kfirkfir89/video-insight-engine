@@ -1,23 +1,35 @@
 """Pytest fixtures for explainer tests."""
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 from bson import ObjectId
-
-import anthropic
 
 
 @pytest.fixture
-def mock_anthropic_client():
-    """Mock Anthropic client."""
-    client = MagicMock(spec=anthropic.Anthropic)
+def mock_llm_provider():
+    """Mock LLMProvider for testing."""
+    from src.services.llm_provider import LLMProvider
 
-    # Mock messages.create to return a proper response
-    mock_response = MagicMock()
-    mock_response.content = [MagicMock(text="Generated content from LLM")]
-    client.messages.create.return_value = mock_response
+    provider = MagicMock(spec=LLMProvider)
+    provider.model = "anthropic/claude-sonnet-4-20250514"
 
-    return client
+    # Default mock for complete() - can be overridden per test
+    provider.complete = AsyncMock(return_value="Generated content from LLM")
+    provider.complete_with_messages = AsyncMock(return_value="Generated content from LLM")
+
+    # Default mock for stream() - can be overridden per test
+    async def mock_stream(*args, **kwargs):
+        yield "Hello "
+        yield "world"
+
+    async def mock_stream_with_messages(*args, **kwargs):
+        yield "Hello "
+        yield "world"
+
+    provider.stream = mock_stream
+    provider.stream_with_messages = mock_stream_with_messages
+
+    return provider
 
 
 @pytest.fixture

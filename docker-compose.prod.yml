@@ -69,8 +69,18 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       MONGODB_URI: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASS}@vie-mongodb:27017/video-insight-engine?authSource=admin
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
+      # Multi-provider LLM config
+      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+      LLM_FAST_PROVIDER: ${LLM_FAST_PROVIDER:-}
+      LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-4096}
+      LLM_FAST_MAX_TOKENS: ${LLM_FAST_MAX_TOKENS:-2048}
+      # Provider API keys
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       LOG_LEVEL: info
     networks:
       - vie-network
@@ -92,8 +102,18 @@ services:
       PYTHONUNBUFFERED: 1
       PORT: 8001
       MONGODB_URI: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASS}@vie-mongodb:27017/video-insight-engine?authSource=admin
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
+      # Multi-provider LLM config
+      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+      LLM_FAST_PROVIDER: ${LLM_FAST_PROVIDER:-}
+      LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-4096}
+      LLM_FAST_MAX_TOKENS: ${LLM_FAST_MAX_TOKENS:-2048}
+      # Provider API keys
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       LOG_LEVEL: info
     networks:
       - vie-network

@@ -1,17 +1,18 @@
-"""LLM service for video summarization."""
+"""LLM service for video summarization.
+
+Uses LiteLLM via LLMProvider for multi-provider support (Anthropic, OpenAI, Gemini).
+"""
 
 import asyncio
 import json
 import logging
-import queue
 import uuid
 from functools import lru_cache
 from pathlib import Path
 from typing import AsyncGenerator, Callable, Literal
 
-import anthropic
-
 from src.config import settings
+from src.services.llm_provider import LLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -205,33 +206,37 @@ def _extract_bullets_from_content(content: list) -> list[str]:
 class LLMService:
     """Service for LLM-based video processing.
 
-    Accepts an Anthropic client via dependency injection for testability.
-    All API calls are made async using asyncio.to_thread().
+    Uses LLMProvider for multi-provider support (Anthropic, OpenAI, Gemini).
+    All API calls are native async via LiteLLM's acompletion().
     """
 
-    def __init__(self, client: anthropic.Anthropic):
-        self._client = client
-        self._model = settings.ANTHROPIC_MODEL
+    def __init__(self, provider: LLMProvider):
+        """Initialize LLM service.
 
-    def _call_llm_sync(self, prompt: str, max_tokens: int = 2000) -> str:
-        """Make a synchronous LLM call (internal)."""
-        response = self._client.messages.create(
-            model=self._model,
-            max_tokens=max_tokens,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return response.content[0].text
+        Args:
+            provider: LLMProvider instance for making LLM calls
+        """
+        self._provider = provider
 
     async def _call_llm(self, prompt: str, max_tokens: int = 2000) -> str:
-        """Make an async LLM call using thread pool.
+        """Make an async LLM call.
+
+        Args:
+            prompt: The prompt to send
+            max_tokens: Maximum tokens in response
+
+        Returns:
+            Generated text content
 
         Raises:
             TimeoutError: If LLM call exceeds configured timeout
         """
         async with asyncio.timeout(settings.LLM_TIMEOUT_SECONDS):
-            return await asyncio.to_thread(self._call_llm_sync, prompt, max_tokens)
+            return await self._provider.complete(prompt, max_tokens=max_tokens)
 
-    async def stream_llm(self, prompt: str, max_tokens: int = 2000):
+    async def stream_llm(
+        self, prompt: str, max_tokens: int = 2000
+    ) -> AsyncGenerator[str, None]:
         """Stream LLM response tokens.
 
         Args:
@@ -241,45 +246,15 @@ class LLMService:
         Yields:
             String tokens as they are generated
         """
-        import threading
-
-        kwargs = {
-            "model": self._model,
-            "max_tokens": max_tokens,
-            "messages": [{"role": "user", "content": prompt}],
-        }
-
-        q: queue.Queue[str | None] = queue.Queue()
-
-        def producer():
-            try:
-                with self._client.messages.stream(**kwargs) as stream:
-                    for text in stream.text_stream:
-                        q.put(text)
-            except anthropic.APIError as e:
-                logger.error(f"Anthropic API error during streaming: {e}")
-            finally:
-                q.put(None)
-
-        thread = threading.Thread(target=producer, daemon=True)
-        thread.start()
-
-        token_timeout = settings.LLM_TIMEOUT_SECONDS
-        while True:
-            try:
-                item = await asyncio.to_thread(q.get, timeout=token_timeout)
-                if item is None:
-                    break
-                yield item
-            except (TimeoutError, asyncio.TimeoutError, queue.Empty):
-                # Timeout waiting for next token - stream is done or stalled
-                logger.warning(
-                    f"Stream token timeout after {token_timeout}s - stream may be stalled"
-                )
-                break
-            except asyncio.CancelledError:
-                # Task was cancelled - clean exit
-                break
+        try:
+            async for token in self._provider.stream(prompt, max_tokens=max_tokens):
+                yield token
+        except asyncio.CancelledError:
+            # Task was cancelled - clean exit
+            pass
+        except Exception as e:
+            logger.error(f"Error during streaming: {e}")
+            raise
 
     async def detect_sections(self, transcript: str, segments: list[dict], duration: int | None = None) -> list[dict]:
         """Detect logical sections in transcript."""

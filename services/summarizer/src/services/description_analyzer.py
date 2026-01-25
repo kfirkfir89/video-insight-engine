@@ -8,13 +8,13 @@ This module extracts structured data from YouTube video descriptions:
 - Social links (creator's profiles)
 """
 
-import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import anthropic
+from litellm import acompletion
+import litellm
 
 from src.config import settings
 
@@ -110,8 +110,8 @@ def _parse_json_response(text: str) -> dict:
     return {}
 
 
-def _analyze_description_sync(description: str, client: anthropic.Anthropic) -> DescriptionAnalysis:
-    """Analyze description synchronously using Haiku."""
+async def _analyze_description_async(description: str) -> DescriptionAnalysis:
+    """Analyze description asynchronously using LiteLLM (fast model)."""
     if not description or len(description.strip()) < 20:
         logger.debug("Description too short for analysis")
         return DescriptionAnalysis()
@@ -125,13 +125,14 @@ def _analyze_description_sync(description: str, client: anthropic.Anthropic) -> 
         prompt_template = load_prompt("description_analysis")
         prompt = prompt_template.format(description=description)
 
-        response = client.messages.create(
-            model=settings.ANTHROPIC_HAIKU_MODEL,
+        # Use the fast model for quick extraction
+        response = await acompletion(
+            model=settings.llm_fast_model,
             max_tokens=1500,
             messages=[{"role": "user", "content": prompt}]
         )
 
-        result_text = response.content[0].text
+        result_text = response.choices[0].message.content
         data = _parse_json_response(result_text)
 
         # Parse into dataclasses
@@ -171,27 +172,23 @@ def _analyze_description_sync(description: str, client: anthropic.Anthropic) -> 
 
         return analysis
 
-    except anthropic.APIError as e:
-        logger.error(f"Anthropic API error during description analysis: {e}")
+    except litellm.exceptions.APIError as e:
+        logger.error(f"LLM API error during description analysis: {e}")
         return DescriptionAnalysis()
     except Exception as e:
         logger.error(f"Error analyzing description: {e}")
         return DescriptionAnalysis()
 
 
-async def analyze_description(
-    description: str,
-    client: anthropic.Anthropic | None = None
-) -> DescriptionAnalysis:
+async def analyze_description(description: str) -> DescriptionAnalysis:
     """
-    Analyze a video description to extract structured data using Claude Haiku.
+    Analyze a video description to extract structured data using LiteLLM.
 
     This is a fast extraction (~1-2 seconds) that runs in parallel with other
     summarization tasks.
 
     Args:
         description: The full video description text
-        client: Optional Anthropic client (creates one if not provided)
 
     Returns:
         DescriptionAnalysis with extracted links, resources, timestamps, etc.
@@ -201,7 +198,4 @@ async def analyze_description(
         if analysis.has_content:
             print(f"Found {len(analysis.links)} links")
     """
-    if client is None:
-        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-
-    return await asyncio.to_thread(_analyze_description_sync, description, client)
+    return await _analyze_description_async(description)

@@ -13,7 +13,7 @@ Python service that processes YouTube videos into structured summaries.
 | Python 3.11+ | Runtime |
 | FastAPI | Web framework + background tasks |
 | youtube-transcript-api | Fetch transcripts |
-| anthropic | Claude API |
+| LiteLLM | Multi-provider LLM abstraction (Anthropic, OpenAI, Gemini) |
 | pymongo | MongoDB driver |
 | Pydantic | Validation |
 
@@ -29,13 +29,16 @@ services/summarizer/
 └── src/
     ├── __init__.py
     ├── main.py                   # FastAPI app + routes
-    ├── config.py                 # Settings
+    ├── config.py                 # Settings + model mapping
+    ├── dependencies.py           # DI for LLMProvider
     │
     ├── services/
     │   ├── transcript.py         # YouTube transcript fetching
     │   ├── metadata.py           # Video metadata (oEmbed)
     │   ├── cleaner.py            # Text normalization
-    │   ├── summarizer.py         # LLM orchestration
+    │   ├── llm.py                # LLM service (prompts + orchestration)
+    │   ├── llm_provider.py       # LiteLLM abstraction layer
+    │   ├── usage_tracker.py      # LLM usage tracking
     │   └── mongodb.py            # Database operations
     │
     ├── prompts/
@@ -53,9 +56,23 @@ services/summarizer/
 ## Environment Variables
 
 ```bash
+# Database
 MONGODB_URI=mongodb://vie-mongodb:27017/video-insight-engine
+
+# LLM Provider Configuration
+LLM_PROVIDER=anthropic          # anthropic, openai, or gemini
+LLM_FAST_PROVIDER=              # Optional: separate provider for fast model
+LLM_FALLBACK_PROVIDER=          # Optional: fallback if primary fails
+LLM_MODEL=                      # Optional: override default model
+LLM_FAST_MODEL=                 # Optional: override fast model
+LLM_MAX_TOKENS=4096
+LLM_FAST_MAX_TOKENS=2048
+
+# Provider API Keys (set for providers you use)
 ANTHROPIC_API_KEY=sk-ant-...
-ANTHROPIC_MODEL=claude-sonnet-4-20250514
+OPENAI_API_KEY=                 # Required if using OpenAI
+GOOGLE_API_KEY=                 # Required if using Gemini
+
 LOG_LEVEL=debug
 ```
 
@@ -254,131 +271,76 @@ def get_transcript(video_id: str) -> tuple[list[dict], str]:
         raise TranscriptError(f"Failed to fetch transcript: {str(e)}")
 ```
 
-### LLM Summarization
+### LLM Summarization (LiteLLM Multi-Provider)
 
 ```python
-# src/services/summarizer.py
+# src/services/llm_provider.py
+from litellm import acompletion
+from src.config import settings
 
-import anthropic
-from config import settings
+class LLMProvider:
+    """Multi-provider LLM abstraction using LiteLLM."""
 
-client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    def __init__(self, model: str | None = None, fallback_models: list[str] | None = None):
+        self._model = model or settings.llm_model
+        self._fallback_models = fallback_models or settings.llm_fallback_models
 
-def detect_sections(transcript: str, segments: list[dict]) -> list[dict]:
-    """Detect logical sections in transcript."""
+    async def complete(self, prompt: str, max_tokens: int = 2000) -> str:
+        """Generate completion from prompt."""
+        kwargs = {
+            "model": self._model,  # e.g., "anthropic/claude-sonnet-4-20250514"
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+        }
+        if self._fallback_models:
+            kwargs["fallbacks"] = self._fallback_models
 
-    prompt = f"""Analyze this video transcript and identify logical sections.
+        response = await acompletion(**kwargs)
+        return response.choices[0].message.content or ""
 
-TRANSCRIPT:
-{transcript[:15000]}  # Truncate for token limits
+    async def stream(self, prompt: str, max_tokens: int = 2000):
+        """Stream completion tokens."""
+        kwargs = {
+            "model": self._model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+        response = await acompletion(**kwargs)
+        async for chunk in response:
+            if chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
 
-Return JSON only:
-{{
-  "sections": [
-    {{
-      "title": "Section title",
-      "startSeconds": 0,
-      "endSeconds": 180
-    }}
-  ]
-}}
 
-Rules:
-- Identify 3-8 sections
-- Each section = coherent topic
-- Use actual timestamps from content
-- Sections must be sequential"""
+# src/services/llm.py
+class LLMService:
+    """LLM service for video summarization."""
 
-    response = client.messages.create(
-        model=settings.ANTHROPIC_MODEL,
-        max_tokens=2000,
-        messages=[{"role": "user", "content": prompt}]
-    )
+    def __init__(self, provider: LLMProvider):
+        self._provider = provider
 
-    return parse_json_response(response.content[0].text)['sections']
+    async def detect_sections(self, transcript: str, segments: list) -> list[dict]:
+        """Detect logical sections using configured LLM provider."""
+        prompt = load_prompt("section_detect").format(transcript=transcript[:15000])
+        response = await self._provider.complete(prompt, max_tokens=2000)
+        return parse_json_response(response)['sections']
 
-def summarize_section(section_text: str, title: str) -> dict:
-    """Generate summary and bullets for a section."""
+    async def summarize_section(self, section_text: str, title: str) -> dict:
+        """Generate summary and bullets for a section."""
+        prompt = load_prompt("section_summary").format(
+            title=title, section_text=section_text
+        )
+        response = await self._provider.complete(prompt, max_tokens=1000)
+        return parse_json_response(response)
+```
 
-    prompt = f"""Summarize this video section.
-
-SECTION: {title}
-CONTENT:
-{section_text}
-
-Return JSON only:
-{{
-  "summary": "2-3 sentence summary",
-  "bullets": ["key point 1", "key point 2", "key point 3"]
-}}"""
-
-    response = client.messages.create(
-        model=settings.ANTHROPIC_MODEL,
-        max_tokens=1000,
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    return parse_json_response(response.content[0].text)
-
-def extract_concepts(transcript: str) -> list[dict]:
-    """Extract key concepts/terms from transcript."""
-
-    prompt = f"""Extract key concepts, terms, and definitions from this transcript.
-
-TRANSCRIPT:
-{transcript[:15000]}
-
-Return JSON only:
-{{
-  "concepts": [
-    {{
-      "name": "Concept name",
-      "definition": "Brief definition from video",
-      "timestamp": "MM:SS or null"
-    }}
-  ]
-}}
-
-Focus on:
-- Technical terms
-- Important concepts
-- Named frameworks/tools"""
-
-    response = client.messages.create(
-        model=settings.ANTHROPIC_MODEL,
-        max_tokens=2000,
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    return parse_json_response(response.content[0].text)['concepts']
-
-def synthesize_summary(sections: list[dict], concepts: list[dict]) -> dict:
-    """Generate TLDR and key takeaways."""
-
-    sections_text = "\n".join([
-        f"- {s['title']}: {s['summary']}" for s in sections
-    ])
-
-    prompt = f"""Create a high-level summary of this video.
-
-SECTIONS:
-{sections_text}
-
-CONCEPTS: {', '.join([c['name'] for c in concepts])}
-
-Return JSON only:
-{{
-  "tldr": "1-2 sentence overview of entire video",
-  "keyTakeaways": ["takeaway 1", "takeaway 2", "takeaway 3"]
-}}"""
-
-    response = client.messages.create(
-        model=settings.ANTHROPIC_MODEL,
-        max_tokens=1000,
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    return parse_json_response(response.content[0].text)
+**Model mapping (config.py):**
+```python
+MODEL_MAP = {
+    "anthropic": {"default": "anthropic/claude-sonnet-4-20250514", "fast": "anthropic/claude-3-5-haiku-20241022"},
+    "openai": {"default": "openai/gpt-4o", "fast": "openai/gpt-4o-mini"},
+    "gemini": {"default": "gemini/gemini-3-flash-preview", "fast": "gemini/gemini-2.5-flash-lite"},
+}
 ```
 
 ---

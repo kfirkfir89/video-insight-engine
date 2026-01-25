@@ -3,20 +3,27 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import anthropic
-
 
 @pytest.fixture
-def mock_anthropic_client():
-    """Mock Anthropic client."""
-    client = MagicMock(spec=anthropic.Anthropic)
+def mock_llm_provider():
+    """Mock LLMProvider for testing."""
+    from src.services.llm_provider import LLMProvider
 
-    # Mock messages.create to return a proper response
-    mock_response = MagicMock()
-    mock_response.content = [MagicMock(text='{"sections": [{"title": "Test", "startSeconds": 0, "endSeconds": 60}]}')]
-    client.messages.create.return_value = mock_response
+    provider = MagicMock(spec=LLMProvider)
+    provider.model = "anthropic/claude-sonnet-4-20250514"
 
-    return client
+    # Default mock for complete() - can be overridden per test
+    provider.complete = AsyncMock(
+        return_value='{"sections": [{"title": "Test", "startSeconds": 0, "endSeconds": 60}]}'
+    )
+
+    # Default mock for stream() - can be overridden per test
+    async def mock_stream(*args, **kwargs):
+        yield '{"sections": [{"title": "Test", "startSeconds": 0, "endSeconds": 60}]}'
+
+    provider.stream = mock_stream
+
+    return provider
 
 
 @pytest.fixture
@@ -53,8 +60,8 @@ def sample_llm_sections_response():
 
 @pytest.fixture
 def sample_llm_summary_response():
-    """Sample LLM response for section summary."""
-    return '{"summary": "This section covers the basics of testing.", "bullets": ["Write tests first", "Keep tests simple"]}'
+    """Sample LLM response for section summary with content blocks."""
+    return '{"content": [{"type": "paragraph", "text": "This section covers the basics of testing."}, {"type": "bullets", "items": ["Write tests first", "Keep tests simple"]}]}'
 
 
 @pytest.fixture

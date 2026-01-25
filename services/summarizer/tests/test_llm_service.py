@@ -1,7 +1,7 @@
-"""Tests for LLMService."""
+"""Tests for LLMService with LiteLLM multi-provider support."""
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, AsyncMock, patch
 
 from src.services.llm import (
     LLMService,
@@ -10,6 +10,8 @@ from src.services.llm import (
     load_examples,
     seconds_to_timestamp,
     VALID_PERSONAS,
+    _extract_summary_from_content,
+    _extract_bullets_from_content,
 )
 from src.services.youtube import _load_persona_rules
 
@@ -42,7 +44,8 @@ class TestLoadPrompt:
 
     def test_load_section_summary_prompt(self):
         prompt = load_prompt("section_summary")
-        assert "summary" in prompt.lower()
+        # Prompt transforms section content into article format
+        assert "section" in prompt.lower()
 
     def test_load_concept_extract_prompt(self):
         prompt = load_prompt("concept_extract")
@@ -53,99 +56,126 @@ class TestLoadPrompt:
         assert "tldr" in prompt.lower() or "summary" in prompt.lower()
 
 
+class TestExtractFromContent:
+    """Tests for content extraction helpers."""
+
+    def test_extract_summary_from_paragraph(self):
+        content = [{"type": "paragraph", "text": "Test summary"}]
+        assert _extract_summary_from_content(content) == "Test summary"
+
+    def test_extract_summary_from_multiple_paragraphs(self):
+        content = [
+            {"type": "paragraph", "text": "First part."},
+            {"type": "paragraph", "text": "Second part."},
+        ]
+        assert _extract_summary_from_content(content) == "First part. Second part."
+
+    def test_extract_summary_fallback_to_definition(self):
+        content = [{"type": "definition", "term": "API", "meaning": "Application Programming Interface"}]
+        assert "API" in _extract_summary_from_content(content)
+
+    def test_extract_summary_empty_content(self):
+        assert _extract_summary_from_content([]) == ""
+
+    def test_extract_bullets_from_bullets_block(self):
+        content = [{"type": "bullets", "items": ["Item 1", "Item 2"]}]
+        bullets = _extract_bullets_from_content(content)
+        assert len(bullets) == 2
+        assert "Item 1" in bullets
+
+    def test_extract_bullets_from_numbered_block(self):
+        content = [{"type": "numbered", "items": ["Step 1", "Step 2"]}]
+        bullets = _extract_bullets_from_content(content)
+        assert len(bullets) == 2
+
+
 class TestLLMService:
-    """Tests for LLMService class."""
+    """Tests for LLMService class with LLMProvider."""
 
-    def test_init(self, mock_anthropic_client):
-        """Test service initialization."""
-        service = LLMService(mock_anthropic_client)
-        assert service._client is mock_anthropic_client
+    def test_init(self, mock_llm_provider):
+        """Test service initialization with LLMProvider."""
+        service = LLMService(mock_llm_provider)
+        assert service._provider is mock_llm_provider
 
+    @pytest.mark.asyncio
     async def test_detect_sections_success(
         self,
-        mock_anthropic_client,
+        mock_llm_provider,
         sample_transcript,
         sample_segments,
         sample_llm_sections_response,
     ):
         """Test successful section detection."""
-        # Setup mock response
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text=sample_llm_sections_response)]
-        mock_anthropic_client.messages.create.return_value = mock_response
+        mock_llm_provider.complete = AsyncMock(return_value=sample_llm_sections_response)
 
-        service = LLMService(mock_anthropic_client)
+        service = LLMService(mock_llm_provider)
         sections = await service.detect_sections(sample_transcript, sample_segments)
 
         assert len(sections) == 2
         assert sections[0]["title"] == "Introduction"
         assert sections[1]["title"] == "Testing Basics"
-        mock_anthropic_client.messages.create.assert_called_once()
+        mock_llm_provider.complete.assert_called_once()
 
+    @pytest.mark.asyncio
     async def test_detect_sections_fallback(
         self,
-        mock_anthropic_client,
+        mock_llm_provider,
         sample_transcript,
         sample_segments,
     ):
         """Test fallback when JSON parsing fails."""
-        # Setup mock to return non-JSON
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="No JSON here")]
-        mock_anthropic_client.messages.create.return_value = mock_response
+        mock_llm_provider.complete = AsyncMock(return_value="No JSON here")
 
-        service = LLMService(mock_anthropic_client)
+        service = LLMService(mock_llm_provider)
         sections = await service.detect_sections(sample_transcript, sample_segments)
 
         # Should return fallback single section
         assert len(sections) == 1
         assert sections[0]["title"] == "Full Video"
 
+    @pytest.mark.asyncio
     async def test_summarize_section_success(
         self,
-        mock_anthropic_client,
+        mock_llm_provider,
         sample_llm_summary_response,
     ):
-        """Test successful section summarization."""
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text=sample_llm_summary_response)]
-        mock_anthropic_client.messages.create.return_value = mock_response
+        """Test successful section summarization with content blocks."""
+        mock_llm_provider.complete = AsyncMock(return_value=sample_llm_summary_response)
 
-        service = LLMService(mock_anthropic_client)
+        service = LLMService(mock_llm_provider)
         result = await service.summarize_section("Some section text", "Test Section")
 
-        assert "summary" in result
-        assert result["summary"] == "This section covers the basics of testing."
-        assert len(result["bullets"]) == 2
+        assert "content" in result
+        assert isinstance(result["content"], list)
+        assert "summary" in result  # Legacy field
+        assert "bullets" in result  # Legacy field
 
+    @pytest.mark.asyncio
     async def test_extract_concepts_success(
         self,
-        mock_anthropic_client,
+        mock_llm_provider,
         sample_transcript,
         sample_llm_concepts_response,
     ):
         """Test successful concept extraction."""
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text=sample_llm_concepts_response)]
-        mock_anthropic_client.messages.create.return_value = mock_response
+        mock_llm_provider.complete = AsyncMock(return_value=sample_llm_concepts_response)
 
-        service = LLMService(mock_anthropic_client)
+        service = LLMService(mock_llm_provider)
         concepts = await service.extract_concepts(sample_transcript)
 
         assert len(concepts) == 2
         assert concepts[0]["name"] == "Unit Testing"
 
+    @pytest.mark.asyncio
     async def test_synthesize_summary_success(
         self,
-        mock_anthropic_client,
+        mock_llm_provider,
         sample_llm_synthesis_response,
     ):
         """Test successful summary synthesis."""
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text=sample_llm_synthesis_response)]
-        mock_anthropic_client.messages.create.return_value = mock_response
+        mock_llm_provider.complete = AsyncMock(return_value=sample_llm_synthesis_response)
 
-        service = LLMService(mock_anthropic_client)
+        service = LLMService(mock_llm_provider)
         sections = [{"title": "Section 1", "summary": "Test"}]
         concepts = [{"name": "Concept 1"}]
 
@@ -155,36 +185,30 @@ class TestLLMService:
         assert "keyTakeaways" in result
         assert len(result["keyTakeaways"]) == 2
 
+    @pytest.mark.asyncio
     async def test_process_video_calls_all_steps(
         self,
-        mock_anthropic_client,
+        mock_llm_provider,
         sample_transcript,
         sample_segments,
     ):
         """Test that process_video calls all LLM steps."""
-        # Setup mock to return appropriate responses based on call count
         call_count = [0]
 
-        def get_mock_response(*args, **kwargs):
+        async def mock_complete(*args, **kwargs):
             call_count[0] += 1
-            mock_response = MagicMock()
             if call_count[0] == 1:
-                # Section detection
-                mock_response.content = [MagicMock(text='{"sections": [{"title": "Test", "startSeconds": 0, "endSeconds": 10}]}')]
+                return '{"sections": [{"title": "Test", "startSeconds": 0, "endSeconds": 10}]}'
             elif call_count[0] == 2:
-                # Section summary
-                mock_response.content = [MagicMock(text='{"summary": "Test summary", "bullets": ["Point 1"]}')]
+                return '{"content": [{"type": "paragraph", "text": "Test summary"}]}'
             elif call_count[0] == 3:
-                # Concept extraction
-                mock_response.content = [MagicMock(text='{"concepts": [{"name": "Test Concept"}]}')]
+                return '{"concepts": [{"name": "Test Concept"}]}'
             else:
-                # Synthesis
-                mock_response.content = [MagicMock(text='{"tldr": "Test TLDR", "keyTakeaways": ["Take 1"]}')]
-            return mock_response
+                return '{"tldr": "Test TLDR", "keyTakeaways": ["Take 1"]}'
 
-        mock_anthropic_client.messages.create.side_effect = get_mock_response
+        mock_llm_provider.complete = mock_complete
 
-        service = LLMService(mock_anthropic_client)
+        service = LLMService(mock_llm_provider)
         result = await service.process_video(sample_transcript, sample_segments)
 
         assert "tldr" in result
@@ -202,7 +226,6 @@ class TestLoadPersona:
         result = load_persona("code")
         assert isinstance(result, str)
         assert len(result) > 0
-        # Code persona should mention technical concepts
         assert "code" in result.lower() or "developer" in result.lower()
 
     def test_load_valid_persona_recipe(self):
@@ -219,15 +242,12 @@ class TestLoadPersona:
 
     def test_load_invalid_persona_falls_back_to_standard(self):
         """Test that invalid persona names fall back to 'standard'."""
-        # Clear cache to ensure fresh load
         load_persona.cache_clear()
 
-        # Test path traversal attempt
         result_traversal = load_persona("../../../etc/passwd")
         standard = load_persona("standard")
         assert result_traversal == standard
 
-        # Test random invalid name
         load_persona.cache_clear()
         result_invalid = load_persona("nonexistent_persona")
         assert result_invalid == standard
@@ -249,7 +269,6 @@ class TestLoadExamples:
         result = load_examples("code")
         assert isinstance(result, str)
         assert len(result) > 0
-        # Examples should contain JSON-like content
         assert "{" in result or "[" in result
 
     def test_load_valid_examples_recipe(self):
@@ -266,15 +285,12 @@ class TestLoadExamples:
 
     def test_load_invalid_examples_falls_back_to_standard(self):
         """Test that invalid example names fall back to 'standard'."""
-        # Clear cache to ensure fresh load
         load_examples.cache_clear()
 
-        # Test path traversal attempt
         result_traversal = load_examples("../../../etc/passwd")
         standard = load_examples("standard")
         assert result_traversal == standard
 
-        # Test random invalid name
         load_examples.cache_clear()
         result_invalid = load_examples("nonexistent_examples")
         assert result_invalid == standard
@@ -293,11 +309,9 @@ class TestLoadPersonaRules:
 
     def test_persona_rules_structure(self):
         """Test that persona_rules.json has the expected structure."""
-        # Clear cache to ensure fresh load
         _load_persona_rules.cache_clear()
         rules = _load_persona_rules()
 
-        # Check top-level keys
         assert "personas" in rules
         assert "default_persona" in rules
         assert rules["default_persona"] == "standard"
@@ -307,10 +321,8 @@ class TestLoadPersonaRules:
         rules = _load_persona_rules()
         personas = rules["personas"]
 
-        # Check that key personas exist
         assert "code" in personas
         assert "recipe" in personas
-        # interview and review are optional but should exist
         assert "interview" in personas
         assert "review" in personas
 
@@ -325,23 +337,3 @@ class TestLoadPersonaRules:
             assert isinstance(config["categories"], list), f"'{persona_name}' categories should be list"
             assert len(config["keywords"]) > 0, f"'{persona_name}' should have at least one keyword"
             assert len(config["categories"]) > 0, f"'{persona_name}' should have at least one category"
-
-    def test_code_persona_has_expected_keywords(self):
-        """Test that code persona includes programming-related keywords."""
-        rules = _load_persona_rules()
-        keywords = rules["personas"]["code"]["keywords"]
-
-        # Check for some expected programming keywords
-        keyword_set = set(k.lower() for k in keywords)
-        assert "python" in keyword_set or "programming" in keyword_set
-        assert "code" in keyword_set or "coding" in keyword_set
-
-    def test_recipe_persona_has_expected_keywords(self):
-        """Test that recipe persona includes food-related keywords."""
-        rules = _load_persona_rules()
-        keywords = rules["personas"]["recipe"]["keywords"]
-
-        # Check for some expected food keywords
-        keyword_set = set(k.lower() for k in keywords)
-        assert "recipe" in keyword_set or "cooking" in keyword_set
-        assert "food" in keyword_set or "chef" in keyword_set

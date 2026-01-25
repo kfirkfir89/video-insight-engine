@@ -85,7 +85,7 @@ async def explain_auto(
         target_id=target_id,
         context=context,
         content=content,
-        model=settings.ANTHROPIC_MODEL,
+        model=settings.llm_model,
     )
 
     return content

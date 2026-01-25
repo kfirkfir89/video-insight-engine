@@ -82,8 +82,8 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
+      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
     networks:
       - vie-network
     depends_on:
@@ -101,8 +101,8 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
+      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
     networks:
       - vie-network
     depends_on:
@@ -146,10 +146,16 @@ volumes:
 # Copy to .env and fill in values
 
 # ────────────────────────────────────────────────────
-# Anthropic Claude API (REQUIRED)
+# LLM Provider Configuration
 # ────────────────────────────────────────────────────
+LLM_PROVIDER=anthropic          # anthropic, openai, or gemini
+LLM_FAST_PROVIDER=              # Optional: separate provider for fast model
+LLM_FALLBACK_PROVIDER=          # Optional: fallback if primary fails
+
+# Provider API Keys (set for providers you use)
 ANTHROPIC_API_KEY=sk-ant-api03-xxxxxxxxxxxxx
-ANTHROPIC_MODEL=claude-sonnet-4-20250514
+OPENAI_API_KEY=                 # Required if using OpenAI
+GOOGLE_API_KEY=                 # Required if using Gemini
 
 # ────────────────────────────────────────────────────
 # JWT Authentication

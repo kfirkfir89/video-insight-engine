@@ -1,46 +1,25 @@
 # AI Integration (Python)
 
-Core patterns for calling LLMs - SDK setup, streaming, tools, and production essentials.
+Core patterns for calling LLMs - unified API with LiteLLM, streaming, tools, and production essentials.
 
 ---
 
-## SDK Setup
+## LiteLLM Setup (Recommended)
+
+LiteLLM provides a unified OpenAI-compatible API for 100+ providers with built-in fallbacks, retries, and cost tracking.
 
 ### DO ✅
 
 ```python
-# lib/ai/clients.py
-from openai import AsyncOpenAI
-from anthropic import AsyncAnthropic
+# lib/ai/provider.py
+from litellm import acompletion, completion_cost
+from litellm.exceptions import (
+    RateLimitError,
+    AuthenticationError,
+    APIError,
+    Timeout,
+)
 from app.core.config import settings
-
-_openai_client: AsyncOpenAI | None = None
-_anthropic_client: AsyncAnthropic | None = None
-
-
-def get_openai() -> AsyncOpenAI:
-    """Get singleton OpenAI client."""
-    global _openai_client
-    if _openai_client is None:
-        _openai_client = AsyncOpenAI(
-            api_key=settings.OPENAI_API_KEY,
-            timeout=30.0,
-            max_retries=2,
-        )
-    return _openai_client
-
-
-def get_anthropic() -> AsyncAnthropic:
-    """Get singleton Anthropic client."""
-    global _anthropic_client
-    if _anthropic_client is None:
-        _anthropic_client = AsyncAnthropic(
-            api_key=settings.ANTHROPIC_API_KEY,
-        )
-    return _anthropic_client
-
-
-# Types
 from pydantic import BaseModel
 from typing import Literal
 
@@ -51,22 +30,50 @@ class Message(BaseModel):
 
 
 class CompletionOptions(BaseModel):
-    model: str = "gpt-4o"
+    model: str = "anthropic/claude-sonnet-4-20250514"  # provider/model format
     max_tokens: int = 1000
     temperature: float = 0.7
-    system_prompt: str = "You are a helpful assistant."
+
+
+# Model name format: provider/model-name
+MODEL_MAP = {
+    "anthropic": {
+        "default": "anthropic/claude-sonnet-4-20250514",
+        "fast": "anthropic/claude-3-5-haiku-20241022",
+    },
+    "openai": {
+        "default": "openai/gpt-4o",
+        "fast": "openai/gpt-4o-mini",
+    },
+    "gemini": {
+        "default": "gemini/gemini-1.5-pro",
+        "fast": "gemini/gemini-1.5-flash",
+    },
+}
+
+
+def get_model(provider: str = "anthropic", tier: str = "default") -> str:
+    """Get model name for provider and tier."""
+    return MODEL_MAP.get(provider, MODEL_MAP["anthropic"]).get(tier, "default")
 ```
 
 ### DON'T ❌
 
 ```python
-# New client per request (wasteful)
-@router.post("/chat")
-async def chat(request: ChatRequest):
-    client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Separate SDKs for each provider (harder to maintain)
+from openai import AsyncOpenAI
+from anthropic import AsyncAnthropic
+from google.generativeai import GenerativeModel
 
-# Hardcoded keys
-client = AsyncOpenAI(api_key="sk-...")
+# Different client per provider
+if provider == "openai":
+    client = AsyncOpenAI()
+elif provider == "anthropic":
+    client = AsyncAnthropic()
+# ... different APIs, different response formats
+
+# Hardcoded model names without provider prefix
+model = "claude-sonnet-4-20250514"  # Missing provider prefix!
 ```
 
 ---
@@ -77,23 +84,24 @@ client = AsyncOpenAI(api_key="sk-...")
 
 ```python
 # services/ai_service.py
-from lib.ai.clients import get_openai, get_anthropic, Message, CompletionOptions
+from litellm import acompletion
+from lib.ai.provider import Message, CompletionOptions
 
 
 async def complete(
     prompt: str,
-    options: CompletionOptions | None = None
+    options: CompletionOptions | None = None,
+    system_prompt: str = "You are a helpful assistant.",
 ) -> str:
-    """Generate completion from prompt."""
+    """Generate completion using LiteLLM (any provider)."""
     opts = options or CompletionOptions()
-    client = get_openai()
 
-    response = await client.chat.completions.create(
-        model=opts.model,
+    response = await acompletion(
+        model=opts.model,  # e.g., "anthropic/claude-sonnet-4-20250514"
         max_tokens=opts.max_tokens,
         temperature=opts.temperature,
         messages=[
-            {"role": "system", "content": opts.system_prompt},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
         ],
     )
@@ -101,22 +109,36 @@ async def complete(
     return response.choices[0].message.content or ""
 
 
-async def complete_claude(
-    prompt: str,
-    options: CompletionOptions | None = None
+async def complete_with_messages(
+    messages: list[Message],
+    options: CompletionOptions | None = None,
 ) -> str:
-    """Generate completion using Claude."""
+    """Chat completion with message history."""
     opts = options or CompletionOptions()
-    client = get_anthropic()
 
-    response = await client.messages.create(
-        model=opts.model if "claude" in opts.model else "claude-sonnet-4-20250514",
+    response = await acompletion(
+        model=opts.model,
         max_tokens=opts.max_tokens,
-        system=opts.system_prompt,
-        messages=[{"role": "user", "content": prompt}],
+        messages=[m.model_dump() for m in messages],
     )
 
-    return response.content[0].text if response.content else ""
+    return response.choices[0].message.content or ""
+```
+
+### DON'T ❌
+
+```python
+# Provider-specific code paths
+if "claude" in model:
+    response = await anthropic_client.messages.create(...)
+    return response.content[0].text
+else:
+    response = await openai_client.chat.completions.create(...)
+    return response.choices[0].message.content
+
+# Blocking calls in async context
+from litellm import completion  # Sync version!
+response = completion(...)  # Blocks event loop!
 ```
 
 ---
@@ -127,42 +149,63 @@ async def complete_claude(
 
 ```python
 from collections.abc import AsyncGenerator
+from litellm import acompletion
 
 
 async def stream_completion(
     messages: list[Message],
-    options: CompletionOptions | None = None
+    options: CompletionOptions | None = None,
 ) -> AsyncGenerator[str, None]:
-    """Stream OpenAI completion."""
+    """Stream completion from any provider."""
     opts = options or CompletionOptions()
-    client = get_openai()
 
-    stream = await client.chat.completions.create(
+    response = await acompletion(
         model=opts.model,
         max_tokens=opts.max_tokens,
         messages=[m.model_dump() for m in messages],
         stream=True,
     )
 
-    async for chunk in stream:
+    async for chunk in response:
         content = chunk.choices[0].delta.content
         if content:
             yield content
 
 
-async def stream_claude_completion(
+# With token usage in stream
+async def stream_with_usage(
     messages: list[Message],
-) -> AsyncGenerator[str, None]:
-    """Stream Claude completion."""
-    client = get_anthropic()
+    options: CompletionOptions | None = None,
+) -> AsyncGenerator[str | dict, None]:
+    """Stream with final usage stats."""
+    opts = options or CompletionOptions()
 
-    async with client.messages.stream(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1024,
+    response = await acompletion(
+        model=opts.model,
         messages=[m.model_dump() for m in messages],
-    ) as stream:
+        stream=True,
+        stream_options={"include_usage": True},  # Get usage in final chunk
+    )
+
+    async for chunk in response:
+        if chunk.choices and chunk.choices[0].delta.content:
+            yield chunk.choices[0].delta.content
+        elif chunk.usage:  # Final chunk with usage
+            yield {"usage": chunk.usage.model_dump()}
+```
+
+### DON'T ❌
+
+```python
+# Different streaming APIs per provider
+if provider == "anthropic":
+    async with client.messages.stream(...) as stream:
         async for text in stream.text_stream:
             yield text
+elif provider == "openai":
+    stream = await client.chat.completions.create(..., stream=True)
+    async for chunk in stream:
+        yield chunk.choices[0].delta.content
 ```
 
 ---
@@ -173,7 +216,7 @@ async def stream_claude_completion(
 
 ```python
 # routes/chat.py
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import json
@@ -183,13 +226,16 @@ router = APIRouter()
 
 class ChatRequest(BaseModel):
     messages: list[Message]
-    model: str = "gpt-4o"
+    model: str = "anthropic/claude-sonnet-4-20250514"
 
 
 async def event_generator(messages: list[Message], model: str):
-    """Generate SSE events."""
+    """Generate SSE events from LiteLLM stream."""
     try:
-        async for chunk in stream_completion(messages, CompletionOptions(model=model)):
+        async for chunk in stream_completion(
+            messages,
+            CompletionOptions(model=model)
+        ):
             data = json.dumps({"content": chunk})
             yield f"data: {data}\n\n"
 
@@ -214,57 +260,309 @@ async def stream_chat(request: ChatRequest):
 
 ---
 
-## Structured Output (JSON Mode)
+## Error Handling & Fallbacks
 
 ### DO ✅
 
 ```python
-from pydantic import BaseModel, Field
+from litellm import acompletion
+from litellm.exceptions import (
+    RateLimitError,
+    AuthenticationError,
+    APIError,
+    Timeout,
+    ServiceUnavailableError,
+)
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-class ExtractedData(BaseModel):
-    """Schema for extracted data."""
-    title: str
-    summary: str
-    key_points: list[str]
-    sentiment: Literal["positive", "negative", "neutral"]
-    confidence: float = Field(ge=0, le=1)
+async def complete_with_fallback(
+    prompt: str,
+    primary_model: str = "anthropic/claude-sonnet-4-20250514",
+    fallback_model: str = "openai/gpt-4o",
+) -> str:
+    """Complete with automatic fallback on failure."""
+    try:
+        response = await acompletion(
+            model=primary_model,
+            messages=[{"role": "user", "content": prompt}],
+            num_retries=2,  # Built-in retries
+            timeout=30.0,
+        )
+        return response.choices[0].message.content or ""
+
+    except (RateLimitError, Timeout, ServiceUnavailableError) as e:
+        logger.warning(f"Primary model failed: {e}, trying fallback")
+
+        response = await acompletion(
+            model=fallback_model,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.choices[0].message.content or ""
 
 
-async def extract_structured(text: str) -> ExtractedData:
-    """Extract structured data using JSON mode."""
-    client = get_openai()
+# Using built-in fallbacks parameter
+async def complete_with_builtin_fallback(prompt: str) -> str:
+    """Use LiteLLM's built-in fallback mechanism."""
+    response = await acompletion(
+        model="anthropic/claude-sonnet-4-20250514",
+        messages=[{"role": "user", "content": prompt}],
+        fallbacks=["openai/gpt-4o", "gemini/gemini-1.5-pro"],  # Auto-fallback chain
+        num_retries=2,
+    )
+    return response.choices[0].message.content or ""
 
-    response = await client.beta.chat.completions.parse(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "Extract structured data from the text."},
-            {"role": "user", "content": text},
-        ],
-        response_format=ExtractedData,
+
+# Specific exception handling
+async def handle_ai_errors(prompt: str) -> str:
+    """Handle specific LiteLLM exceptions."""
+    try:
+        response = await acompletion(
+            model="anthropic/claude-sonnet-4-20250514",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.choices[0].message.content or ""
+
+    except RateLimitError as e:
+        logger.warning(f"Rate limited by {e.llm_provider}")
+        raise AppError("AI rate limit exceeded", 429, "AI_RATE_LIMIT")
+
+    except AuthenticationError as e:
+        logger.error(f"Invalid API key for {e.llm_provider}")
+        raise AppError("AI authentication failed", 500, "AI_AUTH_ERROR")
+
+    except Timeout as e:
+        logger.warning(f"Request timed out after {e.timeout}s")
+        raise AppError("AI request timed out", 504, "AI_TIMEOUT")
+
+    except APIError as e:
+        logger.error(f"API error: {e.message} (status: {e.status_code})")
+        raise AppError("AI service error", 503, "AI_ERROR")
+```
+
+### DON'T ❌
+
+```python
+# Bare except
+try:
+    response = await acompletion(...)
+except:
+    pass  # Silent failure!
+
+# Not using built-in retries
+for attempt in range(3):  # Manual retry loop
+    try:
+        response = await acompletion(...)
+        break
+    except Exception:
+        time.sleep(2 ** attempt)  # LiteLLM does this for you!
+```
+
+---
+
+## Cost Tracking
+
+### DO ✅
+
+```python
+from litellm import acompletion, completion_cost
+from datetime import datetime, UTC
+from pydantic import BaseModel
+
+
+class UsageRecord(BaseModel):
+    model: str
+    provider: str
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float
+    timestamp: datetime
+    user_id: str | None = None
+    feature: str = "unknown"
+    request_id: str | None = None
+
+
+def extract_provider(model: str) -> str:
+    """Extract provider from model string."""
+    return model.split("/")[0] if "/" in model else "unknown"
+
+
+async def complete_with_tracking(
+    prompt: str,
+    model: str = "anthropic/claude-sonnet-4-20250514",
+    user_id: str | None = None,
+    feature: str = "chat",
+) -> tuple[str, UsageRecord]:
+    """Complete with automatic cost tracking."""
+    response = await acompletion(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
     )
 
-    return response.choices[0].message.parsed
+    # LiteLLM calculates cost automatically
+    cost = completion_cost(completion_response=response)
+
+    usage = UsageRecord(
+        model=model,
+        provider=extract_provider(model),
+        input_tokens=response.usage.prompt_tokens,
+        output_tokens=response.usage.completion_tokens,
+        cost_usd=cost,
+        timestamp=datetime.now(UTC),
+        user_id=user_id,
+        feature=feature,
+    )
+
+    # Store in database
+    await db.llm_usage.insert_one(usage.model_dump())
+
+    return response.choices[0].message.content or "", usage
 
 
-# Alternative: Manual JSON parsing
-async def extract_json(text: str, schema: dict) -> dict:
-    """Extract JSON with schema validation."""
-    client = get_openai()
+# Using LiteLLM callbacks for automatic tracking
+import litellm
 
-    response = await client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {
-                "role": "system",
-                "content": f"Extract JSON matching this schema: {json.dumps(schema)}",
+
+async def track_usage_callback(kwargs, response, start_time, end_time):
+    """LiteLLM success callback for usage tracking."""
+    cost = kwargs.get("response_cost", 0)
+
+    record = {
+        "model": kwargs.get("model"),
+        "provider": extract_provider(kwargs.get("model", "")),
+        "input_tokens": response.usage.prompt_tokens if response.usage else 0,
+        "output_tokens": response.usage.completion_tokens if response.usage else 0,
+        "cost_usd": cost,
+        "duration_ms": int((end_time - start_time) * 1000),
+        "timestamp": datetime.now(UTC),
+        "user_id": kwargs.get("metadata", {}).get("user_id"),
+        "feature": kwargs.get("metadata", {}).get("feature", "unknown"),
+    }
+
+    await db.llm_usage.insert_one(record)
+
+
+# Register callback globally
+litellm.success_callback = [track_usage_callback]
+```
+
+### DON'T ❌
+
+```python
+# Manual pricing tables (outdated quickly)
+PRICING = {
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+    # ... maintaining this is painful
+}
+
+# Forgetting to track failures
+try:
+    response = await acompletion(...)
+except Exception:
+    # Lost visibility into failed requests!
+    raise
+```
+
+---
+
+## Router for Load Balancing
+
+### DO ✅
+
+```python
+from litellm import Router
+import os
+
+
+# Configure router with multiple deployments
+router = Router(
+    model_list=[
+        {
+            "model_name": "claude",  # Alias for routing
+            "litellm_params": {
+                "model": "anthropic/claude-sonnet-4-20250514",
+                "api_key": os.environ["ANTHROPIC_API_KEY"],
             },
-            {"role": "user", "content": text},
-        ],
-        response_format={"type": "json_object"},
+        },
+        {
+            "model_name": "gpt",
+            "litellm_params": {
+                "model": "openai/gpt-4o",
+                "api_key": os.environ["OPENAI_API_KEY"],
+            },
+        },
+    ],
+    fallbacks=[{"claude": ["gpt"]}],  # claude -> gpt on failure
+    num_retries=2,
+    timeout=30,
+    routing_strategy="simple-shuffle",  # or "least-busy", "latency-based-routing"
+)
+
+
+async def complete_via_router(prompt: str, model_alias: str = "claude") -> str:
+    """Route requests through LiteLLM router."""
+    response = await router.acompletion(
+        model=model_alias,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.choices[0].message.content or ""
+```
+
+---
+
+## Concurrent Provider Calls
+
+### DO ✅
+
+```python
+import asyncio
+from litellm import acompletion
+
+
+async def race_providers(prompt: str) -> str:
+    """Get fastest response from multiple providers."""
+    tasks = [
+        acompletion(
+            model="anthropic/claude-sonnet-4-20250514",
+            messages=[{"role": "user", "content": prompt}],
+        ),
+        acompletion(
+            model="openai/gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+        ),
+    ]
+
+    # Return first successful response
+    done, pending = await asyncio.wait(
+        tasks,
+        return_when=asyncio.FIRST_COMPLETED,
     )
 
-    return json.loads(response.choices[0].message.content)
+    # Cancel remaining tasks
+    for task in pending:
+        task.cancel()
+
+    result = done.pop().result()
+    return result.choices[0].message.content or ""
+
+
+async def aggregate_providers(prompt: str) -> list[str]:
+    """Get responses from all providers concurrently."""
+    tasks = [
+        acompletion(model="anthropic/claude-sonnet-4-20250514", messages=[{"role": "user", "content": prompt}]),
+        acompletion(model="openai/gpt-4o", messages=[{"role": "user", "content": prompt}]),
+        acompletion(model="gemini/gemini-1.5-pro", messages=[{"role": "user", "content": prompt}]),
+    ]
+
+    responses = await asyncio.gather(*tasks, return_exceptions=True)
+
+    return [
+        r.choices[0].message.content
+        for r in responses
+        if not isinstance(r, Exception) and r.choices
+    ]
 ```
 
 ---
@@ -274,88 +572,49 @@ async def extract_json(text: str, schema: dict) -> dict:
 ### DO ✅
 
 ```python
-from typing import Callable, Any
+from litellm import acompletion
+import json
 
-# Define tools
+
 tools = [
     {
         "type": "function",
         "function": {
             "name": "search_knowledge_base",
-            "description": "Search internal knowledge base for relevant information",
+            "description": "Search internal knowledge base",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Search query"},
-                    "limit": {"type": "number", "description": "Max results (default 5)"},
                 },
                 "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_current_weather",
-            "description": "Get current weather for a location",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "location": {"type": "string", "description": "City name"},
-                    "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
-                },
-                "required": ["location"],
             },
         },
     },
 ]
 
 
-# Tool handlers
-async def search_knowledge_base(query: str, limit: int = 5) -> str:
-    results = await knowledge_service.search(query, limit)
-    return json.dumps(results)
-
-
-async def get_current_weather(location: str, unit: str = "celsius") -> str:
-    weather = await weather_service.get(location, unit)
-    return json.dumps(weather)
-
-
-tool_handlers: dict[str, Callable[..., Any]] = {
-    "search_knowledge_base": search_knowledge_base,
-    "get_current_weather": get_current_weather,
-}
-
-
 async def chat_with_tools(messages: list[Message]) -> str:
-    """Chat with tool calling support."""
-    client = get_openai()
+    """Chat with tool calling (works across providers)."""
     current_messages = [m.model_dump() for m in messages]
 
     while True:
-        response = await client.chat.completions.create(
-            model="gpt-4o",
+        response = await acompletion(
+            model="anthropic/claude-sonnet-4-20250514",
             messages=current_messages,
             tools=tools,
         )
 
         message = response.choices[0].message
 
-        # No tool calls - return final response
         if not message.tool_calls:
             return message.content or ""
 
-        # Execute tool calls
         current_messages.append(message.model_dump())
 
         for tool_call in message.tool_calls:
-            handler = tool_handlers.get(tool_call.function.name)
-            if not handler:
-                raise ValueError(f"Unknown tool: {tool_call.function.name}")
-
             args = json.loads(tool_call.function.arguments)
-            result = await handler(**args)
+            result = await execute_tool(tool_call.function.name, args)
 
             current_messages.append({
                 "role": "tool",
@@ -366,274 +625,107 @@ async def chat_with_tools(messages: list[Message]) -> str:
 
 ---
 
-## Error Handling & Fallbacks
+## Environment Configuration
 
 ### DO ✅
 
 ```python
-from openai import APIError, RateLimitError, APITimeoutError
-import asyncio
-from dataclasses import dataclass
+# config.py
+from pydantic_settings import BaseSettings
 
 
-@dataclass
-class AIConfig:
-    primary: dict[str, str]  # {"provider": "openai", "model": "gpt-4o"}
-    fallback: dict[str, str] | None = None
+class Settings(BaseSettings):
+    # Provider API keys
+    ANTHROPIC_API_KEY: str
+    OPENAI_API_KEY: str | None = None
+    GOOGLE_API_KEY: str | None = None
+
+    # LLM configuration
+    LLM_PROVIDER: str = "anthropic"
+    LLM_MODEL: str = "anthropic/claude-sonnet-4-20250514"
+    LLM_FALLBACK_MODEL: str | None = "openai/gpt-4o"
+    LLM_MAX_TOKENS: int = 4096
+    LLM_TIMEOUT: float = 30.0
+
+    class Config:
+        env_file = ".env"
 
 
-default_config = AIConfig(
-    primary={"provider": "openai", "model": "gpt-4o"},
-    fallback={"provider": "anthropic", "model": "claude-sonnet-4-20250514"},
-)
-
-
-async def safe_complete(
-    prompt: str,
-    config: AIConfig = default_config
-) -> str:
-    """Complete with fallback support."""
-    try:
-        return await complete_with_provider(prompt, config.primary)
-    except Exception as error:
-        logger.warning(f"Primary AI failed: {error}, trying fallback")
-
-        if config.fallback:
-            try:
-                return await complete_with_provider(prompt, config.fallback)
-            except Exception as fallback_error:
-                logger.error(f"Fallback AI also failed: {fallback_error}")
-
-        # Handle specific errors
-        if isinstance(error, RateLimitError):
-            raise AppError("AI rate limit exceeded", 429, "AI_RATE_LIMIT")
-        if isinstance(error, APITimeoutError):
-            raise AppError("AI request timed out", 504, "AI_TIMEOUT")
-        if isinstance(error, APIError) and error.status_code == 401:
-            raise AppError("AI authentication failed", 500, "AI_AUTH_ERROR")
-
-        raise AppError("AI service unavailable", 503, "AI_ERROR")
-
-
-async def complete_with_provider(prompt: str, config: dict[str, str]) -> str:
-    """Complete using specified provider."""
-    if config["provider"] == "anthropic":
-        return await complete_claude(prompt, CompletionOptions(model=config["model"]))
-    return await complete(prompt, CompletionOptions(model=config["model"]))
+settings = Settings()
 ```
 
----
+```bash
+# .env
+LLM_PROVIDER=anthropic
+LLM_MODEL=anthropic/claude-sonnet-4-20250514
+LLM_FALLBACK_MODEL=openai/gpt-4o
 
-## Token Management
-
-### DO ✅
-
-```python
-import tiktoken
-from functools import lru_cache
-
-
-@lru_cache(maxsize=10)
-def get_encoder(model: str):
-    """Get cached encoder for model."""
-    return tiktoken.encoding_for_model(model)
-
-
-def count_tokens(text: str, model: str = "gpt-4o") -> int:
-    """Count tokens in text."""
-    encoder = get_encoder(model)
-    return len(encoder.encode(text))
-
-
-def count_messages_tokens(messages: list[Message], model: str = "gpt-4o") -> int:
-    """Count tokens in messages."""
-    total = 0
-    for msg in messages:
-        total += count_tokens(msg.content, model)
-        total += 4  # Role + formatting overhead
-    return total + 2  # Priming tokens
-
-
-def truncate_to_fit(
-    messages: list[Message],
-    max_tokens: int,
-    model: str = "gpt-4o"
-) -> list[Message]:
-    """Truncate messages to fit token limit."""
-    result: list[Message] = []
-    current_tokens = 0
-
-    # Always keep system message
-    system_msg = next((m for m in messages if m.role == "system"), None)
-    if system_msg:
-        current_tokens += count_tokens(system_msg.content, model) + 4
-        result.append(system_msg)
-
-    # Add messages from most recent
-    other_msgs = [m for m in messages if m.role != "system"]
-
-    for msg in reversed(other_msgs):
-        msg_tokens = count_tokens(msg.content, model) + 4
-        if current_tokens + msg_tokens > max_tokens:
-            break
-        current_tokens += msg_tokens
-        result.insert(1 if system_msg else 0, msg)
-
-    return result
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+GOOGLE_API_KEY=...
 ```
 
----
-
-## Cost Tracking
-
-### DO ✅
+### DON'T ❌
 
 ```python
-from datetime import datetime, UTC
-from pydantic import BaseModel
+# Hardcoded keys
+ANTHROPIC_API_KEY = "sk-ant-api03-..."
 
-
-# Pricing per 1M tokens
-PRICING: dict[str, dict[str, float]] = {
-    "gpt-4o": {"input": 2.50, "output": 10.00},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "claude-sonnet-4-20250514": {"input": 3.00, "output": 15.00},
-}
-
-
-class UsageRecord(BaseModel):
-    model: str
-    input_tokens: int
-    output_tokens: int
-    cost: float
-    timestamp: datetime
-    user_id: str | None = None
-    request_id: str | None = None
-
-
-def calculate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    """Calculate cost for token usage."""
-    pricing = PRICING.get(model)
-    if not pricing:
-        return 0.0
-
-    input_cost = (input_tokens / 1_000_000) * pricing["input"]
-    output_cost = (output_tokens / 1_000_000) * pricing["output"]
-
-    return input_cost + output_cost
-
-
-async def track_usage(usage: UsageRecord) -> None:
-    """Track AI usage."""
-    await db.ai_usage.insert_one(usage.model_dump())
-
-    # Alert on high usage
-    daily_total = await get_daily_usage(usage.user_id)
-    if daily_total > settings.AI_DAILY_COST_LIMIT:
-        await alert_service.send("AI cost limit exceeded", {"usage": usage.model_dump()})
-
-
-async def completion_with_tracking(
-    prompt: str,
-    user_id: str | None = None,
-    request_id: str | None = None,
-    options: CompletionOptions | None = None,
-) -> tuple[str, UsageRecord]:
-    """Complete with usage tracking."""
-    opts = options or CompletionOptions()
-    client = get_openai()
-
-    response = await client.chat.completions.create(
-        model=opts.model,
-        max_tokens=opts.max_tokens,
-        messages=[
-            {"role": "system", "content": opts.system_prompt},
-            {"role": "user", "content": prompt},
-        ],
-    )
-
-    usage = UsageRecord(
-        model=opts.model,
-        input_tokens=response.usage.prompt_tokens if response.usage else 0,
-        output_tokens=response.usage.completion_tokens if response.usage else 0,
-        cost=calculate_cost(
-            opts.model,
-            response.usage.prompt_tokens if response.usage else 0,
-            response.usage.completion_tokens if response.usage else 0,
-        ),
-        timestamp=datetime.now(UTC),
-        user_id=user_id,
-        request_id=request_id,
-    )
-
-    await track_usage(usage)
-
-    return response.choices[0].message.content or "", usage
-```
-
----
-
-## Multi-Modal (Images)
-
-### DO ✅
-
-```python
-import base64
-from pydantic import BaseModel
-from typing import Literal
-
-
-class ImageInput(BaseModel):
-    type: Literal["url", "base64"]
-    data: str
-    media_type: str = "image/jpeg"
-
-
-async def analyze_image(image: ImageInput, prompt: str) -> str:
-    """Analyze image with vision model."""
-    client = get_openai()
-
-    if image.type == "url":
-        image_content = {"type": "image_url", "image_url": {"url": image.data}}
-    else:
-        image_content = {
-            "type": "image_url",
-            "image_url": {"url": f"data:{image.media_type};base64,{image.data}"},
-        }
-
-    response = await client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    image_content,
-                ],
-            },
-        ],
-        max_tokens=1000,
-    )
-
-    return response.choices[0].message.content or ""
+# No fallback configuration
+LLM_MODEL = "anthropic/claude-sonnet-4-20250514"  # What if Anthropic is down?
 ```
 
 ---
 
 ## Quick Reference
 
-| Pattern           | When to Use                      |
-| ----------------- | -------------------------------- |
-| Basic Completion  | Simple Q&A, summarization        |
-| Streaming         | Chat UI, long responses          |
-| Structured Output | Data extraction, parsing         |
-| Function Calling  | External actions, data retrieval |
-| Fallbacks         | Production reliability           |
-| Token Management  | Long conversations, cost control |
+| Pattern              | When to Use                          |
+| -------------------- | ------------------------------------ |
+| `acompletion`        | Single async completion              |
+| `stream=True`        | Chat UI, long responses              |
+| `fallbacks=[...]`    | Production reliability               |
+| `Router`             | Load balancing, multiple deployments |
+| `completion_cost()`  | Track spending                       |
+| `success_callback`   | Automatic usage logging              |
 
-| Error   | Action                          |
-| ------- | ------------------------------- |
-| 401     | Check API key configuration     |
-| 429     | Use fallback, implement backoff |
-| 500+    | Retry with exponential backoff  |
-| Timeout | Reduce tokens, increase timeout |
+| Model Format                            | Example                       |
+| --------------------------------------- | ----------------------------- |
+| Anthropic                               | `anthropic/claude-sonnet-4-20250514` |
+| OpenAI                                  | `openai/gpt-4o`               |
+| Google                                  | `gemini/gemini-1.5-pro`       |
+| Azure OpenAI                            | `azure/gpt-4-deployment`      |
+
+| Exception              | Meaning                    | Action                     |
+| ---------------------- | -------------------------- | -------------------------- |
+| `RateLimitError`       | Provider rate limit hit    | Use fallback, wait & retry |
+| `AuthenticationError`  | Invalid API key            | Check environment config   |
+| `Timeout`              | Request took too long      | Reduce tokens, retry       |
+| `ServiceUnavailableError` | Provider is down        | Use fallback provider      |
+| `APIError`             | General API error          | Log and retry              |
+
+---
+
+## Migration from Direct SDK
+
+If migrating from direct Anthropic/OpenAI SDK usage:
+
+```python
+# BEFORE (Anthropic SDK)
+from anthropic import AsyncAnthropic
+client = AsyncAnthropic()
+response = await client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": prompt}],
+)
+result = response.content[0].text
+
+# AFTER (LiteLLM)
+from litellm import acompletion
+response = await acompletion(
+    model="anthropic/claude-sonnet-4-20250514",  # Add provider prefix
+    max_tokens=1024,
+    messages=[{"role": "user", "content": prompt}],
+)
+result = response.choices[0].message.content  # OpenAI-compatible format
+```

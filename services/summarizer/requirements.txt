@@ -6,8 +6,8 @@ uvicorn>=0.27.0
 youtube-transcript-api>=0.6.2
 yt-dlp>=2024.1.0
 
-# LLM
-anthropic>=0.18.0
+# LLM (multi-provider via LiteLLM)
+litellm>=1.80.0
 
 # Database
 pymongo>=4.6.0

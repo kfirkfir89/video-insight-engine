@@ -12,7 +12,7 @@ Python MCP server with explain tools.
 | ------------ | -------------- |
 | Python 3.11+ | Runtime        |
 | mcp          | MCP Server SDK |
-| anthropic    | Claude API     |
+| LiteLLM      | Multi-provider LLM abstraction (Anthropic, OpenAI, Gemini) |
 | pymongo      | MongoDB driver |
 | Pydantic     | Validation     |
 
@@ -30,21 +30,23 @@ Python MCP server with explain tools.
 ## Project Structure
 
 ```
-explainer/
+services/explainer/
 ├── Dockerfile
 ├── requirements.txt
 ├── pyproject.toml
 └── src/
     ├── __init__.py
-    ├── server.py                 # MCP server entry
-    ├── config.py                 # Settings
+    ├── main.py                   # FastAPI app + SSE endpoints
+    ├── config.py                 # Settings + model mapping
     │
     ├── tools/
-    │   ├── explain_auto.py        # Cached expansion
-    │   └── explain_chat.py        # Interactive chat
+    │   ├── explain_auto.py       # Cached expansion
+    │   └── explain_chat.py       # Interactive chat
     │
     ├── services/
-    │   ├── llm.py                # Claude API wrapper
+    │   ├── llm.py                # LLM service (prompts + orchestration)
+    │   ├── llm_provider.py       # LiteLLM abstraction layer
+    │   ├── usage_tracker.py      # LLM usage tracking
     │   ├── cache.py              # Cache operations
     │   └── mongodb.py            # Database operations
     │
@@ -59,9 +61,23 @@ explainer/
 ## Environment Variables
 
 ```bash
+# Database
 MONGODB_URI=mongodb://vie-mongodb:27017/video-insight-engine
+
+# LLM Provider Configuration
+LLM_PROVIDER=anthropic          # anthropic, openai, or gemini
+LLM_FAST_PROVIDER=              # Optional: separate provider for fast model
+LLM_FALLBACK_PROVIDER=          # Optional: fallback if primary fails
+LLM_MODEL=                      # Optional: override default model
+LLM_FAST_MODEL=                 # Optional: override fast model
+LLM_MAX_TOKENS=4096
+LLM_FAST_MAX_TOKENS=2048
+
+# Provider API Keys (set for providers you use)
 ANTHROPIC_API_KEY=sk-ant-...
-ANTHROPIC_MODEL=claude-sonnet-4-20250514
+OPENAI_API_KEY=                 # Required if using OpenAI
+GOOGLE_API_KEY=                 # Required if using Gemini
+
 LOG_LEVEL=debug
 ```
 
@@ -441,45 +457,84 @@ Help the user understand this content deeply:
 
 ---
 
-## LLM Service
+## LLM Service (LiteLLM Multi-Provider)
 
 ```python
+# src/services/llm_provider.py
+from litellm import acompletion
+from src.config import settings
+
+class LLMProvider:
+    """Multi-provider LLM abstraction using LiteLLM."""
+
+    def __init__(self, model: str | None = None, fallback_models: list[str] | None = None):
+        self._model = model or settings.llm_model
+        self._fallback_models = fallback_models or settings.llm_fallback_models
+
+    async def complete(self, prompt: str, max_tokens: int = 2000) -> str:
+        """Generate completion from prompt."""
+        kwargs = {
+            "model": self._model,  # e.g., "anthropic/claude-sonnet-4-20250514"
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+        }
+        if self._fallback_models:
+            kwargs["fallbacks"] = self._fallback_models
+
+        response = await acompletion(**kwargs)
+        return response.choices[0].message.content or ""
+
+    async def complete_with_messages(self, messages: list[dict], max_tokens: int = 2000) -> str:
+        """Generate completion from message list."""
+        response = await acompletion(
+            model=self._model,
+            messages=messages,
+            max_tokens=max_tokens,
+        )
+        return response.choices[0].message.content or ""
+
+    async def stream_with_messages(self, messages: list[dict], max_tokens: int = 2000):
+        """Stream completion tokens."""
+        response = await acompletion(
+            model=self._model, messages=messages, max_tokens=max_tokens, stream=True
+        )
+        async for chunk in response:
+            if chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+
+
 # src/services/llm.py
+class LLMService:
+    """LLM service for vie-explainer using LiteLLM."""
 
-import anthropic
-from config import settings
+    def __init__(self, provider: LLMProvider):
+        self._provider = provider
 
-client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    async def generate_expansion(self, template_name: str, context: dict) -> str:
+        """Generate expansion from template."""
+        template = load_prompt(template_name)
+        prompt = template.format(**context)
+        return await self._provider.complete(prompt, max_tokens=2000)
 
-async def generate_expansion(template_name: str, context: dict) -> str:
-    """Generate expansion from template."""
+    async def chat_completion(self, system_prompt: str, messages: list[dict]) -> str:
+        """Complete chat with context."""
+        full_messages = [{"role": "system", "content": system_prompt}] + messages
+        return await self._provider.complete_with_messages(full_messages, max_tokens=2000)
 
-    # Load template
-    with open(f"src/prompts/{template_name}") as f:
-        template = f.read()
+    async def chat_completion_stream(self, system_prompt: str, messages: list[dict]):
+        """Stream chat completion tokens."""
+        full_messages = [{"role": "system", "content": system_prompt}] + messages
+        async for token in self._provider.stream_with_messages(full_messages, max_tokens=2000):
+            yield token
+```
 
-    # Format prompt
-    prompt = template.format(**context)
-
-    response = client.messages.create(
-        model=settings.ANTHROPIC_MODEL,
-        max_tokens=2000,
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    return response.content[0].text
-
-async def chat_completion(system_prompt: str, messages: list[dict]) -> str:
-    """Complete chat with context."""
-
-    response = client.messages.create(
-        model=settings.ANTHROPIC_MODEL,
-        max_tokens=2000,
-        system=system_prompt,
-        messages=messages
-    )
-
-    return response.content[0].text
+**Model mapping (config.py):**
+```python
+MODEL_MAP = {
+    "anthropic": {"default": "anthropic/claude-sonnet-4-20250514", "fast": "anthropic/claude-3-5-haiku-20241022"},
+    "openai": {"default": "openai/gpt-4o", "fast": "openai/gpt-4o-mini"},
+    "gemini": {"default": "gemini/gemini-3-flash-preview", "fast": "gemini/gemini-2.5-flash-lite"},
+}
 ```
 
 ---
@@ -504,10 +559,13 @@ CMD ["python", "-m", "src.server"]
 ## Requirements
 
 ```text
+fastapi>=0.109.0
+uvicorn>=0.27.0
 mcp>=1.0.0
-anthropic>=0.18.0
+litellm>=1.80.0
 pymongo>=4.6.0
-pydantic>=2.0.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
 python-dotenv>=1.0.0
 ```
 
