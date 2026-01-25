@@ -69,6 +69,32 @@ If task exists, read the `plan.md`, `context.md`, `tasks.md`.
 
 ---
 
+## ⚠️ MANDATORY RULES
+
+### Skill Enforcement (CRITICAL)
+
+**When the skill activation hook fires, you MUST:**
+
+1. **READ the SKILL.md file** using the Read tool
+2. **READ all suggested resource files** using the Read tool
+3. **APPLY the patterns** from those files in your response
+
+This is NOT optional. Do NOT write code until you have read the activated skills.
+
+### Rules Reference
+
+Check [.claude/rules/](./.claude/rules/) for detailed guidelines:
+
+| Rule | File | Enforcement |
+|------|------|-------------|
+| Skill Reading | [skill-enforcement.md](./.claude/rules/skill-enforcement.md) | **MANDATORY** |
+| Code Quality | [code-quality.md](./.claude/rules/code-quality.md) | Required |
+| Security | [security.md](./.claude/rules/security.md) | Required |
+| Testing | [testing.md](./.claude/rules/testing.md) | Required |
+| Git Workflow | [git-workflow.md](./.claude/rules/git-workflow.md) | Required |
+
+---
+
 ## Project Structure
 
 See [docs/PROJECT-STRUCTURE.md](./docs/PROJECT-STRUCTURE.md) for complete folder layout.
@@ -89,14 +115,18 @@ video-insight-engine/
 
 ## Available Commands
 
-| Command             | Purpose                          |
-| ------------------- | -------------------------------- |
-| `/task-plan {name}` | Create task documentation        |
-| `/task-plan-update` | Update docs before context reset |
-| `/review`           | Code review recent changes       |
-| `/test {file}`      | Generate tests                   |
-| `/ship`             | Pre-deploy checklist             |
-| `/security-check`   | Security audit                   |
+| Command                  | Purpose                                        |
+| ------------------------ | ---------------------------------------------- |
+| `/task-plan {name}`      | Create task documentation                      |
+| `/task-plan-update`      | Update docs before context reset               |
+| `/list-tasks`            | List all active tasks with status              |
+| `/resume {task}`         | Resume an active task after chat clear         |
+| `/complete-task {task}`  | Full workflow: plan → test → security → review |
+| `/update-docs {changes}` | Update docs/, CLAUDE.md, README.md             |
+| `/review`                | Code review recent changes                     |
+| `/test {file}`           | Generate tests                                 |
+| `/ship`                  | Pre-deploy checklist                           |
+| `/security-check`        | Security audit                                 |
 
 ---
 
