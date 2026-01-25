@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 
 interface HookInput {
@@ -146,6 +146,31 @@ async function main() {
             output += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
 
             console.log(output);
+        }
+
+        // Check for active tasks and display reminder
+        const activeTasksDir = join(projectDir, 'dev', 'active');
+        if (existsSync(activeTasksDir)) {
+            try {
+                const activeTasks = readdirSync(activeTasksDir)
+                    .filter(f => {
+                        const fullPath = join(activeTasksDir, f);
+                        return statSync(fullPath).isDirectory();
+                    });
+
+                if (activeTasks.length > 0) {
+                    let taskOutput = '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+                    taskOutput += '📝 ACTIVE TASKS REMINDER\n';
+                    taskOutput += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+                    taskOutput += `Active tasks: ${activeTasks.join(', ')}\n\n`;
+                    taskOutput += 'Before clearing chat, run: /task-plan-update\n';
+                    taskOutput += 'To resume after clear, run: /resume [task-name]\n';
+                    taskOutput += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+                    console.log(taskOutput);
+                }
+            } catch {
+                // Silently ignore errors reading active tasks
+            }
         }
 
         process.exit(0);
