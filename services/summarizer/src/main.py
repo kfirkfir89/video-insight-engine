@@ -54,6 +54,20 @@ async def summarize(
     Trigger video summarization.
     Returns immediately, processing happens in background.
     """
+    # Debug: Log incoming providers
+    logger.info(f"Received summarize request: providers={request.providers}")
+
+    # Store provider config in database for streaming route to use
+    if request.providers:
+        repository.set_provider_config(
+            request.videoSummaryId,
+            {
+                "default": request.providers.default,
+                "fast": request.providers.fast,
+                "fallback": request.providers.fallback,
+            }
+        )
+
     # Use custom provider if specified (dev tools), otherwise use default
     provider = (
         create_llm_provider(request.providers)

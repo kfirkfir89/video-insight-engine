@@ -32,7 +32,14 @@ export const Sidebar = memo(function Sidebar() {
 
   return (
     <aside className="h-full w-full flex flex-col bg-card border-r overflow-hidden relative">
-      {/* Add Video Input at top */}
+      {/* Dev tools panel (only in development) */}
+      {DevToolPanel && (
+        <Suspense fallback={null}>
+          <DevToolPanel />
+        </Suspense>
+      )}
+
+      {/* Add Video Input */}
       <AddVideoInput />
 
       {/* Toolbar for sidebar controls */}
@@ -48,13 +55,6 @@ export const Sidebar = memo(function Sidebar() {
 
       {/* Selection toolbar at bottom when in selection mode */}
       <SelectionToolbar />
-
-      {/* Dev tools panel (only in development) */}
-      {DevToolPanel && (
-        <Suspense fallback={null}>
-          <DevToolPanel />
-        </Suspense>
-      )}
     </aside>
   );
 });
