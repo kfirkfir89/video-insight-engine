@@ -13,6 +13,14 @@ export interface ListVideosResponse {
   hasMore?: boolean;
 }
 
+export type Provider = "anthropic" | "openai" | "gemini";
+
+export interface ProviderConfig {
+  default: Provider;
+  fast?: Provider;
+  fallback?: Provider | null;
+}
+
 export const videosApi = {
   async list(params: ListVideosParams = {}): Promise<ListVideosResponse> {
     const searchParams = new URLSearchParams();
@@ -33,11 +41,12 @@ export const videosApi = {
   async create(
     url: string,
     folderId?: string,
-    bypassCache?: boolean
+    bypassCache?: boolean,
+    providers?: ProviderConfig
   ): Promise<{ video: Video; cached: boolean }> {
     return request("/videos", {
       method: "POST",
-      body: JSON.stringify({ url, folderId, bypassCache }),
+      body: JSON.stringify({ url, folderId, bypassCache, providers }),
     });
   },
 

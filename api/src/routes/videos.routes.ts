@@ -3,10 +3,19 @@ import { z } from 'zod';
 import { VideoService } from '../services/video.service.js';
 import { idParamSchema, objectIdSchema } from '../utils/validation.js';
 
+// Provider config schema for dev tools (optional)
+const providerSchema = z.enum(['anthropic', 'openai', 'gemini']);
+const providerConfigSchema = z.object({
+  default: providerSchema,
+  fast: providerSchema.optional(),
+  fallback: providerSchema.nullable().optional(),
+}).optional();
+
 const createVideoSchema = z.object({
   url: z.string().url(),
   folderId: objectIdSchema.optional(),
   bypassCache: z.boolean().optional().default(false),
+  providers: providerConfigSchema,
 });
 
 const moveVideoSchema = z.object({
@@ -70,7 +79,13 @@ export async function videosRoutes(fastify: FastifyInstance) {
     },
   }, async (req, reply) => {
     const input = createVideoSchema.parse(req.body);
-    const result = await videoService.createVideo(req.user.userId, input.url, input.folderId, input.bypassCache);
+    const result = await videoService.createVideo(
+      req.user.userId,
+      input.url,
+      input.folderId,
+      input.bypassCache,
+      input.providers
+    );
     return reply.code(201).send(result);
   });
 

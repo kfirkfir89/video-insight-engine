@@ -3,8 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { Plus, Loader2, Link2, Folder } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +29,6 @@ export function AddVideoInput() {
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [bypassCache, setBypassCache] = useState(false);
   const selectedFolderId = useUIStore((s) => s.selectedFolderId);
   const activeSection = useUIStore((s) => s.activeSection);
   const addVideo = useAddVideo();
@@ -66,9 +63,8 @@ export function AddVideoInput() {
 
     try {
       setError(null);
-      const result = await addVideo.mutateAsync({ url: url.trim(), folderId: targetFolderId, bypassCache });
+      const result = await addVideo.mutateAsync({ url: url.trim(), folderId: targetFolderId });
       setUrl("");
-      setBypassCache(false);
       // Reset folder selection tracking so next add follows sidebar selection again
       setUserSelection(USE_SIDEBAR_SELECTION);
 
@@ -160,22 +156,6 @@ export function AddVideoInput() {
             )}
           </Button>
         </div>
-      </div>
-
-      {/* Bypass cache checkbox */}
-      <div className="flex items-center gap-2 mt-2">
-        <Checkbox
-          id="bypass-cache"
-          checked={bypassCache}
-          onCheckedChange={(checked) => setBypassCache(checked === true)}
-          disabled={addVideo.isPending}
-        />
-        <Label
-          htmlFor="bypass-cache"
-          className="text-xs text-muted-foreground cursor-pointer"
-        >
-          Re-summarize (bypass cache)
-        </Label>
       </div>
 
       {/* Error message */}

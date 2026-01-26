@@ -1,5 +1,6 @@
 """FastAPI dependency injection setup."""
 
+import logging
 from functools import lru_cache
 from typing import Annotated
 
@@ -7,11 +8,14 @@ from fastapi import Depends
 from pymongo import MongoClient
 from pymongo.database import Database
 
-from src.config import settings
+from src.config import settings, MODEL_MAP
+from src.models.schemas import ProviderConfig
 from src.repositories.mongodb_repository import MongoDBVideoRepository
 from src.services.llm import LLMService
 from src.services.llm_provider import LLMProvider
 from src.services.usage_tracker import UsageTracker
+
+logger = logging.getLogger(__name__)
 
 
 @lru_cache()
@@ -38,6 +42,38 @@ def get_video_repository(
 def get_llm_provider() -> LLMProvider:
     """Create and cache LLM provider (multi-provider support via LiteLLM)."""
     return LLMProvider()
+
+
+def create_llm_provider(providers: ProviderConfig | None = None) -> LLMProvider:
+    """
+    Factory function to create LLMProvider with optional provider override.
+
+    Used by dev tools to test different LLM providers without code changes.
+    If no providers specified, returns the cached default provider.
+    """
+    if providers is None:
+        return get_llm_provider()
+
+    # Resolve provider name to model string via MODEL_MAP
+    default_model = MODEL_MAP.get(providers.default, {}).get(
+        "default", MODEL_MAP["anthropic"]["default"]
+    )
+
+    fallback_models = None
+    if providers.fallback:
+        fallback_model = MODEL_MAP.get(providers.fallback, {}).get(
+            "default", MODEL_MAP["anthropic"]["default"]
+        )
+        fallback_models = [fallback_model]
+
+    logger.info(
+        f"Creating custom LLMProvider: model={default_model}, fallback={fallback_models}"
+    )
+
+    return LLMProvider(
+        model=default_model,
+        fallback_models=fallback_models,
+    )
 
 
 def get_llm_service(
