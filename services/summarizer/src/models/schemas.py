@@ -1,6 +1,9 @@
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel
+
+# Valid LLM provider names
+Provider = Literal["anthropic", "openai", "gemini"]
 
 
 class ProcessingStatus(str, Enum):
@@ -21,11 +24,20 @@ class ErrorCode(str, Enum):
     UNKNOWN_ERROR = "UNKNOWN_ERROR"
 
 
+class ProviderConfig(BaseModel):
+    """LLM provider configuration for dev tools override."""
+
+    default: Provider
+    fast: Provider | None = None
+    fallback: Provider | None = None
+
+
 class SummarizeRequest(BaseModel):
     videoSummaryId: str
     youtubeId: str
     url: str
     userId: str | None = None
+    providers: ProviderConfig | None = None
 
 
 class SummarizeResponse(BaseModel):

@@ -1,10 +1,19 @@
-import { memo, useEffect } from "react";
+import { memo, useEffect, lazy, Suspense } from "react";
 import { AddVideoInput } from "./AddVideoInput";
 import { SidebarToolbar } from "./SidebarToolbar";
 import { SidebarSection } from "./SidebarSection";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { DndProvider } from "./DndProvider";
 import { useUIStore, useSelectionMode } from "@/stores/ui-store";
+
+// Lazy load DevToolPanel only in dev mode to ensure tree-shaking in production
+const DevToolPanel = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/components/dev/DevToolPanel").then((m) => ({
+        default: m.DevToolPanel,
+      }))
+    )
+  : null;
 
 export const Sidebar = memo(function Sidebar() {
   const selectionMode = useSelectionMode();
@@ -39,6 +48,13 @@ export const Sidebar = memo(function Sidebar() {
 
       {/* Selection toolbar at bottom when in selection mode */}
       <SelectionToolbar />
+
+      {/* Dev tools panel (only in development) */}
+      {DevToolPanel && (
+        <Suspense fallback={null}>
+          <DevToolPanel />
+        </Suspense>
+      )}
     </aside>
   );
 });

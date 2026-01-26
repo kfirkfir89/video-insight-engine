@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { videosApi } from "@/api/videos";
+import { videosApi, type ProviderConfig } from "@/api/videos";
 import { queryKeys } from "@/lib/query-keys";
 
 // Fetch all videos (no folder filter)
@@ -32,8 +32,17 @@ export function useAddVideo() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ url, folderId, bypassCache }: { url: string; folderId?: string | null; bypassCache?: boolean }) =>
-      videosApi.create(url, folderId ?? undefined, bypassCache),
+    mutationFn: ({
+      url,
+      folderId,
+      bypassCache,
+      providers,
+    }: {
+      url: string;
+      folderId?: string | null;
+      bypassCache?: boolean;
+      providers?: ProviderConfig;
+    }) => videosApi.create(url, folderId ?? undefined, bypassCache, providers),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.videos.lists() });
     },

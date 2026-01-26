@@ -1,6 +1,6 @@
 import { Db, ObjectId } from 'mongodb';
 import { extractYoutubeId } from '../utils/youtube.js';
-import { triggerSummarization } from './summarizer-client.js';
+import { triggerSummarization, type ProviderConfig } from './summarizer-client.js';
 import { InvalidYouTubeUrlError, VideoNotFoundError, VersionCreationError } from '../utils/errors.js';
 
 // Logger for debugging (uses console in dev, can be replaced with proper logger)
@@ -15,7 +15,7 @@ const MAX_VERSIONS_PER_VIDEO = 5;
 export class VideoService {
   constructor(private db: Db) {}
 
-  async createVideo(userId: string, url: string, folderId?: string, bypassCache = false) {
+  async createVideo(userId: string, url: string, folderId?: string, bypassCache = false, providers?: ProviderConfig) {
     const youtubeId = extractYoutubeId(url);
     if (!youtubeId) {
       throw new InvalidYouTubeUrlError();
@@ -99,6 +99,7 @@ export class VideoService {
             youtubeId,
             url,
             userId,
+            providers,
           });
 
           return {
@@ -223,6 +224,7 @@ export class VideoService {
         youtubeId,
         url,
         userId,
+        providers,
       });
 
       const userVideo = await this.db.collection('userVideos').insertOne({
@@ -260,6 +262,7 @@ export class VideoService {
       youtubeId,
       url,
       userId,
+      providers,
     });
 
     const userVideo = await this.db.collection('userVideos').insertOne({

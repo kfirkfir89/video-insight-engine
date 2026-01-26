@@ -5,9 +5,14 @@ from fastapi import FastAPI, BackgroundTasks, Depends
 
 from src.config import settings
 from src.models.schemas import SummarizeRequest, SummarizeResponse
-from src.dependencies import get_video_repository, get_llm_service
+from src.dependencies import (
+    get_video_repository,
+    get_llm_provider,
+    create_llm_provider,
+)
 from src.repositories.mongodb_repository import MongoDBVideoRepository
 from src.services.llm import LLMService
+from src.services.llm_provider import LLMProvider
 from src.services.summarizer_service import SummarizeService
 from src.routes.stream import router as stream_router
 
@@ -43,12 +48,22 @@ async def summarize(
     request: SummarizeRequest,
     background_tasks: BackgroundTasks,
     repository: Annotated[MongoDBVideoRepository, Depends(get_video_repository)],
-    llm_service: Annotated[LLMService, Depends(get_llm_service)],
+    default_provider: Annotated[LLMProvider, Depends(get_llm_provider)],
 ):
     """
     Trigger video summarization.
     Returns immediately, processing happens in background.
     """
+    # Use custom provider if specified (dev tools), otherwise use default
+    provider = (
+        create_llm_provider(request.providers)
+        if request.providers
+        else default_provider
+    )
+
+    # Create LLM service with the selected provider
+    llm_service = LLMService(provider)
+
     # Create service with injected dependencies
     service = SummarizeService(repository, llm_service)
 

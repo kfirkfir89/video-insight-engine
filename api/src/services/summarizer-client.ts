@@ -1,10 +1,19 @@
 import { config } from '../config.js';
 
+export type Provider = 'anthropic' | 'openai' | 'gemini';
+
+export interface ProviderConfig {
+  default: Provider;
+  fast?: Provider;
+  fallback?: Provider | null;
+}
+
 interface SummarizeRequest {
   videoSummaryId: string;
   youtubeId: string;
   url: string;
   userId?: string;
+  providers?: ProviderConfig;
 }
 
 const SUMMARIZER_TIMEOUT_MS = 10000; // 10 seconds

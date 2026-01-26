@@ -780,6 +780,47 @@ pnpm run lint
 
 ---
 
+# Dev Tools (Development Only)
+
+The frontend includes a dev-only panel for testing LLM providers.
+
+## DevToolPanel
+
+Located at `src/components/dev/DevToolPanel.tsx`, only visible when `import.meta.env.DEV === true`.
+
+### Features
+
+- **Provider Selection**: Choose between anthropic, openai, gemini for default/fast/fallback
+- **Bypass Cache**: Toggle to force re-summarization (test both cached and non-cached paths)
+- **Re-summarize**: Trigger new summarization with selected provider configuration
+
+### Usage
+
+1. Start dev server: `pnpm run dev`
+2. Look for "Dev Tools" at bottom of sidebar
+3. Expand panel, enter a video URL
+4. Select providers and cache settings
+5. Click "Re-summarize"
+6. Check summarizer logs for provider selection
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `components/dev/ProviderSelector.tsx` | Provider dropdown component |
+| `components/dev/DevToolPanel.tsx` | Main dev tools panel |
+
+### Production
+
+The dev panel is tree-shaken from production builds via:
+```tsx
+const DevToolPanel = import.meta.env.DEV
+  ? lazy(() => import("@/components/dev/DevToolPanel")...)
+  : null;
+```
+
+---
+
 # Anti-Patterns to Avoid
 
 | Anti-Pattern | Fix |
