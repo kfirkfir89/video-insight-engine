@@ -118,18 +118,19 @@
 - [x] Tree-shaking confirmed by conditional loading pattern
 
 ### End-to-End Test
-- [ ] Start all services: `docker-compose up`
-- [ ] Open app in browser (dev mode)
-- [ ] Enter a video URL in DevToolPanel
-- [ ] Select "openai" as default provider
-- [ ] Click Re-summarize
-- [ ] Check summarizer logs: `docker logs vie-summarizer -f`
-- [ ] Verify log shows `Using model: openai/gpt-4o`
+- [x] Start all services: `docker-compose up`
+- [x] Open app in browser (dev mode)
+- [x] Enter a video URL in DevToolPanel
+- [x] Select "gemini" as default provider
+- [x] Click Re-summarize
+- [x] Check summarizer logs: `docker logs vie-summarizer -f`
+- [x] Verify log shows `Creating custom LLMProvider: model=gemini/gemini-3-flash-preview`
 
 ### Fallback Test
 - [ ] Select different provider for fallback
 - [ ] Trigger summarization
 - [ ] Verify fallback provider in logs
+- Note: Fallback test deferred - YouTube rate limiting prevents full flow testing
 
 ---
 

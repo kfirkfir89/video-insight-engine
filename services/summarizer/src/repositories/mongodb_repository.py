@@ -136,3 +136,15 @@ class MongoDBVideoRepository:
             return_document=True
         )
         return result.get("retryCount", 1) if result else 1
+
+    def set_provider_config(
+        self,
+        video_summary_id: str,
+        providers: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """Store provider config for dev tools override."""
+        if providers:
+            self._collection.update_one(
+                {"_id": ObjectId(video_summary_id)},
+                {"$set": {"providerConfig": providers, "updatedAt": _utc_now()}}
+            )

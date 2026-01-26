@@ -19,8 +19,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from src.config import settings
-from src.dependencies import get_video_repository, get_llm_service
-from src.models.schemas import ProcessingStatus, ErrorCode
+from src.dependencies import get_video_repository, get_llm_service, create_llm_provider
+from src.models.schemas import ProcessingStatus, ErrorCode, ProviderConfig
 from src.repositories.mongodb_repository import MongoDBVideoRepository
 from src.services.llm import LLMService, seconds_to_timestamp
 from src.services.transcript import (
@@ -577,6 +577,18 @@ async def stream_summary(
     entry = repository.get_video_summary(video_summary_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Video summary not found")
+
+    # Check for provider config override (dev tools)
+    provider_config = entry.get("providerConfig")
+    if provider_config:
+        logger.info(f"Using custom provider config: {provider_config}")
+        providers = ProviderConfig(
+            default=provider_config.get("default", "anthropic"),
+            fast=provider_config.get("fast"),
+            fallback=provider_config.get("fallback"),
+        )
+        custom_provider = create_llm_provider(providers)
+        llm_service = LLMService(custom_provider)
 
     # Check if already completed - return cached result via SSE
     if entry.get("status") == ProcessingStatus.COMPLETED.value:
