@@ -5,6 +5,9 @@ from pydantic import BaseModel
 # Valid LLM provider names
 Provider = Literal["anthropic", "openai", "gemini"]
 
+# Transcript source types for tracking fetch method
+TranscriptSource = Literal["ytdlp", "api", "proxy", "whisper"]
+
 
 class ProcessingStatus(str, Enum):
     PENDING = "pending"
@@ -21,7 +24,29 @@ class ErrorCode(str, Enum):
     VIDEO_RESTRICTED = "VIDEO_RESTRICTED"
     LIVE_STREAM = "LIVE_STREAM"
     LLM_ERROR = "LLM_ERROR"
+    RATE_LIMITED = "RATE_LIMITED"
     UNKNOWN_ERROR = "UNKNOWN_ERROR"
+
+
+# ─────────────────────────────────────────────────────
+# Normalized Transcript Types
+# ─────────────────────────────────────────────────────
+
+
+class TranscriptSegment(BaseModel):
+    """Normalized transcript segment with millisecond timestamps."""
+
+    text: str
+    startMs: int
+    endMs: int
+
+
+class NormalizedTranscript(BaseModel):
+    """Unified transcript format from any source."""
+
+    text: str
+    segments: list[TranscriptSegment]
+    source: TranscriptSource
 
 
 class ProviderConfig(BaseModel):

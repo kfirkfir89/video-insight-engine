@@ -62,6 +62,12 @@ class MongoDBVideoRepository:
             "thumbnailUrl": result.get("thumbnail_url"),
             "transcript": result["transcript"],
             "transcriptType": result["transcript_type"],
+            # Normalized transcript segments (Phase 2 - transcript system)
+            "transcriptSegments": [
+                {"text": seg["text"], "startMs": seg["startMs"], "endMs": seg["endMs"]}
+                for seg in result.get("transcript_segments", [])
+            ] if result.get("transcript_segments") else None,
+            "transcriptSource": result.get("transcript_source"),
             "summary": {
                 "tldr": result["summary"]["tldr"],
                 "keyTakeaways": result["summary"]["key_takeaways"],

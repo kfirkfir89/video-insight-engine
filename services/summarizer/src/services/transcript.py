@@ -1,5 +1,6 @@
 import re
 import asyncio
+import logging
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.proxies import WebshareProxyConfig
 from youtube_transcript_api._errors import (
@@ -7,12 +8,47 @@ from youtube_transcript_api._errors import (
     NoTranscriptFound,
     VideoUnavailable,
 )
+import tenacity
 
 from src.config import settings
-from src.models.schemas import ErrorCode
+from src.models.schemas import (
+    ErrorCode,
+    TranscriptSegment,
+    NormalizedTranscript,
+    TranscriptSource,
+)
 from src.exceptions import TranscriptError
 
+logger = logging.getLogger(__name__)
 
+
+# ─────────────────────────────────────────────────────
+# Rate Limit Detection & Retry Logic
+# ─────────────────────────────────────────────────────
+
+
+def _is_rate_limit_error(exception: BaseException) -> bool:
+    """Check if exception is a rate limit (429) error."""
+    error_str = str(exception).lower()
+    return any(x in error_str for x in ["429", "too many", "rate limit"])
+
+
+def _log_retry(retry_state: tenacity.RetryCallState) -> None:
+    """Log retry attempts for rate limiting."""
+    wait_time = retry_state.next_action.sleep if retry_state.next_action else 0
+    logger.warning(
+        f"Transcript fetch rate limited, attempt {retry_state.attempt_number}/3, "
+        f"waiting {wait_time:.1f}s..."
+    )
+
+
+@tenacity.retry(
+    stop=tenacity.stop_after_attempt(3),
+    wait=tenacity.wait_exponential(multiplier=2, min=4, max=30),
+    retry=tenacity.retry_if_exception(_is_rate_limit_error),
+    before_sleep=_log_retry,
+    reraise=True,
+)
 def _fetch_transcript_sync(video_id: str) -> tuple[list[dict], str, str]:
     """
     Fetch transcript from YouTube (synchronous internal function).
@@ -76,6 +112,12 @@ def _fetch_transcript_sync(video_id: str) -> tuple[list[dict], str, str]:
     except TranscriptError:
         raise
     except Exception as e:
+        # Detect rate limiting errors and map to specific error code
+        if _is_rate_limit_error(e):
+            raise TranscriptError(
+                "YouTube rate limited. Please try again later.",
+                ErrorCode.RATE_LIMITED,
+            )
         raise TranscriptError(f"Failed to fetch transcript: {str(e)}", ErrorCode.UNKNOWN_ERROR)
 
 
@@ -146,6 +188,54 @@ def format_transcript_with_timestamps(segments: list[dict], interval_seconds: in
     return "\n".join(lines)
 
 
+def normalize_segments(
+    segments: list[dict],
+    source: TranscriptSource,
+) -> list[TranscriptSegment]:
+    """
+    Convert any segment format to normalized milliseconds.
+
+    Handles different input formats:
+    - Browser: already has startMs/endMs (milliseconds)
+    - yt-dlp/API: start (seconds) + duration (seconds)
+    - Whisper: start (seconds) + end (seconds)
+
+    Args:
+        segments: Raw segments in any format
+        source: Source of the transcript for format detection
+
+    Returns:
+        List of normalized TranscriptSegment objects
+    """
+    normalized = []
+    for seg in segments:
+        # Handle different input formats
+        if "startMs" in seg:
+            # Already normalized (Whisper format)
+            normalized.append(TranscriptSegment(
+                text=seg["text"],
+                startMs=int(seg["startMs"]),
+                endMs=int(seg["endMs"]),
+            ))
+        elif "end" in seg:
+            # Whisper format: start + end (seconds)
+            normalized.append(TranscriptSegment(
+                text=seg["text"],
+                startMs=int(seg["start"] * 1000),
+                endMs=int(seg["end"] * 1000),
+            ))
+        else:
+            # youtube-transcript-api / yt-dlp format: start + duration (seconds)
+            start_s = seg.get("start", 0)
+            duration_s = seg.get("duration", 0)
+            normalized.append(TranscriptSegment(
+                text=seg["text"],
+                startMs=int(start_s * 1000),
+                endMs=int((start_s + duration_s) * 1000),
+            ))
+    return normalized
+
+
 async def get_transcript(video_id: str) -> tuple[list[dict], str, str]:
     """
     Fetch transcript from YouTube (async wrapper).
@@ -163,3 +253,38 @@ async def get_transcript(video_id: str) -> tuple[list[dict], str, str]:
         TranscriptError: If transcript cannot be fetched
     """
     return await asyncio.to_thread(_fetch_transcript_sync, video_id)
+
+
+async def get_normalized_transcript(video_id: str) -> NormalizedTranscript:
+    """
+    Fetch and normalize transcript from YouTube.
+
+    This is the main entry point for transcript fetching with full
+    fallback chain: direct API -> proxy -> (future: Whisper)
+
+    Args:
+        video_id: YouTube video ID
+
+    Returns:
+        NormalizedTranscript with unified format
+
+    Raises:
+        TranscriptError: If transcript cannot be fetched
+    """
+    segments, full_text, transcript_type = await get_transcript(video_id)
+
+    # Determine source based on transcript_type
+    source: TranscriptSource = "api"
+    if transcript_type == "yt-dlp":
+        source = "ytdlp"
+    elif settings.WEBSHARE_PROXY_USERNAME:
+        source = "proxy"
+
+    # Normalize segments to milliseconds
+    normalized_segments = normalize_segments(segments, source)
+
+    return NormalizedTranscript(
+        text=full_text,
+        segments=normalized_segments,
+        source=source,
+    )

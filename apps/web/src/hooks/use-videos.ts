@@ -32,7 +32,7 @@ export function useAddVideo() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       url,
       folderId,
       bypassCache,
@@ -42,7 +42,9 @@ export function useAddVideo() {
       folderId?: string | null;
       bypassCache?: boolean;
       providers?: ProviderConfig;
-    }) => videosApi.create(url, folderId ?? undefined, bypassCache, providers),
+    }) => {
+      return videosApi.create(url, folderId ?? undefined, bypassCache, providers);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.videos.lists() });
     },

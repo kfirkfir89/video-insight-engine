@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     WEBSHARE_PROXY_USERNAME: str | None = None
     WEBSHARE_PROXY_PASSWORD: str | None = None
 
+    # Whisper fallback (Phase 4 - for videos without captions)
+    WHISPER_ENABLED: bool = True
+    WHISPER_MAX_DURATION_MINUTES: int = 60
+
     @property
     def llm_model(self) -> str:
         """Get the configured LLM model with provider prefix."""
