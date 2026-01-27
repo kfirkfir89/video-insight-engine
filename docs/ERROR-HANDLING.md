@@ -65,6 +65,7 @@ See [docs/SECURITY.md](./SECURITY.md#rate-limiting) for implementation.
 | `VIDEO_RESTRICTED`  | Age-restricted video not supported       | Requires auth      |
 | `LIVE_STREAM`       | Live streams not supported               | Is a live stream   |
 | `PROCESSING_FAILED` | Failed to process video                  | LLM/internal error |
+| `RATE_LIMITED`      | YouTube rate limited transcript fetch    | 429 from YouTube   |
 
 ### Resource Errors (404)
 
@@ -193,8 +194,33 @@ RETRY_CONFIG = {
         "LLM_ERROR",        # Claude API timeout
         "DATABASE_ERROR",   # MongoDB connection
         "NETWORK_ERROR",    # Transcript fetch
+        "RATE_LIMITED",     # YouTube 429 (transcript fetch)
     ],
 }
+```
+
+### YouTube Transcript Rate Limit Retry
+
+YouTube transcript fetching uses tenacity for automatic retry with exponential backoff:
+
+```python
+# services/summarizer/src/services/transcript.py
+@tenacity.retry(
+    stop=tenacity.stop_after_attempt(3),
+    wait=tenacity.wait_exponential(multiplier=2, min=4, max=30),
+    retry=tenacity.retry_if_exception(_is_rate_limit_error),
+)
+def _fetch_transcript_sync(video_id: str) -> tuple[list[dict], str, str]:
+    """Fetch transcript with rate limit retry."""
+    ...
+```
+
+Rate limit detection:
+```python
+def _is_rate_limit_error(exception: BaseException) -> bool:
+    """Check if exception is a YouTube rate limit error."""
+    error_str = str(exception).lower()
+    return any(x in error_str for x in ["429", "too many", "rate limit"])
 ```
 
 ```python

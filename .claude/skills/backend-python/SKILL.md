@@ -218,6 +218,98 @@ WHY: Features you build "just in case" become code you maintain forever. 50% of 
 
 ---
 
+## Function-Level Design
+
+### Small, Focused Functions
+
+> "A function should do one thing and do it well"
+
+WHY: Large functions hide bugs, are hard to test, and hard to understand.
+Breaking them down makes each piece testable and reusable.
+
+**Guidelines:**
+
+| Metric     | Target | Max | Action if Exceeded         |
+| ---------- | ------ | --- | -------------------------- |
+| Lines      | 10-30  | 50  | Extract helper functions   |
+| Nesting    | 1-2    | 3   | Use early returns          |
+| Parameters | 3-4    | 5   | Use parameter object/model |
+
+### Guard Clauses (Early Returns)
+
+WHY: Reduces nesting, makes the happy path obvious.
+
+```python
+# ❌ Deep nesting
+def process_order(order, user):
+    if order:
+        if user:
+            if user.is_active:
+                if order.total > 0:
+                    # actual logic buried 4 levels deep
+                    return do_something(order, user)
+    return None
+
+# ✅ Guard clauses
+def process_order(order: Order, user: User) -> OrderResult:
+    if not order:
+        raise ValidationError("Order is required")
+    if not user:
+        raise ValidationError("User is required")
+    if not user.is_active:
+        raise ForbiddenError("User account is inactive")
+    if order.total <= 0:
+        raise ValidationError("Order total must be positive")
+
+    # Happy path at top level - clear and obvious
+    return do_something(order, user)
+```
+
+### When to Extract a Function
+
+- [ ] More than 30 lines? → Extract
+- [ ] More than 2 levels of nesting? → Extract
+- [ ] Need a comment to explain a block? → Extract into named function
+- [ ] Same code appears 3+ times? → Extract
+- [ ] Can be tested independently? → Extract
+
+### Signs a Function is Too Complex
+
+```python
+# ❌ Too much going on
+async def process_video(video_id: str) -> VideoResult:
+    # 1. Fetch video
+    video = await db.videos.find_one({"_id": video_id})
+    if not video:
+        raise NotFoundError("Video not found")
+
+    # 2. Download transcript
+    transcript = await fetch_transcript(video["url"])
+    if not transcript:
+        transcript = await generate_transcript(video["url"])
+
+    # 3. Generate summary
+    chunks = split_into_chunks(transcript, 4000)
+    summaries = []
+    for chunk in chunks:
+        summary = await llm.generate(chunk)
+        summaries.append(summary)
+
+    # 4. Combine and save
+    final_summary = combine_summaries(summaries)
+    await db.summaries.insert_one({...})
+    return VideoResult(...)
+
+# ✅ Decomposed into focused functions
+async def process_video(video_id: str) -> VideoResult:
+    video = await get_video_or_raise(video_id)
+    transcript = await get_or_generate_transcript(video)
+    summary = await generate_summary(transcript)
+    return await save_and_return_result(video, summary)
+```
+
+---
+
 ## Dependency Injection (FastAPI Style)
 
 ### Why DI Exists
@@ -641,6 +733,7 @@ For implementation details on specific technologies:
 | Set up FastAPI, routes, middleware           | [fastapi.md](resources/fastapi.md)                     |
 | Build services, repositories, business logic | [services.md](resources/services.md)                   |
 | Work with MongoDB, Motor, Beanie             | [mongodb.md](resources/mongodb.md)                     |
+| Async generators, pipelines, parallel tasks  | [async-patterns.md](resources/async-patterns.md)       |
 | Implement JWT auth, RBAC                     | [auth.md](resources/auth.md)                           |
 | Handle errors, logging, monitoring           | [errors.md](resources/errors.md)                       |
 | Set up Redis, Celery, Docker                 | [infrastructure.md](resources/infrastructure.md)       |
