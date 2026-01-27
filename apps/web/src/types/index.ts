@@ -15,6 +15,9 @@ export type {
   ExpansionStatusEvent,
   WebSocketEvent,
   ApiError,
+  // Transcript types
+  TranscriptSource,
+  TranscriptSegment,
 } from "@vie/types";
 
 export { ErrorCodes } from "@vie/types";

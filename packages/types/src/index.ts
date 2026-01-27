@@ -12,6 +12,18 @@ export type ProcessingStatus =
   | 'completed'
   | 'failed';
 
+// ─────────────────────────────────────────────────────
+// Transcript Types (Phase 2 & 3)
+// ─────────────────────────────────────────────────────
+
+export type TranscriptSource = 'ytdlp' | 'api' | 'proxy' | 'whisper';
+
+export interface TranscriptSegment {
+  text: string;
+  startMs: number;
+  endMs: number;
+}
+
 export type FolderType = 'summarized' | 'memorized';
 
 export type SourceType =

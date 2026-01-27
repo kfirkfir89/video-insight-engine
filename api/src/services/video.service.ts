@@ -214,7 +214,10 @@ export class VideoService {
       await this.db.collection('videoSummaryCache').updateOne(
         { _id: cached._id },
         {
-          $set: { status: 'pending', updatedAt: new Date() },
+          $set: {
+            status: 'pending',
+            updatedAt: new Date(),
+          },
           $inc: { retryCount: 1 },
         }
       );

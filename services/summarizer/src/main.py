@@ -1,19 +1,12 @@
 import logging
 from typing import Annotated
 
-from fastapi import FastAPI, BackgroundTasks, Depends
+from fastapi import FastAPI, Depends
 
 from src.config import settings
 from src.models.schemas import SummarizeRequest, SummarizeResponse
-from src.dependencies import (
-    get_video_repository,
-    get_llm_provider,
-    create_llm_provider,
-)
+from src.dependencies import get_video_repository
 from src.repositories.mongodb_repository import MongoDBVideoRepository
-from src.services.llm import LLMService
-from src.services.llm_provider import LLMProvider
-from src.services.summarizer_service import SummarizeService
 from src.routes.stream import router as stream_router
 
 # Configure logging
@@ -46,15 +39,18 @@ async def root():
 @app.post("/summarize", response_model=SummarizeResponse, status_code=202)
 async def summarize(
     request: SummarizeRequest,
-    background_tasks: BackgroundTasks,
     repository: Annotated[MongoDBVideoRepository, Depends(get_video_repository)],
-    default_provider: Annotated[LLMProvider, Depends(get_llm_provider)],
 ):
     """
-    Trigger video summarization.
-    Returns immediately, processing happens in background.
+    Accept video summarization request.
+
+    This endpoint registers the request and stores provider config.
+    Actual processing happens via the streaming endpoint (GET /summarize/stream/{id})
+    which the frontend connects to for real-time progress updates.
+
+    NOTE: No background processing is started here - the streaming route handles
+    all the actual summarization work. This prevents duplicate processing.
     """
-    # Debug: Log incoming providers
     logger.info(f"Received summarize request: providers={request.providers}")
 
     # Store provider config in database for streaming route to use
@@ -67,28 +63,6 @@ async def summarize(
                 "fallback": request.providers.fallback,
             }
         )
-
-    # Use custom provider if specified (dev tools), otherwise use default
-    provider = (
-        create_llm_provider(request.providers)
-        if request.providers
-        else default_provider
-    )
-
-    # Create LLM service with the selected provider
-    llm_service = LLMService(provider)
-
-    # Create service with injected dependencies
-    service = SummarizeService(repository, llm_service)
-
-    # Add background task
-    background_tasks.add_task(
-        service.process_video,
-        request.videoSummaryId,
-        request.youtubeId,
-        request.url,
-        request.userId,
-    )
 
     return SummarizeResponse(
         status="accepted",

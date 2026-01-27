@@ -1,5 +1,12 @@
 import { config } from '../config.js';
 
+// Logger for summarizer client (can be replaced with proper logging library)
+const logger = {
+  info: (msg: string, context?: unknown) => console.info(`[SummarizerClient] ${msg}`, context ?? ''),
+  warn: (msg: string, context?: unknown) => console.warn(`[SummarizerClient] ${msg}`, context ?? ''),
+  error: (msg: string, context?: unknown) => console.error(`[SummarizerClient] ${msg}`, context ?? ''),
+};
+
 export type Provider = 'anthropic' | 'openai' | 'gemini';
 
 export interface ProviderConfig {
@@ -61,7 +68,7 @@ export async function triggerSummarization(request: SummarizeRequest): Promise<v
         );
 
         if (response.ok) {
-          console.log(`Summarization triggered successfully for ${request.youtubeId}`);
+          logger.info(`Summarization triggered successfully for ${request.youtubeId}`);
           return;
         }
 
@@ -70,9 +77,9 @@ export async function triggerSummarization(request: SummarizeRequest): Promise<v
         lastError = err instanceof Error ? err : new Error(String(err));
 
         if (lastError.name === 'AbortError') {
-          console.warn(`Summarization request timed out (attempt ${attempt}/${MAX_RETRIES})`);
+          logger.warn(`Summarization request timed out (attempt ${attempt}/${MAX_RETRIES})`);
         } else {
-          console.warn(`Summarization request failed (attempt ${attempt}/${MAX_RETRIES}):`, lastError.message);
+          logger.warn(`Summarization request failed (attempt ${attempt}/${MAX_RETRIES}): ${lastError.message}`);
         }
       }
 
@@ -81,8 +88,8 @@ export async function triggerSummarization(request: SummarizeRequest): Promise<v
       }
     }
 
-    console.error(`Failed to trigger summarization after ${MAX_RETRIES} attempts:`, lastError?.message);
+    logger.error(`Failed to trigger summarization after ${MAX_RETRIES} attempts: ${lastError?.message}`);
   })().catch((err) => {
-    console.error('Unexpected error in triggerSummarization:', err);
+    logger.error('Unexpected error in triggerSummarization:', err);
   });
 }

@@ -46,7 +46,12 @@ export const videosApi = {
   ): Promise<{ video: Video; cached: boolean }> {
     return request("/videos", {
       method: "POST",
-      body: JSON.stringify({ url, folderId, bypassCache, providers }),
+      body: JSON.stringify({
+        url,
+        folderId,
+        bypassCache,
+        providers,
+      }),
     });
   },
 
