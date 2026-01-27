@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     # Provider API Keys (set for providers you use)
     ANTHROPIC_API_KEY: str | None = None
     OPENAI_API_KEY: str | None = None
-    GOOGLE_API_KEY: str | None = None  # For Gemini
+    GEMINI_API_KEY: str | None = None  # For Gemini (LiteLLM expects this name)
 
     # LLM limits
     LLM_TIMEOUT_SECONDS: float = 60.0

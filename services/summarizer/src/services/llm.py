@@ -258,6 +258,8 @@ class LLMService:
 
     async def detect_sections(self, transcript: str, segments: list[dict], duration: int | None = None) -> list[dict]:
         """Detect logical sections in transcript."""
+        logger.debug(f"detect_sections: transcript length={len(transcript)} chars")
+
         # Calculate duration from segments if not provided
         if duration is None and segments:
             last = segments[-1]
@@ -266,7 +268,7 @@ class LLMService:
         duration_formatted = f"{duration // 60}:{duration % 60:02d}" if duration else "unknown"
 
         prompt = load_prompt("section_detect").format(
-            transcript=transcript[:settings.MAX_TRANSCRIPT_CHARS],
+            transcript=transcript,
             duration=duration or 0,
             duration_formatted=duration_formatted,
         )
@@ -318,13 +320,15 @@ class LLMService:
             extra_instruction = ""
             generated_title_field = ""
 
+        logger.debug(f"summarize_section: section_text length={len(section_text)} chars, title='{title}'")
+
         # Get persona-specific guidelines and examples from files
         persona_guidelines = load_persona(persona)
         variant_examples = load_examples(persona)
 
         prompt = load_prompt("section_summary").format(
             title=title,
-            content=section_text[:settings.MAX_SECTION_CHARS],
+            content=section_text,
             extra_instruction=extra_instruction,
             generated_title_field=generated_title_field,
             persona_guidelines=persona_guidelines,
@@ -349,8 +353,10 @@ class LLMService:
 
     async def extract_concepts(self, transcript: str) -> list[dict]:
         """Extract key concepts from transcript."""
+        logger.debug(f"extract_concepts: transcript length={len(transcript)} chars")
+
         prompt = load_prompt("concept_extract").format(
-            transcript=transcript[:settings.MAX_TRANSCRIPT_CHARS]
+            transcript=transcript
         )
 
         text = await self._call_llm(prompt)
@@ -490,6 +496,8 @@ class LLMService:
             ("token", str) for each token
             ("complete", list[dict]) with detected sections
         """
+        logger.debug(f"stream_detect_sections: transcript length={len(transcript)} chars")
+
         # Calculate duration from segments if not provided
         if duration is None and segments:
             last = segments[-1]
@@ -498,7 +506,7 @@ class LLMService:
         duration_formatted = f"{duration // 60}:{duration % 60:02d}" if duration else "unknown"
 
         prompt = load_prompt("section_detect").format(
-            transcript=transcript[:settings.MAX_TRANSCRIPT_CHARS],
+            transcript=transcript,
             duration=duration or 0,
             duration_formatted=duration_formatted,
         )
@@ -537,13 +545,15 @@ class LLMService:
             ("token", str) for each token
             ("complete", dict) with content blocks and legacy summary/bullets
         """
+        logger.debug(f"stream_summarize_section: section_text length={len(section_text)} chars, title='{title}'")
+
         # Get persona-specific guidelines and examples from files
         persona_guidelines = load_persona(persona)
         variant_examples = load_examples(persona)
 
         prompt = load_prompt("section_summary").format(
             title=title,
-            content=section_text[:settings.MAX_SECTION_CHARS],
+            content=section_text,
             extra_instruction="",
             generated_title_field="",
             persona_guidelines=persona_guidelines,
@@ -578,8 +588,10 @@ class LLMService:
             ("token", str) for each token
             ("complete", list[dict]) with concepts
         """
+        logger.debug(f"stream_extract_concepts: transcript length={len(transcript)} chars")
+
         prompt = load_prompt("concept_extract").format(
-            transcript=transcript[:settings.MAX_TRANSCRIPT_CHARS]
+            transcript=transcript
         )
 
         async for event_type, data in self._stream_and_parse(prompt):
@@ -637,10 +649,12 @@ class LLMService:
             ("token", str) for each token
             ("complete", dict) with tldr and keyTakeaways
         """
+        logger.debug(f"stream_quick_synthesis: transcript length={len(transcript)} chars")
+
         duration_formatted = f"{duration // 60}:{duration % 60:02d}"
 
         prompt = load_prompt("quick_synthesis").format(
-            transcript=transcript[:settings.MAX_TRANSCRIPT_CHARS],
+            transcript=transcript,
             duration_formatted=duration_formatted,
         )
 
