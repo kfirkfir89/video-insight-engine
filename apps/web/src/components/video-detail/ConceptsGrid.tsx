@@ -16,7 +16,7 @@ export const ConceptsGrid = memo(function ConceptsGrid({ concepts, title = "Conc
         <CardTitle className="text-base font-semibold">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {concepts.map((concept) => (
             <div
               key={concept.id}

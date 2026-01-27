@@ -24,7 +24,7 @@ import { VideoItem } from "./VideoItem";
 import type { FolderNode } from "@/lib/folder-utils";
 import type { FolderType, Video, Folder as FolderData } from "@/types";
 
-const LONG_PRESS_DELAY = 500; // milliseconds
+const LONG_PRESS_DELAY = 500;
 
 interface FolderItemProps {
   folder: FolderNode;
@@ -70,14 +70,13 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
   const textClasses = useSidebarTextClasses();
   const paddingLeft = SIDEBAR_LAYOUT.BASE_PADDING + level * SIDEBAR_LAYOUT.INDENT_PER_LEVEL;
 
-  // Drag & Drop - enabled for selected items in selection mode
+  // Drag & Drop
   const isMultiDrag = selectionMode && isFolderSelectionSelected;
   const { setNodeRef, isOver, isDragging, attributes, listeners, dragStyle } =
     useFolderDragDrop({
       folderId: folder.id,
       folderName: folder.name,
       level: folder.level,
-      // Only disable drag when in selection mode AND this item is NOT selected
       disabled: selectionMode && !isFolderSelectionSelected,
       isMultiDrag,
       selectedVideoIds,
@@ -90,8 +89,6 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
   const folderVideos = videos.filter((v) => v.folderId === folder.id);
   const hasChildren = folder.children.length > 0 || folderVideos.length > 0;
 
-  // Get the original Folder data (includes parentId needed for context menu)
-  // Memoized to avoid O(n) lookup on every render
   const originalFolder = useMemo(
     () => allFolders.find((f) => f.id === folder.id),
     [allFolders, folder.id]
@@ -128,9 +125,8 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
     };
   }, []);
 
-  // Handlers - supports Shift+Click and Ctrl+Click for selection
+  // Supports Shift+Click for range selection, Ctrl/Cmd+Click for toggle selection
   const handleClick = (e: React.MouseEvent) => {
-    // If Shift or Ctrl is held, use selection mode behavior
     if (e.shiftKey || e.ctrlKey || e.metaKey) {
       e.preventDefault();
       e.stopPropagation();
@@ -138,11 +134,9 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
       return;
     }
 
-    // In selection mode, toggle selection on click (add or remove)
     if (selectionMode) {
       e.preventDefault();
       e.stopPropagation();
-      // Pass true for ctrlKey to toggle selection
       handleFolderSelection(folder.id, false, true);
       return;
     }
@@ -191,122 +185,136 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
     }
   }, [isExpanded, toggleFolderExpansion, folder.id]);
 
-  return (
-    <div ref={setNodeRef} style={dragStyle}>
-      {/* Main folder row */}
-      <div
-        data-sidebar-item="folder"
-        className={cn(
-          "group flex items-center cursor-pointer hover:bg-accent/50 rounded-sm transition-colors",
-          textClasses.rowHeight,
-          isSelected && !isFolderSelectionSelected && "bg-accent",
-          isOver && !isDragging && "bg-primary/20 ring-1 ring-primary/50",
-          isDragging && "opacity-50",
-          isFolderSelectionSelected && "bg-accent border-l-2 border-l-primary"
-        )}
-        style={{ paddingLeft: `${paddingLeft}px`, paddingRight: "8px" }}
-        onClick={handleClick}
-        onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerLeave}
-        {...((!selectionMode || isFolderSelectionSelected) && attributes)}
-        {...((!selectionMode || isFolderSelectionSelected) && listeners)}
-      >
-        {/* Checkbox in selection mode, otherwise chevron or spacer */}
-        {selectionMode ? (
-          <Checkbox
-            checked={isFolderSelectionSelected}
-            onCheckedChange={() => handleFolderSelection(folder.id, false, true)}
-            className="w-4 h-4 shrink-0"
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : hasChildren ? (
-          <button
-            onClick={handleChevronClick}
-            className="w-4 h-4 flex items-center justify-center shrink-0 hover:bg-accent rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ChevronRight
-              className={cn(
-                textClasses.smallIconSize,
-                "text-muted-foreground transition-transform",
-                isExpanded && "rotate-90"
-              )}
-            />
-          </button>
-        ) : (
-          <span className="w-4 shrink-0" />
-        )}
+  // Shared row classes
+  const rowClassName = cn(
+    "group flex items-center cursor-pointer hover:bg-accent/50 rounded-sm transition-colors",
+    "has-[[data-state=open]]:bg-accent/50",
+    textClasses.rowHeight,
+    isSelected && !isFolderSelectionSelected && "bg-accent",
+    isOver && !isDragging && "ring-1 ring-primary/50",
+    isDragging && "opacity-50",
+    isFolderSelectionSelected && "bg-accent border-l-2 border-l-primary"
+  );
 
-        {/* Folder Icon */}
-        <Folder
-          className={cn(textClasses.iconSize, "shrink-0 text-muted-foreground ml-1")}
-          style={getFolderColorStyle(folder.color)}
+  const rowStyle = { paddingLeft: `${paddingLeft}px`, paddingRight: "8px" };
+
+  const rowProps = {
+    "data-sidebar-item": "folder" as const,
+    className: rowClassName,
+    style: rowStyle,
+    onClick: handleClick,
+    onPointerDown: handlePointerDown,
+    onPointerUp: handlePointerUp,
+    onPointerLeave: handlePointerLeave,
+    ...((!selectionMode || isFolderSelectionSelected) && attributes),
+    ...((!selectionMode || isFolderSelectionSelected) && listeners),
+  };
+
+  // Shared left side content (checkbox/chevron + folder icon)
+  const leftContent = (
+    <>
+      {selectionMode ? (
+        <Checkbox
+          checked={isFolderSelectionSelected}
+          onCheckedChange={() => handleFolderSelection(folder.id, false, true)}
+          className="w-4 h-4 shrink-0"
+          onClick={(e) => e.stopPropagation()}
         />
+      ) : hasChildren ? (
+        <button
+          type="button"
+          onClick={handleChevronClick}
+          className="w-4 h-4 flex items-center justify-center shrink-0 hover:bg-accent rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ChevronRight
+            className={cn(
+              textClasses.smallIconSize,
+              "text-muted-foreground transition-transform",
+              isExpanded && "rotate-90"
+            )}
+          />
+        </button>
+      ) : (
+        <span className="w-4 shrink-0" />
+      )}
+      <Folder
+        className={cn(textClasses.iconSize, "shrink-0 text-muted-foreground ml-1")}
+        style={getFolderColorStyle(folder.color)}
+      />
+    </>
+  );
 
-        {/* Name or Rename Input */}
-        {isRenaming ? (
+  // Action buttons (add subfolder + context menu)
+  const actionButtons = (
+    <div className={cn(
+      "flex items-center shrink-0",
+      selectionMode && "invisible pointer-events-none"
+    )}>
+      <button
+        type="button"
+        className="p-1.5 rounded-sm opacity-0 group-hover:opacity-100 group-has-[[data-state=open]]:opacity-100 hover:bg-accent transition-opacity shrink-0 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+        onClick={handleAddSubfolderClick}
+        title="Create subfolder"
+      >
+        <Plus className={cn(
+          textClasses.smallIconSize,
+          "text-muted-foreground transition-transform duration-200",
+          showSubfolderInput && "rotate-45"
+        )} />
+      </button>
+      {originalFolder && (
+        <FolderContextMenu
+          folder={originalFolder}
+          allFolders={allFolders}
+          onRename={() => setIsRenaming(true)}
+          onDelete={() => setShowDeleteDialog(true)}
+        />
+      )}
+    </div>
+  );
+
+  // Video count badge
+  const countBadge = (
+    <span className={cn("text-muted-foreground opacity-60 shrink-0 ml-1 w-5 text-right tabular-nums", textClasses.badgeText)}>
+      {folderVideos.length > 0 ? folderVideos.length : ""}
+    </span>
+  );
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={dragStyle}
+      className={cn(isOver && !isDragging && "bg-primary/10 rounded-md")}
+    >
+      {/* Main folder row */}
+      {isRenaming ? (
+        <div {...rowProps}>
+          {leftContent}
           <FolderRenameInput
             folderId={folder.id}
             currentName={folder.name}
             onComplete={() => setIsRenaming(false)}
           />
-        ) : (
-          <TooltipProvider delayDuration={400}>
-            <Tooltip>
-              <TooltipTrigger asChild>
+        </div>
+      ) : (
+        <TooltipProvider delayDuration={400}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div {...rowProps}>
+                {leftContent}
                 <span className={cn("ml-2 truncate flex-1", textClasses.mainText)}>
                   {folder.name}
                 </span>
-              </TooltipTrigger>
-              <TooltipContent
-                side="right"
-                sideOffset={8}
-                className="max-w-xs z-[100]"
-              >
-                {folder.name}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-
-        {/* Add subfolder button and context menu - invisible in selection mode to prevent layout shift */}
-        <div className={cn(
-          "flex items-center shrink-0",
-          selectionMode && "invisible pointer-events-none"
-        )}>
-          {/* Add subfolder button */}
-          {!isRenaming && (
-            <button
-              className="p-1.5 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity shrink-0 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-              onClick={handleAddSubfolderClick}
-              title="Create subfolder"
-            >
-              <Plus className={cn(
-                textClasses.smallIconSize,
-                "text-muted-foreground transition-transform duration-200",
-                showSubfolderInput && "rotate-45"
-              )} />
-            </button>
-          )}
-
-          {/* Context Menu */}
-          {!isRenaming && originalFolder && (
-            <FolderContextMenu
-              folder={originalFolder}
-              allFolders={allFolders}
-              onRename={() => setIsRenaming(true)}
-              onDelete={() => setShowDeleteDialog(true)}
-            />
-          )}
-        </div>
-
-        {/* Video count badge - at the end of the row, fixed width for alignment */}
-        {!isRenaming && (
-          <span className={cn("text-muted-foreground opacity-60 shrink-0 ml-1 w-5 text-right tabular-nums", textClasses.badgeText)}>
-            {folderVideos.length > 0 ? folderVideos.length : ""}
-          </span>
-        )}
-      </div>
+                {actionButtons}
+                {countBadge}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="right" align="start" sideOffset={8} className="max-w-xs z-[100]">
+              {folder.name}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
 
       {/* Subfolder creation input */}
       {showSubfolderInput && (
