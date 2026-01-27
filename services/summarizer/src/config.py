@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     # Provider API Keys (set for providers you use)
     ANTHROPIC_API_KEY: str | None = None
     OPENAI_API_KEY: str | None = None
-    GOOGLE_API_KEY: str | None = None  # For Gemini
+    GEMINI_API_KEY: str | None = None  # For Gemini (LiteLLM expects this name)
 
     # API callback
     API_URL: str = "http://vie-api:3000"
@@ -55,9 +55,9 @@ class Settings(BaseSettings):
     LLM_MAX_TOKENS: int = 4096
     LLM_FAST_MAX_TOKENS: int = 2048
 
-    # Token limits for LLM prompts
-    MAX_TRANSCRIPT_CHARS: int = 15000
-    MAX_SECTION_CHARS: int = 8000
+    # Token limits for LLM prompts (large safety nets - modern LLMs handle full transcripts)
+    MAX_TRANSCRIPT_CHARS: int = 500000  # ~500K chars = well within all LLM limits
+    MAX_SECTION_CHARS: int = 100000  # ~100K chars per section
 
     # Issue #18: Configurable batch size for parallel section processing
     SECTION_BATCH_SIZE: int = 3
