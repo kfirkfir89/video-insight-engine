@@ -53,14 +53,14 @@ export function FolderContextMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="p-1.5 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity shrink-0 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          className="p-1.5 rounded-sm opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 hover:bg-accent data-[state=open]:bg-accent transition-opacity shrink-0 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
           <MoreVertical className="h-4 w-4 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="start" side="right" sideOffset={8} className="w-48 z-[200]">
         {/* Move to folder */}
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>

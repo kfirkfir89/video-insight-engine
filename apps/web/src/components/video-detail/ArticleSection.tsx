@@ -87,7 +87,7 @@ export const ArticleSection = memo(function ArticleSection({
       className="flex flex-col lg:flex-row gap-4 lg:gap-0"
     >
       {/* Title Column - Left side on desktop, top on mobile */}
-      <div className="lg:w-48 lg:shrink-0 lg:pr-6 flex flex-col gap-2">
+      <div className="lg:w-40 xl:w-48 lg:shrink-0 lg:pr-4 xl:pr-6 flex flex-col gap-2">
         {hasCreatorChapter ? (
           <>
             <h3 className="font-medium text-sm leading-tight text-muted-foreground/70">

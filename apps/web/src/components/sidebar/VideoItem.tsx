@@ -154,42 +154,44 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
   );
 
   return (
-    <div
-      ref={setNodeRef}
-      data-sidebar-item="video"
-      style={{ ...style, paddingLeft: `${paddingLeft}px`, paddingRight: "8px" }}
-      className={cn(
-        "group flex items-center hover:bg-accent/50 rounded-sm transition-colors",
-        textClasses.rowHeight,
-        isDragging && "opacity-50 z-50",
-        isSelected && "bg-accent border-l-2 border-l-primary"
-      )}
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerLeave}
-      onClick={handleClick}
-      {...((!selectionMode || isSelected) && attributes)}
-      {...((!selectionMode || isSelected) && listeners)}
-    >
-      {/* Checkbox in selection mode, otherwise spacer */}
-      {selectionMode ? (
-        <Checkbox
-          checked={isSelected}
-          onCheckedChange={() => handleVideoSelection(video.id, false, true)}
-          className="w-4 h-4 shrink-0"
-          onClick={(e) => e.stopPropagation()}
-        />
-      ) : (
-        <span className="w-4 shrink-0" />
-      )}
+    <TooltipProvider delayDuration={400}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            ref={setNodeRef}
+            data-sidebar-item="video"
+            style={{ ...style, paddingLeft: `${paddingLeft}px`, paddingRight: "8px" }}
+            className={cn(
+              "group flex items-center hover:bg-accent/50 rounded-sm transition-colors",
+              // Keep row highlighted when dropdown menu is open
+              "has-[[data-state=open]]:bg-accent/50",
+              textClasses.rowHeight,
+              isDragging && "opacity-50 z-50",
+              isSelected && "bg-accent border-l-2 border-l-primary"
+            )}
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerLeave}
+            onClick={handleClick}
+            {...((!selectionMode || isSelected) && attributes)}
+            {...((!selectionMode || isSelected) && listeners)}
+          >
+            {/* Checkbox in selection mode, otherwise spacer */}
+            {selectionMode ? (
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={() => handleVideoSelection(video.id, false, true)}
+                className="w-4 h-4 shrink-0"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span className="w-4 shrink-0" />
+            )}
 
-      {/* Film Icon */}
-      <Film className={cn(textClasses.iconSize, "shrink-0 text-muted-foreground ml-1")} />
+            {/* Film Icon */}
+            <Film className={cn(textClasses.iconSize, "shrink-0 text-muted-foreground ml-1")} />
 
-      {/* Video link with tooltip for truncated names */}
-      <TooltipProvider delayDuration={400}>
-        <Tooltip>
-          <TooltipTrigger asChild>
+            {/* Video link */}
             <Link
               to={`/video/${video.id}`}
               className={cn("ml-2 truncate flex-1 cursor-pointer", textClasses.mainText)}
@@ -197,69 +199,83 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
             >
               {video.title || "Loading..."}
             </Link>
-          </TooltipTrigger>
-          <TooltipContent
-            side="right"
-            sideOffset={8}
-            className="max-w-xs z-[100]"
-          >
-            {video.title || "Loading..."}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
 
-      {/* Status icon and context menu - invisible in selection mode to prevent layout shift */}
-      <div className={cn(
-        "flex items-center shrink-0",
-        selectionMode && "invisible pointer-events-none"
-      )}>
-        {/* Status icon on hover - only show for non-completed statuses */}
-        {video.status !== "completed" && (
-          <span className="shrink-0 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <StatusIcon status={video.status} size={16} />
-          </span>
-        )}
+            {/* Status icon and context menu - invisible in selection mode to prevent layout shift */}
+            <div className={cn(
+              "flex items-center shrink-0",
+              selectionMode && "invisible pointer-events-none"
+            )}>
+              {/* Status icon on hover with tooltip - always reserve space for consistent layout */}
+              <span className="shrink-0 w-[26px] flex items-center justify-center">
+                {video.status !== "completed" && (
+                  <TooltipProvider delayDuration={0}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <StatusIcon status={video.status} size={16} />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" sideOffset={4}>
+                        {video.status === "pending" && "Pending"}
+                        {video.status === "processing" && "Processing..."}
+                        {video.status === "failed" && "Failed to process"}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </span>
 
-        {/* Context menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="p-1.5 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity shrink-0 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-              onClick={(e) => e.stopPropagation()}
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              <MoreVertical className={cn(textClasses.smallIconSize, "text-muted-foreground")} />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <FolderInput className="h-4 w-4" />
-                <span>Move to folder</span>
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="w-56 max-h-64 overflow-y-auto">
-                <FolderTreeSelect
-                  folders={folders}
-                  currentFolderId={video.folderId}
-                  onSelect={handleMoveToFolder}
-                  showRemoveOption={!!video.folderId}
-                  removeLabel="Remove from folder"
-                />
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => setShowDeleteDialog(true)}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="h-4 w-4" />
-              <span>Delete</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+              {/* Context menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="p-1.5 rounded-sm opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 hover:bg-accent data-[state=open]:bg-accent transition-opacity shrink-0 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <MoreVertical className={cn(textClasses.smallIconSize, "text-muted-foreground")} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" side="right" sideOffset={8} className="w-48 z-[200]">
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <FolderInput className="h-4 w-4" />
+                      <span>Move to folder</span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-56 max-h-64 overflow-y-auto">
+                      <FolderTreeSelect
+                        folders={folders}
+                        currentFolderId={video.folderId}
+                        onSelect={handleMoveToFolder}
+                        showRemoveOption={!!video.folderId}
+                        removeLabel="Remove from folder"
+                      />
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setShowDeleteDialog(true)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span>Delete</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent
+          side="right"
+          align="start"
+          sideOffset={8}
+          className="max-w-xs z-[100]"
+        >
+          {video.title || "Loading..."}
+        </TooltipContent>
+      </Tooltip>
 
-      {/* Delete confirmation dialog */}
+      {/* Delete confirmation dialog - outside tooltip to prevent interference */}
       <DeleteVideoDialog
         open={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
@@ -267,6 +283,6 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
         onConfirm={handleDeleteConfirm}
         isPending={deleteVideo.isPending}
       />
-    </div>
+    </TooltipProvider>
   );
 });
