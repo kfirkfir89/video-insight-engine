@@ -30,3 +30,18 @@ export function useMediaQuery(query: string): boolean {
 export function useIsDesktop(): boolean {
   return useMediaQuery("(min-width: 1024px)");
 }
+
+/**
+ * Hook to detect if viewport is tablet size (md breakpoint: 768px to 1023px)
+ */
+export function useIsTablet(): boolean {
+  return useMediaQuery("(min-width: 768px) and (max-width: 1023px)");
+}
+
+/**
+ * Hook to detect if viewport is large desktop (xl breakpoint: 1280px+)
+ * Use this for layouts that need more space (e.g., showing sidebar nav)
+ */
+export function useIsLargeDesktop(): boolean {
+  return useMediaQuery("(min-width: 1280px)");
+}

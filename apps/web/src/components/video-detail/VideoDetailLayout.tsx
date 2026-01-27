@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Layout } from "@/components/layout/Layout";
 import type { YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
 import { useActiveSection } from "@/hooks/use-active-section";
-import { useIsDesktop } from "@/hooks/use-media-query";
+import { useIsDesktop, useIsLargeDesktop } from "@/hooks/use-media-query";
 import { matchConceptsToSections } from "@/lib/timestamp-utils";
 import { TldrHero } from "./TldrHero";
 import { ArticleSection } from "./ArticleSection";
@@ -50,6 +50,7 @@ export function VideoDetailLayout({
   const effectiveDescriptionAnalysis = descriptionAnalysis || streamingState?.descriptionAnalysis || null;
   const playerRef = useRef<YouTubePlayerRef>(null);
   const isDesktop = useIsDesktop();
+  const isLargeDesktop = useIsLargeDesktop();
 
   // Track which section has the video player collapsed under it, and the start time
   const [activePlaySection, setActivePlaySection] = useState<string | null>(null);
@@ -283,27 +284,27 @@ export function VideoDetailLayout({
           </div>
         </>
       ) : isDesktop ? (
-        /* Desktop Layout: Two-column with sticky sidebar */
-        <div className="flex gap-6">
-          {/* Left column: Hero + Sections */}
+        /* Desktop Layout: Two-column with sticky sidebar on large screens */
+        <div className={isLargeDesktop ? "flex gap-6" : "pb-24"}>
+          {/* Main content column */}
           <div className="flex-1 min-w-0">
             {/* Hero section with background extending behind sidebar */}
-            <div className="relative -mx-6 -mt-6 px-6 pt-8 mb-6">
-              {/* Background image layer - extends to cover sidebar area */}
+            <div className={`relative -mx-4 md:-mx-6 -mt-4 md:-mt-6 px-4 md:px-6 pt-8 mb-6 ${isLargeDesktop ? "" : "pb-6"}`}>
+              {/* Background image layer - extends to cover sidebar area on large screens */}
               {(video.thumbnailUrl || video.youtubeId) && (
                 <div
                   className="absolute inset-0 bg-cover bg-center"
                   style={{
                     backgroundImage: `url(${video.thumbnailUrl || `https://img.youtube.com/vi/${video.youtubeId}/maxresdefault.jpg`})`,
                     opacity: 0.6,
-                    right: "-304px", // Extend to cover sidebar (280px + 24px gap)
+                    right: isLargeDesktop ? "-264px" : "0", // Only extend for sidebar on large screens
                   }}
                 />
               )}
               {/* Gradient overlay - also extends to cover sidebar */}
               <div
                 className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent"
-                style={{ right: "-304px" }}
+                style={{ right: isLargeDesktop ? "-264px" : "0" }}
               />
 
               {/* Content on top of background */}
@@ -318,7 +319,7 @@ export function VideoDetailLayout({
                 {renderHeader()}
 
                 {/* TLDR with Key Takeaways */}
-                <div className="px-25 pb-10">
+                <div className={isLargeDesktop ? "px-4 md:px-8 lg:px-16 xl:px-24 pb-10" : "pb-6"}>
                   <TldrHero
                     tldr={summary.tldr}
                     keyTakeaways={summary.keyTakeaways}
@@ -329,7 +330,7 @@ export function VideoDetailLayout({
             </div>
 
             {/* Sections */}
-            <div className="space-y-6 pb-12 px-25">
+            <div className={`space-y-6 ${isLargeDesktop ? "pb-12 px-4 md:px-8 lg:px-16 xl:px-24" : "pb-12"}`}>
               {/* Show chapters while sections are loading during streaming */}
               {isStreaming && effectiveChapters.length > 0 && summary.sections.length === 0 && (
                 <ChapterList
@@ -348,19 +349,30 @@ export function VideoDetailLayout({
             </div>
           </div>
 
-          {/* Right column: Sticky Chapter Nav - outside hero so it stays sticky */}
-          <aside className="w-[280px] shrink-0">
-            <div className="sticky top-6">
-              <StickyChapterNav
-                sections={summary.sections}
-                activeSection={activeId}
-                activePlaySection={activePlaySection}
-                onScrollToSection={scrollToSection}
-                onPlayFromSection={handlePlayFromSection}
-                onStopSection={handleStopSection}
-              />
-            </div>
-          </aside>
+          {/* Right column: Sticky Chapter Nav - only on large desktop */}
+          {isLargeDesktop && (
+            <aside className="w-[240px] xl:w-[280px] shrink-0">
+              <div className="sticky top-6">
+                <StickyChapterNav
+                  sections={summary.sections}
+                  activeSection={activeId}
+                  activePlaySection={activePlaySection}
+                  onScrollToSection={scrollToSection}
+                  onPlayFromSection={handlePlayFromSection}
+                  onStopSection={handleStopSection}
+                />
+              </div>
+            </aside>
+          )}
+
+          {/* Bottom Navigation for smaller desktops (1024-1280px) */}
+          {!isLargeDesktop && (
+            <MobileChapterNav
+              sections={summary.sections}
+              activeSection={activeId}
+              onScrollToSection={scrollToSection}
+            />
+          )}
         </div>
       ) : (
         /* Mobile Layout: Single Column + Bottom Navigation */
