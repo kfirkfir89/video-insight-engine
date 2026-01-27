@@ -223,6 +223,7 @@ export function SidebarSection({ type, label }: SidebarSectionProps) {
           )}
         </button>
         <button
+          type="button"
           className="h-7 w-7 shrink-0 flex items-center justify-center rounded hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={handleAddFolderClick}
         >
@@ -240,8 +241,8 @@ export function SidebarSection({ type, label }: SidebarSectionProps) {
           <div
             ref={setRootDropRef}
             className={cn(
-              "min-h-full pb-8 pr-2",
-              isRootOver && "bg-primary/5"
+              "h-full flex flex-col pb-8 pr-2",
+              isRootOver && "bg-primary/10"
             )}
           >
             {/* New folder input */}
@@ -296,6 +297,8 @@ export function SidebarSection({ type, label }: SidebarSectionProps) {
               </>
             )}
 
+            {/* Empty drop zone at bottom - ensures drag-to-root works in empty space */}
+            <div className="flex-grow min-h-[200px]" />
           </div>
         </ScrollArea>
       </CollapsibleContent>

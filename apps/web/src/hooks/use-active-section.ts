@@ -95,10 +95,18 @@ export function useActiveSection(sectionIds: string[]) {
   const scrollToSection = useCallback((sectionId: string) => {
     const element = document.getElementById(`section-${sectionId}`);
     if (element) {
-      element.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
+      // Find the scrollable main container - don't use scrollIntoView as it scrolls window
+      const scrollContainer = document.querySelector("main");
+      if (scrollContainer) {
+        const containerRect = scrollContainer.getBoundingClientRect();
+        const elementRect = element.getBoundingClientRect();
+        const relativeTop = elementRect.top - containerRect.top + scrollContainer.scrollTop;
+        const offset = 80; // px from top of container
+        scrollContainer.scrollTo({ top: relativeTop - offset, behavior: "smooth" });
+      } else {
+        // Fallback to scrollIntoView
+        element.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
       // Set active immediately for better UX
       setActiveId(sectionId);
     }

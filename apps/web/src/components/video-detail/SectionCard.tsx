@@ -56,7 +56,7 @@ export function SectionCard({
                 youtubeId={youtubeId}
                 startSeconds={startSeconds}
                 autoplay={true}
-                className="w-[70%] aspect-video rounded-lg overflow-hidden shadow-lg"
+                className="w-full md:w-[80%] lg:w-[70%] aspect-video rounded-lg overflow-hidden shadow-lg"
               />
             </div>
           </div>
