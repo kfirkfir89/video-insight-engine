@@ -205,6 +205,103 @@ WHY: Features you build "just in case" become code you maintain forever. 50% of 
 
 ---
 
+## Function-Level Design
+
+### Small, Focused Functions
+
+> "A function should do one thing and do it well"
+
+WHY: Large functions hide bugs, are hard to test, and hard to understand.
+Breaking them down makes each piece testable and reusable.
+
+**Guidelines:**
+
+| Metric     | Target | Max | Action if Exceeded         |
+| ---------- | ------ | --- | -------------------------- |
+| Lines      | 10-30  | 50  | Extract helper functions   |
+| Nesting    | 1-2    | 3   | Use early returns          |
+| Parameters | 3-4    | 5   | Use parameter object       |
+
+### Guard Clauses (Early Returns)
+
+WHY: Reduces nesting, makes the happy path obvious.
+
+```typescript
+// ❌ Deep nesting
+function processOrder(order, user) {
+  if (order) {
+    if (user) {
+      if (user.isActive) {
+        if (order.total > 0) {
+          // actual logic buried 4 levels deep
+          return doSomething(order, user);
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// ✅ Guard clauses
+function processOrder(order: Order, user: User): OrderResult {
+  if (!order) throw new ValidationError("Order is required");
+  if (!user) throw new ValidationError("User is required");
+  if (!user.isActive) throw new ForbiddenError("User account is inactive");
+  if (order.total <= 0) throw new ValidationError("Order total must be positive");
+
+  // Happy path at top level - clear and obvious
+  return doSomething(order, user);
+}
+```
+
+### When to Extract a Function
+
+- [ ] More than 30 lines? → Extract
+- [ ] More than 2 levels of nesting? → Extract
+- [ ] Need a comment to explain a block? → Extract into named function
+- [ ] Same code appears 3+ times? → Extract
+- [ ] Can be tested independently? → Extract
+
+### Signs a Function is Too Complex
+
+```typescript
+// ❌ Too much going on
+async function processVideo(videoId: string): Promise<VideoResult> {
+  // 1. Fetch video
+  const video = await db.videos.findOne({ _id: videoId });
+  if (!video) throw new NotFoundError("Video not found");
+
+  // 2. Download transcript
+  let transcript = await fetchTranscript(video.url);
+  if (!transcript) {
+    transcript = await generateTranscript(video.url);
+  }
+
+  // 3. Generate summary
+  const chunks = splitIntoChunks(transcript, 4000);
+  const summaries = [];
+  for (const chunk of chunks) {
+    const summary = await llm.generate(chunk);
+    summaries.push(summary);
+  }
+
+  // 4. Combine and save
+  const finalSummary = combineSummaries(summaries);
+  await db.summaries.insertOne({...});
+  return new VideoResult(...);
+}
+
+// ✅ Decomposed into focused functions
+async function processVideo(videoId: string): Promise<VideoResult> {
+  const video = await getVideoOrThrow(videoId);
+  const transcript = await getOrGenerateTranscript(video);
+  const summary = await generateSummary(transcript);
+  return await saveAndReturnResult(video, summary);
+}
+```
+
+---
+
 ## Dependency Injection
 
 ### Why DI Exists

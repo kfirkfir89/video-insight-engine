@@ -222,6 +222,14 @@ One entry per YouTube video. Shared across all users.
   transcript: string | null,
   transcriptType: "manual" | "auto-generated" | null,
 
+  // Transcript system fields
+  transcriptSource: "ytdlp" | "api" | "proxy" | "whisper" | null,
+  transcriptSegments: [{
+    text: string,
+    startMs: number,           // Milliseconds
+    endMs: number
+  }] | null,
+
   // Processed summary
   summary: {
     tldr: string,

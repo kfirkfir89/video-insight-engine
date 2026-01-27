@@ -96,10 +96,12 @@ LOG_LEVEL=debug
     └─▶ YouTube oEmbed API
     └─▶ Get: title, channel, thumbnail
 
- 5. FETCH TRANSCRIPT
-    └─▶ youtube-transcript-api
+ 5. FETCH TRANSCRIPT (Multi-Source Fallback Chain)
+    └─▶ 1. yt-dlp subtitles (embedded in video metadata)
+    └─▶ 2. youtube-transcript-api (with rate limit retry)
+    └─▶ 3. OpenAI Whisper (audio transcription fallback)
     └─▶ Handle: manual > auto-generated
-    └─▶ Output: list of segments with timestamps
+    └─▶ Output: NormalizedTranscript (segments with ms timestamps)
 
  6. CLEAN TRANSCRIPT
     └─▶ Remove [Music], [Applause], etc.
@@ -351,6 +353,20 @@ MODEL_MAP = {
 # src/models/schemas.py
 
 from pydantic import BaseModel
+from typing import Literal
+
+# Transcript system types
+TranscriptSource = Literal["ytdlp", "api", "proxy", "whisper"]
+
+class TranscriptSegment(BaseModel):
+    text: str
+    startMs: int  # Milliseconds
+    endMs: int
+
+class NormalizedTranscript(BaseModel):
+    text: str
+    segments: list[TranscriptSegment]
+    source: TranscriptSource
 
 class Section(BaseModel):
     id: str                    # UUID
@@ -372,6 +388,47 @@ class VideoSummary(BaseModel):
     keyTakeaways: list[str]
     sections: list[Section]
     concepts: list[Concept]
+```
+
+---
+
+## Transcript Fallback Chain
+
+The summarizer uses a multi-source fallback chain to maximize transcript availability:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                  TRANSCRIPT SOURCES                     │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  1. yt-dlp Subtitles                                   │
+│     └─▶ Extracted during video metadata fetch           │
+│     └─▶ Source: "ytdlp"                                │
+│                         │                               │
+│                         ▼                               │
+│  2. youtube-transcript-api                             │
+│     └─▶ With rate limit retry (tenacity)               │
+│     └─▶ 3 attempts, exponential backoff (4-30s)        │
+│     └─▶ Source: "api" or "proxy"                       │
+│                         │                               │
+│                         ▼                               │
+│  3. OpenAI Whisper (if enabled)                        │
+│     └─▶ Download audio via yt-dlp                      │
+│     └─▶ Transcribe with Whisper API                    │
+│     └─▶ For videos without captions                    │
+│     └─▶ Max 60 minutes                                 │
+│     └─▶ Source: "whisper"                              │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Configuration
+
+```bash
+# Whisper fallback settings
+WHISPER_ENABLED=true
+WHISPER_MAX_DURATION_MINUTES=60
+OPENAI_API_KEY=sk-...  # Required for Whisper
 ```
 
 ---
