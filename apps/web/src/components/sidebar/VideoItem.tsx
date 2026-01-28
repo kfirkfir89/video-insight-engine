@@ -7,6 +7,7 @@ import {
   MoreVertical,
   FolderInput,
   Trash2,
+  RefreshCw,
 } from "lucide-react";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -30,7 +31,7 @@ import { DeleteVideoDialog } from "@/components/dialogs/DeleteVideoDialog";
 import { cn } from "@/lib/utils";
 
 import { SIDEBAR_LAYOUT } from "@/lib/layout-constants";
-import { useMoveVideo, useDeleteVideo } from "@/hooks/use-videos";
+import { useMoveVideo, useDeleteVideo, useRetryVideo } from "@/hooks/use-videos";
 import { useSidebarTextClasses } from "@/hooks/use-sidebar-text-size";
 import { useUIStore, useSelectionMode } from "@/stores/ui-store";
 
@@ -48,6 +49,7 @@ interface VideoItemProps {
 export const VideoItem = memo(function VideoItem({ video, level, folders = [] }: VideoItemProps) {
   const moveVideo = useMoveVideo();
   const deleteVideo = useDeleteVideo();
+  const retryVideo = useRetryVideo();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const textClasses = useSidebarTextClasses();
 
@@ -98,6 +100,11 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
         setShowDeleteDialog(false);
       },
     });
+  };
+
+  const handleResummarize = () => {
+    if (!video.youtubeId) return;
+    retryVideo.mutate({ youtubeId: video.youtubeId, folderId: video.folderId });
   };
 
   // Long press handlers
@@ -197,7 +204,7 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
               className={cn("ml-2 truncate flex-1 cursor-pointer", textClasses.mainText)}
               onClick={(e) => (isDragging || selectionMode) && e.preventDefault()}
             >
-              {video.title || "Loading..."}
+              {video.title || "Processing..."}
             </Link>
 
             {/* Status icon and context menu - invisible in selection mode to prevent layout shift */}
@@ -211,7 +218,7 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
                   <TooltipProvider delayDuration={0}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="p-1">
                           <StatusIcon status={video.status} size={16} />
                         </span>
                       </TooltipTrigger>
@@ -252,6 +259,18 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
                       />
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
+                  {video.status === "failed" && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={handleResummarize}
+                        disabled={retryVideo.isPending}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        <span>Re-summarize</span>
+                      </DropdownMenuItem>
+                    </>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={() => setShowDeleteDialog(true)}
@@ -271,7 +290,7 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
           sideOffset={8}
           className="max-w-xs z-[100]"
         >
-          {video.title || "Loading..."}
+          {video.title || "Processing..."}
         </TooltipContent>
       </Tooltip>
 

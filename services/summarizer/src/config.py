@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     INTERNAL_SECRET: str = "dev-internal-secret-change-me"
 
     # Limits
-    MAX_VIDEO_DURATION_MINUTES: int = 180
+    MAX_VIDEO_DURATION_MINUTES: int = 240
     MIN_VIDEO_DURATION_SECONDS: int = 60
     LLM_TIMEOUT_SECONDS: float = 60.0
     LLM_NUM_RETRIES: int = 2

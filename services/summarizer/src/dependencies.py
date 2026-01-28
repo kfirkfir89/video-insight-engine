@@ -59,6 +59,13 @@ def create_llm_provider(providers: ProviderConfig | None = None) -> LLMProvider:
         "default", MODEL_MAP["anthropic"]["default"]
     )
 
+    # Resolve fast provider if specified
+    fast_model = None
+    if providers.fast:
+        fast_model = MODEL_MAP.get(providers.fast, {}).get(
+            "fast", MODEL_MAP["anthropic"]["fast"]
+        )
+
     fallback_models = None
     if providers.fallback:
         fallback_model = MODEL_MAP.get(providers.fallback, {}).get(
@@ -67,11 +74,12 @@ def create_llm_provider(providers: ProviderConfig | None = None) -> LLMProvider:
         fallback_models = [fallback_model]
 
     logger.info(
-        f"Creating custom LLMProvider: model={default_model}, fallback={fallback_models}"
+        f"Creating custom LLMProvider: model={default_model}, fast_model={fast_model}, fallback={fallback_models}"
     )
 
     return LLMProvider(
         model=default_model,
+        fast_model=fast_model,
         fallback_models=fallback_models,
     )
 

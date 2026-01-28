@@ -19,6 +19,13 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.folders.details(), id] as const,
   },
 
+  // Playlists
+  playlists: {
+    all: ["playlists"] as const,
+    videos: (playlistId: string) =>
+      [...queryKeys.playlists.all, "videos", playlistId] as const,
+  },
+
   // User
   user: {
     current: ["user", "current"] as const,

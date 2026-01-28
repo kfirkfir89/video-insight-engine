@@ -98,12 +98,63 @@ export async function streamRoutes(fastify: FastifyInstance) {
       });
 
       // Stream chunks with proper cleanup
+      // Parse SSE events to persist metadata early (allows resumption after refresh)
+      let buffer = '';
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
           const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+
+          // Parse complete SSE events from buffer
+          const lines = buffer.split('\n');
+          // Keep the last incomplete line in buffer
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const event = JSON.parse(data);
+              // Persist metadata to DB when received so title is available after refresh
+              if (event.event === 'metadata' && event.title) {
+                await db.collection('videoSummaryCache').updateOne(
+                  { _id: new ObjectId(videoSummaryId) },
+                  {
+                    $set: {
+                      title: event.title,
+                      channel: event.channel,
+                      thumbnailUrl: event.thumbnailUrl,
+                      duration: event.duration,
+                    },
+                  }
+                );
+
+                // Broadcast metadata to frontend via WebSocket for sidebar sync
+                fastify.broadcast(req.user.userId, {
+                  type: 'video.metadata',
+                  payload: {
+                    videoSummaryId,
+                    title: event.title,
+                    channel: event.channel,
+                    thumbnailUrl: event.thumbnailUrl,
+                    duration: event.duration,
+                  },
+                });
+              }
+            } catch (err) {
+              // Log parse errors in development for debugging
+              if (process.env.NODE_ENV === 'development') {
+                req.log.debug({ err, data }, 'SSE event parse skipped');
+              }
+            }
+          }
+
+          // Forward chunk to client
           reply.raw.write(chunk);
         }
       } finally {

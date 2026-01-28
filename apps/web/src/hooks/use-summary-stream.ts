@@ -50,6 +50,79 @@ export type {
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 
+// ─────────────────────────────────────────────────────
+// Error Message Mapping for Better UX
+// ─────────────────────────────────────────────────────
+
+/**
+ * Maps error codes and raw error messages to user-friendly text.
+ * Provides context-specific messages that help users understand what went wrong.
+ */
+function getUserFriendlyError(message: string, code?: string): string {
+  // Error code mappings (from backend ErrorCode enum)
+  const codeMessages: Record<string, string> = {
+    NO_TRANSCRIPT: "This video doesn't have captions available. Videos need captions or subtitles to be summarized.",
+    VIDEO_TOO_LONG: "This video is too long to summarize. Maximum duration is 4 hours.",
+    VIDEO_TOO_SHORT: "This video is too short to summarize. Minimum duration is 30 seconds.",
+    VIDEO_UNAVAILABLE: "This video is unavailable. It may be private, deleted, or region-restricted.",
+    VIDEO_RESTRICTED: "This video has restrictions that prevent it from being processed.",
+    LIVE_STREAM: "Live streams cannot be summarized. Please wait until the stream ends.",
+    LLM_ERROR: "Our AI service encountered an issue. Please try again in a few moments.",
+    RATE_LIMITED: "Too many requests. Please wait a moment and try again.",
+    UNKNOWN_ERROR: "Something went wrong while processing this video. Please try again.",
+  };
+
+  // Check if we have a specific code message
+  if (code && codeMessages[code]) {
+    return codeMessages[code];
+  }
+
+  // Pattern matching for common raw error messages
+  const patterns: Array<[RegExp, string]> = [
+    [/timeout|timed out/i, "The request took too long. This video might be too complex. Please try again."],
+    [/rate limit|429/i, "Too many requests. Please wait a moment and try again."],
+    [/connection|network|fetch/i, "Connection issue. Please check your internet and try again."],
+    [/transcript.*not available|no captions/i, "This video doesn't have captions available."],
+    [/video.*unavailable|private video/i, "This video is unavailable or private."],
+    [/authentication|unauthorized|401/i, "Session expired. Please refresh the page."],
+    [/server error|500|502|503/i, "Our servers are having issues. Please try again later."],
+  ];
+
+  for (const [pattern, friendlyMessage] of patterns) {
+    if (pattern.test(message)) {
+      return friendlyMessage;
+    }
+  }
+
+  // If message is already user-friendly (starts with capital, proper sentence), keep it
+  if (/^[A-Z].*[.!]$/.test(message) && message.length < 150) {
+    return message;
+  }
+
+  // Default fallback
+  return "Something went wrong while processing this video. Please try again.";
+}
+
+// LocalStorage cache key for partial streaming state
+const STREAM_CACHE_KEY = (id: string) => `vie-stream-cache-${id}`;
+
+interface StreamCache {
+  sections: Section[];
+  concepts: Concept[];
+  tldr: string;
+  keyTakeaways: string[];
+  metadata: {
+    title?: string;
+    channel?: string;
+    thumbnailUrl?: string;
+    duration?: number;
+  } | null;
+  timestamp: number;
+}
+
+// Cache expiry time - 1 hour (covers most video processing scenarios)
+const CACHE_EXPIRY_MS = 60 * 60 * 1000;
+
 export type StreamPhase =
   | "idle"
   | "connecting"
@@ -129,6 +202,74 @@ const initialState: StreamState = {
 // Batch interval for token updates (ms) - balance between responsiveness and performance
 const TOKEN_BATCH_INTERVAL = 50;
 
+// Save interval for localStorage cache (ms) - don't save on every update
+const CACHE_SAVE_INTERVAL = 2000;
+
+/**
+ * Load cached streaming state from localStorage.
+ * Returns null if no cache exists or cache is expired.
+ */
+function loadStreamCache(videoSummaryId: string): Partial<StreamState> | null {
+  try {
+    const cached = localStorage.getItem(STREAM_CACHE_KEY(videoSummaryId));
+    if (!cached) return null;
+
+    const data: StreamCache = JSON.parse(cached);
+
+    // Check if cache is expired
+    if (Date.now() - data.timestamp > CACHE_EXPIRY_MS) {
+      localStorage.removeItem(STREAM_CACHE_KEY(videoSummaryId));
+      return null;
+    }
+
+    // Only restore if we have meaningful data
+    if (data.sections.length === 0 && !data.tldr && data.concepts.length === 0 && !data.metadata) {
+      return null;
+    }
+
+    return {
+      sections: data.sections,
+      concepts: data.concepts,
+      tldr: data.tldr,
+      keyTakeaways: data.keyTakeaways,
+      metadata: data.metadata,
+      duration: data.metadata?.duration ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Save streaming state to localStorage for resumption after refresh.
+ */
+function saveStreamCache(videoSummaryId: string, state: StreamState): void {
+  try {
+    const cache: StreamCache = {
+      sections: state.sections,
+      concepts: state.concepts,
+      tldr: state.tldr,
+      keyTakeaways: state.keyTakeaways,
+      metadata: state.metadata,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem(STREAM_CACHE_KEY(videoSummaryId), JSON.stringify(cache));
+  } catch {
+    // Ignore localStorage errors (quota exceeded, etc.)
+  }
+}
+
+/**
+ * Clear cached streaming state when summarization completes.
+ */
+function clearStreamCache(videoSummaryId: string): void {
+  try {
+    localStorage.removeItem(STREAM_CACHE_KEY(videoSummaryId));
+  } catch {
+    // Ignore errors
+  }
+}
+
 export function useSummaryStream({
   videoSummaryId,
   enabled,
@@ -142,6 +283,10 @@ export function useSummaryStream({
   const tokenRefreshAttemptedRef = useRef(false);
   // Track current streaming text outside React state for performance
   const streamingTextRef = useRef("");
+  // Track if we've restored from cache to avoid double-restoration
+  const cacheRestoredRef = useRef(false);
+  // Track last cache save time to throttle saves
+  const lastCacheSaveRef = useRef(0);
   // Track if we're currently connecting to prevent duplicate connections
   const isConnectingRef = useRef(false);
   // Store callbacks in refs to avoid dependency issues
@@ -292,15 +437,15 @@ export function useSummaryStream({
         return;
       }
 
-      const errorMessage =
-        err instanceof Error ? err.message : "Connection failed";
+      const rawMessage = err instanceof Error ? err.message : "Connection failed";
+      const userFriendlyError = getUserFriendlyError(rawMessage);
 
       setState((prev) => ({
         ...prev,
         phase: "error",
-        error: errorMessage,
+        error: userFriendlyError,
       }));
-      onErrorRef.current?.(errorMessage);
+      onErrorRef.current?.(userFriendlyError);
 
       // Note: Removed automatic retry to prevent infinite loops.
       // User can manually retry using the retry() function.
@@ -340,6 +485,16 @@ export function useSummaryStream({
       retryCountRef.current = 0;
       tokenRefreshAttemptedRef.current = false;
       isConnectingRef.current = false;
+
+      // Restore cached state before connecting (allows resumption after refresh)
+      if (!cacheRestoredRef.current) {
+        cacheRestoredRef.current = true;
+        const cachedState = loadStreamCache(videoSummaryId);
+        if (cachedState) {
+          setState((prev) => ({ ...prev, ...cachedState }));
+        }
+      }
+
       connect();
     }
 
@@ -347,6 +502,7 @@ export function useSummaryStream({
     // when the user returns to the same video
     if (!enabled) {
       lastConnectedIdRef.current = null;
+      cacheRestoredRef.current = false;
     }
 
     // Cleanup: abort any in-flight request and clear batch timeout when dependencies change or unmount
@@ -365,6 +521,33 @@ export function useSummaryStream({
     // - lastConnectedIdRef prevents duplicate connections for same videoSummaryId
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, videoSummaryId, accessToken]);
+
+  // Save state to localStorage periodically for resumption after refresh
+  // Throttled to CACHE_SAVE_INTERVAL to avoid excessive writes
+  useEffect(() => {
+    if (!videoSummaryId || !enabled) return;
+
+    // Only save if we have meaningful data to cache
+    const hasData = state.sections.length > 0 || state.concepts.length > 0 || state.tldr || state.metadata;
+    if (!hasData) return;
+
+    // Don't save if stream completed or errored (will be cleared anyway)
+    if (state.phase === "done" || state.phase === "error" || state.phase === "cancelled") return;
+
+    const now = Date.now();
+    if (now - lastCacheSaveRef.current >= CACHE_SAVE_INTERVAL) {
+      lastCacheSaveRef.current = now;
+      saveStreamCache(videoSummaryId, state);
+    }
+  }, [videoSummaryId, enabled, state]);
+
+  // Clear cache when stream completes (success, error, or cancelled)
+  // This prevents stale cache entries from accumulating
+  useEffect(() => {
+    if (videoSummaryId && (state.phase === "done" || state.phase === "error" || state.phase === "cancelled")) {
+      clearStreamCache(videoSummaryId);
+    }
+  }, [videoSummaryId, state.phase]);
 
   return { ...state, retry, stop };
 }
@@ -560,11 +743,12 @@ function processEvent(
 
     case "error": {
       // Issue #11: Runtime validation for SSE events
-      const { message } = validateErrorEvent(event);
+      const { message, code } = validateErrorEvent(event);
+      const userFriendlyError = getUserFriendlyError(message, code);
       setState((prev) => ({
         ...prev,
         phase: "error",
-        error: message,
+        error: userFriendlyError,
       }));
       break;
     }

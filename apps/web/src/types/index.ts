@@ -18,6 +18,13 @@ export type {
   // Transcript types
   TranscriptSource,
   TranscriptSegment,
+  // Playlist types
+  PlaylistMode,
+  PlaylistInfo,
+  PlaylistVideo,
+  PlaylistPreview,
+  PlaylistImportVideo,
+  PlaylistImportResult,
 } from "@vie/types";
 
 export { ErrorCodes } from "@vie/types";

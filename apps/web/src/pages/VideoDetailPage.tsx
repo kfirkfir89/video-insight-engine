@@ -1,18 +1,20 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useCallback, useMemo } from "react";
-import { useVideo } from "@/hooks/use-videos";
+import { useVideo, useRetryVideo } from "@/hooks/use-videos";
 import { useSummaryStream, type StreamState } from "@/hooks/use-summary-stream";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, RefreshCw, AlertCircle } from "lucide-react";
 import { VideoDetailLayout } from "@/components/video-detail";
 import { StreamingIndicator } from "@/components/video-detail/StreamingIndicator";
 import type { VideoSummary, Section, Concept } from "@vie/types";
 
 export function VideoDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useVideo(id || "");
+  const retryVideo = useRetryVideo();
 
   // Extract data safely (may be undefined during loading/error)
   const video = data?.video;
@@ -26,6 +28,20 @@ export function VideoDetailPage() {
   const handleStreamComplete = useCallback(() => {
     refetch();
   }, [refetch]);
+
+  // Handle retry for failed videos
+  const handleRetry = useCallback(() => {
+    if (!video?.youtubeId) return;
+    retryVideo.mutate(
+      { youtubeId: video.youtubeId, folderId: video.folderId },
+      {
+        onSuccess: (result) => {
+          // Navigate to the new video
+          navigate(`/video/${result.video.id}`);
+        },
+      }
+    );
+  }, [video?.youtubeId, video?.folderId, retryVideo, navigate]);
 
   // Use streaming hook when processing
   const streamState = useSummaryStream({
@@ -82,6 +98,36 @@ export function VideoDetailPage() {
               <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
             </Button>
           </Link>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Failed state - show retry button
+  if (video?.status === "failed") {
+    return (
+      <Layout>
+        <div className="text-center py-12">
+          <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+          <h2 className="text-lg font-semibold mb-2">Summarization Failed</h2>
+          <p className="text-muted-foreground mb-6">
+            Something went wrong while processing this video.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Link to="/">
+              <Button variant="outline">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back
+              </Button>
+            </Link>
+            <Button onClick={handleRetry} disabled={retryVideo.isPending}>
+              {retryVideo.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Retry
+            </Button>
+          </div>
         </div>
       </Layout>
     );

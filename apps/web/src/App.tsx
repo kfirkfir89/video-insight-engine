@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWebSocket } from "@/hooks/use-websocket";
+import { useProcessingManager } from "@/hooks/use-processing-manager";
 import { Loader2, AlertTriangle } from "lucide-react";
 
 // Lazy load toast components - not needed for initial render
@@ -83,6 +84,9 @@ function AppRoutes() {
 
   // Connect to WebSocket for real-time updates
   useWebSocket();
+
+  // Manage processing streams for all videos (auto-resume, sidebar sync)
+  useProcessingManager();
 
   useEffect(() => {
     checkAuth();

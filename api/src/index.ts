@@ -14,6 +14,7 @@ import { websocketPlugin } from './plugins/websocket.js';
 import { authRoutes } from './routes/auth.routes.js';
 import { foldersRoutes } from './routes/folders.routes.js';
 import { videosRoutes } from './routes/videos.routes.js';
+import { playlistsRoutes } from './routes/playlists.routes.js';
 import { memorizeRoutes } from './routes/memorize.routes.js';
 import { explainRoutes } from './routes/explain.routes.js';
 import { internalRoutes } from './routes/internal.routes.js';
@@ -77,6 +78,7 @@ await fastify.register(authRoutes, { prefix: '/api/auth' });
 await fastify.register(foldersRoutes, { prefix: '/api/folders' });
 await fastify.register(videosRoutes, { prefix: '/api/videos' });
 await fastify.register(streamRoutes, { prefix: '/api/videos' });  // Streaming SSE route
+await fastify.register(playlistsRoutes, { prefix: '/api/playlists' });
 await fastify.register(memorizeRoutes, { prefix: '/api/memorize' });
 await fastify.register(explainRoutes, { prefix: '/api/explain' });
 await fastify.register(internalRoutes, { prefix: '/internal' });

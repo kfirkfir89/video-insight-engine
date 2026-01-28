@@ -77,6 +77,9 @@ apps/web/
     │   │   ├── VideoCard.tsx
     │   │   └── AddVideoDialog.tsx
     │   │
+    │   ├── playlists/
+    │   │   └── PlaylistPreview.tsx
+    │   │
     │   └── memorize/
     │       ├── MemorizedGrid.tsx
     │       ├── MemorizedCard.tsx
@@ -86,8 +89,11 @@ apps/web/
     │   ├── useAuth.ts
     │   ├── useFolders.ts
     │   ├── useVideos.ts
+    │   ├── use-playlists.ts
     │   ├── useMemorized.ts
-    │   └── use-summary-stream.ts  # SSE streaming
+    │   ├── use-summary-stream.ts     # SSE streaming for video detail
+    │   ├── use-processing-manager.ts # Auto-resume & sidebar sync
+    │   └── use-websocket.ts          # Real-time updates
     │
     ├── pages/
     │   ├── LoginPage.tsx
@@ -97,6 +103,7 @@ apps/web/
     │
     ├── stores/
     │   ├── auth-store.ts
+    │   ├── processing-store.ts  # Video processing state
     │   └── ui-store.ts
     │
     └── lib/
@@ -756,6 +763,79 @@ function App() {
   );
 }
 ```
+
+### WebSocket Events
+
+| Event Type | Payload | Action |
+|------------|---------|--------|
+| `video.status` | `{ videoSummaryId, status, progress?, error? }` | Invalidates video list queries |
+| `video.metadata` | `{ videoSummaryId, title, channel?, thumbnailUrl?, duration? }` | Invalidates video list for sidebar title sync |
+
+## Processing Manager (Auto-Resume)
+
+The `useProcessingManager` hook provides app-level management of video processing streams. It enables:
+
+1. **Auto-resume after browser refresh**: Automatically reconnects to SSE streams for any videos still processing
+2. **Sidebar title sync**: WebSocket broadcasts metadata updates for real-time title display
+3. **Centralized stream state**: Processing state shared across components via Zustand store
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  App.tsx                                                    │
+│  ├── useWebSocket()      - Real-time status/metadata events │
+│  └── useProcessingManager() - Auto-manages SSE streams      │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  processing-store.ts (Zustand)                              │
+│  └── streamStates: Map<videoSummaryId, ProcessingStreamState> │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                ┌─────────────┴─────────────┐
+                ▼                           ▼
+        ┌───────────────┐          ┌───────────────────┐
+        │ Sidebar       │          │ VideoDetailPage   │
+        │ (spinner)     │          │ (full progress)   │
+        └───────────────┘          └───────────────────┘
+```
+
+### Usage
+
+The hook is initialized in `App.tsx` after `useWebSocket()`:
+
+```tsx
+function AppRoutes() {
+  useWebSocket();          // Real-time updates
+  useProcessingManager();  // Auto-resume & sidebar sync
+  // ...
+}
+```
+
+### Processing Store State
+
+```typescript
+interface ProcessingStreamState {
+  phase: StreamPhase;  // "connecting" | "metadata" | "transcript" | "sections" | "done" | "error"
+  metadata: {
+    title?: string;
+    channel?: string;
+    thumbnailUrl?: string;
+    duration?: number;
+  } | null;
+  sectionsCount: number;
+  error: string | null;
+}
+```
+
+### How It Works
+
+1. **Watch video list**: When videos with status `pending` or `processing` are detected
+2. **Start SSE streams**: Automatically connects to `/api/videos/:id/stream` for each
+3. **Update store**: Stream events update `processing-store` state
+4. **Cleanup**: Streams are aborted when videos complete, are deleted, or user logs out
 
 ---
 

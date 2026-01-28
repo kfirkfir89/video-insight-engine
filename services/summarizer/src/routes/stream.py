@@ -224,7 +224,7 @@ async def run_parallel_analysis(
     # Build parallel tasks
     tasks: dict[str, asyncio.Task[Any]] = {
         "description": asyncio.create_task(
-            analyze_description(video_data.description),
+            analyze_description(video_data.description, fast_model=llm_service.fast_model),
             name="description"
         ),
         "tldr": asyncio.create_task(
@@ -685,6 +685,8 @@ async def stream_summarization(
                 "totalDurationRemoved": sum(s.end_seconds - s.start_seconds for s in sponsor_segments),
             })
 
+        logger.info(f"Processing chapters: has_chapters={video_data.has_chapters}")
+
         # Chapters
         if video_data.has_chapters:
             yield sse_event("chapters", {
@@ -696,7 +698,9 @@ async def stream_summarization(
             })
 
         # Validate duration
+        logger.info(f"Validating duration: {video_data.duration} seconds ({video_data.duration // 60} min)")
         validate_duration(video_data.duration)
+        logger.info("Duration validation passed")
 
         # ── Fetch Transcript ──
         transcript_data: TranscriptData | None = None
@@ -793,11 +797,38 @@ async def stream_summarization(
         repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), e.code)
         yield sse_event("error", {"message": str(e), "code": e.code.value})
 
+    except litellm.RateLimitError as e:
+        logger.warning(f"Rate limited for {video_summary_id}: {e}")
+        repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.RATE_LIMITED)
+        yield sse_event("error", {"message": "AI service rate limited. Please try again in a moment.", "code": ErrorCode.RATE_LIMITED.value})
+
+    except litellm.Timeout as e:
+        logger.warning(f"LLM timeout for {video_summary_id}: {e}")
+        repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.LLM_ERROR)
+        yield sse_event("error", {"message": "Request took too long. Please try again.", "code": ErrorCode.LLM_ERROR.value})
+
+    except litellm.APIError as e:
+        logger.error(f"LLM API error for {video_summary_id}: {e}")
+        repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.LLM_ERROR)
+        yield sse_event("error", {"message": "AI service error. Please try again.", "code": ErrorCode.LLM_ERROR.value})
+
     except Exception as e:
         import traceback
         logger.error(f"Stream error for {video_summary_id}: {e}\n{traceback.format_exc()}")
-        repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.UNKNOWN_ERROR)
-        yield sse_event("error", {"message": str(e)})
+
+        # Map common exception types to error codes for better frontend UX
+        error_code = ErrorCode.UNKNOWN_ERROR
+        error_str = str(e).lower()
+
+        if "timeout" in error_str or "timed out" in error_str:
+            error_code = ErrorCode.LLM_ERROR
+        elif "rate limit" in error_str or "429" in error_str:
+            error_code = ErrorCode.RATE_LIMITED
+        elif "transcript" in error_str or "caption" in error_str:
+            error_code = ErrorCode.NO_TRANSCRIPT
+
+        repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), error_code)
+        yield sse_event("error", {"message": str(e), "code": error_code.value})
 
 
 # ─────────────────────────────────────────────────────────────────────────────

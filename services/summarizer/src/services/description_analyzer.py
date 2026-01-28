@@ -110,8 +110,15 @@ def _parse_json_response(text: str) -> dict:
     return {}
 
 
-async def _analyze_description_async(description: str) -> DescriptionAnalysis:
-    """Analyze description asynchronously using LiteLLM (fast model)."""
+async def _analyze_description_async(
+    description: str, fast_model: str | None = None
+) -> DescriptionAnalysis:
+    """Analyze description asynchronously using LiteLLM (fast model).
+
+    Args:
+        description: The video description text
+        fast_model: Optional fast model override. Defaults to settings.llm_fast_model
+    """
     if not description or len(description.strip()) < 20:
         logger.debug("Description too short for analysis")
         return DescriptionAnalysis()
@@ -126,8 +133,9 @@ async def _analyze_description_async(description: str) -> DescriptionAnalysis:
         prompt = prompt_template.format(description=description)
 
         # Use the fast model for quick extraction
+        model = fast_model or settings.llm_fast_model
         response = await acompletion(
-            model=settings.llm_fast_model,
+            model=model,
             max_tokens=1500,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -180,7 +188,9 @@ async def _analyze_description_async(description: str) -> DescriptionAnalysis:
         return DescriptionAnalysis()
 
 
-async def analyze_description(description: str) -> DescriptionAnalysis:
+async def analyze_description(
+    description: str, fast_model: str | None = None
+) -> DescriptionAnalysis:
     """
     Analyze a video description to extract structured data using LiteLLM.
 
@@ -189,6 +199,7 @@ async def analyze_description(description: str) -> DescriptionAnalysis:
 
     Args:
         description: The full video description text
+        fast_model: Optional fast model override. Defaults to settings.llm_fast_model
 
     Returns:
         DescriptionAnalysis with extracted links, resources, timestamps, etc.
@@ -196,6 +207,7 @@ async def analyze_description(description: str) -> DescriptionAnalysis:
     Example:
         analysis = await analyze_description(video_data.description)
         if analysis.has_content:
-            print(f"Found {len(analysis.links)} links")
+            # analysis.links contains extracted URLs
+            # len(analysis.links) -> 5
     """
-    return await _analyze_description_async(description)
+    return await _analyze_description_async(description, fast_model)

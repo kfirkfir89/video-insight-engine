@@ -40,6 +40,7 @@ api/
     │   ├── auth.routes.ts
     │   ├── folders.routes.ts
     │   ├── videos.routes.ts
+    │   ├── playlists.routes.ts
     │   ├── memorize.routes.ts
     │   └── explain.routes.ts
     │
@@ -47,6 +48,7 @@ api/
     │   ├── auth.service.ts
     │   ├── folder.service.ts
     │   ├── video.service.ts
+    │   ├── playlist.service.ts
     │   ├── memorize.service.ts
     │   ├── cache.service.ts
     │   └── summarizer-client.ts  # HTTP client for summarizer
