@@ -105,6 +105,42 @@ export class VersionCreationError extends AppError {
   }
 }
 
+// Playlist-specific errors
+export class InvalidPlaylistUrlError extends AppError {
+  constructor() {
+    super('INVALID_PLAYLIST_URL', 400, 'Invalid playlist URL');
+    this.name = 'InvalidPlaylistUrlError';
+  }
+}
+
+export class PlaylistNotFoundError extends AppError {
+  constructor() {
+    super('PLAYLIST_NOT_FOUND', 404, 'Playlist not found or unavailable');
+    this.name = 'PlaylistNotFoundError';
+  }
+}
+
+export class PlaylistExtractionError extends AppError {
+  constructor(message = 'Failed to extract playlist data') {
+    super('PLAYLIST_EXTRACTION_FAILED', 502, message);
+    this.name = 'PlaylistExtractionError';
+  }
+}
+
+export class PlaylistTooLargeError extends AppError {
+  constructor(max: number) {
+    super('PLAYLIST_TOO_LARGE', 400, `Playlist exceeds maximum of ${max} videos`);
+    this.name = 'PlaylistTooLargeError';
+  }
+}
+
+export class UrlModeMismatchError extends AppError {
+  constructor(message: string, suggestion?: string) {
+    super('URL_MODE_MISMATCH', 400, suggestion ? `${message}. ${suggestion}` : message);
+    this.name = 'UrlModeMismatchError';
+  }
+}
+
 // External service errors
 export class ServiceTimeoutError extends AppError {
   constructor(service: string) {

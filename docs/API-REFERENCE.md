@@ -379,6 +379,126 @@ Remove video from user's library.
 
 ---
 
+## Playlists
+
+### POST /playlists/preview
+
+Preview a playlist before importing.
+
+**Rate Limit:** 30 requests per hour
+
+**Request:**
+
+```json
+{
+  "url": "https://www.youtube.com/playlist?list=PLxxx",
+  "maxVideos": 100
+}
+```
+
+**Response (200):**
+
+```json
+{
+  "playlist": {
+    "playlistId": "PLxxx",
+    "title": "React Tutorial Series",
+    "channel": "Fireship",
+    "thumbnailUrl": "https://img.youtube.com/...",
+    "totalVideos": 15,
+    "videos": [
+      {
+        "videoId": "dQw4w9WgXcQ",
+        "title": "React Hooks",
+        "position": 0,
+        "duration": 1200,
+        "thumbnailUrl": "https://img.youtube.com/...",
+        "isCached": true
+      }
+    ],
+    "cachedCount": 5
+  }
+}
+```
+
+---
+
+### POST /playlists/import
+
+Import a playlist, creating a folder and adding all videos.
+
+**Rate Limit:** 5 requests per 24 hours
+
+**Request:**
+
+```json
+{
+  "url": "https://www.youtube.com/playlist?list=PLxxx",
+  "folderId": "507f1f77bcf86cd799439013",
+  "maxVideos": 100
+}
+```
+
+**Response (201):**
+
+```json
+{
+  "folder": {
+    "id": "507f1f77bcf86cd799439013",
+    "name": "React Tutorial Series"
+  },
+  "videos": [
+    {
+      "id": "507f1f77bcf86cd799439014",
+      "videoSummaryId": "507f1f77bcf86cd799439020",
+      "youtubeId": "dQw4w9WgXcQ",
+      "title": "React Hooks",
+      "status": "completed",
+      "position": 0
+    }
+  ],
+  "totalVideos": 15,
+  "cachedCount": 5,
+  "processingCount": 10,
+  "failedCount": 0
+}
+```
+
+---
+
+### GET /playlists/:playlistId/videos
+
+Get videos in a playlist, sorted by position.
+
+**Response (200):**
+
+```json
+{
+  "videos": [
+    {
+      "id": "507f1f77bcf86cd799439014",
+      "videoSummaryId": "507f1f77bcf86cd799439020",
+      "youtubeId": "dQw4w9WgXcQ",
+      "title": "React Hooks",
+      "channel": "Fireship",
+      "duration": 1200,
+      "thumbnailUrl": "https://img.youtube.com/...",
+      "status": "completed",
+      "folderId": "507f1f77bcf86cd799439013",
+      "playlistInfo": {
+        "playlistId": "PLxxx",
+        "playlistTitle": "React Tutorial Series",
+        "position": 0,
+        "totalVideos": 15
+      },
+      "createdAt": "2024-01-15T10:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
 ## Explain
 
 ### GET /explain/:videoSummaryId/:targetType/:targetId

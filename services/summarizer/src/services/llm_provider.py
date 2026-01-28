@@ -51,6 +51,7 @@ class LLMProvider:
     def __init__(
         self,
         model: str | None = None,
+        fast_model: str | None = None,
         fallback_models: list[str] | None = None,
         timeout: float | None = None,
         num_retries: int | None = None,
@@ -59,11 +60,13 @@ class LLMProvider:
 
         Args:
             model: Model to use (e.g., "anthropic/claude-sonnet-4-20250514")
+            fast_model: Fast model for quick tasks (e.g., "anthropic/claude-3-5-haiku-20241022")
             fallback_models: List of fallback models if primary fails
             timeout: Request timeout in seconds
             num_retries: Number of retries on failure
         """
         self._model = model or settings.llm_model
+        self._fast_model = fast_model or settings.llm_fast_model
         self._fallback_models = fallback_models or settings.llm_fallback_models
         self._timeout = timeout or settings.LLM_TIMEOUT_SECONDS
         self._num_retries = num_retries or settings.LLM_NUM_RETRIES
@@ -72,6 +75,11 @@ class LLMProvider:
     def model(self) -> str:
         """Get the configured model."""
         return self._model
+
+    @property
+    def fast_model(self) -> str:
+        """Get the configured fast model for quick tasks."""
+        return self._fast_model
 
     def _extract_provider(self, model: str) -> str:
         """Extract provider from model string."""
@@ -275,8 +283,11 @@ class LLMProvider:
                 "messages": msg_dicts,
                 "max_tokens": max_tokens,
                 "timeout": self._timeout,
+                "num_retries": self._num_retries,
                 "stream": True,
             }
+            if self._fallback_models:
+                kwargs["fallbacks"] = self._fallback_models
             if metadata:
                 kwargs["metadata"] = metadata
 

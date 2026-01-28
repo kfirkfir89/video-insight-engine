@@ -39,6 +39,7 @@ services/summarizer/
     │   ├── llm.py                # LLM service (prompts + orchestration)
     │   ├── llm_provider.py       # LiteLLM abstraction layer
     │   ├── usage_tracker.py      # LLM usage tracking
+    │   ├── playlist.py           # Playlist extraction (yt-dlp)
     │   └── mongodb.py            # Database operations
     │
     ├── prompts/
@@ -490,6 +491,42 @@ Trigger video summarization (async).
   "videoSummaryId": "507f1f77bcf86cd799439011"
 }
 ```
+
+### POST /playlist/extract
+
+Extract playlist metadata using yt-dlp (fast, no video download).
+
+**Request:**
+```json
+{
+  "playlist_id": "PLxxx",
+  "max_videos": 100
+}
+```
+
+**Response:**
+```json
+{
+  "playlist_id": "PLxxx",
+  "title": "React Tutorial Series",
+  "channel": "Fireship",
+  "thumbnail_url": "https://img.youtube.com/...",
+  "total_videos": 15,
+  "videos": [
+    {
+      "video_id": "dQw4w9WgXcQ",
+      "title": "React Hooks",
+      "position": 0,
+      "duration": 1200,
+      "thumbnail_url": "https://img.youtube.com/..."
+    }
+  ]
+}
+```
+
+**Error Codes:**
+- `404`: Playlist not found or private
+- `500`: yt-dlp extraction failed
 
 ### GET /health
 

@@ -250,6 +250,72 @@ export interface SponsorSegment {
 }
 
 // ─────────────────────────────────────────────────────
+// Playlist Types
+// ─────────────────────────────────────────────────────
+
+export type PlaylistMode = 'video' | 'playlist';
+
+/**
+ * Playlist context stored in userVideos for ordering within a playlist.
+ * Stored in userVideos (not cache) because same video can be in multiple playlists.
+ */
+export interface PlaylistInfo {
+  playlistId: string;
+  playlistTitle: string;
+  position: number;       // 0-indexed order in playlist
+  totalVideos: number;    // Total videos at import time
+}
+
+/**
+ * Video info within a playlist preview (before import).
+ */
+export interface PlaylistVideo {
+  videoId: string;
+  title: string;
+  position: number;
+  duration: number | null;
+  thumbnailUrl: string | null;
+  isCached: boolean;
+}
+
+/**
+ * Playlist preview response - returned before importing.
+ */
+export interface PlaylistPreview {
+  playlistId: string;
+  title: string;
+  channel: string | null;
+  thumbnailUrl: string | null;
+  totalVideos: number;
+  videos: PlaylistVideo[];
+  cachedCount: number;
+}
+
+/**
+ * Video entry in playlist import result.
+ */
+export interface PlaylistImportVideo {
+  id: string;
+  videoSummaryId: string;
+  youtubeId: string;
+  title: string | null;
+  status: string;
+  position: number;
+}
+
+/**
+ * Result of importing a playlist.
+ */
+export interface PlaylistImportResult {
+  folder: { id: string; name: string };
+  videos: PlaylistImportVideo[];
+  totalVideos: number;
+  cachedCount: number;
+  processingCount: number;
+  failedCount: number;
+}
+
+// ─────────────────────────────────────────────────────
 // API Response Types
 // ─────────────────────────────────────────────────────
 
@@ -281,6 +347,8 @@ export interface VideoResponse {
   sponsorSegments?: SponsorSegment[];
   // Video context for persona-based rendering
   context?: VideoContext;
+  // Playlist context (if video was added via playlist import)
+  playlistInfo?: PlaylistInfo;
 }
 
 export interface FolderResponse {
@@ -313,6 +381,17 @@ export interface VideoStatusEvent {
   };
 }
 
+export interface VideoMetadataEvent {
+  type: 'video.metadata';
+  payload: {
+    videoSummaryId: string;
+    title: string;
+    channel?: string;
+    thumbnailUrl?: string;
+    duration?: number;
+  };
+}
+
 export interface ExpansionStatusEvent {
   type: 'expansion.status';
   payload: {
@@ -324,7 +403,7 @@ export interface ExpansionStatusEvent {
   };
 }
 
-export type WebSocketEvent = VideoStatusEvent | ExpansionStatusEvent;
+export type WebSocketEvent = VideoStatusEvent | VideoMetadataEvent | ExpansionStatusEvent;
 
 // ─────────────────────────────────────────────────────
 // SSE Stream Event Types (Progressive Summarization)
@@ -445,6 +524,13 @@ export const ErrorCodes = {
   VIDEO_TOO_LONG: 'VIDEO_TOO_LONG',
   VIDEO_TOO_SHORT: 'VIDEO_TOO_SHORT',
   VIDEO_UNAVAILABLE: 'VIDEO_UNAVAILABLE',
+
+  // Playlist
+  INVALID_PLAYLIST_URL: 'INVALID_PLAYLIST_URL',
+  PLAYLIST_NOT_FOUND: 'PLAYLIST_NOT_FOUND',
+  PLAYLIST_EXTRACTION_FAILED: 'PLAYLIST_EXTRACTION_FAILED',
+  PLAYLIST_TOO_LARGE: 'PLAYLIST_TOO_LARGE',
+  URL_MODE_MISMATCH: 'URL_MODE_MISMATCH',
 
   // General
   NOT_FOUND: 'NOT_FOUND',

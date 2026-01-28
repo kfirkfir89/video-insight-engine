@@ -33,7 +33,18 @@ interface VideoStatusEvent {
   };
 }
 
-type WebSocketEvent = VideoStatusEvent;
+interface VideoMetadataEvent {
+  type: "video.metadata";
+  payload: {
+    videoSummaryId: string;
+    title: string;
+    channel?: string;
+    thumbnailUrl?: string;
+    duration?: number;
+  };
+}
+
+type WebSocketEvent = VideoStatusEvent | VideoMetadataEvent;
 
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
@@ -75,6 +86,12 @@ export function useWebSocket() {
               queryKey: queryKeys.videos.detail(data.payload.userVideoId),
             });
           }
+        }
+
+        if (data.type === "video.metadata") {
+          // Metadata received - invalidate video list to update sidebar titles
+          debugLog("Metadata received for", data.payload.videoSummaryId, data.payload.title);
+          queryClient.invalidateQueries({ queryKey: queryKeys.videos.lists() });
         }
       } catch {
         // Ignore non-JSON messages like "connected"

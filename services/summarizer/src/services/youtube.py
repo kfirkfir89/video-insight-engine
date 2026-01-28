@@ -566,10 +566,10 @@ async def extract_video_data(video_id: str) -> VideoData:
 
     Example:
         video_data = await extract_video_data("dQw4w9WgXcQ")
-        print(video_data.title)  # "Rick Astley - Never Gonna Give You Up"
-        print(video_data.duration)  # 212 (seconds)
-        if video_data.has_chapters:
-            for ch in video_data.chapters:
-                print(f"{ch.start_time}s - {ch.title}")
+        # video_data.title -> "Rick Astley - Never Gonna Give You Up"
+        # video_data.duration -> 212 (seconds)
+        # video_data.has_chapters -> True
+        # video_data.chapters[0].start_time -> 0
+        # video_data.chapters[0].title -> "Intro"
     """
     return await asyncio.to_thread(_extract_video_data_sync, video_id)

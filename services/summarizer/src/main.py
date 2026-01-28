@@ -4,7 +4,13 @@ from typing import Annotated
 from fastapi import FastAPI, Depends
 
 from src.config import settings
-from src.models.schemas import SummarizeRequest, SummarizeResponse
+from src.models.schemas import (
+    SummarizeRequest,
+    SummarizeResponse,
+    PlaylistExtractRequest,
+    PlaylistExtractResponse,
+    PlaylistVideoInfo,
+)
 from src.dependencies import get_video_repository
 from src.repositories.mongodb_repository import MongoDBVideoRepository
 from src.routes.stream import router as stream_router
@@ -68,3 +74,43 @@ async def summarize(
         status="accepted",
         videoSummaryId=request.videoSummaryId,
     )
+
+
+@app.post("/playlist/extract", response_model=PlaylistExtractResponse)
+async def extract_playlist(request: PlaylistExtractRequest):
+    """
+    Extract playlist metadata using yt-dlp.
+
+    Uses extract_flat mode for fast metadata-only extraction.
+    Returns playlist info and list of videos with positions.
+    """
+    from src.services.playlist import extract_playlist_data
+
+    logger.info(f"Extracting playlist: {request.playlist_id} (max={request.max_videos})")
+
+    try:
+        playlist = await extract_playlist_data(
+            request.playlist_id,
+            max_videos=request.max_videos
+        )
+
+        return PlaylistExtractResponse(
+            playlist_id=playlist.playlist_id,
+            title=playlist.title,
+            channel=playlist.channel,
+            thumbnail_url=playlist.thumbnail_url,
+            total_videos=playlist.total_videos,
+            videos=[
+                PlaylistVideoInfo(
+                    video_id=v.video_id,
+                    title=v.title,
+                    position=v.position,
+                    duration=v.duration,
+                    thumbnail_url=v.thumbnail_url,
+                )
+                for v in playlist.videos
+            ],
+        )
+    except ValueError as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=str(e))

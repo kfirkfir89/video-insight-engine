@@ -218,6 +218,11 @@ class LLMService:
         """
         self._provider = provider
 
+    @property
+    def fast_model(self) -> str:
+        """Get the configured fast model from the provider."""
+        return self._provider.fast_model
+
     async def _call_llm(self, prompt: str, max_tokens: int = 2000) -> str:
         """Make an async LLM call.
 

@@ -425,7 +425,15 @@ User's video library. References shared cache.
   folderId: ObjectId | null,
   notes: string | null,
   isFavorite: boolean,            // Quick access
-  
+
+  // Playlist context (optional - set when imported via playlist)
+  playlistInfo: {
+    playlistId: string,           // YouTube playlist ID
+    playlistTitle: string,        // Playlist title at import time
+    position: number,             // 0-indexed position in playlist
+    totalVideos: number           // Total videos at import time
+  } | null,
+
   // Timestamps
   addedAt: Date,                  // When user added this video
   lastViewedAt: Date | null,      // Last time user opened it

@@ -118,3 +118,25 @@ export function useBulkMoveVideos() {
     },
   });
 }
+
+// Retry/re-summarize a failed video
+export function useRetryVideo() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      youtubeId,
+      folderId,
+    }: {
+      youtubeId: string;
+      folderId?: string | null;
+    }) => {
+      // Create new version with bypassCache to force re-summarization
+      const url = `https://www.youtube.com/watch?v=${youtubeId}`;
+      return videosApi.create(url, folderId ?? undefined, true);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.videos.lists() });
+    },
+  });
+}

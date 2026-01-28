@@ -21,6 +21,59 @@ dev/
 
 ## Active Tasks
 
+### Video Processing Auto-Resume & Sidebar Sync
+**Status**: Ready for Implementation
+**Location**: `dev/active/processing-auto-resume/`
+**Effort**: Medium (M) - 3 phases, ~8 hours
+
+Fix critical UX issues where video processing doesn't auto-resume after browser refresh and sidebar shows stale data.
+
+**Files**:
+- `processing-auto-resume-plan.md` - Implementation plan (3 phases)
+- `processing-auto-resume-context.md` - Key files, decisions, data flow
+- `processing-auto-resume-tasks.md` - 15 tasks with acceptance criteria
+
+**Key Features**:
+- App-level Processing Manager auto-starts SSE for all processing videos
+- WebSocket metadata events for sidebar title sync
+- Shared state between sidebar and detail page
+- No duplicate SSE connections
+
+**Next Steps**:
+1. Backend WebSocket enhancement (Phase 1)
+2. Frontend Processing Manager (Phase 2)
+3. Integration & Testing (Phase 3)
+
+---
+
+### YouTube Playlist Support
+**Status**: Ready for Implementation
+**Location**: `dev/active/playlist-support/`
+**Effort**: Large (XL) - 5 phases
+
+Add playlist import support to summarize entire YouTube playlists into a single folder with preserved ordering.
+
+**Files**:
+- `playlist-support-plan.md` - Comprehensive implementation plan (5 phases)
+- `playlist-support-context.md` - Key files, patterns, database schemas
+- `playlist-support-tasks.md` - 28 tasks with acceptance criteria
+
+**Key Features**:
+- Mode toggle (Single Video | Playlist) in UI
+- yt-dlp playlist extraction via summarizer
+- Auto-create folder with playlist name
+- Preserve video ordering via playlistInfo
+- Cache deduplication (no re-processing)
+
+**Next Steps**:
+1. URL parsing foundation (Phase 1)
+2. Add types and data model (Phase 2)
+3. Summarizer playlist extraction (Phase 3)
+4. Backend API and service (Phase 4)
+5. Frontend implementation (Phase 5)
+
+---
+
 ### Dev Tool for Model Selection
 **Status**: Ready for Implementation
 **Location**: `dev/active/dev-tool/`
@@ -94,5 +147,5 @@ When starting a new major feature or refactoring:
 
 ---
 
-**Last Updated**: 2025-01-25
+**Last Updated**: 2026-01-28
 **Maintained By**: Development Team

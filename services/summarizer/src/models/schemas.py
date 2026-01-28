@@ -104,3 +104,33 @@ class ProcessingResult(BaseModel):
     transcript_type: str
     summary: VideoSummary
     token_usage: dict
+
+
+# ─────────────────────────────────────────────────────
+# Playlist Extraction Types
+# ─────────────────────────────────────────────────────
+
+
+class PlaylistExtractRequest(BaseModel):
+    """Request to extract playlist metadata."""
+    playlist_id: str
+    max_videos: int = 100
+
+
+class PlaylistVideoInfo(BaseModel):
+    """Information about a single video in a playlist."""
+    video_id: str
+    title: str
+    position: int
+    duration: int | None = None
+    thumbnail_url: str | None = None
+
+
+class PlaylistExtractResponse(BaseModel):
+    """Response from playlist extraction."""
+    playlist_id: str
+    title: str
+    channel: str | None = None
+    thumbnail_url: str | None = None
+    total_videos: int
+    videos: list[PlaylistVideoInfo]
