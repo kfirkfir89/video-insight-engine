@@ -1,13 +1,5 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import {
-  listMemorizedItems,
-  getMemorizedItemById,
-  createMemorizedItem,
-  updateMemorizedItem,
-  deleteMemorizedItem,
-  listChatsForItem,
-} from '../services/memorize.service.js';
 import { idParamSchema, objectIdSchema } from '../utils/validation.js';
 import { ValidationError } from '../utils/errors.js';
 
@@ -39,6 +31,8 @@ const updateItemSchema = z.object({
 });
 
 export async function memorizeRoutes(fastify: FastifyInstance) {
+  const { memorizeService } = fastify.container;
+
   // GET /api/memorize
   fastify.get<{
     Querystring: z.infer<typeof memorizeQuerySchema>;
@@ -46,7 +40,7 @@ export async function memorizeRoutes(fastify: FastifyInstance) {
     preHandler: [fastify.authenticate],
   }, async (req) => {
     const { folderId } = memorizeQuerySchema.parse(req.query);
-    const items = await listMemorizedItems(fastify.mongo.db, req.user.userId, folderId);
+    const items = await memorizeService.list(req.user.userId, folderId);
     return { items };
   });
 
@@ -57,7 +51,7 @@ export async function memorizeRoutes(fastify: FastifyInstance) {
     preHandler: [fastify.authenticate],
   }, async (req) => {
     const { id } = idParamSchema.parse(req.params);
-    const item = await getMemorizedItemById(fastify.mongo.db, req.user.userId, id);
+    const item = await memorizeService.getById(req.user.userId, id);
     return { item };
   });
 
@@ -81,7 +75,7 @@ export async function memorizeRoutes(fastify: FastifyInstance) {
       throw new ValidationError('expansionId required for system_expansion type');
     }
 
-    const item = await createMemorizedItem(fastify.mongo.db, {
+    const item = await memorizeService.create({
       userId: req.user.userId,
       ...input,
     });
@@ -98,7 +92,7 @@ export async function memorizeRoutes(fastify: FastifyInstance) {
   }, async (req) => {
     const { id } = idParamSchema.parse(req.params);
     const input = updateItemSchema.parse(req.body);
-    return updateMemorizedItem(fastify.mongo.db, req.user.userId, id, input);
+    return memorizeService.update(req.user.userId, id, input);
   });
 
   // DELETE /api/memorize/:id
@@ -108,7 +102,7 @@ export async function memorizeRoutes(fastify: FastifyInstance) {
     preHandler: [fastify.authenticate],
   }, async (req, reply) => {
     const { id } = idParamSchema.parse(req.params);
-    await deleteMemorizedItem(fastify.mongo.db, req.user.userId, id);
+    await memorizeService.delete(req.user.userId, id);
     return reply.status(204).send();
   });
 
@@ -119,9 +113,9 @@ export async function memorizeRoutes(fastify: FastifyInstance) {
     preHandler: [fastify.authenticate],
   }, async (req) => {
     const { id } = idParamSchema.parse(req.params);
-    // getMemorizedItemById will throw if not found
-    await getMemorizedItemById(fastify.mongo.db, req.user.userId, id);
-    const chats = await listChatsForItem(fastify.mongo.db, req.user.userId, id);
+    // getById will throw if not found
+    await memorizeService.getById(req.user.userId, id);
+    const chats = await memorizeService.listChats(req.user.userId, id);
     return { chats };
   });
 }

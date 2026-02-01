@@ -1,3 +1,4 @@
+import { FastifyBaseLogger } from 'fastify';
 import { config } from '../config.js';
 import { ServiceTimeoutError, ServiceUnavailableError } from '../utils/errors.js';
 
@@ -38,127 +39,127 @@ async function fetchWithTimeout(
   }
 }
 
-/**
- * Call explain_auto endpoint to generate documentation for a section or concept.
- * Results are cached by vie-explainer.
- */
-export async function explainAuto(
-  videoSummaryId: string,
-  targetType: 'section' | 'concept',
-  targetId: string
-): Promise<ExplainAutoResult> {
-  try {
-    const response = await fetchWithTimeout(
-      `${config.EXPLAINER_URL}/explain/auto`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          videoSummaryId,
-          targetType,
-          targetId,
-        }),
-      },
-      EXPLAINER_TIMEOUT_MS
-    );
+export class ExplainerClient {
+  constructor(private readonly logger: FastifyBaseLogger) {}
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new ServiceUnavailableError(`Explainer: ${error.detail || response.status}`);
-    }
+  /**
+   * Call explain_auto endpoint to generate documentation for a section or concept.
+   * Results are cached by vie-explainer.
+   */
+  async explainAuto(
+    videoSummaryId: string,
+    targetType: 'section' | 'concept',
+    targetId: string
+  ): Promise<ExplainAutoResult> {
+    try {
+      const response = await fetchWithTimeout(
+        `${config.EXPLAINER_URL}/explain/auto`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            videoSummaryId,
+            targetType,
+            targetId,
+          }),
+        },
+        EXPLAINER_TIMEOUT_MS
+      );
 
-    return response.json();
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new ServiceTimeoutError('Explainer');
-    }
-    if (err instanceof ServiceUnavailableError || err instanceof ServiceTimeoutError) {
-      throw err;
-    }
-    throw new ServiceUnavailableError('Explainer');
-  }
-}
-
-/**
- * Call explain_chat endpoint for interactive conversation about a memorized item.
- * Personalized per user, not cached.
- */
-export async function explainChat(
-  request: ExplainChatRequest
-): Promise<ExplainChatResult> {
-  try {
-    const response = await fetchWithTimeout(
-      `${config.EXPLAINER_URL}/explain/chat`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          memorizedItemId: request.memorizedItemId,
-          userId: request.userId,
-          message: request.message,
-          ...(request.chatId && { chatId: request.chatId }),
-        }),
-      },
-      EXPLAINER_TIMEOUT_MS
-    );
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new ServiceUnavailableError(`Explainer: ${error.detail || response.status}`);
-    }
-
-    return response.json();
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new ServiceTimeoutError('Explainer');
-    }
-    if (err instanceof ServiceUnavailableError || err instanceof ServiceTimeoutError) {
-      throw err;
-    }
-    throw new ServiceUnavailableError('Explainer');
-  }
-}
-
-/**
- * Call explain_chat streaming endpoint for real-time SSE responses.
- * Returns raw Response to allow streaming to client.
- */
-export async function explainChatStream(
-  request: ExplainChatRequest
-): Promise<Response> {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), EXPLAINER_TIMEOUT_MS);
-
-    const response = await fetch(
-      `${config.EXPLAINER_URL}/explain/chat/stream`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          memorizedItemId: request.memorizedItemId,
-          userId: request.userId,
-          message: request.message,
-          ...(request.chatId && { chatId: request.chatId }),
-        }),
-        signal: controller.signal,
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        throw new ServiceUnavailableError(`Explainer: ${error.detail || response.status}`);
       }
-    );
 
-    clearTimeout(timeoutId);
+      return response.json();
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new ServiceTimeoutError('Explainer');
+      }
+      if (err instanceof ServiceUnavailableError || err instanceof ServiceTimeoutError) {
+        throw err;
+      }
+      throw new ServiceUnavailableError('Explainer');
+    }
+  }
 
-    if (!response.ok) {
-      throw new ServiceUnavailableError(`Explainer streaming: ${response.status}`);
-    }
+  /**
+   * Call explain_chat endpoint for interactive conversation about a memorized item.
+   * Personalized per user, not cached.
+   */
+  async explainChat(request: ExplainChatRequest): Promise<ExplainChatResult> {
+    try {
+      const response = await fetchWithTimeout(
+        `${config.EXPLAINER_URL}/explain/chat`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            memorizedItemId: request.memorizedItemId,
+            userId: request.userId,
+            message: request.message,
+            ...(request.chatId && { chatId: request.chatId }),
+          }),
+        },
+        EXPLAINER_TIMEOUT_MS
+      );
 
-    return response;
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new ServiceTimeoutError('Explainer streaming');
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        throw new ServiceUnavailableError(`Explainer: ${error.detail || response.status}`);
+      }
+
+      return response.json();
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new ServiceTimeoutError('Explainer');
+      }
+      if (err instanceof ServiceUnavailableError || err instanceof ServiceTimeoutError) {
+        throw err;
+      }
+      throw new ServiceUnavailableError('Explainer');
     }
-    if (err instanceof ServiceUnavailableError || err instanceof ServiceTimeoutError) {
-      throw err;
+  }
+
+  /**
+   * Call explain_chat streaming endpoint for real-time SSE responses.
+   * Returns raw Response to allow streaming to client.
+   */
+  async explainChatStream(request: ExplainChatRequest): Promise<Response> {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), EXPLAINER_TIMEOUT_MS);
+
+      const response = await fetch(
+        `${config.EXPLAINER_URL}/explain/chat/stream`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            memorizedItemId: request.memorizedItemId,
+            userId: request.userId,
+            message: request.message,
+            ...(request.chatId && { chatId: request.chatId }),
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new ServiceUnavailableError(`Explainer streaming: ${response.status}`);
+      }
+
+      return response;
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new ServiceTimeoutError('Explainer streaming');
+      }
+      if (err instanceof ServiceUnavailableError || err instanceof ServiceTimeoutError) {
+        throw err;
+      }
+      throw new ServiceUnavailableError('Explainer streaming');
     }
-    throw new ServiceUnavailableError('Explainer streaming');
   }
 }

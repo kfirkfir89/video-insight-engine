@@ -1,11 +1,5 @@
+import { FastifyBaseLogger } from 'fastify';
 import { config } from '../config.js';
-
-// Logger for summarizer client (can be replaced with proper logging library)
-const logger = {
-  info: (msg: string, context?: unknown) => console.info(`[SummarizerClient] ${msg}`, context ?? ''),
-  warn: (msg: string, context?: unknown) => console.warn(`[SummarizerClient] ${msg}`, context ?? ''),
-  error: (msg: string, context?: unknown) => console.error(`[SummarizerClient] ${msg}`, context ?? ''),
-};
 
 export type Provider = 'anthropic' | 'openai' | 'gemini';
 
@@ -15,7 +9,7 @@ export interface ProviderConfig {
   fallback?: Provider | null;
 }
 
-interface SummarizeRequest {
+export interface SummarizeRequest {
   videoSummaryId: string;
   youtubeId: string;
   url: string;
@@ -50,46 +44,50 @@ async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export async function triggerSummarization(request: SummarizeRequest): Promise<void> {
-  // Fire and forget with retry logic - but don't block the caller
-  (async () => {
-    let lastError: Error | null = null;
+export class SummarizerClient {
+  constructor(private readonly logger: FastifyBaseLogger) {}
 
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        const response = await fetchWithTimeout(
-          `${config.SUMMARIZER_URL}/summarize`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(request),
-          },
-          SUMMARIZER_TIMEOUT_MS
-        );
+  triggerSummarization(request: SummarizeRequest): void {
+    // Fire and forget with retry logic - but don't block the caller
+    (async () => {
+      let lastError: Error | null = null;
 
-        if (response.ok) {
-          logger.info(`Summarization triggered successfully for ${request.youtubeId}`);
-          return;
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const response = await fetchWithTimeout(
+            `${config.SUMMARIZER_URL}/summarize`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(request),
+            },
+            SUMMARIZER_TIMEOUT_MS
+          );
+
+          if (response.ok) {
+            this.logger.info({ youtubeId: request.youtubeId }, 'Summarization triggered successfully');
+            return;
+          }
+
+          lastError = new Error(`Summarizer returned ${response.status}`);
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+
+          if (lastError.name === 'AbortError') {
+            this.logger.warn({ attempt, maxRetries: MAX_RETRIES }, 'Summarization request timed out');
+          } else {
+            this.logger.warn({ attempt, maxRetries: MAX_RETRIES, error: lastError.message }, 'Summarization request failed');
+          }
         }
 
-        lastError = new Error(`Summarizer returned ${response.status}`);
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err));
-
-        if (lastError.name === 'AbortError') {
-          logger.warn(`Summarization request timed out (attempt ${attempt}/${MAX_RETRIES})`);
-        } else {
-          logger.warn(`Summarization request failed (attempt ${attempt}/${MAX_RETRIES}): ${lastError.message}`);
+        if (attempt < MAX_RETRIES) {
+          await sleep(RETRY_DELAY_MS * Math.pow(2, attempt - 1)); // Exponential backoff: 1s, 2s, 4s
         }
       }
 
-      if (attempt < MAX_RETRIES) {
-        await sleep(RETRY_DELAY_MS * attempt); // Exponential backoff
-      }
-    }
-
-    logger.error(`Failed to trigger summarization after ${MAX_RETRIES} attempts: ${lastError?.message}`);
-  })().catch((err) => {
-    logger.error('Unexpected error in triggerSummarization:', err);
-  });
+      this.logger.error({ maxRetries: MAX_RETRIES, error: lastError?.message }, 'Failed to trigger summarization after retries');
+    })().catch((err) => {
+      this.logger.error({ error: err }, 'Unexpected error in triggerSummarization');
+    });
+  }
 }

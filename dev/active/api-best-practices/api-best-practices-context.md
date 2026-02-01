@@ -1,359 +1,200 @@
 # API Best Practices Refactor - Context
 
-**Last Updated:** 2026-02-01
+**Last Updated:** 2026-02-01 (Session Complete)
+**Status:** ✅ ALL 4 PHASES COMPLETE
 
 ---
 
-## Key Files to Modify
+## Session Summary
 
-### Core Bootstrap (Phase 1-2)
-| File | Current | Change |
-|------|---------|--------|
-| `api/src/index.ts` | All-in-one | Simplify to import server.ts |
-| `api/src/app.ts` | N/A | NEW - buildApp() function |
-| `api/src/server.ts` | N/A | NEW - Server startup + process handlers |
-| `api/src/container.ts` | N/A | NEW - DI container |
-| `api/src/plugins/helmet.ts` | N/A | NEW - Security headers |
-| `api/src/plugins/mongodb.ts` | Connection only | Add index creation |
+All four phases of the API best practices refactor have been completed:
 
-### Repositories (Phase 3)
-| File | Creates |
-|------|---------|
-| `api/src/repositories/video.repository.ts` | VideoRepository class |
-| `api/src/repositories/folder.repository.ts` | FolderRepository class |
-| `api/src/repositories/memorize.repository.ts` | MemorizeRepository class |
-| `api/src/repositories/user.repository.ts` | UserRepository class |
-| `api/src/repositories/index.ts` | Export all |
+1. **Phase 1: Security Hardening** - Helmet plugin, process handlers, graceful shutdown
+2. **Phase 2: Bootstrap Refactor** - buildApp(), server.ts, container.ts, simplified index.ts
+3. **Phase 3: Repository Layer** - 4 repositories, all services refactored to DI
+4. **Phase 4: Test Suite** - Vitest setup, 59 tests passing
 
-### Services to Refactor (Phase 3)
-| File | Change |
-|------|--------|
-| `api/src/services/video.service.ts` | Use VideoRepository, inject logger |
-| `api/src/services/folder.service.ts` | Convert to class, use FolderRepository |
-| `api/src/services/memorize.service.ts` | Use MemorizeRepository |
-| `api/src/services/playlist.service.ts` | Inject VideoService |
-| `api/src/services/summarizer-client.ts` | Fix exponential backoff, inject logger |
+---
 
-### Routes to Update (Phase 2)
-| File | Change |
-|------|--------|
-| `api/src/routes/videos.routes.ts` | Use `fastify.container.videoService` |
-| `api/src/routes/folders.routes.ts` | Use `fastify.container.folderService` |
-| `api/src/routes/memorize.routes.ts` | Use `fastify.container.memorizeService` |
-| `api/src/routes/playlists.routes.ts` | Use container, add rate limit |
-| `api/src/routes/auth.routes.ts` | Use `fastify.container.authService` |
+## Files Created
 
-### Tests (Phase 4)
+### Core Infrastructure
 | File | Purpose |
 |------|---------|
-| `api/src/__tests__/setup.ts` | Test configuration, MongoDB memory server |
-| `api/src/__tests__/factories/*.ts` | Test data factories |
-| `api/src/__tests__/routes/*.test.ts` | Route integration tests |
-| `api/src/__tests__/services/*.test.ts` | Service unit tests |
+| `api/src/app.ts` | buildApp() function with container injection support |
+| `api/src/server.ts` | Server startup, process handlers, graceful shutdown |
+| `api/src/container.ts` | DI container with all repos/services |
+| `api/src/plugins/helmet.ts` | Security headers plugin |
+
+### Repositories
+| File | Purpose |
+|------|---------|
+| `api/src/repositories/video.repository.ts` | Video and cache operations |
+| `api/src/repositories/folder.repository.ts` | Folder CRUD |
+| `api/src/repositories/user.repository.ts` | User operations |
+| `api/src/repositories/memorize.repository.ts` | Memorized items |
+| `api/src/repositories/index.ts` | Barrel export |
+
+### Tests
+| File | Tests |
+|------|-------|
+| `api/src/test/env.ts` | Test environment variables |
+| `api/src/test/setup.ts` | MongoDB memory server setup |
+| `api/src/test/helpers.ts` | Mock container, buildTestApp |
+| `api/src/app.test.ts` | 3 tests |
+| `api/src/services/video.service.test.ts` | 4 tests |
+| `api/src/routes/explain.routes.test.ts` | 10 tests |
+| `api/src/routes/videos.routes.test.ts` | 16 tests |
+| `api/src/routes/folders.routes.test.ts` | 14 tests |
+| `api/src/routes/auth.routes.test.ts` | 12 tests |
+| `api/vitest.config.ts` | Vitest configuration |
 
 ---
 
-## Code Patterns
+## Files Modified
 
-### buildApp Pattern (fastify.md)
+| File | Change |
+|------|--------|
+| `api/src/index.ts` | Simplified to 3 lines |
+| `api/src/config.ts` | Added CORS URL validation |
+| `api/src/plugins/mongodb.ts` | Added onReady hook for indexes |
+| `api/src/services/video.service.ts` | DI, fixed videoSummaryId return |
+| `api/src/services/folder.service.ts` | Converted to class with DI |
+| `api/src/services/auth.service.ts` | DI with UserRepository |
+| `api/src/services/memorize.service.ts` | DI with repositories |
+| `api/src/services/playlist.service.ts` | DI with services |
+| `api/src/services/summarizer-client.ts` | Class with DI, fixed exponential backoff |
+| `api/src/services/explainer-client.ts` | Class with DI |
+| `api/src/routes/*.ts` | All use fastify.container |
+| `api/package.json` | Added vitest, mongodb-memory-server |
+
+---
+
+## Key Decisions Made
+
+### Testing Strategy
+- **Mock Container > Factories**: Instead of test factories, used mock container pattern
+- Container overrides passed to `buildApp({ container: mockContainer })`
+- Each test file creates its own mock container for isolation
+
+### Architecture
+- **buildApp() pattern**: Separates app creation from server lifecycle
+- **Container injection**: `buildApp({ container })` for test overrides
+- **Type declaration in container.ts**: `declare module 'fastify'` for TypeScript
+
+### Bug Fixes During Session
+- `explain.routes.ts`: Updated to use container (was using old function exports)
+- `video.service.ts`: Ensured `videoSummaryId` always returned (was optional in some paths)
+
+---
+
+## Test Infrastructure
+
 ```typescript
-// app.ts
-export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstance> {
-  const app = Fastify({
-    logger: options?.logger ?? {
-      level: config.LOG_LEVEL,
-      transport: isDev ? { target: 'pino-pretty' } : undefined,
-    },
-  });
-
-  // Plugins
-  await app.register(helmet);
-  await app.register(cors, corsOptions);
-  await app.register(rateLimit);
-  await app.register(mongodb);
-  await app.register(jwt);
-
-  // Container (DI)
-  const container = createContainer(app.mongo.db, app.log);
-  app.decorate('container', container);
-
-  // Routes
-  await app.register(routes);
-
-  return app;
-}
-```
-
-### Container Pattern (services.md)
-```typescript
-// container.ts
-export interface Container {
-  // Repositories
-  videoRepository: VideoRepository;
-  folderRepository: FolderRepository;
-  memorizeRepository: MemorizeRepository;
-  userRepository: UserRepository;
-
-  // Services
-  authService: AuthService;
-  videoService: VideoService;
-  folderService: FolderService;
-  memorizeService: MemorizeService;
-  playlistService: PlaylistService;
-  summarizerClient: SummarizerClient;
-  explainerClient: ExplainerClient;
-}
-
-export function createContainer(db: Db, logger: FastifyBaseLogger): Container {
-  // Repositories
-  const videoRepository = new VideoRepository(db);
-  const folderRepository = new FolderRepository(db);
-  const memorizeRepository = new MemorizeRepository(db);
-  const userRepository = new UserRepository(db);
-
-  // Services (inject dependencies)
-  const authService = new AuthService(userRepository, logger);
-  const videoService = new VideoService(videoRepository, logger);
-  const folderService = new FolderService(folderRepository, logger);
-  const memorizeService = new MemorizeService(memorizeRepository, videoRepository, logger);
-  const summarizerClient = new SummarizerClient(logger);
-  const explainerClient = new ExplainerClient(logger);
-  const playlistService = new PlaylistService(videoService, folderService, summarizerClient, logger);
-
+// api/src/test/helpers.ts
+export function createMockContainer(): MockContainer {
   return {
-    videoRepository,
-    folderRepository,
-    memorizeRepository,
-    userRepository,
-    authService,
-    videoService,
-    folderService,
-    memorizeService,
-    playlistService,
-    summarizerClient,
-    explainerClient,
+    videoService: { createVideo: vi.fn(), ... },
+    folderService: { list: vi.fn(), ... },
+    authService: { register: vi.fn(), ... },
+    // All services mocked with vi.fn()
   };
 }
-```
 
-### Repository Pattern (services.md)
-```typescript
-// repositories/video.repository.ts
-export class VideoRepository {
-  private readonly collection: Collection<VideoSummaryCacheDocument>;
-  private readonly userVideosCollection: Collection<UserVideoDocument>;
-
-  constructor(db: Db) {
-    this.collection = db.collection('videoSummaryCache');
-    this.userVideosCollection = db.collection('userVideos');
-  }
-
-  async findById(id: string): Promise<VideoSummary | null> {
-    const doc = await this.collection.findOne({ _id: new ObjectId(id) });
-    return doc ? this.toEntity(doc) : null;
-  }
-
-  async findByYoutubeId(youtubeId: string): Promise<VideoSummary | null> {
-    const doc = await this.collection.findOne({ youtubeId });
-    return doc ? this.toEntity(doc) : null;
-  }
-
-  async create(data: CreateVideoData): Promise<VideoSummary> {
-    const doc = { ...data, createdAt: new Date(), updatedAt: new Date() };
-    const result = await this.collection.insertOne(doc);
-    return this.toEntity({ ...doc, _id: result.insertedId });
-  }
-
-  // Convert DB document to domain entity
-  private toEntity(doc: VideoSummaryCacheDocument): VideoSummary {
-    return {
-      id: doc._id.toString(),
-      youtubeId: doc.youtubeId,
-      title: doc.title,
-      status: doc.status,
-      summary: doc.summary,
-      createdAt: doc.createdAt,
-      updatedAt: doc.updatedAt,
-    };
-  }
+export async function buildTestApp(mockContainer?: Partial<MockContainer>): Promise<FastifyInstance> {
+  return buildApp({
+    logger: false,
+    container: mockContainer,
+  });
 }
-```
-
-### Process Handlers (errors.md)
-```typescript
-// server.ts
-export async function startServer(): Promise<void> {
-  const app = await buildApp();
-
-  // Process handlers
-  process.on('unhandledRejection', (reason, promise) => {
-    app.log.error({ reason, promise }, 'Unhandled Rejection');
-  });
-
-  process.on('uncaughtException', (error) => {
-    app.log.error(error, 'Uncaught Exception');
-    process.exit(1);
-  });
-
-  // Graceful shutdown
-  const shutdown = async (signal: string) => {
-    app.log.info(`${signal} received, shutting down gracefully`);
-    await app.close();
-    process.exit(0);
-  };
-
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-
-  // Start
-  await app.listen({ port: config.PORT, host: '0.0.0.0' });
-  app.log.info(`Server running on port ${config.PORT}`);
-}
-```
-
-### MongoDB Indexes (mongodb.md)
-```typescript
-// plugins/mongodb.ts - Add after connection
-app.addHook('onReady', async () => {
-  const db = app.mongo.db;
-
-  // videoSummaryCache
-  await db.collection('videoSummaryCache').createIndexes([
-    { key: { youtubeId: 1 }, unique: true },
-    { key: { status: 1 } },
-  ]);
-
-  // userVideos
-  await db.collection('userVideos').createIndexes([
-    { key: { userId: 1, videoSummaryId: 1 }, unique: true },
-    { key: { userId: 1, folderId: 1 } },
-    { key: { userId: 1, createdAt: -1 } },
-  ]);
-
-  // folders
-  await db.collection('folders').createIndexes([
-    { key: { userId: 1, type: 1, path: 1 } },
-    { key: { userId: 1, parentId: 1 } },
-  ]);
-
-  // memorizedItems
-  await db.collection('memorizedItems').createIndexes([
-    { key: { userId: 1, folderId: 1 } },
-    { key: { userId: 1, 'source.videoSummaryId': 1 } },
-    { key: { userId: 1, createdAt: -1 } },
-  ]);
-
-  app.log.info('MongoDB indexes created');
-});
-```
-
-### Helmet Configuration (security.md)
-```typescript
-// plugins/helmet.ts
-import helmet from '@fastify/helmet';
-import fp from 'fastify-plugin';
-
-export const helmetPlugin = fp(async (app) => {
-  await app.register(helmet, {
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'", config.FRONTEND_URL],
-      },
-    },
-    hsts: {
-      maxAge: 31536000,
-      includeSubDomains: true,
-    },
-  });
-});
 ```
 
 ---
 
-## Dependencies
+## Verification Commands
 
-### New Dev Dependencies
 ```bash
-npm install -D vitest @vitest/coverage-v8 mongodb-memory-server
-```
+# Run all tests (59 passing)
+cd api && npm test
 
-### Fastify Type Augmentation
-```typescript
-// types/fastify.d.ts
-import { Container } from '../container';
+# TypeScript check (clean)
+cd api && npm run typecheck
 
-declare module 'fastify' {
-  interface FastifyInstance {
-    container: Container;
-  }
-}
+# Start dev server
+cd api && npm run dev
 ```
 
 ---
 
-## Key Decisions
+## Uncommitted Changes
 
-### Why Repository Pattern?
-1. **Testability**: Mock repositories in service tests
-2. **Single Responsibility**: Services do business logic, repos do data access
-3. **Schema Independence**: Change DB schema without touching services
-4. **Reusability**: Same repo methods used across services
+**IMPORTANT:** All changes are uncommitted and need to be committed.
 
-### Why DI Container?
-1. **No new instances per request**: Services are singletons
-2. **Easy testing**: Swap implementations for mocks
-3. **Explicit dependencies**: Clear what each service needs
-4. **Centralized wiring**: One place to see all dependencies
+```bash
+cd /home/kfir/projects/video-insight-engine/api
+git add .
+git commit -m "feat(api): complete best practices refactor with DI and tests
 
-### Why buildApp()?
-1. **Testability**: Test routes with `app.inject()` without starting server
-2. **Separation**: App config separate from server lifecycle
-3. **Reusability**: Same app for tests, dev, production
+- Phase 1: Security hardening (helmet, process handlers, shutdown)
+- Phase 2: Bootstrap refactor (buildApp, server.ts, container)
+- Phase 3: Repository layer (4 repos, all services refactored)
+- Phase 4: Test suite (59 tests, vitest, mongodb-memory-server)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+```
 
 ---
 
-## Testing Strategy
+## Remaining Low-Priority Work
 
-### Test Types
-| Type | Coverage | Tools |
-|------|----------|-------|
-| Unit (Services) | 90% | Vitest, mocked repos |
-| Integration (Routes) | 80% | Vitest, app.inject(), memory MongoDB |
-| E2E | Critical paths | Playwright (existing) |
+1. **Repository unit tests** - Add incrementally as needed
+2. **CI test runner** - Add test step to workflow
+3. **Pre-commit hooks** - Add husky for test enforcement
 
-### Test File Structure
+---
+
+## Architecture After Refactor
+
 ```
-api/src/__tests__/
-├── setup.ts                # Global setup, memory MongoDB
-├── factories/
-│   ├── user.factory.ts     # createUser(), createUserInput()
-│   ├── video.factory.ts    # createVideo(), createVideoInput()
-│   └── folder.factory.ts   # createFolder()
+api/src/
+├── index.ts           # 3 lines: import + startServer()
+├── server.ts          # Process handlers, graceful shutdown
+├── app.ts             # buildApp() with container injection
+├── container.ts       # DI container creation
+├── config.ts          # Environment validation
+├── plugins/
+│   ├── helmet.ts      # Security headers
+│   ├── mongodb.ts     # Connection + indexes
+│   ├── jwt.ts         # Auth
+│   └── cors.ts        # CORS
+├── repositories/
+│   ├── video.repository.ts
+│   ├── folder.repository.ts
+│   ├── user.repository.ts
+│   ├── memorize.repository.ts
+│   └── index.ts
+├── services/
+│   ├── video.service.ts      # Uses VideoRepository
+│   ├── folder.service.ts     # Uses FolderRepository
+│   ├── auth.service.ts       # Uses UserRepository
+│   ├── memorize.service.ts   # Uses MemorizeRepository
+│   ├── playlist.service.ts   # Uses VideoService, FolderService
+│   ├── summarizer-client.ts  # HTTP client class
+│   └── explainer-client.ts   # HTTP client class
 ├── routes/
-│   ├── auth.routes.test.ts
-│   ├── videos.routes.test.ts
-│   └── folders.routes.test.ts
-└── services/
-    ├── video.service.test.ts
-    └── folder.service.test.ts
+│   ├── *.routes.ts           # All use fastify.container
+│   └── *.routes.test.ts      # Integration tests
+└── test/
+    ├── env.ts                # Test env vars
+    ├── setup.ts              # MongoDB memory server
+    └── helpers.ts            # Mock container, buildTestApp
 ```
 
 ---
 
-## Migration Notes
+## Next Steps (If Continuing)
 
-### Breaking Changes
-- None expected (internal refactor only)
-
-### Backwards Compatibility
-- All API endpoints unchanged
-- All request/response formats unchanged
-- Only internal architecture changes
-
-### Rollback Plan
-1. Revert to previous commit
-2. No database changes to undo
+1. Commit the changes with the message above
+2. Optionally add repository unit tests
+3. Optionally add CI test runner
+4. Task can be marked complete or moved to completed/

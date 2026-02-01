@@ -1,12 +1,5 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import {
-  listFolders,
-  createFolder,
-  updateFolder,
-  deleteFolder,
-  getFolderById,
-} from '../services/folder.service.js';
 import { idParamSchema, objectIdSchema } from '../utils/validation.js';
 
 const folderTypeSchema = z.enum(['summarized', 'memorized']);
@@ -35,6 +28,8 @@ const deleteFolderQuerySchema = z.object({
 });
 
 export async function foldersRoutes(fastify: FastifyInstance) {
+  const { folderService } = fastify.container;
+
   // GET /api/folders
   fastify.get<{
     Querystring: z.infer<typeof foldersQuerySchema>;
@@ -42,7 +37,7 @@ export async function foldersRoutes(fastify: FastifyInstance) {
     preHandler: [fastify.authenticate],
   }, async (req) => {
     const { type } = foldersQuerySchema.parse(req.query);
-    const folders = await listFolders(fastify.mongo.db, req.user.userId, type);
+    const folders = await folderService.list(req.user.userId, type);
     return { folders };
   });
 
@@ -53,7 +48,7 @@ export async function foldersRoutes(fastify: FastifyInstance) {
     preHandler: [fastify.authenticate],
   }, async (req) => {
     const { id } = idParamSchema.parse(req.params);
-    return getFolderById(fastify.mongo.db, req.user.userId, id);
+    return folderService.getById(req.user.userId, id);
   });
 
   // POST /api/folders
@@ -63,7 +58,7 @@ export async function foldersRoutes(fastify: FastifyInstance) {
     preHandler: [fastify.authenticate],
   }, async (req, reply) => {
     const input = createFolderSchema.parse(req.body);
-    const folder = await createFolder(fastify.mongo.db, {
+    const folder = await folderService.create({
       userId: req.user.userId,
       ...input,
     });
@@ -79,7 +74,7 @@ export async function foldersRoutes(fastify: FastifyInstance) {
   }, async (req) => {
     const { id } = idParamSchema.parse(req.params);
     const input = updateFolderSchema.parse(req.body);
-    return updateFolder(fastify.mongo.db, req.user.userId, id, input);
+    return folderService.update(req.user.userId, id, input);
   });
 
   // DELETE /api/folders/:id
@@ -92,7 +87,7 @@ export async function foldersRoutes(fastify: FastifyInstance) {
   }, async (req, reply) => {
     const { id } = idParamSchema.parse(req.params);
     const { deleteContent } = deleteFolderQuerySchema.parse(req.query);
-    await deleteFolder(fastify.mongo.db, req.user.userId, id, deleteContent === 'true');
+    await folderService.delete(req.user.userId, id, deleteContent === 'true');
     return reply.status(204).send();
   });
 }

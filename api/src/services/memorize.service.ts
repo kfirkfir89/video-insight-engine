@@ -1,41 +1,46 @@
-import { Db, ObjectId } from 'mongodb';
+import { FastifyBaseLogger } from 'fastify';
+import { ObjectId } from 'mongodb';
+import {
+  MemorizeRepository,
+  MemorizedItemDocument,
+  CreateMemorizedItemData,
+  UpdateMemorizedItemData,
+} from '../repositories/memorize.repository.js';
+import { VideoRepository } from '../repositories/video.repository.js';
 import { MemorizedItemNotFoundError } from '../utils/errors.js';
 
-export interface MemorizedItem {
-  _id: ObjectId;
-  userId: ObjectId;
+export interface MemorizedItemListResponse {
+  id: string;
   title: string;
-  folderId: ObjectId | null;
   sourceType: 'video_section' | 'video_concept' | 'system_expansion';
   source: {
-    videoSummaryId: ObjectId;
+    videoTitle: string;
+    youtubeUrl: string;
+  };
+  folderId: string | null;
+  tags: string[];
+  createdAt: string;
+}
+
+export interface MemorizedItemDetailResponse {
+  id: string;
+  title: string;
+  sourceType: 'video_section' | 'video_concept' | 'system_expansion';
+  source: {
+    videoSummaryId: string;
     youtubeId: string;
     videoTitle: string;
     videoThumbnail: string;
     youtubeUrl: string;
     startSeconds?: number;
     endSeconds?: number;
-    sectionIds?: string[];
-    expansionId?: ObjectId;
-    content: {
-      sections?: Array<{
-        id: string;
-        timestamp: string;
-        title: string;
-        summary: string;
-        bullets: string[];
-      }>;
-      concept?: {
-        name: string;
-        definition: string | null;
-      };
-      expansion?: string;
-    };
+    content: MemorizedItemDocument['source']['content'];
   };
+  folderId: string | null;
   notes: string | null;
   tags: string[];
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateMemorizedItemInput {
@@ -60,55 +65,7 @@ export interface UpdateMemorizedItemInput {
   folderId?: string | null;
 }
 
-interface VideoSummaryCache {
-  _id: ObjectId;
-  youtubeId: string;
-  title: string;
-  thumbnailUrl: string | null;
-  url: string;
-  summary: {
-    sections: Array<{
-      id: string;
-      timestamp: string;
-      startSeconds: number;
-      endSeconds: number;
-      title: string;
-      summary: string;
-      bullets: string[];
-    }>;
-    concepts: Array<{
-      id: string;
-      name: string;
-      definition: string | null;
-    }>;
-  } | null;
-}
-
-interface SystemExpansion {
-  _id: ObjectId;
-  content: string;
-}
-
-interface UserChat {
-  _id: ObjectId;
-  userId: ObjectId;
-  memorizedItemId: ObjectId;
-  title: string | null;
-  messages: Array<{
-    role: 'user' | 'assistant';
-    content: string;
-    createdAt: Date;
-  }>;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-const COLLECTION = 'memorizedItems';
-const VIDEO_SUMMARY_CACHE = 'videoSummaryCache';
-const SYSTEM_EXPANSION_CACHE = 'systemExpansionCache';
-const USER_CHATS = 'userChats';
-
-function toItemListResponse(item: MemorizedItem) {
+function toListResponse(item: MemorizedItemDocument): MemorizedItemListResponse {
   return {
     id: item._id.toHexString(),
     title: item.title,
@@ -123,7 +80,7 @@ function toItemListResponse(item: MemorizedItem) {
   };
 }
 
-function toItemDetailResponse(item: MemorizedItem) {
+function toDetailResponse(item: MemorizedItemDocument): MemorizedItemDetailResponse {
   return {
     id: item._id.toHexString(),
     title: item.title,
@@ -146,242 +103,147 @@ function toItemDetailResponse(item: MemorizedItem) {
   };
 }
 
-export async function listMemorizedItems(
-  db: Db,
-  userId: string,
-  folderId?: string,
-  options: { limit?: number; offset?: number } = {}
-) {
-  const { limit = 50, offset = 0 } = options;
-  const query: { userId: ObjectId; folderId?: ObjectId | null } = {
-    userId: new ObjectId(userId),
-  };
+export class MemorizeService {
+  constructor(
+    private readonly memorizeRepository: MemorizeRepository,
+    private readonly videoRepository: VideoRepository,
+    private readonly logger: FastifyBaseLogger
+  ) {}
 
-  if (folderId !== undefined) {
-    query.folderId = folderId ? new ObjectId(folderId) : null;
+  async list(
+    userId: string,
+    folderId?: string,
+    options: { limit?: number; offset?: number } = {}
+  ): Promise<MemorizedItemListResponse[]> {
+    const items = await this.memorizeRepository.list(userId, folderId, options);
+    return items.map(toListResponse);
   }
 
-  const items = await db
-    .collection<MemorizedItem>(COLLECTION)
-    .find(query)
-    .sort({ createdAt: -1 })
-    .skip(offset)
-    .limit(limit)
-    .toArray();
-
-  return items.map(toItemListResponse);
-}
-
-export async function getMemorizedItemById(
-  db: Db,
-  userId: string,
-  itemId: string
-) {
-  const item = await db.collection<MemorizedItem>(COLLECTION).findOne({
-    _id: new ObjectId(itemId),
-    userId: new ObjectId(userId),
-  });
-
-  if (!item) {
-    throw new MemorizedItemNotFoundError();
+  async getById(userId: string, itemId: string): Promise<MemorizedItemDetailResponse> {
+    const item = await this.memorizeRepository.findById(userId, itemId);
+    if (!item) {
+      throw new MemorizedItemNotFoundError();
+    }
+    return toDetailResponse(item);
   }
 
-  return toItemDetailResponse(item);
-}
+  async create(input: CreateMemorizedItemInput): Promise<MemorizedItemDetailResponse> {
+    // Fetch the video summary cache to get content
+    const videoSummary = await this.memorizeRepository.getVideoSummaryCache(input.videoSummaryId);
 
-export async function createMemorizedItem(
-  db: Db,
-  input: CreateMemorizedItemInput
-) {
-  const userObjectId = new ObjectId(input.userId);
-  const videoSummaryObjectId = new ObjectId(input.videoSummaryId);
-
-  // Fetch the video summary cache to get content
-  const videoSummary = await db
-    .collection<VideoSummaryCache>(VIDEO_SUMMARY_CACHE)
-    .findOne({ _id: videoSummaryObjectId });
-
-  if (!videoSummary || !videoSummary.summary) {
-    throw new Error('Video summary not found or not processed');
-  }
-
-  // Build the source content based on sourceType
-  let content: MemorizedItem['source']['content'] = {};
-  let startSeconds: number | undefined;
-  let endSeconds: number | undefined;
-
-  if (input.sourceType === 'video_section' && input.sectionIds) {
-    const sections = videoSummary.summary.sections.filter((s) =>
-      input.sectionIds!.includes(s.id)
-    );
-
-    if (sections.length === 0) {
-      throw new Error('No matching sections found');
+    if (!videoSummary || !videoSummary.summary) {
+      throw new Error('Video summary not found or not processed');
     }
 
-    content.sections = sections.map((s) => ({
-      id: s.id,
-      timestamp: s.timestamp,
-      title: s.title,
-      summary: s.summary,
-      bullets: s.bullets,
-    }));
+    // Build the source content based on sourceType
+    let content: MemorizedItemDocument['source']['content'] = {};
+    let startSeconds: number | undefined;
+    let endSeconds: number | undefined;
 
-    startSeconds = input.startSeconds ?? sections[0].startSeconds;
-    endSeconds = input.endSeconds ?? sections[sections.length - 1].endSeconds;
-  } else if (input.sourceType === 'video_concept' && input.conceptId) {
-    const concept = videoSummary.summary.concepts.find(
-      (c) => c.id === input.conceptId
-    );
+    if (input.sourceType === 'video_section' && input.sectionIds) {
+      const sections = videoSummary.summary.sections.filter((s) =>
+        input.sectionIds!.includes(s.id)
+      );
 
-    if (!concept) {
-      throw new Error('Concept not found');
+      if (sections.length === 0) {
+        throw new Error('No matching sections found');
+      }
+
+      content.sections = sections.map((s) => ({
+        id: s.id,
+        timestamp: s.timestamp,
+        title: s.title,
+        summary: s.summary,
+        bullets: s.bullets,
+      }));
+
+      startSeconds = input.startSeconds ?? sections[0].startSeconds;
+      endSeconds = input.endSeconds ?? sections[sections.length - 1].endSeconds;
+    } else if (input.sourceType === 'video_concept' && input.conceptId) {
+      const concept = videoSummary.summary.concepts.find(
+        (c) => c.id === input.conceptId
+      );
+
+      if (!concept) {
+        throw new Error('Concept not found');
+      }
+
+      content.concept = {
+        name: concept.name,
+        definition: concept.definition,
+      };
+    } else if (input.sourceType === 'system_expansion' && input.expansionId) {
+      const expansion = await this.memorizeRepository.getSystemExpansion(input.expansionId);
+
+      if (!expansion) {
+        throw new Error('Expansion not found');
+      }
+
+      content.expansion = expansion.content;
     }
 
-    content.concept = {
-      name: concept.name,
-      definition: concept.definition,
+    const youtubeUrl = startSeconds
+      ? `${videoSummary.url}&t=${startSeconds}`
+      : videoSummary.url;
+
+    const data: CreateMemorizedItemData = {
+      userId: input.userId,
+      title: input.title,
+      sourceType: input.sourceType,
+      source: {
+        videoSummaryId: new ObjectId(input.videoSummaryId),
+        youtubeId: videoSummary.youtubeId,
+        videoTitle: videoSummary.title,
+        videoThumbnail: videoSummary.thumbnailUrl ?? '',
+        youtubeUrl,
+        startSeconds,
+        endSeconds,
+        sectionIds: input.sectionIds,
+        expansionId: input.expansionId ? new ObjectId(input.expansionId) : undefined,
+        content,
+      },
+      folderId: input.folderId,
+      notes: input.notes,
+      tags: input.tags,
     };
-  } else if (input.sourceType === 'system_expansion' && input.expansionId) {
-    const expansion = await db
-      .collection<SystemExpansion>(SYSTEM_EXPANSION_CACHE)
-      .findOne({ _id: new ObjectId(input.expansionId) });
 
-    if (!expansion) {
-      throw new Error('Expansion not found');
+    const item = await this.memorizeRepository.create(data);
+    return toDetailResponse(item);
+  }
+
+  async update(
+    userId: string,
+    itemId: string,
+    input: UpdateMemorizedItemInput
+  ): Promise<MemorizedItemDetailResponse> {
+    const updates: UpdateMemorizedItemData = {};
+    if (input.title !== undefined) updates.title = input.title;
+    if (input.notes !== undefined) updates.notes = input.notes;
+    if (input.tags !== undefined) updates.tags = input.tags;
+    if (input.folderId !== undefined) updates.folderId = input.folderId;
+
+    const updated = await this.memorizeRepository.update(userId, itemId, updates);
+    if (!updated) {
+      throw new MemorizedItemNotFoundError();
     }
 
-    content.expansion = expansion.content;
+    return toDetailResponse(updated);
   }
 
-  const youtubeUrl = startSeconds
-    ? `${videoSummary.url}&t=${startSeconds}`
-    : videoSummary.url;
-
-  const now = new Date();
-  const item: Omit<MemorizedItem, '_id'> = {
-    userId: userObjectId,
-    title: input.title,
-    folderId: input.folderId ? new ObjectId(input.folderId) : null,
-    sourceType: input.sourceType,
-    source: {
-      videoSummaryId: videoSummaryObjectId,
-      youtubeId: videoSummary.youtubeId,
-      videoTitle: videoSummary.title,
-      videoThumbnail: videoSummary.thumbnailUrl ?? '',
-      youtubeUrl,
-      startSeconds,
-      endSeconds,
-      sectionIds: input.sectionIds,
-      expansionId: input.expansionId ? new ObjectId(input.expansionId) : undefined,
-      content,
-    },
-    notes: input.notes ?? null,
-    tags: input.tags ?? [],
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  const result = await db
-    .collection<MemorizedItem>(COLLECTION)
-    .insertOne(item as MemorizedItem);
-
-  return toItemDetailResponse({ ...item, _id: result.insertedId } as MemorizedItem);
-}
-
-export async function updateMemorizedItem(
-  db: Db,
-  userId: string,
-  itemId: string,
-  input: UpdateMemorizedItemInput
-) {
-  const userObjectId = new ObjectId(userId);
-  const itemObjectId = new ObjectId(itemId);
-
-  const existing = await db.collection<MemorizedItem>(COLLECTION).findOne({
-    _id: itemObjectId,
-    userId: userObjectId,
-  });
-
-  if (!existing) {
-    throw new MemorizedItemNotFoundError();
+  async delete(userId: string, itemId: string): Promise<void> {
+    const deleted = await this.memorizeRepository.delete(userId, itemId);
+    if (!deleted) {
+      throw new MemorizedItemNotFoundError();
+    }
   }
 
-  const updates: Partial<MemorizedItem> & { updatedAt: Date } = {
-    updatedAt: new Date(),
-  };
-
-  if (input.title !== undefined) {
-    updates.title = input.title;
+  async listChats(userId: string, itemId: string) {
+    const chats = await this.memorizeRepository.listChats(userId, itemId);
+    return chats.map((chat) => ({
+      id: chat._id.toHexString(),
+      title: chat.title,
+      messageCount: chat.messages.length,
+      updatedAt: chat.updatedAt.toISOString(),
+    }));
   }
-  if (input.notes !== undefined) {
-    updates.notes = input.notes;
-  }
-  if (input.tags !== undefined) {
-    updates.tags = input.tags;
-  }
-  if (input.folderId !== undefined) {
-    updates.folderId = input.folderId ? new ObjectId(input.folderId) : null;
-  }
-
-  await db.collection<MemorizedItem>(COLLECTION).updateOne(
-    { _id: itemObjectId },
-    { $set: updates }
-  );
-
-  const updated = await db.collection<MemorizedItem>(COLLECTION).findOne({
-    _id: itemObjectId,
-  });
-
-  if (!updated) {
-    throw new MemorizedItemNotFoundError();
-  }
-
-  return toItemDetailResponse(updated);
-}
-
-export async function deleteMemorizedItem(
-  db: Db,
-  userId: string,
-  itemId: string
-): Promise<void> {
-  const userObjectId = new ObjectId(userId);
-  const itemObjectId = new ObjectId(itemId);
-
-  const result = await db.collection<MemorizedItem>(COLLECTION).deleteOne({
-    _id: itemObjectId,
-    userId: userObjectId,
-  });
-
-  if (result.deletedCount === 0) {
-    throw new MemorizedItemNotFoundError();
-  }
-
-  // Delete associated chats
-  await db.collection(USER_CHATS).deleteMany({
-    userId: userObjectId,
-    memorizedItemId: itemObjectId,
-  });
-}
-
-export async function listChatsForItem(
-  db: Db,
-  userId: string,
-  itemId: string
-) {
-  const chats = await db
-    .collection<UserChat>(USER_CHATS)
-    .find({
-      userId: new ObjectId(userId),
-      memorizedItemId: new ObjectId(itemId),
-    })
-    .sort({ updatedAt: -1 })
-    .toArray();
-
-  return chats.map((chat) => ({
-    id: chat._id.toHexString(),
-    title: chat.title,
-    messageCount: chat.messages.length,
-    updatedAt: chat.updatedAt.toISOString(),
-  }));
 }
