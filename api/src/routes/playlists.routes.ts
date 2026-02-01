@@ -1,6 +1,5 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { PlaylistService } from '../services/playlist.service.js';
 import { objectIdSchema } from '../utils/validation.js';
 
 // Provider config schema (same as videos)
@@ -28,7 +27,7 @@ const playlistIdParamSchema = z.object({
 });
 
 export async function playlistsRoutes(fastify: FastifyInstance) {
-  const playlistService = new PlaylistService(fastify.mongo.db);
+  const { playlistService } = fastify.container;
 
   // POST /api/playlists/preview - Preview a playlist before importing
   fastify.post<{

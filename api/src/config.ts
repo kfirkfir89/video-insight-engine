@@ -24,6 +24,16 @@ const envSchema = z.object({
 
 const parsedConfig = envSchema.parse(process.env);
 
+// Validate URL format
+function isValidUrl(url: string): boolean {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Build allowed origins list from FRONTEND_URL and any additional origins
 function buildAllowedOrigins(): string[] {
   const origins = new Set<string>();
@@ -36,12 +46,18 @@ function buildAllowedOrigins(): string[] {
     origins.add('http://localhost:5173');
   }
 
-  // Add any additional origins from env
+  // Add any additional origins from env (with validation)
   if (parsedConfig.CORS_ADDITIONAL_ORIGINS) {
-    parsedConfig.CORS_ADDITIONAL_ORIGINS.split(',')
+    const additionalOrigins = parsedConfig.CORS_ADDITIONAL_ORIGINS.split(',')
       .map(origin => origin.trim())
-      .filter(Boolean)
-      .forEach(origin => origins.add(origin));
+      .filter(Boolean);
+
+    for (const origin of additionalOrigins) {
+      if (!isValidUrl(origin)) {
+        throw new Error(`Invalid CORS origin URL: ${origin}`);
+      }
+      origins.add(origin);
+    }
   }
 
   return Array.from(origins);

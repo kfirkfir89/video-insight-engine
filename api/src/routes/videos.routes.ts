@@ -1,6 +1,5 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { VideoService } from '../services/video.service.js';
 import { idParamSchema, objectIdSchema } from '../utils/validation.js';
 
 // Provider config schema for dev tools (optional)
@@ -38,7 +37,7 @@ const versionsQuerySchema = z.object({
 });
 
 export async function videosRoutes(fastify: FastifyInstance) {
-  const videoService = new VideoService(fastify.mongo.db);
+  const { videoService } = fastify.container;
 
   // GET /api/videos
   fastify.get<{

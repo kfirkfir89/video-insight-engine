@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { explainAuto, explainChat, explainChatStream } from '../services/explainer-client.js';
 import { setSSECorsHeaders, setSSEResponseHeaders } from '../utils/cors.js';
+import { VideoNotFoundError, MemorizedItemNotFoundError } from '../utils/errors.js';
 
 const explainAutoParamsSchema = z.object({
   videoSummaryId: z.string().min(1),
@@ -11,11 +11,13 @@ const explainAutoParamsSchema = z.object({
 
 const explainChatBodySchema = z.object({
   memorizedItemId: z.string().min(1),
-  message: z.string().min(1),
+  message: z.string().min(1).max(10000),
   chatId: z.string().optional(),
 });
 
 export async function explainRoutes(fastify: FastifyInstance) {
+  const { explainerClient, videoRepository, memorizeRepository } = fastify.container;
+
   // GET /api/explain/:videoSummaryId/:targetType/:targetId
   fastify.get<{
     Params: { videoSummaryId: string; targetType: string; targetId: string };
@@ -32,8 +34,14 @@ export async function explainRoutes(fastify: FastifyInstance) {
 
     const { videoSummaryId, targetType, targetId } = parsed.data;
 
+    // Verify user has access to this video summary
+    const hasAccess = await videoRepository.userHasAccessToSummary(req.user.userId, videoSummaryId);
+    if (!hasAccess) {
+      throw new VideoNotFoundError();
+    }
+
     try {
-      const result = await explainAuto(videoSummaryId, targetType, targetId);
+      const result = await explainerClient.explainAuto(videoSummaryId, targetType, targetId);
       return result;
     } catch (error) {
       fastify.log.error(error, 'explain_auto failed');
@@ -61,8 +69,14 @@ export async function explainRoutes(fastify: FastifyInstance) {
 
     const userId = req.user.userId;
 
+    // Verify user owns this memorized item
+    const item = await memorizeRepository.findById(userId, parsed.data.memorizedItemId);
+    if (!item) {
+      throw new MemorizedItemNotFoundError();
+    }
+
     try {
-      const result = await explainChat({
+      const result = await explainerClient.explainChat({
         ...parsed.data,
         userId,
       });
@@ -93,13 +107,19 @@ export async function explainRoutes(fastify: FastifyInstance) {
 
     const userId = req.user.userId;
 
+    // Verify user owns this memorized item
+    const item = await memorizeRepository.findById(userId, parsed.data.memorizedItemId);
+    if (!item) {
+      throw new MemorizedItemNotFoundError();
+    }
+
     try {
       // Set CORS and SSE headers (reply.raw bypasses Fastify CORS plugin)
       setSSECorsHeaders(req, reply);
       setSSEResponseHeaders(reply);
 
       // Stream from explainer service
-      const response = await explainChatStream({
+      const response = await explainerClient.explainChatStream({
         ...parsed.data,
         userId,
       });

@@ -1,45 +1,38 @@
-import { Db, ObjectId } from 'mongodb';
+import { FastifyBaseLogger } from 'fastify';
 import bcrypt from 'bcrypt';
+import { UserRepository } from '../repositories/user.repository.js';
 import { RegisterInput, LoginInput } from '../schemas/auth.schema.js';
 import { EmailExistsError, InvalidCredentialsError, UserNotFoundError } from '../utils/errors.js';
 
 export class AuthService {
-  constructor(private db: Db) {}
+  constructor(
+    private readonly userRepository: UserRepository,
+    private readonly logger: FastifyBaseLogger
+  ) {}
 
   async register(input: RegisterInput) {
-    const existing = await this.db.collection('users').findOne({ email: input.email });
+    const existing = await this.userRepository.findByEmail(input.email);
     if (existing) {
       throw new EmailExistsError();
     }
 
     const passwordHash = await bcrypt.hash(input.password, 10);
 
-    const result = await this.db.collection('users').insertOne({
+    const user = await this.userRepository.create({
       email: input.email,
       passwordHash,
       name: input.name,
-      preferences: {
-        defaultSummarizedFolder: null,
-        defaultMemorizedFolder: null,
-        theme: 'system',
-      },
-      usage: {
-        videosThisMonth: 0,
-        videosResetAt: new Date(),
-      },
-      createdAt: new Date(),
-      updatedAt: new Date(),
     });
 
     return {
-      id: result.insertedId.toString(),
-      email: input.email,
-      name: input.name,
+      id: user._id.toString(),
+      email: user.email,
+      name: user.name,
     };
   }
 
   async login(input: LoginInput) {
-    const user = await this.db.collection('users').findOne({ email: input.email });
+    const user = await this.userRepository.findByEmail(input.email);
     if (!user) {
       throw new InvalidCredentialsError();
     }
@@ -49,10 +42,7 @@ export class AuthService {
       throw new InvalidCredentialsError();
     }
 
-    await this.db.collection('users').updateOne(
-      { _id: user._id },
-      { $set: { lastLoginAt: new Date() } }
-    );
+    await this.userRepository.updateLastLogin(user._id.toString());
 
     return {
       id: user._id.toString(),
@@ -62,7 +52,7 @@ export class AuthService {
   }
 
   async getUser(userId: string) {
-    const user = await this.db.collection('users').findOne({ _id: new ObjectId(userId) });
+    const user = await this.userRepository.findById(userId);
     if (!user) {
       throw new UserNotFoundError();
     }

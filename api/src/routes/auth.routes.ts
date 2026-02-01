@@ -1,6 +1,5 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { AuthService } from '../services/auth.service.js';
 import { registerSchema, loginSchema } from '../schemas/auth.schema.js';
 import { config } from '../config.js';
 import { UnauthorizedError } from '../utils/errors.js';
@@ -43,7 +42,7 @@ function generateAuthTokens(
 }
 
 export async function authRoutes(fastify: FastifyInstance) {
-  const authService = new AuthService(fastify.mongo.db);
+  const { authService } = fastify.container;
 
   // POST /api/auth/register
   fastify.post<{

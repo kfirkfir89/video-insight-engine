@@ -97,6 +97,41 @@ export class ParentFolderNotFoundError extends AppError {
   }
 }
 
+export class FolderMoveError extends AppError {
+  constructor(message = 'Cannot move folder') {
+    super('FOLDER_MOVE_ERROR', 400, message);
+    this.name = 'FolderMoveError';
+  }
+}
+
+export class VideoSummaryNotFoundError extends AppError {
+  constructor() {
+    super('VIDEO_SUMMARY_NOT_FOUND', 404, 'Video summary not found or not processed');
+    this.name = 'VideoSummaryNotFoundError';
+  }
+}
+
+export class SectionNotFoundError extends AppError {
+  constructor() {
+    super('SECTION_NOT_FOUND', 404, 'Section not found');
+    this.name = 'SectionNotFoundError';
+  }
+}
+
+export class ConceptNotFoundError extends AppError {
+  constructor() {
+    super('CONCEPT_NOT_FOUND', 404, 'Concept not found');
+    this.name = 'ConceptNotFoundError';
+  }
+}
+
+export class ExpansionNotFoundError extends AppError {
+  constructor() {
+    super('EXPANSION_NOT_FOUND', 404, 'Expansion not found');
+    this.name = 'ExpansionNotFoundError';
+  }
+}
+
 // Database/Transaction errors
 export class VersionCreationError extends AppError {
   constructor(message = 'Failed to create new video version') {
