@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo, memo } from "react";
+import { useState, useCallback, useMemo, memo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronRight, Folder, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import { SIDEBAR_LAYOUT } from "@/lib/layout-constants";
 import { useUIStore, useSelectionMode } from "@/stores/ui-store";
 import { useDeleteFolder } from "@/hooks/use-folders";
 import { useSidebarTextClasses } from "@/hooks/use-sidebar-text-size";
+import { useLongPress } from "@/hooks/use-long-press";
 import { useFolderDragDrop } from "@/hooks/use-folder-drag-drop";
 import { FolderRenameInput } from "./FolderRenameInput";
 import { CreateSubfolderInput } from "./CreateSubfolderInput";
@@ -23,8 +24,6 @@ import { FolderContextMenu } from "./FolderContextMenu";
 import { VideoItem } from "./VideoItem";
 import type { FolderNode } from "@/lib/folder-utils";
 import type { FolderType, Video, Folder as FolderData } from "@/types";
-
-const LONG_PRESS_DELAY = 500;
 
 interface FolderItemProps {
   folder: FolderNode;
@@ -55,8 +54,11 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
   const selectedVideoIds = useUIStore((s) => s.selectedVideoIds);
   const selectedFolderIds = useUIStore((s) => s.selectedFolderIds);
 
-  // Long press timer for entering selection mode
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Long press for entering selection mode
+  const longPress = useLongPress({
+    onLongPress: () => enterSelectionMode(undefined, folder.id),
+    disabled: selectionMode,
+  });
 
   // Local UI state
   const [isRenaming, setIsRenaming] = useState(false);
@@ -93,37 +95,6 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
     () => allFolders.find((f) => f.id === folder.id),
     [allFolders, folder.id]
   );
-
-  // Long press handlers
-  const handlePointerDown = useCallback(() => {
-    if (selectionMode) return;
-    longPressTimer.current = setTimeout(() => {
-      enterSelectionMode(undefined, folder.id);
-    }, LONG_PRESS_DELAY);
-  }, [selectionMode, enterSelectionMode, folder.id]);
-
-  const handlePointerUp = useCallback(() => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  }, []);
-
-  const handlePointerLeave = useCallback(() => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  }, []);
-
-  // Cleanup long press timer on unmount to prevent memory leaks
-  useEffect(() => {
-    return () => {
-      if (longPressTimer.current) {
-        clearTimeout(longPressTimer.current);
-      }
-    };
-  }, []);
 
   // Supports Shift+Click for range selection, Ctrl/Cmd+Click for toggle selection
   const handleClick = (e: React.MouseEvent) => {
@@ -203,9 +174,9 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
     className: rowClassName,
     style: rowStyle,
     onClick: handleClick,
-    onPointerDown: handlePointerDown,
-    onPointerUp: handlePointerUp,
-    onPointerLeave: handlePointerLeave,
+    onPointerDown: longPress.onPointerDown,
+    onPointerUp: longPress.onPointerUp,
+    onPointerLeave: longPress.onPointerLeave,
     ...((!selectionMode || isFolderSelectionSelected) && attributes),
     ...((!selectionMode || isFolderSelectionSelected) && listeners),
   };

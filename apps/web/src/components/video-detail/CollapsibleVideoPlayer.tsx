@@ -9,6 +9,10 @@ interface CollapsibleVideoPlayerProps {
   className?: string;
 }
 
+/**
+ * Collapsible video player that can expand/collapse between preview and full view.
+ * Uses forwardRef to allow parent components to control the YouTube player.
+ */
 export const CollapsibleVideoPlayer = forwardRef<
   YouTubePlayerRef,
   CollapsibleVideoPlayerProps
@@ -59,3 +63,5 @@ export const CollapsibleVideoPlayer = forwardRef<
     </div>
   );
 });
+
+CollapsibleVideoPlayer.displayName = "CollapsibleVideoPlayer";

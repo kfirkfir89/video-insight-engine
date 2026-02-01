@@ -138,7 +138,8 @@ const result = await mcpClient.callTool({
 
 ```typescript
 // services/rag.service.ts
-import { getOpenAI } from "../lib/ai/clients.js";
+import { generateText } from "ai";
+import { models } from "../lib/ai/providers.js";
 import { vectorStore } from "../lib/vector/index.js";
 
 interface RAGOptions {
@@ -176,36 +177,29 @@ export async function ragQuery(
   // 3. Build context from results
   const context = results.map((r, i) => `[${i + 1}] ${r.content}`).join("\n\n");
 
-  // 4. Generate answer with context
-  const client = getOpenAI();
-
-  const response = await client.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: `You are a helpful assistant. Answer based on the provided context.
+  // 4. Generate answer with context using AI SDK
+  const result = await generateText({
+    model: models.smart,
+    system: `You are a helpful assistant. Answer based on the provided context.
 If the context doesn't contain relevant information, say so.
 Cite sources using [1], [2], etc.
 
 Context:
 ${context}`,
-      },
-      { role: "user", content: query },
-    ],
-    max_tokens: 1000,
+    prompt: query,
+    maxTokens: 1000,
   });
 
   return {
-    answer: response.choices[0]?.message?.content ?? "",
+    answer: result.text,
     sources: results.map((r) => ({
       content: r.content.slice(0, 200) + "...",
       score: r.score,
       metadata: includeMetadata ? r.metadata : undefined,
     })),
     usage: {
-      inputTokens: response.usage?.prompt_tokens ?? 0,
-      outputTokens: response.usage?.completion_tokens ?? 0,
+      inputTokens: result.usage.promptTokens,
+      outputTokens: result.usage.completionTokens,
     },
   };
 }
@@ -288,28 +282,26 @@ function chunkText(
 
 ```typescript
 // lib/embeddings.ts
-import { getOpenAI } from "./ai/clients.js";
+import { embed, embedMany } from "ai";
+import { openai } from "./ai/providers.js";
 
+// Use AI SDK's embed function for consistency
 export async function embedText(text: string): Promise<number[]> {
-  const client = getOpenAI();
-
-  const response = await client.embeddings.create({
-    model: "text-embedding-3-small",
-    input: text,
+  const result = await embed({
+    model: openai.embedding("text-embedding-3-small"),
+    value: text,
   });
 
-  return response.data[0].embedding;
+  return result.embedding;
 }
 
 export async function embedTexts(texts: string[]): Promise<number[][]> {
-  const client = getOpenAI();
-
-  const response = await client.embeddings.create({
-    model: "text-embedding-3-small",
-    input: texts,
+  const result = await embedMany({
+    model: openai.embedding("text-embedding-3-small"),
+    values: texts,
   });
 
-  return response.data.map((d) => d.embedding);
+  return result.embeddings;
 }
 
 // Similarity calculation
@@ -425,121 +417,180 @@ export const vectorStore = {
 
 ---
 
-## Agents & Planning
+## Agents with AI SDK
+
+Use the Vercel AI SDK's built-in agent capabilities with `maxSteps` and `stopWhen` for cleaner, more reliable agents.
 
 ### DO ✅
 
 ```typescript
 // services/agent.service.ts
-interface AgentStep {
-  thought: string;
-  action: string;
-  actionInput: Record<string, unknown>;
-  observation?: string;
-}
+import { generateText, tool } from "ai";
+import { z } from "zod";
+import { models } from "../lib/ai/providers.js";
+
+// Define tools with proper Zod schemas
+const searchKnowledgeTool = tool({
+  description: "Search internal knowledge base for relevant information",
+  parameters: z.object({
+    query: z.string().describe("The search query"),
+    limit: z.number().optional().default(5).describe("Max results"),
+  }),
+  execute: async ({ query, limit }) => {
+    const results = await knowledgeService.search(query, limit);
+    return results;
+  },
+});
+
+const calculateTool = tool({
+  description: "Perform mathematical calculations",
+  parameters: z.object({
+    expression: z.string().describe("Math expression to evaluate"),
+  }),
+  execute: async ({ expression }) => {
+    // Use a safe math evaluator like mathjs in production
+    const result = evaluateSafeMath(expression);
+    return { result };
+  },
+});
+
+const lookupUserTool = tool({
+  description: "Get information about a user",
+  parameters: z.object({
+    userId: z.string().describe("The user ID to look up"),
+  }),
+  execute: async ({ userId }) => {
+    const user = await userService.findById(userId);
+    return user;
+  },
+});
+
+// Signal tool for agent completion
+const finishTool = tool({
+  description: "Call this when you have the final answer",
+  parameters: z.object({
+    answer: z.string().describe("The final answer to return"),
+    reasoning: z.string().optional().describe("Explanation of how you arrived at this answer"),
+  }),
+  // No execute - signal tool
+});
 
 interface AgentResult {
   answer: string;
-  steps: AgentStep[];
+  reasoning?: string;
+  steps: number;
+  toolCalls: Array<{ tool: string; args: unknown; result: unknown }>;
   totalTokens: number;
 }
-
-const AGENT_SYSTEM_PROMPT = `You are an AI assistant that solves problems step by step.
-
-For each step, respond with:
-THOUGHT: Your reasoning about what to do next
-ACTION: The tool to use (or "FINISH" if done)
-ACTION_INPUT: JSON input for the tool
-
-Available tools:
-- search_knowledge: Search internal knowledge base
-- calculate: Perform calculations
-- lookup_user: Get user information
-
-When you have the final answer, use ACTION: FINISH with the answer in ACTION_INPUT.`;
 
 export async function runAgent(
   query: string,
   maxSteps = 10
 ): Promise<AgentResult> {
-  const client = getOpenAI();
-  const steps: AgentStep[] = [];
-  let totalTokens = 0;
+  const result = await generateText({
+    model: models.smart,
+    system: `You are a helpful assistant that solves problems step by step.
+Use the available tools to gather information and perform calculations.
+When you have the final answer, call the 'finish' tool with your answer.`,
+    prompt: query,
+    tools: {
+      searchKnowledge: searchKnowledgeTool,
+      calculate: calculateTool,
+      lookupUser: lookupUserTool,
+      finish: finishTool,
+    },
+    maxSteps,
 
-  const messages: Message[] = [
-    { role: "system", content: AGENT_SYSTEM_PROMPT },
-    { role: "user", content: query },
-  ];
+    // Stop when finish tool is called
+    stopWhen: (result) => {
+      const lastStep = result.steps.at(-1);
+      return lastStep?.toolCalls.some((tc) => tc.toolName === "finish") ?? false;
+    },
+  });
 
-  for (let i = 0; i < maxSteps; i++) {
-    const response = await client.chat.completions.create({
-      model: "gpt-4o",
-      messages,
-      max_tokens: 500,
-    });
+  // Extract finish tool call
+  const finishCall = result.steps
+    .flatMap((s) => s.toolCalls)
+    .find((tc) => tc.toolName === "finish");
 
-    totalTokens += response.usage?.total_tokens ?? 0;
-    const content = response.choices[0]?.message?.content ?? "";
-
-    // Parse response
-    const thought =
-      content.match(/THOUGHT:\s*(.+?)(?=ACTION:|$)/s)?.[1]?.trim() ?? "";
-    const action =
-      content.match(/ACTION:\s*(.+?)(?=ACTION_INPUT:|$)/s)?.[1]?.trim() ?? "";
-    const actionInputStr =
-      content.match(/ACTION_INPUT:\s*(.+?)$/s)?.[1]?.trim() ?? "{}";
-
-    let actionInput: Record<string, unknown>;
-    try {
-      actionInput = JSON.parse(actionInputStr);
-    } catch {
-      actionInput = { raw: actionInputStr };
-    }
-
-    const step: AgentStep = { thought, action, actionInput };
-
-    // Check if done
-    if (action.toUpperCase() === "FINISH") {
-      return {
-        answer: (actionInput.answer as string) ?? actionInputStr,
-        steps,
-        totalTokens,
-      };
-    }
-
-    // Execute tool
-    const observation = await executeTool(action, actionInput);
-    step.observation = observation;
-    steps.push(step);
-
-    // Add to conversation
-    messages.push({ role: "assistant", content });
-    messages.push({ role: "user", content: `OBSERVATION: ${observation}` });
-  }
+  // Collect all tool calls for observability
+  const toolCalls = result.steps.flatMap((step, stepIndex) =>
+    step.toolCalls.map((tc, callIndex) => ({
+      tool: tc.toolName,
+      args: tc.args,
+      result: step.toolResults?.[callIndex]?.result,
+    }))
+  );
 
   return {
-    answer: "Max steps reached without conclusion",
-    steps,
-    totalTokens,
+    answer: finishCall?.args.answer ?? result.text,
+    reasoning: finishCall?.args.reasoning,
+    steps: result.steps.length,
+    toolCalls,
+    totalTokens: result.usage.totalTokens,
   };
 }
+```
 
-async function executeTool(
-  action: string,
-  input: Record<string, unknown>
-): Promise<string> {
-  switch (action.toLowerCase()) {
-    case "search_knowledge":
-      const results = await knowledgeService.search(input.query as string);
-      return JSON.stringify(results);
-    case "calculate":
-      return String(eval(input.expression as string)); // Use safe evaluator in production!
-    case "lookup_user":
-      const user = await userService.findById(input.userId as string);
-      return JSON.stringify(user);
-    default:
-      return `Unknown tool: ${action}`;
+### Streaming Agent with Progress Updates
+
+```typescript
+import { streamText, tool } from "ai";
+import { z } from "zod";
+
+interface AgentProgress {
+  type: "thinking" | "tool_call" | "tool_result" | "answer";
+  content: string;
+  metadata?: Record<string, unknown>;
+}
+
+export async function* streamAgent(
+  query: string
+): AsyncGenerator<AgentProgress> {
+  const result = streamText({
+    model: models.smart,
+    system: `You are a helpful assistant. Use tools when needed.
+Think step by step and explain your reasoning.`,
+    prompt: query,
+    tools: {
+      search: searchKnowledgeTool,
+      calculate: calculateTool,
+    },
+    maxSteps: 10,
+
+    onStepFinish: async ({ stepType, toolCalls, toolResults }) => {
+      // Log each step for observability
+      logger.info("Agent step completed", { stepType, toolCalls: toolCalls?.length });
+    },
+  });
+
+  // Stream thinking text
+  for await (const chunk of result.textStream) {
+    yield { type: "thinking", content: chunk };
   }
+
+  // After stream completes, get final result
+  const finalResult = await result;
+
+  // Yield tool calls for UI display
+  for (const step of finalResult.steps) {
+    for (const tc of step.toolCalls) {
+      yield {
+        type: "tool_call",
+        content: `Calling ${tc.toolName}`,
+        metadata: { tool: tc.toolName, args: tc.args },
+      };
+    }
+    for (const tr of step.toolResults ?? []) {
+      yield {
+        type: "tool_result",
+        content: JSON.stringify(tr.result),
+        metadata: { tool: tr.toolName },
+      };
+    }
+  }
+
+  yield { type: "answer", content: finalResult.text };
 }
 ```
 
@@ -551,6 +602,14 @@ async function executeTool(
 
 ```typescript
 // services/context.service.ts
+import { generateText } from "ai";
+import { models } from "../lib/ai/providers.js";
+
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+}
+
 interface ConversationContext {
   messages: Message[];
   summary?: string;
@@ -584,24 +643,15 @@ export class ContextManager {
 
     if (toSummarize.length < 2) return;
 
-    const client = getOpenAI();
-    const response = await client.chat.completions.create({
-      model: "gpt-4o-mini", // Cheaper for summarization
-      messages: [
-        {
-          role: "system",
-          content:
-            "Summarize this conversation concisely, keeping key facts and decisions.",
-        },
-        {
-          role: "user",
-          content: toSummarize.map((m) => `${m.role}: ${m.content}`).join("\n"),
-        },
-      ],
-      max_tokens: 500,
+    // Use AI SDK with fast model for summarization
+    const result = await generateText({
+      model: models.fast, // Use cheaper/faster model
+      system: "Summarize this conversation concisely, keeping key facts and decisions.",
+      prompt: toSummarize.map((m) => `${m.role}: ${m.content}`).join("\n"),
+      maxTokens: 500,
     });
 
-    this.context.summary = response.choices[0]?.message?.content ?? "";
+    this.context.summary = result.text;
     this.context.messages = toKeep;
     this.context.totalTokens =
       countTokens(this.context.summary) +
@@ -613,7 +663,7 @@ export class ContextManager {
 
     if (this.context.summary) {
       messages.push({
-        role: "system",
+        role: "user",
         content: `Previous conversation summary:\n${this.context.summary}`,
       });
     }
@@ -705,8 +755,11 @@ Adapt tone to the audience. Be creative but accurate.`,
 
 ```typescript
 // services/guardrails.service.ts
+import { generateText, generateObject } from "ai";
+import { z } from "zod";
+import { models, openai } from "../lib/ai/providers.js";
 
-// Input validation
+// Input validation with prompt injection detection
 export async function validateInput(input: string): Promise<{
   safe: boolean;
   issues: string[];
@@ -734,11 +787,20 @@ export async function validateInput(input: string): Promise<{
     }
   }
 
-  // Use moderation API
-  const client = getOpenAI();
-  const moderation = await client.moderations.create({ input });
+  // Use OpenAI moderation API (still accessed via provider)
+  // Note: Moderation API isn't part of AI SDK yet, use raw client
+  const response = await fetch("https://api.openai.com/v1/moderations", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({ input }),
+  });
 
-  if (moderation.results[0].flagged) {
+  const moderation = await response.json();
+
+  if (moderation.results?.[0]?.flagged) {
     const categories = moderation.results[0].categories;
     Object.entries(categories).forEach(([cat, flagged]) => {
       if (flagged) issues.push(`Content flagged: ${cat}`);
@@ -748,7 +810,7 @@ export async function validateInput(input: string): Promise<{
   return { safe: issues.length === 0, issues };
 }
 
-// Output validation
+// Output validation with PII detection
 export async function validateOutput(output: string): Promise<{
   safe: boolean;
   sanitized: string;
@@ -757,7 +819,7 @@ export async function validateOutput(output: string): Promise<{
   const issues: string[] = [];
   let sanitized = output;
 
-  // Check for PII
+  // Check for PII patterns
   const piiPatterns = {
     ssn: /\b\d{3}-\d{2}-\d{4}\b/g,
     creditCard: /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g,
@@ -775,38 +837,63 @@ export async function validateOutput(output: string): Promise<{
     }
   }
 
-  // Check for harmful content
-  const client = getOpenAI();
-  const moderation = await client.moderations.create({ input: output });
-
-  if (moderation.results[0].flagged) {
-    issues.push("Output flagged by moderation");
-  }
-
   return { safe: issues.length === 0, sanitized, issues };
 }
 
-// Wrapper with guardrails
+// Safe completion wrapper using AI SDK
 export async function safeCompletion(
   prompt: string,
-  options: CompletionOptions = {}
+  options: { model?: keyof typeof models } = {}
 ): Promise<{ content: string; filtered: boolean }> {
   // Validate input
   const inputCheck = await validateInput(prompt);
   if (!inputCheck.safe) {
+    logger.warn("Input validation failed", { issues: inputCheck.issues });
     return { content: "I cannot process this request.", filtered: true };
   }
 
-  // Generate response
-  const response = await complete(prompt, options);
+  // Generate response with AI SDK
+  const result = await generateText({
+    model: models[options.model ?? "smart"],
+    prompt,
+  });
 
   // Validate output
-  const outputCheck = await validateOutput(response);
+  const outputCheck = await validateOutput(result.text);
+
+  if (!outputCheck.safe) {
+    logger.warn("Output validation issues", { issues: outputCheck.issues });
+  }
 
   return {
     content: outputCheck.sanitized,
     filtered: !outputCheck.safe,
   };
+}
+
+// AI-powered content classification for complex cases
+const ContentClassificationSchema = z.object({
+  safe: z.boolean(),
+  category: z.enum(["safe", "harmful", "sensitive", "pii", "unknown"]),
+  confidence: z.number().min(0).max(1),
+  reason: z.string().optional(),
+});
+
+export async function classifyContent(content: string) {
+  const result = await generateObject({
+    model: models.fast,
+    schema: ContentClassificationSchema,
+    system: `You are a content safety classifier. Analyze the content and classify it.
+Categories:
+- safe: Normal, appropriate content
+- harmful: Violent, illegal, or dangerous content
+- sensitive: Adult, political, or controversial content
+- pii: Contains personal identifiable information
+- unknown: Cannot determine`,
+    prompt: content,
+  });
+
+  return result.object;
 }
 ```
 
@@ -905,11 +992,14 @@ export class MemoryService {
 
 ```typescript
 // lib/observability.ts
-import { trace, context, SpanStatusCode } from "@opentelemetry/api";
+import { trace, SpanStatusCode } from "@opentelemetry/api";
+import { generateObject } from "ai";
+import { z } from "zod";
+import { models } from "./ai/providers.js";
 
 const tracer = trace.getTracer("ai-service");
 
-// Trace AI calls
+// Trace AI calls with OpenTelemetry
 export async function tracedCompletion<T>(
   name: string,
   fn: () => Promise<T>,
@@ -930,7 +1020,7 @@ export async function tracedCompletion<T>(
   });
 }
 
-// Structured logging for AI
+// Structured logging for AI using AI SDK usage metadata
 export function logAIRequest(params: {
   model: string;
   inputTokens: number;
@@ -945,40 +1035,76 @@ export function logAIRequest(params: {
   });
 }
 
-// Evaluation metrics
-interface EvalResult {
-  score: number;
-  feedback: string;
-}
+// Evaluation metrics using AI SDK's generateObject
+const EvalResultSchema = z.object({
+  score: z.number().min(1).max(5),
+  feedback: z.string(),
+  strengths: z.array(z.string()).optional(),
+  improvements: z.array(z.string()).optional(),
+});
+
+type EvalResult = z.infer<typeof EvalResultSchema>;
 
 export async function evaluateResponse(
   query: string,
   response: string,
   expectedBehavior: string
 ): Promise<EvalResult> {
-  const client = getOpenAI();
-
-  const result = await client.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: `Evaluate the AI response. Score 1-5 and explain.
+  const result = await generateObject({
+    model: models.smart,
+    schema: EvalResultSchema,
+    system: `Evaluate the AI response. Score 1-5 and explain.
 Expected behavior: ${expectedBehavior}`,
-      },
-      {
-        role: "user",
-        content: `Query: ${query}\n\nResponse: ${response}`,
-      },
-    ],
-    response_format: { type: "json_object" },
+    prompt: `Query: ${query}\n\nResponse: ${response}`,
   });
 
-  const content = JSON.parse(result.choices[0]?.message?.content ?? "{}");
-  return {
-    score: content.score ?? 0,
-    feedback: content.feedback ?? "",
-  };
+  return result.object;
+}
+
+// AI SDK provides automatic usage tracking in onFinish callback
+// Use this pattern for comprehensive observability:
+import { streamText } from "ai";
+
+export function streamWithObservability(
+  messages: Array<{ role: "user" | "assistant"; content: string }>,
+  requestId: string
+) {
+  const startTime = Date.now();
+
+  return streamText({
+    model: models.smart,
+    messages,
+
+    onFinish: ({ usage, text }) => {
+      const latencyMs = Date.now() - startTime;
+
+      logAIRequest({
+        model: "smart",
+        inputTokens: usage.promptTokens,
+        outputTokens: usage.completionTokens,
+        latencyMs,
+        success: true,
+      });
+
+      // Emit metrics for dashboards
+      metrics.histogram("ai.latency", latencyMs, { model: "smart" });
+      metrics.counter("ai.tokens.input", usage.promptTokens);
+      metrics.counter("ai.tokens.output", usage.completionTokens);
+    },
+
+    onError: (error) => {
+      const latencyMs = Date.now() - startTime;
+
+      logAIRequest({
+        model: "smart",
+        inputTokens: 0,
+        outputTokens: 0,
+        latencyMs,
+        success: false,
+        error: error.message,
+      });
+    },
+  });
 }
 ```
 
@@ -986,16 +1112,28 @@ Expected behavior: ${expectedBehavior}`,
 
 ## Quick Reference
 
-| Pattern    | When to Use                            |
-| ---------- | -------------------------------------- |
-| MCP        | Connecting LLMs to external tools/data |
-| RAG        | Knowledge-base Q&A, document search    |
-| Agents     | Multi-step reasoning, complex tasks    |
-| Guardrails | Production safety, compliance          |
-| Memory     | Long-running conversations             |
+| Pattern    | When to Use                            | AI SDK Function    |
+| ---------- | -------------------------------------- | ------------------ |
+| MCP        | Connecting LLMs to external tools/data | N/A (separate SDK) |
+| RAG        | Knowledge-base Q&A, document search    | `generateText`     |
+| Agents     | Multi-step reasoning, complex tasks    | `generateText` + `maxSteps` + `stopWhen` |
+| Guardrails | Production safety, compliance          | `generateObject` for classification |
+| Memory     | Long-running conversations             | `generateText` for summarization |
 
 | Component     | Tools                                |
 | ------------- | ------------------------------------ |
+| AI SDK        | `ai`, `@ai-sdk/openai`, `@ai-sdk/anthropic` |
 | Vector DB     | Pinecone, Qdrant, pgvector, Weaviate |
+| Embeddings    | `embed`, `embedMany` from AI SDK     |
 | Observability | LangSmith, Helicone, OpenTelemetry   |
-| Evaluation    | Custom metrics, LLM-as-judge         |
+| Evaluation    | `generateObject` with eval schema    |
+
+| AI SDK Function | Use Case |
+| --------------- | -------- |
+| `generateText`  | Non-interactive completions |
+| `streamText`    | Real-time streaming with `onError`/`onFinish` |
+| `generateObject`| Structured output with Zod schema |
+| `streamObject`  | Streaming structured output |
+| `embed`         | Single text embedding |
+| `embedMany`     | Batch text embeddings |
+| `tool`          | Define tools with Zod parameters |

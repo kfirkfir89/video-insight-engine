@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import type { Video, Folder } from "@/types";
 import { Loader2, Folder as FolderIcon, Play } from "lucide-react";
 import { FolderCard } from "./FolderCard";
@@ -45,6 +45,39 @@ export const VideoGrid = memo(function VideoGrid({
   const allVideos = folderContext?.allVideos ?? [];
   const setSelectedFolder = useUIStore((s) => s.setSelectedFolder);
   const setActiveSection = useUIStore((s) => s.setActiveSection);
+
+  // Memoize grouping logic - must be called unconditionally to respect Rules of Hooks
+  // Even if groupByFolder is false, we still compute this (but don't use it)
+  const { sortedGroups, folderMap } = useMemo(() => {
+    const folderMap = new Map(folders.map((f) => [f.id, f]));
+    const grouped = new Map<string | null, Video[]>();
+
+    // Initialize groups for all folders (even empty ones won't show)
+    for (const video of videos) {
+      const folderId = video.folderId;
+      if (!grouped.has(folderId)) {
+        grouped.set(folderId, []);
+      }
+      grouped.get(folderId)!.push(video);
+    }
+
+    // Sort folder groups: folders first (alphabetically), then unassigned at the end
+    const sortedGroups = Array.from(grouped.entries()).sort((a, b) => {
+      const [folderIdA] = a;
+      const [folderIdB] = b;
+
+      // Unassigned goes last
+      if (folderIdA === null) return 1;
+      if (folderIdB === null) return -1;
+
+      // Sort by folder name
+      const folderA = folderMap.get(folderIdA);
+      const folderB = folderMap.get(folderIdB);
+      return (folderA?.name || "").localeCompare(folderB?.name || "");
+    });
+
+    return { sortedGroups, folderMap };
+  }, [videos, folders]);
 
   if (isLoading) {
     return (
@@ -141,34 +174,7 @@ export const VideoGrid = memo(function VideoGrid({
     );
   }
 
-  // Group videos by folder
-  const folderMap = new Map(folders.map((f) => [f.id, f]));
-  const grouped = new Map<string | null, Video[]>();
-
-  // Initialize groups for all folders (even empty ones won't show)
-  for (const video of videos) {
-    const folderId = video.folderId;
-    if (!grouped.has(folderId)) {
-      grouped.set(folderId, []);
-    }
-    grouped.get(folderId)!.push(video);
-  }
-
-  // Sort folder groups: folders first (alphabetically), then unassigned at the end
-  const sortedGroups = Array.from(grouped.entries()).sort((a, b) => {
-    const [folderIdA] = a;
-    const [folderIdB] = b;
-
-    // Unassigned goes last
-    if (folderIdA === null) return 1;
-    if (folderIdB === null) return -1;
-
-    // Sort by folder name
-    const folderA = folderMap.get(folderIdA);
-    const folderB = folderMap.get(folderIdB);
-    return (folderA?.name || "").localeCompare(folderB?.name || "");
-  });
-
+  // Grouped by folder view - use pre-computed sortedGroups and folderMap
   return (
     <div className="space-y-8">
       {sortedGroups.map(([folderId, folderVideos]) => {

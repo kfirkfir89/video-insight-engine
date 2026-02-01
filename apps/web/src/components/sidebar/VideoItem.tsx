@@ -1,26 +1,10 @@
-import { useState, useRef, useCallback, useEffect, memo } from "react";
-import { Link } from "react-router-dom";
+import { useState, useCallback, memo } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import {
-  Film,
-  MoreVertical,
-  FolderInput,
-  Trash2,
-  RefreshCw,
-} from "lucide-react";
+import { Film } from "lucide-react";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
@@ -33,12 +17,11 @@ import { cn } from "@/lib/utils";
 import { SIDEBAR_LAYOUT } from "@/lib/layout-constants";
 import { useMoveVideo, useDeleteVideo, useRetryVideo } from "@/hooks/use-videos";
 import { useSidebarTextClasses } from "@/hooks/use-sidebar-text-size";
+import { useLongPress } from "@/hooks/use-long-press";
 import { useUIStore, useSelectionMode } from "@/stores/ui-store";
 
 import type { Video, Folder as FolderData } from "@/types";
-import { FolderTreeSelect } from "./FolderTreeSelect";
-
-const LONG_PRESS_DELAY = 500; // milliseconds
+import { VideoContextMenu } from "./VideoContextMenu";
 
 interface VideoItemProps {
   video: Video;
@@ -47,11 +30,15 @@ interface VideoItemProps {
 }
 
 export const VideoItem = memo(function VideoItem({ video, level, folders = [] }: VideoItemProps) {
+  const location = useLocation();
   const moveVideo = useMoveVideo();
   const deleteVideo = useDeleteVideo();
   const retryVideo = useRetryVideo();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const textClasses = useSidebarTextClasses();
+
+  // Check if this video is currently being viewed (active)
+  const isActiveVideo = location.pathname === `/video/${video.id}`;
 
   // Selection mode state
   const selectionMode = useSelectionMode();
@@ -61,9 +48,13 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
   const isSelected = isVideoSelected(video.id);
   const selectedVideoIds = useUIStore((s) => s.selectedVideoIds);
   const selectedFolderIds = useUIStore((s) => s.selectedFolderIds);
+  const setSelectedFolder = useUIStore((s) => s.setSelectedFolder);
 
-  // Long press timer for entering selection mode
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Long press for entering selection mode
+  const longPress = useLongPress({
+    onLongPress: () => enterSelectionMode(video.id, undefined),
+    disabled: selectionMode,
+  });
 
   // DnD draggable - use prefixed ID to ensure uniqueness
   // Enable drag for selected items in selection mode, disable for unselected
@@ -107,37 +98,6 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
     retryVideo.mutate({ youtubeId: video.youtubeId, folderId: video.folderId });
   };
 
-  // Long press handlers
-  const handlePointerDown = useCallback(() => {
-    if (selectionMode) return;
-    longPressTimer.current = setTimeout(() => {
-      enterSelectionMode(video.id, undefined);
-    }, LONG_PRESS_DELAY);
-  }, [selectionMode, enterSelectionMode, video.id]);
-
-  const handlePointerUp = useCallback(() => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  }, []);
-
-  const handlePointerLeave = useCallback(() => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  }, []);
-
-  // Cleanup long press timer on unmount to prevent memory leaks
-  useEffect(() => {
-    return () => {
-      if (longPressTimer.current) {
-        clearTimeout(longPressTimer.current);
-      }
-    };
-  }, []);
-
   // Handle click - supports Shift+Click and Ctrl+Click for selection
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -174,11 +134,13 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
               "has-[[data-state=open]]:bg-accent/50",
               textClasses.rowHeight,
               isDragging && "opacity-50 z-50",
-              isSelected && "bg-accent border-l-2 border-l-primary"
+              isSelected && "bg-accent border-l-2 border-l-primary",
+              // Highlight the currently viewed video
+              isActiveVideo && !isSelected && "bg-accent/70 font-medium"
             )}
-            onPointerDown={handlePointerDown}
-            onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerLeave}
+            onPointerDown={longPress.onPointerDown}
+            onPointerUp={longPress.onPointerUp}
+            onPointerLeave={longPress.onPointerLeave}
             onClick={handleClick}
             {...((!selectionMode || isSelected) && attributes)}
             {...((!selectionMode || isSelected) && listeners)}
@@ -202,7 +164,14 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
             <Link
               to={`/video/${video.id}`}
               className={cn("ml-2 truncate flex-1 cursor-pointer", textClasses.mainText)}
-              onClick={(e) => (isDragging || selectionMode) && e.preventDefault()}
+              onClick={(e) => {
+                if (isDragging || selectionMode) {
+                  e.preventDefault();
+                  return;
+                }
+                // Clear folder selection when navigating to a video
+                setSelectedFolder(null);
+              }}
             >
               {video.title || "Processing..."}
             </Link>
@@ -233,54 +202,15 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
               </span>
 
               {/* Context menu */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="p-1.5 rounded-sm opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 hover:bg-accent data-[state=open]:bg-accent transition-opacity shrink-0 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-                    onClick={(e) => e.stopPropagation()}
-                    onPointerDown={(e) => e.stopPropagation()}
-                  >
-                    <MoreVertical className={cn(textClasses.smallIconSize, "text-muted-foreground")} />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" side="right" sideOffset={8} className="w-48 z-[200]">
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger>
-                      <FolderInput className="h-4 w-4" />
-                      <span>Move to folder</span>
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-56 max-h-64 overflow-y-auto">
-                      <FolderTreeSelect
-                        folders={folders}
-                        currentFolderId={video.folderId}
-                        onSelect={handleMoveToFolder}
-                        showRemoveOption={!!video.folderId}
-                        removeLabel="Remove from folder"
-                      />
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  {video.status === "failed" && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={handleResummarize}
-                        disabled={retryVideo.isPending}
-                      >
-                        <RefreshCw className="h-4 w-4" />
-                        <span>Re-summarize</span>
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => setShowDeleteDialog(true)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    <span>Delete</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <VideoContextMenu
+                video={video}
+                folders={folders}
+                textClasses={textClasses}
+                onMoveToFolder={handleMoveToFolder}
+                onDelete={() => setShowDeleteDialog(true)}
+                onResummarize={handleResummarize}
+                isRetrying={retryVideo.isPending}
+              />
             </div>
           </div>
         </TooltipTrigger>
