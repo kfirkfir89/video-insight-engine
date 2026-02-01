@@ -677,6 +677,71 @@ LLM_MODEL = "anthropic/claude-sonnet-4-20250514"  # What if Anthropic is down?
 
 ---
 
+## Structured Output with Instructor
+
+For simple structured output (without full agents), use Instructor with LiteLLM:
+
+### DO ✅
+
+```python
+# services/extraction_service.py
+import instructor
+from litellm import acompletion
+from pydantic import BaseModel
+
+
+# Patch LiteLLM with Instructor
+client = instructor.from_litellm(acompletion)
+
+
+class ExtractedData(BaseModel):
+    """Structured extraction output."""
+    title: str
+    summary: str
+    key_points: list[str]
+    sentiment: str
+
+
+async def extract_structured(text: str) -> ExtractedData:
+    """Extract structured data from text using Instructor."""
+    return await client(
+        model="anthropic/claude-sonnet-4-20250514",
+        response_model=ExtractedData,
+        messages=[
+            {"role": "user", "content": f"Extract information from:\n\n{text}"},
+        ],
+    )
+
+
+# With retries for validation failures
+class UserInfo(BaseModel):
+    name: str
+    email: str
+    age: int
+
+
+async def extract_user_info(text: str) -> UserInfo:
+    """Extract user info with automatic retries on validation failure."""
+    return await client(
+        model="anthropic/claude-sonnet-4-20250514",
+        response_model=UserInfo,
+        max_retries=3,  # Retry on validation failure
+        messages=[
+            {"role": "user", "content": f"Extract user info from:\n\n{text}"},
+        ],
+    )
+```
+
+### When to Use What
+
+| Need | Use | Why |
+|------|-----|-----|
+| Simple structured output | **Instructor** | Lightweight, just Pydantic validation |
+| Agents with tools | **PydanticAI** | Full agent framework with DI |
+| Raw LLM calls | **LiteLLM** | Unified provider API |
+
+---
+
 ## Quick Reference
 
 | Pattern              | When to Use                          |
@@ -687,6 +752,7 @@ LLM_MODEL = "anthropic/claude-sonnet-4-20250514"  # What if Anthropic is down?
 | `Router`             | Load balancing, multiple deployments |
 | `completion_cost()`  | Track spending                       |
 | `success_callback`   | Automatic usage logging              |
+| `instructor.from_litellm()` | Structured output with validation |
 
 | Model Format                            | Example                       |
 | --------------------------------------- | ----------------------------- |

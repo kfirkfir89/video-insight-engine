@@ -46,3 +46,7 @@ docker-compose.override.yml
 *.temp
 .cache/
 .mcp.json
+
+# Claude Code
+.claude/tdd-state.json
+.claude/tsc-cache/

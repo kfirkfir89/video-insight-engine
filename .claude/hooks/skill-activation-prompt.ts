@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 
 interface HookInput {
@@ -19,7 +19,10 @@ interface SkillRule {
     type: 'guardrail' | 'domain';
     enforcement: 'block' | 'suggest' | 'warn';
     priority: 'critical' | 'high' | 'medium' | 'low';
+    description?: string;
+    skillPath?: string;
     promptTriggers?: PromptTriggers;
+    resourceMapping?: Record<string, string>;
 }
 
 interface SkillRules {
@@ -30,7 +33,29 @@ interface SkillRules {
 interface MatchedSkill {
     name: string;
     matchType: 'keyword' | 'intent';
+    matchedOn: string;
     config: SkillRule;
+    relevantResources: string[];
+}
+
+function findRelevantResources(
+    prompt: string,
+    resourceMapping?: Record<string, string>
+): string[] {
+    if (!resourceMapping) return [];
+
+    const resources = new Set<string>();
+    const promptLower = prompt.toLowerCase();
+
+    for (const [pattern, resourceFile] of Object.entries(resourceMapping)) {
+        const keywords = pattern.split('|');
+        const matches = keywords.some(kw => promptLower.includes(kw.toLowerCase()));
+        if (matches) {
+            resources.add(resourceFile);
+        }
+    }
+
+    return Array.from(resources);
 }
 
 async function main() {
@@ -54,69 +79,104 @@ async function main() {
                 continue;
             }
 
+            let matchType: 'keyword' | 'intent' | null = null;
+            let matchedOn = '';
+
             // Keyword matching
             if (triggers.keywords) {
-                const keywordMatch = triggers.keywords.some(kw =>
-                    prompt.includes(kw.toLowerCase())
-                );
-                if (keywordMatch) {
-                    matchedSkills.push({ name: skillName, matchType: 'keyword', config });
-                    continue;
+                const matched = triggers.keywords.find(kw => prompt.includes(kw.toLowerCase()));
+                if (matched) {
+                    matchType = 'keyword';
+                    matchedOn = matched;
                 }
             }
 
             // Intent pattern matching
-            if (triggers.intentPatterns) {
-                const intentMatch = triggers.intentPatterns.some(pattern => {
-                    const regex = new RegExp(pattern, 'i');
-                    return regex.test(prompt);
-                });
-                if (intentMatch) {
-                    matchedSkills.push({ name: skillName, matchType: 'intent', config });
+            if (!matchType && triggers.intentPatterns) {
+                for (const pattern of triggers.intentPatterns) {
+                    if (new RegExp(pattern, 'i').test(data.prompt)) {
+                        matchType = 'intent';
+                        matchedOn = pattern;
+                        break;
+                    }
                 }
+            }
+
+            if (matchType) {
+                const relevantResources = findRelevantResources(data.prompt, config.resourceMapping);
+                matchedSkills.push({
+                    name: skillName,
+                    matchType,
+                    matchedOn,
+                    config,
+                    relevantResources
+                });
             }
         }
 
-        // Generate output if matches found
+        // ALWAYS show skill status - make it prominent
+        let output = '\n';
+
         if (matchedSkills.length > 0) {
-            let output = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-            output += '🎯 SKILL ACTIVATION CHECK\n';
-            output += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+            // Sort by priority
+            const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+            matchedSkills.sort((a, b) =>
+                priorityOrder[a.config.priority] - priorityOrder[b.config.priority]
+            );
 
-            // Group by priority
-            const critical = matchedSkills.filter(s => s.config.priority === 'critical');
-            const high = matchedSkills.filter(s => s.config.priority === 'high');
-            const medium = matchedSkills.filter(s => s.config.priority === 'medium');
-            const low = matchedSkills.filter(s => s.config.priority === 'low');
+            output += '╔═══════════════════════════════════════════════════════════╗\n';
+            output += '║  ✅ SKILLS LOADED - READ BEFORE CODING                    ║\n';
+            output += '╠═══════════════════════════════════════════════════════════╣\n';
 
-            if (critical.length > 0) {
-                output += '⚠️ CRITICAL SKILLS (REQUIRED):\n';
-                critical.forEach(s => output += `  → ${s.name}\n`);
-                output += '\n';
+            for (const skill of matchedSkills.slice(0, 3)) {
+                output += `║  ✅ ${skill.name.padEnd(20)} ← "${skill.matchedOn}" (${skill.matchType})\n`;
+
+                if (skill.relevantResources.length > 0) {
+                    skill.relevantResources.forEach(r => {
+                        output += `║     📄 resources/${r}\n`;
+                    });
+                }
             }
 
-            if (high.length > 0) {
-                output += '📚 RECOMMENDED SKILLS:\n';
-                high.forEach(s => output += `  → ${s.name}\n`);
-                output += '\n';
+            output += '╠═══════════════════════════════════════════════════════════╣\n';
+            output += '║  ⚠️  YOU MUST READ SKILL + RESOURCES BEFORE RESPONDING    ║\n';
+            output += '╚═══════════════════════════════════════════════════════════╝\n';
+        } else {
+            // No skills matched - show prominent warning
+            output += '╔═══════════════════════════════════════════════════════════╗\n';
+            output += '║  ❌ NO SKILLS LOADED                                      ║\n';
+            output += '╠═══════════════════════════════════════════════════════════╣\n';
+            output += '║  No domain keywords detected in your prompt.              ║\n';
+            output += '║  Available: backend-node, backend-python, react-vite      ║\n';
+            output += '║  Triggers: api, route, component, react, python, etc.     ║\n';
+            output += '╚═══════════════════════════════════════════════════════════╝\n';
+        }
+
+        console.log(output);
+
+        // Check for active tasks and display reminder
+        const activeTasksDir = join(projectDir, 'dev', 'active');
+        if (existsSync(activeTasksDir)) {
+            try {
+                const activeTasks = readdirSync(activeTasksDir)
+                    .filter(f => {
+                        const fullPath = join(activeTasksDir, f);
+                        return statSync(fullPath).isDirectory();
+                    });
+
+                if (activeTasks.length > 0) {
+                    let taskOutput = '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+                    taskOutput += '📝 ACTIVE TASKS REMINDER\n';
+                    taskOutput += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+                    taskOutput += `Active tasks: ${activeTasks.join(', ')}\n\n`;
+                    taskOutput += 'Before clearing chat, run: /task-plan-update\n';
+                    taskOutput += 'To resume after clear, run: /resume [task-name]\n';
+                    taskOutput += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+                    console.log(taskOutput);
+                }
+            } catch {
+                // Silently ignore errors reading active tasks
             }
-
-            if (medium.length > 0) {
-                output += '💡 SUGGESTED SKILLS:\n';
-                medium.forEach(s => output += `  → ${s.name}\n`);
-                output += '\n';
-            }
-
-            if (low.length > 0) {
-                output += '📌 OPTIONAL SKILLS:\n';
-                low.forEach(s => output += `  → ${s.name}\n`);
-                output += '\n';
-            }
-
-            output += 'ACTION: Use Skill tool BEFORE responding\n';
-            output += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-
-            console.log(output);
         }
 
         process.exit(0);

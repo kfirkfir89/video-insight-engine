@@ -1,7 +1,8 @@
 ---
 name: react-vite
 description: Frontend engineering principles for React/Vite/TypeScript with shadcn/ui and Tailwind v4. How to think about UI architecture, not just what to build.
-version: 3.0.0
+version: 3.1.0
+updated: 2026-02-01
 ---
 
 # Frontend Engineering Guidelines (React)

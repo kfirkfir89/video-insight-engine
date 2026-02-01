@@ -141,7 +141,7 @@ async def use_mcp_tools():
 ```python
 # services/rag_service.py
 from pydantic import BaseModel
-from lib.ai.clients import get_openai
+from litellm import acompletion, completion_cost
 from lib.vector import vector_store
 from lib.embeddings import embed_text
 
@@ -150,6 +150,7 @@ class RAGOptions(BaseModel):
     top_k: int = 5
     min_score: float = 0.7
     include_metadata: bool = True
+    model: str = "anthropic/claude-sonnet-4-20250514"
 
 
 class Source(BaseModel):
@@ -162,10 +163,11 @@ class RAGResult(BaseModel):
     answer: str
     sources: list[Source]
     usage: dict[str, int]
+    cost_usd: float
 
 
 async def rag_query(query: str, options: RAGOptions | None = None) -> RAGResult:
-    """Execute RAG query."""
+    """Execute RAG query using LiteLLM."""
     opts = options or RAGOptions()
 
     # 1. Embed the query
@@ -183,11 +185,9 @@ async def rag_query(query: str, options: RAGOptions | None = None) -> RAGResult:
         f"[{i + 1}] {r.content}" for i, r in enumerate(results)
     )
 
-    # 4. Generate answer with context
-    client = get_openai()
-
-    response = await client.chat.completions.create(
-        model="gpt-4o",
+    # 4. Generate answer with context using LiteLLM
+    response = await acompletion(
+        model=opts.model,
         messages=[
             {
                 "role": "system",
@@ -203,6 +203,9 @@ Context:
         max_tokens=1000,
     )
 
+    # Track cost with LiteLLM's built-in function
+    cost = completion_cost(completion_response=response)
+
     return RAGResult(
         answer=response.choices[0].message.content or "",
         sources=[
@@ -217,6 +220,7 @@ Context:
             "input_tokens": response.usage.prompt_tokens if response.usage else 0,
             "output_tokens": response.usage.completion_tokens if response.usage else 0,
         },
+        cost_usd=cost,
     )
 ```
 
@@ -300,31 +304,27 @@ def chunk_text(
 
 ```python
 # lib/embeddings.py
-from lib.ai.clients import get_openai
+from litellm import aembedding
 
 
-async def embed_text(text: str) -> list[float]:
-    """Generate embedding for text."""
-    client = get_openai()
-
-    response = await client.embeddings.create(
-        model="text-embedding-3-small",
+async def embed_text(text: str, model: str = "openai/text-embedding-3-small") -> list[float]:
+    """Generate embedding for text using LiteLLM."""
+    response = await aembedding(
+        model=model,
         input=text,
     )
 
-    return response.data[0].embedding
+    return response.data[0]["embedding"]
 
 
-async def embed_texts(texts: list[str]) -> list[list[float]]:
-    """Generate embeddings for multiple texts."""
-    client = get_openai()
-
-    response = await client.embeddings.create(
-        model="text-embedding-3-small",
+async def embed_texts(texts: list[str], model: str = "openai/text-embedding-3-small") -> list[list[float]]:
+    """Generate embeddings for multiple texts using LiteLLM."""
+    response = await aembedding(
+        model=model,
         input=texts,
     )
 
-    return [d.embedding for d in response.data]
+    return [d["embedding"] for d in response.data]
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -453,123 +453,248 @@ vector_store = PgVectorStore()
 
 ---
 
-## Agents & Planning
+## Agents with PydanticAI
 
-### DO ✅
+PydanticAI is the modern Python agent framework from the Pydantic team. It provides type-safe tools, dependency injection, structured output, and streaming - all with Pydantic validation.
+
+### DO ✅ - Basic Agent
 
 ```python
 # services/agent_service.py
 from pydantic import BaseModel
-from lib.ai.clients import get_openai
-import re
+from pydantic_ai import Agent, RunContext
+from dataclasses import dataclass
 
 
-class AgentStep(BaseModel):
-    thought: str
-    action: str
-    action_input: dict
-    observation: str | None = None
+# Dependencies injected into agent tools
+@dataclass
+class AgentDependencies:
+    knowledge_service: KnowledgeService
+    user_service: UserService
+    user_id: str
 
 
-class AgentResult(BaseModel):
+# Structured output with validation
+class AgentOutput(BaseModel):
     answer: str
-    steps: list[AgentStep]
-    total_tokens: int
+    confidence: float
+    sources: list[str]
 
 
-AGENT_SYSTEM_PROMPT = """You are an AI assistant that solves problems step by step.
-
-For each step, respond with:
-THOUGHT: Your reasoning about what to do next
-ACTION: The tool to use (or "FINISH" if done)
-ACTION_INPUT: JSON input for the tool
-
-Available tools:
-- search_knowledge: Search internal knowledge base
-- calculate: Perform calculations
-- lookup_user: Get user information
-
-When you have the final answer, use ACTION: FINISH with the answer in ACTION_INPUT."""
+# Create typed agent
+agent = Agent(
+    "anthropic:claude-sonnet-4-20250514",  # PydanticAI model format
+    deps_type=AgentDependencies,
+    output_type=AgentOutput,
+    system_prompt="You are a helpful assistant. Always cite your sources.",
+)
 
 
-async def run_agent(query: str, max_steps: int = 10) -> AgentResult:
-    """Run agent to completion."""
-    client = get_openai()
-    steps: list[AgentStep] = []
-    total_tokens = 0
-
-    messages = [
-        {"role": "system", "content": AGENT_SYSTEM_PROMPT},
-        {"role": "user", "content": query},
-    ]
-
-    for _ in range(max_steps):
-        response = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            max_tokens=500,
-        )
-
-        total_tokens += response.usage.total_tokens if response.usage else 0
-        content = response.choices[0].message.content or ""
-
-        # Parse response
-        thought = _extract(content, r"THOUGHT:\s*(.+?)(?=ACTION:|$)")
-        action = _extract(content, r"ACTION:\s*(.+?)(?=ACTION_INPUT:|$)")
-        action_input_str = _extract(content, r"ACTION_INPUT:\s*(.+?)$")
-
-        try:
-            action_input = json.loads(action_input_str)
-        except json.JSONDecodeError:
-            action_input = {"raw": action_input_str}
-
-        step = AgentStep(thought=thought, action=action, action_input=action_input)
-
-        # Check if done
-        if action.upper() == "FINISH":
-            return AgentResult(
-                answer=action_input.get("answer", action_input_str),
-                steps=steps,
-                total_tokens=total_tokens,
-            )
-
-        # Execute tool
-        observation = await execute_tool(action, action_input)
-        step.observation = observation
-        steps.append(step)
-
-        # Add to conversation
-        messages.append({"role": "assistant", "content": content})
-        messages.append({"role": "user", "content": f"OBSERVATION: {observation}"})
-
-    return AgentResult(
-        answer="Max steps reached without conclusion",
-        steps=steps,
-        total_tokens=total_tokens,
-    )
+# Type-safe tool with dependency injection
+@agent.tool
+async def search_knowledge(
+    ctx: RunContext[AgentDependencies],
+    query: str,
+) -> list[dict]:
+    """Search the internal knowledge base."""
+    return await ctx.deps.knowledge_service.search(query)
 
 
-def _extract(text: str, pattern: str) -> str:
-    """Extract text using regex."""
-    match = re.search(pattern, text, re.DOTALL)
-    return match.group(1).strip() if match else ""
+@agent.tool
+async def lookup_user(
+    ctx: RunContext[AgentDependencies],
+    user_id: str,
+) -> dict:
+    """Look up user information by ID."""
+    user = await ctx.deps.user_service.find_by_id(user_id)
+    return user.model_dump() if user else {}
 
 
-async def execute_tool(action: str, input: dict) -> str:
-    """Execute agent tool."""
-    match action.lower():
-        case "search_knowledge":
-            results = await knowledge_service.search(input.get("query", ""))
-            return json.dumps(results)
-        case "calculate":
-            # Use safe evaluator in production!
-            return str(eval(input.get("expression", "0")))
-        case "lookup_user":
-            user = await user_service.find_by_id(input.get("user_id", ""))
-            return json.dumps(user)
-        case _:
-            return f"Unknown tool: {action}"
+@agent.tool
+def calculate(expression: str) -> float:
+    """Safely evaluate a mathematical expression."""
+    # Use ast.literal_eval or a safe math parser in production
+    import ast
+    return float(ast.literal_eval(expression))
+
+
+async def run_agent(
+    query: str,
+    deps: AgentDependencies,
+) -> AgentOutput:
+    """Run agent and get structured output."""
+    result = await agent.run(query, deps=deps)
+    return result.output
 ```
+
+### DO ✅ - Agent with Streaming
+
+```python
+from pydantic_ai import Agent
+from collections.abc import AsyncGenerator
+
+
+agent = Agent(
+    "anthropic:claude-sonnet-4-20250514",
+    system_prompt="You are a helpful assistant.",
+)
+
+
+async def stream_agent_response(query: str) -> AsyncGenerator[str, None]:
+    """Stream agent response with validation."""
+    async with agent.run_stream(query) as result:
+        async for chunk in result.stream_text():
+            yield chunk
+
+    # Final validated output available after stream
+    final_output = result.output
+```
+
+### DO ✅ - Dynamic System Prompts
+
+```python
+from pydantic_ai import Agent, RunContext
+
+
+@dataclass
+class ChatDependencies:
+    user_name: str
+    user_preferences: dict
+
+
+agent = Agent(
+    "anthropic:claude-sonnet-4-20250514",
+    deps_type=ChatDependencies,
+)
+
+
+@agent.system_prompt
+async def dynamic_prompt(ctx: RunContext[ChatDependencies]) -> str:
+    """Generate system prompt based on user context."""
+    return f"""You are a helpful assistant for {ctx.deps.user_name}.
+Their preferences: {ctx.deps.user_preferences}
+Adapt your responses accordingly."""
+```
+
+### DO ✅ - Multiple Tool Agents
+
+```python
+from pydantic_ai import Agent, RunContext
+from pydantic import BaseModel
+
+
+class ResearchOutput(BaseModel):
+    summary: str
+    key_findings: list[str]
+    recommendations: list[str]
+
+
+@dataclass
+class ResearchDependencies:
+    db: Database
+    search_client: SearchClient
+
+
+research_agent = Agent(
+    "anthropic:claude-sonnet-4-20250514",
+    deps_type=ResearchDependencies,
+    output_type=ResearchOutput,
+    system_prompt="You are a research analyst. Be thorough and cite sources.",
+)
+
+
+@research_agent.tool
+async def search_documents(
+    ctx: RunContext[ResearchDependencies],
+    query: str,
+    limit: int = 10,
+) -> list[dict]:
+    """Search internal documents."""
+    return await ctx.deps.search_client.search(query, limit=limit)
+
+
+@research_agent.tool
+async def get_statistics(
+    ctx: RunContext[ResearchDependencies],
+    metric: str,
+    time_range: str = "30d",
+) -> dict:
+    """Get statistics from the database."""
+    return await ctx.deps.db.get_metrics(metric, time_range)
+
+
+@research_agent.tool
+async def fetch_external_data(
+    ctx: RunContext[ResearchDependencies],
+    url: str,
+) -> str:
+    """Fetch data from external API."""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        return response.text
+```
+
+### DO ✅ - Usage Tracking
+
+```python
+from pydantic_ai import Agent
+
+
+agent = Agent("anthropic:claude-sonnet-4-20250514")
+
+
+async def run_with_tracking(query: str) -> tuple[str, dict]:
+    """Run agent and track usage."""
+    result = await agent.run(query)
+
+    usage = {
+        "input_tokens": result.usage.request_tokens,
+        "output_tokens": result.usage.response_tokens,
+        "total_tokens": result.usage.total_tokens,
+    }
+
+    return result.output, usage
+```
+
+### DON'T ❌ - Manual ReAct Parsing
+
+```python
+# OUTDATED: Manual text parsing is fragile and error-prone
+AGENT_SYSTEM_PROMPT = """
+THOUGHT: Your reasoning
+ACTION: tool_name
+ACTION_INPUT: {...}
+"""
+
+# Regex parsing of LLM output
+thought = re.search(r"THOUGHT:\s*(.+?)(?=ACTION:|$)", content)
+action = re.search(r"ACTION:\s*(.+?)(?=ACTION_INPUT:|$)", content)
+# This breaks when LLM formats slightly differently!
+
+# Instead, use PydanticAI's built-in tool handling
+```
+
+### Model Name Mapping
+
+PydanticAI uses its own model format. For LiteLLM integration, use the adapter:
+
+```python
+from pydantic_ai import Agent
+from pydantic_ai.models.litellm import LiteLLMModel
+
+# Using PydanticAI's LiteLLM adapter
+model = LiteLLMModel("anthropic/claude-sonnet-4-20250514")
+agent = Agent(model)
+
+# Or use PydanticAI's native format
+agent = Agent("anthropic:claude-sonnet-4-20250514")  # Note: colon not slash
+```
+
+| PydanticAI Format | LiteLLM Format |
+|-------------------|----------------|
+| `anthropic:claude-sonnet-4-20250514` | `anthropic/claude-sonnet-4-20250514` |
+| `openai:gpt-4o` | `openai/gpt-4o` |
+| `gemini:gemini-1.5-pro` | `gemini/gemini-1.5-pro` |
 
 ---
 
@@ -580,7 +705,7 @@ async def execute_tool(action: str, input: dict) -> str:
 ```python
 # services/context_service.py
 from pydantic import BaseModel
-from lib.ai.clients import get_openai
+from litellm import acompletion
 from lib.tokens import count_tokens
 
 
@@ -595,8 +720,9 @@ SUMMARIZE_THRESHOLD = 6000
 
 
 class ContextManager:
-    def __init__(self):
+    def __init__(self, model: str = "anthropic/claude-3-5-haiku-20241022"):
         self.context = ConversationContext()
+        self.model = model  # Use fast model for summarization
 
     async def add_message(self, message: Message) -> None:
         """Add message and summarize if needed."""
@@ -615,9 +741,8 @@ class ContextManager:
         if len(to_summarize) < 2:
             return
 
-        client = get_openai()
-        response = await client.chat.completions.create(
-            model="gpt-4o-mini",
+        response = await acompletion(
+            model=self.model,
             messages=[
                 {
                     "role": "system",
@@ -730,6 +855,7 @@ Adapt tone to the audience. Be creative but accurate.""",
 ```python
 # services/guardrails_service.py
 from pydantic import BaseModel
+from litellm import amoderation, acompletion
 import re
 
 
@@ -744,12 +870,12 @@ class OutputValidation(BaseModel):
     issues: list[str]
 
 
-async def validate_input(input: str) -> ValidationResult:
+async def validate_input(text: str) -> ValidationResult:
     """Validate user input for safety."""
     issues: list[str] = []
 
     # Check length
-    if len(input) > 10000:
+    if len(text) > 10000:
         issues.append("Input too long")
 
     # Check for prompt injection patterns
@@ -762,17 +888,16 @@ async def validate_input(input: str) -> ValidationResult:
     ]
 
     for pattern in injection_patterns:
-        if re.search(pattern, input, re.IGNORECASE):
+        if re.search(pattern, text, re.IGNORECASE):
             issues.append("Potential prompt injection detected")
             break
 
-    # Use moderation API
-    client = get_openai()
-    moderation = await client.moderations.create(input=input)
+    # Use OpenAI moderation API via LiteLLM
+    moderation = await amoderation(model="text-moderation-latest", input=text)
 
     if moderation.results[0].flagged:
         categories = moderation.results[0].categories
-        for cat, flagged in categories.model_dump().items():
+        for cat, flagged in vars(categories).items():
             if flagged:
                 issues.append(f"Content flagged: {cat}")
 
@@ -797,9 +922,8 @@ async def validate_output(output: str) -> OutputValidation:
             issues.append(f"PII detected: {pii_type}")
             sanitized = re.sub(pattern, f"[REDACTED {pii_type.upper()}]", sanitized)
 
-    # Check for harmful content
-    client = get_openai()
-    moderation = await client.moderations.create(input=output)
+    # Check for harmful content via LiteLLM
+    moderation = await amoderation(model="text-moderation-latest", input=output)
 
     if moderation.results[0].flagged:
         issues.append("Output flagged by moderation")
@@ -809,7 +933,7 @@ async def validate_output(output: str) -> OutputValidation:
 
 async def safe_completion(
     prompt: str,
-    options: CompletionOptions | None = None
+    model: str = "anthropic/claude-sonnet-4-20250514",
 ) -> tuple[str, bool]:
     """Complete with safety guardrails."""
     # Validate input
@@ -817,11 +941,15 @@ async def safe_completion(
     if not input_check.safe:
         return "I cannot process this request.", True
 
-    # Generate response
-    response = await complete(prompt, options)
+    # Generate response using LiteLLM
+    response = await acompletion(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    result = response.choices[0].message.content or ""
 
     # Validate output
-    output_check = await validate_output(response)
+    output_check = await validate_output(result)
 
     return output_check.sanitized, not output_check.safe
 ```
@@ -918,9 +1046,12 @@ memory_service = MemoryService()
 # lib/observability.py
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
+from litellm import acompletion, completion_cost
 import structlog
 from functools import wraps
 from typing import Callable, TypeVar, ParamSpec
+from pydantic import BaseModel
+import json
 
 tracer = trace.get_tracer("ai-service")
 logger = structlog.get_logger()
@@ -952,6 +1083,7 @@ def log_ai_request(
     output_tokens: int,
     latency_ms: float,
     success: bool,
+    cost_usd: float,
     error: str | None = None,
 ) -> None:
     """Log AI request metrics."""
@@ -963,7 +1095,7 @@ def log_ai_request(
         latency_ms=latency_ms,
         success=success,
         error=error,
-        cost=calculate_cost(model, input_tokens, output_tokens),
+        cost_usd=cost_usd,  # Use LiteLLM's completion_cost()
     )
 
 
@@ -975,18 +1107,19 @@ class EvalResult(BaseModel):
 async def evaluate_response(
     query: str,
     response: str,
-    expected_behavior: str
+    expected_behavior: str,
+    model: str = "anthropic/claude-sonnet-4-20250514",
 ) -> EvalResult:
-    """Evaluate AI response quality."""
-    client = get_openai()
-
-    result = await client.chat.completions.create(
-        model="gpt-4o",
+    """Evaluate AI response quality using LiteLLM."""
+    result = await acompletion(
+        model=model,
         messages=[
             {
                 "role": "system",
                 "content": f"""Evaluate the AI response. Score 1-5 and explain.
-Expected behavior: {expected_behavior}""",
+Expected behavior: {expected_behavior}
+
+Respond with JSON: {{"score": <1-5>, "feedback": "<explanation>"}}""",
             },
             {
                 "role": "user",
@@ -1001,22 +1134,37 @@ Expected behavior: {expected_behavior}""",
         score=content.get("score", 0),
         feedback=content.get("feedback", ""),
     )
+
+
+# PydanticAI has built-in OpenTelemetry support
+# See: https://ai.pydantic.dev/logfire/
 ```
 
 ---
 
 ## Quick Reference
 
-| Pattern    | When to Use                            |
-| ---------- | -------------------------------------- |
-| MCP        | Connecting LLMs to external tools/data |
-| RAG        | Knowledge-base Q&A, document search    |
-| Agents     | Multi-step reasoning, complex tasks    |
-| Guardrails | Production safety, compliance          |
-| Memory     | Long-running conversations             |
+| Pattern    | When to Use                            | Tool |
+| ---------- | -------------------------------------- | ---- |
+| MCP        | Connecting LLMs to external tools/data | mcp SDK |
+| RAG        | Knowledge-base Q&A, document search    | LiteLLM + vector store |
+| Agents     | Multi-step reasoning, complex tasks    | **PydanticAI** |
+| Guardrails | Production safety, compliance          | LiteLLM + custom rules |
+| Memory     | Long-running conversations             | LiteLLM + database |
+
+| Need | Use | Why |
+|------|-----|-----|
+| Single LLM call | LiteLLM `acompletion()` | Unified API across providers |
+| Streaming | LiteLLM `stream=True` | Built-in async generator |
+| Fallbacks | LiteLLM `fallbacks=[]` | Built-in provider fallback |
+| Cost tracking | LiteLLM `completion_cost()` | Automatic pricing |
+| Agents with tools | PydanticAI `Agent` | Type-safe, dependency injection |
+| Structured output | PydanticAI `output_type` | Pydantic validation |
 
 | Component     | Tools                                |
 | ------------- | ------------------------------------ |
+| LLM API       | LiteLLM (unified interface)          |
+| Agent Framework | PydanticAI (type-safe agents)      |
 | Vector DB     | Pinecone, Qdrant, pgvector, Weaviate |
-| Observability | LangSmith, Helicone, OpenTelemetry   |
+| Observability | LangSmith, Helicone, OpenTelemetry, Logfire |
 | Evaluation    | Custom metrics, LLM-as-judge         |

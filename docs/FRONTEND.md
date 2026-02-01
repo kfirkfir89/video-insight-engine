@@ -60,13 +60,28 @@ apps/web/
     │   │   └── Sidebar.tsx
     │   │
     │   ├── video-detail/
-    │   │   ├── VideoDetailLayout.tsx
+    │   │   ├── VideoDetailLayout.tsx     # Orchestrator (responsive)
+    │   │   ├── VideoDetailDesktop.tsx    # Desktop two-column layout
+    │   │   ├── VideoDetailMobile.tsx     # Mobile single-column layout
+    │   │   ├── VideoHeaderSection.tsx    # Video metadata header
+    │   │   ├── video-detail-types.ts     # Shared TypeScript types
     │   │   ├── SectionCard.tsx
     │   │   ├── ContentBlockRenderer.tsx  # Dynamic content blocks
+    │   │   ├── blocks/                   # Extracted block components
+    │   │   │   ├── BulletsBlock.tsx
+    │   │   │   ├── NumberedBlock.tsx
+    │   │   │   ├── ExampleBlock.tsx
+    │   │   │   └── CalloutBlock.tsx
     │   │   └── views/                    # Persona-specific views
     │   │       ├── CodeView.tsx
     │   │       ├── RecipeView.tsx
     │   │       └── StandardView.tsx
+    │   │
+    │   ├── sidebar/
+    │   │   ├── VideoItem.tsx           # Video row with drag-drop
+    │   │   ├── VideoContextMenu.tsx    # Video actions menu
+    │   │   ├── FolderItem.tsx          # Folder row with drag-drop
+    │   │   └── FolderContextMenu.tsx   # Folder actions menu
     │   │
     │   ├── folders/
     │   │   ├── FolderTree.tsx
@@ -93,7 +108,8 @@ apps/web/
     │   ├── useMemorized.ts
     │   ├── use-summary-stream.ts     # SSE streaming for video detail
     │   ├── use-processing-manager.ts # Auto-resume & sidebar sync
-    │   └── use-websocket.ts          # Real-time updates
+    │   ├── use-websocket.ts          # Real-time updates
+    │   └── use-long-press.ts         # Long press gesture hook
     │
     ├── pages/
     │   ├── LoginPage.tsx

@@ -334,6 +334,187 @@ useEffect(() => {
 
 ---
 
+## React 19 Hooks
+
+React 19 introduces new hooks for actions, optimistic updates, and async operations.
+
+### useActionState
+
+Tracks the lifecycle of form actions (pending, success, error).
+
+```tsx
+import { useActionState } from "react";
+
+function LoginForm() {
+  const [state, submitAction, isPending] = useActionState(
+    async (previousState, formData: FormData) => {
+      const email = formData.get("email") as string;
+      const password = formData.get("password") as string;
+
+      try {
+        await loginUser(email, password);
+        return { success: true, error: null };
+      } catch (error) {
+        return { success: false, error: "Invalid credentials" };
+      }
+    },
+    { success: false, error: null }
+  );
+
+  return (
+    <form action={submitAction}>
+      <input name="email" type="email" required />
+      <input name="password" type="password" required />
+
+      {state.error && <p className="text-red-500">{state.error}</p>}
+
+      <button type="submit" disabled={isPending}>
+        {isPending ? "Signing in..." : "Sign in"}
+      </button>
+    </form>
+  );
+}
+```
+
+### use() Hook
+
+Read promises and context directly in components (suspends until resolved).
+
+```tsx
+import { use, Suspense } from "react";
+
+// With Promises - component suspends until resolved
+function UserProfile({ userPromise }: { userPromise: Promise<User> }) {
+  const user = use(userPromise);
+
+  return (
+    <div>
+      <h1>{user.name}</h1>
+      <p>{user.email}</p>
+    </div>
+  );
+}
+
+// Usage - wrap in Suspense
+function App() {
+  const userPromise = fetchUser(userId);
+
+  return (
+    <Suspense fallback={<UserSkeleton />}>
+      <UserProfile userPromise={userPromise} />
+    </Suspense>
+  );
+}
+
+// With Context - can be called conditionally
+function ThemedButton({ showTheme }: { showTheme: boolean }) {
+  if (showTheme) {
+    const theme = use(ThemeContext);
+    return <button className={theme.buttonClass}>Themed</button>;
+  }
+  return <button>Default</button>;
+}
+```
+
+### useOptimistic
+
+Built-in optimistic updates without external libraries.
+
+```tsx
+import { useOptimistic, useTransition } from "react";
+
+function LikeButton({ postId, likes }: { postId: string; likes: number }) {
+  const [isPending, startTransition] = useTransition();
+  const [optimisticLikes, addOptimisticLike] = useOptimistic(
+    likes,
+    (currentLikes, increment: number) => currentLikes + increment
+  );
+
+  const handleLike = () => {
+    startTransition(async () => {
+      addOptimisticLike(1);
+      await likePost(postId);
+    });
+  };
+
+  return (
+    <button onClick={handleLike} disabled={isPending}>
+      {optimisticLikes} likes
+    </button>
+  );
+}
+
+// With array state
+function TodoList({ todos }: { todos: Todo[] }) {
+  const [optimisticTodos, addOptimisticTodo] = useOptimistic(
+    todos,
+    (state, newTodo: Todo) => [...state, { ...newTodo, pending: true }]
+  );
+
+  const addTodo = async (text: string) => {
+    const newTodo = { id: crypto.randomUUID(), text, pending: false };
+    addOptimisticTodo(newTodo);
+    await createTodo(newTodo);
+  };
+
+  return (
+    <ul>
+      {optimisticTodos.map((todo) => (
+        <li key={todo.id} className={todo.pending ? "opacity-50" : ""}>
+          {todo.text}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### useFormStatus
+
+Access form submission status from within form components.
+
+```tsx
+import { useFormStatus } from "react-dom";
+
+// Must be used inside a <form>
+function SubmitButton() {
+  const { pending, data, method, action } = useFormStatus();
+
+  return (
+    <button type="submit" disabled={pending}>
+      {pending ? "Submitting..." : "Submit"}
+    </button>
+  );
+}
+
+// Usage
+function ContactForm() {
+  async function submitForm(formData: FormData) {
+    "use server";
+    await saveContact(formData);
+  }
+
+  return (
+    <form action={submitForm}>
+      <input name="name" required />
+      <input name="email" type="email" required />
+      <SubmitButton />
+    </form>
+  );
+}
+```
+
+### When to Use Each Hook
+
+| Hook | Use Case |
+|------|----------|
+| `useActionState` | Form submissions with server actions, need state + pending |
+| `use()` | Read promises (with Suspense) or context conditionally |
+| `useOptimistic` | Show immediate feedback before async completes |
+| `useFormStatus` | Submit buttons that need to know form state |
+
+---
+
 ## Quick Reference
 
 | Pattern | When to Use |
@@ -352,3 +533,7 @@ useEffect(() => {
 | useCallback | Stable function reference |
 | useMemo | Expensive computations |
 | useContext | Consume context value |
+| useActionState | Form action lifecycle (React 19) |
+| use | Read promises/context (React 19) |
+| useOptimistic | Optimistic updates (React 19) |
+| useFormStatus | Form submission status (React 19) |

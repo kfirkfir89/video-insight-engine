@@ -21,6 +21,34 @@ dev/
 
 ## Active Tasks
 
+### API Best Practices Refactor
+**Status**: Ready for Implementation
+**Location**: `dev/active/api-best-practices/`
+**Effort**: XL (5-7 developer-days)
+
+Comprehensive refactor to address critical gaps from best practices audit: no tests (0%), missing helmet, no DI, no repository layer, no process handlers.
+
+**Files**:
+- `api-best-practices-plan.md` - Full implementation plan (4 phases)
+- `api-best-practices-context.md` - Code patterns, key files, decisions
+- `api-best-practices-tasks.md` - 31 tasks with acceptance criteria
+
+**Phases**:
+1. **Security Hardening** (S) - Helmet, process handlers, rate limits
+2. **Bootstrap Refactor** (M) - buildApp(), DI container, indexes
+3. **Repository Layer** (L) - Separate data access, entity mapping
+4. **Test Suite** (L) - Vitest, 80% coverage, CI integration
+
+**Quick Wins** (Do First):
+- Register helmet plugin
+- Add process exception handlers
+- Fix exponential backoff
+- Add playlist rate limit
+
+**Current Score**: 6.5/10 → **Target**: 9/10
+
+---
+
 ### Video Processing Auto-Resume & Sidebar Sync
 **Status**: Ready for Implementation
 **Location**: `dev/active/processing-auto-resume/`
@@ -112,6 +140,59 @@ LiteLLM migration for multi-provider support (Anthropic, OpenAI, Gemini).
 
 ---
 
+### Frontend Best Practices Refactor
+**Status**: Ready for Implementation
+**Location**: `dev/active/frontend-refactor/`
+**Effort**: Medium (M) - 3-5 developer-days
+
+Address findings from frontend best practices audit. Split oversized components, fix export patterns, add missing memoization.
+
+**Files**:
+- `frontend-refactor-plan.md` - Comprehensive refactoring plan
+- `frontend-refactor-context.md` - Key files, architecture decisions
+- `frontend-refactor-tasks.md` - 31 tasks with acceptance criteria
+
+**Key Targets**:
+- VideoDetailLayout.tsx (382 → ~100 lines)
+- ContentBlockRenderer.tsx (451 → ~100 lines)
+- FolderItem.tsx (366 → ~180 lines)
+- VideoItem.tsx (322 → ~220 lines)
+
+**Next Steps**:
+1. Phase 1: Split VideoDetailLayout
+2. Phase 2: Extract ContentBlockRenderer blocks
+3. Phase 3: Refactor sidebar components
+4. Phase 4: Fix code quality issues
+
+---
+
+### Backend Python Services Refactor
+**Status**: Ready for Implementation
+**Location**: `dev/active/backend-python-refactor/`
+**Effort**: Large (L) - 4-6 developer-days
+
+Refactor `services/summarizer/` and `services/explainer/` to align with backend-python skill best practices.
+
+**Files**:
+- `backend-python-refactor-plan.md` - Comprehensive implementation plan (5 phases)
+- `backend-python-refactor-context.md` - Key files, patterns, migration details
+- `backend-python-refactor-tasks.md` - 33 tasks with acceptance criteria
+
+**Key Fixes**:
+- Replace blocking PyMongo with Motor async driver (Critical)
+- Extract business logic from stream.py (928 → ~300 lines)
+- Add FastAPI Depends() DI pattern to explainer
+- Create repository pattern for explainer
+
+**Phases**:
+1. **Explainer Async MongoDB** (M) - Motor migration
+2. **Explainer DI** (S) - FastAPI Depends()
+3. **Explainer Repository** (M) - Repository pattern
+4. **Summarizer Stream** (M) - Extract pipeline service
+5. **Cross-Cutting** (S) - Structured logging
+
+---
+
 ## Other Active Tasks
 
 See `dev/active/` for all active tasks:
@@ -119,6 +200,7 @@ See `dev/active/` for all active tasks:
 - `llm-context-reorganization/` - Context window optimization
 - `master-summary/` - Master summary feature
 - `progressive-summarization/` - Progressive loading
+- `transcript-system/` - Transcript processing
 - `video-context/` - Video context extraction
 - `vie-explainer/` - Explainer service development
 
@@ -147,5 +229,5 @@ When starting a new major feature or refactoring:
 
 ---
 
-**Last Updated**: 2026-01-28
+**Last Updated**: 2026-02-01
 **Maintained By**: Development Team

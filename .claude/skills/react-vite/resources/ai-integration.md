@@ -1,6 +1,19 @@
 # AI Integration (React)
 
-Vercel AI SDK, streaming UI, chat components, and production AI UI patterns.
+Vercel AI SDK 6, streaming UI, chat components, and production AI UI patterns.
+
+> **Note:** This guide covers AI SDK 6.x (package: `@ai-sdk/react`). If you see `ai/react` imports, update them.
+
+---
+
+## Package Overview
+
+| Package | Purpose |
+|---------|---------|
+| `@ai-sdk/react` | React hooks (useChat, useCompletion) |
+| `ai` | Core streaming utilities, transports |
+| `@ai-sdk/openai` | OpenAI provider |
+| `@ai-sdk/anthropic` | Anthropic provider |
 
 ---
 
@@ -34,41 +47,44 @@ const openai = createOpenAI({
 
 // Don't use VITE_ prefix for secret keys
 import.meta.env.VITE_OPENAI_API_KEY; // This is exposed to browser!
+
+// Don't use old import path
+import { useChat } from "ai/react"; // OUTDATED - use @ai-sdk/react
 ```
 
 ---
 
-## useChat Hook
+## useChat Hook (AI SDK 6)
+
+The primary hook for multi-turn conversations with streaming.
 
 ### DO ✅
 
 ```tsx
-import { useChat } from "ai/react";
+import { useChat } from "@ai-sdk/react";
 
 function ChatInterface() {
   const {
-    messages,
-    input,
-    setInput,
-    handleSubmit,
-    isLoading,
-    error,
-    reload,
-    stop,
-    append,
-    setMessages,
+    messages,      // UIMessage[] - Full message state
+    input,         // Current input value
+    setInput,      // Update input
+    handleSubmit,  // Form submit handler (legacy)
+    status,        // 'idle' | 'pending' | 'streaming' | 'complete' | 'error'
+    error,         // Error object if status is 'error'
+    reload,        // Regenerate last response
+    stop,          // Stop streaming
+    append,        // Add message programmatically
+    setMessages,   // Replace messages
   } = useChat({
     api: "/api/chat",
     initialMessages: [],
     id: "unique-chat-id", // For persistence
     onResponse: (response) => {
-      // Handle headers, status
       if (!response.ok) {
         console.error("Response error:", response.status);
       }
     },
     onFinish: (message) => {
-      // Message complete - save, analytics, etc.
       trackEvent("chat_complete", { length: message.content.length });
     },
     onError: (error) => {
@@ -77,9 +93,13 @@ function ChatInterface() {
     },
   });
 
+  // Derive loading state from status
+  const isLoading = status === "pending" || status === "streaming";
+  const isStreaming = status === "streaming";
+
   return (
     <div className="flex flex-col h-full">
-      <MessageList messages={messages} isLoading={isLoading} />
+      <MessageList messages={messages} isStreaming={isStreaming} />
 
       <ChatInput
         input={input}
@@ -95,14 +115,146 @@ function ChatInterface() {
 }
 ```
 
+### Status Values
+
+| Status | Description | UI State |
+|--------|-------------|----------|
+| `idle` | No active request | Ready for input |
+| `pending` | Request sent, waiting for response | Show loading |
+| `streaming` | Receiving streamed response | Show partial content |
+| `complete` | Response finished | Show full response |
+| `error` | Request failed | Show error + retry |
+
 ---
 
-## useCompletion Hook
+## useChat with Transport (Advanced)
+
+For more control over the connection, use the transport-based API.
 
 ### DO ✅
 
 ```tsx
-import { useCompletion } from "ai/react";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+
+function ChatWithTransport() {
+  const { messages, input, handleSubmit, status } = useChat({
+    transport: new DefaultChatTransport({
+      api: "/api/chat",
+      headers: {
+        "X-Custom-Header": "value",
+      },
+      credentials: "include",
+    }),
+  });
+
+  return (/* ... */);
+}
+```
+
+---
+
+## UIMessage Type
+
+AI SDK 6 introduces `UIMessage` for full application state in messages.
+
+### DO ✅
+
+```tsx
+import type { UIMessage } from "@ai-sdk/react";
+
+interface ChatProps {
+  messages: UIMessage[];
+}
+
+function MessageList({ messages }: ChatProps) {
+  return (
+    <div>
+      {messages.map((message) => (
+        <div key={message.id}>
+          <strong>{message.role}:</strong>
+
+          {/* Content can be string or parts array */}
+          {typeof message.content === "string" ? (
+            <p>{message.content}</p>
+          ) : (
+            message.content.map((part, i) => (
+              <MessagePart key={i} part={part} />
+            ))
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+---
+
+## Integrating with Zustand
+
+AI SDK 6 decouples state management. Integrate with Zustand for complex apps.
+
+### DO ✅
+
+```tsx
+// stores/chat-store.ts
+import { create } from "zustand";
+import type { UIMessage } from "@ai-sdk/react";
+
+interface ChatStore {
+  chats: Record<string, UIMessage[]>;
+  activeChat: string | null;
+  setActiveChat: (id: string) => void;
+  setMessages: (chatId: string, messages: UIMessage[]) => void;
+  addMessage: (chatId: string, message: UIMessage) => void;
+}
+
+export const useChatStore = create<ChatStore>((set) => ({
+  chats: {},
+  activeChat: null,
+  setActiveChat: (id) => set({ activeChat: id }),
+  setMessages: (chatId, messages) =>
+    set((state) => ({
+      chats: { ...state.chats, [chatId]: messages },
+    })),
+  addMessage: (chatId, message) =>
+    set((state) => ({
+      chats: {
+        ...state.chats,
+        [chatId]: [...(state.chats[chatId] || []), message],
+      },
+    })),
+}));
+
+// Component using both
+function ChatWithZustand({ chatId }: { chatId: string }) {
+  const { chats, setMessages } = useChatStore();
+
+  const { messages, handleSubmit, status } = useChat({
+    api: "/api/chat",
+    id: chatId,
+    initialMessages: chats[chatId] || [],
+    onFinish: (message) => {
+      // Sync to Zustand after completion
+      setMessages(chatId, [...messages, message]);
+    },
+  });
+
+  return (/* ... */);
+}
+```
+
+---
+
+## useCompletion Hook
+
+For single prompt/completion interactions.
+
+### DO ✅
+
+```tsx
+import { useCompletion } from "@ai-sdk/react";
 
 function TextGenerator() {
   const {
@@ -110,17 +262,18 @@ function TextGenerator() {
     input,
     setInput,
     handleSubmit,
-    isLoading,
+    status,
     error,
     complete,
     stop,
   } = useCompletion({
     api: "/api/completion",
     onFinish: (prompt, completion) => {
-      // Save generated content
       saveToHistory({ prompt, completion });
     },
   });
+
+  const isLoading = status === "pending" || status === "streaming";
 
   // Programmatic completion
   const generateSummary = async (text: string) => {
@@ -142,7 +295,7 @@ function TextGenerator() {
       </form>
 
       {completion && (
-        <StreamingText content={completion} isStreaming={isLoading} />
+        <StreamingText content={completion} isStreaming={status === "streaming"} />
       )}
     </div>
   );
@@ -156,14 +309,14 @@ function TextGenerator() {
 ### DO ✅
 
 ```tsx
-import { Message } from "ai";
+import type { UIMessage } from "@ai-sdk/react";
 
 interface MessageListProps {
-  messages: Message[];
-  isLoading: boolean;
+  messages: UIMessage[];
+  isStreaming: boolean;
 }
 
-function MessageList({ messages, isLoading }: MessageListProps) {
+function MessageList({ messages, isStreaming }: MessageListProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -199,10 +352,9 @@ function MessageList({ messages, isLoading }: MessageListProps) {
           key={message.id}
           message={message}
           isLast={index === messages.length - 1}
+          isStreaming={isStreaming && index === messages.length - 1}
         />
       ))}
-
-      {isLoading && <TypingIndicator />}
 
       <div ref={messagesEndRef} />
 
@@ -216,11 +368,16 @@ function MessageList({ messages, isLoading }: MessageListProps) {
 function MessageBubble({
   message,
   isLast,
+  isStreaming,
 }: {
-  message: Message;
+  message: UIMessage;
   isLast: boolean;
+  isStreaming: boolean;
 }) {
   const isUser = message.role === "user";
+  const content = typeof message.content === "string"
+    ? message.content
+    : message.content.map(p => p.type === "text" ? p.text : "").join("");
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -235,9 +392,13 @@ function MessageBubble({
           }`}
         >
           {isUser ? (
-            <p>{message.content}</p>
+            <p>{content}</p>
           ) : (
-            <MarkdownContent content={message.content} />
+            <MarkdownContent content={content} />
+          )}
+
+          {isStreaming && !isUser && (
+            <span className="inline-block w-2 h-4 ml-1 bg-blue-500 animate-pulse" />
           )}
         </div>
 
@@ -355,7 +516,6 @@ function MarkdownContent({ content }: { content: string }) {
             </code>
           );
         },
-        // Custom link handling
         a({ href, children }) {
           return (
             <a
@@ -368,7 +528,6 @@ function MarkdownContent({ content }: { content: string }) {
             </a>
           );
         },
-        // Tables
         table({ children }) {
           return (
             <div className="overflow-x-auto">
@@ -572,42 +731,40 @@ function ChatLoadingSkeleton() {
 ### DO ✅
 
 ```tsx
+import type { UIMessage } from "@ai-sdk/react";
+
 function MessageActions({
   message,
   isLast,
 }: {
-  message: Message;
+  message: UIMessage;
   isLast: boolean;
 }) {
   const { reload, setMessages, messages } = useChat();
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(message.content);
+  const content = typeof message.content === "string"
+    ? message.content
+    : message.content.map(p => p.type === "text" ? p.text : "").join("");
+  const [editedContent, setEditedContent] = useState(content);
 
   const handleRegenerate = () => {
-    // Remove this message and regenerate
     reload();
   };
 
   const handleEdit = () => {
     setIsEditing(true);
-    setEditedContent(message.content);
+    setEditedContent(content);
   };
 
   const handleSaveEdit = () => {
     const messageIndex = messages.findIndex((m) => m.id === message.id);
     if (messageIndex === -1) return;
 
-    // Update message and remove subsequent messages
     const updatedMessages = messages.slice(0, messageIndex);
     updatedMessages.push({ ...message, content: editedContent });
 
     setMessages(updatedMessages);
     setIsEditing(false);
-
-    // Trigger new response if it was a user message
-    if (message.role === "user") {
-      // The useChat will automatically continue
-    }
   };
 
   if (isEditing) {
@@ -639,7 +796,7 @@ function MessageActions({
 
   return (
     <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-      <CopyButton code={message.content} />
+      <CopyButton code={content} />
 
       {message.role === "user" && (
         <button onClick={handleEdit} className="p-1 hover:bg-gray-200 rounded">
@@ -768,7 +925,9 @@ function MessageFeedback({ messageId }: { messageId: string }) {
 ### DO ✅
 
 ```tsx
-interface MessageWithAttachments extends Message {
+import type { UIMessage } from "@ai-sdk/react";
+
+interface MessageWithAttachments extends UIMessage {
   attachments?: Array<{
     type: "image" | "file";
     url: string;
@@ -777,12 +936,14 @@ interface MessageWithAttachments extends Message {
 }
 
 function MultiModalMessage({ message }: { message: MessageWithAttachments }) {
+  const content = typeof message.content === "string"
+    ? message.content
+    : message.content.map(p => p.type === "text" ? p.text : "").join("");
+
   return (
     <div className="space-y-2">
-      {/* Text content */}
-      {message.content && <MarkdownContent content={message.content} />}
+      {content && <MarkdownContent content={content} />}
 
-      {/* Attachments */}
       {message.attachments?.map((attachment, i) => (
         <AttachmentPreview key={i} attachment={attachment} />
       ))}
@@ -805,7 +966,7 @@ function AttachmentPreview({
           onClick={() => window.open(attachment.url, "_blank")}
         />
         <button className="absolute top-2 right-2 p-1 bg-black/50 rounded opacity-0 group-hover:opacity-100">
-          <ExplainIcon className="w-4 h-4 text-white" />
+          <ExpandIcon className="w-4 h-4 text-white" />
         </button>
       </div>
     );
@@ -824,7 +985,6 @@ function AttachmentPreview({
   );
 }
 
-// Image upload handling
 function ImageUpload({ onUpload }: { onUpload: (file: File) => void }) {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -943,10 +1103,12 @@ function NetworkErrorHandler({
 ```tsx
 // hooks/useChatPersistence.ts
 function useChatPersistence(chatId: string) {
-  const { messages, setMessages, isLoading } = useChat({
+  const { messages, setMessages, status } = useChat({
     id: chatId,
     api: "/api/chat",
   });
+
+  const isLoading = status === "pending" || status === "streaming";
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -975,26 +1137,78 @@ function useChatPersistence(chatId: string) {
 
 ---
 
+## Migration from AI SDK < 5
+
+If upgrading from older versions:
+
+### Import Changes
+
+```tsx
+// OLD (pre-v5)
+import { useChat, useCompletion } from "ai/react";
+import { Message } from "ai";
+
+// NEW (v6)
+import { useChat, useCompletion } from "@ai-sdk/react";
+import type { UIMessage } from "@ai-sdk/react";
+```
+
+### API Changes
+
+```tsx
+// OLD
+const { isLoading, handleSubmit } = useChat();
+
+// NEW
+const { status, handleSubmit } = useChat();
+const isLoading = status === "pending" || status === "streaming";
+```
+
+### Type Changes
+
+```tsx
+// OLD
+interface Props {
+  messages: Message[];
+}
+
+// NEW
+interface Props {
+  messages: UIMessage[];
+}
+```
+
+---
+
 ## Quick Reference
 
-| Hook            | Purpose                                |
-| --------------- | -------------------------------------- |
-| `useChat`       | Multi-turn conversation with streaming |
-| `useCompletion` | Single prompt/completion               |
-| `useAssistant`  | OpenAI Assistants API                  |
+| Hook | Purpose |
+|------|---------|
+| `useChat` | Multi-turn conversation with streaming |
+| `useCompletion` | Single prompt/completion |
+| `useAssistant` | OpenAI Assistants API |
 
-| State     | UI                               |
-| --------- | -------------------------------- |
-| Empty     | Welcome message + suggestions    |
-| Loading   | Typing indicator, disabled input |
-| Streaming | Partial content + cursor         |
-| Error     | Error banner + retry button      |
-| Complete  | Full message + actions           |
+| Status | Description |
+|--------|-------------|
+| `idle` | Ready for input |
+| `pending` | Request sent, awaiting response |
+| `streaming` | Receiving streamed content |
+| `complete` | Response finished |
+| `error` | Request failed |
 
-| Feature     | Implementation                                |
-| ----------- | --------------------------------------------- |
+| State | UI |
+|-------|-----|
+| Empty | Welcome message + suggestions |
+| Pending | Typing indicator, disabled input |
+| Streaming | Partial content + cursor |
+| Error | Error banner + retry button |
+| Complete | Full message + actions |
+
+| Feature | Implementation |
+|---------|---------------|
 | Auto-scroll | Track scroll position, pause on manual scroll |
-| Copy code   | Button on code blocks                         |
-| Regenerate  | Reload last response                          |
-| Edit        | Modify user message, resubmit                 |
-| Feedback    | Thumbs up/down + details modal                |
+| Copy code | Button on code blocks |
+| Regenerate | `reload()` last response |
+| Edit | Modify user message, resubmit |
+| Feedback | Thumbs up/down + details modal |
+| Persistence | localStorage + Zustand sync |

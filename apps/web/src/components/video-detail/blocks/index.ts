@@ -3,3 +3,7 @@ export { ComparisonRenderer } from './ComparisonRenderer';
 export { TimestampRenderer } from './TimestampRenderer';
 export { QuoteRenderer } from './QuoteRenderer';
 export { StatisticRenderer } from './StatisticRenderer';
+export { BulletsBlock } from './BulletsBlock';
+export { NumberedBlock } from './NumberedBlock';
+export { ExampleBlock } from './ExampleBlock';
+export { CalloutBlock } from './CalloutBlock';

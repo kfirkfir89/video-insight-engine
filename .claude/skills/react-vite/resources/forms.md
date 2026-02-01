@@ -367,6 +367,104 @@ function FormInput({ label, error, id, ...props }: FormInputProps) {
 
 ---
 
+## React 19 Form Actions
+
+### useActionState with Forms
+
+Combine React Hook Form validation with React 19 server actions.
+
+```tsx
+import { useActionState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+const schema = z.object({
+  email: z.string().email(),
+  message: z.string().min(10),
+});
+
+type FormData = z.infer<typeof schema>;
+
+function ContactForm() {
+  const {
+    register,
+    formState: { errors },
+    handleSubmit,
+  } = useForm<FormData>({
+    resolver: zodResolver(schema),
+  });
+
+  const [state, submitAction, isPending] = useActionState(
+    async (prevState: { error: string | null }, formData: FormData) => {
+      try {
+        await sendContactEmail(formData);
+        return { error: null };
+      } catch {
+        return { error: "Failed to send message" };
+      }
+    },
+    { error: null }
+  );
+
+  const onSubmit = handleSubmit((data) => {
+    submitAction(data);
+  });
+
+  return (
+    <form onSubmit={onSubmit}>
+      <input {...register("email")} placeholder="Email" />
+      {errors.email && <span>{errors.email.message}</span>}
+
+      <textarea {...register("message")} placeholder="Message" />
+      {errors.message && <span>{errors.message.message}</span>}
+
+      {state.error && <div className="text-red-500">{state.error}</div>}
+
+      <button type="submit" disabled={isPending}>
+        {isPending ? "Sending..." : "Send"}
+      </button>
+    </form>
+  );
+}
+```
+
+### useFormStatus for Submit Buttons
+
+Extract submit button to use form status.
+
+```tsx
+import { useFormStatus } from "react-dom";
+
+function SubmitButton({ children }: { children: React.ReactNode }) {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className={pending ? "opacity-50 cursor-not-allowed" : ""}
+    >
+      {pending ? "Submitting..." : children}
+    </button>
+  );
+}
+
+// Works with native form actions
+function SimpleForm() {
+  return (
+    <form action={async (formData) => {
+      await saveData(formData);
+    }}>
+      <input name="name" required />
+      <SubmitButton>Save</SubmitButton>
+    </form>
+  );
+}
+```
+
+---
+
 ## Multi-Step Forms
 
 ### DO ✅
@@ -435,6 +533,11 @@ function PersonalInfoStep() {
 | useFieldArray | Dynamic array fields |
 | useWatch | Watch field values |
 | useController | Controlled component wrapper |
+
+| React 19 Hook | Purpose |
+|---------------|---------|
+| useActionState | Track form action lifecycle |
+| useFormStatus | Access form pending state |
 
 | Form State | Description |
 |------------|-------------|
