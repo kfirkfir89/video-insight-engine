@@ -4,8 +4,9 @@ from datetime import datetime, timezone
 from typing import AsyncGenerator
 
 from src.exceptions import ResourceNotFoundError, UnauthorizedError
-from src.services import mongodb
-from src.services.llm import chat_completion_stream, load_prompt
+from src.repositories.base import ChatRepositoryProtocol, MemorizedItemRepositoryProtocol
+from src.services.llm import LLMService
+from src.tools.chat_utils import build_system_prompt
 
 
 def _utc_now() -> datetime:
@@ -13,69 +14,13 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def format_content(source: dict) -> str:
-    """Format memorized item content for prompt.
-
-    Args:
-        source: Source data from memorized item
-
-    Returns:
-        Formatted content string for the system prompt
-    """
-    content_parts = []
-    content = source.get("content", {})
-
-    # Sections
-    if "sections" in content:
-        for section in content["sections"]:
-            content_parts.append(
-                f"## {section.get('title', 'Section')} ({section.get('timestamp', '')})"
-            )
-            content_parts.append(section.get("summary", ""))
-            if section.get("bullets"):
-                content_parts.append("Key points:")
-                for bullet in section["bullets"]:
-                    content_parts.append(f"- {bullet}")
-            content_parts.append("")
-
-    # Concept
-    if "concept" in content:
-        concept = content["concept"]
-        content_parts.append(f"## Concept: {concept.get('name', '')}")
-        content_parts.append(concept.get("definition", ""))
-
-    # Expansion
-    if "expansion" in content:
-        content_parts.append("## Detailed Explanation")
-        content_parts.append(content["expansion"])
-
-    return "\n".join(content_parts)
-
-
-def build_system_prompt(item: dict) -> str:
-    """Build system prompt from memorized item.
-
-    Args:
-        item: Memorized item document
-
-    Returns:
-        Formatted system prompt string
-    """
-    source = item.get("source", {})
-
-    return load_prompt("chat_system").format(
-        title=item.get("title", "Saved Content"),
-        video_title=source.get("videoTitle", "Unknown Video"),
-        youtube_url=source.get("youtubeUrl", ""),
-        content=format_content(source),
-        notes=item.get("notes") or "None",
-    )
-
-
 async def explain_chat_stream(
     memorized_item_id: str,
     user_id: str,
     message: str,
+    memorized_item_repo: MemorizedItemRepositoryProtocol,
+    chat_repo: ChatRepositoryProtocol,
+    llm_service: LLMService,
     chat_id: str | None = None,
 ) -> AsyncGenerator[tuple[str, str], None]:
     """Stream interactive conversation about a memorized item.
@@ -86,6 +31,9 @@ async def explain_chat_stream(
         memorized_item_id: ID of the memorized item
         user_id: ID of the user
         message: User's message
+        memorized_item_repo: Repository for memorized items
+        chat_repo: Repository for chats
+        llm_service: LLM service for generation
         chat_id: Optional - continue existing chat
 
     Yields:
@@ -96,48 +44,41 @@ async def explain_chat_stream(
         ResourceNotFoundError: If chat not found
     """
     # 1. Load memorized item (verify user ownership)
-    item = mongodb.get_memorized_item(memorized_item_id, user_id)
+    item = await memorized_item_repo.find_by_id_and_user(memorized_item_id, user_id)
     if not item:
         raise UnauthorizedError("Memorized item not found or unauthorized")
 
     # 2. Load or create chat
+    active_chat_id: str
     if chat_id:
-        chat = mongodb.get_chat(chat_id, user_id)
+        chat = await chat_repo.find_by_id_and_user(chat_id, user_id)
         if not chat:
             raise ResourceNotFoundError("Chat not found", resource_type="chat")
+        chat_messages = chat.messages
+        active_chat_id = chat_id
     else:
-        chat_id = mongodb.create_chat(user_id, memorized_item_id)
-        chat = {"messages": []}
+        active_chat_id = await chat_repo.create(user_id, memorized_item_id)
+        chat_messages = []
 
     # 3. Build messages for LLM
     system_prompt = build_system_prompt(item)
 
-    messages = []
-    for msg in chat.get("messages", []):
-        messages.append(
-            {
-                "role": msg["role"],
-                "content": msg["content"],
-            }
-        )
-
-    messages.append(
-        {
-            "role": "user",
-            "content": message,
-        }
-    )
+    messages = [
+        {"role": msg.role, "content": msg.content}
+        for msg in chat_messages
+    ]
+    messages.append({"role": "user", "content": message})
 
     # 4. Stream LLM response
     full_response = ""
-    async for token in chat_completion_stream(system_prompt, messages):
+    async for token in llm_service.chat_completion_stream(system_prompt, messages):
         full_response += token
-        yield token, chat_id
+        yield token, active_chat_id
 
     # 5. Save messages to chat after streaming completes
     now = _utc_now()
-    mongodb.add_messages(
-        chat_id,
+    await chat_repo.add_messages(
+        active_chat_id,
         [
             {"role": "user", "content": message, "createdAt": now},
             {"role": "assistant", "content": full_response, "createdAt": now},

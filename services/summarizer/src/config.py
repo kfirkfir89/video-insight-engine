@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     WHISPER_ENABLED: bool = True
     WHISPER_MAX_DURATION_MINUTES: int = 60
 
+    # Logging
+    log_level: str = "INFO"
+    log_format: str = "console"  # "console" or "json"
+
     @property
     def llm_model(self) -> str:
         """Get the configured LLM model with provider prefix."""

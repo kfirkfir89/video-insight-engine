@@ -11,10 +11,11 @@ Python MCP server with explain tools.
 | Technology   | Purpose        |
 | ------------ | -------------- |
 | Python 3.11+ | Runtime        |
-| mcp          | MCP Server SDK |
+| FastAPI      | HTTP API framework |
+| Motor        | Async MongoDB driver |
 | LiteLLM      | Multi-provider LLM abstraction (Anthropic, OpenAI, Gemini) |
-| pymongo      | MongoDB driver |
-| Pydantic     | Validation     |
+| Pydantic     | Validation & Settings |
+| structlog    | Structured logging |
 
 ---
 
@@ -36,19 +37,27 @@ services/explainer/
 ├── pyproject.toml
 └── src/
     ├── __init__.py
-    ├── main.py                   # FastAPI app + SSE endpoints
+    ├── main.py                   # FastAPI app + routes
     ├── config.py                 # Settings + model mapping
+    ├── schemas.py                # Pydantic domain models
+    ├── dependencies.py           # FastAPI Depends() providers
+    ├── exceptions.py             # Custom exceptions
+    ├── logging_config.py         # structlog configuration
+    ├── middleware.py             # Request ID middleware
     │
     ├── tools/
-    │   ├── explain_auto.py       # Cached expansion
-    │   └── explain_chat.py       # Interactive chat
+    │   ├── explain_auto.py       # Cached expansion (DI)
+    │   ├── explain_chat.py       # Interactive chat (DI)
+    │   └── explain_chat_stream.py # Streaming chat (SSE)
     │
     ├── services/
-    │   ├── llm.py                # LLM service (prompts + orchestration)
-    │   ├── llm_provider.py       # LiteLLM abstraction layer
-    │   ├── usage_tracker.py      # LLM usage tracking
-    │   ├── cache.py              # Cache operations
-    │   └── mongodb.py            # Database operations
+    │   ├── llm.py                # LLM service
+    │   └── llm_provider.py       # LiteLLM abstraction
+    │
+    ├── repositories/
+    │   ├── __init__.py
+    │   ├── base.py               # Repository protocols
+    │   └── mongodb_repository.py # Motor async implementation
     │
     └── prompts/
         ├── explain_section.txt
@@ -78,7 +87,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=                 # Required if using OpenAI
 GOOGLE_API_KEY=                 # Required if using Gemini
 
-LOG_LEVEL=debug
+LOG_LEVEL=INFO
+LOG_FORMAT=console              # console or json
 ```
 
 ---

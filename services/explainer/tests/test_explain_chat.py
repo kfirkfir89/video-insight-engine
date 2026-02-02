@@ -1,13 +1,11 @@
 """Tests for explain_chat tool."""
 
 import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch
 
-from src.tools.explain_chat import (
-    explain_chat,
-    format_content,
-    build_system_prompt,
-)
+from src.exceptions import ResourceNotFoundError, UnauthorizedError
+from src.tools.chat_utils import build_system_prompt, format_content
+from src.tools.explain_chat import explain_chat
 
 
 class TestFormatContent:
@@ -88,140 +86,139 @@ class TestBuildSystemPrompt:
         assert "Test Video Title" in result
         assert "My personal notes" in result
 
-    @patch("src.tools.explain_chat.load_prompt")
-    def test_handles_missing_notes(self, mock_load_prompt):
-        """Test handling of missing notes."""
-        mock_load_prompt.return_value = "Notes: {notes}"
-        item = {
-            "title": "Test",
-            "notes": None,
-            "source": {"videoTitle": "Video", "youtubeUrl": "url", "content": {}},
-        }
-
-        result = build_system_prompt(item)
-        assert "None" in result
-
 
 class TestExplainChat:
-    """Tests for explain_chat function."""
+    """Tests for explain_chat function with dependency injection."""
 
-    @patch("src.tools.explain_chat.mongodb")
-    @patch("src.tools.explain_chat.chat_completion", new_callable=AsyncMock)
     async def test_creates_new_chat_success(
         self,
-        mock_chat_completion,
-        mock_mongodb,
+        mock_memorized_item_repo,
+        mock_chat_repo,
+        mock_llm_service,
         sample_user_id,
         sample_memorized_item,
     ):
         """Test successful chat creation."""
-        mock_mongodb.get_memorized_item.return_value = sample_memorized_item
-        mock_mongodb.create_chat.return_value = "new-chat-id"
-        mock_chat_completion.return_value = "This is the assistant response."
+        mock_memorized_item_repo.find_by_id_and_user.return_value = sample_memorized_item
+        mock_chat_repo.create.return_value = "new-chat-id"
+        mock_llm_service.chat_completion.return_value = "This is the assistant response."
 
         result = await explain_chat(
-            memorized_item_id=str(sample_memorized_item["_id"]),
+            memorized_item_id=sample_memorized_item.id,
             user_id=sample_user_id,
             message="What is this about?",
+            memorized_item_repo=mock_memorized_item_repo,
+            chat_repo=mock_chat_repo,
+            llm_service=mock_llm_service,
         )
 
         assert result["response"] == "This is the assistant response."
         assert result["chatId"] == "new-chat-id"
-        mock_mongodb.create_chat.assert_called_once()
-        mock_mongodb.add_messages.assert_called_once()
+        mock_chat_repo.create.assert_called_once()
+        mock_chat_repo.add_messages.assert_called_once()
 
-    @patch("src.tools.explain_chat.mongodb")
-    @patch("src.tools.explain_chat.chat_completion", new_callable=AsyncMock)
     async def test_continues_existing_chat(
         self,
-        mock_chat_completion,
-        mock_mongodb,
+        mock_memorized_item_repo,
+        mock_chat_repo,
+        mock_llm_service,
         sample_user_id,
         sample_memorized_item,
         sample_chat,
     ):
         """Test continuing existing chat."""
-        mock_mongodb.get_memorized_item.return_value = sample_memorized_item
-        mock_mongodb.get_chat.return_value = sample_chat
-        mock_chat_completion.return_value = "Follow-up response."
-
-        chat_id = str(sample_chat["_id"])
+        mock_memorized_item_repo.find_by_id_and_user.return_value = sample_memorized_item
+        mock_chat_repo.find_by_id_and_user.return_value = sample_chat
+        mock_llm_service.chat_completion.return_value = "Follow-up response."
 
         result = await explain_chat(
-            memorized_item_id=str(sample_memorized_item["_id"]),
+            memorized_item_id=sample_memorized_item.id,
             user_id=sample_user_id,
             message="Tell me more.",
-            chat_id=chat_id,
+            memorized_item_repo=mock_memorized_item_repo,
+            chat_repo=mock_chat_repo,
+            llm_service=mock_llm_service,
+            chat_id=sample_chat.id,
         )
 
         assert result["response"] == "Follow-up response."
-        assert result["chatId"] == chat_id
-        mock_mongodb.create_chat.assert_not_called()
+        assert result["chatId"] == sample_chat.id
+        mock_chat_repo.create.assert_not_called()
 
         # Verify messages include history
-        mock_chat_completion.assert_called_once()
-        call_args = mock_chat_completion.call_args
+        mock_llm_service.chat_completion.assert_called_once()
+        call_args = mock_llm_service.chat_completion.call_args
         messages = call_args[0][1]
         assert len(messages) == 3  # 2 history + 1 new
 
-    @patch("src.tools.explain_chat.mongodb")
     async def test_raises_error_item_not_found(
         self,
-        mock_mongodb,
+        mock_memorized_item_repo,
+        mock_chat_repo,
+        mock_llm_service,
         sample_user_id,
     ):
         """Test error when memorized item not found."""
-        mock_mongodb.get_memorized_item.return_value = None
+        mock_memorized_item_repo.find_by_id_and_user.return_value = None
 
-        with pytest.raises(ValueError, match="Memorized item not found"):
+        with pytest.raises(UnauthorizedError, match="Memorized item not found"):
             await explain_chat(
                 memorized_item_id="some-item-id",
                 user_id=sample_user_id,
                 message="Hello",
+                memorized_item_repo=mock_memorized_item_repo,
+                chat_repo=mock_chat_repo,
+                llm_service=mock_llm_service,
             )
 
-    @patch("src.tools.explain_chat.mongodb")
     async def test_raises_error_chat_not_found(
         self,
-        mock_mongodb,
+        mock_memorized_item_repo,
+        mock_chat_repo,
+        mock_llm_service,
         sample_user_id,
         sample_memorized_item,
     ):
         """Test error when chat not found."""
-        mock_mongodb.get_memorized_item.return_value = sample_memorized_item
-        mock_mongodb.get_chat.return_value = None
+        mock_memorized_item_repo.find_by_id_and_user.return_value = sample_memorized_item
+        mock_chat_repo.find_by_id_and_user.return_value = None
 
-        with pytest.raises(ValueError, match="Chat not found"):
+        with pytest.raises(ResourceNotFoundError, match="Chat not found"):
             await explain_chat(
-                memorized_item_id=str(sample_memorized_item["_id"]),
+                memorized_item_id=sample_memorized_item.id,
                 user_id=sample_user_id,
                 message="Hello",
+                memorized_item_repo=mock_memorized_item_repo,
+                chat_repo=mock_chat_repo,
+                llm_service=mock_llm_service,
                 chat_id="nonexistent-chat-id",
             )
 
-    @patch("src.tools.explain_chat.mongodb")
-    @patch("src.tools.explain_chat.chat_completion", new_callable=AsyncMock)
     async def test_saves_both_messages(
         self,
-        mock_chat_completion,
-        mock_mongodb,
+        mock_memorized_item_repo,
+        mock_chat_repo,
+        mock_llm_service,
         sample_user_id,
         sample_memorized_item,
     ):
         """Test that both user and assistant messages are saved."""
-        mock_mongodb.get_memorized_item.return_value = sample_memorized_item
-        mock_mongodb.create_chat.return_value = "new-chat-id"
-        mock_chat_completion.return_value = "Assistant response"
+        mock_memorized_item_repo.find_by_id_and_user.return_value = sample_memorized_item
+        mock_chat_repo.create.return_value = "new-chat-id"
+        mock_llm_service.chat_completion.return_value = "Assistant response"
 
         await explain_chat(
-            memorized_item_id=str(sample_memorized_item["_id"]),
+            memorized_item_id=sample_memorized_item.id,
             user_id=sample_user_id,
             message="User message",
+            memorized_item_repo=mock_memorized_item_repo,
+            chat_repo=mock_chat_repo,
+            llm_service=mock_llm_service,
         )
 
         # Verify add_messages was called with both messages
-        mock_mongodb.add_messages.assert_called_once()
-        call_args = mock_mongodb.add_messages.call_args
+        mock_chat_repo.add_messages.assert_called_once()
+        call_args = mock_chat_repo.add_messages.call_args
         messages = call_args[0][1]
 
         assert len(messages) == 2

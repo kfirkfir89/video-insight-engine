@@ -1,9 +1,10 @@
-import logging
 from typing import Annotated
 
 from fastapi import FastAPI, Depends
 
 from src.config import settings
+from src.logging_config import configure_structlog, get_logger
+from src.middleware import add_request_context_middleware
 from src.models.schemas import (
     SummarizeRequest,
     SummarizeResponse,
@@ -11,18 +12,18 @@ from src.models.schemas import (
     PlaylistExtractResponse,
     PlaylistVideoInfo,
 )
-from src.dependencies import get_video_repository
+from src.dependencies import get_video_repository, get_mongo_client
 from src.repositories.mongodb_repository import MongoDBVideoRepository
 from src.routes.stream import router as stream_router
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+# Configure structured logging (JSON in production, console in development)
+configure_structlog(json_format=settings.log_format == "json")
+logger = get_logger(__name__)
 
 app = FastAPI(title="vie-summarizer")
+
+# Add middleware
+add_request_context_middleware(app)
 
 # Register routers
 app.include_router(stream_router)
@@ -30,10 +31,21 @@ app.include_router(stream_router)
 
 @app.get("/health")
 async def health():
+    """Health check endpoint with DB connectivity verification."""
+    try:
+        # Verify MongoDB connection (sync client, runs in thread)
+        client = get_mongo_client()
+        client.admin.command("ping")
+        db_status = "connected"
+    except Exception as e:
+        logger.warning("mongodb_health_check_failed", error=str(e))
+        db_status = "disconnected"
+
     return {
-        "status": "healthy",
+        "status": "healthy" if db_status == "connected" else "degraded",
         "service": "vie-summarizer",
         "model": settings.llm_model,
+        "database": db_status,
     }
 
 

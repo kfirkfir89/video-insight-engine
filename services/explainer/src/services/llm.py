@@ -122,34 +122,4 @@ class LLMService:
             raise
 
 
-# Global instance for backward compatibility
-# Will be replaced with DI in main.py
-_llm_service: LLMService | None = None
-
-
-def get_llm_service() -> LLMService:
-    """Get or create LLM service instance."""
-    global _llm_service
-    if _llm_service is None:
-        provider = LLMProvider()
-        _llm_service = LLMService(provider)
-    return _llm_service
-
-
-# Convenience functions for backward compatibility with existing tools
-async def generate_expansion(template_name: str, context: dict) -> str:
-    """Generate expansion (backward compatible wrapper)."""
-    return await get_llm_service().generate_expansion(template_name, context)
-
-
-async def chat_completion(system_prompt: str, messages: list[dict]) -> str:
-    """Complete chat (backward compatible wrapper)."""
-    return await get_llm_service().chat_completion(system_prompt, messages)
-
-
-async def chat_completion_stream(
-    system_prompt: str, messages: list[dict]
-) -> AsyncGenerator[str, None]:
-    """Stream chat completion (backward compatible wrapper)."""
-    async for token in get_llm_service().chat_completion_stream(system_prompt, messages):
-        yield token
+__all__ = ["LLMService", "load_prompt"]

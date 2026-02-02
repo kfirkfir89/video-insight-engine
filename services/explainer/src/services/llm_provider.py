@@ -301,13 +301,4 @@ class LLMProvider:
             raise
 
 
-# Default provider instance (can be overridden via DI)
-_default_provider: LLMProvider | None = None
-
-
-def get_llm_provider() -> LLMProvider:
-    """Get or create default LLM provider instance."""
-    global _default_provider
-    if _default_provider is None:
-        _default_provider = LLMProvider()
-    return _default_provider
+__all__ = ["LLMProvider", "Message", "CompletionResult"]

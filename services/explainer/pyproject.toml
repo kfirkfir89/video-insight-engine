@@ -5,8 +5,8 @@ description = "Video content explanation service with HTTP endpoints"
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.0.0",
-    "anthropic>=0.40.0",
-    "pymongo>=4.6.0",
+    "litellm>=1.80.0",
+    "motor>=3.3.0",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
     "python-dotenv>=1.0.0",

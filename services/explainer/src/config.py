@@ -54,7 +54,8 @@ class Settings(BaseSettings):
     LLM_STREAM_TOKEN_TIMEOUT_SECONDS: float = 60.0
 
     # Logging
-    LOG_LEVEL: str = "debug"
+    log_level: str = "INFO"
+    log_format: str = "console"  # "console" or "json"
 
     @property
     def llm_model(self) -> str:
