@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { objectIdSchema } from '../utils/validation.js';
+import { config } from '../config.js';
 
 // Provider config schema (same as videos)
 const providerSchema = z.enum(['anthropic', 'openai', 'gemini']);
@@ -36,7 +37,7 @@ export async function playlistsRoutes(fastify: FastifyInstance) {
     preHandler: [fastify.authenticate],
     config: {
       rateLimit: {
-        max: 30,
+        max: config.RATE_LIMITS.PLAYLIST_PREVIEW,
         timeWindow: '1 hour',
         errorResponseBuilder: () => ({
           error: 'RATE_LIMITED',
@@ -58,11 +59,11 @@ export async function playlistsRoutes(fastify: FastifyInstance) {
     preHandler: [fastify.authenticate],
     config: {
       rateLimit: {
-        max: 5,
+        max: config.RATE_LIMITS.PLAYLIST_IMPORT,
         timeWindow: '24 hours',
         errorResponseBuilder: () => ({
           error: 'RATE_LIMITED',
-          message: 'Daily playlist import limit reached (5 playlists per 24 hours). Try again tomorrow.',
+          message: 'Daily playlist import limit reached. Try again tomorrow.',
           statusCode: 429,
         }),
       },

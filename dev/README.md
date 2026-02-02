@@ -21,6 +21,34 @@ dev/
 
 ## Active Tasks
 
+### TDD Infrastructure & Test Coverage
+**Status**: Ready for Implementation
+**Location**: `dev/active/tdd-infrastructure/`
+**Effort**: XL (8-12 developer-days)
+
+Establish complete TDD development flow across vie-api, vie-summarizer, and vie-web. Set up missing test infrastructure, create test patterns, and systematically fill test coverage gaps.
+
+**Files**:
+- `tdd-infrastructure-plan.md` - Implementation plan (5 phases)
+- `tdd-infrastructure-context.md` - Key files, patterns, decisions
+- `tdd-infrastructure-tasks.md` - 65 tasks with acceptance criteria
+
+**Phases**:
+1. **Infrastructure Setup** (S) - vie-web Vitest, vie-summarizer pytest
+2. **Critical Path Tests** (M) - Auth, streaming, core features
+3. **Core Feature Tests** (M) - Routes, services, hooks
+4. **Supporting Tests** (L) - Plugins, utils, repositories
+5. **Component Tests** (L) - UI components
+
+**Coverage Targets**:
+- vie-api: 80% (currently partial, 75 tests)
+- vie-summarizer: 80% (currently 3 test files)
+- vie-web: 80% for hooks/stores/utils (currently 0 unit tests)
+
+**Excluded**: vie-explainer (already has adequate coverage)
+
+---
+
 ### API Best Practices Refactor
 **Status**: Ready for Implementation
 **Location**: `dev/active/api-best-practices/`

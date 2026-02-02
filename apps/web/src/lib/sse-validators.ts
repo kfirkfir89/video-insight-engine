@@ -78,7 +78,10 @@ export const sectionSchema = z.object({
   generated_title: z.string().optional().nullable(), // Backend compatibility
   isCreatorChapter: z.boolean().optional(),
   is_creator_chapter: z.boolean().optional(), // Backend compatibility
-  content: z.array(contentBlockSchema).optional(), // Dynamic content blocks
+  // Content blocks use z.any() here to allow partial success - individual blocks
+  // are validated by validateContentBlocks() in validateSection(), which filters
+  // out invalid blocks while keeping valid ones (graceful degradation).
+  content: z.array(z.any()).optional(),
   summary: z.string(),
   bullets: z.array(z.string()),
 });
@@ -86,7 +89,7 @@ export const sectionSchema = z.object({
 export const conceptSchema = z.object({
   id: z.string(),
   name: z.string(),
-  definition: z.string().optional(),
+  definition: z.string().nullable().optional(),
   timestamp: z.string().nullable().optional(),
 });
 

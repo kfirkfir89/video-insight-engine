@@ -95,7 +95,13 @@ export async function request<T>(
     return res.json();
   } catch (error) {
     clearTimeout(timeoutId);
-    if (error instanceof Error && error.name === "AbortError") {
+    // Handle AbortError (may be DOMException or Error depending on environment)
+    if (
+      error &&
+      typeof error === "object" &&
+      "name" in error &&
+      (error as { name: string }).name === "AbortError"
+    ) {
       throw new ApiError(408, "Request timeout", "TIMEOUT");
     }
     throw error;
