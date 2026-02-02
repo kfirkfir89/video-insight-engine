@@ -11,11 +11,13 @@ Python service that processes YouTube videos into structured summaries.
 | Technology | Purpose |
 |------------|---------|
 | Python 3.11+ | Runtime |
-| FastAPI | Web framework + background tasks |
+| FastAPI | Web framework + SSE streaming |
 | youtube-transcript-api | Fetch transcripts |
+| yt-dlp | Video metadata + chapters |
 | LiteLLM | Multi-provider LLM abstraction (Anthropic, OpenAI, Gemini) |
 | pymongo | MongoDB driver |
-| Pydantic | Validation |
+| Pydantic | Validation & Settings |
+| structlog | Structured logging |
 
 ---
 
@@ -30,17 +32,28 @@ services/summarizer/
     ├── __init__.py
     ├── main.py                   # FastAPI app + routes
     ├── config.py                 # Settings + model mapping
-    ├── dependencies.py           # DI for LLMProvider
+    ├── dependencies.py           # DI providers
+    ├── exceptions.py             # Custom exceptions
+    ├── logging_config.py         # structlog configuration
+    ├── middleware.py             # Request ID middleware
+    │
+    ├── routes/
+    │   └── stream.py             # SSE streaming endpoint
     │
     ├── services/
     │   ├── transcript.py         # YouTube transcript fetching
-    │   ├── metadata.py           # Video metadata (oEmbed)
-    │   ├── cleaner.py            # Text normalization
+    │   ├── youtube.py            # Video metadata (yt-dlp)
+    │   ├── description_analyzer.py # Description analysis
     │   ├── llm.py                # LLM service (prompts + orchestration)
     │   ├── llm_provider.py       # LiteLLM abstraction layer
     │   ├── usage_tracker.py      # LLM usage tracking
     │   ├── playlist.py           # Playlist extraction (yt-dlp)
-    │   └── mongodb.py            # Database operations
+    │   ├── sponsorblock.py       # Sponsor segment detection
+    │   └── whisper_transcriber.py # Whisper fallback
+    │
+    ├── repositories/
+    │   ├── base.py               # Repository protocols
+    │   └── mongodb_repository.py # MongoDB implementation
     │
     ├── prompts/
     │   ├── section_detect.txt
@@ -74,7 +87,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=                 # Required if using OpenAI
 GOOGLE_API_KEY=                 # Required if using Gemini
 
-LOG_LEVEL=debug
+LOG_LEVEL=INFO
+LOG_FORMAT=console              # console or json
 ```
 
 ---
