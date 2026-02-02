@@ -42,11 +42,12 @@ class TestSummarizeService:
     def test_calculate_duration_valid_segments(self, service, sample_segments):
         """Test duration calculation with valid segments."""
         result = service._calculate_and_validate_duration(sample_segments)
-        assert result == 10  # 7.5 + 3.0
+        assert result == 75  # 65.0 + 10.0 (last segment start + duration)
 
     def test_calculate_duration_too_long(self, service):
         """Test duration validation for too long video."""
-        segments = [{"start": 0, "duration": 3700}]  # Over 60 mins
+        # MAX_VIDEO_DURATION_MINUTES is 240, so 241 minutes = 14460 seconds
+        segments = [{"start": 0, "duration": 14500}]  # Over 240 mins
         with pytest.raises(TranscriptError) as exc_info:
             service._calculate_and_validate_duration(segments)
         assert exc_info.value.code == ErrorCode.VIDEO_TOO_LONG
@@ -108,7 +109,7 @@ class TestSummarizeService:
         await service.process_video(
             video_summary_id="test-id",
             youtube_id="test123",
-            url="https://youtube.com/watch?v=test123",
+            _url="https://youtube.com/watch?v=test123",
         )
 
         # Verify repository was called
@@ -135,7 +136,7 @@ class TestSummarizeService:
         await service.process_video(
             video_summary_id="test-id",
             youtube_id="test123",
-            url="https://youtube.com/watch?v=test123",
+            _url="https://youtube.com/watch?v=test123",
         )
 
         # Verify error was recorded

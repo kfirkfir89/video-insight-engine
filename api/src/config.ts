@@ -20,6 +20,9 @@ const envSchema = z.object({
   // Configurable rate limits
   RATE_LIMIT_MAX: z.string().default('300').transform(Number),
   RATE_LIMIT_WINDOW: z.string().default('1 minute'),
+  // Playlist-specific rate limits (higher in test mode to avoid test interference)
+  PLAYLIST_PREVIEW_RATE_LIMIT: z.string().default('30').transform(Number),
+  PLAYLIST_IMPORT_RATE_LIMIT: z.string().default('5').transform(Number),
 });
 
 const parsedConfig = envSchema.parse(process.env);
@@ -63,8 +66,20 @@ function buildAllowedOrigins(): string[] {
   return Array.from(origins);
 }
 
+// Test mode rate limit multiplier to avoid test interference
+const TEST_RATE_LIMIT_MULTIPLIER = 20;
+
 export const config = {
   ...parsedConfig,
   // Computed property: list of all allowed CORS origins
   ALLOWED_ORIGINS: buildAllowedOrigins(),
+  // Computed rate limits - higher in test mode to avoid interference
+  RATE_LIMITS: {
+    PLAYLIST_PREVIEW: parsedConfig.NODE_ENV === 'test'
+      ? parsedConfig.PLAYLIST_PREVIEW_RATE_LIMIT * TEST_RATE_LIMIT_MULTIPLIER
+      : parsedConfig.PLAYLIST_PREVIEW_RATE_LIMIT,
+    PLAYLIST_IMPORT: parsedConfig.NODE_ENV === 'test'
+      ? parsedConfig.PLAYLIST_IMPORT_RATE_LIMIT * TEST_RATE_LIMIT_MULTIPLIER
+      : parsedConfig.PLAYLIST_IMPORT_RATE_LIMIT,
+  },
 };

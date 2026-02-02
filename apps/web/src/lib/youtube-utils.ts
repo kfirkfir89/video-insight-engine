@@ -4,10 +4,14 @@
  */
 
 export function extractVideoId(url: string): string | null {
+  // Unified pattern for all YouTube URL formats:
+  // - youtu.be/ID (short links)
+  // - youtube.com/embed/ID (embed links)
+  // - youtube.com/watch?v=ID (standard, v= anywhere in query string)
   const match = url.match(
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/
+    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|watch[^]*[?&]v=))([a-zA-Z0-9_-]{11})/
   );
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 export function hasVideoId(url: string): boolean {
