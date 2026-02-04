@@ -13,6 +13,16 @@ export type ProcessingStatus =
   | 'failed';
 
 // ─────────────────────────────────────────────────────
+// Base Block Interface (V2.1)
+// All content blocks extend this for stable identification
+// ─────────────────────────────────────────────────────
+
+export interface BaseBlock {
+  /** Stable UUID for tracking, analytics, and React keys */
+  blockId: string;
+}
+
+// ─────────────────────────────────────────────────────
 // Transcript Types (Phase 2 & 3)
 // ─────────────────────────────────────────────────────
 
@@ -37,11 +47,28 @@ export type TargetType = 'section' | 'concept';
 // Video Context Types
 // ─────────────────────────────────────────────────────
 
+/** @deprecated Use VideoCategory instead */
 export type VideoPersona = 'code' | 'recipe' | 'standard' | 'interview' | 'review';
+
+/** Video category for UI theming (V2.1) */
+export type VideoCategory =
+  | 'cooking'
+  | 'coding'
+  | 'travel'
+  | 'reviews'
+  | 'fitness'
+  | 'education'
+  | 'podcast'
+  | 'diy'
+  | 'gaming'
+  | 'standard';
 
 export interface VideoContext {
   youtubeCategory: string;
-  persona: VideoPersona;
+  /** @deprecated Use category instead */
+  persona?: VideoPersona;
+  /** Category for UI theming (V2.1) */
+  category?: VideoCategory;
   tags: string[];
   displayTags: string[];
 }
@@ -52,33 +79,34 @@ export interface VideoContext {
 
 // ─────────────────────────────────────────────────────
 // Content Block Types (Dynamic Section Content)
+// All blocks include optional blockId for stable tracking (V2.1)
 // ─────────────────────────────────────────────────────
 
-export interface ParagraphBlock {
+export interface ParagraphBlock extends Partial<BaseBlock> {
   type: 'paragraph';
   variant?: string;
   text: string;
 }
 
-export interface BulletsBlock {
+export interface BulletsBlock extends Partial<BaseBlock> {
   type: 'bullets';
   variant?: 'ingredients' | 'checklist' | string;
   items: string[];
 }
 
-export interface NumberedBlock {
+export interface NumberedBlock extends Partial<BaseBlock> {
   type: 'numbered';
   variant?: 'cooking_steps' | string;
   items: string[];
 }
 
-export interface DoDoNotBlock {
+export interface DoDoNotBlock extends Partial<BaseBlock> {
   type: 'do_dont';
   do: string[];
   dont: string[];
 }
 
-export interface ExampleBlock {
+export interface ExampleBlock extends Partial<BaseBlock> {
   type: 'example';
   variant?: 'terminal_command' | string;
   title?: string;
@@ -88,43 +116,43 @@ export interface ExampleBlock {
 
 export type CalloutStyle = 'tip' | 'warning' | 'note' | 'chef_tip' | 'security';
 
-export interface CalloutBlock {
+export interface CalloutBlock extends Partial<BaseBlock> {
   type: 'callout';
   variant?: 'chef_tip' | string;
   style: CalloutStyle;
   text: string;
 }
 
-export interface DefinitionBlock {
+export interface DefinitionBlock extends Partial<BaseBlock> {
   type: 'definition';
   variant?: string;
   term: string;
   meaning: string;
 }
 
-// ===== NEW BLOCK TYPES =====
+// ===== UNIVERSAL BLOCK TYPES (V2.1) =====
 
-export interface KeyValueBlock {
+export interface KeyValueBlock extends Partial<BaseBlock> {
   type: 'keyvalue';
   variant?: 'specs' | 'cost' | 'stats' | 'info' | 'location';
   items: { key: string; value: string }[];
 }
 
-export interface ComparisonBlock {
+export interface ComparisonBlock extends Partial<BaseBlock> {
   type: 'comparison';
   variant?: 'dos_donts' | 'pros_cons' | 'versus' | 'before_after';
   left: { label: string; items: string[] };
   right: { label: string; items: string[] };
 }
 
-export interface TimestampBlock {
+export interface TimestampBlock extends Partial<BaseBlock> {
   type: 'timestamp';
   time: string;       // "5:23" format
   seconds: number;    // For video seeking
   label: string;
 }
 
-export interface QuoteBlock {
+export interface QuoteBlock extends Partial<BaseBlock> {
   type: 'quote';
   variant?: 'speaker' | 'testimonial' | 'highlight';
   text: string;
@@ -132,7 +160,7 @@ export interface QuoteBlock {
   timestamp?: number;    // seconds for video seek
 }
 
-export interface StatisticBlock {
+export interface StatisticBlock extends Partial<BaseBlock> {
   type: 'statistic';
   variant?: 'metric' | 'percentage' | 'trend';
   items: {
@@ -143,7 +171,223 @@ export interface StatisticBlock {
   }[];
 }
 
+// ===== NEW UNIVERSAL BLOCKS (V2.1) =====
+
+export interface TranscriptBlock extends Partial<BaseBlock> {
+  type: 'transcript';
+  lines: {
+    time: string;
+    seconds: number;
+    text: string;
+  }[];
+}
+
+export interface TimelineBlock extends Partial<BaseBlock> {
+  type: 'timeline';
+  events: {
+    date?: string;
+    time?: string;
+    title: string;
+    description?: string;
+  }[];
+}
+
+export interface ToolListBlock extends Partial<BaseBlock> {
+  type: 'tool_list';
+  tools: {
+    name: string;
+    quantity?: string;
+    notes?: string;
+    checked?: boolean;
+  }[];
+}
+
+// ===== CATEGORY-SPECIFIC BLOCKS (V2.1) =====
+
+// Cooking blocks
+export interface IngredientBlock extends Partial<BaseBlock> {
+  type: 'ingredient';
+  servings?: number;
+  items: {
+    name: string;
+    amount?: string;
+    unit?: string;
+    notes?: string;
+    checked?: boolean;
+  }[];
+}
+
+export interface StepBlock extends Partial<BaseBlock> {
+  type: 'step';
+  steps: {
+    number: number;
+    instruction: string;
+    duration?: number; // seconds
+    tips?: string;
+  }[];
+}
+
+export interface NutritionBlock extends Partial<BaseBlock> {
+  type: 'nutrition';
+  servingSize?: string;
+  items: {
+    nutrient: string;
+    amount: string;
+    unit?: string;
+    dailyValue?: string;
+  }[];
+}
+
+// Coding blocks
+export interface CodeBlock extends Partial<BaseBlock> {
+  type: 'code';
+  language?: string;
+  code: string;
+  filename?: string;
+  highlightLines?: number[];
+}
+
+export interface TerminalBlock extends Partial<BaseBlock> {
+  type: 'terminal';
+  command: string;
+  output?: string;
+}
+
+export interface FileTreeBlock extends Partial<BaseBlock> {
+  type: 'file_tree';
+  tree: FileTreeNode[];
+}
+
+export interface FileTreeNode {
+  name: string;
+  type: 'file' | 'folder';
+  children?: FileTreeNode[];
+  expanded?: boolean;
+}
+
+// Travel blocks
+export interface LocationBlock extends Partial<BaseBlock> {
+  type: 'location';
+  name: string;
+  address?: string;
+  coordinates?: { lat: number; lng: number };
+  description?: string;
+  imageUrl?: string;
+  mapUrl?: string;
+}
+
+export interface ItineraryBlock extends Partial<BaseBlock> {
+  type: 'itinerary';
+  days: {
+    day: number;
+    title?: string;
+    activities: {
+      time?: string;
+      activity: string;
+      location?: string;
+      duration?: string;
+      notes?: string;
+    }[];
+  }[];
+}
+
+export interface CostBlock extends Partial<BaseBlock> {
+  type: 'cost';
+  currency?: string;
+  items: {
+    category: string;
+    amount: number;
+    notes?: string;
+  }[];
+  total?: number;
+}
+
+// Review blocks
+export interface ProConBlock extends Partial<BaseBlock> {
+  type: 'pro_con';
+  pros: string[];
+  cons: string[];
+}
+
+export interface RatingBlock extends Partial<BaseBlock> {
+  type: 'rating';
+  score: number;
+  maxScore: number;
+  label?: string;
+  breakdown?: {
+    category: string;
+    score: number;
+    maxScore?: number;
+  }[];
+}
+
+export interface VerdictBlock extends Partial<BaseBlock> {
+  type: 'verdict';
+  verdict: 'recommended' | 'not_recommended' | 'conditional' | 'neutral';
+  summary: string;
+  bestFor?: string[];
+  notFor?: string[];
+}
+
+// Fitness blocks
+export interface ExerciseBlock extends Partial<BaseBlock> {
+  type: 'exercise';
+  exercises: {
+    name: string;
+    sets?: number;
+    reps?: string;
+    duration?: string;
+    rest?: string;
+    difficulty?: 'beginner' | 'intermediate' | 'advanced';
+    notes?: string;
+    timestamp?: number;
+  }[];
+}
+
+export interface WorkoutTimerBlock extends Partial<BaseBlock> {
+  type: 'workout_timer';
+  intervals: {
+    name: string;
+    duration: number; // seconds
+    type: 'work' | 'rest' | 'warmup' | 'cooldown';
+  }[];
+  rounds?: number;
+}
+
+// Education blocks
+export interface QuizBlock extends Partial<BaseBlock> {
+  type: 'quiz';
+  questions: {
+    question: string;
+    options: string[];
+    correctIndex: number;
+    explanation?: string;
+  }[];
+}
+
+export interface FormulaBlock extends Partial<BaseBlock> {
+  type: 'formula';
+  latex: string;
+  description?: string;
+  inline?: boolean;
+}
+
+// Podcast blocks
+export interface GuestBlock extends Partial<BaseBlock> {
+  type: 'guest';
+  guests: {
+    name: string;
+    title?: string;
+    bio?: string;
+    imageUrl?: string;
+    socialLinks?: { platform: string; url: string }[];
+  }[];
+}
+
+// ===== CONTENT BLOCK UNION (V2.1) =====
+
 export type ContentBlock =
+  // Existing blocks
   | ParagraphBlock
   | BulletsBlock
   | NumberedBlock
@@ -155,13 +399,44 @@ export type ContentBlock =
   | ComparisonBlock
   | TimestampBlock
   | QuoteBlock
-  | StatisticBlock;
+  | StatisticBlock
+  // New universal blocks (V2.1)
+  | TranscriptBlock
+  | TimelineBlock
+  | ToolListBlock
+  // Cooking blocks (V2.1)
+  | IngredientBlock
+  | StepBlock
+  | NutritionBlock
+  // Coding blocks (V2.1)
+  | CodeBlock
+  | TerminalBlock
+  | FileTreeBlock
+  // Travel blocks (V2.1)
+  | LocationBlock
+  | ItineraryBlock
+  | CostBlock
+  // Review blocks (V2.1)
+  | ProConBlock
+  | RatingBlock
+  | VerdictBlock
+  // Fitness blocks (V2.1)
+  | ExerciseBlock
+  | WorkoutTimerBlock
+  // Education blocks (V2.1)
+  | QuizBlock
+  | FormulaBlock
+  // Podcast blocks (V2.1)
+  | GuestBlock;
+
+/** All possible block type strings */
+export type ContentBlockType = ContentBlock['type'];
 
 // ─────────────────────────────────────────────────────
-// Section Type
+// Chapter Type (V2.1 - renamed from Section)
 // ─────────────────────────────────────────────────────
 
-export interface Section {
+export interface Chapter {
   id: string;
   timestamp: string;
   startSeconds: number;
@@ -170,10 +445,13 @@ export interface Section {
   originalTitle?: string;      // Creator's original chapter title
   generatedTitle?: string;     // AI-generated explanation subtitle
   isCreatorChapter?: boolean;  // Flag for dual-title display
-  content?: ContentBlock[];    // Dynamic content blocks
+  content?: ContentBlock[];    // Dynamic content blocks (V2.1: each block has blockId)
   summary: string;             // Legacy fallback
   bullets: string[];           // Legacy fallback
 }
+
+/** @deprecated Use Chapter instead */
+export type Section = Chapter;
 
 export interface Concept {
   id: string;
@@ -185,9 +463,51 @@ export interface Concept {
 export interface VideoSummary {
   tldr: string;
   keyTakeaways: string[];
-  sections: Section[];
+  /** @deprecated Use chapters instead */
+  sections?: Chapter[];
+  /** Chapters with content blocks (V2.1) */
+  chapters?: Chapter[];
   concepts: Concept[];
   masterSummary?: string;
+}
+
+// ─────────────────────────────────────────────────────
+// Memorized Item Types (V2.1)
+// ─────────────────────────────────────────────────────
+
+export type MemorizedItemSourceType = 'video_chapters' | 'concept' | 'expansion';
+
+export interface MemorizedItemSource {
+  videoSummaryId: string;
+  youtubeId: string;
+  videoTitle: string;
+  thumbnailUrl: string;
+  youtubeUrl: string;
+}
+
+export interface MemorizedItem {
+  id: string;
+  userId: string;
+  title: string;
+  folderId: string | null;
+  sourceType: MemorizedItemSourceType;
+  source: MemorizedItemSource;
+  chapters: Chapter[];
+  concept?: {
+    id: string;
+    name: string;
+    definition: string | null;
+  };
+  expansion?: {
+    expansionId: string;
+    content: string;
+  };
+  videoContext: VideoContext | null;
+  notes: string | null;
+  tags: string[];
+  collectionIds: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ─────────────────────────────────────────────────────
@@ -196,7 +516,8 @@ export interface VideoSummary {
 
 export type ChapterSource = 'creator' | 'description' | 'ai_detected';
 
-export interface Chapter {
+/** Simplified chapter info used during progressive streaming */
+export interface StreamingChapter {
   startSeconds: number;
   endSeconds: number;
   title: string;
@@ -341,7 +662,7 @@ export interface VideoResponse {
   folderId: string | null;
   createdAt: string;
   // Progressive summarization fields (optional for backward compat)
-  chapters?: Chapter[];
+  chapters?: StreamingChapter[];
   chapterSource?: ChapterSource;
   descriptionAnalysis?: DescriptionAnalysis;
   sponsorSegments?: SponsorSegment[];
@@ -429,7 +750,7 @@ export interface SSEMetadataEvent {
 
 export interface SSEChaptersEvent {
   event: 'chapters';
-  chapters: Chapter[];
+  chapters: StreamingChapter[];
   isCreatorChapters: boolean;
 }
 

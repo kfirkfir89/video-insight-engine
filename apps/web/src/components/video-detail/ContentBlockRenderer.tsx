@@ -1,14 +1,46 @@
-import { Check, X } from 'lucide-react';
 import type { ContentBlock } from '@vie/types';
-import { KeyValueRenderer } from './blocks/KeyValueRenderer';
-import { ComparisonRenderer } from './blocks/ComparisonRenderer';
-import { TimestampRenderer } from './blocks/TimestampRenderer';
-import { QuoteRenderer } from './blocks/QuoteRenderer';
-import { StatisticRenderer } from './blocks/StatisticRenderer';
-import { BulletsBlock } from './blocks/BulletsBlock';
-import { NumberedBlock } from './blocks/NumberedBlock';
-import { ExampleBlock } from './blocks/ExampleBlock';
-import { CalloutBlock } from './blocks/CalloutBlock';
+import {
+  // Existing blocks
+  KeyValueRenderer,
+  ComparisonRenderer,
+  TimestampRenderer,
+  QuoteRenderer,
+  StatisticRenderer,
+  BulletsBlock,
+  NumberedBlock,
+  ExampleBlock,
+  CalloutBlock,
+  // New universal blocks (V2.1)
+  TranscriptBlock,
+  DosDontsBlock,
+  TimelineBlock,
+  DefinitionBlock,
+  ToolListBlock,
+  // Cooking blocks (V2.1)
+  IngredientBlock,
+  StepBlock,
+  NutritionBlock,
+  // Coding blocks (V2.1)
+  CodeBlock,
+  TerminalBlock,
+  FileTreeBlock,
+  // Travel blocks (V2.1)
+  LocationBlock,
+  ItineraryBlock,
+  CostBlock,
+  // Review blocks (V2.1)
+  ProConBlock,
+  RatingBlock,
+  VerdictBlock,
+  // Fitness blocks (V2.1)
+  ExerciseBlock,
+  WorkoutTimerBlock,
+  // Education blocks (V2.1)
+  QuizBlock,
+  FormulaBlock,
+  // Podcast blocks (V2.1)
+  GuestBlock,
+} from './blocks';
 
 interface ContentBlockRendererProps {
   block: ContentBlock;
@@ -27,14 +59,26 @@ interface ContentBlockRendererProps {
  * Renders a single content block based on its type.
  * Pure presentational component - receives props, renders UI.
  * Delegates to specialized block components for each type.
+ *
+ * V2.1: Now supports 31 block types across all categories.
  */
-export function ContentBlockRenderer({ block, onSeek, onPlay, onStop, isVideoActive, activeStartSeconds }: ContentBlockRendererProps) {
+export function ContentBlockRenderer({
+  block,
+  onSeek,
+  onPlay,
+  onStop,
+  isVideoActive,
+  activeStartSeconds,
+}: ContentBlockRendererProps) {
   // Defensive check for null/undefined or malformed block
   if (!block || typeof block !== 'object' || !('type' in block)) {
     return null;
   }
 
   switch (block.type) {
+    // ─────────────────────────────────────────────────────
+    // Existing blocks
+    // ─────────────────────────────────────────────────────
     case 'paragraph':
       return (
         <div className="relative pl-3 border-l-2 border-border/50">
@@ -51,43 +95,7 @@ export function ContentBlockRenderer({ block, onSeek, onPlay, onStop, isVideoAct
       return <NumberedBlock items={block.items} variant={block.variant} />;
 
     case 'do_dont':
-      if (!Array.isArray(block.do) || !Array.isArray(block.dont)) return null;
-      return (
-        <div className="rounded-lg border border-border/40 overflow-hidden">
-          <div className="grid grid-cols-1 sm:grid-cols-2">
-            {/* Do column */}
-            <div className="p-4 sm:border-r border-border/40">
-              <div className="flex items-center gap-1.5 pb-2 mb-3 border-b border-emerald-500/30">
-                <Check className="h-3.5 w-3.5 text-emerald-600/80 dark:text-emerald-400/80" />
-                <span className="text-xs font-medium text-emerald-600/80 dark:text-emerald-400/80">Do</span>
-              </div>
-              <ul className="space-y-1.5">
-                {block.do.map((item, index) => (
-                  <li key={index} className="flex items-baseline gap-2.5 text-sm">
-                    <span className="w-1 h-1 rounded-full bg-emerald-500/60 shrink-0 translate-y-1.5" />
-                    <span className="text-muted-foreground">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            {/* Don't column */}
-            <div className="p-4 border-t sm:border-t-0 border-border/40">
-              <div className="flex items-center gap-1.5 pb-2 mb-3 border-b border-rose-500/30">
-                <X className="h-3.5 w-3.5 text-rose-600/80 dark:text-rose-400/80" />
-                <span className="text-xs font-medium text-rose-600/80 dark:text-rose-400/80">Don't</span>
-              </div>
-              <ul className="space-y-1.5">
-                {block.dont.map((item, index) => (
-                  <li key={index} className="flex items-baseline gap-2.5 text-sm">
-                    <span className="w-1 h-1 rounded-full bg-rose-500/60 shrink-0 translate-y-1.5" />
-                    <span className="text-muted-foreground">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      );
+      return <DosDontsBlock block={block} />;
 
     case 'example':
       return (
@@ -103,14 +111,7 @@ export function ContentBlockRenderer({ block, onSeek, onPlay, onStop, isVideoAct
       return <CalloutBlock style={block.style} variant={block.variant} text={block.text} />;
 
     case 'definition':
-      return (
-        <div className="border-l-2 border-primary/30 pl-3">
-          <dl>
-            <dt className="text-sm font-medium">{block.term}</dt>
-            <dd className="mt-0.5 text-sm text-muted-foreground">{block.meaning}</dd>
-          </dl>
-        </div>
-      );
+      return <DefinitionBlock block={block} />;
 
     case 'keyvalue':
       return <KeyValueRenderer block={block} />;
@@ -135,13 +136,115 @@ export function ContentBlockRenderer({ block, onSeek, onPlay, onStop, isVideoAct
     case 'statistic':
       return <StatisticRenderer block={block} />;
 
+    // ─────────────────────────────────────────────────────
+    // New universal blocks (V2.1)
+    // ─────────────────────────────────────────────────────
+    case 'transcript':
+      return (
+        <TranscriptBlock
+          block={block}
+          onSeek={onSeek}
+          onPlay={onPlay}
+          activeSeconds={activeStartSeconds}
+        />
+      );
+
+    case 'timeline':
+      return <TimelineBlock block={block} />;
+
+    case 'tool_list':
+      return <ToolListBlock block={block} />;
+
+    // ─────────────────────────────────────────────────────
+    // Cooking blocks (V2.1)
+    // ─────────────────────────────────────────────────────
+    case 'ingredient':
+      return <IngredientBlock block={block} />;
+
+    case 'step':
+      return <StepBlock block={block} />;
+
+    case 'nutrition':
+      return <NutritionBlock block={block} />;
+
+    // ─────────────────────────────────────────────────────
+    // Coding blocks (V2.1)
+    // ─────────────────────────────────────────────────────
+    case 'code':
+      return <CodeBlock block={block} />;
+
+    case 'terminal':
+      return <TerminalBlock block={block} />;
+
+    case 'file_tree':
+      return <FileTreeBlock block={block} />;
+
+    // ─────────────────────────────────────────────────────
+    // Travel blocks (V2.1)
+    // ─────────────────────────────────────────────────────
+    case 'location':
+      return <LocationBlock block={block} />;
+
+    case 'itinerary':
+      return <ItineraryBlock block={block} />;
+
+    case 'cost':
+      return <CostBlock block={block} />;
+
+    // ─────────────────────────────────────────────────────
+    // Review blocks (V2.1)
+    // ─────────────────────────────────────────────────────
+    case 'pro_con':
+      return <ProConBlock block={block} />;
+
+    case 'rating':
+      return <RatingBlock block={block} />;
+
+    case 'verdict':
+      return <VerdictBlock block={block} />;
+
+    // ─────────────────────────────────────────────────────
+    // Fitness blocks (V2.1)
+    // ─────────────────────────────────────────────────────
+    case 'exercise':
+      return <ExerciseBlock block={block} onPlay={onPlay} />;
+
+    case 'workout_timer':
+      return <WorkoutTimerBlock block={block} />;
+
+    // ─────────────────────────────────────────────────────
+    // Education blocks (V2.1)
+    // ─────────────────────────────────────────────────────
+    case 'quiz':
+      return <QuizBlock block={block} />;
+
+    case 'formula':
+      return <FormulaBlock block={block} />;
+
+    // ─────────────────────────────────────────────────────
+    // Podcast blocks (V2.1)
+    // ─────────────────────────────────────────────────────
+    case 'guest':
+      return <GuestBlock block={block} />;
+
     default: {
-      // Exhaustive type check - TypeScript will error if a case is missing
-      const _exhaustiveCheck: never = block;
+      // Handle unknown block types gracefully
+      const unknownBlock = block as { type: string; text?: string };
+
       // Log warning in development for debugging
       if (import.meta.env.DEV) {
-        console.warn(`Unknown content block type: ${(_exhaustiveCheck as { type: string }).type}`);
+        console.warn(`Unknown content block type: ${unknownBlock.type}`, block);
       }
+
+      // Attempt graceful fallback for text-like blocks
+      if ('text' in unknownBlock && typeof unknownBlock.text === 'string') {
+        return (
+          <div className="relative pl-3 border-l-2 border-border/50">
+            <p className="text-muted-foreground leading-[1.75]">{unknownBlock.text}</p>
+          </div>
+        );
+      }
+
       return null;
     }
   }
