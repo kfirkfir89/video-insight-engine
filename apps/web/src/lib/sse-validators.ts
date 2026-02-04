@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { sseLogger } from './sse-logger';
 import type {
   Chapter,
-  Section,
+  SummaryChapter,
   Concept,
   ContentBlock,
   DescriptionLink,
@@ -30,31 +30,37 @@ export const chapterSchema = z.object({
   title: z.string(),
 });
 
-// Content block schemas for dynamic section content
+// Base block schema with blockId for stable referencing
+const baseBlockFields = {
+  blockId: z.string(),
+  variant: z.string().optional(),
+};
+
+// Content block schemas for dynamic chapter content
 export const contentBlockSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('paragraph'), variant: z.string().optional(), text: z.string() }),
-  z.object({ type: z.literal('bullets'), variant: z.string().optional(), items: z.array(z.string()) }),
-  z.object({ type: z.literal('numbered'), variant: z.string().optional(), items: z.array(z.string()) }),
-  z.object({ type: z.literal('do_dont'), do: z.array(z.string()), dont: z.array(z.string()) }),
-  z.object({ type: z.literal('example'), variant: z.string().optional(), title: z.string().optional(), code: z.string(), explanation: z.string().optional() }),
-  z.object({ type: z.literal('callout'), variant: z.string().optional(), style: z.enum(['tip', 'warning', 'note', 'chef_tip', 'security']), text: z.string() }),
-  z.object({ type: z.literal('definition'), variant: z.string().optional(), term: z.string(), meaning: z.string() }),
+  z.object({ ...baseBlockFields, type: z.literal('paragraph'), text: z.string() }),
+  z.object({ ...baseBlockFields, type: z.literal('bullets'), items: z.array(z.string()) }),
+  z.object({ ...baseBlockFields, type: z.literal('numbered'), items: z.array(z.string()) }),
+  z.object({ ...baseBlockFields, type: z.literal('do_dont'), do: z.array(z.string()), dont: z.array(z.string()) }),
+  z.object({ ...baseBlockFields, type: z.literal('example'), title: z.string().optional(), code: z.string(), explanation: z.string().optional() }),
+  z.object({ ...baseBlockFields, type: z.literal('callout'), style: z.enum(['tip', 'warning', 'note', 'chef_tip', 'security']), text: z.string() }),
+  z.object({ ...baseBlockFields, type: z.literal('definition'), term: z.string(), meaning: z.string() }),
   // Block types for video context enhancement
-  z.object({ type: z.literal('keyvalue'), variant: z.string().optional(), items: z.array(z.object({ key: z.string(), value: z.string() })) }),
-  z.object({ type: z.literal('comparison'), variant: z.string().optional(), left: z.object({ label: z.string(), items: z.array(z.string()) }), right: z.object({ label: z.string(), items: z.array(z.string()) }) }),
-  z.object({ type: z.literal('timestamp'), time: z.string(), seconds: z.number(), label: z.string() }),
+  z.object({ ...baseBlockFields, type: z.literal('keyvalue'), items: z.array(z.object({ key: z.string(), value: z.string() })) }),
+  z.object({ ...baseBlockFields, type: z.literal('comparison'), left: z.object({ label: z.string(), items: z.array(z.string()) }), right: z.object({ label: z.string(), items: z.array(z.string()) }) }),
+  z.object({ ...baseBlockFields, type: z.literal('timestamp'), time: z.string(), seconds: z.number(), label: z.string() }),
   // Quote block for speaker quotes and testimonials
   z.object({
+    ...baseBlockFields,
     type: z.literal('quote'),
-    variant: z.enum(['speaker', 'testimonial', 'highlight']).optional(),
     text: z.string(),
     attribution: z.string().optional(),
     timestamp: z.number().optional(),
   }),
   // Statistic block for metrics and data points
   z.object({
+    ...baseBlockFields,
     type: z.literal('statistic'),
-    variant: z.enum(['metric', 'percentage', 'trend']).optional(),
     items: z.array(z.object({
       value: z.string(),
       label: z.string(),
@@ -64,7 +70,7 @@ export const contentBlockSchema = z.discriminatedUnion('type', [
   }),
 ]);
 
-export const sectionSchema = z.object({
+export const summaryChapterSchema = z.object({
   id: z.string(),
   timestamp: z.string(),
   startSeconds: z.number().optional(),
@@ -79,7 +85,7 @@ export const sectionSchema = z.object({
   isCreatorChapter: z.boolean().optional(),
   is_creator_chapter: z.boolean().optional(), // Backend compatibility
   // Content blocks use z.any() here to allow partial success - individual blocks
-  // are validated by validateContentBlocks() in validateSection(), which filters
+  // are validated by validateContentBlocks() in validateChapter(), which filters
   // out invalid blocks while keeping valid ones (graceful degradation).
   content: z.array(z.any()).optional(),
   summary: z.string(),
@@ -159,14 +165,14 @@ function validateContentBlocks(blocks: unknown[] | undefined): ContentBlock[] | 
 }
 
 /**
- * Validate section from SSE event.
+ * Validate chapter from SSE event.
  * Returns null if validation fails.
  * Normalizes snake_case to camelCase for backend compatibility.
  */
-export function validateSection(data: unknown): Section | null {
-  const result = sectionSchema.safeParse(data);
+export function validateChapter(data: unknown): SummaryChapter | null {
+  const result = summaryChapterSchema.safeParse(data);
   if (!result.success) {
-    sseLogger.warn('Invalid section data:', result.error.message);
+    sseLogger.warn('Invalid chapter data:', result.error.message);
     return null;
   }
   const d = result.data;
@@ -240,10 +246,10 @@ export function validateDescriptionAnalysis(data: unknown): {
 // Event-Level Validators (for full SSE event objects)
 // ─────────────────────────────────────────────────────
 
-// Video context schema for persona-aware rendering
+// Video context schema for category-based rendering
 export const videoContextSchema = z.object({
+  category: z.string(),
   youtubeCategory: z.string(),
-  persona: z.enum(['code', 'recipe', 'standard', 'interview', 'review']),
   tags: z.array(z.string()),
   displayTags: z.array(z.string()),
 });
@@ -396,8 +402,8 @@ const VALID_SSE_PHASES = [
   'metadata',
   'transcript',
   'parallel_analysis',
-  'section_detect',
-  'section_summaries',
+  'chapter_detect',
+  'chapter_summaries',
   'concepts',
   'master_summary',
 ] as const;

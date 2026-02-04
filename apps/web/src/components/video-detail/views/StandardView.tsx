@@ -1,9 +1,9 @@
 import { memo } from 'react';
-import type { Section } from '@vie/types';
+import type { SummaryChapter } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
 interface StandardViewProps {
-  section: Section;
+  chapter: SummaryChapter;
   onPlay?: (seconds: number) => void;
   onStop?: () => void;
   isVideoActive?: boolean;
@@ -16,13 +16,13 @@ interface StandardViewProps {
  * Used as fallback when no specialized persona is detected.
  */
 export const StandardView = memo(function StandardView({
-  section,
+  chapter,
   onPlay,
   onStop,
   isVideoActive,
   activeStartSeconds,
 }: StandardViewProps) {
-  const blocks = section.content ?? [];
+  const blocks = chapter.content ?? [];
 
   // Early return for empty content to avoid rendering empty wrapper
   if (blocks.length === 0) {

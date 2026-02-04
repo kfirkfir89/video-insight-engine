@@ -1,0 +1,25 @@
+Analyze this video transcript and identify logical chapters.
+
+VIDEO DURATION: {duration} seconds ({duration_formatted})
+
+TRANSCRIPT:
+{transcript}
+
+Return JSON only (no other text):
+{{
+  "chapters": [
+    {{
+      "title": "Chapter title",
+      "startSeconds": 0,
+      "endSeconds": 180
+    }}
+  ]
+}}
+
+Rules:
+- Identify 3-8 chapters based on topic changes
+- Each chapter should be a coherent topic
+- IMPORTANT: All timestamps MUST be between 0 and {duration} seconds
+- Chapters must be sequential with no gaps
+- Last chapter endSeconds must equal {duration}
+- Title should be descriptive (3-6 words)

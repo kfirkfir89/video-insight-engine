@@ -70,7 +70,8 @@ class SummarizeResponse(BaseModel):
     videoSummaryId: str
 
 
-class Section(BaseModel):
+class Chapter(BaseModel):
+    """A chapter in the video summary (formerly Section)."""
     id: str
     timestamp: str
     start_seconds: int
@@ -78,6 +79,11 @@ class Section(BaseModel):
     title: str
     summary: str
     bullets: list[str]
+    content: list[dict] = []  # Dynamic content blocks with blockId
+
+
+# Backwards compatibility alias
+Section = Chapter
 
 
 class Concept(BaseModel):
@@ -90,7 +96,7 @@ class Concept(BaseModel):
 class VideoSummary(BaseModel):
     tldr: str
     key_takeaways: list[str]
-    sections: list[Section]
+    chapters: list[Chapter]
     concepts: list[Concept]
     master_summary: Optional[str] = None
 

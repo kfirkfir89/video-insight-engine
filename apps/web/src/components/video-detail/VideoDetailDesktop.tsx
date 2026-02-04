@@ -28,13 +28,13 @@ export function VideoDetailDesktop({
   effectiveChapters,
   effectiveIsCreatorChapters,
   effectiveDescriptionAnalysis,
-  activePlaySection,
+  activePlayChapter,
   activeStartSeconds,
-  handlePlayFromSection,
-  handleStopSection,
+  handlePlayFromChapter,
+  handleStopChapter,
   handleSeekToChapter,
   activeId,
-  scrollToSection,
+  scrollToChapter,
   conceptMatchResult,
   playerRef,
 }: VideoDetailDesktopProps) {
@@ -90,10 +90,10 @@ export function VideoDetailDesktop({
           </div>
         </div>
 
-        {/* Sections */}
+        {/* Chapters */}
         <div className={`space-y-6 ${isLargeDesktop ? "pb-12 px-4 md:px-8 lg:px-16 xl:px-24" : "pb-12"}`}>
-          {/* Show chapters while sections are loading during streaming */}
-          {isStreaming && effectiveChapters.length > 0 && summary.sections.length === 0 && (
+          {/* Show chapters while summary chapters are loading during streaming */}
+          {isStreaming && effectiveChapters.length > 0 && summary.chapters.length === 0 && (
             <ChapterList
               chapters={effectiveChapters}
               isCreatorChapters={effectiveIsCreatorChapters}
@@ -101,22 +101,22 @@ export function VideoDetailDesktop({
             />
           )}
 
-          {/* Article sections */}
-          {summary.sections.length > 0 && (
+          {/* Article chapters */}
+          {summary.chapters.length > 0 && (
             <div>
-              {summary.sections.map((section, index) => (
-                <Fragment key={section.id}>
+              {summary.chapters.map((chapter, index) => (
+                <Fragment key={chapter.id}>
                   {index > 0 && <Separator className="my-3 opacity-40" />}
                   <ArticleSection
-                    section={section}
-                    onPlay={handlePlayFromSection}
-                    onStop={handleStopSection}
-                    isVideoActive={activePlaySection === section.id}
-                    concepts={conceptMatchResult.bySection.get(section.id) || []}
+                    chapter={chapter}
+                    onPlay={handlePlayFromChapter}
+                    onStop={handleStopChapter}
+                    isVideoActive={activePlayChapter === chapter.id}
+                    concepts={conceptMatchResult.byChapter.get(chapter.id) || []}
                     playerRef={playerRef}
                     youtubeId={video.youtubeId}
-                    startSeconds={activePlaySection === section.id ? activeStartSeconds : section.startSeconds}
-                    persona={video.context?.persona}
+                    startSeconds={activePlayChapter === chapter.id ? activeStartSeconds : chapter.startSeconds}
+                    persona={video.context?.category as 'code' | 'recipe' | 'interview' | 'review' | 'standard'}
                   />
                 </Fragment>
               ))}
@@ -135,12 +135,12 @@ export function VideoDetailDesktop({
         <aside className="w-[240px] xl:w-[280px] shrink-0">
           <div className="sticky top-6">
             <StickyChapterNav
-              sections={summary.sections}
-              activeSection={activeId}
-              activePlaySection={activePlaySection}
-              onScrollToSection={scrollToSection}
-              onPlayFromSection={handlePlayFromSection}
-              onStopSection={handleStopSection}
+              chapters={summary.chapters}
+              activeChapter={activeId}
+              activePlayChapter={activePlayChapter}
+              onScrollToChapter={scrollToChapter}
+              onPlayFromChapter={handlePlayFromChapter}
+              onStopChapter={handleStopChapter}
             />
           </div>
         </aside>
@@ -149,9 +149,9 @@ export function VideoDetailDesktop({
       {/* Bottom Navigation for smaller desktops (1024-1280px) */}
       {!isLargeDesktop && (
         <MobileChapterNav
-          sections={summary.sections}
-          activeSection={activeId}
-          onScrollToSection={scrollToSection}
+          chapters={summary.chapters}
+          activeChapter={activeId}
+          onScrollToChapter={scrollToChapter}
         />
       )}
     </div>

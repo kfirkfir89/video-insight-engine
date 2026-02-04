@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   validateChapters,
-  validateSection,
+  validateChapter,
   validateConcepts,
   validateDescriptionAnalysis,
   validateMetadataEvent,
@@ -70,10 +70,10 @@ describe('sse-validators', () => {
   });
 
   // ─────────────────────────────────────────────────────
-  // validateSection Tests
+  // validateChapter Tests
   // ─────────────────────────────────────────────────────
 
-  describe('validateSection', () => {
+  describe('validateChapter', () => {
     it('should validate valid section', () => {
       const section = {
         id: 's1',
@@ -85,7 +85,7 @@ describe('sse-validators', () => {
         bullets: ['Point 1', 'Point 2'],
       };
 
-      const result = validateSection(section);
+      const result = validateChapter(section);
 
       expect(result).toMatchObject({
         id: 's1',
@@ -110,7 +110,7 @@ describe('sse-validators', () => {
         bullets: [],
       };
 
-      const result = validateSection(section);
+      const result = validateChapter(section);
 
       expect(result).toMatchObject({
         startSeconds: 0,
@@ -134,20 +134,20 @@ describe('sse-validators', () => {
         bullets: [],
       };
 
-      const result = validateSection(section);
+      const result = validateChapter(section);
 
       expect(result?.startSeconds).toBe(100);
       expect(result?.endSeconds).toBe(200);
     });
 
     it('should return null for invalid section', () => {
-      const result = validateSection({ id: 's1' }); // Missing required fields
+      const result = validateChapter({ id: 's1' }); // Missing required fields
 
       expect(result).toBeNull();
     });
 
     it('should return null for null input', () => {
-      const result = validateSection(null);
+      const result = validateChapter(null);
 
       expect(result).toBeNull();
     });
@@ -162,15 +162,15 @@ describe('sse-validators', () => {
         summary: 'Summary',
         bullets: [],
         content: [
-          { type: 'paragraph', text: 'Hello world' },
-          { type: 'bullets', items: ['Item 1', 'Item 2'] },
+          { blockId: 'block-1', type: 'paragraph', text: 'Hello world' },
+          { blockId: 'block-2', type: 'bullets', items: ['Item 1', 'Item 2'] },
         ],
       };
 
-      const result = validateSection(section);
+      const result = validateChapter(section);
 
       expect(result?.content).toHaveLength(2);
-      expect(result?.content?.[0]).toEqual({ type: 'paragraph', text: 'Hello world' });
+      expect(result?.content?.[0]).toEqual({ blockId: 'block-1', type: 'paragraph', text: 'Hello world' });
     });
 
     it('should filter out invalid content blocks', () => {
@@ -183,13 +183,13 @@ describe('sse-validators', () => {
         summary: 'Summary',
         bullets: [],
         content: [
-          { type: 'paragraph', text: 'Valid' },
-          { type: 'invalid_type', data: 'Invalid' },
-          { type: 'bullets', items: ['Valid items'] },
+          { blockId: 'block-1', type: 'paragraph', text: 'Valid' },
+          { blockId: 'block-2', type: 'invalid_type', data: 'Invalid' },
+          { blockId: 'block-3', type: 'bullets', items: ['Valid items'] },
         ],
       };
 
-      const result = validateSection(section);
+      const result = validateChapter(section);
 
       expect(result?.content).toHaveLength(2);
     });
@@ -296,8 +296,8 @@ describe('sse-validators', () => {
         thumbnailUrl: 'https://example.com/thumb.jpg',
         duration: 3600,
         context: {
+          category: 'coding',
           youtubeCategory: 'Education',
-          persona: 'code',
           tags: ['programming'],
           displayTags: ['Programming'],
         },
@@ -311,8 +311,8 @@ describe('sse-validators', () => {
         thumbnailUrl: 'https://example.com/thumb.jpg',
         duration: 3600,
         context: {
+          category: 'coding',
           youtubeCategory: 'Education',
-          persona: 'code',
           tags: ['programming'],
           displayTags: ['Programming'],
         },
@@ -342,13 +342,13 @@ describe('sse-validators', () => {
       expect(result).toEqual({});
     });
 
-    it('should return empty object for invalid context persona', () => {
+    it('should return empty object for invalid context category', () => {
       const data = {
         event: 'metadata',
         title: 'Test',
         context: {
+          // Missing required 'category' field
           youtubeCategory: 'Education',
-          persona: 'invalid_persona', // Invalid
           tags: [],
           displayTags: [],
         },
@@ -521,8 +521,8 @@ describe('sse-validators', () => {
         'metadata',
         'transcript',
         'parallel_analysis',
-        'section_detect',
-        'section_summaries',
+        'chapter_detect',
+        'chapter_summaries',
         'concepts',
         'master_summary',
       ];

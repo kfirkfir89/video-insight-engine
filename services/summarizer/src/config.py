@@ -57,10 +57,10 @@ class Settings(BaseSettings):
 
     # Token limits for LLM prompts (large safety nets - modern LLMs handle full transcripts)
     MAX_TRANSCRIPT_CHARS: int = 500000  # ~500K chars = well within all LLM limits
-    MAX_SECTION_CHARS: int = 100000  # ~100K chars per section
+    MAX_CHAPTER_CHARS: int = 100000  # ~100K chars per chapter
 
-    # Issue #18: Configurable batch size for parallel section processing
-    SECTION_BATCH_SIZE: int = 3
+    # Issue #18: Configurable batch size for parallel chapter processing
+    CHAPTER_BATCH_SIZE: int = 3
 
     # SponsorBlock API timeout
     SPONSORBLOCK_TIMEOUT: float = 5.0
