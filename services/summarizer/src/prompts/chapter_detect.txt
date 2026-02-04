@@ -1,4 +1,4 @@
-Analyze this video transcript and identify logical sections.
+Analyze this video transcript and identify logical chapters.
 
 VIDEO DURATION: {duration} seconds ({duration_formatted})
 
@@ -7,9 +7,9 @@ TRANSCRIPT:
 
 Return JSON only (no other text):
 {{
-  "sections": [
+  "chapters": [
     {{
-      "title": "Section title",
+      "title": "Chapter title",
       "startSeconds": 0,
       "endSeconds": 180
     }}
@@ -17,9 +17,9 @@ Return JSON only (no other text):
 }}
 
 Rules:
-- Identify 3-8 sections based on topic changes
-- Each section should be a coherent topic
+- Identify 3-8 chapters based on topic changes
+- Each chapter should be a coherent topic
 - IMPORTANT: All timestamps MUST be between 0 and {duration} seconds
-- Sections must be sequential with no gaps
-- Last section endSeconds must equal {duration}
+- Chapters must be sequential with no gaps
+- Last chapter endSeconds must equal {duration}
 - Title should be descriptive (3-6 words)

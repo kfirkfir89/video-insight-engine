@@ -13,7 +13,7 @@ export interface ProcessingStreamState {
     thumbnailUrl?: string;
     duration?: number;
   } | null;
-  sectionsCount: number;
+  chaptersCount: number;
   error: string | null;
 }
 
@@ -79,7 +79,7 @@ export function toProcessingStreamState(state: StreamState): ProcessingStreamSta
   return {
     phase: state.phase,
     metadata: state.metadata,
-    sectionsCount: state.sections.length,
+    chaptersCount: state.chapters.length,
     error: state.error,
   };
 }

@@ -1,10 +1,10 @@
 import { memo, useMemo } from 'react';
 import { ChefHat, ListChecks, Clock, Lightbulb } from 'lucide-react';
-import type { Section, ContentBlock } from '@vie/types';
+import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
 interface RecipeViewProps {
-  section: Section;
+  chapter: SummaryChapter;
   onPlay?: (seconds: number) => void;
   onStop?: () => void;
   isVideoActive?: boolean;
@@ -20,7 +20,7 @@ interface RecipeViewProps {
  * - Timestamps for technique demonstrations
  */
 export const RecipeView = memo(function RecipeView({
-  section,
+  chapter,
   onPlay,
   onStop,
   isVideoActive,
@@ -35,7 +35,7 @@ export const RecipeView = memo(function RecipeView({
     const timestamps: ContentBlock[] = [];
     const other: ContentBlock[] = [];
 
-    for (const block of section.content ?? []) {
+    for (const block of chapter.content ?? []) {
       if (block.type === 'bullets' && block.variant === 'ingredients') {
         ingredients.push(block);
       } else if (block.type === 'numbered' && block.variant === 'cooking_steps') {
@@ -60,7 +60,7 @@ export const RecipeView = memo(function RecipeView({
       timestampBlocks: timestamps,
       otherBlocks: other,
     };
-  }, [section.content]);
+  }, [chapter.content]);
 
   const hasIngredients = ingredientBlocks.length > 0;
   const hasSteps = stepBlocks.length > 0;

@@ -27,13 +27,13 @@ export function VideoDetailMobile({
   effectiveChapters,
   effectiveIsCreatorChapters,
   effectiveDescriptionAnalysis,
-  activePlaySection,
+  activePlayChapter,
   activeStartSeconds,
-  handlePlayFromSection,
-  handleStopSection,
+  handlePlayFromChapter,
+  handleStopChapter,
   handleSeekToChapter,
   activeId,
-  scrollToSection,
+  scrollToChapter,
   conceptMatchResult,
   playerRef,
 }: VideoDetailMobileProps) {
@@ -77,11 +77,11 @@ export function VideoDetailMobile({
               <Fragment key={section.id}>
                 {index > 0 && <Separator className="my-3 opacity-40" />}
                 <ArticleSection
-                  section={section}
-                  onPlay={handlePlayFromSection}
-                  onStop={handleStopSection}
-                  isVideoActive={activePlaySection === section.id}
-                  concepts={conceptMatchResult.bySection.get(section.id) || []}
+                  chapter={chapter}
+                  onPlay={handlePlayFromChapter}
+                  onStop={handleStopChapter}
+                  isVideoActive={activePlayChapter === chapter.id}
+                  concepts={conceptMatchResult.byChapter.get(chapter.id) || []}
                   playerRef={playerRef}
                   youtubeId={video.youtubeId}
                   startSeconds={activePlaySection === section.id ? activeStartSeconds : section.startSeconds}

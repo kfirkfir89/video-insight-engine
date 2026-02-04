@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Layout } from "@/components/layout/Layout";
 import type { YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
-import { useActiveSection } from "@/hooks/use-active-section";
+import { useActiveChapter } from "@/hooks/use-active-chapter";
 import { useIsDesktop } from "@/hooks/use-media-query";
-import { matchConceptsToSections } from "@/lib/timestamp-utils";
+import { matchConceptsToChapters } from "@/lib/timestamp-utils";
 import { ChapterList } from "./ChapterList";
 import { ResourcesPanel } from "./ResourcesPanel";
 import { MasterSummaryModal } from "./MasterSummaryModal";
@@ -50,8 +50,8 @@ export function VideoDetailLayout({
   const playerRef = useRef<YouTubePlayerRef>(null);
   const isDesktop = useIsDesktop();
 
-  // Section play state
-  const [activePlaySection, setActivePlaySection] = useState<string | null>(null);
+  // Chapter play state
+  const [activePlayChapter, setActivePlayChapter] = useState<string | null>(null);
   const [activeStartSeconds, setActiveStartSeconds] = useState<number>(0);
 
   // Master summary modal state
@@ -62,36 +62,36 @@ export function VideoDetailLayout({
   const sectionIds = useMemo(
     () => (summary?.sections ?? []).map((s) => s.id) ?? [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sectionIdsString]
+    [chapterIdsString]
   );
 
-  const { activeId, scrollToSection } = useActiveSection(sectionIds);
+  const { activeId, scrollToChapter } = useActiveChapter(chapterIds);
 
-  // Match concepts to sections
+  // Match concepts to chapters
   const conceptMatchResult = useMemo(() => {
-    if (!summary?.concepts || !summary?.sections) {
-      return { bySection: new Map(), orphaned: [] };
+    if (!summary?.concepts || !summary?.chapters) {
+      return { byChapter: new Map(), orphaned: [] };
     }
     return matchConceptsToSections(summary.concepts, (summary.sections ?? []));
   }, [summary?.concepts, summary?.sections]);
 
-  // Handle play from section - collapses video under the section on desktop
-  const handlePlayFromSection = useCallback((sectionId: string, startSeconds: number) => {
+  // Handle play from chapter - collapses video under the chapter on desktop
+  const handlePlayFromChapter = useCallback((chapterId: string, startSeconds: number) => {
     if (isDesktop) {
-      setActivePlaySection(sectionId);
+      setActivePlayChapter(chapterId);
       setActiveStartSeconds(startSeconds);
       setTimeout(() => {
-        const sectionElement = document.getElementById(`section-${sectionId}`);
-        if (sectionElement) {
-          const scrollContainer = sectionElement.closest("main");
+        const chapterElement = document.getElementById(`chapter-${chapterId}`);
+        if (chapterElement) {
+          const scrollContainer = chapterElement.closest("main");
           if (scrollContainer) {
             const containerRect = scrollContainer.getBoundingClientRect();
-            const elementRect = sectionElement.getBoundingClientRect();
+            const elementRect = chapterElement.getBoundingClientRect();
             const relativeTop = elementRect.top - containerRect.top + scrollContainer.scrollTop;
             const offset = 80;
             scrollContainer.scrollTo({ top: relativeTop - offset, behavior: "smooth" });
           } else {
-            sectionElement.scrollIntoView({ behavior: "smooth", block: "start" });
+            chapterElement.scrollIntoView({ behavior: "smooth", block: "start" });
           }
         }
       }, 150);
@@ -107,8 +107,8 @@ export function VideoDetailLayout({
     }
   }, [isDesktop]);
 
-  const handleStopSection = useCallback(() => {
-    setActivePlaySection(null);
+  const handleStopChapter = useCallback(() => {
+    setActivePlayChapter(null);
   }, []);
 
   const handleSeekToChapter = useCallback((startSeconds: number) => {
@@ -138,13 +138,13 @@ export function VideoDetailLayout({
     effectiveChapters,
     effectiveIsCreatorChapters,
     effectiveDescriptionAnalysis,
-    activePlaySection,
+    activePlayChapter,
     activeStartSeconds,
-    handlePlayFromSection,
-    handleStopSection,
+    handlePlayFromChapter,
+    handleStopChapter,
     handleSeekToChapter,
     activeId,
-    scrollToSection,
+    scrollToChapter,
     conceptMatchResult,
     playerRef,
   };

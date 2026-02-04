@@ -1,10 +1,10 @@
 import { memo, useMemo } from 'react';
 import { Code2, GitCompare } from 'lucide-react';
-import type { Section, ContentBlock } from '@vie/types';
+import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
 interface CodeViewProps {
-  section: Section;
+  chapter: SummaryChapter;
   onPlay?: (seconds: number) => void;
   onStop?: () => void;
   isVideoActive?: boolean;
@@ -19,7 +19,7 @@ interface CodeViewProps {
  * - Technical concepts
  */
 export const CodeView = memo(function CodeView({
-  section,
+  chapter,
   onPlay,
   onStop,
   isVideoActive,
@@ -31,7 +31,7 @@ export const CodeView = memo(function CodeView({
     const comparisons: ContentBlock[] = [];
     const other: ContentBlock[] = [];
 
-    for (const block of section.content ?? []) {
+    for (const block of chapter.content ?? []) {
       if (block.type === 'example' || (block.type === 'bullets' && block.variant === 'terminal_command')) {
         code.push(block);
       } else if (block.type === 'comparison') {
@@ -42,7 +42,7 @@ export const CodeView = memo(function CodeView({
     }
 
     return { codeBlocks: code, comparisonBlocks: comparisons, otherBlocks: other };
-  }, [section.content]);
+  }, [chapter.content]);
 
   const hasCodeBlocks = codeBlocks.length > 0;
   const hasComparisons = comparisonBlocks.length > 0;

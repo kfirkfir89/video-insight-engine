@@ -1,21 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { parseTimestamp, matchConceptsToSections } from '../timestamp-utils';
-import type { Section, Concept } from '@vie/types';
+import { parseTimestamp, matchConceptsToChapters } from '../timestamp-utils';
+import type { SummaryChapter, Concept } from '@vie/types';
 
 // ─────────────────────────────────────────────────────
 // Test Fixtures
 // ─────────────────────────────────────────────────────
 
-const createSection = (
+const createChapter = (
   id: string,
   startSeconds: number,
   endSeconds: number
-): Section => ({
+): SummaryChapter => ({
   id,
   timestamp: `${Math.floor(startSeconds / 60)}:${String(startSeconds % 60).padStart(2, '0')}`,
   startSeconds,
   endSeconds,
-  title: `Section ${id}`,
+  title: `Chapter ${id}`,
   summary: 'Test summary',
   bullets: ['Bullet 1'],
 });
@@ -113,178 +113,178 @@ describe('timestamp-utils', () => {
   });
 
   // ─────────────────────────────────────────────────────
-  // matchConceptsToSections Tests
+  // matchConceptsToChapters Tests
   // ─────────────────────────────────────────────────────
 
-  describe('matchConceptsToSections', () => {
+  describe('matchConceptsToChapters', () => {
     it('should return all concepts as orphaned when no sections exist', () => {
       const concepts: Concept[] = [
         createConcept('1', 'Concept A', '1:00'),
         createConcept('2', 'Concept B', '2:00'),
       ];
 
-      const result = matchConceptsToSections(concepts, []);
+      const result = matchConceptsToChapters(concepts, []);
 
-      expect(result.bySection.size).toBe(0);
+      expect(result.byChapter.size).toBe(0);
       expect(result.orphaned).toHaveLength(2);
     });
 
     it('should return empty result for no concepts', () => {
-      const sections: Section[] = [createSection('s1', 0, 60)];
+      const sections: SummaryChapter[] = [createChapter('s1', 0, 60)];
 
-      const result = matchConceptsToSections([], sections);
+      const result = matchConceptsToChapters([], sections);
 
-      expect(result.bySection.get('s1')).toEqual([]);
+      expect(result.byChapter.get('s1')).toEqual([]);
       expect(result.orphaned).toHaveLength(0);
     });
 
     it('should match concept to section by timestamp range', () => {
-      const sections: Section[] = [
-        createSection('s1', 0, 60),
-        createSection('s2', 60, 120),
+      const sections: SummaryChapter[] = [
+        createChapter('s1', 0, 60),
+        createChapter('s2', 60, 120),
       ];
       const concepts: Concept[] = [
         createConcept('c1', 'Concept A', '0:30'), // 30 seconds - in s1
         createConcept('c2', 'Concept B', '1:15'), // 75 seconds - in s2
       ];
 
-      const result = matchConceptsToSections(concepts, sections);
+      const result = matchConceptsToChapters(concepts, sections);
 
-      expect(result.bySection.get('s1')).toHaveLength(1);
-      expect(result.bySection.get('s1')![0].name).toBe('Concept A');
-      expect(result.bySection.get('s2')).toHaveLength(1);
-      expect(result.bySection.get('s2')![0].name).toBe('Concept B');
+      expect(result.byChapter.get('s1')).toHaveLength(1);
+      expect(result.byChapter.get('s1')![0].name).toBe('Concept A');
+      expect(result.byChapter.get('s2')).toHaveLength(1);
+      expect(result.byChapter.get('s2')![0].name).toBe('Concept B');
       expect(result.orphaned).toHaveLength(0);
     });
 
     it('should handle concept at exact section start', () => {
-      const sections: Section[] = [createSection('s1', 60, 120)];
+      const sections: SummaryChapter[] = [createChapter('s1', 60, 120)];
       const concepts: Concept[] = [createConcept('c1', 'At Start', '1:00')]; // Exactly 60 seconds
 
-      const result = matchConceptsToSections(concepts, sections);
+      const result = matchConceptsToChapters(concepts, sections);
 
-      expect(result.bySection.get('s1')).toHaveLength(1);
+      expect(result.byChapter.get('s1')).toHaveLength(1);
     });
 
     it('should NOT match concept at exact section end (exclusive end)', () => {
-      const sections: Section[] = [createSection('s1', 0, 60)];
+      const sections: SummaryChapter[] = [createChapter('s1', 0, 60)];
       const concepts: Concept[] = [createConcept('c1', 'At End', '1:00')]; // Exactly 60 seconds
 
-      const result = matchConceptsToSections(concepts, sections);
+      const result = matchConceptsToChapters(concepts, sections);
 
-      expect(result.bySection.get('s1')).toHaveLength(0);
+      expect(result.byChapter.get('s1')).toHaveLength(0);
       expect(result.orphaned).toHaveLength(1);
     });
 
     it('should treat concepts without timestamp as orphaned', () => {
-      const sections: Section[] = [createSection('s1', 0, 60)];
+      const sections: SummaryChapter[] = [createChapter('s1', 0, 60)];
       const concepts: Concept[] = [
         createConcept('c1', 'No Timestamp', null),
         createConcept('c2', 'With Timestamp', '0:30'),
       ];
 
-      const result = matchConceptsToSections(concepts, sections);
+      const result = matchConceptsToChapters(concepts, sections);
 
-      expect(result.bySection.get('s1')).toHaveLength(1);
+      expect(result.byChapter.get('s1')).toHaveLength(1);
       expect(result.orphaned).toHaveLength(1);
       expect(result.orphaned[0].name).toBe('No Timestamp');
     });
 
     it('should treat concepts with invalid timestamp as orphaned', () => {
-      const sections: Section[] = [createSection('s1', 0, 60)];
+      const sections: SummaryChapter[] = [createChapter('s1', 0, 60)];
       const concepts: Concept[] = [createConcept('c1', 'Invalid', 'invalid')];
 
-      const result = matchConceptsToSections(concepts, sections);
+      const result = matchConceptsToChapters(concepts, sections);
 
-      expect(result.bySection.get('s1')).toHaveLength(0);
+      expect(result.byChapter.get('s1')).toHaveLength(0);
       expect(result.orphaned).toHaveLength(1);
     });
 
     it('should handle special case of 0:00 timestamp correctly', () => {
-      const sections: Section[] = [createSection('s1', 0, 60)];
+      const sections: SummaryChapter[] = [createChapter('s1', 0, 60)];
       const concepts: Concept[] = [createConcept('c1', 'At Zero', '0:00')];
 
-      const result = matchConceptsToSections(concepts, sections);
+      const result = matchConceptsToChapters(concepts, sections);
 
-      expect(result.bySection.get('s1')).toHaveLength(1);
+      expect(result.byChapter.get('s1')).toHaveLength(1);
       expect(result.orphaned).toHaveLength(0);
     });
 
     it('should normalize sections with missing endSeconds', () => {
       // endSeconds=0 should be calculated from next section
-      const sections: Section[] = [
-        { ...createSection('s1', 0, 0), endSeconds: 0 },
-        { ...createSection('s2', 60, 0), endSeconds: 0 },
+      const sections: SummaryChapter[] = [
+        { ...createChapter('s1', 0, 0), endSeconds: 0 },
+        { ...createChapter('s2', 60, 0), endSeconds: 0 },
       ];
       const concepts: Concept[] = [
         createConcept('c1', 'In S1', '0:30'), // Should match s1 (0-60)
         createConcept('c2', 'In S2', '1:30'), // Should match s2 (60-Infinity)
       ];
 
-      const result = matchConceptsToSections(concepts, sections);
+      const result = matchConceptsToChapters(concepts, sections);
 
-      expect(result.bySection.get('s1')).toHaveLength(1);
-      expect(result.bySection.get('s1')![0].name).toBe('In S1');
-      expect(result.bySection.get('s2')).toHaveLength(1);
-      expect(result.bySection.get('s2')![0].name).toBe('In S2');
+      expect(result.byChapter.get('s1')).toHaveLength(1);
+      expect(result.byChapter.get('s1')![0].name).toBe('In S1');
+      expect(result.byChapter.get('s2')).toHaveLength(1);
+      expect(result.byChapter.get('s2')![0].name).toBe('In S2');
     });
 
     it('should orphan concepts that fall outside all sections', () => {
-      const sections: Section[] = [createSection('s1', 60, 120)];
+      const sections: SummaryChapter[] = [createChapter('s1', 60, 120)];
       const concepts: Concept[] = [
         createConcept('c1', 'Before', '0:30'), // 30 seconds - before s1
         createConcept('c2', 'After', '3:00'), // 180 seconds - after s1
       ];
 
-      const result = matchConceptsToSections(concepts, sections);
+      const result = matchConceptsToChapters(concepts, sections);
 
-      expect(result.bySection.get('s1')).toHaveLength(0);
+      expect(result.byChapter.get('s1')).toHaveLength(0);
       expect(result.orphaned).toHaveLength(2);
     });
 
     it('should initialize all sections with empty arrays', () => {
-      const sections: Section[] = [
-        createSection('s1', 0, 60),
-        createSection('s2', 60, 120),
-        createSection('s3', 120, 180),
+      const sections: SummaryChapter[] = [
+        createChapter('s1', 0, 60),
+        createChapter('s2', 60, 120),
+        createChapter('s3', 120, 180),
       ];
       const concepts: Concept[] = [createConcept('c1', 'Only in S2', '1:30')];
 
-      const result = matchConceptsToSections(concepts, sections);
+      const result = matchConceptsToChapters(concepts, sections);
 
-      expect(result.bySection.has('s1')).toBe(true);
-      expect(result.bySection.has('s2')).toBe(true);
-      expect(result.bySection.has('s3')).toBe(true);
-      expect(result.bySection.get('s1')).toEqual([]);
-      expect(result.bySection.get('s2')).toHaveLength(1);
-      expect(result.bySection.get('s3')).toEqual([]);
+      expect(result.byChapter.has('s1')).toBe(true);
+      expect(result.byChapter.has('s2')).toBe(true);
+      expect(result.byChapter.has('s3')).toBe(true);
+      expect(result.byChapter.get('s1')).toEqual([]);
+      expect(result.byChapter.get('s2')).toHaveLength(1);
+      expect(result.byChapter.get('s3')).toEqual([]);
     });
 
     it('should match multiple concepts to the same section', () => {
-      const sections: Section[] = [createSection('s1', 0, 300)];
+      const sections: SummaryChapter[] = [createChapter('s1', 0, 300)];
       const concepts: Concept[] = [
         createConcept('c1', 'First', '0:30'),
         createConcept('c2', 'Second', '1:00'),
         createConcept('c3', 'Third', '2:30'),
       ];
 
-      const result = matchConceptsToSections(concepts, sections);
+      const result = matchConceptsToChapters(concepts, sections);
 
-      expect(result.bySection.get('s1')).toHaveLength(3);
+      expect(result.byChapter.get('s1')).toHaveLength(3);
     });
 
-    it('should preserve original section order in bySection map', () => {
+    it('should preserve original section order in byChapter map', () => {
       // Sections intentionally out of time order
-      const sections: Section[] = [
-        createSection('s2', 60, 120),
-        createSection('s1', 0, 60),
-        createSection('s3', 120, 180),
+      const sections: SummaryChapter[] = [
+        createChapter('s2', 60, 120),
+        createChapter('s1', 0, 60),
+        createChapter('s3', 120, 180),
       ];
       const concepts: Concept[] = [];
 
-      const result = matchConceptsToSections(concepts, sections);
+      const result = matchConceptsToChapters(concepts, sections);
 
-      const keys = Array.from(result.bySection.keys());
+      const keys = Array.from(result.byChapter.keys());
       // Should preserve original order (s2, s1, s3)
       expect(keys).toEqual(['s2', 's1', 's3']);
     });

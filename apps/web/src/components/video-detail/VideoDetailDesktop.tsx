@@ -28,13 +28,13 @@ export function VideoDetailDesktop({
   effectiveChapters,
   effectiveIsCreatorChapters,
   effectiveDescriptionAnalysis,
-  activePlaySection,
+  activePlayChapter,
   activeStartSeconds,
-  handlePlayFromSection,
-  handleStopSection,
+  handlePlayFromChapter,
+  handleStopChapter,
   handleSeekToChapter,
   activeId,
-  scrollToSection,
+  scrollToChapter,
   conceptMatchResult,
   playerRef,
 }: VideoDetailDesktopProps) {
@@ -90,7 +90,7 @@ export function VideoDetailDesktop({
           </div>
         </div>
 
-        {/* Sections */}
+        {/* Chapters */}
         <div className={`space-y-6 ${isLargeDesktop ? "pb-12 px-4 md:px-8 lg:px-16 xl:px-24" : "pb-12"}`}>
           {/* Show chapters while sections are loading during streaming */}
           {isStreaming && effectiveChapters.length > 0 && (summary.sections ?? []).length === 0 && (
@@ -108,11 +108,11 @@ export function VideoDetailDesktop({
                 <Fragment key={section.id}>
                   {index > 0 && <Separator className="my-3 opacity-40" />}
                   <ArticleSection
-                    section={section}
-                    onPlay={handlePlayFromSection}
-                    onStop={handleStopSection}
-                    isVideoActive={activePlaySection === section.id}
-                    concepts={conceptMatchResult.bySection.get(section.id) || []}
+                    chapter={chapter}
+                    onPlay={handlePlayFromChapter}
+                    onStop={handleStopChapter}
+                    isVideoActive={activePlayChapter === chapter.id}
+                    concepts={conceptMatchResult.byChapter.get(chapter.id) || []}
                     playerRef={playerRef}
                     youtubeId={video.youtubeId}
                     startSeconds={activePlaySection === section.id ? activeStartSeconds : section.startSeconds}
@@ -141,6 +141,7 @@ export function VideoDetailDesktop({
               onScrollToSection={scrollToSection}
               onPlayFromSection={handlePlayFromSection}
               onStopSection={handleStopSection}
+
             />
           </div>
         </aside>

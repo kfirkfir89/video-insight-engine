@@ -12,7 +12,7 @@ const createMockStreamState = (
 ): ProcessingStreamState => ({
   phase: "idle",
   metadata: null,
-  sectionsCount: 0,
+  chaptersCount: 0,
   error: null,
   ...overrides,
 });
@@ -24,9 +24,9 @@ const createFullStreamState = (
   phase: "idle",
   metadata: null,
   duration: null,
-  sections: [],
-  currentSectionIndex: -1,
-  currentSectionText: "",
+  chapters: [],
+  currentChapterIndex: -1,
+  currentChapterText: "",
   concepts: [],
   tldr: "",
   keyTakeaways: [],
@@ -34,10 +34,10 @@ const createFullStreamState = (
   error: null,
   isCached: false,
   processingTimeMs: null,
-  chapters: [],
+  detectedChapters: [],
   isCreatorChapters: false,
   descriptionAnalysis: null,
-  sectionStatuses: {},
+  chapterStatuses: {},
   warnings: [],
   ...overrides,
 });
@@ -99,29 +99,29 @@ describe("processingStore", () => {
       setStreamState("video-2", createMockStreamState({ phase: "metadata" }));
       setStreamState(
         "video-3",
-        createMockStreamState({ phase: "section_summaries" })
+        createMockStreamState({ phase: "chapter_summaries" })
       );
 
       const state = useProcessingStore.getState();
       expect(state.streams.size).toBe(3);
       expect(state.streams.get("video-1")?.phase).toBe("connecting");
       expect(state.streams.get("video-2")?.phase).toBe("metadata");
-      expect(state.streams.get("video-3")?.phase).toBe("section_summaries");
+      expect(state.streams.get("video-3")?.phase).toBe("chapter_summaries");
     });
 
-    it("should track sections count", () => {
+    it("should track chapters count", () => {
       const { setStreamState } = useProcessingStore.getState();
 
       setStreamState(
         "video-1",
         createMockStreamState({
-          phase: "section_summaries",
-          sectionsCount: 5,
+          phase: "chapter_summaries",
+          chaptersCount: 5,
         })
       );
 
       const state = useProcessingStore.getState();
-      expect(state.streams.get("video-1")?.sectionsCount).toBe(5);
+      expect(state.streams.get("video-1")?.chaptersCount).toBe(5);
     });
 
     it("should track error state", () => {
@@ -178,7 +178,7 @@ describe("processingStore", () => {
       setStreamState("video-1", createMockStreamState({ phase: "metadata" }));
       setStreamState(
         "video-1",
-        createMockStreamState({ phase: "section_summaries" })
+        createMockStreamState({ phase: "chapter_summaries" })
       );
       setStreamState("video-1", createMockStreamState({ phase: "done" }));
 
@@ -252,8 +252,8 @@ describe("processingStore", () => {
     it("should return stream state for given video", () => {
       const { setStreamState } = useProcessingStore.getState();
       const streamState = createMockStreamState({
-        phase: "section_summaries",
-        sectionsCount: 3,
+        phase: "chapter_summaries",
+        chaptersCount: 3,
       });
 
       setStreamState("video-1", streamState);
@@ -281,14 +281,14 @@ describe("processingStore", () => {
   describe("toProcessingStreamState", () => {
     it("should convert full StreamState to ProcessingStreamState", () => {
       const fullState = createFullStreamState({
-        phase: "section_summaries",
+        phase: "chapter_summaries",
         metadata: {
           title: "Test Video",
           channel: "Test Channel",
           thumbnailUrl: "https://example.com/thumb.jpg",
           duration: 300,
         },
-        sections: [
+        chapters: [
           {
             index: 0,
             title: "Section 1",
@@ -309,26 +309,26 @@ describe("processingStore", () => {
 
       const result = toProcessingStreamState(fullState);
 
-      expect(result.phase).toBe("section_summaries");
+      expect(result.phase).toBe("chapter_summaries");
       expect(result.metadata).toEqual({
         title: "Test Video",
         channel: "Test Channel",
         thumbnailUrl: "https://example.com/thumb.jpg",
         duration: 300,
       });
-      expect(result.sectionsCount).toBe(2);
+      expect(result.chaptersCount).toBe(2);
       expect(result.error).toBeNull();
     });
 
-    it("should handle empty sections", () => {
+    it("should handle empty chapters", () => {
       const fullState = createFullStreamState({
         phase: "connecting",
-        sections: [],
+        chapters: [],
       });
 
       const result = toProcessingStreamState(fullState);
 
-      expect(result.sectionsCount).toBe(0);
+      expect(result.chaptersCount).toBe(0);
     });
 
     it("should preserve error state", () => {
@@ -401,33 +401,33 @@ describe("processingStore", () => {
       setStreamState(
         "video-1",
         createMockStreamState({
-          phase: "section_summaries",
+          phase: "chapter_summaries",
           metadata: {
             title: "Test Video",
             channel: "Test Channel",
             thumbnailUrl: "https://example.com/thumb.jpg",
             duration: 600,
           },
-          sectionsCount: 0,
+          chaptersCount: 0,
         })
       );
-      expect(getStreamState("video-1")?.phase).toBe("section_summaries");
+      expect(getStreamState("video-1")?.phase).toBe("chapter_summaries");
 
       // Sections being added
       setStreamState(
         "video-1",
         createMockStreamState({
-          phase: "section_summaries",
+          phase: "chapter_summaries",
           metadata: {
             title: "Test Video",
             channel: "Test Channel",
             thumbnailUrl: "https://example.com/thumb.jpg",
             duration: 600,
           },
-          sectionsCount: 3,
+          chaptersCount: 3,
         })
       );
-      expect(getStreamState("video-1")?.sectionsCount).toBe(3);
+      expect(getStreamState("video-1")?.chaptersCount).toBe(3);
 
       // Phase 4: Synthesis
       setStreamState(
@@ -440,7 +440,7 @@ describe("processingStore", () => {
             thumbnailUrl: "https://example.com/thumb.jpg",
             duration: 600,
           },
-          sectionsCount: 5,
+          chaptersCount: 5,
         })
       );
       expect(getStreamState("video-1")?.phase).toBe("synthesis");
@@ -456,7 +456,7 @@ describe("processingStore", () => {
             thumbnailUrl: "https://example.com/thumb.jpg",
             duration: 600,
           },
-          sectionsCount: 5,
+          chaptersCount: 5,
         })
       );
       expect(getStreamState("video-1")?.phase).toBe("done");
@@ -498,7 +498,7 @@ describe("processingStore", () => {
 
       setStreamState(
         "video-1",
-        createMockStreamState({ phase: "section_summaries" })
+        createMockStreamState({ phase: "chapter_summaries" })
       );
       setStreamState(
         "video-1",
@@ -532,7 +532,7 @@ describe("processingStore", () => {
       // Video 1 progresses
       setStreamState(
         "video-1",
-        createMockStreamState({ phase: "section_summaries", sectionsCount: 2 })
+        createMockStreamState({ phase: "chapter_summaries", chaptersCount: 2 })
       );
 
       // Video 3 starts
@@ -548,8 +548,8 @@ describe("processingStore", () => {
       );
 
       // Verify all are tracked independently
-      expect(getStreamState("video-1")?.phase).toBe("section_summaries");
-      expect(getStreamState("video-1")?.sectionsCount).toBe(2);
+      expect(getStreamState("video-1")?.phase).toBe("chapter_summaries");
+      expect(getStreamState("video-1")?.chaptersCount).toBe(2);
       expect(getStreamState("video-2")?.phase).toBe("metadata");
       expect(getStreamState("video-3")?.phase).toBe("connecting");
     });
@@ -577,8 +577,8 @@ describe("processingStore", () => {
       "metadata",
       "transcript",
       "parallel_analysis",
-      "section_detect",
-      "section_summaries",
+      "chapter_detect",
+      "chapter_summaries",
       "concepts",
       "master_summary",
       "synthesis",

@@ -292,14 +292,17 @@ Get video with summary.
   "summary": {
     "tldr": "Comprehensive guide to React Hooks...",
     "keyTakeaways": ["useState for state", "useEffect for side effects"],
-    "sections": [
+    "chapters": [
       {
-        "id": "sec-001",
+        "id": "ch-001",
         "timestamp": "00:00",
         "startSeconds": 0,
         "endSeconds": 180,
         "title": "Introduction",
-        "content": [],
+        "isCreatorChapter": true,
+        "content": [
+          {"blockId": "uuid-1", "type": "paragraph", "text": "..."}
+        ],
         "summary": "Overview of React Hooks...",
         "bullets": ["What are hooks", "Why use them"]
       }
@@ -1384,13 +1387,13 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
 | Event | Phase | Description |
 |-------|-------|-------------|
 | `phase` | All | Indicates which processing phase started |
-| `metadata` | 1 | Video metadata (title, channel, duration, context) |
+| `metadata` | 1 | Video metadata (title, channel, duration, context with category) |
 | `chapters` | 1 | Creator chapters if available |
 | `sponsor_segments` | 1 | SponsorBlock segments |
 | `transcript_ready` | 1 | Transcript extraction complete |
 | `description_analysis` | 2 | Links, resources extracted from description |
 | `synthesis_complete` | 2 | TLDR and key takeaways |
-| `section_ready` | 2-3 | Individual section summary |
+| `chapter_ready` | 2-3 | Individual chapter summary with content blocks |
 | `concepts_complete` | 4 | Key concepts extracted |
 | `done` | 5 | Processing complete |
 
@@ -1412,7 +1415,7 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
 │  │    - chapters (if creator chapters exist)                            │   │
 │  │    - sponsor_segments (SponsorBlock API)                             │   │
 │  │    - transcript_ready                                                │   │
-│  │    - VideoContext with PERSONA (code/recipe/standard)                │   │
+│  │    - VideoContext with CATEGORY (coding/cooking/general/etc)        │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  PHASE 2: PARALLEL ANALYSIS (~2-5 seconds)                                 │
@@ -1426,18 +1429,18 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
 │  │  └──────────────────┘ └──────────────────┘ └──────────────────┘     │   │
 │  │                                                                      │   │
 │  │  Output events: description_analysis, synthesis_complete,            │   │
-│  │                 section_ready (index 0)                              │   │
+│  │                 chapter_ready (index 0)                              │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  PHASE 3: SECTION SUMMARIES (progressive, ~3-5s per batch)                 │
+│  PHASE 3: CHAPTER SUMMARIES (progressive, ~3-5s per batch)                 │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  Process remaining sections in batches (SECTION_BATCH_SIZE = 3)     │   │
+│  │  Process remaining chapters in batches (CHAPTER_BATCH_SIZE = 3)     │   │
 │  │                                                                      │   │
-│  │  Batch 1: Sections 2-4 (parallel) → section_ready events            │   │
-│  │  Batch 2: Sections 5-7 (parallel) → section_ready events            │   │
+│  │  Batch 1: Chapters 2-4 (parallel) → chapter_ready events            │   │
+│  │  Batch 2: Chapters 5-7 (parallel) → chapter_ready events            │   │
 │  │  ...                                                                 │   │
 │  │                                                                      │   │
-│  │  Each section uses PERSONA for content block styling                 │   │
+│  │  Each chapter uses PERSONA internally for content block styling     │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  PHASE 4: CONCEPTS (~3-5 seconds)                                          │
@@ -1463,7 +1466,7 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
 ### phase
 
 ```json
-{ "event": "phase", "phase": "metadata" | "parallel_analysis" | "section_summaries" | "concepts" }
+{ "event": "phase", "phase": "metadata" | "transcript" | "parallel_analysis" | "chapter_detect" | "chapter_summaries" | "concepts" | "master_summary" }
 ```
 
 ### metadata
@@ -1476,8 +1479,9 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
   "duration": 627,
   "thumbnailUrl": "https://i.ytimg.com/vi/xxx/maxresdefault.jpg",
   "context": {
-    "persona": "code",
+    "category": "coding",
     "youtubeCategory": "Science & Technology",
+    "tags": ["react", "javascript", "hooks", "programming"],
     "displayTags": ["#React", "#JavaScript", "#Hooks"]
   }
 }
@@ -1537,21 +1541,23 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
 }
 ```
 
-### section_ready
+### chapter_ready
 
 ```json
 {
-  "event": "section_ready",
+  "event": "chapter_ready",
   "index": 0,
-  "section": {
+  "chapter": {
     "id": "uuid-1234",
     "timestamp": "00:00",
     "startSeconds": 0,
     "endSeconds": 120,
     "title": "Introduction",
+    "originalTitle": "Introduction",
+    "isCreatorChapter": true,
     "content": [
-      { "type": "paragraph", "text": "In this section..." },
-      { "type": "bullets", "items": ["Point 1", "Point 2"] }
+      { "blockId": "uuid-a1b2", "type": "paragraph", "text": "In this chapter..." },
+      { "blockId": "uuid-c3d4", "type": "bullets", "items": ["Point 1", "Point 2"] }
     ],
     "summary": "Legacy summary text",
     "bullets": ["Legacy bullet 1", "Legacy bullet 2"]
@@ -1619,10 +1625,10 @@ export function useSummaryStream(videoSummaryId: string | null) {
           setState(s => ({ ...s, tldr: data.tldr, keyTakeaways: data.keyTakeaways }));
           break;
 
-        case 'section_ready':
+        case 'chapter_ready':
           setState(s => ({
             ...s,
-            sections: [...(s.sections || []), data.section]
+            chapters: [...(s.chapters || []), data.chapter]
           }));
           break;
 
@@ -1652,14 +1658,14 @@ export function useSummaryStream(videoSummaryId: string | null) {
 
 ## LLM Calls Summary
 
-For a typical 10-section video:
+For a typical 10-chapter video:
 
 | Phase | Model | Calls | Parallel? |
 |-------|-------|-------|-----------|
 | Phase 2 | Haiku | 1 (description) | Yes |
 | Phase 2 | Sonnet | 1 (TLDR) | Yes |
-| Phase 2 | Sonnet | 1 (first section) | Yes |
-| Phase 3 | Sonnet | 9 (remaining sections) | Batched (3) |
+| Phase 2 | Sonnet | 1 (first chapter) | Yes |
+| Phase 3 | Sonnet | 9 (remaining chapters) | Batched (3) |
 | Phase 4 | Sonnet | 1 (concepts) | No |
 
 **Total: ~13 LLM calls, ~20-30 seconds**

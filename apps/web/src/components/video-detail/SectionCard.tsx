@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 import { YouTubePlayer, type YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
 import { cn } from "@/lib/utils";
 import { ContentBlocks } from "./ContentBlocks";
-import type { Section } from "@vie/types";
+import type { SummaryChapter } from "@vie/types";
 
 interface SectionCardProps {
-  section: Section;
+  section: SummaryChapter;
   onPlay: () => void;
   onStop?: () => void;
   // Props for collapsing video under section

@@ -3,8 +3,8 @@ import type { StreamPhase } from "@/hooks/use-summary-stream";
 
 interface StreamingIndicatorProps {
   phase: StreamPhase;
-  currentSectionIndex: number;
-  totalSections: number;
+  currentChapterIndex: number;
+  totalChapters: number;
 }
 
 const phaseLabels: Record<StreamPhase, string> = {
@@ -13,8 +13,8 @@ const phaseLabels: Record<StreamPhase, string> = {
   metadata: "Fetching video info...",
   transcript: "Processing transcript...",
   parallel_analysis: "Analyzing content...",
-  section_detect: "Analyzing video structure...",
-  section_summaries: "Summarizing sections...",
+  chapter_detect: "Analyzing video structure...",
+  chapter_summaries: "Summarizing chapters...",
   concepts: "Extracting key concepts...",
   master_summary: "Creating quick read...",
   synthesis: "Generating summary...",
@@ -25,11 +25,11 @@ const phaseLabels: Record<StreamPhase, string> = {
 
 export function StreamingIndicator({
   phase,
-  currentSectionIndex,
-  totalSections,
+  currentChapterIndex,
+  totalChapters,
 }: StreamingIndicatorProps) {
-  const label = phase === "section_summaries" && currentSectionIndex >= 0
-    ? `Summarizing section ${currentSectionIndex + 1}${totalSections > 0 ? ` of ${totalSections}` : ""}...`
+  const label = phase === "chapter_summaries" && currentChapterIndex >= 0
+    ? `Summarizing chapter ${currentChapterIndex + 1}${totalChapters > 0 ? ` of ${totalChapters}` : ""}...`
     : phaseLabels[phase];
 
   return (

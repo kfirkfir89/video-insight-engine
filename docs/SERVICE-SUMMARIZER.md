@@ -56,9 +56,10 @@ services/summarizer/
     │   └── mongodb_repository.py # MongoDB implementation
     │
     ├── prompts/
-    │   ├── section_detect.txt
-    │   ├── section_summary.txt
+    │   ├── chapter_detect.txt
+    │   ├── chapter_summary.txt
     │   ├── concept_extract.txt
+    │   ├── master_summary.txt
     │   └── global_synthesis.txt
     │
     └── models/
@@ -123,13 +124,13 @@ LOG_FORMAT=console              # console or json
     └─▶ Merge fragmented sentences
     └─▶ Normalize spacing
 
- 7. DETECT SECTIONS (LLM)
-    └─▶ Identify 3-8 logical sections
+ 7. DETECT CHAPTERS (LLM)
+    └─▶ Use creator chapters if available, else AI-detect 3-8 logical chapters
     └─▶ Output: boundaries + titles
 
- 8. SUMMARIZE SECTIONS (LLM)
-    └─▶ One call per section
-    └─▶ Generate: summary + bullets
+ 8. SUMMARIZE CHAPTERS (LLM)
+    └─▶ One call per chapter
+    └─▶ Generate: content blocks with blockId, summary + bullets
 
  9. EXTRACT CONCEPTS (LLM)
     └─▶ Identify key terms
@@ -336,18 +337,19 @@ class LLMService:
     def __init__(self, provider: LLMProvider):
         self._provider = provider
 
-    async def detect_sections(self, transcript: str, segments: list) -> list[dict]:
-        """Detect logical sections using configured LLM provider."""
-        prompt = load_prompt("section_detect").format(transcript=transcript[:15000])
+    async def detect_chapters(self, transcript: str, segments: list) -> list[dict]:
+        """Detect logical chapters using configured LLM provider."""
+        prompt = load_prompt("chapter_detect").format(transcript=transcript[:15000])
         response = await self._provider.complete(prompt, max_tokens=2000)
-        return parse_json_response(response)['sections']
+        return parse_json_response(response)['chapters']
 
-    async def summarize_section(self, section_text: str, title: str) -> dict:
-        """Generate summary and bullets for a section."""
-        prompt = load_prompt("section_summary").format(
-            title=title, section_text=section_text
+    async def summarize_chapter(self, chapter_text: str, title: str, persona: str) -> dict:
+        """Generate content blocks, summary and bullets for a chapter."""
+        prompt = load_prompt("chapter_summary").format(
+            title=title, chapter_text=chapter_text, persona=persona
         )
         response = await self._provider.complete(prompt, max_tokens=1000)
+        # Content blocks are injected with blockId (UUID) for stable referencing
         return parse_json_response(response)
 ```
 
@@ -383,12 +385,16 @@ class NormalizedTranscript(BaseModel):
     segments: list[TranscriptSegment]
     source: TranscriptSource
 
-class Section(BaseModel):
-    id: str                    # UUID
-    timestamp: str             # "03:45"
+class Chapter(BaseModel):
+    id: str                      # UUID
+    timestamp: str               # "03:45"
     startSeconds: int
     endSeconds: int
     title: str
+    originalTitle: str | None    # Creator's chapter title
+    generatedTitle: str | None   # AI-generated title
+    isCreatorChapter: bool       # True if from YouTube chapters
+    content: list[dict]          # ContentBlocks with blockId
     summary: str
     bullets: list[str]
 
@@ -401,7 +407,7 @@ class Concept(BaseModel):
 class VideoSummary(BaseModel):
     tldr: str
     keyTakeaways: list[str]
-    sections: list[Section]
+    chapters: list[Chapter]
     concepts: list[Concept]
 ```
 

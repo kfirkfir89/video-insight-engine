@@ -64,10 +64,8 @@ export type VideoCategory =
   | 'standard';
 
 export interface VideoContext {
+  category: string;          // User-facing: "coding", "cooking", etc.
   youtubeCategory: string;
-  /** @deprecated Use category instead */
-  persona?: VideoPersona;
-  /** Category for UI theming (V2.1) */
   category?: VideoCategory;
   tags: string[];
   displayTags: string[];
@@ -78,35 +76,39 @@ export interface VideoContext {
 // ─────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────
-// Content Block Types (Dynamic Section Content)
-// All blocks include optional blockId for stable tracking (V2.1)
+// Content Block Types (Dynamic Chapter Content)
 // ─────────────────────────────────────────────────────
-
-export interface ParagraphBlock extends Partial<BaseBlock> {
-  type: 'paragraph';
+// Base interface for all content blocks - provides stable block identifiers
+export interface BaseBlock {
+  blockId: string;  // UUID - stable identifier for referencing
+  type: string;
   variant?: string;
+}
+
+export interface ParagraphBlock extends BaseBlock {
+  type: 'paragraph';
   text: string;
 }
 
-export interface BulletsBlock extends Partial<BaseBlock> {
+export interface BulletsBlock extends BaseBlock {
   type: 'bullets';
   variant?: 'ingredients' | 'checklist' | string;
   items: string[];
 }
 
-export interface NumberedBlock extends Partial<BaseBlock> {
+export interface NumberedBlock extends BaseBlock {
   type: 'numbered';
   variant?: 'cooking_steps' | string;
   items: string[];
 }
 
-export interface DoDoNotBlock extends Partial<BaseBlock> {
+export interface DoDoNotBlock extends BaseBlock {
   type: 'do_dont';
   do: string[];
   dont: string[];
 }
 
-export interface ExampleBlock extends Partial<BaseBlock> {
+export interface ExampleBlock extends BaseBlock {
   type: 'example';
   variant?: 'terminal_command' | string;
   title?: string;
@@ -116,43 +118,40 @@ export interface ExampleBlock extends Partial<BaseBlock> {
 
 export type CalloutStyle = 'tip' | 'warning' | 'note' | 'chef_tip' | 'security';
 
-export interface CalloutBlock extends Partial<BaseBlock> {
+export interface CalloutBlock extends BaseBlock {
   type: 'callout';
   variant?: 'chef_tip' | string;
   style: CalloutStyle;
   text: string;
 }
 
-export interface DefinitionBlock extends Partial<BaseBlock> {
+export interface DefinitionBlock extends BaseBlock {
   type: 'definition';
-  variant?: string;
   term: string;
   meaning: string;
 }
 
-// ===== UNIVERSAL BLOCK TYPES (V2.1) =====
-
-export interface KeyValueBlock extends Partial<BaseBlock> {
+export interface KeyValueBlock extends BaseBlock {
   type: 'keyvalue';
   variant?: 'specs' | 'cost' | 'stats' | 'info' | 'location';
   items: { key: string; value: string }[];
 }
 
-export interface ComparisonBlock extends Partial<BaseBlock> {
+export interface ComparisonBlock extends BaseBlock {
   type: 'comparison';
   variant?: 'dos_donts' | 'pros_cons' | 'versus' | 'before_after';
   left: { label: string; items: string[] };
   right: { label: string; items: string[] };
 }
 
-export interface TimestampBlock extends Partial<BaseBlock> {
+export interface TimestampBlock extends BaseBlock {
   type: 'timestamp';
   time: string;       // "5:23" format
   seconds: number;    // For video seeking
   label: string;
 }
 
-export interface QuoteBlock extends Partial<BaseBlock> {
+export interface QuoteBlock extends BaseBlock {
   type: 'quote';
   variant?: 'speaker' | 'testimonial' | 'highlight';
   text: string;
@@ -160,7 +159,7 @@ export interface QuoteBlock extends Partial<BaseBlock> {
   timestamp?: number;    // seconds for video seek
 }
 
-export interface StatisticBlock extends Partial<BaseBlock> {
+export interface StatisticBlock extends BaseBlock {
   type: 'statistic';
   variant?: 'metric' | 'percentage' | 'trend';
   items: {
@@ -433,10 +432,9 @@ export type ContentBlock =
 export type ContentBlockType = ContentBlock['type'];
 
 // ─────────────────────────────────────────────────────
-// Chapter Type (V2.1 - renamed from Section)
+// Chapter Type (formerly Section)
 // ─────────────────────────────────────────────────────
-
-export interface Chapter {
+export interface SummaryChapter {
   id: string;
   timestamp: string;
   startSeconds: number;
@@ -445,13 +443,11 @@ export interface Chapter {
   originalTitle?: string;      // Creator's original chapter title
   generatedTitle?: string;     // AI-generated explanation subtitle
   isCreatorChapter?: boolean;  // Flag for dual-title display
-  content?: ContentBlock[];    // Dynamic content blocks (V2.1: each block has blockId)
+  content?: ContentBlock[];    // Dynamic content blocks with blockId
   summary: string;             // Legacy fallback
   bullets: string[];           // Legacy fallback
 }
 
-/** @deprecated Use Chapter instead */
-export type Section = Chapter;
 
 export interface Concept {
   id: string;
@@ -463,10 +459,7 @@ export interface Concept {
 export interface VideoSummary {
   tldr: string;
   keyTakeaways: string[];
-  /** @deprecated Use chapters instead */
-  sections?: Chapter[];
-  /** Chapters with content blocks (V2.1) */
-  chapters?: Chapter[];
+  chapters: SummaryChapter[];
   concepts: Concept[];
   masterSummary?: string;
 }
@@ -474,7 +467,6 @@ export interface VideoSummary {
 // ─────────────────────────────────────────────────────
 // Memorized Item Types (V2.1)
 // ─────────────────────────────────────────────────────
-
 export type MemorizedItemSourceType = 'video_chapters' | 'concept' | 'expansion';
 
 export interface MemorizedItemSource {
@@ -734,8 +726,8 @@ export type SummaryStreamPhase =
   | 'metadata'
   | 'transcript'
   | 'parallel_analysis'
-  | 'section_detect'
-  | 'section_summaries'
+  | 'chapter_detect'
+  | 'chapter_summaries'
   | 'concepts'
   | 'master_summary';
 
@@ -769,11 +761,12 @@ export interface SSESynthesisCompleteEvent {
   keyTakeaways: string[];
 }
 
-export interface SSESectionReadyEvent {
-  event: 'section_ready';
+export interface SSEChapterReadyEvent {
+  event: 'chapter_ready';
   index: number;
-  section: Section;
+  chapter: SummaryChapter;
 }
+
 
 export interface SSEConceptsCompleteEvent {
   event: 'concepts_complete';
@@ -814,7 +807,7 @@ export type SSEStreamEvent =
   | SSEChaptersEvent
   | SSEDescriptionAnalysisEvent
   | SSESynthesisCompleteEvent
-  | SSESectionReadyEvent
+  | SSEChapterReadyEvent
   | SSEConceptsCompleteEvent
   | SSEMasterSummaryCompleteEvent
   | SSEDoneEvent

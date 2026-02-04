@@ -1,31 +1,31 @@
 import { Play, StopCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Section } from "@vie/types";
+import type { SummaryChapter } from "@vie/types";
 
 interface ChapterNavItemProps {
-  section: Section;
+  chapter: SummaryChapter;
   isActive: boolean;
   isPlaying?: boolean;
   onScrollTo: () => void;
   onPlay: () => void;
   onStop?: () => void;
-  dataSectionId?: string;
+  dataChapterId?: string;
 }
 
 export function ChapterNavItem({
-  section,
+  chapter,
   isActive,
   isPlaying,
   onScrollTo,
   onPlay,
   onStop,
-  dataSectionId,
+  dataChapterId,
 }: ChapterNavItemProps) {
   return (
     <div
       data-slot="chapter-nav-item"
       data-active={isActive}
-      data-section-id={dataSectionId}
+      data-chapter-id={dataChapterId}
       className={cn(
         "group relative px-2 py-1 rounded transition-all",
         isActive
@@ -48,7 +48,7 @@ export function ChapterNavItem({
       >
         {/* Timestamp */}
         <span className="text-[10px] font-mono text-muted-foreground shrink-0 w-8">
-          {section.timestamp}
+          {chapter.timestamp}
         </span>
 
         {/* Title - truncate to single line */}
@@ -58,7 +58,7 @@ export function ChapterNavItem({
             isActive ? "font-medium text-foreground" : "text-muted-foreground"
           )}
         >
-          {section.title}
+          {chapter.title}
         </span>
 
         {/* Play/Stop button - inline */}
@@ -80,7 +80,7 @@ export function ChapterNavItem({
               onPlay();
             }}
             className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-primary/20 text-primary transition-opacity focus:opacity-100 focus:outline-none shrink-0"
-            aria-label={`Play from ${section.timestamp}`}
+            aria-label={`Play from ${chapter.timestamp}`}
           >
             <Play className="h-3 w-3" />
           </button>
