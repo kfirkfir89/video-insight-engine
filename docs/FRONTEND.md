@@ -67,15 +67,39 @@ apps/web/
     │   │   ├── video-detail-types.ts     # Shared TypeScript types
     │   │   ├── SectionCard.tsx
     │   │   ├── ContentBlockRenderer.tsx  # Dynamic content blocks
-    │   │   ├── blocks/                   # Extracted block components
-    │   │   │   ├── BulletsBlock.tsx
+    │   │   ├── blocks/                   # V2.1 Block Component Library
+    │   │   │   ├── __tests__/            # Unit tests (18 files)
+    │   │   │   ├── index.ts              # Barrel export
+    │   │   │   ├── BulletsBlock.tsx      # Basic
     │   │   │   ├── NumberedBlock.tsx
     │   │   │   ├── ExampleBlock.tsx
-    │   │   │   └── CalloutBlock.tsx
+    │   │   │   ├── CalloutBlock.tsx
+    │   │   │   ├── IngredientBlock.tsx   # Recipe
+    │   │   │   ├── StepBlock.tsx
+    │   │   │   ├── NutritionBlock.tsx
+    │   │   │   ├── CodeBlock.tsx         # Technical
+    │   │   │   ├── TerminalBlock.tsx
+    │   │   │   ├── FileTreeBlock.tsx
+    │   │   │   ├── ProConBlock.tsx       # Review
+    │   │   │   ├── RatingBlock.tsx
+    │   │   │   ├── VerdictBlock.tsx
+    │   │   │   ├── LocationBlock.tsx     # Travel
+    │   │   │   ├── ItineraryBlock.tsx
+    │   │   │   ├── CostBlock.tsx
+    │   │   │   ├── ExerciseBlock.tsx     # Fitness
+    │   │   │   ├── WorkoutTimerBlock.tsx
+    │   │   │   ├── QuizBlock.tsx         # Education
+    │   │   │   ├── FormulaBlock.tsx
+    │   │   │   └── GuestBlock.tsx        # Interview
     │   │   └── views/                    # Persona-specific views
     │   │       ├── CodeView.tsx
     │   │       ├── RecipeView.tsx
     │   │       └── StandardView.tsx
+    │   │
+    │   ├── rag/                          # RAG Components
+    │   │   ├── __tests__/                # Unit tests
+    │   │   ├── RAGSourceCard.tsx         # Source display card
+    │   │   └── RAGChatPanel.tsx          # Chat interface
     │   │
     │   ├── sidebar/
     │   │   ├── VideoItem.tsx           # Video row with drag-drop
@@ -125,7 +149,8 @@ apps/web/
     └── lib/
         ├── utils.ts
         ├── api.ts
-        └── query-keys.ts
+        ├── query-keys.ts
+        └── block-labels.ts      # i18n-ready block labels
 ```
 
 ---
@@ -723,6 +748,536 @@ function SectionCard({ section, onExplain, onMemorize, onTimestampClick }) {
     </Card>
   );
 }
+```
+
+---
+
+# Specialized Block Components (V2.1)
+
+The Content Block Library V2.1 introduces 18 specialized block components organized by persona/use-case. All components follow consistent patterns and are fully tested.
+
+## Component Architecture
+
+```
+src/components/video-detail/blocks/
+├── __tests__/           # Unit tests for all blocks
+├── index.ts             # Barrel export
+├── BulletsBlock.tsx     # Basic blocks (Phase 1)
+├── NumberedBlock.tsx
+├── ExampleBlock.tsx
+├── CalloutBlock.tsx
+├── IngredientBlock.tsx  # Recipe blocks (Phase 2)
+├── StepBlock.tsx
+├── NutritionBlock.tsx
+├── CodeBlock.tsx        # Technical blocks (Phase 3)
+├── TerminalBlock.tsx
+├── FileTreeBlock.tsx
+├── ProConBlock.tsx      # Review blocks (Phase 4)
+├── RatingBlock.tsx
+├── VerdictBlock.tsx
+├── LocationBlock.tsx    # Travel blocks (Phase 5)
+├── ItineraryBlock.tsx
+├── CostBlock.tsx
+├── ExerciseBlock.tsx    # Fitness blocks (Phase 6)
+├── WorkoutTimerBlock.tsx
+├── QuizBlock.tsx        # Education blocks (Phase 6)
+├── FormulaBlock.tsx
+└── GuestBlock.tsx       # Interview blocks (Phase 7)
+```
+
+## Block Types Reference
+
+| Block Type | Component | Persona | Key Features |
+|------------|-----------|---------|--------------|
+| `ingredient` | IngredientBlock | Recipe | Serving scaler, checkbox items |
+| `step` | StepBlock | Recipe | Progress tracking, timing, video sync |
+| `nutrition` | NutritionBlock | Recipe | Table layout, nutrient display |
+| `code` | CodeBlock | Code | Syntax highlighting, copy, line numbers |
+| `terminal` | TerminalBlock | Code | Command display, copy functionality |
+| `file_tree` | FileTreeBlock | Code | Expandable folders, keyboard nav |
+| `pro_con` | ProConBlock | Review | Split layout, weighted items |
+| `rating` | RatingBlock | Review | Stars/progress bar, breakdown |
+| `verdict` | VerdictBlock | Review | Verdict types, best-for lists |
+| `location` | LocationBlock | Travel | Map links, coordinates |
+| `itinerary` | ItineraryBlock | Travel | Day/activity timeline |
+| `cost` | CostBlock | Travel | Currency formatting, totals |
+| `exercise` | ExerciseBlock | Fitness | Sets/reps, difficulty badges, demo links |
+| `workout_timer` | WorkoutTimerBlock | Fitness | Interactive timer, interval tracking |
+| `quiz` | QuizBlock | Education | Interactive Q&A, explanations |
+| `formula` | FormulaBlock | Education | LaTeX rendering, inline mode |
+| `guest` | GuestBlock | Interview | Social links, avatar, bio |
+
+## Recipe Blocks (Phase 2)
+
+### IngredientBlock
+
+Displays ingredients with interactive serving scaler.
+
+```tsx
+<IngredientBlock
+  block={{
+    type: 'ingredient',
+    blockId: 'block-1',
+    ingredients: [
+      { name: 'flour', amount: '2', unit: 'cups' },
+      { name: 'sugar', amount: '1', unit: 'cup', optional: true },
+    ],
+    servings: 4,
+  }}
+/>
+```
+
+**Features:**
+- Serving size scaler (+/- buttons)
+- Checkbox for each ingredient
+- Optional ingredient badges
+- Proportional amount scaling
+
+### StepBlock
+
+Step-by-step instructions with progress tracking.
+
+```tsx
+<StepBlock
+  block={{
+    type: 'step',
+    blockId: 'block-1',
+    steps: [
+      { instruction: 'Preheat oven to 350°F', duration: '5 min', timestamp: 120 },
+      { instruction: 'Mix dry ingredients', tips: ['Sift flour first'] },
+    ],
+  }}
+  onPlay={(seconds) => seekToTime(seconds)}
+/>
+```
+
+**Features:**
+- Completion checkboxes
+- Duration display
+- Tips expansion
+- Video timestamp links
+
+### NutritionBlock
+
+Displays nutritional information in table format.
+
+```tsx
+<NutritionBlock
+  block={{
+    type: 'nutrition',
+    blockId: 'block-1',
+    nutrients: [
+      { name: 'Calories', amount: '250', unit: 'kcal' },
+      { name: 'Protein', amount: '12', unit: 'g', percentDailyValue: 24 },
+    ],
+    servingSize: '1 cup (240g)',
+  }}
+/>
+```
+
+## Technical Blocks (Phase 3)
+
+### CodeBlock
+
+Syntax-highlighted code with copy functionality.
+
+```tsx
+<CodeBlock
+  block={{
+    type: 'code',
+    blockId: 'block-1',
+    code: 'const greeting = "Hello, World!";',
+    language: 'typescript',
+    filename: 'example.ts',
+    highlightLines: [1],
+  }}
+/>
+```
+
+**Features:**
+- Language badge
+- Copy to clipboard with feedback
+- Line numbers
+- Line highlighting
+- Filename header
+
+### TerminalBlock
+
+Command-line display with copy support.
+
+```tsx
+<TerminalBlock
+  block={{
+    type: 'terminal',
+    blockId: 'block-1',
+    commands: [
+      { command: 'npm install', output: 'added 150 packages' },
+      { command: 'npm run build' },
+    ],
+    shell: 'bash',
+  }}
+/>
+```
+
+### FileTreeBlock
+
+Interactive file/folder tree with keyboard navigation.
+
+```tsx
+<FileTreeBlock
+  block={{
+    type: 'file_tree',
+    blockId: 'block-1',
+    tree: [
+      {
+        type: 'folder',
+        name: 'src',
+        children: [
+          { type: 'file', name: 'index.ts' },
+          { type: 'file', name: 'app.tsx' },
+        ],
+      },
+      { type: 'file', name: 'package.json' },
+    ],
+  }}
+/>
+```
+
+**Features:**
+- Expandable/collapsible folders
+- File type icons
+- Keyboard navigation (Enter, Space)
+- ARIA tree role for accessibility
+
+## Review Blocks (Phase 4)
+
+### ProConBlock
+
+Split pros/cons display.
+
+```tsx
+<ProConBlock
+  block={{
+    type: 'pro_con',
+    blockId: 'block-1',
+    pros: [
+      { text: 'Fast performance', weight: 'strong' },
+      { text: 'Great documentation' },
+    ],
+    cons: [
+      { text: 'Steep learning curve' },
+    ],
+  }}
+/>
+```
+
+### RatingBlock
+
+Rating display with stars or progress bar.
+
+```tsx
+<RatingBlock
+  block={{
+    type: 'rating',
+    blockId: 'block-1',
+    score: 4.5,
+    maxScore: 5,
+    label: 'Overall Rating',
+    breakdown: [
+      { category: 'Performance', score: 5 },
+      { category: 'Design', score: 4 },
+    ],
+  }}
+/>
+```
+
+**Features:**
+- Star display for 5-point scales
+- Progress bar for larger scales (10, 100)
+- Half-star support
+- Category breakdown
+- Score clamping
+
+### VerdictBlock
+
+Final verdict with recommendations.
+
+```tsx
+<VerdictBlock
+  block={{
+    type: 'verdict',
+    blockId: 'block-1',
+    verdict: 'Highly Recommended',
+    verdictType: 'positive',
+    summary: 'Excellent choice for most users.',
+    bestFor: ['Power users', 'Developers'],
+    notFor: ['Beginners'],
+  }}
+/>
+```
+
+## Travel Blocks (Phase 5)
+
+### LocationBlock
+
+Location display with map links.
+
+```tsx
+<LocationBlock
+  block={{
+    type: 'location',
+    blockId: 'block-1',
+    name: 'Eiffel Tower',
+    address: 'Champ de Mars, Paris',
+    coordinates: { lat: 48.8584, lng: 2.2945 },
+  }}
+/>
+```
+
+### ItineraryBlock
+
+Day-by-day travel itinerary.
+
+```tsx
+<ItineraryBlock
+  block={{
+    type: 'itinerary',
+    blockId: 'block-1',
+    days: [
+      {
+        day: 1,
+        title: 'Arrival Day',
+        activities: [
+          { time: '10:00', activity: 'Airport pickup', location: 'CDG Airport' },
+          { time: '14:00', activity: 'Hotel check-in' },
+        ],
+      },
+    ],
+  }}
+/>
+```
+
+### CostBlock
+
+Cost breakdown with currency formatting.
+
+```tsx
+<CostBlock
+  block={{
+    type: 'cost',
+    blockId: 'block-1',
+    currency: 'USD',
+    items: [
+      { name: 'Flight', amount: 450 },
+      { name: 'Hotel', amount: 800, perUnit: 'night', quantity: 5 },
+    ],
+    total: 1250,
+  }}
+/>
+```
+
+## Fitness Blocks (Phase 6)
+
+### ExerciseBlock
+
+Exercise display with sets/reps and demo links.
+
+```tsx
+<ExerciseBlock
+  block={{
+    type: 'exercise',
+    blockId: 'block-1',
+    exercises: [
+      { name: 'Push-ups', sets: 3, reps: '10', difficulty: 'beginner' },
+      { name: 'Plank', duration: '60s', timestamp: 120 },
+    ],
+  }}
+  onPlay={(seconds) => seekToTime(seconds)}
+/>
+```
+
+**Features:**
+- Sets/reps display
+- Duration for timed exercises
+- Difficulty badges (beginner/intermediate/advanced)
+- "Watch demo" button for timestamped exercises
+- Rest period display
+- Exercise notes
+
+### WorkoutTimerBlock
+
+Interactive workout interval timer.
+
+```tsx
+<WorkoutTimerBlock
+  block={{
+    type: 'workout_timer',
+    blockId: 'block-1',
+    intervals: [
+      { type: 'work', name: 'High knees', duration: 30 },
+      { type: 'rest', name: 'Rest', duration: 10 },
+    ],
+    rounds: 3,
+  }}
+/>
+```
+
+**Features:**
+- Start/Pause/Reset controls
+- Visual countdown
+- Interval progress indicators
+- Round counter
+- Completion state
+
+## Education Blocks (Phase 6)
+
+### QuizBlock
+
+Interactive quiz with answer reveal.
+
+```tsx
+<QuizBlock
+  block={{
+    type: 'quiz',
+    blockId: 'block-1',
+    questions: [
+      {
+        question: 'What is 2 + 2?',
+        options: ['3', '4', '5'],
+        correctIndex: 1,
+        explanation: 'Basic arithmetic.',
+      },
+    ],
+  }}
+/>
+```
+
+**Features:**
+- Answer selection with feedback
+- Correct/incorrect styling
+- Show/hide answer buttons
+- Explanation display
+- Disabled state after selection
+
+### FormulaBlock
+
+LaTeX formula display.
+
+```tsx
+<FormulaBlock
+  block={{
+    type: 'formula',
+    blockId: 'block-1',
+    latex: 'E = mc^2',
+    inline: false,
+    description: "Einstein's mass-energy equivalence",
+  }}
+/>
+```
+
+## Interview Blocks (Phase 7)
+
+### GuestBlock
+
+Guest/interviewee profile display.
+
+```tsx
+<GuestBlock
+  block={{
+    type: 'guest',
+    blockId: 'block-1',
+    name: 'Jane Doe',
+    title: 'CEO',
+    company: 'Tech Corp',
+    bio: 'Industry veteran with 20 years experience.',
+    avatarUrl: 'https://example.com/avatar.jpg',
+    socialLinks: [
+      { platform: 'twitter', url: 'https://twitter.com/janedoe' },
+      { platform: 'linkedin', url: 'https://linkedin.com/in/janedoe' },
+    ],
+  }}
+/>
+```
+
+## RAG Components
+
+### RAGSourceCard
+
+Displays source cards for RAG-based explanations.
+
+```tsx
+<RAGSourceCard
+  source={{
+    videoSummaryId: 'video-1',
+    title: 'Source Video',
+    timestamp: 120,
+    relevanceScore: 0.95,
+  }}
+  onClick={() => navigateToSource()}
+/>
+```
+
+### RAGChatPanel
+
+Chat interface for RAG-powered conversations.
+
+```tsx
+<RAGChatPanel
+  sources={[...]}
+  initialMessages={[...]}
+  onSendMessage={async (message) => {...}}
+/>
+```
+
+## Shared Patterns
+
+### Empty State Handling
+
+All blocks return `null` when their primary data is empty:
+
+```tsx
+if (!block.exercises?.length) return null;
+if (!block.tree?.length) return null;
+```
+
+### Accessibility
+
+All blocks follow accessibility best practices:
+- `aria-hidden="true"` on decorative icons
+- Proper `role` attributes (tree, treeitem, button)
+- `aria-expanded` for expandable sections
+- Keyboard navigation support
+- Focus-visible styling
+
+### BLOCK_LABELS
+
+Centralized i18n-ready labels in `src/lib/block-labels.ts`:
+
+```typescript
+import { BLOCK_LABELS } from '@/lib/block-labels';
+
+// Usage
+<span>{BLOCK_LABELS.sets}</span>  // "Sets"
+<span>{BLOCK_LABELS.copied}</span> // "Copied!"
+```
+
+### Testing Pattern
+
+All block tests follow consistent structure:
+
+```typescript
+const createMockBlock = (overrides = {}): BlockType => ({
+  type: 'block_type',
+  blockId: 'block-1',
+  // ... default values
+  ...overrides,
+});
+
+describe('BlockComponent', () => {
+  describe('rendering', () => {...});
+  describe('interactions', () => {...});
+  describe('accessibility', () => {...});
+});
 ```
 
 ---

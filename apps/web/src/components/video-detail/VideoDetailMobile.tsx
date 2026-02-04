@@ -62,7 +62,7 @@ export function VideoDetailMobile({
 
       <div className="space-y-6 mt-6">
         {/* Show chapters while sections are loading during streaming */}
-        {isStreaming && effectiveChapters.length > 0 && summary.sections.length === 0 && (
+        {isStreaming && effectiveChapters.length > 0 && (summary.sections ?? []).length === 0 && (
           <ChapterList
             chapters={effectiveChapters}
             isCreatorChapters={effectiveIsCreatorChapters}
@@ -71,9 +71,9 @@ export function VideoDetailMobile({
         )}
 
         {/* Article sections */}
-        {summary.sections.length > 0 && (
+        {(summary.sections ?? []).length > 0 && (
           <div>
-            {summary.sections.map((section, index) => (
+            {(summary.sections ?? []).map((section, index) => (
               <Fragment key={section.id}>
                 {index > 0 && <Separator className="my-3 opacity-40" />}
                 <ArticleSection
@@ -85,7 +85,7 @@ export function VideoDetailMobile({
                   playerRef={playerRef}
                   youtubeId={video.youtubeId}
                   startSeconds={activePlaySection === section.id ? activeStartSeconds : section.startSeconds}
-                  persona={video.context?.persona}
+                  category={video.context?.category}
                 />
               </Fragment>
             ))}
@@ -103,7 +103,7 @@ export function VideoDetailMobile({
 
       {/* Mobile Bottom Navigation */}
       <MobileChapterNav
-        sections={summary.sections}
+        sections={(summary.sections ?? [])}
         activeSection={activeId}
         onScrollToSection={scrollToSection}
       />

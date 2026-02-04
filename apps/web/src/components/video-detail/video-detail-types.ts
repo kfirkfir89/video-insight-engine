@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import type { YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
-import type { VideoResponse, VideoSummary, Concept } from "@vie/types";
+import type { VideoResponse, VideoSummary, Concept, StreamingChapter } from "@vie/types";
 import type { Chapter, DescriptionAnalysis } from "@/hooks/use-summary-stream";
 
 /**
@@ -13,7 +13,7 @@ export interface VideoDetailCommonProps {
   onStopSummarization?: () => void;
   onOpenMasterSummary: () => void;
   // Chapters from progressive summarization
-  effectiveChapters: Chapter[];
+  effectiveChapters: Chapter[] | StreamingChapter[];
   effectiveIsCreatorChapters: boolean;
   effectiveDescriptionAnalysis: DescriptionAnalysis | null;
   // Section play state

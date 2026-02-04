@@ -14,7 +14,7 @@ import { MasterSummaryModal } from "./MasterSummaryModal";
 import { VideoHeaderSection } from "./VideoHeaderSection";
 import { VideoDetailDesktop } from "./VideoDetailDesktop";
 import { VideoDetailMobile } from "./VideoDetailMobile";
-import type { VideoResponse, VideoSummary } from "@vie/types";
+import type { VideoResponse, VideoSummary, StreamingChapter } from "@vie/types";
 import type { StreamState, Chapter, DescriptionAnalysis } from "@/hooks/use-summary-stream";
 
 interface VideoDetailLayoutProps {
@@ -22,7 +22,7 @@ interface VideoDetailLayoutProps {
   summary: VideoSummary | null;
   isStreaming?: boolean;
   streamingState?: StreamState;
-  chapters?: Chapter[];
+  chapters?: Chapter[] | StreamingChapter[];
   isCreatorChapters?: boolean;
   descriptionAnalysis?: DescriptionAnalysis | null;
   onStopSummarization?: () => void;
@@ -58,9 +58,9 @@ export function VideoDetailLayout({
   const [showMasterSummary, setShowMasterSummary] = useState(false);
 
   // Stable dependency for section tracking
-  const sectionIdsString = summary?.sections.map((s) => s.id).join(",") ?? "";
+  const sectionIdsString = (summary?.sections ?? []).map((s) => s.id).join(",") ?? "";
   const sectionIds = useMemo(
-    () => summary?.sections.map((s) => s.id) ?? [],
+    () => (summary?.sections ?? []).map((s) => s.id) ?? [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [sectionIdsString]
   );
@@ -72,7 +72,7 @@ export function VideoDetailLayout({
     if (!summary?.concepts || !summary?.sections) {
       return { bySection: new Map(), orphaned: [] };
     }
-    return matchConceptsToSections(summary.concepts, summary.sections);
+    return matchConceptsToSections(summary.concepts, (summary.sections ?? []));
   }, [summary?.concepts, summary?.sections]);
 
   // Handle play from section - collapses video under the section on desktop
