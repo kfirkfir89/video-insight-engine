@@ -203,6 +203,23 @@ def _extract_bullets_from_content(content: list) -> list[str]:
     return bullets
 
 
+def inject_block_ids(blocks: list[dict]) -> list[dict]:
+    """Inject unique blockId (UUID) into each content block.
+
+    This provides stable identifiers for memorization and RAG features.
+
+    Args:
+        blocks: List of content block dictionaries
+
+    Returns:
+        Same blocks with blockId added to each
+    """
+    for block in blocks:
+        if isinstance(block, dict) and "blockId" not in block:
+            block["blockId"] = str(uuid.uuid4())
+    return blocks
+
+
 class LLMService:
     """Service for LLM-based video processing.
 
@@ -261,9 +278,9 @@ class LLMService:
             logger.error(f"Error during streaming: {e}")
             raise
 
-    async def detect_sections(self, transcript: str, segments: list[dict], duration: int | None = None) -> list[dict]:
-        """Detect logical sections in transcript."""
-        logger.debug(f"detect_sections: transcript length={len(transcript)} chars")
+    async def detect_chapters(self, transcript: str, segments: list[dict], duration: int | None = None) -> list[dict]:
+        """Detect logical chapters in transcript."""
+        logger.debug(f"detect_chapters: transcript length={len(transcript)} chars")
 
         # Calculate duration from segments if not provided
         if duration is None and segments:
@@ -272,7 +289,7 @@ class LLMService:
 
         duration_formatted = f"{duration // 60}:{duration % 60:02d}" if duration else "unknown"
 
-        prompt = load_prompt("section_detect").format(
+        prompt = load_prompt("chapter_detect").format(
             transcript=transcript,
             duration=duration or 0,
             duration_formatted=duration_formatted,
@@ -281,34 +298,34 @@ class LLMService:
         text = await self._call_llm(prompt)
         result = _parse_json_response(text)
 
-        if result.get("sections"):
-            return result["sections"]
+        if result.get("chapters"):
+            return result["chapters"]
 
-        # Fallback: single section
+        # Fallback: single chapter
         return [{
             "title": "Full Video",
             "startSeconds": 0,
             "endSeconds": duration or 0
         }]
 
-    async def summarize_section(
+    async def summarize_chapter(
         self,
-        section_text: str,
+        chapter_text: str,
         title: str,
         has_creator_title: bool = False,
         persona: str = 'standard',
     ) -> dict:
-        """Generate dynamic content blocks for a section.
+        """Generate dynamic content blocks for a chapter.
 
         Args:
-            section_text: The transcript text for this section
-            title: The section title (either creator's chapter title or AI-generated)
+            chapter_text: The transcript text for this chapter
+            title: The chapter title (either creator's chapter title or AI-generated)
             has_creator_title: If True, also generates an explanatory subtitle
             persona: Content persona for styling ('code', 'recipe', 'standard')
 
         Returns:
             dict with:
-            - "content": array of content blocks
+            - "content": array of content blocks with blockId
             - "summary": extracted text for backward compatibility
             - "bullets": extracted list items for backward compatibility
             - "generatedTitle": optional explanatory subtitle
@@ -317,23 +334,23 @@ class LLMService:
         if has_creator_title:
             extra_instruction = (
                 "Also generate a short explanatory title that describes what the viewer "
-                "will learn from this section (e.g., 'How to configure authentication' "
+                "will learn from this chapter (e.g., 'How to configure authentication' "
                 "or 'Understanding the caching strategy')."
             )
-            generated_title_field = ',\n  "generatedTitle": "short explanatory title for this section"'
+            generated_title_field = ',\n  "generatedTitle": "short explanatory title for this chapter"'
         else:
             extra_instruction = ""
             generated_title_field = ""
 
-        logger.debug(f"summarize_section: section_text length={len(section_text)} chars, title='{title}'")
+        logger.debug(f"summarize_chapter: chapter_text length={len(chapter_text)} chars, title='{title}'")
 
         # Get persona-specific guidelines and examples from files
         persona_guidelines = load_persona(persona)
         variant_examples = load_examples(persona)
 
-        prompt = load_prompt("section_summary").format(
+        prompt = load_prompt("chapter_summary").format(
             title=title,
-            content=section_text,
+            content=chapter_text,
             extra_instruction=extra_instruction,
             generated_title_field=generated_title_field,
             persona_guidelines=persona_guidelines,
@@ -347,6 +364,9 @@ class LLMService:
         content = result.get("content", [])
         if not isinstance(content, list):
             content = []
+
+        # Inject blockId into each content block
+        content = inject_block_ids(content)
 
         # Return with legacy fields for backward compatibility
         return {
@@ -397,32 +417,32 @@ class LLMService:
             on_progress: Optional callback for progress updates
 
         Returns:
-            dict with tldr, key_takeaways, sections, and concepts
+            dict with tldr, key_takeaways, chapters, and concepts
         """
         if on_progress:
-            on_progress(10, "Detecting sections...")
+            on_progress(10, "Detecting chapters...")
 
-        # 1. Detect sections
-        raw_sections = await self.detect_sections(transcript, segments)
+        # 1. Detect chapters
+        raw_chapters = await self.detect_chapters(transcript, segments)
 
         if on_progress:
-            on_progress(30, "Summarizing sections...")
+            on_progress(30, "Summarizing chapters...")
 
-        # 2. Summarize each section
-        sections = []
-        for i, raw in enumerate(raw_sections):
+        # 2. Summarize each chapter
+        chapters = []
+        for i, raw in enumerate(raw_chapters):
             start = raw.get("startSeconds", 0)
             end = raw.get("endSeconds", start + 300)
 
-            section_segments = [
+            chapter_segments = [
                 s for s in segments
                 if start <= s["start"] <= end
             ]
-            section_text = " ".join([s["text"] for s in section_segments])
+            chapter_text = " ".join([s["text"] for s in chapter_segments])
 
-            summary_data = await self.summarize_section(section_text, raw["title"])
+            summary_data = await self.summarize_chapter(chapter_text, raw["title"])
 
-            sections.append({
+            chapters.append({
                 "id": str(uuid.uuid4()),
                 "timestamp": seconds_to_timestamp(start),
                 "start_seconds": start,
@@ -435,8 +455,8 @@ class LLMService:
             })
 
             if on_progress:
-                progress = 30 + int((i + 1) / len(raw_sections) * 40)
-                on_progress(progress, f"Summarizing section {i + 1}/{len(raw_sections)}...")
+                progress = 30 + int((i + 1) / len(raw_chapters) * 40)
+                on_progress(progress, f"Summarizing chapter {i + 1}/{len(raw_chapters)}...")
 
         if on_progress:
             on_progress(70, "Extracting concepts...")
@@ -457,12 +477,12 @@ class LLMService:
             on_progress(90, "Generating summary...")
 
         # 4. Synthesize
-        synthesis = await self.synthesize_summary(sections, concepts)
+        synthesis = await self.synthesize_summary(chapters, concepts)
 
         return {
             "tldr": synthesis.get("tldr", ""),
             "key_takeaways": synthesis.get("keyTakeaways", []),
-            "sections": sections,
+            "chapters": chapters,
             "concepts": concepts,
         }
 
@@ -487,10 +507,10 @@ class LLMService:
         result = _parse_json_response(full_response)
         yield ("complete", result)
 
-    async def stream_detect_sections(
+    async def stream_detect_chapters(
         self, transcript: str, segments: list[dict], duration: int | None = None
     ) -> AsyncGenerator[StreamEvent, None]:
-        """Stream section detection with tokens and final result.
+        """Stream chapter detection with tokens and final result.
 
         Args:
             transcript: Cleaned transcript text
@@ -499,9 +519,9 @@ class LLMService:
 
         Yields:
             ("token", str) for each token
-            ("complete", list[dict]) with detected sections
+            ("complete", list[dict]) with detected chapters
         """
-        logger.debug(f"stream_detect_sections: transcript length={len(transcript)} chars")
+        logger.debug(f"stream_detect_chapters: transcript length={len(transcript)} chars")
 
         # Calculate duration from segments if not provided
         if duration is None and segments:
@@ -510,7 +530,7 @@ class LLMService:
 
         duration_formatted = f"{duration // 60}:{duration % 60:02d}" if duration else "unknown"
 
-        prompt = load_prompt("section_detect").format(
+        prompt = load_prompt("chapter_detect").format(
             transcript=transcript,
             duration=duration or 0,
             duration_formatted=duration_formatted,
@@ -524,41 +544,41 @@ class LLMService:
                 result = data
 
         # Process the result (type guard for dict access)
-        if isinstance(result, dict) and result.get("sections"):
-            sections = result["sections"]
+        if isinstance(result, dict) and result.get("chapters"):
+            chapters = result["chapters"]
         else:
-            # Fallback: single section
-            sections = [{
+            # Fallback: single chapter
+            chapters = [{
                 "title": "Full Video",
                 "startSeconds": 0,
                 "endSeconds": duration or 0
             }]
 
-        yield ("complete", sections)
+        yield ("complete", chapters)
 
-    async def stream_summarize_section(
-        self, section_text: str, title: str, persona: str = 'standard'
+    async def stream_summarize_chapter(
+        self, chapter_text: str, title: str, persona: str = 'standard'
     ) -> AsyncGenerator[StreamEvent, None]:
-        """Stream section summary with tokens and final result.
+        """Stream chapter summary with tokens and final result.
 
         Args:
-            section_text: The transcript text for this section
-            title: The section title
+            chapter_text: The transcript text for this chapter
+            title: The chapter title
             persona: Content persona for styling ('code', 'recipe', 'standard')
 
         Yields:
             ("token", str) for each token
-            ("complete", dict) with content blocks and legacy summary/bullets
+            ("complete", dict) with content blocks (with blockId) and legacy summary/bullets
         """
-        logger.debug(f"stream_summarize_section: section_text length={len(section_text)} chars, title='{title}'")
+        logger.debug(f"stream_summarize_chapter: chapter_text length={len(chapter_text)} chars, title='{title}'")
 
         # Get persona-specific guidelines and examples from files
         persona_guidelines = load_persona(persona)
         variant_examples = load_examples(persona)
 
-        prompt = load_prompt("section_summary").format(
+        prompt = load_prompt("chapter_summary").format(
             title=title,
-            content=section_text,
+            content=chapter_text,
             extra_instruction="",
             generated_title_field="",
             persona_guidelines=persona_guidelines,
@@ -574,6 +594,8 @@ class LLMService:
                     content = data.get("content", [])
                     if not isinstance(content, list):
                         content = []
+                    # Inject blockId into each content block
+                    content = inject_block_ids(content)
                     summary_data = {
                         "content": content,
                         # Legacy fields for backward compatibility
@@ -729,7 +751,7 @@ class LLMService:
         persona: str,
         tldr: str,
         key_takeaways: list[str],
-        sections: list[dict],
+        chapters: list[dict],
         concepts: list[dict],
     ) -> str:
         """Generate comprehensive master summary from all video data.
@@ -744,7 +766,7 @@ class LLMService:
             persona: Content persona ('code', 'recipe', 'standard', etc.)
             tldr: Current TLDR text
             key_takeaways: List of key takeaways
-            sections: List of processed sections with content blocks
+            chapters: List of processed chapters with content blocks
             concepts: List of extracted concepts with definitions
 
         Returns:
@@ -771,21 +793,21 @@ class LLMService:
         else:
             takeaways_text = "Not available"
 
-        # Format sections - include title, summary, and key bullets (limit to 30 sections max)
-        sections_parts = []
-        for i, section in enumerate(sections[:30], 1):
-            section_title = _sanitize_llm_input(section.get("title", f"Section {i}"), max_length=200)
-            section_summary = _sanitize_llm_input(section.get("summary", ""), max_length=1000)
-            section_bullets = section.get("bullets", [])
+        # Format chapters - include title, summary, and key bullets (limit to 30 chapters max)
+        chapters_parts = []
+        for i, chapter in enumerate(chapters[:30], 1):
+            chapter_title = _sanitize_llm_input(chapter.get("title", f"Chapter {i}"), max_length=200)
+            chapter_summary = _sanitize_llm_input(chapter.get("summary", ""), max_length=1000)
+            chapter_bullets = chapter.get("bullets", [])
 
-            part = f"### {section_title}\n{section_summary}"
-            if section_bullets:
-                sanitized_bullets = [_sanitize_llm_input(b, max_length=300) for b in section_bullets[:5]]
+            part = f"### {chapter_title}\n{chapter_summary}"
+            if chapter_bullets:
+                sanitized_bullets = [_sanitize_llm_input(b, max_length=300) for b in chapter_bullets[:5]]
                 bullets_text = "\n".join([f"  - {b}" for b in sanitized_bullets])
                 part += f"\n{bullets_text}"
-            sections_parts.append(part)
+            chapters_parts.append(part)
 
-        sections_detailed = "\n\n".join(sections_parts) if sections_parts else "No sections available"
+        chapters_detailed = "\n\n".join(chapters_parts) if chapters_parts else "No chapters available"
 
         # Format concepts (limit to 20 concepts max)
         if concepts:
@@ -808,7 +830,7 @@ class LLMService:
             persona=persona,
             tldr=tldr or "Not available",
             key_takeaways=takeaways_text,
-            sections_detailed=sections_detailed,
+            chapters_detailed=chapters_detailed,
             concepts_detailed=concepts_detailed,
         )
 

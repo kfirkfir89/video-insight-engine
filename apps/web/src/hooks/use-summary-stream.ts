@@ -9,7 +9,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { refreshToken, getAccessToken } from "@/api/client";
 import {
-  validateSection,
+  validateChapter,
   validateConcepts,
   validateDescriptionAnalysis,
   validateMetadataEvent,
@@ -22,7 +22,7 @@ import {
 
 // Issue #12: Import shared types from @vie/types, re-export for consumers
 import type {
-  Section,
+  SummaryChapter,
   Concept,
   Chapter,
   DescriptionLink,
@@ -34,9 +34,9 @@ import type {
   VideoContext,
 } from "@vie/types";
 
-// Re-export types for backward compatibility with existing consumers
+// Re-export types for consumers
 export type {
-  Section,
+  SummaryChapter,
   Concept,
   Chapter,
   DescriptionLink,
@@ -107,7 +107,7 @@ function getUserFriendlyError(message: string, code?: string): string {
 const STREAM_CACHE_KEY = (id: string) => `vie-stream-cache-${id}`;
 
 interface StreamCache {
-  sections: Section[];
+  chapters: SummaryChapter[];
   concepts: Concept[];
   tldr: string;
   keyTakeaways: string[];
@@ -129,8 +129,8 @@ export type StreamPhase =
   | "metadata"
   | "transcript"
   | "parallel_analysis"
-  | "section_detect"
-  | "section_summaries"
+  | "chapter_detect"
+  | "chapter_summaries"
   | "concepts"
   | "master_summary"
   | "synthesis"
@@ -151,9 +151,9 @@ export interface StreamState {
   phase: StreamPhase;
   metadata: VideoMetadata | null;
   duration: number | null;
-  sections: Section[];
-  currentSectionIndex: number;
-  currentSectionText: string;
+  chapters: SummaryChapter[];
+  currentChapterIndex: number;
+  currentChapterText: string;
   concepts: Concept[];
   tldr: string;
   keyTakeaways: string[];
@@ -162,10 +162,10 @@ export interface StreamState {
   isCached: boolean;
   processingTimeMs: number | null;
   // Progressive summarization fields
-  chapters: Chapter[];
+  detectedChapters: Chapter[];
   isCreatorChapters: boolean;
   descriptionAnalysis: DescriptionAnalysis | null;
-  sectionStatuses: Record<number, "pending" | "processing" | "completed">;
+  chapterStatuses: Record<number, "pending" | "processing" | "completed">;
   // Warning state for partial failures (e.g., some analyses failed)
   warnings: string[];
 }
@@ -181,9 +181,9 @@ const initialState: StreamState = {
   phase: "idle",
   metadata: null,
   duration: null,
-  sections: [],
-  currentSectionIndex: -1,
-  currentSectionText: "",
+  chapters: [],
+  currentChapterIndex: -1,
+  currentChapterText: "",
   concepts: [],
   tldr: "",
   keyTakeaways: [],
@@ -192,10 +192,10 @@ const initialState: StreamState = {
   isCached: false,
   processingTimeMs: null,
   // Progressive summarization fields
-  chapters: [],
+  detectedChapters: [],
   isCreatorChapters: false,
   descriptionAnalysis: null,
-  sectionStatuses: {},
+  chapterStatuses: {},
   warnings: [],
 };
 
@@ -223,12 +223,12 @@ function loadStreamCache(videoSummaryId: string): Partial<StreamState> | null {
     }
 
     // Only restore if we have meaningful data
-    if (data.sections.length === 0 && !data.tldr && data.concepts.length === 0 && !data.metadata) {
+    if (data.chapters.length === 0 && !data.tldr && data.concepts.length === 0 && !data.metadata) {
       return null;
     }
 
     return {
-      sections: data.sections,
+      chapters: data.chapters,
       concepts: data.concepts,
       tldr: data.tldr,
       keyTakeaways: data.keyTakeaways,
@@ -246,7 +246,7 @@ function loadStreamCache(videoSummaryId: string): Partial<StreamState> | null {
 function saveStreamCache(videoSummaryId: string, state: StreamState): void {
   try {
     const cache: StreamCache = {
-      sections: state.sections,
+      chapters: state.chapters,
       concepts: state.concepts,
       tldr: state.tldr,
       keyTakeaways: state.keyTakeaways,
@@ -323,11 +323,11 @@ export function useSummaryStream({
       batchTimeoutRef.current = null;
     }
 
-    if (pending.phase === "section_summary") {
+    if (pending.phase === "chapter_summary") {
       setState((prev) => ({
         ...prev,
-        currentSectionText: pending.text,
-        currentSectionIndex: pending.index,
+        currentChapterText: pending.text,
+        currentChapterIndex: pending.index,
       }));
     } else if (pending.phase === "synthesis") {
       setState((prev) => ({ ...prev, tldr: pending.text }));
@@ -528,7 +528,7 @@ export function useSummaryStream({
     if (!videoSummaryId || !enabled) return;
 
     // Only save if we have meaningful data to cache
-    const hasData = state.sections.length > 0 || state.concepts.length > 0 || state.tldr || state.metadata;
+    const hasData = state.chapters.length > 0 || state.concepts.length > 0 || state.tldr || state.metadata;
     if (!hasData) return;
 
     // Don't save if stream completed or errored (will be cleared anyway)
@@ -590,10 +590,10 @@ function processEvent(
 
     case "chapters": {
       // Issue #11: Runtime validation for SSE events
-      const { chapters, isCreatorChapters } = validateChaptersEvent(event);
+      const { chapters: detected, isCreatorChapters } = validateChaptersEvent(event);
       setState((prev) => ({
         ...prev,
-        chapters,
+        detectedChapters: detected,
         isCreatorChapters,
       }));
       break;
@@ -632,66 +632,67 @@ function processEvent(
     }
 
     case "sections_detected":
-      setState((prev) => ({ ...prev, phase: "section_summaries" }));
+    case "chapters_detected":
+      setState((prev) => ({ ...prev, phase: "chapter_summaries" }));
       break;
 
-    case "section_start":
-      // Flush any pending token updates before starting new section
+    case "chapter_start":
+      // Flush any pending token updates before starting new chapter
       flushTokenUpdate();
       streamingTextRef.current = "";
       setState((prev) => ({
         ...prev,
-        currentSectionIndex: event.index as number,
-        currentSectionText: "",
+        currentChapterIndex: event.index as number,
+        currentChapterText: "",
       }));
       break;
 
-    case "section_complete": {
-      // Flush pending token updates before completing section
+    case "chapter_complete": {
+      // Flush pending token updates before completing chapter
       flushTokenUpdate();
       // Issue #11: Runtime validation for SSE events
-      const section = validateSection(event.section);
-      if (!section) break;
+      const chapter = validateChapter(event.chapter);
+      if (!chapter) break;
       streamingTextRef.current = "";
       setState((prev) => ({
         ...prev,
-        sections: [...prev.sections, section],
-        currentSectionText: "",
-        currentSectionIndex: -1,
+        chapters: [...prev.chapters, chapter],
+        currentChapterText: "",
+        currentChapterIndex: -1,
       }));
       break;
     }
 
-    case "section_ready": {
-      // Flush pending token updates before section is ready
+    case "chapter_ready": {
+      // Flush pending token updates before chapter is ready
       flushTokenUpdate();
       // Issue #11: Runtime validation for SSE events
       const index = event.index as number;
-      const section = validateSection(event.section);
-      if (!section) break;
+      const chapter = validateChapter(event.chapter);
+      if (!chapter) break;
       streamingTextRef.current = "";
       setState((prev) => {
-        // Insert section at the correct index position
-        const newSections = [...prev.sections];
-        // Find the right insertion point to keep sections sorted by index
-        const insertAt = newSections.findIndex(
-          (s) => s.startSeconds > section.startSeconds
+        // Insert chapter at the correct index position
+        const newChapters = [...prev.chapters];
+        // Find the right insertion point to keep chapters sorted by startSeconds
+        const insertAt = newChapters.findIndex(
+          (c) => c.startSeconds > chapter.startSeconds
         );
         if (insertAt === -1) {
-          newSections.push(section);
+          newChapters.push(chapter);
         } else {
-          newSections.splice(insertAt, 0, section);
+          newChapters.splice(insertAt, 0, chapter);
         }
 
-        // Update section status
-        const newStatuses = { ...prev.sectionStatuses, [index]: "completed" as const };
+        // Update chapter status
+        const newStatuses = { ...prev.chapterStatuses, [index]: "completed" as const };
 
         return {
           ...prev,
-          sections: newSections,
-          sectionStatuses: newStatuses,
-          currentSectionText: "",
-          currentSectionIndex: -1,
+          chapters: newChapters,
+          chapterStatuses: newStatuses,
+          currentChapterText: "",
+          currentChapterIndex: -1,
         };
       });
       break;

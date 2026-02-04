@@ -15,11 +15,11 @@ import { sseLogger } from "@/lib/sse-logger";
 import {
   validatePhaseEvent,
   validateMetadataEvent,
-  validateSection,
+  validateChapter,
   validateErrorEvent,
 } from "@/lib/sse-validators";
 import type { StreamPhase } from "@/hooks/use-summary-stream";
-import type { Section } from "@/types";
+import type { SummaryChapter } from "@/types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 
@@ -37,7 +37,7 @@ interface ManagerState {
     thumbnailUrl?: string;
     duration?: number;
   } | null;
-  sections: Section[];
+  chapters: SummaryChapter[];
   error?: string | null;
 }
 
@@ -80,7 +80,7 @@ export function useProcessingManager() {
       setStreamState(videoSummaryId, {
         phase: "connecting",
         metadata: null,
-        sectionsCount: 0,
+        chaptersCount: 0,
         error: null,
       });
 
@@ -105,7 +105,7 @@ export function useProcessingManager() {
             setStreamState(videoSummaryId, {
               phase: "error",
               metadata: null,
-              sectionsCount: 0,
+              chaptersCount: 0,
               error: `HTTP ${response.status}`,
             });
             return;
@@ -119,7 +119,7 @@ export function useProcessingManager() {
           let currentState: Partial<ManagerState> = {
             phase: "connecting" as StreamPhase,
             metadata: null,
-            sections: [],
+            chapters: [],
           };
 
           while (true) {
@@ -143,7 +143,7 @@ export function useProcessingManager() {
                 setStreamState(videoSummaryId, {
                   phase: currentState.phase as StreamPhase,
                   metadata: currentState.metadata || null,
-                  sectionsCount: currentState.sections?.length || 0,
+                  chaptersCount: currentState.chapters?.length || 0,
                   error: currentState.error || null,
                 });
 
@@ -167,7 +167,7 @@ export function useProcessingManager() {
           setStreamState(videoSummaryId, {
             phase: "error",
             metadata: null,
-            sectionsCount: 0,
+            chaptersCount: 0,
             error: err instanceof Error ? err.message : "Stream failed",
           });
         }
@@ -271,11 +271,10 @@ function processEvent(
       };
     }
 
-    case "section_ready":
-    case "section_complete": {
-      const section = validateSection(event.section);
-      if (!section) return state;
-      return { ...state, sections: [...(state.sections || []), section] };
+    case "chapter_ready": {
+      const chapter = validateChapter(event.chapter);
+      if (!chapter) return state;
+      return { ...state, chapters: [...(state.chapters || []), chapter] };
     }
 
     case "done":

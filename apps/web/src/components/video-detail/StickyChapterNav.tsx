@@ -1,51 +1,51 @@
 import { useEffect, useRef } from "react";
 import { ChapterNavItem } from "./ChapterNavItem";
-import type { Section } from "@vie/types";
+import type { SummaryChapter } from "@vie/types";
 
 interface StickyChapterNavProps {
-  sections: Section[];
-  activeSection: string | null;
-  activePlaySection: string | null;
-  onScrollToSection: (sectionId: string) => void;
-  onPlayFromSection: (sectionId: string, startSeconds: number) => void;
-  onStopSection: () => void;
+  chapters: SummaryChapter[];
+  activeChapter: string | null;
+  activePlayChapter: string | null;
+  onScrollToChapter: (chapterId: string) => void;
+  onPlayFromChapter: (chapterId: string, startSeconds: number) => void;
+  onStopChapter: () => void;
 }
 
 export function StickyChapterNav({
-  sections,
-  activeSection,
-  activePlaySection,
-  onScrollToSection,
-  onPlayFromSection,
-  onStopSection,
+  chapters,
+  activeChapter,
+  activePlayChapter,
+  onScrollToChapter,
+  onPlayFromChapter,
+  onStopChapter,
 }: StickyChapterNavProps) {
   const navRef = useRef<HTMLElement>(null);
-  // Store sections ref to avoid dependency in effect
-  const sectionsRef = useRef(sections);
+  // Store chapters ref to avoid dependency in effect
+  const chaptersRef = useRef(chapters);
 
   // Update ref in effect, not during render (React rules)
   useEffect(() => {
-    sectionsRef.current = sections;
-  }, [sections]);
+    chaptersRef.current = chapters;
+  }, [chapters]);
 
   // Auto-scroll the chapters list to keep active chapter visible
   // Debounced to reduce layout thrashing during streaming
   useEffect(() => {
-    if (!activeSection || !navRef.current) return;
+    if (!activeChapter || !navRef.current) return;
 
     const timeout = setTimeout(() => {
       if (!navRef.current) return;
 
-      // Check if this is the first section using ref to avoid deps
-      const currentSections = sectionsRef.current;
-      const isFirstSection = currentSections.length > 0 && currentSections[0].id === activeSection;
+      // Check if this is the first chapter using ref to avoid deps
+      const currentChapters = chaptersRef.current;
+      const isFirstChapter = currentChapters.length > 0 && currentChapters[0].id === activeChapter;
 
-      if (isFirstSection) {
-        // For first section, scroll nav to top to show "Chapters" heading
+      if (isFirstChapter) {
+        // For first chapter, scroll nav to top to show "Chapters" heading
         navRef.current.scrollTo({ top: 0, behavior: "smooth" });
       } else {
         const activeElement = navRef.current.querySelector(
-          `[data-section-id="${activeSection}"]`
+          `[data-chapter-id="${activeChapter}"]`
         );
         if (activeElement) {
           // Scroll the active chapter into view within the nav container
@@ -58,7 +58,7 @@ export function StickyChapterNav({
     }, 100); // Debounce scroll to reduce layout thrashing
 
     return () => clearTimeout(timeout);
-  }, [activeSection]); // Removed sections from deps - use ref instead
+  }, [activeChapter]); // Removed chapters from deps - use ref instead
 
   return (
     <aside
@@ -75,16 +75,16 @@ export function StickyChapterNav({
           Chapters
         </h2>
         <div className="space-y-1">
-          {sections.map((section) => (
+          {chapters.map((chapter) => (
             <ChapterNavItem
-              key={section.id}
-              section={section}
-              isActive={activeSection === section.id}
-              isPlaying={activePlaySection === section.id}
-              onScrollTo={() => onScrollToSection(section.id)}
-              onPlay={() => onPlayFromSection(section.id, section.startSeconds)}
-              onStop={onStopSection}
-              dataSectionId={section.id}
+              key={chapter.id}
+              chapter={chapter}
+              isActive={activeChapter === chapter.id}
+              isPlaying={activePlayChapter === chapter.id}
+              onScrollTo={() => onScrollToChapter(chapter.id)}
+              onPlay={() => onPlayFromChapter(chapter.id, chapter.startSeconds)}
+              onStop={onStopChapter}
+              dataChapterId={chapter.id}
             />
           ))}
         </div>

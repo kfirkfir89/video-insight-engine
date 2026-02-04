@@ -195,15 +195,15 @@ describe("useSummaryStream", () => {
       expect(result.current.duration).toBe(600);
     });
 
-    it("should parse section events", async () => {
+    it("should parse chapter events", async () => {
       const events = [
-        { event: "phase", data: { event: "phase", phase: "section_summaries" } },
-        { event: "section_start", data: { event: "section_start", index: 0 } },
+        { event: "phase", data: { event: "phase", phase: "chapter_summaries" } },
+        { event: "chapter_start", data: { event: "chapter_start", index: 0 } },
         {
-          event: "section_complete",
+          event: "chapter_ready",
           data: {
-            event: "section_complete",
-            section: {
+            event: "chapter_ready",
+            chapter: {
               id: "s1",
               timestamp: "0:00",
               title: "Introduction",
@@ -229,11 +229,11 @@ describe("useSummaryStream", () => {
       );
 
       await waitFor(() => {
-        expect(result.current.sections).toHaveLength(1);
+        expect(result.current.chapters).toHaveLength(1);
       });
 
-      expect(result.current.sections[0].title).toBe("Introduction");
-      expect(result.current.sections[0].summary).toBe("Summary text");
+      expect(result.current.chapters[0].title).toBe("Introduction");
+      expect(result.current.chapters[0].summary).toBe("Summary text");
     });
 
     it("should parse concepts event", async () => {
@@ -340,7 +340,7 @@ describe("useSummaryStream", () => {
       const events = [
         { event: "phase", data: { event: "phase", phase: "metadata" } },
         { event: "phase", data: { event: "phase", phase: "transcript" } },
-        { event: "phase", data: { event: "phase", phase: "section_summaries" } },
+        { event: "phase", data: { event: "phase", phase: "chapter_summaries" } },
         { event: "phase", data: { event: "phase", phase: "synthesis" } },
         { event: "done", data: { event: "done", processingTimeMs: 5000 } },
       ];

@@ -1,4 +1,4 @@
-import type { Concept, Section } from "@vie/types";
+import type { Concept, SummaryChapter } from "@vie/types";
 
 /**
  * Parse timestamp string to seconds
@@ -19,67 +19,67 @@ export function parseTimestamp(timestamp: string): number {
 }
 
 /**
- * Result of matching concepts to sections
+ * Result of matching concepts to chapters
  */
 export interface ConceptMatchResult {
-  /** Map of section ID to matched concepts */
-  bySection: Map<string, Concept[]>;
-  /** Concepts that couldn't be matched to any section (no timestamp or out of range) */
+  /** Map of chapter ID to matched concepts */
+  byChapter: Map<string, Concept[]>;
+  /** Concepts that couldn't be matched to any chapter (no timestamp or out of range) */
   orphaned: Concept[];
 }
 
 /**
- * Normalize sections to ensure endSeconds is properly set.
- * If endSeconds is 0 or missing, calculate it from the next section's startSeconds.
+ * Normalize chapters to ensure endSeconds is properly set.
+ * If endSeconds is 0 or missing, calculate it from the next chapter's startSeconds.
  */
-function normalizeSectionRanges(sections: Section[]): Section[] {
-  if (sections.length === 0) return [];
+function normalizeChapterRanges(chapters: SummaryChapter[]): SummaryChapter[] {
+  if (chapters.length === 0) return [];
 
   // Sort by startSeconds to calculate end times
-  const sorted = [...sections].sort((a, b) => a.startSeconds - b.startSeconds);
+  const sorted = [...chapters].sort((a, b) => a.startSeconds - b.startSeconds);
 
-  // Create a map of section ID to calculated endSeconds
+  // Create a map of chapter ID to calculated endSeconds
   const endSecondsMap = new Map<string, number>();
-  sorted.forEach((section, index) => {
-    if (section.endSeconds > section.startSeconds) {
+  sorted.forEach((chapter, index) => {
+    if (chapter.endSeconds > chapter.startSeconds) {
       // endSeconds is valid, use it
-      endSecondsMap.set(section.id, section.endSeconds);
+      endSecondsMap.set(chapter.id, chapter.endSeconds);
     } else {
-      // Calculate from next section or use Infinity for last section
-      const nextSection = sorted[index + 1];
-      endSecondsMap.set(section.id, nextSection ? nextSection.startSeconds : Infinity);
+      // Calculate from next chapter or use Infinity for last chapter
+      const nextChapter = sorted[index + 1];
+      endSecondsMap.set(chapter.id, nextChapter ? nextChapter.startSeconds : Infinity);
     }
   });
 
-  // Return sections in ORIGINAL order with fixed endSeconds
-  return sections.map((section) => ({
-    ...section,
-    endSeconds: endSecondsMap.get(section.id) ?? section.endSeconds,
+  // Return chapters in ORIGINAL order with fixed endSeconds
+  return chapters.map((chapter) => ({
+    ...chapter,
+    endSeconds: endSecondsMap.get(chapter.id) ?? chapter.endSeconds,
   }));
 }
 
 /**
- * Match concepts to sections based on timestamp overlap.
- * A concept matches a section if its timestamp falls within [startSeconds, endSeconds).
+ * Match concepts to chapters based on timestamp overlap.
+ * A concept matches a chapter if its timestamp falls within [startSeconds, endSeconds).
  *
- * Fixes endSeconds=0 issues by calculating from next section's startSeconds.
+ * Fixes endSeconds=0 issues by calculating from next chapter's startSeconds.
  */
-export function matchConceptsToSections(
+export function matchConceptsToChapters(
   concepts: Concept[],
-  sections: Section[]
+  chapters: SummaryChapter[]
 ): ConceptMatchResult {
-  const bySection = new Map<string, Concept[]>();
+  const byChapter = new Map<string, Concept[]>();
   const orphaned: Concept[] = [];
 
-  if (sections.length === 0) {
-    return { bySection, orphaned: concepts };
+  if (chapters.length === 0) {
+    return { byChapter, orphaned: concepts };
   }
 
-  // Normalize sections to fix missing endSeconds values
-  const normalizedSections = normalizeSectionRanges(sections);
+  // Normalize chapters to fix missing endSeconds values
+  const normalizedChapters = normalizeChapterRanges(chapters);
 
-  // Initialize all sections with empty arrays
-  normalizedSections.forEach((s) => bySection.set(s.id, []));
+  // Initialize all chapters with empty arrays
+  normalizedChapters.forEach((c) => byChapter.set(c.id, []));
 
   for (const concept of concepts) {
     if (!concept.timestamp) {
@@ -94,17 +94,17 @@ export function matchConceptsToSections(
       continue;
     }
 
-    // Find matching section by time range
-    const matchingSection = normalizedSections.find(
-      (s) => conceptSeconds >= s.startSeconds && conceptSeconds < s.endSeconds
+    // Find matching chapter by time range
+    const matchingChapter = normalizedChapters.find(
+      (c) => conceptSeconds >= c.startSeconds && conceptSeconds < c.endSeconds
     );
 
-    if (matchingSection) {
-      bySection.get(matchingSection.id)?.push(concept);
+    if (matchingChapter) {
+      byChapter.get(matchingChapter.id)?.push(concept);
     } else {
       orphaned.push(concept);
     }
   }
 
-  return { bySection, orphaned };
+  return { byChapter, orphaned };
 }

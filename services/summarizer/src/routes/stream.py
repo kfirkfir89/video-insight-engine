@@ -47,8 +47,8 @@ from src.exceptions import TranscriptError
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Configurable batch size for parallel section processing
-SECTION_BATCH_SIZE = settings.SECTION_BATCH_SIZE
+# Configurable batch size for parallel chapter processing
+CHAPTER_BATCH_SIZE = settings.CHAPTER_BATCH_SIZE
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ class ParallelResults:
     """Results from parallel analysis phase."""
     description_analysis: DescriptionAnalysis | None = None
     synthesis: dict[str, Any] = field(default_factory=lambda: {"tldr": "", "keyTakeaways": []})
-    first_section: dict[str, Any] | None = None
+    first_chapter: dict[str, Any] | None = None
     failed_tasks: list[str] = field(default_factory=list)
 
 
@@ -188,18 +188,36 @@ def validate_duration(duration: int) -> None:
 
 
 def extract_context(video_data: VideoData) -> tuple[dict[str, Any] | None, str]:
-    """Extract video context and persona from video data."""
+    """Extract video context and persona from video data.
+
+    Returns:
+        Tuple of (context_dict for storage, persona for internal LLM use).
+        The context_dict contains category (user-facing), not persona (internal).
+    """
     if not video_data.context:
         return None, "standard"
 
+    # Map persona to user-facing category
+    persona_to_category = {
+        'code': 'coding',
+        'recipe': 'cooking',
+        'interview': 'podcast',
+        'review': 'reviews',
+        'standard': 'general',
+    }
+
+    persona = video_data.context.persona
+    category = persona_to_category.get(persona, 'general')
+
+    # Store category (user-facing), NOT persona (internal)
     context_dict = {
+        "category": category,
         "youtubeCategory": video_data.context.youtube_category or "Unknown",
-        "persona": video_data.context.persona,
         "tags": video_data.context.tags,
         "displayTags": video_data.context.display_tags,
     }
-    logger.info(f"Video context: persona={video_data.context.persona}, tags={len(video_data.context.display_tags)}")
-    return context_dict, video_data.context.persona
+    logger.info(f"Video context: category={category}, persona={persona}, tags={len(video_data.context.display_tags)}")
+    return context_dict, persona
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -237,18 +255,18 @@ async def run_parallel_analysis(
         ),
     }
 
-    # Add first section task if chapters exist
+    # Add first chapter task if chapters exist
     if video_data.has_chapters and len(video_data.chapters) > 0:
-        first_section_text = video_data.get_chapter_transcript(0)
-        if first_section_text:
-            tasks["first_section"] = asyncio.create_task(
-                llm_service.summarize_section(
-                    first_section_text,
+        first_chapter_text = video_data.get_chapter_transcript(0)
+        if first_chapter_text:
+            tasks["first_chapter"] = asyncio.create_task(
+                llm_service.summarize_chapter(
+                    first_chapter_text,
                     video_data.chapters[0].title,
                     has_creator_title=True,
                     persona=persona,
                 ),
-                name="first_section"
+                name="first_chapter"
             )
 
     # Gather results
@@ -276,8 +294,8 @@ async def run_parallel_analysis(
                 "keyTakeaways": result.get("keyTakeaways", []),
             })
 
-        elif task_name == "first_section" and isinstance(result, dict):
-            parallel_results.first_section = result
+        elif task_name == "first_chapter" and isinstance(result, dict):
+            parallel_results.first_chapter = result
 
     if parallel_results.failed_tasks:
         yield sse_event("warning", {
@@ -293,16 +311,16 @@ async def run_parallel_analysis(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def build_section_dict(
+def build_chapter_dict(
     raw: dict[str, Any],
     summary_data: dict[str, Any],
     is_creator_chapter: bool,
 ) -> dict[str, Any]:
-    """Build a section dictionary from raw data and summary."""
+    """Build a chapter dictionary from raw data and summary."""
     start = raw.get("startSeconds", raw.get("start_seconds", 0))
     end = raw.get("endSeconds", raw.get("end_seconds", start))
 
-    section = {
+    chapter = {
         "id": str(uuid.uuid4()),
         "timestamp": seconds_to_timestamp(start),
         "start_seconds": start,
@@ -315,64 +333,64 @@ def build_section_dict(
     }
 
     if is_creator_chapter:
-        section["original_title"] = raw.get("title", "")
-        section["generated_title"] = summary_data.get("generatedTitle")
+        chapter["original_title"] = raw.get("title", "")
+        chapter["generated_title"] = summary_data.get("generatedTitle")
 
-    return section
+    return chapter
 
 
-async def process_creator_sections(
+async def process_creator_chapters(
     llm_service: LLMService,
     video_data: VideoData,
     persona: str,
-    first_section_result: dict[str, Any] | None,
+    first_chapter_result: dict[str, Any] | None,
 ) -> AsyncGenerator[str | list[dict[str, Any]], None]:
     """
-    Process creator-defined chapters as sections.
+    Process creator-defined chapters.
 
-    Yields SSE events for each section, then yields the sections list.
+    Yields SSE events for each chapter, then yields the chapters list.
     """
-    yield sse_event("phase", {"phase": "section_summaries"})
+    yield sse_event("phase", {"phase": "chapter_summaries"})
 
-    sections: list[dict[str, Any]] = []
-    chapters = video_data.chapters
+    chapters_result: list[dict[str, Any]] = []
+    video_chapters = video_data.chapters
 
-    # Build raw sections from chapters
-    raw_sections = [
+    # Build raw chapters from video chapters
+    raw_chapters = [
         {
             "title": ch.title,
             "startSeconds": int(ch.start_time),
             "endSeconds": int(ch.end_time),
         }
-        for ch in chapters
+        for ch in video_chapters
     ]
 
-    # Add first section if already processed
-    if first_section_result:
-        first_ch = chapters[0]
-        section = build_section_dict(
+    # Add first chapter if already processed
+    if first_chapter_result:
+        first_ch = video_chapters[0]
+        chapter = build_chapter_dict(
             {"title": first_ch.title, "startSeconds": int(first_ch.start_time), "endSeconds": int(first_ch.end_time)},
-            first_section_result,
+            first_chapter_result,
             is_creator_chapter=True,
         )
-        sections.append(section)
-        yield sse_event("section_ready", {"index": 0, "section": section})
+        chapters_result.append(chapter)
+        yield sse_event("chapter_ready", {"index": 0, "chapter": chapter})
 
-    # Process remaining sections in batches
-    start_idx = 1 if first_section_result else 0
-    remaining_indices = list(range(start_idx, len(raw_sections)))
+    # Process remaining chapters in batches
+    start_idx = 1 if first_chapter_result else 0
+    remaining_indices = list(range(start_idx, len(raw_chapters)))
 
-    for batch_start in range(0, len(remaining_indices), SECTION_BATCH_SIZE):
-        batch_indices = remaining_indices[batch_start:batch_start + SECTION_BATCH_SIZE]
+    for batch_start in range(0, len(remaining_indices), CHAPTER_BATCH_SIZE):
+        batch_indices = remaining_indices[batch_start:batch_start + CHAPTER_BATCH_SIZE]
         batch_tasks: list[tuple[int, dict[str, Any], asyncio.Task[Any]]] = []
 
         for idx in batch_indices:
-            raw = raw_sections[idx]
-            section_text = video_data.get_chapter_transcript(idx)
-            if section_text:
+            raw = raw_chapters[idx]
+            chapter_text = video_data.get_chapter_transcript(idx)
+            if chapter_text:
                 task = asyncio.create_task(
-                    llm_service.summarize_section(
-                        section_text,
+                    llm_service.summarize_chapter(
+                        chapter_text,
                         raw["title"],
                         has_creator_title=True,
                         persona=persona,
@@ -383,16 +401,16 @@ async def process_creator_sections(
         for idx, raw, task in batch_tasks:
             try:
                 summary_data = await task
-                section = build_section_dict(raw, summary_data, is_creator_chapter=True)
-                sections.append(section)
-                yield sse_event("section_ready", {"index": idx, "section": section})
+                chapter = build_chapter_dict(raw, summary_data, is_creator_chapter=True)
+                chapters_result.append(chapter)
+                yield sse_event("chapter_ready", {"index": idx, "chapter": chapter})
             except Exception as e:
-                logger.error(f"Section {idx} processing error: {e}")
+                logger.error(f"Chapter {idx} processing error: {e}")
 
-    yield sections
+    yield chapters_result
 
 
-async def process_ai_sections(
+async def process_ai_chapters(
     llm_service: LLMService,
     segments: list[dict[str, Any]],
     clean_text: str,
@@ -400,64 +418,64 @@ async def process_ai_sections(
     persona: str,
 ) -> AsyncGenerator[str | list[dict[str, Any]], None]:
     """
-    Detect and process sections using AI (fallback when no chapters).
+    Detect and process chapters using AI (fallback when no creator chapters).
 
-    Yields SSE events for progress, then yields the sections list.
+    Yields SSE events for progress, then yields the chapters list.
     """
-    yield sse_event("phase", {"phase": "section_detect"})
+    yield sse_event("phase", {"phase": "chapter_detect"})
 
-    # Detect sections via streaming LLM
-    raw_sections: list[dict[str, Any]] = []
-    async for event_type, data in llm_service.stream_detect_sections(clean_text, segments, duration):
+    # Detect chapters via streaming LLM
+    raw_chapters: list[dict[str, Any]] = []
+    async for event_type, data in llm_service.stream_detect_chapters(clean_text, segments, duration):
         if event_type == "token":
-            yield sse_token("section_detect", str(data))
+            yield sse_token("chapter_detect", str(data))
         else:
-            raw_sections = data if isinstance(data, list) else []
+            raw_chapters = data if isinstance(data, list) else []
 
     # Clamp timestamps to valid range
-    for section in raw_sections:
-        section["startSeconds"] = max(0, min(section.get("startSeconds", 0), duration))
-        section["endSeconds"] = max(0, min(section.get("endSeconds", duration), duration))
+    for chapter in raw_chapters:
+        chapter["startSeconds"] = max(0, min(chapter.get("startSeconds", 0), duration))
+        chapter["endSeconds"] = max(0, min(chapter.get("endSeconds", duration), duration))
 
-    yield sse_event("sections_detected", {
-        "count": len(raw_sections),
-        "sections": [{"title": s.get("title"), "startSeconds": s.get("startSeconds")} for s in raw_sections]
+    yield sse_event("chapters_detected", {
+        "count": len(raw_chapters),
+        "chapters": [{"title": ch.get("title"), "startSeconds": ch.get("startSeconds")} for ch in raw_chapters]
     })
-    yield sse_event("phase", {"phase": "section_summaries"})
+    yield sse_event("phase", {"phase": "chapter_summaries"})
 
-    # Process sections in batches
-    sections: list[dict[str, Any]] = []
+    # Process chapters in batches
+    chapters_result: list[dict[str, Any]] = []
 
-    for batch_start in range(0, len(raw_sections), SECTION_BATCH_SIZE):
-        batch = raw_sections[batch_start:batch_start + SECTION_BATCH_SIZE]
+    for batch_start in range(0, len(raw_chapters), CHAPTER_BATCH_SIZE):
+        batch = raw_chapters[batch_start:batch_start + CHAPTER_BATCH_SIZE]
         batch_tasks: list[tuple[int, dict[str, Any], int, int, asyncio.Task[Any]]] = []
 
         for i, raw in enumerate(batch):
             idx = batch_start + i
             start = raw.get("startSeconds", 0)
             end = raw.get("endSeconds", start + 300)
-            section_segments = [s for s in segments if start <= s.get("start", 0) <= end]
-            section_text = " ".join([s.get("text", "") for s in section_segments])
+            chapter_segments = [s for s in segments if start <= s.get("start", 0) <= end]
+            chapter_text = " ".join([s.get("text", "") for s in chapter_segments])
 
             task = asyncio.create_task(
-                llm_service.summarize_section(section_text, raw.get("title", ""), persona=persona)
+                llm_service.summarize_chapter(chapter_text, raw.get("title", ""), persona=persona)
             )
             batch_tasks.append((idx, raw, start, end, task))
 
         for idx, raw, start, end, task in batch_tasks:
             try:
                 summary_data = await task
-                section = build_section_dict(
+                chapter = build_chapter_dict(
                     {"title": raw.get("title", ""), "startSeconds": start, "endSeconds": end},
                     summary_data,
                     is_creator_chapter=False,
                 )
-                sections.append(section)
-                yield sse_event("section_ready", {"index": idx, "section": section})
+                chapters_result.append(chapter)
+                yield sse_event("chapter_ready", {"index": idx, "chapter": chapter})
             except Exception as e:
-                logger.error(f"Section {idx} processing error: {e}")
+                logger.error(f"Chapter {idx} processing error: {e}")
 
-    yield sections
+    yield chapters_result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -510,7 +528,7 @@ async def generate_master_summary(
     duration: int,
     persona: str,
     synthesis: dict[str, Any],
-    sections: list[dict[str, Any]],
+    chapters: list[dict[str, Any]],
     concepts: list[dict[str, Any]],
 ) -> AsyncGenerator[str | None, None]:
     """
@@ -528,7 +546,7 @@ async def generate_master_summary(
             persona=persona,
             tldr=synthesis.get("tldr", ""),
             key_takeaways=synthesis.get("keyTakeaways", []),
-            sections=sections,
+            chapters=chapters,
             concepts=concepts,
         )
         yield sse_event("master_summary_complete", {"masterSummary": master_summary})
@@ -573,7 +591,7 @@ def normalize_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def build_result(
     ctx: PipelineContext,
     synthesis: dict[str, Any],
-    sections: list[dict[str, Any]],
+    chapters: list[dict[str, Any]],
     concepts: list[dict[str, Any]],
     master_summary: str | None,
     description_analysis: DescriptionAnalysis | None,
@@ -594,7 +612,7 @@ def build_result(
         "summary": {
             "tldr": synthesis.get("tldr", ""),
             "key_takeaways": synthesis.get("keyTakeaways", []),
-            "sections": sections,
+            "chapters": chapters,
             "concepts": concepts,
             "master_summary": master_summary,
         },
@@ -749,23 +767,23 @@ async def stream_summarization(
 
         synthesis = parallel_results.synthesis if parallel_results else {"tldr": "", "keyTakeaways": []}
         description_analysis = parallel_results.description_analysis if parallel_results else None
-        first_section_result = parallel_results.first_section if parallel_results else None
+        first_chapter_result = parallel_results.first_chapter if parallel_results else None
 
-        # ── Phase 3: Sections ──
-        sections: list[dict[str, Any]] = []
+        # ── Phase 3: Chapters ──
+        chapters: list[dict[str, Any]] = []
 
         if video_data.has_chapters:
-            async for item in process_creator_sections(llm_service, video_data, persona, first_section_result):
+            async for item in process_creator_chapters(llm_service, video_data, persona, first_chapter_result):
                 if isinstance(item, str):
                     yield item
                 else:
-                    sections = item
+                    chapters = item
         else:
-            async for item in process_ai_sections(llm_service, segments, clean_text, video_data.duration, persona):
+            async for item in process_ai_chapters(llm_service, segments, clean_text, video_data.duration, persona):
                 if isinstance(item, str):
                     yield item
                 else:
-                    sections = item
+                    chapters = item
 
         # ── Phase 4: Concepts ──
         concepts: list[dict[str, Any]] = []
@@ -778,7 +796,7 @@ async def stream_summarization(
         # ── Phase 5: Master Summary ──
         master_summary: str | None = None
         async for item in generate_master_summary(
-            llm_service, video_data, video_data.duration, persona, synthesis, sections, concepts
+            llm_service, video_data, video_data.duration, persona, synthesis, chapters, concepts
         ):
             if isinstance(item, str) and item.startswith("data:"):
                 yield item
@@ -786,7 +804,7 @@ async def stream_summarization(
                 master_summary = item
 
         # ── Save Results ──
-        result = build_result(ctx, synthesis, sections, concepts, master_summary, description_analysis, context_dict)
+        result = build_result(ctx, synthesis, chapters, concepts, master_summary, description_analysis, context_dict)
         repository.save_result(video_summary_id, result)
 
         processing_time = int((time.time() - start_time) * 1000)
@@ -916,8 +934,8 @@ async def _stream_cached_result(video_summary_id: str, entry: dict[str, Any]) ->
         "keyTakeaways": summary.get("key_takeaways", []),
     })
 
-    for i, section in enumerate(summary.get("sections", [])):
-        yield sse_event("section_ready", {"index": i, "section": section})
+    for i, chapter in enumerate(summary.get("chapters", [])):
+        yield sse_event("chapter_ready", {"index": i, "chapter": chapter})
 
     yield sse_event("concepts_complete", {"concepts": summary.get("concepts", [])})
 

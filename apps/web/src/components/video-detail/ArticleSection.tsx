@@ -4,12 +4,12 @@ import { Button } from "@/components/ui/button";
 import { YouTubePlayer, type YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
 import { cn } from "@/lib/utils";
 import { CodeView, RecipeView, StandardView } from "./views";
-import type { Section, Concept } from "@vie/types";
+import type { SummaryChapter, Concept } from "@vie/types";
 
 interface ArticleSectionProps {
-  section: Section;
-  /** Stable callback - receives sectionId and startSeconds to avoid closure recreation */
-  onPlay: (sectionId: string, startSeconds: number) => void;
+  chapter: SummaryChapter;
+  /** Stable callback - receives chapterId and startSeconds to avoid closure recreation */
+  onPlay: (chapterId: string, startSeconds: number) => void;
   onStop?: () => void;
   isVideoActive?: boolean;
   concepts?: Concept[];
@@ -22,7 +22,7 @@ interface ArticleSectionProps {
 
 // Memoized to prevent re-renders when parent re-renders with same props
 export const ArticleSection = memo(function ArticleSection({
-  section,
+  chapter,
   onPlay,
   onStop,
   isVideoActive,
@@ -33,7 +33,7 @@ export const ArticleSection = memo(function ArticleSection({
   persona = 'standard',
 }: ArticleSectionProps) {
   // Check if this is a creator chapter with dual titles
-  const hasCreatorChapter = section.isCreatorChapter && section.originalTitle;
+  const hasCreatorChapter = chapter.isCreatorChapter && chapter.originalTitle;
   const hasConcepts = concepts.length > 0;
 
   // Track expanded concepts
@@ -53,14 +53,14 @@ export const ArticleSection = memo(function ArticleSection({
 
   // Memoized callback to avoid recreating on every render
   const handleBlockPlay = useCallback(
-    (seconds: number) => onPlay(section.id, seconds),
-    [onPlay, section.id]
+    (seconds: number) => onPlay(chapter.id, seconds),
+    [onPlay, chapter.id]
   );
 
   // Memoized persona view with stable dependencies
   const personaView = useMemo(() => {
     const viewProps = {
-      section,
+      chapter,
       onPlay: handleBlockPlay,
       onStop,
       isVideoActive,
@@ -78,12 +78,12 @@ export const ArticleSection = memo(function ArticleSection({
       default:
         return <StandardView {...viewProps} />;
     }
-  }, [persona, section, handleBlockPlay, onStop, isVideoActive, startSeconds]);
+  }, [persona, chapter, handleBlockPlay, onStop, isVideoActive, startSeconds]);
 
   return (
     <article
-      id={`section-${section.id}`}
-      data-slot="article-section"
+      id={`chapter-${chapter.id}`}
+      data-slot="article-chapter"
       className="flex flex-col lg:flex-row gap-4 lg:gap-0"
     >
       {/* Title Column - Left side on desktop, top on mobile */}
@@ -91,17 +91,17 @@ export const ArticleSection = memo(function ArticleSection({
         {hasCreatorChapter ? (
           <>
             <h3 className="font-medium text-sm leading-tight text-muted-foreground/70">
-              {section.originalTitle}
+              {chapter.originalTitle}
             </h3>
-            {section.generatedTitle && (
+            {chapter.generatedTitle && (
               <p className="text-xs text-muted-foreground/50 leading-tight">
-                {section.generatedTitle}
+                {chapter.generatedTitle}
               </p>
             )}
           </>
         ) : (
           <h3 className="font-medium text-sm leading-tight text-muted-foreground/70">
-            {section.title}
+            {chapter.title}
           </h3>
         )}
 
@@ -121,12 +121,12 @@ export const ArticleSection = memo(function ArticleSection({
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => onPlay(section.id, section.startSeconds)}
+            onClick={() => onPlay(chapter.id, chapter.startSeconds)}
             className="w-fit gap-1.5 text-primary hover:bg-primary/10 -ml-2"
-            aria-label={`Play from ${section.timestamp}`}
+            aria-label={`Play from ${chapter.timestamp}`}
           >
             <Play className="h-4 w-4" aria-hidden="true" />
-            <span className="font-mono text-xs">{section.timestamp}</span>
+            <span className="font-mono text-xs">{chapter.timestamp}</span>
           </Button>
         )}
 
@@ -217,17 +217,17 @@ export const ArticleSection = memo(function ArticleSection({
           </div>
         )}
 
-        {/* Section content - uses specialized view based on persona */}
-        {section.content && section.content.length > 0 ? (
+        {/* Chapter content - uses specialized view based on persona */}
+        {chapter.content && chapter.content.length > 0 ? (
           personaView
         ) : (
           <div className="pl-2 pr-8">
             <p className="text-muted-foreground mb-4 leading-relaxed">
-              {section.summary}
+              {chapter.summary}
             </p>
-            {section.bullets && section.bullets.length > 0 && (
+            {chapter.bullets && chapter.bullets.length > 0 && (
               <ul className="space-y-2">
-                {section.bullets.map((bullet, index) => (
+                {chapter.bullets.map((bullet, index) => (
                   <li key={index} className="flex gap-2.5 text-sm">
                     <span className="text-primary mt-0.5 shrink-0">&#8226;</span>
                     <span className="text-muted-foreground">{bullet}</span>
