@@ -3,8 +3,21 @@ import { Play, StopCircle, Lightbulb, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { YouTubePlayer, type YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
 import { cn } from "@/lib/utils";
-import { CodeView, RecipeView, StandardView } from "./views";
-import type { SummaryChapter, Concept } from "@vie/types";
+
+import {
+  CodeView,
+  RecipeView,
+  StandardView,
+  TravelView,
+  ReviewView,
+  FitnessView,
+  EducationView,
+  PodcastView,
+  DIYView,
+  GamingView,
+} from "./views";
+import type { Section, Concept, VideoCategory } from "@vie/types";
+
 
 interface ArticleSectionProps {
   chapter: SummaryChapter;
@@ -16,8 +29,8 @@ interface ArticleSectionProps {
   playerRef?: RefObject<YouTubePlayerRef | null>;
   youtubeId?: string;
   startSeconds?: number;
-  /** Content persona for specialized view rendering */
-  persona?: 'code' | 'recipe' | 'interview' | 'review' | 'standard';
+  /** Content category for specialized view rendering (V2.1) */
+  category?: VideoCategory;
 }
 
 // Memoized to prevent re-renders when parent re-renders with same props
@@ -30,7 +43,7 @@ export const ArticleSection = memo(function ArticleSection({
   playerRef,
   youtubeId,
   startSeconds,
-  persona = 'standard',
+  category = 'standard',
 }: ArticleSectionProps) {
   // Check if this is a creator chapter with dual titles
   const hasCreatorChapter = chapter.isCreatorChapter && chapter.originalTitle;
@@ -57,8 +70,8 @@ export const ArticleSection = memo(function ArticleSection({
     [onPlay, chapter.id]
   );
 
-  // Memoized persona view with stable dependencies
-  const personaView = useMemo(() => {
+  // Memoized category view with stable dependencies (V2.1)
+  const categoryView = useMemo(() => {
     const viewProps = {
       chapter,
       onPlay: handleBlockPlay,
@@ -67,18 +80,30 @@ export const ArticleSection = memo(function ArticleSection({
       activeStartSeconds: startSeconds,
     };
 
-    switch (persona) {
-      case 'code':
+    switch (category) {
+      case 'coding':
         return <CodeView {...viewProps} />;
-      case 'recipe':
+      case 'cooking':
         return <RecipeView {...viewProps} />;
-      case 'interview':
-      case 'review':
+      case 'travel':
+        return <TravelView {...viewProps} />;
+      case 'reviews':
+        return <ReviewView {...viewProps} />;
+      case 'fitness':
+        return <FitnessView {...viewProps} />;
+      case 'education':
+        return <EducationView {...viewProps} />;
+      case 'podcast':
+        return <PodcastView {...viewProps} />;
+      case 'diy':
+        return <DIYView {...viewProps} />;
+      case 'gaming':
+        return <GamingView {...viewProps} />;
       case 'standard':
       default:
         return <StandardView {...viewProps} />;
     }
-  }, [persona, chapter, handleBlockPlay, onStop, isVideoActive, startSeconds]);
+  }, [category, section, handleBlockPlay, onStop, isVideoActive, startSeconds]);
 
   return (
     <article
@@ -217,9 +242,9 @@ export const ArticleSection = memo(function ArticleSection({
           </div>
         )}
 
-        {/* Chapter content - uses specialized view based on persona */}
-        {chapter.content && chapter.content.length > 0 ? (
-          personaView
+        {/* Section content - uses specialized view based on category */}
+        {section.content && section.content.length > 0 ? (
+          categoryView
         ) : (
           <div className="pl-2 pr-8">
             <p className="text-muted-foreground mb-4 leading-relaxed">
