@@ -14,15 +14,15 @@ import { MasterSummaryModal } from "./MasterSummaryModal";
 import { VideoHeaderSection } from "./VideoHeaderSection";
 import { VideoDetailDesktop } from "./VideoDetailDesktop";
 import { VideoDetailMobile } from "./VideoDetailMobile";
-import type { VideoResponse, VideoSummary, StreamingChapter } from "@vie/types";
-import type { StreamState, Chapter, DescriptionAnalysis } from "@/hooks/use-summary-stream";
+import type { VideoResponse, VideoSummary, StreamingChapter, SummaryChapter } from "@vie/types";
+import type { StreamState, DescriptionAnalysis } from "@/hooks/use-summary-stream";
 
 interface VideoDetailLayoutProps {
   video: VideoResponse;
   summary: VideoSummary | null;
   isStreaming?: boolean;
   streamingState?: StreamState;
-  chapters?: Chapter[] | StreamingChapter[];
+  chapters?: StreamingChapter[] | SummaryChapter[];
   isCreatorChapters?: boolean;
   descriptionAnalysis?: DescriptionAnalysis | null;
   onStopSummarization?: () => void;
@@ -57,10 +57,10 @@ export function VideoDetailLayout({
   // Master summary modal state
   const [showMasterSummary, setShowMasterSummary] = useState(false);
 
-  // Stable dependency for section tracking
-  const sectionIdsString = (summary?.sections ?? []).map((s) => s.id).join(",") ?? "";
-  const sectionIds = useMemo(
-    () => (summary?.sections ?? []).map((s) => s.id) ?? [],
+  // Stable dependency for chapter tracking
+  const chapterIdsString = (summary?.chapters ?? []).map((s) => s.id).join(",") ?? "";
+  const chapterIds = useMemo(
+    () => (summary?.chapters ?? []).map((s) => s.id) ?? [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [chapterIdsString]
   );
@@ -72,8 +72,8 @@ export function VideoDetailLayout({
     if (!summary?.concepts || !summary?.chapters) {
       return { byChapter: new Map(), orphaned: [] };
     }
-    return matchConceptsToSections(summary.concepts, (summary.sections ?? []));
-  }, [summary?.concepts, summary?.sections]);
+    return matchConceptsToChapters(summary.concepts, (summary.chapters ?? []));
+  }, [summary?.concepts, summary?.chapters]);
 
   // Handle play from chapter - collapses video under the chapter on desktop
   const handlePlayFromChapter = useCallback((chapterId: string, startSeconds: number) => {

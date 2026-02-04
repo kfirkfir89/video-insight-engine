@@ -7,11 +7,10 @@
 
 import { memo } from "react";
 import { cn } from "@/lib/utils";
-import type { Chapter } from "@/hooks/use-summary-stream";
-import type { StreamingChapter } from "@vie/types";
+import type { StreamingChapter, SummaryChapter } from "@vie/types";
 
 interface ChapterListProps {
-  chapters: Chapter[] | StreamingChapter[];
+  chapters: StreamingChapter[] | SummaryChapter[];
   isCreatorChapters: boolean;
   currentTime?: number;
   onSeek?: (seconds: number) => void;

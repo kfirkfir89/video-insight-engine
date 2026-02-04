@@ -4,11 +4,11 @@ export { VideoDetailLayout } from "./VideoDetailLayout";
 // TLDR & Summary
 export { TldrHero } from "./TldrHero";
 
-// Section Display Components
+// Chapter Display Components
 // ArticleSection: Primary component - article-style layout with concepts sidebar
-// SectionCard: Alternative card-based layout (legacy, kept for flexibility)
+// ChapterCard: Alternative card-based layout (legacy, kept for flexibility)
 export { ArticleSection } from "./ArticleSection";
-export { SectionCard } from "./SectionCard";
+export { ChapterCard } from "./ChapterCard";
 
 // Navigation
 export { ChapterNavItem } from "./ChapterNavItem";

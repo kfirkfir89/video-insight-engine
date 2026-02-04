@@ -1,10 +1,10 @@
 import { memo, useMemo } from 'react';
 import { HelpCircle, Calculator, BookOpen, Clock, Lightbulb } from 'lucide-react';
-import type { Section, ContentBlock } from '@vie/types';
+import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
 interface EducationViewProps {
-  section: Section;
+  chapter: SummaryChapter;
   onPlay?: (seconds: number) => void;
   onStop?: () => void;
   isVideoActive?: boolean;
@@ -20,7 +20,7 @@ interface EducationViewProps {
  * - Learning tips and callouts
  */
 export const EducationView = memo(function EducationView({
-  section,
+  chapter,
   onPlay,
   onStop,
   isVideoActive,
@@ -35,7 +35,7 @@ export const EducationView = memo(function EducationView({
     const timestamps: ContentBlock[] = [];
     const other: ContentBlock[] = [];
 
-    for (const block of section.content ?? []) {
+    for (const block of chapter.content ?? []) {
       if (block.type === 'definition') {
         definitions.push(block);
       } else if (block.type === 'formula') {
@@ -59,7 +59,7 @@ export const EducationView = memo(function EducationView({
       timestampBlocks: timestamps,
       otherBlocks: other,
     };
-  }, [section.content]);
+  }, [chapter.content]);
 
   const hasDefinitions = definitionBlocks.length > 0;
   const hasFormulas = formulaBlocks.length > 0;

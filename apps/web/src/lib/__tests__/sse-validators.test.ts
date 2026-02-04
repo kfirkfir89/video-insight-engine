@@ -74,8 +74,8 @@ describe('sse-validators', () => {
   // ─────────────────────────────────────────────────────
 
   describe('validateChapter', () => {
-    it('should validate valid section', () => {
-      const section = {
+    it('should validate valid chapter', () => {
+      const chapter = {
         id: 's1',
         timestamp: '0:00',
         startSeconds: 0,
@@ -85,7 +85,7 @@ describe('sse-validators', () => {
         bullets: ['Point 1', 'Point 2'],
       };
 
-      const result = validateChapter(section);
+      const result = validateChapter(chapter);
 
       expect(result).toMatchObject({
         id: 's1',
@@ -97,7 +97,7 @@ describe('sse-validators', () => {
     });
 
     it('should normalize snake_case to camelCase', () => {
-      const section = {
+      const chapter = {
         id: 's1',
         timestamp: '0:00',
         start_seconds: 0,
@@ -110,7 +110,7 @@ describe('sse-validators', () => {
         bullets: [],
       };
 
-      const result = validateChapter(section);
+      const result = validateChapter(chapter);
 
       expect(result).toMatchObject({
         startSeconds: 0,
@@ -122,7 +122,7 @@ describe('sse-validators', () => {
     });
 
     it('should prefer camelCase over snake_case when both present', () => {
-      const section = {
+      const chapter = {
         id: 's1',
         timestamp: '0:00',
         startSeconds: 100,
@@ -134,13 +134,13 @@ describe('sse-validators', () => {
         bullets: [],
       };
 
-      const result = validateChapter(section);
+      const result = validateChapter(chapter);
 
       expect(result?.startSeconds).toBe(100);
       expect(result?.endSeconds).toBe(200);
     });
 
-    it('should return null for invalid section', () => {
+    it('should return null for invalid chapter', () => {
       const result = validateChapter({ id: 's1' }); // Missing required fields
 
       expect(result).toBeNull();
@@ -152,8 +152,8 @@ describe('sse-validators', () => {
       expect(result).toBeNull();
     });
 
-    it('should validate section with content blocks', () => {
-      const section = {
+    it('should validate chapter with content blocks', () => {
+      const chapter = {
         id: 's1',
         timestamp: '0:00',
         startSeconds: 0,
@@ -167,14 +167,14 @@ describe('sse-validators', () => {
         ],
       };
 
-      const result = validateChapter(section);
+      const result = validateChapter(chapter);
 
       expect(result?.content).toHaveLength(2);
       expect(result?.content?.[0]).toEqual({ blockId: 'block-1', type: 'paragraph', text: 'Hello world' });
     });
 
     it('should filter out invalid content blocks', () => {
-      const section = {
+      const chapter = {
         id: 's1',
         timestamp: '0:00',
         startSeconds: 0,
@@ -189,7 +189,7 @@ describe('sse-validators', () => {
         ],
       };
 
-      const result = validateChapter(section);
+      const result = validateChapter(chapter);
 
       expect(result?.content).toHaveLength(2);
     });

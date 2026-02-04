@@ -1,10 +1,10 @@
 import { memo, useMemo } from 'react';
 import { MapPin, Calendar, DollarSign, Compass, Lightbulb } from 'lucide-react';
-import type { Section, ContentBlock } from '@vie/types';
+import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
 interface TravelViewProps {
-  section: Section;
+  chapter: SummaryChapter;
   onPlay?: (seconds: number) => void;
   onStop?: () => void;
   isVideoActive?: boolean;
@@ -20,7 +20,7 @@ interface TravelViewProps {
  * - Travel tips and callouts
  */
 export const TravelView = memo(function TravelView({
-  section,
+  chapter,
   onPlay,
   onStop,
   isVideoActive,
@@ -35,7 +35,7 @@ export const TravelView = memo(function TravelView({
     const timestamps: ContentBlock[] = [];
     const other: ContentBlock[] = [];
 
-    for (const block of section.content ?? []) {
+    for (const block of chapter.content ?? []) {
       if (block.type === 'location') {
         locations.push(block);
       } else if (block.type === 'itinerary') {
@@ -59,7 +59,7 @@ export const TravelView = memo(function TravelView({
       timestampBlocks: timestamps,
       otherBlocks: other,
     };
-  }, [section.content]);
+  }, [chapter.content]);
 
   const hasLocations = locationBlocks.length > 0;
   const hasItinerary = itineraryBlocks.length > 0;

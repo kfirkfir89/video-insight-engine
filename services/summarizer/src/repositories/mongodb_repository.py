@@ -71,7 +71,7 @@ class MongoDBVideoRepository:
             "summary": {
                 "tldr": result["summary"]["tldr"],
                 "keyTakeaways": result["summary"]["key_takeaways"],
-                "sections": [
+                "chapters": [
                     {
                         "id": s["id"],
                         "timestamp": s["timestamp"],
@@ -85,7 +85,7 @@ class MongoDBVideoRepository:
                         "summary": s["summary"],
                         "bullets": s["bullets"],
                     }
-                    for s in result["summary"]["sections"]
+                    for s in result["summary"]["chapters"]
                 ],
                 "concepts": [
                     {
