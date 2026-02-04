@@ -21,6 +21,36 @@ dev/
 
 ## Active Tasks
 
+### Context Block Library V2.1
+**Status**: Ready for Implementation
+**Location**: `dev/active/context-block-library/`
+**Effort**: XL (6-8 developer-weeks)
+
+Build a composable, atomic block system for displaying YouTube video summaries across all video categories. Implements V2.1 spec with category theming, 22 new blocks, and consistent rendering across summary/memorized/chat contexts.
+
+**Files**:
+- `context-block-library-plan.md` - Implementation plan (7 phases)
+- `context-block-library-context.md` - Key files, patterns, decisions
+- `context-block-library-tasks.md` - 92 tasks with acceptance criteria
+
+**Phases**:
+1. **Foundation** (S) - Type renames, blockId, category CSS
+2. **Universal Blocks** (M) - 5 new universal blocks, 4 primitives
+3. **Cooking + Coding** (L) - 6 category blocks, view updates
+4. **Reviews + Travel + Fitness** (L) - 8 blocks, 3 new views
+5. **Education + Podcast** (M) - 3 blocks, 4 views
+6. **Memorized + Collections** (M) - Memorized item UI
+7. **RAG Chat** (M) - Block rendering in chat
+
+**Key Changes**:
+- Section → Chapter rename
+- Add blockId to all blocks
+- 10 category themes with CSS variables
+- 31 total blocks (9 existing + 22 new)
+- 10 views (3 existing + 7 new)
+
+---
+
 ### TDD Infrastructure & Test Coverage
 **Status**: Ready for Implementation
 **Location**: `dev/active/tdd-infrastructure/`

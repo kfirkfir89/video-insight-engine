@@ -61,8 +61,8 @@ export function VideoDetailMobile({
       />
 
       <div className="space-y-6 mt-6">
-        {/* Show chapters while summary chapters are loading during streaming */}
-        {isStreaming && effectiveChapters.length > 0 && summary.chapters.length === 0 && (
+        {/* Show chapters while sections are loading during streaming */}
+        {isStreaming && effectiveChapters.length > 0 && (summary.sections ?? []).length === 0 && (
           <ChapterList
             chapters={effectiveChapters}
             isCreatorChapters={effectiveIsCreatorChapters}
@@ -70,11 +70,11 @@ export function VideoDetailMobile({
           />
         )}
 
-        {/* Article chapters */}
-        {summary.chapters.length > 0 && (
+        {/* Article sections */}
+        {(summary.sections ?? []).length > 0 && (
           <div>
-            {summary.chapters.map((chapter, index) => (
-              <Fragment key={chapter.id}>
+            {(summary.sections ?? []).map((section, index) => (
+              <Fragment key={section.id}>
                 {index > 0 && <Separator className="my-3 opacity-40" />}
                 <ArticleSection
                   chapter={chapter}
@@ -84,8 +84,8 @@ export function VideoDetailMobile({
                   concepts={conceptMatchResult.byChapter.get(chapter.id) || []}
                   playerRef={playerRef}
                   youtubeId={video.youtubeId}
-                  startSeconds={activePlayChapter === chapter.id ? activeStartSeconds : chapter.startSeconds}
-                  persona={video.context?.category as 'code' | 'recipe' | 'interview' | 'review' | 'standard'}
+                  startSeconds={activePlaySection === section.id ? activeStartSeconds : section.startSeconds}
+                  category={video.context?.category}
                 />
               </Fragment>
             ))}
@@ -103,9 +103,9 @@ export function VideoDetailMobile({
 
       {/* Mobile Bottom Navigation */}
       <MobileChapterNav
-        chapters={summary.chapters}
-        activeChapter={activeId}
-        onScrollToChapter={scrollToChapter}
+        sections={(summary.sections ?? [])}
+        activeSection={activeId}
+        onScrollToSection={scrollToSection}
       />
     </div>
   );

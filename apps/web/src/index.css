@@ -93,6 +93,119 @@
 }
 
 /* ═══════════════════════════════════════════════════
+   CATEGORY ACCENT COLORS (V2.1)
+   Used for UI theming based on content type
+   ═══════════════════════════════════════════════════ */
+
+/* Focus states - required for keyboard navigation */
+:root {
+  --focus-ring: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+}
+
+/* Respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.category-cooking {
+  --category-accent: #FF6B35;
+  --category-accent-soft: rgba(255, 107, 53, 0.12);
+  --category-surface: #FFF7ED;
+}
+
+.category-coding {
+  --category-accent: #22D3EE;
+  --category-accent-soft: rgba(34, 211, 238, 0.12);
+  --category-surface: #ECFEFF;
+}
+
+.category-travel {
+  --category-accent: #10B981;
+  --category-accent-soft: rgba(16, 185, 129, 0.12);
+  --category-surface: #ECFDF5;
+}
+
+.category-reviews {
+  --category-accent: #F59E0B;
+  --category-accent-soft: rgba(245, 158, 11, 0.12);
+  --category-surface: #FFFBEB;
+}
+
+.category-fitness {
+  --category-accent: #EF4444;
+  --category-accent-soft: rgba(239, 68, 68, 0.12);
+  --category-surface: #FEF2F2;
+}
+
+.category-education {
+  --category-accent: #8B5CF6;
+  --category-accent-soft: rgba(139, 92, 246, 0.12);
+  --category-surface: #F5F3FF;
+}
+
+.category-podcast {
+  --category-accent: #EC4899;
+  --category-accent-soft: rgba(236, 72, 153, 0.12);
+  --category-surface: #FDF2F8;
+}
+
+.category-gaming {
+  --category-accent: #6366F1;
+  --category-accent-soft: rgba(99, 102, 241, 0.12);
+  --category-surface: #EEF2FF;
+}
+
+.category-diy {
+  --category-accent: #D97706;
+  --category-accent-soft: rgba(217, 119, 6, 0.12);
+  --category-surface: #FFFBEB;
+}
+
+.category-standard {
+  --category-accent: #6B7280;
+  --category-accent-soft: rgba(107, 114, 128, 0.12);
+  --category-surface: #F9FAFB;
+}
+
+/* Dark mode category colors */
+.dark .category-cooking {
+  --category-surface: rgba(255, 107, 53, 0.08);
+}
+.dark .category-coding {
+  --category-surface: rgba(34, 211, 238, 0.08);
+}
+.dark .category-travel {
+  --category-surface: rgba(16, 185, 129, 0.08);
+}
+.dark .category-reviews {
+  --category-surface: rgba(245, 158, 11, 0.08);
+}
+.dark .category-fitness {
+  --category-surface: rgba(239, 68, 68, 0.08);
+}
+.dark .category-education {
+  --category-surface: rgba(139, 92, 246, 0.08);
+}
+.dark .category-podcast {
+  --category-surface: rgba(236, 72, 153, 0.08);
+}
+.dark .category-gaming {
+  --category-surface: rgba(99, 102, 241, 0.08);
+}
+.dark .category-diy {
+  --category-surface: rgba(217, 119, 6, 0.08);
+}
+.dark .category-standard {
+  --category-surface: rgba(107, 114, 128, 0.08);
+}
+
+/* ═══════════════════════════════════════════════════
    BASE STYLES
    ═══════════════════════════════════════════════════ */
 @layer base {
