@@ -13,8 +13,8 @@ CURRENT TLDR:
 KEY TAKEAWAYS:
 {key_takeaways}
 
-DETAILED SECTIONS:
-{sections_detailed}
+DETAILED CHAPTERS:
+{chapters_detailed}
 
 KEY CONCEPTS:
 {concepts_detailed}

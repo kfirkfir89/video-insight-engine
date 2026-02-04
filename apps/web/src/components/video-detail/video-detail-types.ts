@@ -16,19 +16,19 @@ export interface VideoDetailCommonProps {
   effectiveChapters: Chapter[] | StreamingChapter[];
   effectiveIsCreatorChapters: boolean;
   effectiveDescriptionAnalysis: DescriptionAnalysis | null;
-  // Section play state
-  activePlaySection: string | null;
+  // Chapter play state
+  activePlayChapter: string | null;
   activeStartSeconds: number;
   // Handlers
-  handlePlayFromSection: (sectionId: string, startSeconds: number) => void;
-  handleStopSection: () => void;
+  handlePlayFromChapter: (chapterId: string, startSeconds: number) => void;
+  handleStopChapter: () => void;
   handleSeekToChapter: (startSeconds: number) => void;
-  // Active section tracking
+  // Active chapter tracking
   activeId: string | null;
-  scrollToSection: (id: string) => void;
+  scrollToChapter: (id: string) => void;
   // Concept matching result
   conceptMatchResult: {
-    bySection: Map<string, Concept[]>;
+    byChapter: Map<string, Concept[]>;
     orphaned: Concept[];
   };
   // Player ref for mobile scroll-to-play

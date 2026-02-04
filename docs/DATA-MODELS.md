@@ -27,53 +27,62 @@ MongoDB collections and schemas.
 
 # ContentBlock Types
 
-Dynamic content blocks that LLM returns for article-like summaries. Each block has a `type` and optional `variant` for specialized styling.
+Dynamic content blocks that LLM returns for article-like summaries. Each block has a `blockId` (UUID for stable referencing), a `type`, and optional `variant` for specialized styling.
 
 ## Block Type Reference
 
 | Type | Purpose | Fields |
 |------|---------|--------|
-| `paragraph` | Prose text, explanations, transitions | `text`, `variant?` |
-| `bullets` | Unordered lists | `items[]`, `variant?` |
-| `numbered` | Sequential steps, processes | `items[]`, `variant?` |
-| `do_dont` | Best practices, comparisons | `do[]`, `dont[]` |
-| `example` | Code snippets, demonstrations | `title?`, `code`, `explanation?`, `variant?` |
-| `callout` | Tips, warnings, important notes | `style` (tip/warning/note), `text`, `variant?` |
-| `definition` | Key term introductions | `term`, `meaning` |
-| `keyvalue` | Specs, costs, stats, metadata | `items[]` (key/value pairs), `variant?` |
-| `comparison` | Side-by-side comparisons | `left`, `right`, `variant?` |
-| `timestamp` | Video navigation links | `time`, `seconds`, `label` |
+| `paragraph` | Prose text, explanations, transitions | `blockId`, `text`, `variant?` |
+| `bullets` | Unordered lists | `blockId`, `items[]`, `variant?` |
+| `numbered` | Sequential steps, processes | `blockId`, `items[]`, `variant?` |
+| `do_dont` | Best practices, comparisons | `blockId`, `do[]`, `dont[]` |
+| `example` | Code snippets, demonstrations | `blockId`, `title?`, `code`, `explanation?`, `variant?` |
+| `callout` | Tips, warnings, important notes | `blockId`, `style` (tip/warning/note/chef_tip/security), `text`, `variant?` |
+| `definition` | Key term introductions | `blockId`, `term`, `meaning` |
+| `keyvalue` | Specs, costs, stats, metadata | `blockId`, `items[]` (key/value pairs), `variant?` |
+| `comparison` | Side-by-side comparisons | `blockId`, `left`, `right`, `variant?` |
+| `timestamp` | Video navigation links | `blockId`, `time`, `seconds`, `label` |
+| `quote` | Speaker quotes, testimonials | `blockId`, `text`, `attribution?`, `timestamp?` |
+| `statistic` | Metrics, data points | `blockId`, `items[]` (value/label/context/trend) |
 
 ## TypeScript Interfaces
 
 ```typescript
-// ===== BASE BLOCKS (Original 7) =====
+// ===== BASE BLOCK =====
 
-interface ParagraphBlock {
-  type: 'paragraph';
+interface BaseBlock {
+  blockId: string;     // UUID - stable identifier for referencing
+  type: string;
   variant?: string;
+}
+
+// ===== CONTENT BLOCKS =====
+
+interface ParagraphBlock extends BaseBlock {
+  type: 'paragraph';
   text: string;
 }
 
-interface BulletsBlock {
+interface BulletsBlock extends BaseBlock {
   type: 'bullets';
   variant?: 'ingredients' | string;  // Recipe: "ingredients"
   items: string[];
 }
 
-interface NumberedBlock {
+interface NumberedBlock extends BaseBlock {
   type: 'numbered';
   variant?: 'cooking_steps' | string;  // Recipe: "cooking_steps"
   items: string[];
 }
 
-interface DoDoNotBlock {
+interface DoDoNotBlock extends BaseBlock {
   type: 'do_dont';
   do: string[];
   dont: string[];
 }
 
-interface ExampleBlock {
+interface ExampleBlock extends BaseBlock {
   type: 'example';
   variant?: 'terminal_command' | string;  // Code: "terminal_command"
   title?: string;
@@ -81,39 +90,54 @@ interface ExampleBlock {
   explanation?: string;
 }
 
-interface CalloutBlock {
+interface CalloutBlock extends BaseBlock {
   type: 'callout';
   variant?: 'chef_tip' | string;  // Recipe: "chef_tip"
-  style: 'tip' | 'warning' | 'note';
+  style: 'tip' | 'warning' | 'note' | 'chef_tip' | 'security';
   text: string;
 }
 
-interface DefinitionBlock {
+interface DefinitionBlock extends BaseBlock {
   type: 'definition';
   term: string;
   meaning: string;
 }
 
-// ===== NEW BLOCKS (3 additions) =====
-
-interface KeyValueBlock {
+interface KeyValueBlock extends BaseBlock {
   type: 'keyvalue';
   variant?: 'specs' | 'cost' | 'stats' | 'info' | 'location';
   items: { key: string; value: string }[];
 }
 
-interface ComparisonBlock {
+interface ComparisonBlock extends BaseBlock {
   type: 'comparison';
   variant?: 'dos_donts' | 'pros_cons' | 'versus' | 'before_after';
   left: { label: string; items: string[] };
   right: { label: string; items: string[] };
 }
 
-interface TimestampBlock {
+interface TimestampBlock extends BaseBlock {
   type: 'timestamp';
   time: string;       // "5:23"
   seconds: number;    // 323 (for video seeking)
   label: string;      // "Setting up the project"
+}
+
+interface QuoteBlock extends BaseBlock {
+  type: 'quote';
+  text: string;
+  attribution?: string;
+  timestamp?: number;
+}
+
+interface StatisticBlock extends BaseBlock {
+  type: 'statistic';
+  items: {
+    value: string;
+    label: string;
+    context?: string;
+    trend?: 'up' | 'down' | 'neutral';
+  }[];
 }
 
 // ===== UNION TYPE =====
@@ -128,30 +152,32 @@ type ContentBlock =
   | DefinitionBlock
   | KeyValueBlock
   | ComparisonBlock
-  | TimestampBlock;
+  | TimestampBlock
+  | QuoteBlock
+  | StatisticBlock;
 ```
 
-## Variant Examples by Persona
+## Variant Examples by Category
 
-### Code Persona
+### Coding Category
 ```json
-{"type": "example", "variant": "terminal_command", "code": "npm install", "explanation": "..."}
-{"type": "comparison", "variant": "dos_donts", "left": {"label": "Do", "items": [...]}, "right": {"label": "Don't", "items": [...]}}
-{"type": "timestamp", "time": "5:23", "seconds": 323, "label": "Setting up the config"}
+{"blockId": "uuid-1", "type": "example", "variant": "terminal_command", "code": "npm install", "explanation": "..."}
+{"blockId": "uuid-2", "type": "comparison", "variant": "dos_donts", "left": {"label": "Do", "items": [...]}, "right": {"label": "Don't", "items": [...]}}
+{"blockId": "uuid-3", "type": "timestamp", "time": "5:23", "seconds": 323, "label": "Setting up the config"}
 ```
 
-### Recipe Persona
+### Cooking Category
 ```json
-{"type": "keyvalue", "variant": "info", "items": [{"key": "Prep Time", "value": "15 min"}, {"key": "Servings", "value": "4"}]}
-{"type": "bullets", "variant": "ingredients", "items": ["2 cups flour", "1 tsp salt"]}
-{"type": "numbered", "variant": "cooking_steps", "items": ["Preheat oven to 350°F", ...]}
-{"type": "callout", "variant": "chef_tip", "style": "tip", "text": "Let dough rest 10 min"}
+{"blockId": "uuid-1", "type": "keyvalue", "variant": "info", "items": [{"key": "Prep Time", "value": "15 min"}, {"key": "Servings", "value": "4"}]}
+{"blockId": "uuid-2", "type": "bullets", "variant": "ingredients", "items": ["2 cups flour", "1 tsp salt"]}
+{"blockId": "uuid-3", "type": "numbered", "variant": "cooking_steps", "items": ["Preheat oven to 350°F", ...]}
+{"blockId": "uuid-4", "type": "callout", "variant": "chef_tip", "style": "chef_tip", "text": "Let dough rest 10 min"}
 ```
 
-### Review Persona
+### Reviews Category
 ```json
-{"type": "keyvalue", "variant": "specs", "items": [{"key": "Battery", "value": "14hrs"}, {"key": "Weight", "value": "1.2kg"}]}
-{"type": "comparison", "variant": "pros_cons", "left": {"label": "Pros", "items": [...]}, "right": {"label": "Cons", "items": [...]}}
+{"blockId": "uuid-1", "type": "keyvalue", "variant": "specs", "items": [{"key": "Battery", "value": "14hrs"}, {"key": "Weight", "value": "1.2kg"}]}
+{"blockId": "uuid-2", "type": "comparison", "variant": "pros_cons", "left": {"label": "Pros", "items": [...]}, "right": {"label": "Cons", "items": [...]}}
 ```
 
 ---
@@ -162,24 +188,26 @@ Metadata extracted from YouTube to enable content-aware summarization with speci
 
 ```typescript
 interface VideoContext {
+  category: string;            // User-facing: "coding", "cooking", "podcast", "reviews", "general"
   youtubeCategory: string;     // "Science & Technology" - for LLM context
-  persona: 'code' | 'recipe' | 'standard' | 'tech' | 'educational';
   tags: string[];              // Raw tags from YouTube (max 15)
   displayTags: string[];       // Cleaned for UI display (max 6)
 }
 ```
 
-## Persona Detection
+## Category Detection
 
-Persona is determined from YouTube metadata (NOT LLM), using category + keyword matching:
+Category is derived from persona (internal LLM concept) for user-facing display:
 
-| Category | Keywords Matched | Persona |
-|----------|-----------------|---------|
-| Science & Technology | programming, coding, react, python... | `code` |
-| Science & Technology | (no code keywords) | `tech` |
-| Howto & Style | recipe, cooking, food, chef... | `recipe` |
-| Education | (any) | `educational` |
-| (other) | (any) | `standard` |
+| Internal Persona | User-Facing Category |
+|------------------|---------------------|
+| `code` | `coding` |
+| `recipe` | `cooking` |
+| `interview` | `podcast` |
+| `review` | `reviews` |
+| `standard` | `general` |
+
+**Note:** Persona is used internally by the LLM for content generation. Category is the stored, user-facing value.
 
 ---
 
@@ -204,10 +232,10 @@ One entry per YouTube video. Shared across all users.
   thumbnailUrl: string | null,
   language: string | null,        // ISO 639-1 ("en", "es", etc.)
 
-  // Video context (persona + tags)
+  // Video context (category + tags)
   context: {
+    category: "coding" | "cooking" | "podcast" | "reviews" | "general",
     youtubeCategory: string,
-    persona: "code" | "recipe" | "standard" | "tech" | "educational",
     tags: string[],
     displayTags: string[]
   } | null,
@@ -235,13 +263,16 @@ One entry per YouTube video. Shared across all users.
     tldr: string,
     keyTakeaways: string[],
 
-    sections: [{
+    chapters: [{
       id: string,                 // UUID
       timestamp: string,          // "03:45"
       startSeconds: number,
       endSeconds: number,
       title: string,
-      content: ContentBlock[],    // Dynamic content blocks
+      originalTitle: string,      // Creator's original chapter title (if any)
+      generatedTitle?: string,    // AI-generated title (if different)
+      isCreatorChapter: boolean,  // True if from YouTube chapters
+      content: ContentBlock[],    // Dynamic content blocks with blockId
       summary: string,            // Legacy: kept for backward compat
       bullets: string[]           // Legacy: kept for backward compat
     }],
@@ -281,22 +312,22 @@ One entry per YouTube video. Shared across all users.
 
 ## systemExpansionCache
 
-One entry per section/concept expansion. Shared across all users.
+One entry per chapter/concept expansion. Shared across all users.
 
 ```javascript
 {
   _id: ObjectId,
-  
+
   // Target reference
   videoSummaryId: ObjectId,
-  targetType: "section" | "concept",
-  targetId: string,               // UUID
-  
+  targetType: "chapter" | "concept",
+  targetId: string,               // UUID (or blockId for content blocks)
+
   // Context (cached from source)
   context: {
     videoTitle: string,
     youtubeId: string,
-    // For sections:
+    // For chapters:
     timestamp?: string,
     title?: string,
     summary?: string,
@@ -464,8 +495,8 @@ User's personal knowledge collection.
   folderId: ObjectId | null,
   
   // What was memorized
-  sourceType: "video_section" | "video_concept" | "system_expansion",
-  
+  sourceType: "video_chapter" | "video_concept" | "system_expansion",
+
   // Source reference
   source: {
     videoSummaryId: ObjectId,
@@ -473,18 +504,19 @@ User's personal knowledge collection.
     videoTitle: string,
     videoThumbnail: string,
     youtubeUrl: string,
-    
-    // For sections
+
+    // For chapters
     startSeconds?: number,
     endSeconds?: number,
-    sectionIds?: string[],
-    
+    chapterIds?: string[],
+    blockIds?: string[],        // Specific content blocks referenced
+
     // For expansions
     expansionId?: ObjectId,
-    
+
     // Cached content (independent)
     content: {
-      sections?: [{ id, timestamp, title, summary, bullets }],
+      chapters?: [{ id, timestamp, title, content, summary, bullets }],
       concept?: { name, definition },
       expansion?: string
     }
@@ -548,7 +580,7 @@ Conversations about memorized items.
 │                      SYSTEM CACHE                             │
 │                                                               │
 │   videoSummaryCache ──────────▶ systemExpansionCache         │
-│   (one per video)              (one per section/concept)     │
+│   (one per video)              (one per chapter/concept)     │
 └──────────────────────────────────────────────────────────────┘
               │                            │
               │ references                 │ references

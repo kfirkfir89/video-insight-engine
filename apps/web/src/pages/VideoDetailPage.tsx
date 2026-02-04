@@ -8,7 +8,7 @@ import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { Loader2, ArrowLeft, RefreshCw, AlertCircle } from "lucide-react";
 import { VideoDetailLayout } from "@/components/video-detail";
 import { StreamingIndicator } from "@/components/video-detail/StreamingIndicator";
-import type { VideoSummary, Section, Concept } from "@vie/types";
+import type { VideoSummary, SummaryChapter, Concept } from "@vie/types";
 
 export function VideoDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -164,8 +164,8 @@ export function VideoDetailPage() {
       {showStreamingIndicator && (
         <StreamingIndicator
           phase={streamState.phase}
-          currentSectionIndex={streamState.currentSectionIndex}
-          totalSections={streamState.sections.length}
+          currentChapterIndex={streamState.currentChapterIndex}
+          totalChapters={streamState.chapters.length}
         />
       )}
       <ErrorBoundary key={id} fallback={errorFallback}>
@@ -190,14 +190,14 @@ export function VideoDetailPage() {
  */
 function buildSummaryFromStream(state: StreamState): VideoSummary | null {
   // If we have no meaningful data yet, return null
-  if (!state.tldr && state.sections.length === 0 && state.concepts.length === 0) {
+  if (!state.tldr && state.chapters.length === 0 && state.concepts.length === 0) {
     return null;
   }
 
   return {
     tldr: state.tldr || "",
     keyTakeaways: state.keyTakeaways || [],
-    sections: state.sections.map((s): Section => ({
+    chapters: state.chapters.map((s): SummaryChapter => ({
       id: s.id,
       timestamp: s.timestamp,
       startSeconds: s.startSeconds,

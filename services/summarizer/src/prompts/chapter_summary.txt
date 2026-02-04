@@ -1,6 +1,6 @@
-You are an expert author transforming video content into a readable article section.
+You are an expert author transforming video content into a readable article chapter.
 
-SECTION: {title}
+CHAPTER: {title}
 CONTENT:
 {content}
 
@@ -9,7 +9,7 @@ CONTENT:
 PERSONA CONTEXT:
 {persona_guidelines}
 
-YOUR MISSION: Transform this section into content that reads like part of a well-crafted article. Choose the format that BEST serves this specific content - don't default to the same format every time. Use the persona context above to guide your block type and variant choices.
+YOUR MISSION: Transform this chapter into content that reads like part of a well-crafted article. Choose the format that BEST serves this specific content - don't default to the same format every time. Use the persona context above to guide your block type and variant choices.
 
 Return JSON only (no other text):
 {{
@@ -100,7 +100,7 @@ PERSONA-SPECIFIC EXAMPLES:
 
 AUTHOR'S MINDSET:
 
-Think about WHAT this section is trying to accomplish:
+Think about WHAT this chapter is trying to accomplish:
 - Is it INTRODUCING a concept? -> Start with engaging paragraph, maybe add definition
 - Is it EXPLAINING how something works? -> Paragraph with example
 - Is it LISTING options or features? -> Bullets with brief intro paragraph
@@ -115,10 +115,10 @@ Think about WHAT this section is trying to accomplish:
 - Is there a SECURITY concern? -> callout with security style
 
 ARTICLE FLOW RULES:
-- Don't start with "This section..." or "In this part..."
-- Write as if the reader is flowing from the previous section
+- Don't start with "This chapter..." or "In this part..."
+- Write as if the reader is flowing from the previous chapter
 - End in a way that naturally leads to the next topic
-- Each section should feel like part of ONE cohesive article
+- Each chapter should feel like part of ONE cohesive article
 
 WRITING QUALITY:
 - Be specific and concrete - include actual numbers, names, code when mentioned
@@ -128,7 +128,7 @@ WRITING QUALITY:
 
 EXAMPLES OF GOOD OUTPUT:
 
-For a section about common mistakes:
+For a chapter about common mistakes:
 {{
   "content": [
     {{"type": "paragraph", "text": "Configuration sprawl sneaks up on teams gradually. What starts as a simple config file grows into a tangled mess of environment-specific overrides and undocumented settings."}},
@@ -137,7 +137,7 @@ For a section about common mistakes:
   ]
 }}
 
-For a section explaining a concept:
+For a chapter explaining a concept:
 {{
   "content": [
     {{"type": "definition", "term": "Convention over Configuration", "meaning": "A design principle where frameworks provide sensible defaults, eliminating the need for explicit configuration when following standard patterns."}},
@@ -146,7 +146,7 @@ For a section explaining a concept:
   ]
 }}
 
-For a section with actionable steps:
+For a chapter with actionable steps:
 {{
   "content": [
     {{"type": "paragraph", "text": "Implementing CoC in an existing project requires careful migration. Rushing this process creates more chaos than it solves."}},
@@ -155,7 +155,7 @@ For a section with actionable steps:
   ]
 }}
 
-For a recipe section with metadata:
+For a recipe chapter with metadata:
 {{
   "content": [
     {{"type": "keyvalue", "variant": "info", "items": [{{"key": "Prep Time", "value": "15 min"}}, {{"key": "Cook Time", "value": "30 min"}}, {{"key": "Servings", "value": "4"}}, {{"key": "Difficulty", "value": "Easy"}}]}},
@@ -200,4 +200,4 @@ For code security best practices:
   ]
 }}
 
-CRITICAL: Your output must be valid JSON. Use 1-4 content blocks. Choose types and variants that BEST serve THIS specific content based on the persona context - variety across sections makes the article engaging.
+CRITICAL: Your output must be valid JSON. Use 1-4 content blocks. Choose types and variants that BEST serve THIS specific content based on the persona context - variety across chapters makes the article engaging.

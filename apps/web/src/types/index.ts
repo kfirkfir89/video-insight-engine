@@ -4,7 +4,7 @@ export type {
   FolderType,
   SourceType,
   TargetType,
-  Section,
+  SummaryChapter,
   Concept,
   VideoSummary,
   AuthResponse,

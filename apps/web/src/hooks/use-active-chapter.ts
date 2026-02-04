@@ -1,41 +1,41 @@
 import { useState, useEffect, useCallback } from "react";
 
-/** Scroll position threshold (px) from top to trigger first section selection */
+/** Scroll position threshold (px) from top to trigger first chapter selection */
 const SCROLL_TOP_THRESHOLD = 100;
 
-/** Scroll position threshold (px) from bottom to trigger last section selection */
+/** Scroll position threshold (px) from bottom to trigger last chapter selection */
 const SCROLL_BOTTOM_THRESHOLD = 100;
 
 /**
- * Tracks which section is currently visible in the viewport using IntersectionObserver.
- * Returns the active section ID and a function to manually set the active section.
+ * Tracks which chapter is currently visible in the viewport using IntersectionObserver.
+ * Returns the active chapter ID and a function to manually set the active chapter.
  */
-export function useActiveSection(sectionIds: string[]) {
+export function useActiveChapter(chapterIds: string[]) {
   const [activeId, setActiveId] = useState<string | null>(
-    sectionIds[0] ?? null
+    chapterIds[0] ?? null
   );
 
   useEffect(() => {
-    if (sectionIds.length === 0) return;
+    if (chapterIds.length === 0) return;
 
-    // Find the scrollable main container - sections scroll within <main>
+    // Find the scrollable main container - chapters scroll within <main>
     const scrollContainer = document.querySelector("main");
 
     // Handle scroll events to detect when at top or bottom
     const handleScroll = () => {
       if (!scrollContainer) return;
 
-      // When near top, always select first section
+      // When near top, always select first chapter
       if (scrollContainer.scrollTop < SCROLL_TOP_THRESHOLD) {
-        setActiveId(sectionIds[0]);
+        setActiveId(chapterIds[0]);
         return;
       }
 
-      // When near bottom, always select last section
+      // When near bottom, always select last chapter
       const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
       if (distanceFromBottom < SCROLL_BOTTOM_THRESHOLD) {
-        setActiveId(sectionIds[sectionIds.length - 1]);
+        setActiveId(chapterIds[chapterIds.length - 1]);
       }
     };
 
@@ -58,23 +58,23 @@ export function useActiveSection(sectionIds: string[]) {
         // Find the first visible entry
         const visibleEntry = entries.find((entry) => entry.isIntersecting);
         if (visibleEntry) {
-          const id = visibleEntry.target.id.replace("section-", "");
+          const id = visibleEntry.target.id.replace("chapter-", "");
           setActiveId(id);
         }
       },
       {
         // Use the scroll container as root (null = viewport)
         root: scrollContainer,
-        // Trigger when section is 20% from top, 60% from bottom
+        // Trigger when chapter is 20% from top, 60% from bottom
         // This gives a good "active" zone in the middle of the viewport
         rootMargin: "-20% 0px -60% 0px",
         threshold: 0,
       }
     );
 
-    // Observe all section elements
-    sectionIds.forEach((id) => {
-      const element = document.getElementById(`section-${id}`);
+    // Observe all chapter elements
+    chapterIds.forEach((id) => {
+      const element = document.getElementById(`chapter-${id}`);
       if (element) {
         observer.observe(element);
       }
@@ -90,10 +90,10 @@ export function useActiveSection(sectionIds: string[]) {
       observer.disconnect();
       scrollContainer?.removeEventListener("scroll", handleScroll);
     };
-  }, [sectionIds]);
+  }, [chapterIds]);
 
-  const scrollToSection = useCallback((sectionId: string) => {
-    const element = document.getElementById(`section-${sectionId}`);
+  const scrollToChapter = useCallback((chapterId: string) => {
+    const element = document.getElementById(`chapter-${chapterId}`);
     if (element) {
       // Find the scrollable main container - don't use scrollIntoView as it scrolls window
       const scrollContainer = document.querySelector("main");
@@ -108,9 +108,9 @@ export function useActiveSection(sectionIds: string[]) {
         element.scrollIntoView({ behavior: "smooth", block: "start" });
       }
       // Set active immediately for better UX
-      setActiveId(sectionId);
+      setActiveId(chapterId);
     }
   }, []);
 
-  return { activeId, scrollToSection, setActiveId };
+  return { activeId, scrollToChapter, setActiveId };
 }
