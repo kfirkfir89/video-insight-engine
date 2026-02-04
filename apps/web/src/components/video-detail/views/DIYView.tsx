@@ -1,10 +1,10 @@
 import { memo, useMemo } from 'react';
 import { Wrench, ListChecks, Clock, Lightbulb, Hammer } from 'lucide-react';
-import type { Section, ContentBlock } from '@vie/types';
+import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
 interface DIYViewProps {
-  section: Section;
+  chapter: SummaryChapter;
   onPlay?: (seconds: number) => void;
   onStop?: () => void;
   isVideoActive?: boolean;
@@ -20,7 +20,7 @@ interface DIYViewProps {
  * - Video timestamps for demonstrations
  */
 export const DIYView = memo(function DIYView({
-  section,
+  chapter,
   onPlay,
   onStop,
   isVideoActive,
@@ -35,7 +35,7 @@ export const DIYView = memo(function DIYView({
     const timestamps: ContentBlock[] = [];
     const other: ContentBlock[] = [];
 
-    for (const block of section.content ?? []) {
+    for (const block of chapter.content ?? []) {
       if (block.type === 'tool_list') {
         tools.push(block);
       } else if (block.type === 'bullets' && block.variant === 'materials') {
@@ -61,7 +61,7 @@ export const DIYView = memo(function DIYView({
       timestampBlocks: timestamps,
       otherBlocks: other,
     };
-  }, [section.content]);
+  }, [chapter.content]);
 
   const hasTools = toolBlocks.length > 0;
   const hasMaterials = materialBlocks.length > 0;

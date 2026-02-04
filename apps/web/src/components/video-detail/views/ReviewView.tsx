@@ -1,10 +1,10 @@
 import { memo, useMemo } from 'react';
 import { ThumbsUp, ThumbsDown, Star, Award, Clock, Lightbulb } from 'lucide-react';
-import type { Section, ContentBlock } from '@vie/types';
+import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
 interface ReviewViewProps {
-  section: Section;
+  chapter: SummaryChapter;
   onPlay?: (seconds: number) => void;
   onStop?: () => void;
   isVideoActive?: boolean;
@@ -20,7 +20,7 @@ interface ReviewViewProps {
  * - Comparison highlights
  */
 export const ReviewView = memo(function ReviewView({
-  section,
+  chapter,
   onPlay,
   onStop,
   isVideoActive,
@@ -35,7 +35,7 @@ export const ReviewView = memo(function ReviewView({
     const timestamps: ContentBlock[] = [];
     const other: ContentBlock[] = [];
 
-    for (const block of section.content ?? []) {
+    for (const block of chapter.content ?? []) {
       if (block.type === 'verdict') {
         verdicts.push(block);
       } else if (block.type === 'rating') {
@@ -59,7 +59,7 @@ export const ReviewView = memo(function ReviewView({
       timestampBlocks: timestamps,
       otherBlocks: other,
     };
-  }, [section.content]);
+  }, [chapter.content]);
 
   const hasVerdicts = verdictBlocks.length > 0;
   const hasRatings = ratingBlocks.length > 0;

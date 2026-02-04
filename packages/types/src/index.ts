@@ -50,23 +50,26 @@ export type TargetType = 'section' | 'concept';
 /** @deprecated Use VideoCategory instead */
 export type VideoPersona = 'code' | 'recipe' | 'standard' | 'interview' | 'review';
 
+/** Video category values for UI theming (V2.1) */
+export const VIDEO_CATEGORY_VALUES = [
+  'cooking',
+  'coding',
+  'travel',
+  'reviews',
+  'fitness',
+  'education',
+  'podcast',
+  'diy',
+  'gaming',
+  'standard',
+] as const;
+
 /** Video category for UI theming (V2.1) */
-export type VideoCategory =
-  | 'cooking'
-  | 'coding'
-  | 'travel'
-  | 'reviews'
-  | 'fitness'
-  | 'education'
-  | 'podcast'
-  | 'diy'
-  | 'gaming'
-  | 'standard';
+export type VideoCategory = (typeof VIDEO_CATEGORY_VALUES)[number];
 
 export interface VideoContext {
-  category: string;          // User-facing: "coding", "cooking", etc.
-  youtubeCategory: string;
-  category?: VideoCategory;
+  category: VideoCategory;    // User-facing category for UI theming
+  youtubeCategory: string;    // Raw YouTube category
   tags: string[];
   displayTags: string[];
 }
@@ -442,7 +445,7 @@ export interface SummaryChapter {
   title: string;
   originalTitle?: string;      // Creator's original chapter title
   generatedTitle?: string;     // AI-generated explanation subtitle
-  isCreatorChapter?: boolean;  // Flag for dual-title display
+  isCreatorChapter: boolean;   // Flag for dual-title display
   content?: ContentBlock[];    // Dynamic content blocks with blockId
   summary: string;             // Legacy fallback
   bullets: string[];           // Legacy fallback
@@ -484,7 +487,7 @@ export interface MemorizedItem {
   folderId: string | null;
   sourceType: MemorizedItemSourceType;
   source: MemorizedItemSource;
-  chapters: Chapter[];
+  chapters: SummaryChapter[];
   concept?: {
     id: string;
     name: string;
@@ -515,6 +518,9 @@ export interface StreamingChapter {
   title: string;
   isCreatorChapter: boolean;
 }
+
+/** Chapter alias - same as StreamingChapter for progressive streaming */
+export type Chapter = StreamingChapter;
 
 export interface DescriptionLink {
   url: string;

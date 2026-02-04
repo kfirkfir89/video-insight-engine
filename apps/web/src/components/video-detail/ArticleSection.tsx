@@ -16,7 +16,7 @@ import {
   DIYView,
   GamingView,
 } from "./views";
-import type { Section, Concept, VideoCategory } from "@vie/types";
+import type { SummaryChapter, Concept, VideoCategory } from "@vie/types";
 
 
 interface ArticleSectionProps {
@@ -103,7 +103,7 @@ export const ArticleSection = memo(function ArticleSection({
       default:
         return <StandardView {...viewProps} />;
     }
-  }, [category, section, handleBlockPlay, onStop, isVideoActive, startSeconds]);
+  }, [category, chapter, handleBlockPlay, onStop, isVideoActive, startSeconds]);
 
   return (
     <article
@@ -242,8 +242,8 @@ export const ArticleSection = memo(function ArticleSection({
           </div>
         )}
 
-        {/* Section content - uses specialized view based on category */}
-        {section.content && section.content.length > 0 ? (
+        {/* Chapter content - uses specialized view based on category */}
+        {chapter.content && chapter.content.length > 0 ? (
           categoryView
         ) : (
           <div className="pl-2 pr-8">

@@ -28,7 +28,7 @@ export const createMockVideoSummary = (overrides = {}) => ({
   id: "summary-1",
   videoId: "video-1",
   overview: "This is a test summary",
-  sections: [],
+  chapters: [],
   concepts: [],
   createdAt: new Date().toISOString(),
   ...overrides,

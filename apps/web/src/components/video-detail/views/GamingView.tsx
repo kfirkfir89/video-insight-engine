@@ -1,10 +1,10 @@
 import { memo, useMemo } from 'react';
 import { Trophy, Target, Clock, Lightbulb } from 'lucide-react';
-import type { Section, ContentBlock } from '@vie/types';
+import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
 interface GamingViewProps {
-  section: Section;
+  chapter: SummaryChapter;
   onPlay?: (seconds: number) => void;
   onStop?: () => void;
   isVideoActive?: boolean;
@@ -20,7 +20,7 @@ interface GamingViewProps {
  * - Video timestamps for gameplay
  */
 export const GamingView = memo(function GamingView({
-  section,
+  chapter,
   onPlay,
   onStop,
   isVideoActive,
@@ -34,7 +34,7 @@ export const GamingView = memo(function GamingView({
     const timestamps: ContentBlock[] = [];
     const other: ContentBlock[] = [];
 
-    for (const block of section.content ?? []) {
+    for (const block of chapter.content ?? []) {
       if (block.type === 'numbered' && block.variant === 'strategy') {
         strategies.push(block);
       } else if (block.type === 'bullets' && block.variant === 'highlights') {
@@ -55,7 +55,7 @@ export const GamingView = memo(function GamingView({
       timestampBlocks: timestamps,
       otherBlocks: other,
     };
-  }, [section.content]);
+  }, [chapter.content]);
 
   const hasStrategies = strategyBlocks.length > 0;
   const hasHighlights = highlightBlocks.length > 0;

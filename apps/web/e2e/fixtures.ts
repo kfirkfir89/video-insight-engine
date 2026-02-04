@@ -49,39 +49,55 @@ export const mockVideos = [
   },
 ];
 
+// Factory function for creating mock chapters
+const createMockChapter = (
+  id: string,
+  title: string,
+  startSeconds: number,
+  endSeconds: number,
+  summary: string,
+  bullets: string[]
+) => ({
+  id,
+  timestamp: `${Math.floor(startSeconds / 60)}:${String(startSeconds % 60).padStart(2, "0")}`,
+  startSeconds,
+  endSeconds,
+  title,
+  isCreatorChapter: true,
+  summary,
+  bullets,
+});
+
 export const mockVideoSummary = {
   tldr: "This is a summary of the video content.",
   keyTakeaways: ["Key point 1", "Key point 2", "Key point 3"],
   masterSummary:
     "This is the complete master summary of the video. It provides a comprehensive overview of all the key points discussed, including the introduction, main content, and conclusion. The video covers important concepts and provides actionable takeaways for the viewer.",
-  sections: [
-    {
-      id: "section-1",
-      timestamp: "0:00",
-      startSeconds: 0,
-      endSeconds: 30,
-      title: "Introduction",
-      summary: "The video starts with an introduction.",
-      bullets: ["Opening remarks", "Setting the scene"],
-    },
-    {
-      id: "section-2",
-      timestamp: "0:30",
-      startSeconds: 30,
-      endSeconds: 90,
-      title: "Main Content",
-      summary: "The main content of the video.",
-      bullets: ["First point", "Second point"],
-    },
-    {
-      id: "section-3",
-      timestamp: "1:30",
-      startSeconds: 90,
-      endSeconds: 180,
-      title: "Conclusion",
-      summary: "The video concludes with final thoughts.",
-      bullets: ["Summary", "Call to action"],
-    },
+  chapters: [
+    createMockChapter(
+      "chapter-1",
+      "Introduction",
+      0,
+      30,
+      "The video starts with an introduction.",
+      ["Opening remarks", "Setting the scene"]
+    ),
+    createMockChapter(
+      "chapter-2",
+      "Main Content",
+      30,
+      90,
+      "The main content of the video.",
+      ["First point", "Second point"]
+    ),
+    createMockChapter(
+      "chapter-3",
+      "Conclusion",
+      90,
+      180,
+      "The video concludes with final thoughts.",
+      ["Summary", "Call to action"]
+    ),
   ],
   concepts: [
     {

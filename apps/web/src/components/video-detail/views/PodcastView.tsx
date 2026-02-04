@@ -1,10 +1,10 @@
 import { memo, useMemo } from 'react';
 import { User, MessageSquare, Clock, Quote } from 'lucide-react';
-import type { Section, ContentBlock } from '@vie/types';
+import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
 interface PodcastViewProps {
-  section: Section;
+  chapter: SummaryChapter;
   onPlay?: (seconds: number) => void;
   onStop?: () => void;
   isVideoActive?: boolean;
@@ -20,7 +20,7 @@ interface PodcastViewProps {
  * - Topic timestamps
  */
 export const PodcastView = memo(function PodcastView({
-  section,
+  chapter,
   onPlay,
   onStop,
   isVideoActive,
@@ -34,7 +34,7 @@ export const PodcastView = memo(function PodcastView({
     const timestamps: ContentBlock[] = [];
     const other: ContentBlock[] = [];
 
-    for (const block of section.content ?? []) {
+    for (const block of chapter.content ?? []) {
       if (block.type === 'guest') {
         guests.push(block);
       } else if (block.type === 'quote') {
@@ -55,7 +55,7 @@ export const PodcastView = memo(function PodcastView({
       timestampBlocks: timestamps,
       otherBlocks: other,
     };
-  }, [section.content]);
+  }, [chapter.content]);
 
   const hasGuests = guestBlocks.length > 0;
   const hasQuotes = quoteBlocks.length > 0;

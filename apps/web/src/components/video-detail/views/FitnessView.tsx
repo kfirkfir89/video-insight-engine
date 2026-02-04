@@ -1,10 +1,10 @@
 import { memo, useMemo } from 'react';
 import { Dumbbell, Timer, Heart, Clock } from 'lucide-react';
-import type { Section, ContentBlock } from '@vie/types';
+import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
 interface FitnessViewProps {
-  section: Section;
+  chapter: SummaryChapter;
   onPlay?: (seconds: number) => void;
   onStop?: () => void;
   isVideoActive?: boolean;
@@ -20,7 +20,7 @@ interface FitnessViewProps {
  * - Video timestamps for demonstrations
  */
 export const FitnessView = memo(function FitnessView({
-  section,
+  chapter,
   onPlay,
   onStop,
   isVideoActive,
@@ -34,7 +34,7 @@ export const FitnessView = memo(function FitnessView({
     const timestamps: ContentBlock[] = [];
     const other: ContentBlock[] = [];
 
-    for (const block of section.content ?? []) {
+    for (const block of chapter.content ?? []) {
       if (block.type === 'workout_timer') {
         timers.push(block);
       } else if (block.type === 'exercise') {
@@ -55,7 +55,7 @@ export const FitnessView = memo(function FitnessView({
       timestampBlocks: timestamps,
       otherBlocks: other,
     };
-  }, [section.content]);
+  }, [chapter.content]);
 
   const hasTimers = timerBlocks.length > 0;
   const hasExercises = exerciseBlocks.length > 0;

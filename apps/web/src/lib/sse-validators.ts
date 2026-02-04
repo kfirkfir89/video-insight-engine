@@ -7,17 +7,18 @@
 
 import { z } from 'zod';
 import { sseLogger } from './sse-logger';
-import type {
-  Chapter,
-  SummaryChapter,
-  Concept,
-  ContentBlock,
-  DescriptionLink,
-  Resource,
-  RelatedVideo,
-  DescriptionTimestamp,
-  SocialLink,
-  VideoContext,
+import {
+  VIDEO_CATEGORY_VALUES,
+  type Chapter,
+  type SummaryChapter,
+  type Concept,
+  type ContentBlock,
+  type DescriptionLink,
+  type Resource,
+  type RelatedVideo,
+  type DescriptionTimestamp,
+  type SocialLink,
+  type VideoContext,
 } from '@vie/types';
 
 // ─────────────────────────────────────────────────────
@@ -185,7 +186,7 @@ export function validateChapter(data: unknown): SummaryChapter | null {
     title: d.title,
     originalTitle: d.originalTitle ?? d.original_title,
     generatedTitle: d.generatedTitle ?? d.generated_title ?? undefined,
-    isCreatorChapter: d.isCreatorChapter ?? d.is_creator_chapter,
+    isCreatorChapter: d.isCreatorChapter ?? d.is_creator_chapter ?? false,
     content: validateContentBlocks(d.content), // Validated dynamic content blocks
     summary: d.summary,
     bullets: d.bullets,
@@ -248,7 +249,7 @@ export function validateDescriptionAnalysis(data: unknown): {
 
 // Video context schema for category-based rendering
 export const videoContextSchema = z.object({
-  category: z.string(),
+  category: z.enum(VIDEO_CATEGORY_VALUES),
   youtubeCategory: z.string(),
   tags: z.array(z.string()),
   displayTags: z.array(z.string()),
@@ -286,8 +287,8 @@ export function validateMetadataEvent(data: unknown): VideoMetadata {
     channel: result.data.channel,
     thumbnailUrl: result.data.thumbnailUrl,
     duration: result.data.duration,
-    // Zod schema already validates and types the context correctly
-    context: result.data.context,
+    // Zod schema validates VideoCategory enum, cast to VideoContext type
+    context: result.data.context as VideoContext | undefined,
   };
 }
 
