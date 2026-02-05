@@ -31,9 +31,9 @@ app.include_router(stream_router)
 
 @app.get("/health")
 async def health():
-    """Health check endpoint with DB connectivity verification."""
+    """Health check endpoint with DB and S3 connectivity verification."""
+    # Check MongoDB
     try:
-        # Verify MongoDB connection (sync client, runs in thread)
         client = get_mongo_client()
         client.admin.command("ping")
         db_status = "connected"
@@ -41,11 +41,26 @@ async def health():
         logger.warning("mongodb_health_check_failed", error=str(e))
         db_status = "disconnected"
 
+    # Check S3 (optional - don't fail health if S3 unavailable)
+    s3_status = "not_configured"
+    if settings.AWS_ENDPOINT_URL or settings.AWS_ACCESS_KEY_ID:
+        try:
+            from src.services.s3_client import s3_client
+            s3_health = await s3_client.health_check()
+            s3_status = s3_health.get("status", "unknown")
+        except Exception as e:
+            logger.warning("s3_health_check_failed", error=str(e))
+            s3_status = "error"
+
+    # Overall status: healthy if DB is connected (S3 is optional)
+    overall_status = "healthy" if db_status == "connected" else "degraded"
+
     return {
-        "status": "healthy" if db_status == "connected" else "degraded",
+        "status": overall_status,
         "service": "vie-summarizer",
         "model": settings.llm_model,
         "database": db_status,
+        "s3": s3_status,
     }
 
 

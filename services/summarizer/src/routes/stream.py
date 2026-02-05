@@ -18,6 +18,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Annotated, AsyncGenerator, Any
 
+from pydantic import BaseModel
+
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException
@@ -34,6 +36,7 @@ from src.services.transcript import (
     clean_transcript,
     format_transcript_with_timestamps,
 )
+from src.utils.transcript_slicer import slice_transcript_for_chapter
 from src.services.youtube import (
     extract_video_data,
     VideoData,
@@ -50,6 +53,8 @@ from src.services.sponsorblock import (
     SponsorSegment,
 )
 from src.exceptions import TranscriptError
+from src.services.transcript_store import transcript_store
+from src.services.s3_client import s3_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -106,6 +111,7 @@ class PipelineContext:
     persona: str
     sponsor_segments: list[SponsorSegment]
     start_time: float
+    raw_transcript_ref: str | None = None  # S3 key for raw transcript
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -367,6 +373,7 @@ def build_chapter_dict(
     raw: dict[str, Any],
     summary_data: dict[str, Any],
     is_creator_chapter: bool,
+    transcript_slice: str | None = None,
 ) -> dict[str, Any]:
     """Build a chapter dictionary from raw data and summary."""
     start = raw.get("startSeconds", raw.get("start_seconds", 0))
@@ -384,6 +391,10 @@ def build_chapter_dict(
         "bullets": summary_data.get("bullets", []),
     }
 
+    # Add sliced transcript for RAG/display
+    if transcript_slice:
+        chapter["transcript"] = transcript_slice
+
     if is_creator_chapter:
         chapter["original_title"] = raw.get("title", "")
         chapter["generated_title"] = summary_data.get("generatedTitle")
@@ -396,6 +407,7 @@ async def process_creator_chapters(
     video_data: VideoData,
     persona: str,
     first_chapter_result: dict[str, Any] | None,
+    normalized_segments: list[dict[str, Any]],
 ) -> AsyncGenerator[str | list[dict[str, Any]], None]:
     """
     Process creator-defined chapters.
@@ -420,10 +432,14 @@ async def process_creator_chapters(
     # Add first chapter if already processed
     if first_chapter_result:
         first_ch = video_chapters[0]
+        transcript_slice = slice_transcript_for_chapter(
+            normalized_segments, int(first_ch.start_time), int(first_ch.end_time)
+        )
         chapter = build_chapter_dict(
             {"title": first_ch.title, "startSeconds": int(first_ch.start_time), "endSeconds": int(first_ch.end_time)},
             first_chapter_result,
             is_creator_chapter=True,
+            transcript_slice=transcript_slice,
         )
         chapters_result.append(chapter)
         yield sse_event("chapter_ready", {"index": 0, "chapter": chapter})
@@ -453,7 +469,10 @@ async def process_creator_chapters(
         for idx, raw, task in batch_tasks:
             try:
                 summary_data = await task
-                chapter = build_chapter_dict(raw, summary_data, is_creator_chapter=True)
+                transcript_slice = slice_transcript_for_chapter(
+                    normalized_segments, raw["startSeconds"], raw["endSeconds"]
+                )
+                chapter = build_chapter_dict(raw, summary_data, is_creator_chapter=True, transcript_slice=transcript_slice)
                 chapters_result.append(chapter)
                 yield sse_event("chapter_ready", {"index": idx, "chapter": chapter})
             except Exception as e:
@@ -468,6 +487,7 @@ async def process_ai_chapters(
     clean_text: str,
     duration: int,
     persona: str,
+    normalized_segments: list[dict[str, Any]],
 ) -> AsyncGenerator[str | list[dict[str, Any]], None]:
     """
     Detect and process chapters using AI (fallback when no creator chapters).
@@ -517,10 +537,12 @@ async def process_ai_chapters(
         for idx, raw, start, end, task in batch_tasks:
             try:
                 summary_data = await task
+                transcript_slice = slice_transcript_for_chapter(normalized_segments, start, end)
                 chapter = build_chapter_dict(
                     {"title": raw.get("title", ""), "startSeconds": start, "endSeconds": end},
                     summary_data,
                     is_creator_chapter=False,
+                    transcript_slice=transcript_slice,
                 )
                 chapters_result.append(chapter)
                 yield sse_event("chapter_ready", {"index": idx, "chapter": chapter})
@@ -648,8 +670,10 @@ def build_result(
     master_summary: str | None,
     description_analysis: DescriptionAnalysis | None,
     context_dict: dict[str, Any] | None,
+    llm_model: str,
 ) -> dict[str, Any]:
     """Build the final result dictionary for storage."""
+    from datetime import datetime, timezone
     processing_time = int((time.time() - ctx.start_time) * 1000)
 
     result: dict[str, Any] = {
@@ -670,6 +694,17 @@ def build_result(
         },
         "processing_time_ms": processing_time,
         "token_usage": {},
+    }
+
+    # Add S3 reference for raw transcript (for regeneration)
+    if ctx.raw_transcript_ref:
+        result["raw_transcript_ref"] = ctx.raw_transcript_ref
+
+    # Add generation metadata (for regeneration tracking)
+    result["generation"] = {
+        "model": llm_model,
+        "prompt_version": settings.PROMPT_VERSION,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
     # Add chapters if available
@@ -789,6 +824,28 @@ async def stream_summarization(
 
         yield sse_event("transcript_ready", {"duration": video_data.duration})
 
+        # Normalize segments for consistent handling
+        normalized_segments = normalize_segments(transcript_data.segments)
+
+        # Store raw transcript in S3 BEFORE sponsor filtering
+        # This is intentional: we preserve the complete transcript for:
+        # - Regeneration with different sponsor rules
+        # - Audit trail of original content
+        # - Future RAG/search that may want full content
+        raw_transcript_ref: str | None = None
+        try:
+            transcript_source = transcript_data.source
+            raw_transcript_ref = await transcript_store.store(
+                youtube_id=youtube_id,
+                segments=normalized_segments,
+                source=transcript_source,  # type: ignore[arg-type]
+                language=None,  # TODO: detect language from yt-dlp
+            )
+            logger.debug(f"Stored transcript in S3: {raw_transcript_ref}")
+        except Exception as e:
+            # S3 storage is non-critical - log and continue
+            logger.warning(f"Failed to store transcript in S3: {e}")
+
         # Filter sponsor content
         segments = transcript_data.segments
         if sponsor_segments:
@@ -796,6 +853,8 @@ async def stream_summarization(
             segments = filter_transcript_segments(segments, sponsor_segments)
             transcript_data.segments = segments
             transcript_data.raw_text = " ".join(seg.get("text", "") for seg in segments)
+            # Re-normalize after filtering
+            normalized_segments = normalize_segments(segments)
             logger.info(f"Filtered transcript: {original_count} -> {len(segments)} segments")
 
         clean_text = clean_transcript(transcript_data.raw_text)
@@ -810,6 +869,7 @@ async def stream_summarization(
             persona=persona,
             sponsor_segments=sponsor_segments,
             start_time=start_time,
+            raw_transcript_ref=raw_transcript_ref,
         )
 
         # ── Phase 2: Parallel Analysis ──
@@ -828,13 +888,17 @@ async def stream_summarization(
         chapters: list[dict[str, Any]] = []
 
         if video_data.has_chapters:
-            async for item in process_creator_chapters(llm_service, video_data, persona, first_chapter_result):
+            async for item in process_creator_chapters(
+                llm_service, video_data, persona, first_chapter_result, normalized_segments
+            ):
                 if isinstance(item, str):
                     yield item
                 else:
                     chapters = item
         else:
-            async for item in process_ai_chapters(llm_service, segments, clean_text, video_data.duration, persona):
+            async for item in process_ai_chapters(
+                llm_service, segments, clean_text, video_data.duration, persona, normalized_segments
+            ):
                 if isinstance(item, str):
                     yield item
                 else:
@@ -859,7 +923,10 @@ async def stream_summarization(
                 master_summary = item
 
         # ── Save Results ──
-        result = build_result(ctx, synthesis, chapters, concepts, master_summary, description_analysis, context_dict)
+        result = build_result(
+            ctx, synthesis, chapters, concepts, master_summary,
+            description_analysis, context_dict, llm_service.provider.model
+        )
         repository.save_result(video_summary_id, result)
 
         processing_time = int((time.time() - start_time) * 1000)
@@ -999,3 +1066,89 @@ async def _stream_cached_result(video_summary_id: str, entry: dict[str, Any]) ->
 
     yield sse_event("done", {"videoSummaryId": video_summary_id, "cached": True})
     yield "data: [DONE]\n\n"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Regeneration Endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class RegenerateRequest(BaseModel):
+    """Request body for regeneration endpoint."""
+    force: bool = False  # Force regenerate even without S3 transcript
+
+
+class RegenerateResponse(BaseModel):
+    """Response for regeneration endpoint."""
+    status: str
+    video_summary_id: str
+    message: str
+    has_raw_transcript: bool = False
+    generation: dict[str, Any] | None = None
+
+
+@router.post("/regenerate/{video_summary_id}", response_model=RegenerateResponse)
+async def regenerate_summary(
+    video_summary_id: str,
+    request: RegenerateRequest,
+    repository: Annotated[MongoDBVideoRepository, Depends(get_video_repository)],
+):
+    """
+    Trigger regeneration of a video summary.
+
+    This endpoint:
+    1. Validates the video summary exists
+    2. Checks if raw transcript is available in S3
+    3. Resets status to allow re-processing via streaming endpoint
+
+    The actual regeneration happens when the client connects to the
+    streaming endpoint (GET /summarize/stream/{video_summary_id}).
+
+    Args:
+        video_summary_id: The video summary ID to regenerate
+        request: Optional request body with force flag
+
+    Returns:
+        Status of regeneration request
+    """
+    # Validate ObjectId format
+    try:
+        ObjectId(video_summary_id)
+    except (InvalidId, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid video summary ID format")
+
+    # Check if video summary exists
+    entry = repository.get_video_summary(video_summary_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Video summary not found")
+
+    # Check if raw transcript is available in S3
+    has_raw_transcript = False
+    raw_transcript_ref = entry.get("rawTranscriptRef")
+
+    if raw_transcript_ref and s3_client.is_available():
+        try:
+            has_raw_transcript = await s3_client.exists(raw_transcript_ref)
+        except Exception as e:
+            logger.warning(f"Failed to check S3 transcript: {e}")
+
+    # If no raw transcript and not forcing, return error
+    if not has_raw_transcript and not request.force:
+        return RegenerateResponse(
+            status="unavailable",
+            video_summary_id=video_summary_id,
+            message="Raw transcript not available in S3. Use force=true to re-fetch from YouTube.",
+            has_raw_transcript=False,
+            generation=entry.get("generation"),
+        )
+
+    # Reset status to pending to allow re-processing
+    repository.update_status(video_summary_id, ProcessingStatus.PENDING)
+
+    return RegenerateResponse(
+        status="ready",
+        video_summary_id=video_summary_id,
+        message="Video summary ready for regeneration. Connect to streaming endpoint to process.",
+        has_raw_transcript=has_raw_transcript,
+        generation=entry.get("generation"),
+    )

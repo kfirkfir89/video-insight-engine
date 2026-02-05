@@ -28,6 +28,27 @@ services:
       retries: 5
       start_period: 10s
 
+  vie-localstack:
+    image: localstack/localstack:latest
+    container_name: vie-localstack
+    restart: unless-stopped
+    ports:
+      - "4566:4566"
+    volumes:
+      - vie_localstack_data:/var/lib/localstack
+    environment:
+      SERVICES: s3
+      DEFAULT_REGION: us-east-1
+      EAGER_SERVICE_LOADING: 1
+    networks:
+      - vie-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   # ----------------------------------------
   # Application Services
   # ----------------------------------------
@@ -71,6 +92,7 @@ services:
       - "8000:8000"
     volumes:
       - ./services/summarizer/src:/app/src:ro
+      - ./services/summarizer/scripts:/app/scripts:ro
     environment:
       PYTHONUNBUFFERED: 1
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
@@ -91,11 +113,19 @@ services:
       INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
       WEBSHARE_PROXY_USERNAME: ${WEBSHARE_PROXY_USERNAME:-}
       WEBSHARE_PROXY_PASSWORD: ${WEBSHARE_PROXY_PASSWORD:-}
+      # AWS S3 configuration (for transcript storage)
+      TRANSCRIPT_S3_BUCKET: ${TRANSCRIPT_S3_BUCKET:-vie-transcripts}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
     networks:
       - vie-network
     depends_on:
       vie-mongodb:
         condition: service_healthy
+      # vie-localstack:  # Optional: uncomment if using LocalStack
+      #   condition: service_healthy
 
   vie-explainer:
     build:
@@ -167,3 +197,5 @@ networks:
 volumes:
   vie_mongodb_data:
     name: vie_mongodb_data
+  vie_localstack_data:
+    name: vie_localstack_data
