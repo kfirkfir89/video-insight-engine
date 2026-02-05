@@ -88,8 +88,7 @@ class VideoSummarySection(BaseModel):
     id: str
     title: str
     timestamp: str = "00:00"
-    summary: str = ""
-    bullets: list[str] = Field(default_factory=list)
+    content: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class VideoSummaryConcept(BaseModel):

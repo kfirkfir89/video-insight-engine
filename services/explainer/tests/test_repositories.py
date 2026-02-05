@@ -49,8 +49,10 @@ class TestMongoVideoSummaryRepository:
                         "id": "section-1",
                         "title": "Introduction",
                         "timestamp": "00:00",
-                        "summary": "Test summary",
-                        "bullets": ["Point 1"],
+                        "content": [
+                            {"type": "paragraph", "text": "Test summary"},
+                            {"type": "bullets", "items": ["Point 1"]},
+                        ],
                     }
                 ],
                 "concepts": [

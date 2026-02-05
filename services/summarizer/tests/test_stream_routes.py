@@ -86,9 +86,10 @@ def mock_llm_service():
         "keyTakeaways": ["Point 1"],
     })
     service.summarize_section = AsyncMock(return_value={
-        "content": [],
-        "summary": "Section summary",
-        "bullets": ["Bullet 1"],
+        "content": [
+            {"type": "paragraph", "text": "Section summary"},
+            {"type": "bullets", "items": ["Bullet 1"]},
+        ],
     })
 
     async def mock_stream_detect(*args, **kwargs):
@@ -397,35 +398,36 @@ class TestHelperFunctions:
         # Should not raise
         validate_duration(300)  # 5 minutes
 
-    def test_build_section_dict(self):
-        """Test building section dictionary."""
-        from src.routes.stream import build_section_dict
+    def test_build_chapter_dict(self):
+        """Test building chapter dictionary."""
+        from src.routes.stream import build_chapter_dict
 
         raw = {"title": "Test Section", "startSeconds": 60, "endSeconds": 120}
         summary = {
-            "content": [{"type": "paragraph", "text": "Summary"}],
-            "summary": "Brief summary",
-            "bullets": ["Point 1"],
+            "content": [
+                {"type": "paragraph", "text": "Summary"},
+                {"type": "bullets", "items": ["Point 1"]},
+            ],
         }
 
-        result = build_section_dict(raw, summary, is_creator_chapter=True)
+        result = build_chapter_dict(raw, summary, is_creator_chapter=True)
 
         assert result["title"] == "Test Section"
         assert result["start_seconds"] == 60
         assert result["end_seconds"] == 120
         assert result["is_creator_chapter"] is True
-        assert result["summary"] == "Brief summary"
         assert "id" in result
         assert result["timestamp"] == "01:00"  # MM:SS format with zero-padded minutes
+        assert result["content"] == summary["content"]
 
-    def test_build_section_dict_generated(self):
-        """Test building section dictionary for AI-generated sections."""
-        from src.routes.stream import build_section_dict
+    def test_build_chapter_dict_generated(self):
+        """Test building chapter dictionary for AI-generated chapters."""
+        from src.routes.stream import build_chapter_dict
 
         raw = {"title": "AI Section", "startSeconds": 0, "endSeconds": 60}
-        summary = {"content": [], "summary": "Summary", "bullets": []}
+        summary = {"content": []}
 
-        result = build_section_dict(raw, summary, is_creator_chapter=False)
+        result = build_chapter_dict(raw, summary, is_creator_chapter=False)
 
         assert result["is_creator_chapter"] is False
         assert "original_title" not in result

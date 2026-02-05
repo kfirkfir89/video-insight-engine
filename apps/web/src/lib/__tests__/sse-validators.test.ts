@@ -81,8 +81,7 @@ describe('sse-validators', () => {
         startSeconds: 0,
         endSeconds: 60,
         title: 'Intro',
-        summary: 'Introduction to the topic',
-        bullets: ['Point 1', 'Point 2'],
+        content: [{ blockId: 'b1', type: 'paragraph', text: 'Introduction to the topic' }],
       };
 
       const result = validateChapter(chapter);
@@ -106,8 +105,6 @@ describe('sse-validators', () => {
         original_title: 'Original',
         generated_title: 'Generated',
         is_creator_chapter: true,
-        summary: 'Summary',
-        bullets: [],
       };
 
       const result = validateChapter(chapter);
@@ -130,8 +127,6 @@ describe('sse-validators', () => {
         endSeconds: 200,
         end_seconds: 150,
         title: 'Test',
-        summary: 'Summary',
-        bullets: [],
       };
 
       const result = validateChapter(chapter);
@@ -159,8 +154,6 @@ describe('sse-validators', () => {
         startSeconds: 0,
         endSeconds: 60,
         title: 'Intro',
-        summary: 'Summary',
-        bullets: [],
         content: [
           { blockId: 'block-1', type: 'paragraph', text: 'Hello world' },
           { blockId: 'block-2', type: 'bullets', items: ['Item 1', 'Item 2'] },
@@ -180,8 +173,6 @@ describe('sse-validators', () => {
         startSeconds: 0,
         endSeconds: 60,
         title: 'Intro',
-        summary: 'Summary',
-        bullets: [],
         content: [
           { blockId: 'block-1', type: 'paragraph', text: 'Valid' },
           { blockId: 'block-2', type: 'invalid_type', data: 'Invalid' },
@@ -247,7 +238,6 @@ describe('sse-validators', () => {
         links: [{ url: 'https://example.com', type: 'documentation', label: 'Docs' }],
         resources: [{ name: 'Resource', url: 'https://resource.com' }],
         relatedVideos: [{ title: 'Related', url: 'https://youtube.com/watch?v=test' }],
-        timestamps: [{ time: '1:00', label: 'Chapter 1' }],
         socialLinks: [{ platform: 'twitter', url: 'https://twitter.com/test' }],
       };
 
@@ -263,7 +253,6 @@ describe('sse-validators', () => {
         links: [],
         resources: [],
         relatedVideos: [],
-        timestamps: [],
         socialLinks: [],
       });
     });

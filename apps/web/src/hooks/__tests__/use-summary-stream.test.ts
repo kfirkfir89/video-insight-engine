@@ -207,10 +207,12 @@ describe("useSummaryStream", () => {
               id: "s1",
               timestamp: "0:00",
               title: "Introduction",
-              summary: "Summary text",
-              bullets: ["Key point 1", "Key point 2"],
               startSeconds: 0,
               endSeconds: 60,
+              content: [
+                { blockId: "b1", type: "paragraph", text: "Summary text" },
+                { blockId: "b2", type: "bullets", items: ["Key point 1", "Key point 2"] },
+              ],
             },
           },
         },
@@ -233,7 +235,12 @@ describe("useSummaryStream", () => {
       });
 
       expect(result.current.chapters[0].title).toBe("Introduction");
-      expect(result.current.chapters[0].summary).toBe("Summary text");
+      expect(result.current.chapters[0].content).toHaveLength(2);
+      expect(result.current.chapters[0].content?.[0]).toEqual({
+        blockId: "b1",
+        type: "paragraph",
+        text: "Summary text",
+      });
     });
 
     it("should parse concepts event", async () => {

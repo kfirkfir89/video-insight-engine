@@ -49,8 +49,7 @@ class MongoVideoSummaryRepository:
                 id=s.get("id", ""),
                 title=s.get("title", ""),
                 timestamp=s.get("timestamp", "00:00"),
-                summary=s.get("summary", ""),
-                bullets=s.get("bullets", []),
+                content=s.get("content", []),
             )
             for s in summary_data.get("sections", [])
         ]

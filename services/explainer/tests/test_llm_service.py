@@ -45,8 +45,8 @@ class TestLLMService:
             "youtube_id": "abc123",
             "timestamp": "00:00",
             "title": "Introduction",
-            "summary": "This is the intro.",
-            "bullets": ["Point 1", "Point 2"],
+            "summary": "This is the intro.",  # Extracted from content blocks
+            "bullets": ["Point 1", "Point 2"],  # Extracted from content blocks
         }
 
         # Patch load_prompt to return a simple template

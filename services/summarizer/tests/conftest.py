@@ -149,8 +149,10 @@ def mock_llm_service(mock_llm_provider):
                 "timestamp": "00:00",
                 "startSeconds": 0,
                 "endSeconds": 60,
-                "summary": "Introduction section summary",
-                "bullets": ["Point 1", "Point 2"],
+                "content": [
+                    {"type": "paragraph", "text": "Introduction section summary"},
+                    {"type": "bullets", "items": ["Point 1", "Point 2"]},
+                ],
             }
         ],
         "concepts": [
@@ -167,9 +169,10 @@ def mock_llm_service(mock_llm_provider):
         {"title": "Introduction", "startSeconds": 0, "endSeconds": 60}
     ])
     service.summarize_section = AsyncMock(return_value={
-        "content": [{"type": "paragraph", "text": "Section summary"}],
-        "summary": "Section summary",
-        "bullets": ["Bullet 1", "Bullet 2"],
+        "content": [
+            {"type": "paragraph", "text": "Section summary"},
+            {"type": "bullets", "items": ["Bullet 1", "Bullet 2"]},
+        ],
     })
     service.extract_concepts = AsyncMock(return_value=[
         {"name": "Test Concept", "definition": "A test definition"}
@@ -258,8 +261,10 @@ def sample_processing_result():
                     "startSeconds": 0,
                     "endSeconds": 180,
                     "title": "Introduction to Testing",
-                    "summary": "Overview of why testing matters",
-                    "bullets": ["Tests catch bugs early", "Tests serve as documentation"],
+                    "content": [
+                        {"type": "paragraph", "text": "Overview of why testing matters"},
+                        {"type": "bullets", "items": ["Tests catch bugs early", "Tests serve as documentation"]},
+                    ],
                 }
             ],
             "concepts": [

@@ -137,8 +137,10 @@ def sample_section():
         id="section-uuid-1",
         title="Introduction",
         timestamp="00:00",
-        summary="This is the introduction section.",
-        bullets=["First point", "Second point"],
+        content=[
+            {"type": "paragraph", "text": "This is the introduction section."},
+            {"type": "bullets", "items": ["First point", "Second point"]},
+        ],
     )
 
 
@@ -197,8 +199,10 @@ def sample_memorized_item(sample_memorized_item_id, sample_user_id):
                     {
                         "title": "Introduction",
                         "timestamp": "00:00",
-                        "summary": "Intro summary",
-                        "bullets": ["Point 1", "Point 2"],
+                        "content": [
+                            {"type": "paragraph", "text": "Intro summary"},
+                            {"type": "bullets", "items": ["Point 1", "Point 2"]},
+                        ],
                     }
                 ],
             },
