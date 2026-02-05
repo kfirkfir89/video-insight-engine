@@ -21,7 +21,60 @@ dev/
 
 ## Active Tasks
 
-### Category-Persona Decoupling (NEW)
+### Dev Tool Expansion (NEW)
+**Status**: Ready for Implementation
+**Location**: `dev/active/dev-tool-expansion/`
+**Effort**: Large (L) - 4-5 developer-days
+
+Add two dev-only pages for component documentation and live previews:
+1. **Design System Page** (`/dev/design-system`) - Colors, typography, spacing, all 31 blocks, all 10 views
+2. **Video Examples Page** (`/dev/video-examples`) - Complete video pages with realistic mock data for all 10 categories
+
+**Files**:
+- `dev-tool-expansion-plan.md` - Implementation plan (7 phases)
+- `dev-tool-expansion-context.md` - Key files, patterns, block types
+- `dev-tool-expansion-tasks.md` - 143 tasks with acceptance criteria
+
+**Key Features**:
+- Design token documentation (colors, typography, spacing, status indicators)
+- All 31 content block types with live previews
+- All 10 category views with mock data
+- 10 complete mock videos (one per category)
+- Full production isolation (tree-shaken from builds)
+
+**Dependencies**: None - uses existing component infrastructure
+
+---
+
+### Data Simplification
+**Status**: Ready for Implementation
+**Location**: `dev/active/data-simplification/`
+**Effort**: Medium (M) - 2-3 developer-days
+
+Remove data duplication in video response storage by eliminating pre-computed `summary` and `bullets` fields from chapter data. These fields are pure extractions from `content` blocks and can be regenerated on-demand.
+
+**Files**:
+- `data-simplification-plan.md` - Implementation plan (7 phases)
+- `data-simplification-context.md` - Key files, data flow, decisions
+- `data-simplification-tasks.md` - 25 tasks with acceptance criteria
+
+**Key Changes**:
+- Create shared extraction utility (`content_extractor.py`)
+- Update LLM consumers to extract from content blocks on-demand
+- Remove `summary`/`bullets` from storage
+- Update memorization to store content only
+- Update explainer chat context
+- Remove frontend fallback rendering
+- Remove unused timestamps field
+
+**Impact**:
+- ~5-7KB storage reduction per video
+- Single source of truth (content blocks only)
+- Cleaner architecture
+
+---
+
+### Category-Persona Decoupling
 **Status**: Ready for Implementation
 **Location**: `dev/active/category-persona-decoupling/`
 **Effort**: Medium (M) - 3-4 developer-days

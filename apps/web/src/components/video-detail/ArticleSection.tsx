@@ -1,5 +1,5 @@
 import { type RefObject, useState, memo, useCallback, useMemo } from "react";
-import { Play, StopCircle, Lightbulb, ChevronRight } from "lucide-react";
+import { Play, StopCircle, Lightbulb, ChevronRight, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { YouTubePlayer, type YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
 import { cn } from "@/lib/utils";
@@ -246,20 +246,9 @@ export const ArticleSection = memo(function ArticleSection({
         {chapter.content && chapter.content.length > 0 ? (
           categoryView
         ) : (
-          <div className="pl-2 pr-8">
-            <p className="text-muted-foreground mb-4 leading-relaxed">
-              {chapter.summary}
-            </p>
-            {chapter.bullets && chapter.bullets.length > 0 && (
-              <ul className="space-y-2">
-                {chapter.bullets.map((bullet, index) => (
-                  <li key={index} className="flex gap-2.5 text-sm">
-                    <span className="text-primary mt-0.5 shrink-0">&#8226;</span>
-                    <span className="text-muted-foreground">{bullet}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+          <div className="flex items-center gap-2 text-muted-foreground pl-2 pr-8 py-4">
+            <FileText className="h-4 w-4 shrink-0" />
+            <p className="text-sm">Content not available for this chapter</p>
           </div>
         )}
       </div>

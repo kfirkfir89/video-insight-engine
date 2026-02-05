@@ -548,7 +548,7 @@ User's personal knowledge collection.
 
     // Cached content (independent)
     content: {
-      chapters?: [{ id, timestamp, title, content, summary, bullets }],
+      chapters?: [{ id, timestamp, title, content }],  // content blocks only
       concept?: { name, definition },
       expansion?: string
     }

@@ -147,7 +147,7 @@ LOG_FORMAT=console              # console or json
  8. SUMMARIZE CHAPTERS (LLM)
     └─▶ One call per chapter
     └─▶ Slice transcript for chapter time range
-    └─▶ Generate: content blocks with blockId, summary + bullets
+    └─▶ Generate: content blocks with blockId (single source of truth)
     └─▶ Store transcript slice in chapter
 
  9. EXTRACT CONCEPTS (LLM)
@@ -364,7 +364,11 @@ class LLMService:
         return parse_json_response(response)['chapters']
 
     async def summarize_chapter(self, chapter_text: str, title: str, persona: str) -> dict:
-        """Generate content blocks, summary and bullets for a chapter."""
+        """Generate content blocks for a chapter.
+
+        Note: summary/bullets are extracted on-demand from content blocks
+        via content_extractor.py when needed for LLM prompts.
+        """
         prompt = load_prompt("chapter_summary").format(
             title=title, chapter_text=chapter_text, persona=persona
         )

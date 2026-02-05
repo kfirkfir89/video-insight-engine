@@ -50,13 +50,14 @@ export const mockVideos = [
 ];
 
 // Factory function for creating mock chapters
+// Uses content blocks as the source of truth (summary/bullets are deprecated)
 const createMockChapter = (
   id: string,
   title: string,
   startSeconds: number,
   endSeconds: number,
-  summary: string,
-  bullets: string[]
+  summaryText: string,
+  bulletItems: string[]
 ) => ({
   id,
   timestamp: `${Math.floor(startSeconds / 60)}:${String(startSeconds % 60).padStart(2, "0")}`,
@@ -64,8 +65,10 @@ const createMockChapter = (
   endSeconds,
   title,
   isCreatorChapter: true,
-  summary,
-  bullets,
+  content: [
+    { blockId: `${id}-paragraph`, type: "paragraph", text: summaryText },
+    { blockId: `${id}-bullets`, type: "bullets", items: bulletItems },
+  ],
 });
 
 export const mockVideoSummary = {

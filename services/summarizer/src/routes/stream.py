@@ -375,7 +375,12 @@ def build_chapter_dict(
     is_creator_chapter: bool,
     transcript_slice: str | None = None,
 ) -> dict[str, Any]:
-    """Build a chapter dictionary from raw data and summary."""
+    """Build a chapter dictionary from raw data and summary.
+
+    Note: summary/bullets are no longer stored - they can be extracted
+    on-demand from content blocks using extract_summary_from_content()
+    and extract_bullets_from_content() from src.utils.content_extractor.
+    """
     start = raw.get("startSeconds", raw.get("start_seconds", 0))
     end = raw.get("endSeconds", raw.get("end_seconds", start))
 
@@ -387,8 +392,6 @@ def build_chapter_dict(
         "title": raw.get("title", ""),
         "is_creator_chapter": is_creator_chapter,
         "content": summary_data.get("content", []),
-        "summary": summary_data.get("summary", ""),
-        "bullets": summary_data.get("bullets", []),
     }
 
     # Add sliced transcript for RAG/display
