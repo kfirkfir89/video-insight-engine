@@ -52,13 +52,6 @@ class RelatedVideo:
 
 
 @dataclass
-class Timestamp:
-    """A timestamp/chapter marker from description."""
-    time: str  # "0:00" format
-    label: str
-
-
-@dataclass
 class SocialLink:
     """A social media link from description."""
     platform: str  # twitter, discord, github, linkedin, patreon, other
@@ -71,7 +64,6 @@ class DescriptionAnalysis:
     links: list[DescriptionLink] = field(default_factory=list)
     resources: list[Resource] = field(default_factory=list)
     related_videos: list[RelatedVideo] = field(default_factory=list)
-    timestamps: list[Timestamp] = field(default_factory=list)
     social_links: list[SocialLink] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -80,7 +72,6 @@ class DescriptionAnalysis:
             "links": [{"url": l.url, "type": l.type, "label": l.label} for l in self.links],
             "resources": [{"name": r.name, "url": r.url} for r in self.resources],
             "relatedVideos": [{"title": v.title, "url": v.url} for v in self.related_videos],
-            "timestamps": [{"time": t.time, "label": t.label} for t in self.timestamps],
             "socialLinks": [{"platform": s.platform, "url": s.url} for s in self.social_links],
         }
 
@@ -89,7 +80,7 @@ class DescriptionAnalysis:
         """Check if any content was extracted."""
         return bool(
             self.links or self.resources or self.related_videos or
-            self.timestamps or self.social_links
+            self.social_links
         )
 
 
@@ -160,11 +151,6 @@ async def _analyze_description_async(
                 for v in data.get("relatedVideos", [])
                 if v.get("url")
             ],
-            timestamps=[
-                Timestamp(time=t.get("time", ""), label=t.get("label", ""))
-                for t in data.get("timestamps", [])
-                if t.get("time") and t.get("label")
-            ],
             social_links=[
                 SocialLink(platform=s.get("platform", "other"), url=s.get("url", ""))
                 for s in data.get("socialLinks", [])
@@ -175,7 +161,7 @@ async def _analyze_description_async(
         logger.info(
             f"Description analysis complete: {len(analysis.links)} links, "
             f"{len(analysis.resources)} resources, {len(analysis.related_videos)} videos, "
-            f"{len(analysis.timestamps)} timestamps, {len(analysis.social_links)} social"
+            f"{len(analysis.social_links)} social"
         )
 
         return analysis

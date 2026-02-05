@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { idParamSchema, objectIdSchema } from '../utils/validation.js';
+import { config } from '../config.js';
 
 // Provider config schema for dev tools (optional)
 const providerSchema = z.enum(['anthropic', 'openai', 'gemini']);
@@ -61,20 +62,22 @@ export async function videosRoutes(fastify: FastifyInstance) {
   });
 
   // POST /api/videos
+  // Video daily limit is configurable via VIDEO_DAILY_LIMIT env var (0 = unlimited)
+  const videoDailyLimit = config.RATE_LIMITS.VIDEO_DAILY;
   fastify.post<{
     Body: z.infer<typeof createVideoSchema>;
   }>('/', {
     preHandler: [fastify.authenticate],
     config: {
-      rateLimit: {
-        max: 10,
+      rateLimit: videoDailyLimit > 0 ? {
+        max: videoDailyLimit,
         timeWindow: '24 hours',
         errorResponseBuilder: () => ({
           error: 'RATE_LIMITED',
-          message: 'Daily video limit reached (10 videos per 24 hours). Try again tomorrow.',
+          message: `Daily video limit reached (${videoDailyLimit} videos per 24 hours). Try again tomorrow.`,
           statusCode: 429,
         }),
-      },
+      } : false, // Disable rate limiting when limit is 0
     },
   }, async (req, reply) => {
     const input = createVideoSchema.parse(req.body);

@@ -1,5 +1,5 @@
 import { type RefObject } from "react";
-import { Play, StopCircle } from "lucide-react";
+import { Play, StopCircle, FileText } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { YouTubePlayer, type YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
@@ -103,21 +103,10 @@ export function ChapterCard({
         {chapter.content && chapter.content.length > 0 ? (
           <ContentBlocks blocks={chapter.content} />
         ) : (
-          <>
-            <p className="text-muted-foreground mb-4 leading-relaxed">
-              {chapter.summary}
-            </p>
-            {chapter.bullets && chapter.bullets.length > 0 && (
-              <ul className="space-y-2">
-                {chapter.bullets.map((bullet, index) => (
-                  <li key={index} className="flex gap-2.5 text-sm">
-                    <span className="text-primary mt-0.5 shrink-0">&#8226;</span>
-                    <span className="text-muted-foreground">{bullet}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
+          <div className="flex items-center gap-2 text-muted-foreground py-4">
+            <FileText className="h-4 w-4 shrink-0" />
+            <p className="text-sm">Content not available for this chapter</p>
+          </div>
         )}
       </CardContent>
     </Card>

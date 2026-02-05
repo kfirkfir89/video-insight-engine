@@ -149,12 +149,12 @@ export class MemorizeService {
         throw new Error('No matching sections found');
       }
 
+      // Store content blocks only - summary/bullets can be extracted on-demand
       content.sections = sections.map((s) => ({
         id: s.id,
         timestamp: s.timestamp,
         title: s.title,
-        summary: s.summary,
-        bullets: s.bullets,
+        content: s.content,
       }));
 
       startSeconds = input.startSeconds ?? sections[0].startSeconds;

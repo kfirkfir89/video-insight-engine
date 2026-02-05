@@ -23,6 +23,8 @@ const envSchema = z.object({
   // Playlist-specific rate limits (higher in test mode to avoid test interference)
   PLAYLIST_PREVIEW_RATE_LIMIT: z.string().default('30').transform(Number),
   PLAYLIST_IMPORT_RATE_LIMIT: z.string().default('5').transform(Number),
+  // Video creation daily limit (0 = unlimited for admins/dev)
+  VIDEO_DAILY_LIMIT: z.string().default('10').transform(Number),
 });
 
 const parsedConfig = envSchema.parse(process.env);
@@ -81,5 +83,9 @@ export const config = {
     PLAYLIST_IMPORT: parsedConfig.NODE_ENV === 'test'
       ? parsedConfig.PLAYLIST_IMPORT_RATE_LIMIT * TEST_RATE_LIMIT_MULTIPLIER
       : parsedConfig.PLAYLIST_IMPORT_RATE_LIMIT,
+    // Video daily limit (0 = unlimited, useful for dev/admin)
+    VIDEO_DAILY: parsedConfig.NODE_ENV === 'test'
+      ? parsedConfig.VIDEO_DAILY_LIMIT * TEST_RATE_LIMIT_MULTIPLIER
+      : parsedConfig.VIDEO_DAILY_LIMIT,
   },
 };

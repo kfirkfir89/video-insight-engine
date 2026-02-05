@@ -1,4 +1,5 @@
 import { Db, ObjectId, Collection } from 'mongodb';
+import type { ContentBlock } from '@vie/types';
 
 export interface MemorizedItemDocument {
   _id: ObjectId;
@@ -21,8 +22,7 @@ export interface MemorizedItemDocument {
         id: string;
         timestamp: string;
         title: string;
-        summary: string;
-        bullets: string[];
+        content?: ContentBlock[];  // Dynamic content blocks - source of truth
       }>;
       concept?: {
         name: string;
@@ -64,8 +64,7 @@ export interface VideoSummaryCacheForMemorize {
       startSeconds: number;
       endSeconds: number;
       title: string;
-      summary: string;
-      bullets: string[];
+      content?: ContentBlock[];  // Dynamic content blocks - source of truth
     }>;
     concepts: Array<{
       id: string;
