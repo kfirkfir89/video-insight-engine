@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, RefreshCw, Wrench, Video, ListVideo } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ChevronDown, ChevronRight, RefreshCw, Wrench, Video, ListVideo, Palette, Eye } from "lucide-react";
 import { ProviderSelector, type Provider } from "./ProviderSelector";
 import { useAddVideo } from "@/hooks/use-videos";
 import { usePlaylistPreview, usePlaylistImport } from "@/hooks/use-playlists";
@@ -174,6 +175,37 @@ export function DevToolPanel() {
               </label>
             </div>
           )}
+
+          {/* Dev Pages Links */}
+          <div className="border-t border-yellow-500/20 pt-3">
+            <label className="block text-[10px] text-muted-foreground mb-2">
+              Dev Pages
+            </label>
+            <div className="flex gap-2">
+              <Link
+                to="/dev/design-system"
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-[10px] rounded",
+                  "bg-yellow-500/10 text-yellow-700 dark:text-yellow-300",
+                  "hover:bg-yellow-500/20 transition-colors"
+                )}
+              >
+                <Palette className="h-3 w-3" />
+                Design System
+              </Link>
+              <Link
+                to="/dev/video-examples"
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-[10px] rounded",
+                  "bg-yellow-500/10 text-yellow-700 dark:text-yellow-300",
+                  "hover:bg-yellow-500/20 transition-colors"
+                )}
+              >
+                <Eye className="h-3 w-3" />
+                Video Examples
+              </Link>
+            </div>
+          </div>
 
           {/* Submit Button */}
           <button
