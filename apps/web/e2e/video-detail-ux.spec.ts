@@ -54,7 +54,7 @@ test.describe("Video Detail - Sticky Navigation (Desktop)", () => {
     await page.waitForTimeout(500);
 
     // The "Main Content" section should be in viewport after click
-    const section = page.locator("#section-section-2");
+    const section = page.locator("#chapter-chapter-2");
     await expect(section).toBeInViewport({ timeout: 3000 });
   });
 
@@ -105,10 +105,10 @@ test.describe("Video Detail - Sticky Navigation (Desktop)", () => {
     authenticatedPage: page,
   }) => {
     // Wait for sections to load
-    await page.waitForSelector('[data-slot="article-section"]');
+    await page.waitForSelector('[data-slot="article-chapter"]');
 
     // Click play button on first section
-    const firstSection = page.locator('[data-slot="article-section"]').first();
+    const firstSection = page.locator('[data-slot="article-chapter"]').first();
     const playButton = firstSection.locator('button[aria-label*="Play from"]');
     await playButton.click();
 
@@ -178,7 +178,7 @@ test.describe("Video Detail - Mobile Layout", () => {
     await page.waitForTimeout(500);
 
     // Section should be in viewport
-    const section = page.locator("#section-section-3");
+    const section = page.locator("#chapter-chapter-3");
     await expect(section).toBeInViewport();
   });
 
@@ -227,7 +227,7 @@ test.describe("Video Detail - Content Display", () => {
   test("displays section articles with content", async ({
     authenticatedPage: page,
   }) => {
-    const sections = page.locator('[data-slot="article-section"]');
+    const sections = page.locator('[data-slot="article-chapter"]');
     await expect(sections).toHaveCount(3);
 
     // First section should have title and content
@@ -240,7 +240,7 @@ test.describe("Video Detail - Content Display", () => {
   test("sections have play buttons with timestamps", async ({
     authenticatedPage: page,
   }) => {
-    const sections = page.locator('[data-slot="article-section"]');
+    const sections = page.locator('[data-slot="article-chapter"]');
 
     // Each section should have a play button
     const playButtons = sections.locator('button[aria-label*="Play from"]');
@@ -252,7 +252,7 @@ test.describe("Video Detail - Content Display", () => {
 
   test("displays concepts inline with sections", async ({ authenticatedPage: page }) => {
     // On desktop, concepts are shown inline within section articles
-    const sections = page.locator('[data-slot="article-section"]');
+    const sections = page.locator('[data-slot="article-chapter"]');
 
     // The Main Content section (second section) should contain the concept
     const mainContentSection = sections.nth(1);
@@ -314,7 +314,7 @@ test.describe("Video Detail - Accessibility", () => {
     await page.waitForTimeout(500);
 
     // Second section should be in viewport after keyboard activation
-    const section = page.locator("#section-section-2");
+    const section = page.locator("#chapter-chapter-2");
     await expect(section).toBeInViewport({ timeout: 3000 });
   });
 
@@ -331,7 +331,7 @@ test.describe("Video Detail - Accessibility", () => {
     await expect(h2).toBeVisible();
 
     // H3 for section titles within articles
-    const h3s = page.locator('[data-slot="article-section"] h3');
+    const h3s = page.locator('[data-slot="article-chapter"] h3');
     await expect(h3s).toHaveCount(3);
   });
 

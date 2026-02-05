@@ -188,26 +188,47 @@ Metadata extracted from YouTube to enable content-aware summarization with speci
 
 ```typescript
 interface VideoContext {
-  category: string;            // User-facing: "coding", "cooking", "podcast", "reviews", "general"
-  youtubeCategory: string;     // "Science & Technology" - for LLM context
+  category: string;            // Detected: "coding", "cooking", "travel", "fitness", etc.
+  youtubeCategory: string;     // Raw YouTube category: "Science & Technology", "Entertainment"
   tags: string[];              // Raw tags from YouTube (max 15)
   displayTags: string[];       // Cleaned for UI display (max 6)
+  categoryConfidence?: number; // Detection confidence (0.0-1.0), used internally
 }
 ```
 
 ## Category Detection
 
-Category is derived from persona (internal LLM concept) for user-facing display:
+Category is detected independently using **weighted scoring** (not derived from persona):
 
-| Internal Persona | User-Facing Category |
-|------------------|---------------------|
-| `code` | `coding` |
-| `recipe` | `cooking` |
-| `interview` | `podcast` |
-| `review` | `reviews` |
-| `standard` | `general` |
+| Signal | Weight | Description |
+|--------|--------|-------------|
+| Keywords (tags + hashtags) | 40% | Primary content indicator |
+| YouTube category | 30% | Supportive, but unreliable alone |
+| Title patterns | 15% | Pattern matching ("recipe", "tutorial", etc.) |
+| Channel patterns | 15% | Known channels (jamie oliver, fireship, etc.) |
 
-**Note:** Persona is used internally by the LLM for content generation. Category is the stored, user-facing value.
+**LLM Fallback:** If confidence < 0.4, uses fast model (Haiku) for classification.
+
+### Valid Categories
+
+`cooking`, `coding`, `fitness`, `travel`, `education`, `podcast`, `reviews`, `gaming`, `diy`, `standard`
+
+### Category to Persona Mapping
+
+Persona is derived FROM category for LLM prompt selection:
+
+| Category | Persona | Purpose |
+|----------|---------|---------|
+| `cooking` | `recipe` | Recipe-specific prompts |
+| `coding` | `code` | Code tutorial prompts |
+| `reviews` | `review` | Product review prompts |
+| `podcast` | `interview` | Interview/podcast prompts |
+| `fitness` | `fitness` | Workout prompts |
+| `travel` | `travel` | Travel guide prompts |
+| `education` | `education` | Educational prompts |
+| other | `standard` | Generic prompts |
+
+**Key Principle:** Category detection is independent of persona. A video can have category="cooking" even if persona falls back to "standard".
 
 ---
 

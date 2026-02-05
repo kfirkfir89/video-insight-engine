@@ -129,10 +129,10 @@ test.describe("Video Playback - Detail Page", () => {
     authenticatedPage: page,
   }) => {
     // Wait for sections
-    await page.waitForSelector('[data-slot="article-section"]');
+    await page.waitForSelector('[data-slot="article-chapter"]');
 
     // Click play button on first section
-    const firstSection = page.locator('[data-slot="article-section"]').first();
+    const firstSection = page.locator('[data-slot="article-chapter"]').first();
     const playButton = firstSection.locator('button[aria-label*="Play from"]');
     await playButton.click();
 
@@ -167,10 +167,10 @@ test.describe("Video Playback - Detail Page", () => {
     authenticatedPage: page,
   }) => {
     // Wait for sections to load
-    await page.waitForSelector('[data-slot="article-section"]');
+    await page.waitForSelector('[data-slot="article-chapter"]');
 
     // Find timestamp play buttons in article sections
-    const timestampButtons = page.locator('[data-slot="article-section"] button[aria-label*="Play from"]');
+    const timestampButtons = page.locator('[data-slot="article-chapter"] button[aria-label*="Play from"]');
     await expect(timestampButtons).toHaveCount(3);
 
     // First timestamp should show "0:00"
@@ -179,10 +179,10 @@ test.describe("Video Playback - Detail Page", () => {
 
   test("clicking play button in section triggers video", async ({ authenticatedPage: page }) => {
     // Wait for sections
-    await page.waitForSelector('[data-slot="article-section"]');
+    await page.waitForSelector('[data-slot="article-chapter"]');
 
     // Click a timestamp button in the article section
-    const section = page.locator('[data-slot="article-section"]').nth(1); // Main Content section
+    const section = page.locator('[data-slot="article-chapter"]').nth(1); // Main Content section
     const timestampButton = section.locator('button[aria-label="Play from 0:30"]');
     await timestampButton.click();
 
@@ -247,9 +247,9 @@ test.describe("Video Playback - Accessibility", () => {
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/video/video-1");
-    await page.waitForSelector('[data-slot="article-section"]');
+    await page.waitForSelector('[data-slot="article-chapter"]');
 
-    const timestampButtons = page.locator('[data-slot="article-section"] button[aria-label*="Play from"]');
+    const timestampButtons = page.locator('[data-slot="article-chapter"] button[aria-label*="Play from"]');
     const count = await timestampButtons.count();
 
     for (let i = 0; i < count; i++) {

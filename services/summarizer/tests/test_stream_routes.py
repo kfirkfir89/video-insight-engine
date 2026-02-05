@@ -471,6 +471,7 @@ class TestHelperFunctions:
             description="",
             context=VideoContext(
                 youtube_category="Science & Technology",
+                category="coding",
                 persona="code",
                 tags=["python"],
                 display_tags=["Python"],
@@ -481,7 +482,7 @@ class TestHelperFunctions:
 
         assert persona == "code"
         assert context_dict["youtubeCategory"] == "Science & Technology"
-        assert context_dict["persona"] == "code"
+        assert context_dict["category"] == "coding"
 
     def test_extract_context_without_context(self):
         """Test extracting context when video has no context."""
@@ -629,3 +630,136 @@ class TestStreamIntegration:
         response = await client.get(f"/summarize/stream/{valid_object_id}")
 
         assert "data: [DONE]" in response.text
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# finalize_video_context Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestFinalizeVideoContext:
+    """Tests for finalize_video_context() function."""
+
+    @pytest.fixture
+    def mock_llm_provider(self):
+        """Mock LLM provider for fast classification."""
+        provider = AsyncMock()
+        provider.complete_fast = AsyncMock(return_value="cooking")
+        return provider
+
+    @pytest.fixture
+    def video_data_high_confidence(self):
+        """VideoData with high category confidence (no LLM fallback needed)."""
+        from src.services.youtube import VideoData, VideoContext
+        return VideoData(
+            video_id="test123",
+            title="Easy Pasta Recipe",
+            channel="Jamie Oliver",
+            duration=300,
+            thumbnail_url="https://example.com/thumb.jpg",
+            description="Learn to make pasta",
+            chapters=[],
+            subtitles=[],
+            context=VideoContext(
+                youtube_category="Entertainment",
+                category="cooking",
+                persona="recipe",
+                tags=["recipe", "cooking"],
+                display_tags=["Recipe", "Cooking"],
+                category_confidence=0.54,  # Above 0.4 threshold
+            ),
+        )
+
+    @pytest.fixture
+    def video_data_low_confidence(self):
+        """VideoData with low category confidence (needs LLM fallback)."""
+        from src.services.youtube import VideoData, VideoContext
+        return VideoData(
+            video_id="test456",
+            title="Funny Video",
+            channel="Random Channel",
+            duration=300,
+            thumbnail_url="https://example.com/thumb.jpg",
+            description="Entertainment video",
+            chapters=[],
+            subtitles=[],
+            context=VideoContext(
+                youtube_category="Entertainment",
+                category="standard",
+                persona="standard",
+                tags=["funny"],
+                display_tags=["Funny"],
+                category_confidence=0.15,  # Below 0.4 threshold
+            ),
+        )
+
+    @patch("src.routes.stream.get_llm_fallback_threshold")
+    async def test_high_confidence_skips_llm(self, mock_threshold, mock_llm_provider, video_data_high_confidence):
+        """Test that high confidence skips LLM fallback."""
+        from src.routes.stream import finalize_video_context
+
+        mock_threshold.return_value = 0.4
+
+        result = await finalize_video_context(video_data_high_confidence, mock_llm_provider)
+
+        # LLM should NOT be called
+        mock_llm_provider.complete_fast.assert_not_called()
+        # Context should be unchanged
+        assert result.context.category == "cooking"
+        assert result.context.persona == "recipe"
+        assert result.context.category_confidence == 0.54
+
+    @patch("src.routes.stream.classify_category_with_llm")
+    @patch("src.routes.stream.get_llm_fallback_threshold")
+    async def test_low_confidence_triggers_llm(self, mock_threshold, mock_classify, mock_llm_provider, video_data_low_confidence):
+        """Test that low confidence triggers LLM fallback."""
+        from src.routes.stream import finalize_video_context
+
+        mock_threshold.return_value = 0.4
+        mock_classify.return_value = "cooking"
+
+        result = await finalize_video_context(video_data_low_confidence, mock_llm_provider)
+
+        # LLM should be called
+        mock_classify.assert_called_once()
+        # Context should be updated
+        assert result.context.category == "cooking"
+        assert result.context.persona == "recipe"
+        assert result.context.category_confidence == 0.8  # Updated by LLM
+
+    @patch("src.routes.stream.classify_category_with_llm")
+    @patch("src.routes.stream.get_llm_fallback_threshold")
+    async def test_llm_fallback_returns_standard(self, mock_threshold, mock_classify, mock_llm_provider, video_data_low_confidence):
+        """Test LLM fallback can return standard category."""
+        from src.routes.stream import finalize_video_context
+
+        mock_threshold.return_value = 0.4
+        mock_classify.return_value = "standard"
+
+        result = await finalize_video_context(video_data_low_confidence, mock_llm_provider)
+
+        assert result.context.category == "standard"
+        assert result.context.persona == "standard"
+
+    async def test_handles_missing_context(self, mock_llm_provider):
+        """Test graceful handling of missing context."""
+        from src.routes.stream import finalize_video_context
+        from src.services.youtube import VideoData
+
+        video_data = VideoData(
+            video_id="test789",
+            title="No Context Video",
+            channel="Channel",
+            duration=300,
+            thumbnail_url=None,
+            description="",
+            chapters=[],
+            subtitles=[],
+            context=None,  # No context
+        )
+
+        result = await finalize_video_context(video_data, mock_llm_provider)
+
+        # Should return unchanged
+        assert result.context is None
+        mock_llm_provider.complete_fast.assert_not_called()
