@@ -21,6 +21,32 @@ dev/
 
 ## Active Tasks
 
+### Category-Persona Decoupling (NEW)
+**Status**: Ready for Implementation
+**Location**: `dev/active/category-persona-decoupling/`
+**Effort**: Medium (M) - 3-4 developer-days
+
+Fix flawed architecture where video category is derived from persona detection. When persona detection fails (AND logic), category incorrectly becomes "general", breaking category-specific frontend views like RecipeView.
+
+**Files**:
+- `category-persona-decoupling-plan.md` - Implementation plan (6 phases)
+- `category-persona-decoupling-context.md` - Key files, data flow, architecture
+- `category-persona-decoupling-tasks.md` - 58 tasks with acceptance criteria
+
+**Key Changes**:
+- Decouple category detection from persona selection
+- Weighted scoring for category detection (keywords 40%, YouTube category 30%, title 15%, channel 15%)
+- LLM fallback for low-confidence cases (<0.4 threshold)
+- Add `category` field to `VideoContext` separate from `persona`
+
+**Problem Example**: Jamie Oliver cooking video
+- YouTube Category: "Entertainment" (not in recipe's allowed list)
+- Tags: "recipe", "cooking" (clearly cooking content)
+- **Current**: category = "general" (wrong!)
+- **After Fix**: category = "cooking" (correct!)
+
+---
+
 ### Context Block Library V2.1
 **Status**: Ready for Implementation
 **Location**: `dev/active/context-block-library/`
@@ -287,5 +313,5 @@ When starting a new major feature or refactoring:
 
 ---
 
-**Last Updated**: 2026-02-01
+**Last Updated**: 2026-02-05
 **Maintained By**: Development Team

@@ -1,5 +1,7 @@
-{"type": "keyvalue", "variant": "info", "items": [{"key": "Prep Time", "value": "15 min"}, {"key": "Servings", "value": "4"}]}
-{"type": "bullets", "variant": "ingredients", "items": ["2 cups flour", "1 tsp salt"]}
-{"type": "numbered", "variant": "cooking_steps", "items": ["Preheat oven to 350F", "Mix dry ingredients"]}
-{"type": "callout", "variant": "chef_tip", "style": "tip", "text": "Let dough rest 10 min"}
-{"type": "timestamp", "time": "3:45", "seconds": 225, "label": "Kneading technique"}
+{"type": "keyvalue", "variant": "info", "items": [{"key": "Prep Time", "value": "15 min"}, {"key": "Cook Time", "value": "30 min"}, {"key": "Servings", "value": "4"}, {"key": "Difficulty", "value": "Easy"}]}
+{"type": "ingredient", "servings": 4, "items": [{"name": "all-purpose flour", "amount": "2", "unit": "cups"}, {"name": "salt", "amount": "1", "unit": "tsp"}, {"name": "butter", "amount": "1/2", "unit": "cup", "notes": "softened"}, {"name": "eggs", "amount": "2", "unit": "large"}]}
+{"type": "step", "steps": [{"number": 1, "instruction": "Preheat oven to 375°F (190°C)", "duration": 600}, {"number": 2, "instruction": "Mix dry ingredients in a large bowl", "tips": "Sift flour for lighter texture"}, {"number": 3, "instruction": "Add wet ingredients and mix until just combined", "duration": 120}]}
+{"type": "tool_list", "tools": [{"name": "Stand mixer", "notes": "with paddle attachment"}, {"name": "9x13 baking pan"}, {"name": "Wire cooling rack"}]}
+{"type": "nutrition", "servingSize": "1 serving", "items": [{"nutrient": "Calories", "amount": "285", "unit": "kcal"}, {"nutrient": "Protein", "amount": "6", "unit": "g", "dailyValue": "12%"}, {"nutrient": "Carbs", "amount": "42", "unit": "g"}]}
+{"type": "callout", "variant": "chef_tip", "style": "tip", "text": "Let dough rest for 10 minutes for a more tender result"}
+{"type": "timestamp", "time": "3:45", "seconds": 225, "label": "Proper kneading technique"}

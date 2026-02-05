@@ -34,7 +34,14 @@ from src.services.transcript import (
     clean_transcript,
     format_transcript_with_timestamps,
 )
-from src.services.youtube import extract_video_data, VideoData
+from src.services.youtube import (
+    extract_video_data,
+    VideoData,
+    FastLLMProvider,
+    classify_category_with_llm,
+    get_llm_fallback_threshold,
+    _select_persona,
+)
 from src.services.description_analyzer import analyze_description, DescriptionAnalysis
 from src.services.sponsorblock import (
     get_sponsor_segments,
@@ -187,8 +194,61 @@ def validate_duration(duration: int) -> None:
         )
 
 
+async def finalize_video_context(
+    video_data: VideoData,
+    llm_provider: FastLLMProvider,
+) -> VideoData:
+    """Finalize video context with LLM fallback if confidence is low.
+
+    If category detection confidence is below threshold, uses LLM
+    to classify the video category. Updates VideoContext in place.
+
+    Args:
+        video_data: VideoData with initial context
+        llm_provider: FastLLMProvider instance for LLM fallback
+
+    Returns:
+        VideoData with finalized context (category may be updated)
+    """
+    if not video_data.context:
+        return video_data
+
+    threshold = get_llm_fallback_threshold()
+    confidence = video_data.context.category_confidence
+
+    # Only call LLM if confidence is below threshold
+    if confidence < threshold:
+        logger.info(
+            f"Low category confidence ({confidence:.2f} < {threshold}), "
+            f"triggering LLM fallback for '{video_data.title}'"
+        )
+
+        new_category = await classify_category_with_llm(
+            title=video_data.title,
+            channel=video_data.channel,
+            tags=video_data.context.tags,
+            description=video_data.description,
+            llm_provider=llm_provider,
+        )
+
+        # Update context with LLM-detected category
+        video_data.context.category = new_category
+        video_data.context.persona = _select_persona(new_category)
+        video_data.context.category_confidence = 0.8  # LLM confidence is higher
+
+        logger.info(
+            f"LLM fallback: category={new_category}, persona={video_data.context.persona}"
+        )
+
+    return video_data
+
+
 def extract_context(video_data: VideoData) -> tuple[dict[str, Any] | None, str]:
     """Extract video context and persona from video data.
+
+    Category and persona are now decoupled:
+    - category: detected directly via weighted scoring in youtube.py
+    - persona: selected based on category, used for LLM prompts
 
     Returns:
         Tuple of (context_dict for storage, persona for internal LLM use).
@@ -197,19 +257,11 @@ def extract_context(video_data: VideoData) -> tuple[dict[str, Any] | None, str]:
     if not video_data.context:
         return None, "standard"
 
-    # Map persona to user-facing category
-    persona_to_category = {
-        'code': 'coding',
-        'recipe': 'cooking',
-        'interview': 'podcast',
-        'review': 'reviews',
-        'standard': 'general',
-    }
-
+    # Use category directly from VideoContext (no more reverse mapping!)
+    category = video_data.context.category
     persona = video_data.context.persona
-    category = persona_to_category.get(persona, 'general')
 
-    # Store category (user-facing), NOT persona (internal)
+    # Store category and metadata
     context_dict = {
         "category": category,
         "youtubeCategory": video_data.context.youtube_category or "Unknown",
@@ -685,6 +737,9 @@ async def stream_summarization(
         # ── Phase 1: Metadata ──
         yield sse_event("phase", {"phase": "metadata"})
         video_data = await extract_video_data(youtube_id)
+
+        # Finalize context with LLM fallback if confidence is low
+        video_data = await finalize_video_context(video_data, llm_service.provider)
         context_dict, persona = extract_context(video_data)
 
         yield sse_event("metadata", {

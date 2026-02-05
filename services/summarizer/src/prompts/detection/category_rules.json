@@ -1,0 +1,123 @@
+{
+  "version": "1.0",
+  "detection_config": {
+    "llm_fallback_threshold": 0.4,
+    "weights": {
+      "keywords": 0.40,
+      "youtube_category": 0.30,
+      "title": 0.15,
+      "channel": 0.15
+    }
+  },
+  "categories": {
+    "cooking": {
+      "keywords": {
+        "primary": ["recipe", "cooking", "cook", "chef", "meal", "recipes"],
+        "secondary": ["ingredient", "kitchen", "bake", "baking", "food", "dish", "cuisine", "homemade", "delicious", "tasty"]
+      },
+      "youtube_categories": {
+        "primary": ["Howto & Style"],
+        "secondary": ["People & Blogs", "Entertainment"]
+      },
+      "channel_patterns": ["jamie oliver", "gordon ramsay", "joshua weissman", "binging with babish", "bon appetit", "tasty", "epicurious"],
+      "title_patterns": ["recipe", "how to make", "how to cook", "minute meal", "easy recipe", "homemade"]
+    },
+    "coding": {
+      "keywords": {
+        "primary": ["programming", "coding", "code", "developer", "software", "tutorial"],
+        "secondary": ["javascript", "python", "typescript", "react", "api", "node", "frontend", "backend", "devops", "algorithm", "data structure", "web development", "machine learning", "github"]
+      },
+      "youtube_categories": {
+        "primary": ["Science & Technology"],
+        "secondary": ["Education"]
+      },
+      "channel_patterns": ["fireship", "traversy media", "theprimeagen", "web dev simplified", "techworld with nana", "freecodecamp", "coding train"],
+      "title_patterns": ["tutorial", "how to code", "build a", "crash course", "in 100 seconds", "full course"]
+    },
+    "fitness": {
+      "keywords": {
+        "primary": ["workout", "exercise", "fitness", "gym", "training"],
+        "secondary": ["cardio", "strength", "hiit", "yoga", "muscle", "abs", "weight loss", "bodyweight"]
+      },
+      "youtube_categories": {
+        "primary": ["Sports"],
+        "secondary": ["Howto & Style", "People & Blogs"]
+      },
+      "channel_patterns": ["athlean-x", "jeff nippard", "fitness blender", "blogilates", "popsugar fitness"],
+      "title_patterns": ["workout", "minute", "full body", "no equipment", "at home", "burn"]
+    },
+    "travel": {
+      "keywords": {
+        "primary": ["travel", "destination", "trip", "vacation", "tour"],
+        "secondary": ["hotel", "flight", "itinerary", "explore", "adventure", "tourism", "backpacking"]
+      },
+      "youtube_categories": {
+        "primary": ["Travel & Events"],
+        "secondary": ["People & Blogs", "Entertainment"]
+      },
+      "channel_patterns": ["kara and nate", "lost leblanc", "mark wiens", "drew binsky", "nas daily"],
+      "title_patterns": ["travel guide", "days in", "things to do", "travel vlog", "must visit"]
+    },
+    "education": {
+      "keywords": {
+        "primary": ["learn", "education", "course", "lecture", "explain", "explained"],
+        "secondary": ["history", "science", "math", "physics", "chemistry", "biology", "economics", "documentary"]
+      },
+      "youtube_categories": {
+        "primary": ["Education"],
+        "secondary": ["Science & Technology", "News & Politics"]
+      },
+      "channel_patterns": ["kurzgesagt", "veritasium", "3blue1brown", "vsauce", "crash course", "ted-ed", "khan academy"],
+      "title_patterns": ["explained", "how .* works", "what is", "why do", "the science of"]
+    },
+    "podcast": {
+      "keywords": {
+        "primary": ["interview", "podcast", "conversation", "guest", "episode"],
+        "secondary": ["talk", "discussion", "q&a", "host", "chat", "dialogue"]
+      },
+      "youtube_categories": {
+        "primary": ["People & Blogs"],
+        "secondary": ["Entertainment", "News & Politics"]
+      },
+      "channel_patterns": ["lex fridman", "joe rogan", "huberman lab", "diary of a ceo", "impact theory"],
+      "title_patterns": ["interview", "podcast", "ep\\s?\\d+", "episode", "conversation with"]
+    },
+    "reviews": {
+      "keywords": {
+        "primary": ["review", "unboxing", "comparison", "hands-on", "first look"],
+        "secondary": ["test", "rating", "impressions", "analysis", "breakdown", "benchmark", "worth it", "vs"]
+      },
+      "youtube_categories": {
+        "primary": ["Science & Technology"],
+        "secondary": ["Gaming", "Autos & Vehicles"]
+      },
+      "channel_patterns": ["mkbhd", "linus tech tips", "dave2d", "mrwhosetheboss", "unbox therapy"],
+      "title_patterns": ["review", "vs\\.?", "unboxing", "worth it", "should you buy"]
+    },
+    "gaming": {
+      "keywords": {
+        "primary": ["gameplay", "gaming", "walkthrough", "playthrough", "game"],
+        "secondary": ["stream", "lets play", "speedrun", "guide", "tips", "tricks"]
+      },
+      "youtube_categories": {
+        "primary": ["Gaming"],
+        "secondary": ["Entertainment"]
+      },
+      "channel_patterns": [],
+      "title_patterns": ["gameplay", "walkthrough", "part \\d+", "lets play", "guide"]
+    },
+    "diy": {
+      "keywords": {
+        "primary": ["diy", "build", "craft", "woodworking", "renovation", "make"],
+        "secondary": ["project", "handmade", "repair", "restore", "how to build"]
+      },
+      "youtube_categories": {
+        "primary": ["Howto & Style"],
+        "secondary": ["Science & Technology"]
+      },
+      "channel_patterns": ["i like to make stuff", "diy creators", "adam savage"],
+      "title_patterns": ["diy", "how to build", "making a", "i built", "building"]
+    }
+  },
+  "default_category": "standard"
+}

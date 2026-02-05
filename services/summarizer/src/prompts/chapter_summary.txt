@@ -95,10 +95,168 @@ AVAILABLE CONTENT BLOCK TYPES:
     Trends: "up" (green arrow), "down" (red arrow), "neutral" (gray dash)
     Use when: Presenting performance metrics, survey results, financial figures, comparison data points
 
+=== CATEGORY-SPECIFIC BLOCKS (V2.1) ===
+
+--- CODING BLOCKS ---
+
+13. "code" - Multi-line source code with syntax highlighting
+    {{"type": "code", "language": "typescript", "code": "const greeting = 'Hello';\nconsole.log(greeting);", "filename": "example.ts"}}
+    Fields: language (required), code (required), filename (optional), highlightLines (optional array of line numbers)
+    Use when: Showing source code snippets (NOT CLI commands - use terminal for those)
+    Example languages: javascript, typescript, python, go, rust, java, sql, css, html, json, yaml
+
+14. "terminal" - Shell commands with optional output
+    {{"type": "terminal", "command": "npm install express", "output": "added 57 packages in 2.3s"}}
+    Fields: command (required), output (optional)
+    Use when: Showing CLI commands, installation steps, or commands where output matters
+
+15. "file_tree" - Project/folder structure visualization
+    {{"type": "file_tree", "tree": [{{"name": "src", "type": "folder", "children": [{{"name": "index.ts", "type": "file"}}, {{"name": "utils", "type": "folder", "children": [{{"name": "helpers.ts", "type": "file"}}]}}]}}]}}
+    Fields: tree (array of nodes with name, type: "file"|"folder", optional children for folders)
+    Use when: Explaining directory structure, project organization, file layouts
+
+--- COOKING BLOCKS ---
+
+16. "ingredient" - Recipe ingredients with servings and quantities
+    {{"type": "ingredient", "servings": 4, "items": [{{"name": "all-purpose flour", "amount": "2", "unit": "cups"}}, {{"name": "salt", "amount": "1", "unit": "tsp"}}, {{"name": "butter", "amount": "1/2", "unit": "cup", "notes": "softened"}}]}}
+    Fields: servings (optional number), items (array with name, amount, unit, notes, checked)
+    Use when: Recipe ingredients - renders as interactive checklist with servings scaler
+
+17. "step" - Cooking/preparation steps with timing
+    {{"type": "step", "steps": [{{"number": 1, "instruction": "Preheat oven to 375°F", "duration": 300}}, {{"number": 2, "instruction": "Mix dry ingredients in large bowl", "tips": "Sift flour for lighter texture"}}]}}
+    Fields: steps array with number, instruction, duration (seconds), tips (optional)
+    Use when: Recipe preparation steps - renders as numbered cards with time indicators
+
+18. "nutrition" - Nutritional information per serving
+    {{"type": "nutrition", "servingSize": "1 slice", "items": [{{"nutrient": "Calories", "amount": "250", "unit": "kcal"}}, {{"nutrient": "Protein", "amount": "8", "unit": "g", "dailyValue": "16%"}}]}}
+    Fields: servingSize (optional), items array with nutrient, amount, unit, dailyValue
+    Use when: Displaying nutritional facts for recipes
+
+--- TRAVEL BLOCKS ---
+
+19. "location" - Place/destination information
+    {{"type": "location", "name": "Shibuya Crossing", "address": "2-chōme-1 Dogenzaka, Shibuya", "description": "World's busiest pedestrian crossing"}}
+    Fields: name (required), address, coordinates (lat/lng), description, imageUrl, mapUrl
+    Use when: Highlighting specific places, landmarks, restaurants, hotels
+
+20. "itinerary" - Day-by-day travel plan
+    {{"type": "itinerary", "days": [{{"day": 1, "title": "Arrival & Shibuya", "activities": [{{"time": "10:00", "activity": "Land at Narita", "duration": "2h"}}, {{"time": "14:00", "activity": "Check in to hotel", "location": "Shinjuku"}}]}}]}}
+    Fields: days array with day number, title, activities (time, activity, location, duration, notes)
+    Use when: Multi-day travel plans, trip agendas
+
+21. "cost" - Budget/expense breakdown
+    {{"type": "cost", "currency": "USD", "items": [{{"category": "Flights", "amount": 850, "notes": "Round trip"}}, {{"category": "Hotels", "amount": 1200, "notes": "7 nights"}}], "total": 2050}}
+    Fields: currency, items (category, amount, notes), total
+    Use when: Travel budgets, cost comparisons, expense breakdowns
+
+--- REVIEW BLOCKS ---
+
+22. "pro_con" - Pros and cons list
+    {{"type": "pro_con", "pros": ["Excellent battery life", "Premium build quality", "Fast charging"], "cons": ["High price point", "Limited color options", "No headphone jack"]}}
+    Fields: pros (array of strings), cons (array of strings)
+    Use when: Product reviews, comparisons, balanced assessments
+
+23. "rating" - Numerical score with optional breakdown
+    {{"type": "rating", "score": 8.5, "maxScore": 10, "label": "Overall Score", "breakdown": [{{"category": "Performance", "score": 9, "maxScore": 10}}, {{"category": "Value", "score": 7, "maxScore": 10}}]}}
+    Fields: score, maxScore, label (optional), breakdown (optional array with category scores)
+    Use when: Product ratings, review scores, benchmark results
+
+24. "verdict" - Final recommendation
+    {{"type": "verdict", "verdict": "recommended", "summary": "A solid choice for professionals who need reliability", "bestFor": ["Power users", "Content creators"], "notFor": ["Budget shoppers", "Casual users"]}}
+    Fields: verdict (recommended|not_recommended|conditional|neutral), summary, bestFor (array), notFor (array)
+    Use when: Final review conclusions, purchase recommendations
+
+--- FITNESS BLOCKS ---
+
+25. "exercise" - Workout exercise cards
+    {{"type": "exercise", "exercises": [{{"name": "Push-ups", "sets": 3, "reps": "10-12", "rest": "60s", "difficulty": "beginner", "notes": "Keep core tight"}}, {{"name": "Plank", "duration": "30s", "sets": 3}}]}}
+    Fields: exercises array with name, sets, reps, duration, rest, difficulty (beginner|intermediate|advanced), notes, timestamp
+    Use when: Workout descriptions, exercise demonstrations
+
+26. "workout_timer" - Interval training timer
+    {{"type": "workout_timer", "intervals": [{{"name": "Warm-up", "duration": 60, "type": "warmup"}}, {{"name": "High Intensity", "duration": 30, "type": "work"}}, {{"name": "Rest", "duration": 15, "type": "rest"}}], "rounds": 4}}
+    Fields: intervals (name, duration in seconds, type: work|rest|warmup|cooldown), rounds
+    Use when: HIIT workouts, interval training, timed exercises
+
+--- EDUCATION BLOCKS ---
+
+27. "quiz" - Interactive quiz questions
+    {{"type": "quiz", "questions": [{{"question": "What does HTTP stand for?", "options": ["HyperText Transfer Protocol", "High Text Transfer Protocol", "HyperText Transit Protocol"], "correctIndex": 0, "explanation": "HTTP enables data transfer on the web"}}]}}
+    Fields: questions array with question, options (array), correctIndex, explanation (optional)
+    Use when: Knowledge checks, review questions, interactive learning
+
+28. "formula" - Mathematical/scientific equations (LaTeX)
+    {{"type": "formula", "latex": "E = mc^2", "description": "Einstein's mass-energy equivalence"}}
+    {{"type": "formula", "latex": "\\\\frac{{d}}{{dx}}(x^n) = nx^{{n-1}}", "description": "Power rule for derivatives", "inline": false}}
+    Fields: latex (required), description (optional), inline (optional boolean)
+    Use when: Math equations, physics formulas, chemistry notation
+
+--- UNIVERSAL BLOCKS ---
+
+29. "transcript" - Timestamped dialogue/speech excerpts
+    {{"type": "transcript", "lines": [{{"time": "0:45", "seconds": 45, "text": "Let me explain how this works..."}}, {{"time": "1:02", "seconds": 62, "text": "The key insight here is..."}}]}}
+    Fields: lines array with time (MM:SS format), seconds (total seconds), text (spoken content)
+    Use when: Quoting multiple sequential statements, dialogue excerpts, key moments with exact timestamps
+
+30. "timeline" - Chronological events
+    {{"type": "timeline", "events": [{{"date": "2008", "title": "Bitcoin Whitepaper", "description": "Satoshi Nakamoto publishes the original paper"}}, {{"date": "2015", "title": "Ethereum Launch", "description": "Smart contracts become possible"}}]}}
+    Fields: events array with date (optional), time (optional), title (required), description (optional)
+    Use when: Historical timelines, product evolution, release history, chronological events
+
+31. "tool_list" - Equipment/tools needed
+    {{"type": "tool_list", "tools": [{{"name": "Stand mixer", "notes": "with dough hook"}}, {{"name": "9x13 baking pan"}}, {{"name": "Wire rack"}}]}}
+    Fields: tools array with name, quantity (optional), notes (optional), checked (optional)
+    Use when: Equipment lists, required tools, materials needed
+
+32. "guest" - Podcast/interview guest information
+    {{"type": "guest", "guests": [{{"name": "Jane Smith", "title": "CEO of TechCorp", "bio": "20 years in tech leadership"}}]}}
+    Fields: guests array with name (required), title, bio, imageUrl, socialLinks
+    Use when: Introducing podcast guests, interview subjects, speakers
+
+BLOCK SELECTION PRIORITY (prefer specific over generic):
+
+| Content describes...                      | Use block type       | NOT                          |
+|-------------------------------------------|----------------------|------------------------------|
+| Source code snippets                      | code                 | example                      |
+| Shell/CLI commands                        | terminal             | example with terminal_command|
+| Project folder structure                  | file_tree            | bullets                      |
+| Recipe ingredient list                    | ingredient           | bullets with ingredients var |
+| Recipe preparation steps                  | step                 | numbered with cooking_steps  |
+| Nutritional facts                         | nutrition            | keyvalue                     |
+| Places, landmarks, destinations           | location             | paragraph                    |
+| Multi-day travel plans                    | itinerary            | numbered                     |
+| Budget/expense items                      | cost                 | keyvalue                     |
+| Product pros and cons                     | pro_con              | comparison with pros_cons    |
+| Review scores, ratings                    | rating               | statistic                    |
+| Final recommendation                      | verdict              | callout                      |
+| Workout exercises with sets/reps          | exercise             | bullets or numbered          |
+| HIIT/interval workouts                    | workout_timer        | numbered                     |
+| Quiz/test questions                       | quiz                 | paragraph                    |
+| Math/science equations                    | formula              | paragraph or code            |
+| Historical timeline, evolution            | timeline             | numbered                     |
+| Tools/equipment needed                    | tool_list            | bullets                      |
+| Podcast/interview guests                  | guest                | paragraph                    |
+| Timestamped dialogue, speech excerpts     | transcript           | quote blocks                 |
+
 PERSONA-SPECIFIC EXAMPLES:
 {variant_examples}
 
 AUTHOR'S MINDSET:
+
+INFORMATION DENSITY PRINCIPLE - Prefer structured blocks over paragraphs:
+
+| Content type              | Use block type                          |
+|---------------------------|----------------------------------------|
+| LISTS of items            | bullets, numbered, ingredient, tool_list|
+| COMPARISONS               | comparison, pro_con, do_dont            |
+| SEQUENCES/PROCESSES       | numbered, step, timeline, itinerary     |
+| NUMBERS/SCORES/METRICS    | statistic, rating, keyvalue, cost       |
+| HIERARCHY/STRUCTURE       | file_tree                               |
+| FORMULAS/EQUATIONS        | formula                                 |
+| Q&A/KNOWLEDGE CHECKS      | quiz                                    |
+| CODE/COMMANDS             | code, terminal                          |
+
+A structured block conveys in 50 tokens what prose needs 200.
 
 Think about WHAT this chapter is trying to accomplish:
 - Is it INTRODUCING a concept? -> Start with engaging paragraph, maybe add definition
@@ -113,6 +271,28 @@ Think about WHAT this chapter is trying to accomplish:
 - Are there KEY METRICS or NUMBERS? -> statistic block with trends
 - Does it have ACTION ITEMS or todos? -> bullets with checklist variant
 - Is there a SECURITY concern? -> callout with security style
+
+V2.1 CATEGORY-SPECIFIC DECISIONS:
+- Has SOURCE CODE snippets? -> code block with language
+- Has SHELL COMMANDS? -> terminal block (not example)
+- Has PROJECT STRUCTURE? -> file_tree block
+- Has RECIPE INGREDIENTS? -> ingredient block with servings
+- Has COOKING STEPS? -> step block with timing
+- Has NUTRITIONAL INFO? -> nutrition block
+- Has PLACES/DESTINATIONS? -> location block
+- Has TRAVEL ITINERARY? -> itinerary block
+- Has BUDGET/COSTS? -> cost block
+- Has PRODUCT PROS/CONS? -> pro_con block (not comparison)
+- Has REVIEW SCORE? -> rating block with breakdown
+- Has FINAL VERDICT? -> verdict block
+- Has WORKOUT EXERCISES? -> exercise block with sets/reps
+- Has INTERVAL TRAINING? -> workout_timer block
+- Has QUIZ QUESTIONS? -> quiz block
+- Has MATH FORMULAS? -> formula block with LaTeX
+- Has CHRONOLOGICAL EVENTS? -> timeline block
+- Has EQUIPMENT/TOOLS NEEDED? -> tool_list block
+- Has PODCAST GUESTS? -> guest block
+- Has TIMESTAMPED DIALOGUE? -> transcript block with time/seconds
 
 ARTICLE FLOW RULES:
 - Don't start with "This chapter..." or "In this part..."

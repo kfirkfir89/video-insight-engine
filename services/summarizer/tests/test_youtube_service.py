@@ -20,6 +20,11 @@ from src.services.youtube import (
     _parse_chapters,
     _clean_subtitle_text,
     _load_persona_rules,
+    _detect_category,
+    _select_persona,
+    _load_category_rules,
+    classify_category_with_llm,
+    get_llm_fallback_threshold,
 )
 from src.models.schemas import ErrorCode
 from src.exceptions import TranscriptError
@@ -281,10 +286,11 @@ class TestCleanSubtitleText:
 class TestExtractVideoContext:
     """Tests for extracting video context from yt-dlp info."""
 
+    @patch("src.services.youtube._load_category_rules")
     @patch("src.services.youtube._load_persona_rules")
-    def test_extracts_context(self, mock_rules):
+    def test_extracts_context(self, mock_persona_rules, mock_category_rules):
         """Test extracting full video context."""
-        mock_rules.return_value = {
+        mock_persona_rules.return_value = {
             "personas": {
                 "code": {
                     "keywords": ["python", "programming"],
@@ -292,6 +298,32 @@ class TestExtractVideoContext:
                 },
             },
             "default_persona": "standard",
+        }
+        mock_category_rules.return_value = {
+            "detection_config": {
+                "llm_fallback_threshold": 0.4,
+                "weights": {
+                    "keywords": 0.40,
+                    "youtube_category": 0.30,
+                    "title": 0.15,
+                    "channel": 0.15,
+                },
+            },
+            "categories": {
+                "coding": {
+                    "keywords": {
+                        "primary": ["python", "programming"],
+                        "secondary": ["tutorial"],
+                    },
+                    "youtube_categories": {
+                        "primary": ["Science & Technology"],
+                        "secondary": ["Education"],
+                    },
+                    "channel_patterns": [],
+                    "title_patterns": ["tutorial"],
+                },
+            },
+            "default_category": "standard",
         }
 
         info = {
@@ -303,22 +335,38 @@ class TestExtractVideoContext:
         context = extract_video_context(info, description)
 
         assert context.youtube_category == "Science & Technology"
+        assert context.category == "coding"
         assert context.persona == "code"
         assert "Python" in context.tags
         assert len(context.display_tags) <= 6
 
+    @patch("src.services.youtube._load_category_rules")
     @patch("src.services.youtube._load_persona_rules")
-    def test_handles_missing_category(self, mock_rules):
+    def test_handles_missing_category(self, mock_persona_rules, mock_category_rules):
         """Test handling videos without category."""
-        mock_rules.return_value = {
+        mock_persona_rules.return_value = {
             "personas": {},
             "default_persona": "standard",
+        }
+        mock_category_rules.return_value = {
+            "detection_config": {
+                "llm_fallback_threshold": 0.4,
+                "weights": {
+                    "keywords": 0.40,
+                    "youtube_category": 0.30,
+                    "title": 0.15,
+                    "channel": 0.15,
+                },
+            },
+            "categories": {},
+            "default_category": "standard",
         }
 
         info = {"tags": ["video"]}
         context = extract_video_context(info, "")
 
         assert context.youtube_category is None
+        assert context.category == "standard"
         assert context.persona == "standard"
 
 
@@ -538,3 +586,308 @@ class TestRateLimitHandling:
 
         assert result.video_id == "test123"
         assert mock_extract.call_count == 2
+
+
+class TestDetectCategory:
+    """Tests for weighted category detection."""
+
+    @patch("src.services.youtube._load_category_rules")
+    def test_detects_cooking_from_keywords(self, mock_rules):
+        """Test detecting cooking category from strong keywords."""
+        mock_rules.return_value = {
+            "detection_config": {
+                "llm_fallback_threshold": 0.4,
+                "weights": {
+                    "keywords": 0.40,
+                    "youtube_category": 0.30,
+                    "title": 0.15,
+                    "channel": 0.15,
+                },
+            },
+            "categories": {
+                "cooking": {
+                    "keywords": {
+                        "primary": ["recipe", "cooking"],
+                        "secondary": ["food", "baking"],
+                    },
+                    "youtube_categories": {
+                        "primary": ["Howto & Style"],
+                        "secondary": ["Entertainment"],
+                    },
+                    "channel_patterns": ["jamie oliver"],
+                    "title_patterns": ["recipe"],
+                },
+            },
+            "default_category": "standard",
+        }
+
+        # Jamie Oliver video with Entertainment category (not primary)
+        category, confidence = _detect_category(
+            youtube_category="Entertainment",
+            tags=["recipe", "cooking", "food"],
+            hashtags=["recipe"],
+            channel="Jamie Oliver",
+            title="Easy Recipe for Dinner",
+        )
+
+        assert category == "cooking"
+        assert confidence > 0.4  # Above threshold
+
+    @patch("src.services.youtube._load_category_rules")
+    def test_detects_coding_category(self, mock_rules):
+        """Test detecting coding category."""
+        mock_rules.return_value = {
+            "detection_config": {
+                "llm_fallback_threshold": 0.4,
+                "weights": {
+                    "keywords": 0.40,
+                    "youtube_category": 0.30,
+                    "title": 0.15,
+                    "channel": 0.15,
+                },
+            },
+            "categories": {
+                "coding": {
+                    "keywords": {
+                        "primary": ["programming", "coding", "python"],
+                        "secondary": ["javascript", "api"],
+                    },
+                    "youtube_categories": {
+                        "primary": ["Science & Technology"],
+                        "secondary": ["Education"],
+                    },
+                    "channel_patterns": ["fireship"],
+                    "title_patterns": ["tutorial", "crash course"],
+                },
+            },
+            "default_category": "standard",
+        }
+
+        category, confidence = _detect_category(
+            youtube_category="Science & Technology",
+            tags=["python", "programming"],
+            hashtags=["coding"],
+            channel="Some Channel",
+            title="Python Tutorial",
+        )
+
+        assert category == "coding"
+        assert confidence > 0.5
+
+    @patch("src.services.youtube._load_category_rules")
+    def test_defaults_to_standard_with_low_confidence(self, mock_rules):
+        """Test defaulting to standard when no strong match."""
+        mock_rules.return_value = {
+            "detection_config": {
+                "llm_fallback_threshold": 0.4,
+                "weights": {
+                    "keywords": 0.40,
+                    "youtube_category": 0.30,
+                    "title": 0.15,
+                    "channel": 0.15,
+                },
+            },
+            "categories": {
+                "cooking": {
+                    "keywords": {
+                        "primary": ["recipe"],
+                        "secondary": ["food"],
+                    },
+                    "youtube_categories": {
+                        "primary": ["Howto & Style"],
+                        "secondary": [],
+                    },
+                    "channel_patterns": [],
+                    "title_patterns": [],
+                },
+            },
+            "default_category": "standard",
+        }
+
+        category, confidence = _detect_category(
+            youtube_category="Entertainment",
+            tags=["funny", "comedy"],
+            hashtags=[],
+            channel="Random Channel",
+            title="Funny Video",
+        )
+
+        assert category == "standard"
+        assert confidence < 0.4
+
+    @patch("src.services.youtube._load_category_rules")
+    def test_channel_pattern_matching(self, mock_rules):
+        """Test channel pattern contributes to score."""
+        mock_rules.return_value = {
+            "detection_config": {
+                "llm_fallback_threshold": 0.4,
+                "weights": {
+                    "keywords": 0.40,
+                    "youtube_category": 0.30,
+                    "title": 0.15,
+                    "channel": 0.15,
+                },
+            },
+            "categories": {
+                "cooking": {
+                    "keywords": {"primary": [], "secondary": []},
+                    "youtube_categories": {"primary": [], "secondary": []},
+                    "channel_patterns": ["gordon ramsay"],
+                    "title_patterns": [],
+                },
+            },
+            "default_category": "standard",
+        }
+
+        # Only channel matches, gets 0.15 score
+        category, confidence = _detect_category(
+            youtube_category="Entertainment",
+            tags=[],
+            hashtags=[],
+            channel="Gordon Ramsay",
+            title="Kitchen Nightmares",
+        )
+
+        # Should detect cooking from channel alone
+        assert category == "cooking"
+        assert confidence == pytest.approx(0.15, abs=0.01)
+
+
+class TestSelectPersona:
+    """Tests for category to persona mapping."""
+
+    def test_maps_cooking_to_recipe(self):
+        """Test cooking category maps to recipe persona."""
+        persona = _select_persona("cooking")
+        assert persona == "recipe"
+
+    def test_maps_coding_to_code(self):
+        """Test coding category maps to code persona."""
+        persona = _select_persona("coding")
+        assert persona == "code"
+
+    def test_maps_reviews_to_review(self):
+        """Test reviews category maps to review persona."""
+        persona = _select_persona("reviews")
+        assert persona == "review"
+
+    def test_maps_standard_to_standard(self):
+        """Test standard category stays standard."""
+        persona = _select_persona("standard")
+        assert persona == "standard"
+
+    def test_unknown_category_defaults_to_standard(self):
+        """Test unknown categories default to standard."""
+        persona = _select_persona("unknown_category")
+        assert persona == "standard"
+
+    def test_maps_education_to_education(self):
+        """Test education category maps to education persona."""
+        persona = _select_persona("education")
+        assert persona == "education"
+
+
+class TestClassifyCategoryWithLLM:
+    """Tests for LLM-based category classification."""
+
+    @pytest.fixture
+    def mock_llm_provider(self):
+        """Mock LLM provider."""
+        provider = AsyncMock()
+        provider.complete_fast = AsyncMock()
+        return provider
+
+    async def test_returns_valid_category(self, mock_llm_provider):
+        """Test LLM returns valid category."""
+        mock_llm_provider.complete_fast.return_value = "cooking"
+
+        result = await classify_category_with_llm(
+            title="Easy Pasta Recipe",
+            channel="Cooking Channel",
+            tags=["recipe", "pasta"],
+            description="Learn to make delicious pasta",
+            llm_provider=mock_llm_provider,
+        )
+
+        assert result == "cooking"
+        mock_llm_provider.complete_fast.assert_called_once()
+
+    async def test_normalizes_category_case(self, mock_llm_provider):
+        """Test LLM response is normalized to lowercase."""
+        mock_llm_provider.complete_fast.return_value = "CODING"
+
+        result = await classify_category_with_llm(
+            title="Python Tutorial",
+            channel="Tech Channel",
+            tags=["python", "coding"],
+            description="Learn Python",
+            llm_provider=mock_llm_provider,
+        )
+
+        assert result == "coding"
+
+    async def test_strips_whitespace(self, mock_llm_provider):
+        """Test LLM response whitespace is stripped."""
+        mock_llm_provider.complete_fast.return_value = "  cooking  \n"
+
+        result = await classify_category_with_llm(
+            title="Recipe Video",
+            channel="Food Channel",
+            tags=["recipe"],
+            description="Cooking tutorial",
+            llm_provider=mock_llm_provider,
+        )
+
+        assert result == "cooking"
+
+    async def test_returns_standard_on_invalid_response(self, mock_llm_provider):
+        """Test returns standard when LLM gives invalid category."""
+        mock_llm_provider.complete_fast.return_value = "invalid_category"
+
+        result = await classify_category_with_llm(
+            title="Random Video",
+            channel="Channel",
+            tags=[],
+            description="Some video",
+            llm_provider=mock_llm_provider,
+        )
+
+        assert result == "standard"
+
+    async def test_returns_standard_on_exception(self, mock_llm_provider):
+        """Test returns standard when LLM call fails."""
+        mock_llm_provider.complete_fast.side_effect = Exception("API Error")
+
+        result = await classify_category_with_llm(
+            title="Test Video",
+            channel="Channel",
+            tags=[],
+            description="Test",
+            llm_provider=mock_llm_provider,
+        )
+
+        assert result == "standard"
+
+
+class TestGetLLMFallbackThreshold:
+    """Tests for LLM fallback threshold retrieval."""
+
+    @patch("src.services.youtube._load_category_rules")
+    def test_returns_threshold_from_config(self, mock_rules):
+        """Test returning threshold from configuration."""
+        mock_rules.return_value = {
+            "detection_config": {
+                "llm_fallback_threshold": 0.35,
+            },
+        }
+
+        threshold = get_llm_fallback_threshold()
+        assert threshold == 0.35
+
+    @patch("src.services.youtube._load_category_rules")
+    def test_returns_default_on_missing_config(self, mock_rules):
+        """Test returning default threshold when config is missing."""
+        mock_rules.return_value = {}
+
+        threshold = get_llm_fallback_threshold()
+        assert threshold == 0.4  # Default value

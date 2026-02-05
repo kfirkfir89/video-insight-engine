@@ -116,6 +116,52 @@ class LLMProvider:
 
         return await self.complete_with_messages(messages, max_tokens, metadata)
 
+    async def complete_fast(
+        self,
+        prompt: str,
+        max_tokens: int = 50,
+        timeout: float = 5.0,
+    ) -> str:
+        """Generate quick completion using fast model.
+
+        Uses the fast model (e.g., Haiku) for simple classifications
+        and quick responses. Has shorter timeout than regular complete().
+
+        Args:
+            prompt: User prompt
+            max_tokens: Maximum tokens in response (default 50)
+            timeout: Request timeout in seconds (default 5.0)
+
+        Returns:
+            Generated text content
+
+        Raises:
+            RateLimitError: Rate limit exceeded
+            Timeout: Request timed out
+            APIError: General API error
+        """
+        try:
+            kwargs: dict[str, Any] = {
+                "model": self._fast_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": max_tokens,
+                "timeout": timeout,
+                "num_retries": 1,  # Fewer retries for fast calls
+            }
+
+            response = await acompletion(**kwargs)
+            return response.choices[0].message.content or ""
+
+        except RateLimitError as e:
+            logger.warning(f"Rate limited by {self._extract_provider(self._fast_model)}: {e}")
+            raise
+        except Timeout as e:
+            logger.warning(f"Fast model timeout after {timeout}s: {e}")
+            raise
+        except APIError as e:
+            logger.error(f"Fast model API error: {e}")
+            raise
+
     async def complete_with_messages(
         self,
         messages: list[dict | Message],

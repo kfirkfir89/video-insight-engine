@@ -22,8 +22,22 @@ EXAMPLES_DIR = PROMPTS_DIR / "examples"
 
 # Valid persona names - whitelist to prevent path traversal attacks
 VALID_PERSONAS: frozenset[str] = frozenset([
-    'code', 'recipe', 'interview', 'review', 'standard'
+    'code', 'recipe', 'interview', 'review', 'standard',
+    'fitness', 'travel', 'education'
 ])
+
+# Category to preferred V2.1 block types mapping
+# Used for logging metrics and future prompt injection
+CATEGORY_BLOCKS: dict[str, list[str]] = {
+    'code': ['code', 'terminal', 'file_tree', 'definition', 'quiz'],
+    'recipe': ['ingredient', 'step', 'nutrition', 'tool_list'],
+    'review': ['pro_con', 'rating', 'verdict', 'cost'],
+    'fitness': ['exercise', 'workout_timer'],
+    'travel': ['location', 'itinerary', 'cost'],
+    'education': ['quiz', 'formula', 'timeline', 'definition'],
+    'interview': ['guest', 'quote', 'timestamp', 'transcript'],
+    'standard': [],
+}
 
 # Streaming event types
 StreamEventType = Literal["token", "complete"]
@@ -220,6 +234,54 @@ def inject_block_ids(blocks: list[dict]) -> list[dict]:
     return blocks
 
 
+def _log_block_metrics(
+    content: list[dict],
+    chapter_title: str,
+    persona: str,
+) -> None:
+    """Log block generation metrics for analysis.
+
+    Tracks:
+    - Block type diversity
+    - Paragraph ratio (lower is better for information density)
+    - Category-appropriate block usage
+
+    Args:
+        content: List of content blocks
+        chapter_title: Title for logging context
+        persona: Content persona used
+    """
+    if not content:
+        return
+
+    block_types = [b.get("type") for b in content if isinstance(b, dict) and b.get("type")]
+    unique_types = set(block_types)
+    total_blocks = len(block_types)
+
+    # Count paragraphs
+    paragraph_count = sum(1 for t in block_types if t == "paragraph")
+    paragraph_ratio = paragraph_count / total_blocks if total_blocks > 0 else 0
+
+    # Check category-appropriate block usage
+    category_blocks = CATEGORY_BLOCKS.get(persona, [])
+    category_block_count = sum(1 for t in block_types if t in category_blocks)
+    category_match_ratio = category_block_count / total_blocks if total_blocks > 0 else 0
+
+    # Log metrics
+    logger.info(
+        "chapter_summary_blocks",
+        extra={
+            "chapter_title": chapter_title[:50],
+            "persona": persona,
+            "total_blocks": total_blocks,
+            "unique_block_types": len(unique_types),
+            "block_types": list(block_types),
+            "paragraph_ratio": round(paragraph_ratio, 2),
+            "category_match_ratio": round(category_match_ratio, 2),
+        },
+    )
+
+
 class LLMService:
     """Service for LLM-based video processing.
 
@@ -234,6 +296,15 @@ class LLMService:
             provider: LLMProvider instance for making LLM calls
         """
         self._provider = provider
+
+    @property
+    def provider(self) -> LLMProvider:
+        """Get the underlying LLM provider.
+
+        Use this for operations that need direct provider access,
+        such as fast model calls for classification.
+        """
+        return self._provider
 
     @property
     def fast_model(self) -> str:
@@ -367,6 +438,9 @@ class LLMService:
 
         # Inject blockId into each content block
         content = inject_block_ids(content)
+
+        # Log block metrics for analysis
+        _log_block_metrics(content, title, persona)
 
         # Return with legacy fields for backward compatibility
         return {
@@ -596,6 +670,8 @@ class LLMService:
                         content = []
                     # Inject blockId into each content block
                     content = inject_block_ids(content)
+                    # Log block metrics for analysis
+                    _log_block_metrics(content, title, persona)
                     summary_data = {
                         "content": content,
                         # Legacy fields for backward compatibility

@@ -6,6 +6,12 @@ This module provides a single-call extraction of all video data:
 - Description (full text)
 - Subtitles/captions with timestamps
 - Video context (category, persona, tags)
+
+Category detection uses weighted scoring:
+- Keywords (tags + hashtags): 40%
+- YouTube category: 30%
+- Title patterns: 15%
+- Channel patterns: 15%
 """
 
 import asyncio
@@ -15,7 +21,7 @@ import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, Protocol, TypedDict, runtime_checkable
 
 import tenacity
 import yt_dlp  # type: ignore[import-untyped]
@@ -26,12 +32,35 @@ from src.exceptions import TranscriptError
 
 logger = logging.getLogger(__name__)
 
-# Path to persona detection rules
+# Path to detection rules
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+
+# Valid category values (matches frontend VideoCategory)
+VALID_CATEGORIES: frozenset[str] = frozenset([
+    'cooking', 'coding', 'fitness', 'travel', 'education',
+    'podcast', 'reviews', 'gaming', 'diy', 'standard'
+])
+
+
+@runtime_checkable
+class FastLLMProvider(Protocol):
+    """Protocol for LLM providers that support fast classification.
+
+    Used for type-safe LLM provider injection in classify_category_with_llm.
+    """
+
+    async def complete_fast(
+        self,
+        prompt: str,
+        max_tokens: int = 50,
+        timeout: float = 5.0,
+    ) -> str:
+        """Generate quick completion using fast model."""
+        ...
 
 
 # -----------------------------------------------------------------------------
-# Video Context Extraction (Phase 1)
+# Video Context Extraction
 # -----------------------------------------------------------------------------
 
 class PersonaConfig(TypedDict):
@@ -44,6 +73,40 @@ class PersonaRules(TypedDict):
     """Structure of persona_rules.json."""
     personas: dict[str, PersonaConfig]
     default_persona: str
+
+
+class CategoryKeywords(TypedDict):
+    """Keywords config for category detection."""
+    primary: list[str]
+    secondary: list[str]
+
+
+class YouTubeCategories(TypedDict):
+    """YouTube categories config for category detection."""
+    primary: list[str]
+    secondary: list[str]
+
+
+class CategoryConfig(TypedDict):
+    """Configuration for a single category detection rule."""
+    keywords: CategoryKeywords
+    youtube_categories: YouTubeCategories
+    channel_patterns: list[str]
+    title_patterns: list[str]
+
+
+class DetectionConfig(TypedDict):
+    """Detection configuration."""
+    llm_fallback_threshold: float
+    weights: dict[str, float]
+
+
+class CategoryRules(TypedDict):
+    """Structure of category_rules.json."""
+    version: str
+    detection_config: DetectionConfig
+    categories: dict[str, CategoryConfig]
+    default_category: str
 
 
 @lru_cache(maxsize=1)
@@ -61,22 +124,66 @@ def _load_persona_rules() -> PersonaRules:
     return json.loads(path.read_text())
 
 
+@lru_cache(maxsize=1)
+def _load_category_rules() -> CategoryRules:
+    """Load category detection rules from JSON file.
+
+    Returns:
+        Dict with 'categories' containing weighted scoring rules,
+        'detection_config' for thresholds and weights,
+        and 'default_category' for fallback.
+
+    Raises:
+        ValueError: If required keys are missing from the config file.
+
+    Note:
+        Results are cached to avoid repeated disk reads.
+    """
+    path = PROMPTS_DIR / "detection" / "category_rules.json"
+    data = json.loads(path.read_text())
+
+    # Schema validation - check required top-level keys
+    required_keys = {"categories", "default_category", "detection_config"}
+    missing_keys = required_keys - set(data.keys())
+    if missing_keys:
+        raise ValueError(f"Invalid category_rules.json: missing required keys {missing_keys}")
+
+    # Validate detection_config structure
+    detection_config = data.get("detection_config", {})
+    if "weights" not in detection_config:
+        raise ValueError("Invalid category_rules.json: detection_config.weights is required")
+
+    weights = detection_config.get("weights", {})
+    required_weights = {"keywords", "youtube_category", "title", "channel"}
+    missing_weights = required_weights - set(weights.keys())
+    if missing_weights:
+        raise ValueError(f"Invalid category_rules.json: missing weights {missing_weights}")
+
+    return data
+
+
 @dataclass
 class VideoContext:
     """Context information extracted from video metadata.
 
-    Used to determine appropriate summarization persona and display tags.
+    Category and persona are SEPARATE concerns:
+    - category: Video's actual subject (cooking, coding, travel) - for frontend views
+    - persona: Which LLM prompts to use - can fallback without affecting category
 
     Attributes:
-        youtube_category: The YouTube category of the video (e.g., "Science & Technology")
-        persona: Determined content type - "code", "recipe", or "standard"
+        youtube_category: Raw YouTube category (e.g., "Science & Technology")
+        category: Detected content category (e.g., "cooking", "coding", "standard")
+        persona: LLM persona for summarization ("code", "recipe", "standard")
         tags: Raw tags from video metadata
         display_tags: Cleaned, deduplicated tags for UI display (max 6)
+        category_confidence: Confidence score from detection (0.0-1.0)
     """
     youtube_category: str | None
-    persona: str  # "code", "recipe", or "standard"
+    category: str  # "cooking", "coding", "travel", etc.
+    persona: str  # "code", "recipe", "standard", etc.
     tags: list[str]
     display_tags: list[str]
+    category_confidence: float = 1.0
 
 
 def _extract_hashtags(description: str) -> list[str]:
@@ -93,27 +200,230 @@ def _extract_hashtags(description: str) -> list[str]:
     return re.findall(r'#(\w+)', description.lower())
 
 
+def _detect_category(
+    youtube_category: str | None,
+    tags: list[str],
+    hashtags: list[str],
+    channel: str | None = None,
+    title: str | None = None,
+) -> tuple[str, float]:
+    """Detect video category using weighted scoring.
+
+    Scoring weights (from category_rules.json):
+    - Keywords (tags + hashtags): 40%
+    - YouTube category: 30%
+    - Title patterns: 15%
+    - Channel patterns: 15%
+
+    Args:
+        youtube_category: YouTube category name (e.g., "Entertainment")
+        tags: Video tags from metadata
+        hashtags: Hashtags extracted from description
+        channel: Channel name (optional, for pattern matching)
+        title: Video title (optional, for pattern matching)
+
+    Returns:
+        Tuple of (category, confidence_score)
+        - category: detected category ('cooking', 'coding', 'standard', etc.)
+        - confidence: 0.0 to 1.0
+    """
+    rules = _load_category_rules()
+    weights = rules.get("detection_config", {}).get("weights", {})
+
+    # Normalize weights
+    keyword_weight = weights.get("keywords", 0.40)
+    yt_category_weight = weights.get("youtube_category", 0.30)
+    title_weight = weights.get("title", 0.15)
+    channel_weight = weights.get("channel", 0.15)
+
+    # Combine tags and hashtags for keyword matching
+    all_terms = set(t.lower() for t in tags) | set(hashtags)
+    title_lower = (title or "").lower()
+    channel_lower = (channel or "").lower()
+
+    # Score each category
+    category_scores: dict[str, float] = {}
+
+    for cat_name, config in rules.get("categories", {}).items():
+        score = 0.0
+
+        # 1. Keyword scoring (weight: 0.40)
+        keywords = config.get("keywords", {})
+        primary_keywords = set(k.lower() for k in keywords.get("primary", []))
+        secondary_keywords = set(k.lower() for k in keywords.get("secondary", []))
+
+        primary_matches = len(all_terms & primary_keywords)
+        secondary_matches = len(all_terms & secondary_keywords)
+
+        if primary_keywords or secondary_keywords:
+            max_possible = len(primary_keywords) + len(secondary_keywords) * 0.5
+            keyword_score = (primary_matches + secondary_matches * 0.5) / max_possible if max_possible > 0 else 0
+            score += min(keyword_score, 1.0) * keyword_weight
+
+        # 2. YouTube category scoring (weight: 0.30)
+        if youtube_category:
+            yt_cats = config.get("youtube_categories", {})
+            primary_cats = yt_cats.get("primary", [])
+            secondary_cats = yt_cats.get("secondary", [])
+
+            if youtube_category in primary_cats:
+                score += yt_category_weight
+            elif youtube_category in secondary_cats:
+                score += yt_category_weight * 0.5
+
+        # 3. Title pattern matching (weight: 0.15)
+        # Limit title length to prevent ReDoS attacks
+        title_patterns = config.get("title_patterns", [])
+        title_safe = title_lower[:500] if title_lower else ""
+        if title_safe and title_patterns:
+            for pattern in title_patterns:
+                try:
+                    if re.search(pattern, title_safe):
+                        score += title_weight
+                        break
+                except re.error:
+                    logger.warning(f"Invalid regex pattern in category rules: {pattern}")
+                    continue
+
+        # 4. Channel pattern matching (weight: 0.15)
+        channel_patterns = config.get("channel_patterns", [])
+        if channel_lower and channel_patterns:
+            for pattern in channel_patterns:
+                if pattern.lower() in channel_lower:
+                    score += channel_weight
+                    break
+
+        category_scores[cat_name] = score
+
+    # Find best category
+    if not category_scores:
+        return rules.get("default_category", "standard"), 0.0
+
+    best_category = max(category_scores, key=category_scores.get)  # type: ignore[arg-type]
+    best_score = category_scores[best_category]
+
+    # If score is too low, return standard
+    if best_score < 0.1:
+        return rules.get("default_category", "standard"), best_score
+
+    return best_category, best_score
+
+
+def _select_persona(category: str) -> str:
+    """Select LLM persona based on detected category.
+
+    The persona determines which prompt templates and examples are used
+    for summarization. Category is the user-facing classification,
+    persona is the internal LLM configuration.
+
+    Args:
+        category: Detected video category ('cooking', 'coding', etc.)
+
+    Returns:
+        Persona string for LLM prompts ('recipe', 'code', 'standard', etc.)
+    """
+    # Map category to persona
+    category_to_persona = {
+        'cooking': 'recipe',
+        'coding': 'code',
+        'podcast': 'interview',
+        'reviews': 'review',
+        'fitness': 'fitness',
+        'travel': 'travel',
+        'education': 'education',
+        'gaming': 'standard',  # No gaming-specific persona yet
+        'diy': 'standard',     # No DIY-specific persona yet
+    }
+    return category_to_persona.get(category, 'standard')
+
+
+async def classify_category_with_llm(
+    title: str,
+    channel: str,
+    tags: list[str],
+    description: str,
+    llm_provider: FastLLMProvider,
+) -> str:
+    """Use LLM fast model to classify video category when rule-based scoring is uncertain.
+
+    Called only when rule-based confidence < threshold (0.4).
+    Uses fast/cheap model (e.g., Haiku) with ~1-2s latency.
+
+    Args:
+        title: Video title
+        channel: Channel name
+        tags: Video tags
+        description: Video description (truncated)
+        llm_provider: LLMProvider instance for making the call
+
+    Returns:
+        Detected category ('cooking', 'coding', 'travel', etc.)
+        Falls back to 'standard' on error or invalid response.
+    """
+    # Build concise classification prompt
+    tags_str = ", ".join(tags[:15]) if tags else "none"
+    desc_truncated = (description[:500] + "...") if len(description) > 500 else description
+
+    prompt = f"""Classify this YouTube video into exactly ONE category.
+
+Title: {title[:200]}
+Channel: {channel[:100] if channel else 'Unknown'}
+Tags: {tags_str}
+Description: {desc_truncated}
+
+Categories (pick ONE):
+- cooking: Recipes, cooking tutorials, food preparation
+- coding: Programming tutorials, software development
+- fitness: Workouts, exercise routines, gym content
+- travel: Travel vlogs, destination guides
+- education: Educational content, lectures, explainers
+- podcast: Interviews, conversations, podcasts
+- reviews: Product reviews, unboxing, comparisons
+- gaming: Gameplay, walkthroughs, gaming content
+- diy: DIY projects, crafts, building
+- standard: None of the above
+
+Respond with ONLY the category name, nothing else."""
+
+    try:
+        response = await llm_provider.complete_fast(prompt, max_tokens=20, timeout=5.0)
+        category = response.strip().lower()
+
+        # Validate response
+        if category in VALID_CATEGORIES:
+            logger.info(f"LLM classified category: {category}")
+            return category
+
+        logger.warning(f"LLM returned invalid category '{category}', falling back to standard")
+        return "standard"
+
+    except Exception as e:
+        logger.warning(f"LLM category classification failed: {e}, falling back to standard")
+        return "standard"
+
+
+def get_llm_fallback_threshold() -> float:
+    """Get the confidence threshold for LLM fallback.
+
+    Returns:
+        Threshold value (default 0.4). If category detection confidence
+        is below this, LLM fallback should be triggered.
+    """
+    rules = _load_category_rules()
+    return rules.get("detection_config", {}).get("llm_fallback_threshold", 0.4)
+
+
 def _determine_persona(
     category: str | None,
     tags: list[str],
     hashtags: list[str],
 ) -> str:
-    """Determine the video persona based on category, tags, and hashtags.
+    """DEPRECATED: Use _detect_category() + _select_persona() instead.
 
-    The persona affects how the video is summarized:
-    - "code": Technical/programming content - emphasizes code examples, APIs
-    - "recipe": Food/cooking content - emphasizes ingredients, steps
-    - "standard": General content - balanced summarization
+    This function uses AND logic which fails when YouTube category
+    doesn't match even if keywords are strong.
 
-    Rules are loaded from prompts/detection/persona_rules.json.
-
-    Args:
-        category: YouTube category name (e.g., "Science & Technology")
-        tags: Video tags from metadata
-        hashtags: Hashtags extracted from description
-
-    Returns:
-        Persona string: "code", "recipe", or "standard"
+    Kept for backward compatibility with tests.
     """
     rules = _load_persona_rules()
 
@@ -179,15 +489,23 @@ def _build_display_tags(
     return display_tags[:max_tags]
 
 
-def extract_video_context(info: dict[str, Any], description: str) -> VideoContext:
+def extract_video_context(
+    info: dict[str, Any],
+    description: str,
+    channel: str | None = None,
+    title: str | None = None,
+) -> VideoContext:
     """Extract video context from yt-dlp info dict.
 
-    Analyzes video metadata to determine content type (persona) and
-    build display-ready tags.
+    Uses weighted scoring to detect category independently from persona.
+    Category detection is more lenient (OR-like) while persona selection
+    is a simple mapping.
 
     Args:
         info: The yt-dlp info dictionary
         description: Video description text (for hashtag extraction)
+        channel: Channel name (optional, improves detection accuracy)
+        title: Video title (optional, improves detection accuracy)
 
     Returns:
         VideoContext with category, persona, and tags
@@ -202,22 +520,40 @@ def extract_video_context(info: dict[str, Any], description: str) -> VideoContex
     # Extract hashtags from description
     hashtags = _extract_hashtags(description)
 
-    # Determine persona based on category and keywords
-    persona = _determine_persona(youtube_category, tags, hashtags)
+    # Get channel and title from info if not provided
+    if channel is None:
+        channel = info.get('uploader') or info.get('channel')
+    if title is None:
+        title = info.get('title')
+
+    # Detect category using weighted scoring (NEW)
+    category, confidence = _detect_category(
+        youtube_category=youtube_category,
+        tags=tags,
+        hashtags=hashtags,
+        channel=channel,
+        title=title,
+    )
+
+    # Select persona based on detected category (NEW)
+    persona = _select_persona(category)
 
     # Build display tags
     display_tags = _build_display_tags(tags, hashtags)
 
-    logger.debug(
-        f"Video context: category={youtube_category}, persona={persona}, "
+    logger.info(
+        f"Video context: category={category} (confidence={confidence:.2f}), "
+        f"persona={persona}, youtube_category={youtube_category}, "
         f"tags_count={len(tags)}, hashtags_count={len(hashtags)}"
     )
 
     return VideoContext(
         youtube_category=youtube_category,
+        category=category,
         persona=persona,
         tags=tags,
         display_tags=display_tags,
+        category_confidence=confidence,
     )
 
 
