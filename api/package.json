@@ -20,6 +20,7 @@
     "@fastify/rate-limit": "^9.1.0",
     "@fastify/websocket": "^10.0.0",
     "@modelcontextprotocol/sdk": "^1.25.2",
+    "@vie/types": "workspace:^",
     "ai": "^6.0.27",
     "bcrypt": "^5.1.0",
     "fastify": "^4.26.0",
