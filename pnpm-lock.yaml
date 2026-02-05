@@ -38,6 +38,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.25.2
         version: 1.25.2(hono@4.11.3)(zod@3.25.76)
+      '@vie/types':
+        specifier: workspace:^
+        version: link:../packages/types
       ai:
         specifier: ^6.0.27
         version: 6.0.27(zod@3.25.76)
