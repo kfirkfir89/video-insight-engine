@@ -648,7 +648,8 @@ For implementation details on specific technologies:
 | Write components, hooks, patterns              | [react.md](resources/react.md)                         |
 | Manage state, forms, server data               | [state.md](resources/state.md)                         |
 | Generic CSS architecture and design principles | [styling.md](resources/styling.md)                     |
-| Tailwind best practices.                       | [tailwind.md](resources/tailwind.md)                   |
+| Tailwind best practices                        | [tailwind.md](resources/tailwind.md)                   |
+| Use Lucide icons correctly (Tailwind, a11y)    | [lucide.md](resources/lucide.md)                       |
 | Optimize performance, lazy load                | [performance.md](resources/performance.md)             |
 | Handle routing, navigation                     | [routing.md](resources/routing.md)                     |
 | Write tests, mock data                         | [testing.md](resources/testing.md)                     |

@@ -147,7 +147,7 @@
           "validation", "routing", "performance", "lazy load", "suspense",
           "accessibility", "a11y", "aria", "keyboard", "i18n",
           "translation", "internationalization", "chat ui", "streaming",
-          "ai sdk", "useChat"
+          "ai sdk", "useChat", "lucide", "icon library", "icon", "icons", "lucide-react"
         ],
         "intentPatterns": [
           "(create|add|build|update|modify).*?(component|page|ui|modal|dialog|form)",
@@ -183,11 +183,58 @@
         "security|xss|token|csrf|sanitize": "security.md",
         "chat|ai|streaming|useChat|completion|vercel": "ai-integration.md",
         "accessible|a11y|aria|keyboard|screen reader|focus": "accessibility.md",
-        "i18n|translation|language|locale|intl|rtl": "i18n.md"
+        "i18n|translation|language|locale|intl|rtl": "i18n.md",
+        "lucide|icon": "lucide.md"
       },
       "additionalDocs": [
         "docs/FRONTEND.md",
         "docs/API-REFERENCE.md"
+      ]
+    },
+    "design-system": {
+      "type": "domain",
+      "enforcement": "suggest",
+      "priority": "medium",
+      "description": "Design system patterns for icons, tokens, and components in vie-web",
+      "skillPath": ".claude/skills/design-system/SKILL.md",
+      "promptTriggers": {
+        "keywords": [
+          "icon mapping", "which icon", "design token", "color token",
+          "oklch", "category accent", "status color", "semantic color",
+          "design system", "icon for", "cva", "variant", "shadcn pattern",
+          "icon", "color", "theme", "styling", "button", "card", "badge",
+          "modal", "dialog", "toast", "dark mode", "ui", "component"
+        ],
+        "intentPatterns": [
+          "(which|what).*?icon.*?(for|should|use)",
+          "(add|create|use).*?(color|token|theme)",
+          "(style|design).*?(component|block|card)",
+          "(extend|add).*?(token|category|variant)",
+          "(create|add|build).*?(button|card|badge|modal|dialog|component)"
+        ]
+      },
+      "fileTriggers": {
+        "pathPatterns": [
+          "apps/web/src/index.css",
+          "apps/web/src/components/ui/**/*.tsx"
+        ],
+        "contentPatterns": [
+          "from.*lucide-react",
+          "cva\\(",
+          "var\\(--category",
+          "var\\(--status"
+        ]
+      },
+      "resourceMapping": {
+        "icon|which icon|icon for|lucide": "icons.md",
+        "color|token|oklch|theme|dark mode|semantic": "tokens.md",
+        "cva|variant|shadcn|component pattern|compound": "components.md",
+        "figma|design file|mockup": "figma.md",
+        "storybook|story|documentation": "storybook.md"
+      },
+      "additionalDocs": [
+        "docs/FRONTEND.md",
+        "apps/web/src/index.css"
       ]
     }
   },
