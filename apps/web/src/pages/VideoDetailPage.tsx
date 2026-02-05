@@ -206,9 +206,7 @@ function buildSummaryFromStream(state: StreamState): VideoSummary | null {
       originalTitle: s.originalTitle,
       generatedTitle: s.generatedTitle,
       isCreatorChapter: s.isCreatorChapter,
-      content: s.content, // Dynamic content blocks
-      summary: s.summary,
-      bullets: s.bullets,
+      content: s.content, // Dynamic content blocks - source of truth
     })),
     concepts: state.concepts.map((c): Concept => ({
       id: c.id,

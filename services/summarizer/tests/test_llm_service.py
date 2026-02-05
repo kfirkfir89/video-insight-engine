@@ -10,8 +10,6 @@ from src.services.llm import (
     load_examples,
     seconds_to_timestamp,
     VALID_PERSONAS,
-    _extract_summary_from_content,
-    _extract_bullets_from_content,
 )
 from src.services.youtube import _load_persona_rules
 
@@ -54,39 +52,6 @@ class TestLoadPrompt:
     def test_load_global_synthesis_prompt(self):
         prompt = load_prompt("global_synthesis")
         assert "tldr" in prompt.lower() or "summary" in prompt.lower()
-
-
-class TestExtractFromContent:
-    """Tests for content extraction helpers."""
-
-    def test_extract_summary_from_paragraph(self):
-        content = [{"type": "paragraph", "text": "Test summary"}]
-        assert _extract_summary_from_content(content) == "Test summary"
-
-    def test_extract_summary_from_multiple_paragraphs(self):
-        content = [
-            {"type": "paragraph", "text": "First part."},
-            {"type": "paragraph", "text": "Second part."},
-        ]
-        assert _extract_summary_from_content(content) == "First part. Second part."
-
-    def test_extract_summary_fallback_to_definition(self):
-        content = [{"type": "definition", "term": "API", "meaning": "Application Programming Interface"}]
-        assert "API" in _extract_summary_from_content(content)
-
-    def test_extract_summary_empty_content(self):
-        assert _extract_summary_from_content([]) == ""
-
-    def test_extract_bullets_from_bullets_block(self):
-        content = [{"type": "bullets", "items": ["Item 1", "Item 2"]}]
-        bullets = _extract_bullets_from_content(content)
-        assert len(bullets) == 2
-        assert "Item 1" in bullets
-
-    def test_extract_bullets_from_numbered_block(self):
-        content = [{"type": "numbered", "items": ["Step 1", "Step 2"]}]
-        bullets = _extract_bullets_from_content(content)
-        assert len(bullets) == 2
 
 
 class TestLLMService:
@@ -176,7 +141,7 @@ class TestLLMService:
         mock_llm_provider.complete = AsyncMock(return_value=sample_llm_synthesis_response)
 
         service = LLMService(mock_llm_provider)
-        sections = [{"title": "Section 1", "summary": "Test"}]
+        sections = [{"title": "Section 1", "content": [{"type": "paragraph", "text": "Test"}]}]
         concepts = [{"name": "Concept 1"}]
 
         result = await service.synthesize_summary(sections, concepts)

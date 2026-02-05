@@ -18,7 +18,7 @@ class TestSummarizeService:
         service.process_video.return_value = {
             "tldr": "Test TLDR",
             "key_takeaways": ["Take 1", "Take 2"],
-            "sections": [{"id": "1", "title": "Section 1", "summary": "Summary"}],
+            "sections": [{"id": "1", "title": "Section 1", "content": [{"type": "paragraph", "text": "Summary"}]}],
             "concepts": [{"id": "1", "name": "Concept 1"}],
         }
         return service

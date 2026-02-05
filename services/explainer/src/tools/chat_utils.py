@@ -2,6 +2,10 @@
 
 from src.schemas import MemorizedItem
 from src.services.llm import load_prompt
+from src.utils.content_extractor import (
+    extract_summary_from_content,
+    extract_bullets_from_content,
+)
 
 
 def format_content(source: dict) -> str:
@@ -21,10 +25,16 @@ def format_content(source: dict) -> str:
             content_parts.append(
                 f"## {section.get('title', 'Section')} ({section.get('timestamp', '')})"
             )
-            content_parts.append(section.get("summary", ""))
-            if section.get("bullets"):
+            # Extract summary and bullets from content blocks on-demand
+            section_content = section.get("content", [])
+            summary = extract_summary_from_content(section_content)
+            bullets = extract_bullets_from_content(section_content)
+
+            if summary:
+                content_parts.append(summary)
+            if bullets:
                 content_parts.append("Key points:")
-                for bullet in section["bullets"]:
+                for bullet in bullets:
                     content_parts.append(f"- {bullet}")
             content_parts.append("")
 

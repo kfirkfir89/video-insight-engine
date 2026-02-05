@@ -468,9 +468,7 @@ export interface SummaryChapter {
   originalTitle?: string;      // Creator's original chapter title
   generatedTitle?: string;     // AI-generated explanation subtitle
   isCreatorChapter: boolean;   // Flag for dual-title display
-  content?: ContentBlock[];    // Dynamic content blocks with blockId
-  summary: string;             // Legacy fallback
-  bullets: string[];           // Legacy fallback
+  content?: ContentBlock[];    // Dynamic content blocks with blockId - source of truth
   /** Raw transcript slice for this chapter's time range (for RAG/display) */
   transcript?: string;
 }
@@ -566,11 +564,6 @@ export interface RelatedVideo {
   url: string;
 }
 
-export interface DescriptionTimestamp {
-  time: string;
-  label: string;
-}
-
 export interface SocialLink {
   platform: 'twitter' | 'discord' | 'github' | 'linkedin' | 'patreon' | 'other';
   url: string;
@@ -580,7 +573,6 @@ export interface DescriptionAnalysis {
   links: DescriptionLink[];
   resources: Resource[];
   relatedVideos: RelatedVideo[];
-  timestamps: DescriptionTimestamp[];
   socialLinks: SocialLink[];
 }
 
@@ -785,7 +777,6 @@ export interface SSEDescriptionAnalysisEvent {
   links: DescriptionLink[];
   resources: Resource[];
   relatedVideos: RelatedVideo[];
-  timestamps: DescriptionTimestamp[];
   socialLinks: SocialLink[];
 }
 

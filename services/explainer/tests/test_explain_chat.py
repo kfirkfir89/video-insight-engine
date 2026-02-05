@@ -19,8 +19,10 @@ class TestFormatContent:
                     {
                         "title": "Introduction",
                         "timestamp": "00:00",
-                        "summary": "Intro summary",
-                        "bullets": ["Point 1", "Point 2"],
+                        "content": [
+                            {"type": "paragraph", "text": "Intro summary"},
+                            {"type": "bullets", "items": ["Point 1", "Point 2"]},
+                        ],
                     }
                 ]
             }

@@ -17,8 +17,7 @@ const createChapter = (
   endSeconds,
   title: `Chapter ${id}`,
   isCreatorChapter: true,
-  summary: 'Test summary',
-  bullets: ['Bullet 1'],
+  content: [{ blockId: 'b1', type: 'paragraph', text: 'Test summary' }],
 });
 
 const createConcept = (

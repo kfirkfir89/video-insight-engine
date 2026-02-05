@@ -13,6 +13,10 @@ from typing import AsyncGenerator, Callable, Literal
 
 from src.config import settings
 from src.services.llm_provider import LLMProvider
+from src.utils.content_extractor import (
+    extract_summary_from_content,
+    extract_bullets_from_content,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -145,76 +149,6 @@ def _parse_json_response(text: str, fallback: dict | None = None) -> dict:
     except json.JSONDecodeError:
         pass
     return fallback or {}
-
-
-def _extract_summary_from_content(content: list) -> str:
-    """Extract summary text from dynamic content blocks for backward compatibility.
-
-    Priority: paragraphs > definitions > callouts > first bullet item.
-    Ensures backward compatibility by always returning meaningful text when content exists.
-    """
-    paragraphs = []
-    definitions = []
-    callouts = []
-    first_bullet = None
-
-    for block in content:
-        if isinstance(block, dict):
-            block_type = block.get("type")
-            if block_type == "paragraph":
-                text = block.get("text", "")
-                if text:
-                    paragraphs.append(text)
-            elif block_type == "definition":
-                term = block.get("term", "")
-                meaning = block.get("meaning", "")
-                if term and meaning:
-                    definitions.append(f"{term}: {meaning}")
-            elif block_type == "callout":
-                text = block.get("text", "")
-                if text:
-                    callouts.append(text)
-            elif block_type in ("bullets", "numbered") and first_bullet is None:
-                items = block.get("items", [])
-                if items:
-                    first_bullet = items[0]
-
-    # Return in priority order
-    if paragraphs:
-        return " ".join(paragraphs)
-    if definitions:
-        return " ".join(definitions)
-    if callouts:
-        return " ".join(callouts)
-    if first_bullet:
-        return first_bullet
-    return ""
-
-
-def _extract_bullets_from_content(content: list) -> list[str]:
-    """Extract bullet points from dynamic content blocks for backward compatibility.
-
-    Collects items from bullets, numbered lists, do/dont blocks, etc.
-    """
-    bullets = []
-    for block in content:
-        if isinstance(block, dict):
-            block_type = block.get("type")
-            if block_type == "bullets":
-                bullets.extend(block.get("items", []))
-            elif block_type == "numbered":
-                bullets.extend(block.get("items", []))
-            elif block_type == "do_dont":
-                for do_item in block.get("do", []):
-                    bullets.append(f"Do: {do_item}")
-                for dont_item in block.get("dont", []):
-                    bullets.append(f"Don't: {dont_item}")
-            elif block_type == "callout":
-                style = block.get("style", "note").capitalize()
-                text = block.get("text", "")
-                if text:
-                    bullets.append(f"{style}: {text}")
-    return bullets
 
 
 def inject_block_ids(blocks: list[dict]) -> list[dict]:
@@ -442,11 +376,9 @@ class LLMService:
         # Log block metrics for analysis
         _log_block_metrics(content, title, persona)
 
-        # Return with legacy fields for backward compatibility
+        # Content blocks are the single source of truth (data-simplification)
         return {
             "content": content,
-            "summary": _extract_summary_from_content(content),
-            "bullets": _extract_bullets_from_content(content),
             "generatedTitle": result.get("generatedTitle"),
         }
 
@@ -465,7 +397,7 @@ class LLMService:
     async def synthesize_summary(self, sections: list[dict], concepts: list[dict]) -> dict:
         """Generate TLDR and key takeaways."""
         sections_text = "\n".join([
-            f"- {s['title']}: {s.get('summary', '')}" for s in sections
+            f"- {s['title']}: {extract_summary_from_content(s.get('content', []))}" for s in sections
         ])
         concepts_text = ", ".join([c["name"] for c in concepts])
 
@@ -523,9 +455,6 @@ class LLMService:
                 "end_seconds": end,
                 "title": raw["title"],
                 "content": summary_data.get("content", []),
-                # Legacy fields for backward compatibility
-                "summary": _extract_summary_from_content(summary_data.get("content", [])),
-                "bullets": _extract_bullets_from_content(summary_data.get("content", [])),
             })
 
             if on_progress:
@@ -674,12 +603,9 @@ class LLMService:
                     _log_block_metrics(content, title, persona)
                     summary_data = {
                         "content": content,
-                        # Legacy fields for backward compatibility
-                        "summary": _extract_summary_from_content(content),
-                        "bullets": _extract_bullets_from_content(content),
                     }
                 else:
-                    summary_data = {"content": [], "summary": "", "bullets": []}
+                    summary_data = {"content": []}
                 yield ("complete", summary_data)
 
     async def stream_extract_concepts(
@@ -873,8 +799,10 @@ class LLMService:
         chapters_parts = []
         for i, chapter in enumerate(chapters[:30], 1):
             chapter_title = _sanitize_llm_input(chapter.get("title", f"Chapter {i}"), max_length=200)
-            chapter_summary = _sanitize_llm_input(chapter.get("summary", ""), max_length=1000)
-            chapter_bullets = chapter.get("bullets", [])
+            # Extract summary and bullets from content blocks on-demand
+            chapter_content = chapter.get("content", [])
+            chapter_summary = _sanitize_llm_input(extract_summary_from_content(chapter_content), max_length=1000)
+            chapter_bullets = extract_bullets_from_content(chapter_content)
 
             part = f"### {chapter_title}\n{chapter_summary}"
             if chapter_bullets:

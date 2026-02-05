@@ -42,6 +42,16 @@ const createFullStreamState = (
   ...overrides,
 });
 
+// Helper to create mock SummaryChapter
+const createMockChapter = (id: string, startSeconds: number, endSeconds: number) => ({
+  id,
+  timestamp: `${Math.floor(startSeconds / 60)}:${String(startSeconds % 60).padStart(2, "0")}`,
+  startSeconds,
+  endSeconds,
+  title: `Chapter ${id}`,
+  content: [{ blockId: "b1", type: "paragraph" as const, text: "Test content" }],
+});
+
 describe("processingStore", () => {
   beforeEach(() => {
     // Reset store state before each test
@@ -289,20 +299,8 @@ describe("processingStore", () => {
           duration: 300,
         },
         chapters: [
-          {
-            index: 0,
-            title: "Section 1",
-            summary: "Summary",
-            startSeconds: 0,
-            endSeconds: 60,
-          },
-          {
-            index: 1,
-            title: "Section 2",
-            summary: "Summary",
-            startSeconds: 60,
-            endSeconds: 120,
-          },
+          createMockChapter("s1", 0, 60),
+          createMockChapter("s2", 60, 120),
         ],
         error: null,
       });

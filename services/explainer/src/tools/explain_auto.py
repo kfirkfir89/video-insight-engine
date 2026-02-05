@@ -4,6 +4,7 @@ from src.config import settings
 from src.exceptions import ResourceNotFoundError, ValidationError
 from src.repositories.base import ExpansionRepositoryProtocol, VideoSummaryRepositoryProtocol
 from src.services.llm import LLMService
+from src.utils.content_extractor import extract_summary_from_content, extract_bullets_from_content
 
 
 async def explain_auto(
@@ -53,13 +54,18 @@ async def explain_auto(
         if not target:
             raise ResourceNotFoundError("Section not found", resource_type="section")
 
+        # Extract summary and bullets from content blocks
+        content = target.content or []
+        summary = extract_summary_from_content(content)
+        bullets = extract_bullets_from_content(content)
+
         context = {
             "video_title": video_summary.title,
             "youtube_id": video_summary.youtubeId,
             "timestamp": target.timestamp,
             "title": target.title,
-            "summary": target.summary,
-            "bullets": target.bullets,
+            "summary": summary,
+            "bullets": bullets,
         }
         template = "explain_section"
 
