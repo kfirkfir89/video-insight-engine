@@ -1470,6 +1470,67 @@ const DevToolPanel = import.meta.env.DEV
   : null;
 ```
 
+## Dev Pages
+
+Two dev-only pages provide component documentation and live previews.
+
+### Design System Page (`/dev/design-system`)
+
+Living style guide for all design tokens and components.
+
+| Section | Contents |
+|---------|----------|
+| Color Palette | Semantic colors (background, foreground, primary, etc.) with swatches |
+| Typography | Text scale (xs-4xl) and font weights |
+| Spacing Scale | Tailwind spacing tokens (1-12) with visual boxes |
+| Status Indicators | Pending, processing, completed, failed states |
+| Category Accents | All 10 category accent colors |
+| Content Blocks | All 31 block types with live previews and JSON toggle |
+| Category Views | All 10 view components (CodeView, RecipeView, etc.) |
+
+### Video Examples Page (`/dev/video-examples`)
+
+Complete video pages with realistic mock data for all 10 categories.
+
+| Category | Mock Video |
+|----------|------------|
+| cooking | Gordon Ramsay's Perfect Carbonara |
+| coding | React 19 Hooks Complete Tutorial |
+| fitness | 30-Min Full Body HIIT Workout |
+| travel | 7 Days in Japan Complete Guide |
+| education | Quantum Computing Explained |
+| podcast | Lex Fridman #400: Naval Ravikant |
+| reviews | iPhone 15 Pro Max 6-Month Review |
+| gaming | Elden Ring Beginner's Walkthrough |
+| diy | Build a Standing Desk from Scratch |
+| standard | Understanding the Stock Market 2024 |
+
+### Dev Page Files
+
+| File | Purpose |
+|------|---------|
+| `pages/dev/DesignSystemPage.tsx` | Design system page |
+| `pages/dev/VideoExamplesPage.tsx` | Video examples page |
+| `components/dev/design-system/*.tsx` | Token showcase components |
+| `components/dev/video-examples/*.tsx` | Video example components |
+| `lib/dev/mock-blocks.ts` | Factory functions for all 31 block types |
+| `lib/dev/mock-videos.ts` | Mock video data for all 10 categories |
+
+### Production Safety
+
+All dev code has production guards:
+```tsx
+if (!import.meta.env.DEV) {
+  throw new Error('This module should not be imported in production');
+}
+```
+
+Dev pages are verified to be tree-shaken via:
+```bash
+grep -r "DesignSystemPage" dist/  # Returns nothing
+grep -r "mock-videos" dist/        # Returns nothing
+```
+
 ---
 
 # Anti-Patterns to Avoid

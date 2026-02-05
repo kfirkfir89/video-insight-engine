@@ -27,6 +27,14 @@ const VideoDetailPage = lazy(() =>
   import("@/pages/VideoDetailPage").then((m) => ({ default: m.VideoDetailPage }))
 );
 
+// Dev-only pages - completely tree-shaken in production
+const DesignSystemPage = import.meta.env.DEV
+  ? lazy(() => import("@/pages/dev/DesignSystemPage").then((m) => ({ default: m.DesignSystemPage })))
+  : null;
+const VideoExamplesPage = import.meta.env.DEV
+  ? lazy(() => import("@/pages/dev/VideoExamplesPage").then((m) => ({ default: m.VideoExamplesPage })))
+  : null;
+
 // Loading fallback for lazy-loaded routes with ARIA live region
 function RouteLoadingFallback() {
   return (
@@ -125,6 +133,13 @@ function AppRoutes() {
               </ProtectedRoute>
             }
           />
+          {/* Dev-only routes - completely tree-shaken in production */}
+          {import.meta.env.DEV && DesignSystemPage && (
+            <Route path="/dev/design-system" element={<DesignSystemPage />} />
+          )}
+          {import.meta.env.DEV && VideoExamplesPage && (
+            <Route path="/dev/video-examples" element={<VideoExamplesPage />} />
+          )}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
