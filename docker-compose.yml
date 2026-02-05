@@ -1,5 +1,3 @@
-version: '3.8'
-
 # ============================================
 # Video Insight Engine - Development
 # ============================================
@@ -55,8 +53,8 @@ services:
 
   vie-api:
     build:
-      context: ./api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./api/Dockerfile
     container_name: vie-api
     restart: unless-stopped
     ports:
