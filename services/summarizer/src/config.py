@@ -77,6 +77,16 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "console"  # "console" or "json"
 
+    # S3/LocalStack Configuration (for transcript storage)
+    TRANSCRIPT_S3_BUCKET: str = "vie-transcripts"
+    AWS_REGION: str = "us-east-1"
+    AWS_ENDPOINT_URL: str | None = None  # Set for LocalStack (e.g., http://vie-localstack:4566)
+    AWS_ACCESS_KEY_ID: str | None = None
+    AWS_SECRET_ACCESS_KEY: str | None = None
+
+    # Prompt versioning (for regeneration tracking)
+    PROMPT_VERSION: str = "v1.0"
+
     @property
     def llm_model(self) -> str:
         """Get the configured LLM model with provider prefix."""

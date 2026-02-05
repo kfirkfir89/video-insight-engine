@@ -34,6 +34,28 @@ export interface TranscriptSegment {
   endMs: number;
 }
 
+/**
+ * Full transcript stored in S3 for regeneration without re-fetching from YouTube.
+ * S3 key format: `transcripts/{youtubeId}.json`
+ */
+export interface RawTranscript {
+  youtubeId: string;
+  fetchedAt: string;           // ISO date
+  source: TranscriptSource;
+  language: string | null;
+  segments: TranscriptSegment[];
+}
+
+/**
+ * Generation metadata for tracking prompt versions and enabling regeneration.
+ * Stored with each summary to know what model/prompt produced it.
+ */
+export interface GenerationMetadata {
+  model: string;               // e.g., "anthropic/claude-sonnet-4-20250514"
+  promptVersion: string;       // e.g., "v2.3"
+  generatedAt: string;         // ISO date
+}
+
 export type FolderType = 'summarized' | 'memorized';
 
 export type SourceType =
@@ -449,6 +471,8 @@ export interface SummaryChapter {
   content?: ContentBlock[];    // Dynamic content blocks with blockId
   summary: string;             // Legacy fallback
   bullets: string[];           // Legacy fallback
+  /** Raw transcript slice for this chapter's time range (for RAG/display) */
+  transcript?: string;
 }
 
 
@@ -465,6 +489,10 @@ export interface VideoSummary {
   chapters: SummaryChapter[];
   concepts: Concept[];
   masterSummary?: string;
+  /** Reference to full transcript in S3 (e.g., "transcripts/{youtubeId}.json") */
+  rawTranscriptRef?: string | null;
+  /** Generation metadata for tracking prompt versions and regeneration */
+  generation?: GenerationMetadata;
 }
 
 // ─────────────────────────────────────────────────────

@@ -294,6 +294,7 @@ One entry per YouTube video. Shared across all users.
       generatedTitle?: string,    // AI-generated title (if different)
       isCreatorChapter: boolean,  // True if from YouTube chapters
       content: ContentBlock[],    // Dynamic content blocks with blockId
+      transcript: string | null,  // Sliced transcript text for this chapter
       summary: string,            // Legacy: kept for backward compat
       bullets: string[]           // Legacy: kept for backward compat
     }],
@@ -316,6 +317,16 @@ One entry per YouTube video. Shared across all users.
     input: number,
     output: number,
     cost: number                    // USD
+  } | null,
+
+  // Transcript storage (S3)
+  rawTranscriptRef: string | null,  // S3 key: "transcripts/{youtubeId}.json"
+
+  // Generation metadata (for regeneration)
+  generation: {
+    model: string,                  // LLM model used
+    promptVersion: string,          // Prompt version (e.g., "v1.0")
+    generatedAt: string             // ISO 8601 timestamp
   } | null,
 
   createdAt: Date,

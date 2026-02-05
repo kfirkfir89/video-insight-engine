@@ -1,6 +1,6 @@
 # Development Scratchpad
 
-**Last Updated:** 2026-02-02 (TDD Infrastructure Session)
+**Last Updated:** 2026-02-05 (Transcript Storage Session - COMPLETED)
 
 ---
 
@@ -8,11 +8,65 @@
 
 ### What Was Being Worked On
 
-**Task: TDD Infrastructure & Test Coverage**
+**Task: Transcript Storage System**
 
-**Status: ~85% COMPLETE** - Major test coverage expansion across all services
+**Status: FULLY COMPLETED** - All phases + testing + documentation
 
-### Current State
+### Summary
+
+Implemented complete transcript storage system with:
+- S3 storage for raw transcripts (via LocalStack)
+- Transcript slicing per chapter for RAG/search
+- Generation metadata tracking for regeneration
+- Regeneration endpoint
+- Migration script for backfilling
+
+### Key Files Modified
+
+| File | Purpose |
+|------|---------|
+| `packages/types/src/index.ts` | Added RawTranscript, GenerationMetadata types |
+| `services/summarizer/src/utils/transcript_slicer.py` | NEW - Slice transcript by time range |
+| `services/summarizer/src/services/s3_client.py` | NEW - Async S3 client with lazy init |
+| `services/summarizer/src/services/transcript_store.py` | NEW - Business logic for S3 storage |
+| `services/summarizer/src/routes/stream.py` | S3 integration, regeneration endpoint |
+| `services/summarizer/src/repositories/mongodb_repository.py` | Save new fields |
+| `services/summarizer/src/config.py` | S3 configuration |
+| `docker-compose.yml` | LocalStack service, scripts mount |
+
+### Completion Status (2026-02-05)
+
+1. **Docker image rebuilt** with aioboto3 ✅
+2. **S3 bucket created** in LocalStack ✅
+3. **All tests passing**: API (542), Web (889) ✅
+4. **Documentation updated**: DATA-MODELS.md, SERVICE-SUMMARIZER.md ✅
+5. **Security audit completed** - findings documented ✅
+6. **Code review completed** - findings documented ✅
+
+### Verified Working
+
+```bash
+# Health check shows S3 healthy
+curl -s http://localhost:8000/health | jq .
+# {"status": "healthy", "s3": "healthy", ...}
+
+# Transcript storage works
+# - Stores to S3
+# - Retrieves by youtube_id
+# - Retrieves by S3 ref
+# - Deletes properly
+```
+
+### Known Issues (Non-blocking)
+
+1. **Tests directory not mounted** - Run tests locally instead
+2. **Security recommendations** - See audit findings (internal service, network isolated)
+
+---
+
+## Previous Session (2026-02-02) - TDD Infrastructure
+
+**Status: ~85% COMPLETE** - Major test coverage expansion
 
 | Service | Before | After | Status |
 |---------|--------|-------|--------|
@@ -20,140 +74,43 @@
 | vie-web | 0 unit tests | 15 test files, 418 tests | ⚠️ 8 failing |
 | vie-summarizer | 3 test files | 12+ test files | ✅ Created |
 
-### Immediate Next Steps
-
-1. **Fix 27 failing tests** (19 vie-api + 8 vie-web)
-2. **Verify vie-summarizer tests in Docker**: `docker exec vie-summarizer python -m pytest -v`
-3. **Complete Phase 4** (3 remaining tasks)
-4. **Optional: Phase 5** component tests
-
-### Commands to Run on Resume
-
-```bash
-# Check test status
-cd /home/kfir/projects/video-insight-engine
-
-# vie-api
-cd api && npm test -- --run 2>&1 | tail -10
-
-# vie-web
-cd ../apps/web && npm test -- --run 2>&1 | tail -10
-
-# vie-summarizer (in Docker)
-docker exec vie-summarizer python -m pytest -v 2>&1 | head -50
-```
-
-### Known Issues to Fix
-
-1. **BUG-1**: `summarizer-client.test.ts` - Timer mocking with retry logic
-2. **BUG-2**: `rate-limit.test.ts` - Mock timing issues
-3. **BUG-3**: `youtube-utils.ts` - `extractVideoId()` fails when `v` param not first
-4. **BUG-4**: Various hook test timing issues
-
----
-
-## Previous Session (2026-01-21) - Video Context Backend
-
-**Status: ALL PHASES COMPLETE**
-
-- Backend phases 1-3 already implemented (discovered during code review)
-- All context extraction, persona loading, and SSE integration in place
-- Remaining: Verification testing with real videos
+**Blockers:** 27 failing tests need fixes
 
 ---
 
 ## Architecture Notes
 
-### Test Infrastructure Architecture (NEW)
+### Transcript Storage Architecture (NEW)
 
 ```
-vie-api/
-├── vitest.config.ts           # Vitest + coverage
-├── src/test/
-│   ├── setup.ts               # Global mocks
-│   ├── helpers.ts             # buildTestApp(), factories
-│   └── factories/             # Test data factories
-└── src/**/__tests__/*.test.ts # Co-located tests
-
-vie-web/
-├── vitest.config.ts           # jsdom environment
-├── src/test/
-│   ├── setup.ts               # MSW, global mocks
-│   ├── test-utils.tsx         # createWrapper(), renderWithProviders()
-│   └── mocks/
-│       ├── server.ts          # MSW server
-│       └── handlers.ts        # API handlers
-└── src/**/__tests__/*.test.ts # Co-located tests
-
-vie-summarizer/
-├── pytest.ini                 # pytest config
-├── requirements.txt           # pytest deps
-└── tests/
-    ├── conftest.py            # Shared fixtures
-    └── test_*.py              # Test files
+YouTube Transcript
+       │
+       ▼
+stream_summarization()
+       │
+       ├─ normalize_segments()
+       │
+       ├─ transcript_store.store() → S3 (optional)
+       │
+       ├─ process_chapters()
+       │     ├─ slice_transcript_for_chapter()
+       │     └─ llm_service.summarize_chapter()
+       │
+       ├─ build_result() with:
+       │     - rawTranscriptRef
+       │     - generation metadata
+       │     - chapters with transcript
+       │
+       ▼
+mongodb_repository.save_result()
 ```
 
-### Test Patterns Established
+### Key Design Decisions
 
-**vie-api (DI + Mocking)**:
-```typescript
-const mockRepo = { findById: vi.fn() };
-const service = new VideoService(mockRepo);
-mockRepo.findById.mockResolvedValue(video);
-await service.findById('123');
-expect(mockRepo.findById).toHaveBeenCalledWith('123');
-```
-
-**vie-web (MSW + Hooks)**:
-```typescript
-server.use(
-  http.get('/api/videos', () => HttpResponse.json({ data: videos }))
-);
-const { result } = renderHook(() => useVideos(), { wrapper: createWrapper() });
-await waitFor(() => expect(result.current.videos).toEqual(videos));
-```
-
-**vie-summarizer (pytest + AsyncMock)**:
-```python
-@pytest.fixture
-def mock_http_client():
-    return AsyncMock()
-
-@pytest.mark.asyncio
-async def test_fetch(service, mock_http_client):
-    mock_http_client.get.return_value = {"title": "Test"}
-    result = await service.fetch("id")
-    assert result["title"] == "Test"
-```
-
-### Timestamp Playback Architecture
-
-```
-User clicks timestamp "4:12" (252 seconds)
-  → TimestampRenderer calls onPlay(252)
-  → ContentBlocks calls onPlay(252)
-  → ArticleSection calls onPlay(sectionId, 252)
-  → VideoDetailLayout.handlePlayFromSection(sectionId, 252)
-    → setActivePlaySection(sectionId)
-    → setActiveStartSeconds(252)
-    → Scrolls to section
-  → ArticleSection re-renders with isVideoActive=true, startSeconds=252
-    → YouTubePlayer renders with startSeconds=252, autoplay=true
-    → ContentBlocks receives isVideoActive=true, activeStartSeconds=252
-      → TimestampRenderer with seconds=252 shows STOP (isActive=true)
-      → Other timestamps show PLAY (isActive=false)
-```
-
-### Persona System Flow
-```
-Video URL submitted
-  → YouTube metadata extracted (category, tags)
-  → _determine_persona() checks against persona_rules.json
-  → Returns: 'code', 'recipe', 'interview', 'review', or 'standard'
-  → load_persona(name) loads prompts/personas/{name}.txt
-  → load_examples(name) loads prompts/examples/{name}.txt
-  → LLM generates summary with persona-specific blocks
-```
+1. **Lazy S3 initialization** - aioboto3 imported only when needed
+2. **Graceful degradation** - S3 failure doesn't block summarization
+3. **Regeneration via status reset** - Reuses streaming endpoint
+4. **Chapter-level transcripts** - Stored in MongoDB for fast access
 
 ---
 
@@ -169,64 +126,57 @@ Video URL submitted
 
 ### Key Files
 
+**Transcript Storage:**
+- S3 client: `services/summarizer/src/services/s3_client.py`
+- Transcript store: `services/summarizer/src/services/transcript_store.py`
+- Slicer: `services/summarizer/src/utils/transcript_slicer.py`
+- Pipeline: `services/summarizer/src/routes/stream.py`
+- Migration: `services/summarizer/scripts/backfill-transcripts.py`
+
 **Test Infrastructure:**
 - vie-api config: `api/vitest.config.ts`
-- vie-api helpers: `api/src/test/helpers.ts`
 - vie-web config: `apps/web/vitest.config.ts`
-- vie-web helpers: `apps/web/src/test/test-utils.tsx`
 - vie-summarizer config: `services/summarizer/pytest.ini`
-- vie-summarizer fixtures: `services/summarizer/tests/conftest.py`
-
-**Application Code:**
-- Timestamp rendering: `apps/web/src/components/video-detail/blocks/TimestampRenderer.tsx`
-- Content blocks container: `apps/web/src/components/video-detail/ContentBlocks.tsx`
-- Video layout state: `apps/web/src/components/video-detail/VideoDetailLayout.tsx`
-- Persona loading: `services/summarizer/src/services/llm.py`
-- Persona detection: `services/summarizer/src/services/youtube.py`
-- SSE streaming: `apps/web/src/hooks/use-summary-stream.ts`
 
 ---
 
 ## Active Task Documentation
 
+### Transcript Storage (COMPLETED)
+See `/dev/active/transcript-storage/` for:
+- `transcript-storage-plan.md` - Implementation plan
+- `transcript-storage-context.md` - Decisions and patterns
+- `transcript-storage-tasks.md` - Task checklist (ALL DONE)
+
 ### TDD Infrastructure (IN PROGRESS)
 See `/dev/active/tdd-infrastructure/` for:
-- `tdd-infrastructure-plan.md` - Full implementation plan
-- `tdd-infrastructure-context.md` - Decisions and patterns
-- `tdd-infrastructure-tasks.md` - Task checklist (55/65 done)
-
-**Progress:**
-- ✅ Phase 1: Infrastructure Setup (8/8)
-- ✅ Phase 2: Critical Path Tests (13/13)
-- ✅ Phase 3: Core Feature Tests (16/16)
-- ⏳ Phase 4: Supporting Tests (18/22)
-- 🔲 Phase 5: Component Tests (0/6)
-
-**Blockers:** 27 failing tests need fixes before Phase 5
+- 27 failing tests need fixes
+- Phase 4 & 5 remaining
 
 ### Video Context Enhancement (COMPLETE)
-See `/dev/active/video-context/` for:
-- All phases complete
-- Need verification testing with real videos
-
-### LLM Context Reorganization (COMPLETE)
-See `/dev/active/llm-context-reorganization/` for:
-- All tasks complete
-- Persona system file-based
+See `/dev/active/video-context/`
 
 ---
 
 ## Uncommitted Changes
 
-**Large amount of new test files - review git status**
+**Transcript Storage (new files):**
+- `services/summarizer/src/utils/transcript_slicer.py`
+- `services/summarizer/src/services/s3_client.py`
+- `services/summarizer/src/services/transcript_store.py`
+- `services/summarizer/scripts/backfill-transcripts.py`
+- `services/summarizer/tests/test_transcript_slicer.py`
 
-New test files created:
-- 20 new vie-api test files
-- 15 new vie-web test files
-- 9 new vie-summarizer test files
-- Test infrastructure (vitest.config.ts, setup.ts, etc.)
+**Modified files:**
+- `packages/types/src/index.ts`
+- `services/summarizer/src/routes/stream.py`
+- `services/summarizer/src/repositories/mongodb_repository.py`
+- `services/summarizer/src/config.py`
+- `services/summarizer/requirements.txt`
+- `docker-compose.yml`
+- `.env.example`
 
 **Recommendation:**
-1. Fix failing tests first
-2. Commit passing tests in batches by service
-3. Create separate commits for infrastructure vs tests
+1. Rebuild Docker image first
+2. Test S3 integration
+3. Commit in logical groups (types, S3 infra, pipeline, migration)

@@ -84,6 +84,8 @@ class MongoDBVideoRepository:
                         "content": s.get("content"),  # Dynamic content blocks
                         "summary": s["summary"],
                         "bullets": s["bullets"],
+                        # Sliced transcript for this chapter (RAG/display)
+                        "transcript": s.get("transcript"),
                     }
                     for s in result["summary"]["chapters"]
                 ],
@@ -128,6 +130,18 @@ class MongoDBVideoRepository:
         # Add video context if present (persona-aware summarization)
         if "context" in result and result["context"]:
             update_data["context"] = result["context"]
+
+        # Add S3 reference for raw transcript (Phase 3 - transcript storage)
+        if "raw_transcript_ref" in result:
+            update_data["rawTranscriptRef"] = result["raw_transcript_ref"]
+
+        # Add generation metadata (Phase 3 - for regeneration tracking)
+        if "generation" in result:
+            update_data["generation"] = {
+                "model": result["generation"]["model"],
+                "promptVersion": result["generation"]["prompt_version"],
+                "generatedAt": result["generation"]["generated_at"],
+            }
 
         self._collection.update_one(
             {"_id": ObjectId(video_summary_id)},

@@ -16,6 +16,7 @@ Python service that processes YouTube videos into structured summaries.
 | yt-dlp | Video metadata + chapters |
 | LiteLLM | Multi-provider LLM abstraction (Anthropic, OpenAI, Gemini) |
 | pymongo | MongoDB driver |
+| aioboto3 | Async S3 client (for transcript storage) |
 | Pydantic | Validation & Settings |
 | structlog | Structured logging |
 
@@ -49,7 +50,9 @@ services/summarizer/
     │   ├── usage_tracker.py      # LLM usage tracking
     │   ├── playlist.py           # Playlist extraction (yt-dlp)
     │   ├── sponsorblock.py       # Sponsor segment detection
-    │   └── whisper_transcriber.py # Whisper fallback
+    │   ├── whisper_transcriber.py # Whisper fallback
+    │   ├── s3_client.py          # Async S3 client (lazy init)
+    │   └── transcript_store.py   # Transcript storage service
     │
     ├── repositories/
     │   ├── base.py               # Repository protocols
@@ -88,6 +91,14 @@ ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=                 # Required if using OpenAI
 GOOGLE_API_KEY=                 # Required if using Gemini
 
+# S3 Configuration (for transcript storage)
+TRANSCRIPT_S3_BUCKET=vie-transcripts
+AWS_REGION=us-east-1
+AWS_ENDPOINT_URL=http://vie-localstack:4566  # LocalStack for dev
+AWS_ACCESS_KEY_ID=test
+AWS_SECRET_ACCESS_KEY=test
+PROMPT_VERSION=v1.0             # For generation tracking
+
 LOG_LEVEL=INFO
 LOG_FORMAT=console              # console or json
 ```
@@ -119,6 +130,11 @@ LOG_FORMAT=console              # console or json
     └─▶ Handle: manual > auto-generated
     └─▶ Output: NormalizedTranscript (segments with ms timestamps)
 
+ 5b. STORE RAW TRANSCRIPT (optional)
+    └─▶ Store to S3 (LocalStack/AWS) as JSON
+    └─▶ Key: "transcripts/{youtubeId}.json"
+    └─▶ Graceful degradation if S3 unavailable
+
  6. CLEAN TRANSCRIPT
     └─▶ Remove [Music], [Applause], etc.
     └─▶ Merge fragmented sentences
@@ -130,7 +146,9 @@ LOG_FORMAT=console              # console or json
 
  8. SUMMARIZE CHAPTERS (LLM)
     └─▶ One call per chapter
+    └─▶ Slice transcript for chapter time range
     └─▶ Generate: content blocks with blockId, summary + bullets
+    └─▶ Store transcript slice in chapter
 
  9. EXTRACT CONCEPTS (LLM)
     └─▶ Identify key terms
@@ -143,6 +161,8 @@ LOG_FORMAT=console              # console or json
 
 11. SAVE TO CACHE
     └─▶ Update videoSummaryCache
+    └─▶ Include rawTranscriptRef (S3 key)
+    └─▶ Include generation metadata (model, promptVersion, timestamp)
     └─▶ Set status = "completed"
 ```
 
@@ -454,6 +474,59 @@ OPENAI_API_KEY=sk-...  # Required for Whisper
 
 ---
 
+## Transcript Storage (S3)
+
+Raw transcripts are stored in S3 for regeneration and RAG/search capabilities.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                 TRANSCRIPT STORAGE                       │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  1. Store Raw Transcript                                │
+│     └─▶ S3 key: "transcripts/{youtubeId}.json"         │
+│     └─▶ Contains: segments, source, language, fetchedAt│
+│                                                         │
+│  2. Slice Transcript per Chapter                        │
+│     └─▶ Extract text by startSeconds/endSeconds        │
+│     └─▶ Store slice in chapter.transcript field        │
+│                                                         │
+│  3. Track Generation Metadata                           │
+│     └─▶ model: LLM used for summarization              │
+│     └─▶ promptVersion: for tracking prompt changes     │
+│     └─▶ generatedAt: ISO timestamp                     │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Design Decisions
+
+| Decision | Choice | Why |
+|----------|--------|-----|
+| Lazy S3 initialization | aioboto3 imported on first use | Container starts without S3 dependency |
+| Graceful degradation | S3 failure doesn't block summarization | Core functionality works without S3 |
+| Regeneration via status reset | Reuses streaming endpoint | No duplicate code |
+| Chapter-level transcripts | Stored in MongoDB | Fast access for RAG/search |
+
+### Migration Script
+
+Backfill raw transcripts for existing videos:
+
+```bash
+# Dry run (preview what would be migrated)
+docker exec vie-summarizer python /app/scripts/backfill-transcripts.py --dry-run
+
+# Run migration
+docker exec vie-summarizer python /app/scripts/backfill-transcripts.py
+
+# Limit batch size
+docker exec vie-summarizer python /app/scripts/backfill-transcripts.py --batch-size 100
+```
+
+---
+
 ## Dockerfile
 
 ```dockerfile
@@ -548,6 +621,36 @@ Extract playlist metadata using yt-dlp (fast, no video download).
 - `404`: Playlist not found or private
 - `500`: yt-dlp extraction failed
 
+### POST /regenerate/{video_summary_id}
+
+Trigger regeneration of an existing video summary.
+
+**Request:**
+```json
+{
+  "force": false  // Optional: set true to re-fetch from YouTube if S3 unavailable
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "status": "ready",
+  "video_summary_id": "507f1f77bcf86cd799439011",
+  "message": "Video summary ready for regeneration. Connect to streaming endpoint to process.",
+  "has_raw_transcript": true,
+  "generation": {
+    "model": "anthropic/claude-sonnet-4-20250514",
+    "promptVersion": "v1.0",
+    "generatedAt": "2026-02-05T10:30:00Z"
+  }
+}
+```
+
+**Error Codes:**
+- `400`: Invalid video summary ID format
+- `404`: Video summary not found
+
 ### GET /health
 
 Health check endpoint.
@@ -556,6 +659,9 @@ Health check endpoint.
 ```json
 {
   "status": "healthy",
-  "service": "summarizer"
+  "service": "summarizer",
+  "model": "anthropic/claude-sonnet-4-20250514",
+  "database": "connected",
+  "s3": "healthy"
 }
 ```
