@@ -64,80 +64,79 @@ export const IngredientBlock = memo(function IngredientBlock({ block }: Ingredie
     <BlockWrapper
       blockId={block.blockId}
       label={BLOCK_LABELS.ingredients}
-    >
-      <div className="space-y-3 p-4 rounded-lg bg-[var(--category-surface,rgba(255,107,53,0.08))] border border-[var(--category-accent,#FF6B35)]/20">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <UtensilsCrossed className="h-4 w-4 text-[var(--category-accent,#FF6B35)]" aria-hidden="true" />
-            <span className="text-sm font-medium text-[var(--category-accent,#FF6B35)]">
-              {BLOCK_LABELS.ingredients}
+      variant="card"
+      headerIcon={<UtensilsCrossed className="h-4 w-4" />}
+      headerLabel={BLOCK_LABELS.ingredients}
+      headerAction={
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{BLOCK_LABELS.servings}:</span>
+          <div className="flex items-center gap-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6"
+              onClick={() => setServingMultiplier(Math.max(0.5, servingMultiplier - 0.5))}
+              disabled={servingMultiplier <= 0.5}
+              aria-label="Decrease servings"
+            >
+              <Minus className="h-3 w-3" />
+            </Button>
+            <span className="text-sm font-medium w-8 text-center tabular-nums">
+              {currentServings}
             </span>
-          </div>
-
-          {/* Serving scaler */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">{BLOCK_LABELS.servings}:</span>
-            <div className="flex items-center gap-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6"
-                onClick={() => setServingMultiplier(Math.max(0.5, servingMultiplier - 0.5))}
-                disabled={servingMultiplier <= 0.5}
-                aria-label="Decrease servings"
-              >
-                <Minus className="h-3 w-3" />
-              </Button>
-              <span className="text-sm font-medium w-8 text-center tabular-nums">
-                {currentServings}
-              </span>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6"
-                onClick={() => setServingMultiplier(servingMultiplier + 0.5)}
-                aria-label="Increase servings"
-              >
-                <Plus className="h-3 w-3" />
-              </Button>
-            </div>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6"
+              onClick={() => setServingMultiplier(servingMultiplier + 0.5)}
+              aria-label="Increase servings"
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
           </div>
         </div>
-
-        <ul className="space-y-1.5" role="list">
+      }
+    >
+      <div className="space-y-0 p-4 rounded-lg bg-card border border-border/20">
+        <ul className="space-y-0 stagger-children" role="list">
           {items.map((item, index) => {
             const isChecked = checkedItems.has(index) || item.checked;
             const scaledAmount = scaleAmount(item.amount);
 
             return (
-              <li key={index} className="flex items-start gap-2.5 text-sm">
-                <button
-                  type="button"
-                  onClick={() => toggleItem(index)}
-                  className={cn(
-                    'shrink-0 mt-0.5 transition-colors',
-                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--category-accent)]/50 rounded'
-                  )}
-                  aria-label={isChecked ? `Uncheck ${item.name}` : `Check ${item.name}`}
-                >
-                  {isChecked ? (
-                    <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                  ) : (
-                    <Square className="h-4 w-4 text-muted-foreground/50" aria-hidden="true" />
-                  )}
-                </button>
-                <div className={cn('flex-1', isChecked && 'line-through text-muted-foreground/50')}>
-                  {scaledAmount && (
-                    <span className="font-medium tabular-nums">{scaledAmount}</span>
-                  )}
-                  {scaledAmount && item.unit && ' '}
-                  {item.unit && <span className="text-muted-foreground">{item.unit}</span>}
-                  {(scaledAmount || item.unit) && ' '}
-                  <span className="text-muted-foreground">{item.name}</span>
-                  {item.notes && (
-                    <span className="text-xs text-muted-foreground/70 ml-1">({item.notes})</span>
-                  )}
+              <li key={index}>
+                <div className="flex items-start gap-2.5 text-sm py-1.5">
+                  <button
+                    type="button"
+                    onClick={() => toggleItem(index)}
+                    className={cn(
+                      'shrink-0 mt-0.5 transition-colors',
+                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded'
+                    )}
+                    aria-label={isChecked ? `Uncheck ${item.name}` : `Check ${item.name}`}
+                  >
+                    {isChecked ? (
+                      <Check className="h-4 w-4 text-success" aria-hidden="true" />
+                    ) : (
+                      <Square className="h-4 w-4 text-muted-foreground/50" aria-hidden="true" />
+                    )}
+                  </button>
+                  <div className={cn('flex-1', isChecked && 'line-through text-muted-foreground/50')}>
+                    {scaledAmount && (
+                      <span className="font-mono text-xs font-bold bg-muted/30 px-1.5 py-0.5 rounded tabular-nums amount-badge-glow">{scaledAmount}</span>
+                    )}
+                    {scaledAmount && item.unit && ' '}
+                    {item.unit && <span className="text-muted-foreground">{item.unit}</span>}
+                    {(scaledAmount || item.unit) && ' '}
+                    <span className="text-muted-foreground">{item.name}</span>
+                    {item.notes && (
+                      <span className="text-xs text-muted-foreground/70 ml-1">({item.notes})</span>
+                    )}
+                  </div>
                 </div>
+                {index < items.length - 1 && (
+                  <div className="fade-divider" aria-hidden="true" />
+                )}
               </li>
             );
           })}

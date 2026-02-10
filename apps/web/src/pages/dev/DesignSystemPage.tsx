@@ -13,6 +13,7 @@ if (!import.meta.env.DEV) {
 import { useState } from 'react';
 import { Palette, Type, Ruler, Activity, Layers, LayoutGrid, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 // Components will be imported as they're built
 import { ColorPalette } from '@/components/dev/design-system/ColorPalette';
@@ -49,18 +50,21 @@ export function DesignSystemPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-14 items-center">
-          <h1 className="text-xl font-semibold">Design System</h1>
-          <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-            DEV ONLY
-          </span>
+      <header className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-14 items-center justify-between">
+          <div className="flex items-center">
+            <h1 className="text-xl font-semibold">Design System</h1>
+            <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+              DEV ONLY
+            </span>
+          </div>
+          <ThemeToggle />
         </div>
       </header>
 
       <div className="container flex gap-8 py-8">
-        {/* Sidebar Navigation */}
-        <nav className="sticky top-20 h-fit w-48 shrink-0" aria-label="Design system sections">
+        {/* Sidebar Navigation - hidden on tablet/mobile */}
+        <nav className="sticky top-20 hidden h-fit w-48 shrink-0 lg:block" aria-label="Design system sections">
           <ul className="space-y-1">
             {sections.map((section) => (
               <li key={section.id}>
@@ -82,7 +86,7 @@ export function DesignSystemPage() {
         </nav>
 
         {/* Main Content */}
-        <main className="flex-1 space-y-16">
+        <main className="min-w-0 flex-1 space-y-16">
           <section id="colors">
             <ColorPalette />
           </section>
@@ -116,7 +120,7 @@ export function DesignSystemPage() {
       {/* Back to top button */}
       <button
         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-        className="fixed bottom-8 right-8 rounded-full bg-primary p-3 text-primary-foreground shadow-lg transition-opacity hover:bg-primary/90"
+        className="fixed bottom-8 right-8 rounded-full bg-primary p-3 text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
         aria-label="Back to top"
       >
         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

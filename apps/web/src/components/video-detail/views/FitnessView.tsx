@@ -72,8 +72,8 @@ export const FitnessView = memo(function FitnessView({
     <div className="space-y-4">
       {/* Workout Timer Section - Interactive timer at the top */}
       {hasTimers && (
-        <div className="bg-rose-50/50 dark:bg-rose-950/20 rounded-lg p-4 border border-rose-200/50 dark:border-rose-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-rose-700 dark:text-rose-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '0ms' }}>
+          <h4 className="glass-section-header">
             <Timer className="h-4 w-4" aria-hidden="true" />
             <span>Workout Timer</span>
           </h4>
@@ -100,8 +100,8 @@ export const FitnessView = memo(function FitnessView({
 
       {/* Exercise List Section */}
       {hasExercises && (
-        <div className="bg-emerald-50/50 dark:bg-emerald-950/20 rounded-lg p-4 border border-emerald-200/50 dark:border-emerald-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '100ms' }}>
+          <h4 className="glass-section-header">
             <Dumbbell className="h-4 w-4" aria-hidden="true" />
             <span>Exercises</span>
           </h4>
@@ -137,7 +137,7 @@ export const FitnessView = memo(function FitnessView({
       {/* Form Tips */}
       {hasTips && (
         <div className="mt-4 space-y-2">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-rose-600 dark:text-rose-400 mb-2">
+          <h4 className="glass-section-header">
             <Heart className="h-4 w-4" aria-hidden="true" />
             <span>Form Tips</span>
           </h4>

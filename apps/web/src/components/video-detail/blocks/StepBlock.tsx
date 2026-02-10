@@ -5,6 +5,8 @@ import { BlockWrapper } from './BlockWrapper';
 import type { StepBlock as StepBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
+const STEP_COLORS = ['border-primary/40 text-primary', 'border-info/40 text-info', 'border-success/40 text-success'] as const;
+
 interface StepBlockProps {
   block: StepBlockType;
 }
@@ -41,22 +43,21 @@ export const StepBlock = memo(function StepBlock({ block }: StepBlockProps) {
     <BlockWrapper
       blockId={block.blockId}
       label={BLOCK_LABELS.steps}
+      variant="card"
+      headerIcon={<Timer className="h-4 w-4" />}
+      headerLabel="Steps"
     >
-      <div className="space-y-3">
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
-          <Timer className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>{BLOCK_LABELS.steps}</span>
-        </div>
-
-        <ol className="space-y-4">
-          {steps.map((step) => {
+      <div className="space-y-0">
+        <ol className="space-y-0 stagger-children">
+          {steps.map((step, stepIndex) => {
             const isCompleted = completedSteps.has(step.number);
+            const colorClass = STEP_COLORS[stepIndex % STEP_COLORS.length];
 
             return (
               <li
                 key={step.number}
                 className={cn(
-                  'flex gap-3 transition-opacity',
+                  'step-connector flex gap-3 transition-opacity',
                   isCompleted && 'opacity-60'
                 )}
               >
@@ -64,11 +65,11 @@ export const StepBlock = memo(function StepBlock({ block }: StepBlockProps) {
                   type="button"
                   onClick={() => toggleStep(step.number)}
                   className={cn(
-                    'shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-sm font-medium transition-colors',
+                    'shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-sm font-medium transition-all duration-200 z-10',
                     'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
                     isCompleted
-                      ? 'bg-emerald-500 border-emerald-500 text-white'
-                      : 'border-[var(--category-accent,currentColor)]/40 text-[var(--category-accent,currentColor)]'
+                      ? 'bg-success border-success text-white'
+                      : colorClass
                   )}
                   aria-label={isCompleted ? `Mark step ${step.number} incomplete` : `Mark step ${step.number} complete`}
                 >

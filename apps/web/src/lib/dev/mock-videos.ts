@@ -50,6 +50,7 @@ import {
   createToolListBlock,
   createDefinitionBlock,
   createComparisonBlock,
+  createTableBlock,
 } from './mock-blocks';
 
 // ─────────────────────────────────────────────────────
@@ -458,6 +459,22 @@ export const mockVideos: Record<VideoCategory, MockVideoData> = {
       createChapter(2, 'Superposition', [
         createParagraphBlock('Superposition allows qubits to process multiple possibilities simultaneously.'),
         createFormulaBlock('|\\alpha|^2 + |\\beta|^2 = 1', 'Normalization condition - probabilities must sum to 1'),
+        createTableBlock(
+          [
+            { key: 'qubits', label: 'Qubits', align: 'center' },
+            { key: 'states', label: 'Possible States', align: 'center' },
+            { key: 'classical', label: 'Classical Equivalent', align: 'center' },
+          ],
+          [
+            { qubits: 1, states: 2, classical: '1 bit' },
+            { qubits: 5, states: 32, classical: '5 bits' },
+            { qubits: 10, states: 1024, classical: '10 bits' },
+            { qubits: 50, states: '1.13 quadrillion', classical: '50 bits' },
+            { qubits: 300, states: '2^300', classical: 'More than atoms in universe' },
+          ],
+          'Qubit scaling comparison',
+          [3, 4]
+        ),
         createStatisticBlock([
           { value: '2^n', label: 'States with n qubits', context: 'vs n states classically' },
           { value: '1000x', label: 'Potential speedup', context: 'for certain problems' },
@@ -577,11 +594,21 @@ export const mockVideos: Record<VideoCategory, MockVideoData> = {
       ]),
       createChapter(3, 'Performance & Battery', [
         createParagraphBlock('A17 Pro chip handles everything with ease. Gaming performance is desktop-class.'),
-        createStatisticBlock([
-          { value: '8-9h', label: 'Screen-on Time' },
-          { value: '3nm', label: 'Chip Process' },
-          { value: '8GB', label: 'RAM' },
-        ]),
+        createTableBlock(
+          [
+            { key: 'spec', label: 'Specification' },
+            { key: 'value', label: 'Value', align: 'right' },
+          ],
+          [
+            { spec: 'Chip', value: 'A17 Pro' },
+            { spec: 'CPU Cores', value: '6 (2P + 4E)' },
+            { spec: 'GPU Cores', value: 6 },
+            { spec: 'RAM', value: '8 GB' },
+            { spec: 'Battery', value: '4,441 mAh' },
+            { spec: 'Screen-on Time', value: '8-9 hours' },
+          ],
+          'Key Specifications'
+        ),
         createRatingBlock(8.5, 10, 'Performance'),
       ]),
       createChapter(4, 'Final Verdict', [

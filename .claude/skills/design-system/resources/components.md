@@ -269,30 +269,111 @@ function StatusBadge({ status }: { status: keyof typeof STATUS_STYLES }) {
 
 ### Block Components
 
-Content blocks with consistent structure:
+Content blocks with consistent structure, powered by BlockWrapper and premium CSS utilities.
 
 ```tsx
-interface BlockProps {
-  title: string;
-  icon?: LucideIcon;
-  children: React.ReactNode;
-  className?: string;
-}
-
-function ContentBlock({ title, icon: Icon, children, className }: BlockProps) {
-  return (
-    <section className={cn("rounded-lg border p-4", className)}>
-      <header className="flex items-center gap-2 mb-3">
-        {Icon && <Icon className="h-5 w-5 text-muted-foreground" />}
-        <h3 className="font-semibold">{title}</h3>
-      </header>
-      <div className="text-sm text-muted-foreground">
-        {children}
+// Modern block pattern using BlockWrapper
+<BlockWrapper
+  blockId={block.blockId}
+  variant="card"
+  label="Ingredients"
+  headerIcon={<UtensilsCrossed className="h-4 w-4" />}
+  headerLabel={BLOCK_LABELS.ingredients}
+  headerAction={<ScaleButton />}
+>
+  <div className="space-y-1.5 stagger-children">
+    {items.map(item => (
+      <div key={item.name} className="hover-lift rounded-lg p-2">
+        {item.name}
       </div>
-    </section>
-  );
-}
+    ))}
+  </div>
+</BlockWrapper>
 ```
+
+---
+
+## Block Component Design Language
+
+All 32 block components follow a unified design language using BlockWrapper variants, premium CSS utilities, and consistent design scales.
+
+### BlockWrapper Variants
+
+The `BlockWrapper` component (`blocks/BlockWrapper.tsx`) provides 5 visual variants:
+
+| Variant | CSS Class | Appearance | Used By |
+|---------|-----------|------------|---------|
+| `card` | `block-card` | Rounded-xl surface with shadow + hover lift | Most blocks (IngredientBlock, ExerciseBlock, etc.) |
+| `accent` | `block-accent` | Left border accent with muted bg | CalloutBlock, DefinitionBlock |
+| `code` | `block-code-container` | Dark IDE surface with traffic light dots | CodeBlock, TerminalBlock |
+| `inline` | `block-inline` | No border/bg, compact `space-y-1.5` | BulletsBlock, NumberedBlock |
+| `transparent` | (none) | No visual container | Minimal inline content |
+
+### Standard Header Pattern
+
+Card and code variants auto-render a header when `headerIcon` and/or `headerLabel` are provided:
+
+```tsx
+// Card variant header: icon + uppercase label + optional action
+<BlockWrapper
+  variant="card"
+  headerIcon={<Star className="h-4 w-4" />}
+  headerLabel="Rating"
+  headerAction={<CopyButton />}
+>
+
+// Code variant header: traffic lights + icon + filename + action
+<BlockWrapper
+  variant="code"
+  headerIcon={<FileCode className="h-4 w-4" />}
+  headerLabel="example.ts"
+  headerAction={<CopyButton />}
+>
+```
+
+### Accent Color System
+
+The `accentColor` prop controls the left border color for `accent` variant:
+
+```tsx
+<BlockWrapper variant="accent" accentColor="warning">  // amber border
+<BlockWrapper variant="accent" accentColor="info">      // blue border
+<BlockWrapper variant="accent" accentColor="success">   // green border
+<BlockWrapper variant="accent" accentColor="destructive"> // red border
+<BlockWrapper variant="accent" accentColor="primary">   // brand red border
+```
+
+### Premium Utility Application Rules
+
+When building or modifying block components, apply these utilities:
+
+| Scenario | Utility | Example |
+|----------|---------|---------|
+| Lists with >3 items | `stagger-children` on parent | `<ul className="stagger-children">` |
+| Cards-within-cards | `hover-lift` on inner cards | `<div className="hover-lift rounded-lg">` |
+| Section headers / control bars | `glass-surface` | `<div className="glass-surface px-4 py-2">` |
+| Hero numbers / scores | `text-gradient-primary` | `<span className="text-gradient-primary text-3xl">` |
+| Rating scores | `text-gradient-warm` | `<span className="text-gradient-warm">4.5</span>` |
+| Between list items | `fade-divider` | `<div className="fade-divider" />` |
+| Callout icons | Color matches `accentColor` | `<Icon className="text-warning" />` (not `text-muted-foreground`) |
+| Dark mode colored elements | Appropriate `*-glow` class | `<span className="badge-glow-success">` |
+| Interactive options | `hover-scale` | `<button className="hover-scale">` |
+
+### Design Scales Reference
+
+Standardized values from `index.css` comments. All blocks follow these scales:
+
+| Element | Scale | Tailwind Classes |
+|---------|-------|-----------------|
+| Card padding | 20px | `p-5` |
+| Card inner gap | 12px | `space-y-3` |
+| List item gap | 6px | `space-y-1.5` |
+| Card border radius | 14px | `rounded-xl` |
+| Header text | 12px uppercase | `text-xs font-semibold uppercase tracking-widest` |
+| Body text | 14px relaxed | `text-sm leading-relaxed` |
+| Metadata text | 12px muted | `text-xs text-muted-foreground` |
+| Header icon | 16px | `h-4 w-4 shrink-0` |
+| Inline icon | 14px | `h-3.5 w-3.5 shrink-0` |
 
 ---
 
@@ -435,6 +516,16 @@ When creating a new component:
 - [ ] Handle loading/disabled states
 - [ ] Test keyboard navigation
 - [ ] Add aria attributes where needed
+
+**Block component additions:**
+- [ ] Wrap in BlockWrapper with appropriate variant
+- [ ] Apply `stagger-children` to list containers with >3 items
+- [ ] Apply `hover-lift` to interactive sub-cards
+- [ ] Apply `glass-surface` to section headers / control bars
+- [ ] Add dark mode glow class if element has semantic color (e.g. `badge-glow-success`)
+- [ ] Use `text-gradient-primary` for hero numbers / feature scores
+- [ ] Use `fade-divider` between list items
+- [ ] Match callout icon color to `accentColor` (not `text-muted-foreground`)
 
 ### Template
 

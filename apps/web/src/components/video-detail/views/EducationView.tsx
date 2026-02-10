@@ -77,8 +77,8 @@ export const EducationView = memo(function EducationView({
     <div className="space-y-4">
       {/* Key Definitions Section */}
       {hasDefinitions && (
-        <div className="bg-indigo-50/50 dark:bg-indigo-950/20 rounded-lg p-4 border border-indigo-200/50 dark:border-indigo-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '0ms' }}>
+          <h4 className="glass-section-header">
             <BookOpen className="h-4 w-4" aria-hidden="true" />
             <span>Key Concepts</span>
           </h4>
@@ -105,8 +105,8 @@ export const EducationView = memo(function EducationView({
 
       {/* Formulas Section */}
       {hasFormulas && (
-        <div className="bg-emerald-50/50 dark:bg-emerald-950/20 rounded-lg p-4 border border-emerald-200/50 dark:border-emerald-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '100ms' }}>
+          <h4 className="glass-section-header">
             <Calculator className="h-4 w-4" aria-hidden="true" />
             <span>Formulas & Equations</span>
           </h4>
@@ -122,8 +122,8 @@ export const EducationView = memo(function EducationView({
 
       {/* Quiz Section */}
       {hasQuizzes && (
-        <div className="bg-violet-50/50 dark:bg-violet-950/20 rounded-lg p-4 border border-violet-200/50 dark:border-violet-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-violet-700 dark:text-violet-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '200ms' }}>
+          <h4 className="glass-section-header">
             <HelpCircle className="h-4 w-4" aria-hidden="true" />
             <span>Knowledge Check</span>
           </h4>
@@ -159,7 +159,7 @@ export const EducationView = memo(function EducationView({
       {/* Learning Tips */}
       {hasTips && (
         <div className="mt-4 space-y-2">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 mb-2">
+          <h4 className="glass-section-header">
             <Lightbulb className="h-4 w-4" aria-hidden="true" />
             <span>Learning Tips</span>
           </h4>

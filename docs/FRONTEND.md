@@ -807,6 +807,90 @@ src/components/video-detail/blocks/
 | `formula` | FormulaBlock | Education | LaTeX rendering, inline mode |
 | `guest` | GuestBlock | Interview | Social links, avatar, bio |
 
+## Block Visual Design Language
+
+All 32 block components implement a unified "Enterprise Calm" design language. This section documents the visual patterns, premium CSS utilities, and rules for maintaining consistency.
+
+### Premium Utility Matrix
+
+Which blocks use which premium CSS utilities:
+
+| Utility | Blocks Using It |
+|---------|----------------|
+| `stagger-children` | BulletsBlock, NumberedBlock, IngredientBlock, StepBlock, ExerciseBlock, ItineraryBlock, CostBlock, ToolListBlock, DosDontsBlock, TimelineBlock, TranscriptBlock |
+| `hover-lift` | IngredientBlock (items), ExerciseBlock (items), ItineraryBlock (activities), CostBlock (items), LocationBlock (card), GuestBlock (social links) |
+| `hover-scale` | QuizBlock (options), WorkoutTimerBlock (controls) |
+| `glass-surface` | IngredientBlock (scaler), WorkoutTimerBlock (controls), NutritionBlock (header), CostBlock (total) |
+| `text-gradient-primary` | NumberedBlock (numbers), RatingBlock (large scores), FormulaBlock (display), StepBlock (numbers) |
+| `text-gradient-warm` | RatingBlock (star scores), NutritionBlock (daily values) |
+| `fade-divider` | IngredientBlock, ExerciseBlock, CostBlock, ItineraryBlock, NutritionBlock, ToolListBlock, TranscriptBlock |
+| `block-card` | Most blocks via `BlockWrapper variant="card"` |
+| `block-accent` | CalloutBlock, DefinitionBlock, QuoteRenderer |
+| `block-code-container` | CodeBlock, TerminalBlock |
+
+### Dark Mode Glow Usage
+
+| Glow Class | Block | Element |
+|------------|-------|---------|
+| `badge-glow-success` | ExerciseBlock | Beginner difficulty badge |
+| `badge-glow-warning` | ExerciseBlock | Intermediate difficulty badge |
+| `badge-glow-destructive` | ExerciseBlock | Advanced difficulty badge |
+| `amount-badge-glow` | IngredientBlock | Amount/unit badge |
+| `timer-glow` | WorkoutTimerBlock | Timer digit display |
+| `day-number-glow` | ItineraryBlock | Day number circle |
+| `avatar-glow` | GuestBlock | Avatar ring |
+
+### Design Scales
+
+All blocks follow these standardized scales (defined in `index.css` comments):
+
+| Element | Value | Classes |
+|---------|-------|---------|
+| Card padding | 20px | `p-5` |
+| Card inner gap | 12px | `space-y-3` |
+| List item gap | 6px | `space-y-1.5` |
+| Card border radius | 14px | `rounded-xl` |
+| Header text | 12px uppercase | `text-xs font-semibold uppercase tracking-widest` |
+| Body text | 14px relaxed | `text-sm leading-relaxed` |
+| Metadata | 12px muted | `text-xs text-muted-foreground` |
+| Header icon | 16px | `h-4 w-4 shrink-0` |
+| Inline icon | 14px | `h-3.5 w-3.5 shrink-0` |
+
+### Building a New Block (Example)
+
+```tsx
+import { BlockWrapper } from './BlockWrapper';
+import { BLOCK_LABELS } from '@/lib/block-labels';
+import { ListChecks } from 'lucide-react';
+
+export function MyNewBlock({ block }: { block: MyBlockType }) {
+  if (!block.items?.length) return null;
+
+  return (
+    <BlockWrapper
+      blockId={block.blockId}
+      variant="card"
+      label="My Block"
+      headerIcon={<ListChecks className="h-4 w-4" />}
+      headerLabel={BLOCK_LABELS.myBlock}
+    >
+      <div className="space-y-1.5 stagger-children">
+        {block.items.map((item, i) => (
+          <div key={i}>
+            <div className="hover-lift rounded-lg border border-border/40 p-3">
+              <span className="text-sm leading-relaxed">{item.text}</span>
+            </div>
+            {i < block.items.length - 1 && <div className="fade-divider mt-1.5" />}
+          </div>
+        ))}
+      </div>
+    </BlockWrapper>
+  );
+}
+```
+
+---
+
 ## Recipe Blocks (Phase 2)
 
 ### IngredientBlock
@@ -1476,7 +1560,7 @@ Two dev-only pages provide component documentation and live previews.
 
 ### Design System Page (`/dev/design-system`)
 
-Living style guide for all design tokens and components.
+Living style guide for all design tokens and components. All 32 block types are showcased with premium polish applied (stagger animations, hover-lift, glass-surface, dark mode glow effects).
 
 | Section | Contents |
 |---------|----------|
@@ -1485,8 +1569,13 @@ Living style guide for all design tokens and components.
 | Spacing Scale | Tailwind spacing tokens (1-12) with visual boxes |
 | Status Indicators | Pending, processing, completed, failed states |
 | Category Accents | All 10 category accent colors |
-| Content Blocks | All 31 block types with live previews and JSON toggle |
+| Content Blocks | All 32 block types with live previews, JSON toggle, and premium polish |
 | Category Views | All 10 view components (CodeView, RecipeView, etc.) |
+
+**Verification tips:**
+- Toggle dark mode to verify glow effects on badges, timers, avatars, and day numbers
+- Stagger animations fire on mount — refresh the page to see entrance animations
+- Hover over ingredient items, exercise cards, itinerary activities to verify `hover-lift`
 
 ### Video Examples Page (`/dev/video-examples`)
 
@@ -1545,3 +1634,7 @@ grep -r "mock-videos" dist/        # Returns nothing
 | `transition-all` | Be specific: `transition-colors` |
 | Dynamic class construction | Use complete class strings |
 | Missing focus states | Always include `focus-visible:ring` |
+| Missing `stagger-children` | Add to list containers with >3 items |
+| Muted callout icons | Match icon color to callout `accentColor` |
+| Missing dark mode glow | Add glow utility class to colored elements (badges, numbers, avatars) |
+| No `hover-lift` on sub-cards | Add to interactive cards-within-cards |

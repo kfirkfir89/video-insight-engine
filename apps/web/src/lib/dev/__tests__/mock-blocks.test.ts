@@ -432,8 +432,8 @@ describe('mock-blocks factories', () => {
   // Block count verification
   // ─────────────────────────────────────────────────────
   describe('Block type count', () => {
-    it('BLOCK_TYPE_COUNT matches expected 31 types', () => {
-      expect(BLOCK_TYPE_COUNT).toBe(31);
+    it('BLOCK_TYPE_COUNT matches expected 32 types', () => {
+      expect(BLOCK_TYPE_COUNT).toBe(32);
     });
   });
 });

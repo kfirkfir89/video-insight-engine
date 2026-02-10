@@ -11,10 +11,17 @@ interface WorkoutTimerBlockProps {
 }
 
 const INTERVAL_COLORS = {
-  work: 'text-rose-500 bg-rose-500/10',
-  rest: 'text-emerald-500 bg-emerald-500/10',
-  warmup: 'text-amber-500 bg-amber-500/10',
-  cooldown: 'text-sky-500 bg-sky-500/10',
+  work: 'text-destructive bg-destructive/10',
+  rest: 'text-success bg-success-soft',
+  warmup: 'text-warning bg-warning-soft',
+  cooldown: 'text-info bg-info/10',
+};
+
+const INTERVAL_PROGRESS_COLORS = {
+  work: 'bg-destructive',
+  rest: 'bg-success',
+  warmup: 'bg-warning',
+  cooldown: 'bg-info',
 };
 
 const INTERVAL_LABELS = {
@@ -109,20 +116,18 @@ export const WorkoutTimerBlock = memo(function WorkoutTimerBlock({ block }: Work
     <BlockWrapper
       blockId={block.blockId}
       label={BLOCK_LABELS.workoutTimer}
+      variant="card"
+      headerIcon={<Timer className="h-4 w-4" />}
+      headerLabel={BLOCK_LABELS.workoutTimer}
+      headerAction={
+        rounds > 1 ? (
+          <span className="text-xs text-muted-foreground">
+            {BLOCK_LABELS.rounds}: {currentRound}/{rounds}
+          </span>
+        ) : undefined
+      }
     >
       <div className="rounded-lg border border-border/50 overflow-hidden">
-        {/* Header */}
-        <div className="bg-muted/30 px-4 py-2 border-b border-border/50 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Timer className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <span className="text-sm font-medium">{BLOCK_LABELS.workoutTimer}</span>
-          </div>
-          {rounds > 1 && (
-            <span className="text-xs text-muted-foreground">
-              {BLOCK_LABELS.rounds}: {currentRound}/{rounds}
-            </span>
-          )}
-        </div>
 
         {/* Timer display - aria-live for screen reader announcements */}
         <div
@@ -132,7 +137,7 @@ export const WorkoutTimerBlock = memo(function WorkoutTimerBlock({ block }: Work
         >
           {isComplete ? (
             <div className="space-y-2" role="alert">
-              <div className="text-4xl font-bold text-emerald-500">{BLOCK_LABELS.complete}</div>
+              <div className="text-4xl font-bold text-success">{BLOCK_LABELS.complete}</div>
               <p className="text-sm text-muted-foreground">{BLOCK_LABELS.totalTime}: {formatTime(totalDuration)}</p>
             </div>
           ) : (
@@ -140,7 +145,7 @@ export const WorkoutTimerBlock = memo(function WorkoutTimerBlock({ block }: Work
               <div className="text-sm font-medium uppercase tracking-wide opacity-80">
                 {intervalLabel}: {currentInterval?.name}
               </div>
-              <div className="text-5xl font-bold tabular-nums">
+              <div className="text-5xl font-bold tabular-nums text-gradient-primary timer-glow">
                 {formatTime(timeRemaining)}
               </div>
             </div>
@@ -148,7 +153,7 @@ export const WorkoutTimerBlock = memo(function WorkoutTimerBlock({ block }: Work
         </div>
 
         {/* Controls */}
-        <div className="p-4 border-t border-border/50 flex items-center justify-center gap-3">
+        <div className="p-4 border-t border-border/50 glass-surface flex items-center justify-center gap-3">
           <Button
             size="sm"
             variant="outline"
@@ -178,19 +183,31 @@ export const WorkoutTimerBlock = memo(function WorkoutTimerBlock({ block }: Work
           </Button>
         </div>
 
-        {/* Interval preview */}
-        <div className="px-4 pb-4">
-          <div className="flex gap-1">
+        {/* Interval preview with dots */}
+        <div className="px-4 pb-4 space-y-2">
+          <div className="flex gap-1 stagger-children">
             {intervals.map((interval, index) => (
               <div
                 key={index}
                 className={cn(
                   'flex-1 h-2 rounded-full transition-colors',
                   index < currentIntervalIndex ? 'bg-primary' :
-                  index === currentIntervalIndex ? INTERVAL_COLORS[interval.type].replace('text-', 'bg-').replace('/10', '') :
+                  index === currentIntervalIndex ? INTERVAL_PROGRESS_COLORS[interval.type] :
                   'bg-muted'
                 )}
                 title={`${INTERVAL_LABELS[interval.type]}: ${formatTime(interval.duration)}`}
+              />
+            ))}
+          </div>
+          {/* Phase dots indicator */}
+          <div className="flex justify-center gap-1.5" aria-hidden="true">
+            {intervals.map((_, index) => (
+              <div
+                key={index}
+                className={cn(
+                  'w-2 h-2 rounded-full transition-colors',
+                  index === currentIntervalIndex ? 'bg-primary' : 'bg-muted-foreground/20'
+                )}
               />
             ))}
           </div>

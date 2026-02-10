@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import { ThumbsUp, ThumbsDown, Star, Award, Clock, Lightbulb } from 'lucide-react';
+import { Star, Award, Clock, Lightbulb } from 'lucide-react';
 import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
@@ -77,8 +77,8 @@ export const ReviewView = memo(function ReviewView({
     <div className="space-y-4">
       {/* Verdict Section - Final assessment at the top */}
       {hasVerdicts && (
-        <div className="bg-violet-50/50 dark:bg-violet-950/20 rounded-lg p-4 border border-violet-200/50 dark:border-violet-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-violet-700 dark:text-violet-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '0ms' }}>
+          <h4 className="glass-section-header">
             <Award className="h-4 w-4" aria-hidden="true" />
             <span>Verdict</span>
           </h4>
@@ -94,8 +94,8 @@ export const ReviewView = memo(function ReviewView({
 
       {/* Ratings Section */}
       {hasRatings && (
-        <div className="bg-amber-50/50 dark:bg-amber-950/20 rounded-lg p-4 border border-amber-200/50 dark:border-amber-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '100ms' }}>
+          <h4 className="glass-section-header">
             <Star className="h-4 w-4" aria-hidden="true" />
             <span>Ratings</span>
           </h4>
@@ -110,22 +110,6 @@ export const ReviewView = memo(function ReviewView({
       )}
 
       {/* Pros & Cons Section */}
-      {hasProCons && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="bg-emerald-50/50 dark:bg-emerald-950/20 rounded-lg p-4 border border-emerald-200/50 dark:border-emerald-800/30">
-            <h4 className="flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-300 mb-3">
-              <ThumbsUp className="h-4 w-4" aria-hidden="true" />
-              <span>What We Liked</span>
-            </h4>
-          </div>
-          <div className="bg-rose-50/50 dark:bg-rose-950/20 rounded-lg p-4 border border-rose-200/50 dark:border-rose-800/30">
-            <h4 className="flex items-center gap-2 text-sm font-medium text-rose-700 dark:text-rose-300 mb-3">
-              <ThumbsDown className="h-4 w-4" aria-hidden="true" />
-              <span>What Could Be Better</span>
-            </h4>
-          </div>
-        </div>
-      )}
       {hasProCons && (
         <ContentBlocks
           blocks={proConBlocks}
@@ -149,8 +133,8 @@ export const ReviewView = memo(function ReviewView({
 
       {/* Comparison Section */}
       {hasComparisons && (
-        <div className="bg-slate-50/50 dark:bg-slate-950/20 rounded-lg p-4 border border-slate-200/50 dark:border-slate-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '200ms' }}>
+          <h4 className="glass-section-header">
             <Lightbulb className="h-4 w-4" aria-hidden="true" />
             <span>Comparison</span>
           </h4>

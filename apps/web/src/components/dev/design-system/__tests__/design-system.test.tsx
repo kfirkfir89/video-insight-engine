@@ -40,8 +40,13 @@ describe('Design System Components', () => {
       expect(screen.getByText('secondary')).toBeInTheDocument();
       expect(screen.getByText('muted')).toBeInTheDocument();
       expect(screen.getByText('accent')).toBeInTheDocument();
-      expect(screen.getByText('destructive')).toBeInTheDocument();
+      // 'destructive' appears in both Semantic and Feedback groups
+      expect(screen.getAllByText('destructive').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText('border')).toBeInTheDocument();
+      // Feedback group tokens
+      expect(screen.getByText('success')).toBeInTheDocument();
+      expect(screen.getByText('warning')).toBeInTheDocument();
+      expect(screen.getByText('info')).toBeInTheDocument();
     });
 
     it('has copy-to-clipboard buttons', () => {

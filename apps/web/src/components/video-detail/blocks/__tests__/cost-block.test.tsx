@@ -36,7 +36,7 @@ describe('CostBlock', () => {
     it('should render notes when present', () => {
       render(<CostBlock block={createMockBlock()} />);
 
-      expect(screen.getByText('(5 nights)')).toBeInTheDocument();
+      expect(screen.getByText('5 nights')).toBeInTheDocument();
     });
 
     it('should return null for empty items', () => {
@@ -103,25 +103,25 @@ describe('CostBlock', () => {
     });
   });
 
-  describe('table structure', () => {
-    it('should render as table element', () => {
+  describe('layout structure', () => {
+    it('should render cost items as div rows', () => {
+      const { container } = render(<CostBlock block={createMockBlock()} />);
+
+      const rows = container.querySelectorAll('.flex.items-baseline.justify-between');
+      expect(rows.length).toBeGreaterThan(1); // items + total
+    });
+
+    it('should have fade dividers between items', () => {
+      const { container } = render(<CostBlock block={createMockBlock()} />);
+
+      const dividers = container.querySelectorAll('.fade-divider');
+      expect(dividers.length).toBeGreaterThan(0);
+    });
+
+    it('should display total row', () => {
       render(<CostBlock block={createMockBlock()} />);
 
-      expect(screen.getByRole('table')).toBeInTheDocument();
-    });
-
-    it('should have total in tfoot', () => {
-      const { container } = render(<CostBlock block={createMockBlock()} />);
-
-      const tfoot = container.querySelector('tfoot');
-      expect(tfoot).toBeInTheDocument();
-    });
-
-    it('should have sr-only headers', () => {
-      const { container } = render(<CostBlock block={createMockBlock()} />);
-
-      const thead = container.querySelector('thead');
-      expect(thead).toHaveClass('sr-only');
+      expect(screen.getByText('Total')).toBeInTheDocument();
     });
   });
 
@@ -132,11 +132,11 @@ describe('CostBlock', () => {
       expect(icons.length).toBeGreaterThan(0);
     });
 
-    it('should have proper table semantics', () => {
-      render(<CostBlock block={createMockBlock()} />);
+    it('should have aria-hidden on decorative dividers', () => {
+      const { container } = render(<CostBlock block={createMockBlock()} />);
 
-      expect(screen.getByRole('table')).toBeInTheDocument();
-      expect(screen.getAllByRole('row').length).toBeGreaterThan(1);
+      const dividers = container.querySelectorAll('.fade-divider[aria-hidden="true"]');
+      expect(dividers.length).toBeGreaterThan(0);
     });
   });
 });

@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { ChefHat } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { BlockWrapper } from './BlockWrapper';
 
 interface NumberedBlockProps {
   items: string[];
@@ -16,36 +17,36 @@ export const NumberedBlock = memo(function NumberedBlock({ items, variant }: Num
   const isCookingSteps = variant === 'cooking_steps';
 
   return (
-    <div
-      className={cn(
-        isCookingSteps && 'border-l-2 border-emerald-400/50 pl-3'
-      )}
-    >
+    <BlockWrapper variant="inline">
       {isCookingSteps && (
         <div className="flex items-center gap-1.5 mb-2">
-          <ChefHat className="h-3.5 w-3.5 text-muted-foreground/60" aria-hidden="true" />
+          <ChefHat className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" aria-hidden="true" />
           <span className="text-xs text-muted-foreground/70">steps</span>
         </div>
       )}
-      <ol className="space-y-2">
+      <ol className="space-y-2 stagger-children">
         {items.map((item, index) => (
-          <li key={index} className="flex items-baseline gap-2.5 text-sm">
+          <li key={index} className="relative pl-10 text-sm min-h-[2rem]">
+            {/* Ghost watermark number */}
+            <span className="numbered-ghost" aria-hidden="true">{index + 1}</span>
+            {/* Gradient badge */}
             <span
               className={cn(
-                'w-5 shrink-0 text-right font-medium tabular-nums',
+                'absolute left-0 top-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold',
                 isCookingSteps
-                  ? 'text-emerald-600/70 dark:text-emerald-400/70'
-                  : 'text-muted-foreground/70'
+                  ? 'border-success/40 text-success/80'
+                  : 'border-primary/40 text-primary/80'
               )}
+              aria-hidden="true"
             >
-              {index + 1}.
+              {index + 1}
             </span>
-            <span className="text-muted-foreground">
+            <span className="text-muted-foreground leading-relaxed">
               {item}
             </span>
           </li>
         ))}
       </ol>
-    </div>
+    </BlockWrapper>
   );
 });

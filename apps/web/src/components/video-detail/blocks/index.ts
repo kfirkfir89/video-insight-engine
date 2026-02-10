@@ -53,3 +53,6 @@ export { FormulaBlock } from './FormulaBlock';
 
 // Podcast blocks (V2.1)
 export { GuestBlock } from './GuestBlock';
+
+// Generic blocks
+export { TableBlock } from './TableBlock';

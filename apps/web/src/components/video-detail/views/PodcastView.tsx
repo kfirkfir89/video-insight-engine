@@ -72,8 +72,8 @@ export const PodcastView = memo(function PodcastView({
     <div className="space-y-4">
       {/* Guests Section - Bio cards at the top */}
       {hasGuests && (
-        <div className="bg-purple-50/50 dark:bg-purple-950/20 rounded-lg p-4 border border-purple-200/50 dark:border-purple-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-purple-700 dark:text-purple-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '0ms' }}>
+          <h4 className="glass-section-header">
             <User className="h-4 w-4" aria-hidden="true" />
             <span>Featured Guests</span>
           </h4>
@@ -89,8 +89,8 @@ export const PodcastView = memo(function PodcastView({
 
       {/* Key Quotes Section */}
       {hasQuotes && (
-        <div className="bg-amber-50/50 dark:bg-amber-950/20 rounded-lg p-4 border border-amber-200/50 dark:border-amber-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '100ms' }}>
+          <h4 className="glass-section-header">
             <Quote className="h-4 w-4" aria-hidden="true" />
             <span>Key Quotes</span>
           </h4>
@@ -117,8 +117,8 @@ export const PodcastView = memo(function PodcastView({
 
       {/* Transcript Segments */}
       {hasTranscripts && (
-        <div className="bg-slate-50/50 dark:bg-slate-950/20 rounded-lg p-4 border border-slate-200/50 dark:border-slate-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '200ms' }}>
+          <h4 className="glass-section-header">
             <MessageSquare className="h-4 w-4" aria-hidden="true" />
             <span>Transcript Highlights</span>
           </h4>

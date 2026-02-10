@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { ThemeContext, type Theme } from "./theme-context";
 
 export function ThemeProvider({
@@ -13,12 +13,20 @@ export function ThemeProvider({
   const [theme, setTheme] = useState<Theme>(
     () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
   );
+  const isFirstRender = useRef(true);
 
   useEffect(() => {
-    // Use requestIdleCallback for non-critical theme sync
+    let transitionTimer: ReturnType<typeof setTimeout>;
+
     // Initial theme is already applied by inline script in index.html
     const applyTheme = () => {
       const root = window.document.documentElement;
+
+      // Enable smooth color transitions during theme switch (skip first mount)
+      if (!isFirstRender.current) {
+        root.classList.add("theme-transitioning");
+      }
+
       root.classList.remove("light", "dark");
 
       if (theme === "system") {
@@ -30,14 +38,24 @@ export function ThemeProvider({
       } else {
         root.classList.add(theme);
       }
+
+      // Remove after transition completes (matches 200ms in CSS)
+      if (!isFirstRender.current) {
+        transitionTimer = setTimeout(() => root.classList.remove("theme-transitioning"), 250);
+      }
+      isFirstRender.current = false;
     };
 
     // Defer if available, otherwise apply immediately
     if ("requestIdleCallback" in window) {
       const id = window.requestIdleCallback(applyTheme, { timeout: 100 });
-      return () => window.cancelIdleCallback(id);
+      return () => {
+        window.cancelIdleCallback(id);
+        clearTimeout(transitionTimer);
+      };
     } else {
       applyTheme();
+      return () => clearTimeout(transitionTimer);
     }
   }, [theme]);
 

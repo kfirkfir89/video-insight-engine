@@ -82,8 +82,8 @@ export const DIYView = memo(function DIYView({
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Tools */}
           {hasTools && (
-            <div className="bg-orange-50/50 dark:bg-orange-950/20 rounded-lg p-4 border border-orange-200/50 dark:border-orange-800/30">
-              <h4 className="flex items-center gap-2 text-sm font-medium text-orange-700 dark:text-orange-300 mb-3">
+            <div className="glass-panel block-entrance" style={{ animationDelay: '0ms' }}>
+              <h4 className="glass-section-header">
                 <Wrench className="h-4 w-4" aria-hidden="true" />
                 <span>Tools Needed</span>
               </h4>
@@ -99,8 +99,8 @@ export const DIYView = memo(function DIYView({
 
           {/* Materials */}
           {hasMaterials && (
-            <div className="bg-amber-50/50 dark:bg-amber-950/20 rounded-lg p-4 border border-amber-200/50 dark:border-amber-800/30">
-              <h4 className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-300 mb-3">
+            <div className="glass-panel block-entrance" style={{ animationDelay: '50ms' }}>
+              <h4 className="glass-section-header">
                 <ListChecks className="h-4 w-4" aria-hidden="true" />
                 <span>Materials</span>
               </h4>
@@ -129,8 +129,8 @@ export const DIYView = memo(function DIYView({
 
       {/* Step-by-Step Instructions */}
       {hasSteps && (
-        <div className="bg-emerald-50/50 dark:bg-emerald-950/20 rounded-lg p-4 border border-emerald-200/50 dark:border-emerald-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '100ms' }}>
+          <h4 className="glass-section-header">
             <Hammer className="h-4 w-4" aria-hidden="true" />
             <span>Instructions</span>
           </h4>
@@ -166,7 +166,7 @@ export const DIYView = memo(function DIYView({
       {/* Safety & Pro Tips */}
       {hasTips && (
         <div className="mt-4 space-y-2">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-orange-600 dark:text-orange-400 mb-2">
+          <h4 className="glass-section-header">
             <Lightbulb className="h-4 w-4" aria-hidden="true" />
             <span>Tips & Safety</span>
           </h4>

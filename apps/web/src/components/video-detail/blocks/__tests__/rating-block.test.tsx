@@ -45,7 +45,7 @@ describe('RatingBlock', () => {
       const { container } = render(<RatingBlock block={createMockBlock({ score: 3, maxScore: 5 })} />);
 
       // 3 filled stars should have fill class
-      const filledStars = container.querySelectorAll('.fill-amber-400');
+      const filledStars = container.querySelectorAll('.fill-warning');
       expect(filledStars.length).toBe(3);
     });
 
@@ -53,7 +53,7 @@ describe('RatingBlock', () => {
       const { container } = render(<RatingBlock block={createMockBlock({ score: 3.5, maxScore: 5 })} />);
 
       // Should have StarHalf icon
-      const filledStars = container.querySelectorAll('.fill-amber-400');
+      const filledStars = container.querySelectorAll('.fill-warning');
       expect(filledStars.length).toBe(4); // 3 full + 1 half
     });
   });

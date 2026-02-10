@@ -93,8 +93,8 @@ describe('TimelineBlock', () => {
     it('should have proper structure', () => {
       const { container } = render(<TimelineBlock block={createMockBlock()} />);
 
-      // Should have timeline visual elements
-      expect(container.querySelector('.border-l')).toBeInTheDocument();
+      // Should have timeline visual elements (gradient line)
+      expect(container.querySelector('.timeline-line')).toBeInTheDocument();
     });
   });
 });

@@ -1,7 +1,8 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { BlockWrapper } from './BlockWrapper';
 import type { ComparisonBlock } from '@vie/types';
-import { Check, X, ThumbsUp, ThumbsDown, Sparkles, type LucideIcon } from 'lucide-react';
+import { Check, X, ThumbsUp, ThumbsDown, Sparkles, Columns2, Rows3, type LucideIcon } from 'lucide-react';
 
 interface ComparisonRendererProps {
   block: ComparisonBlock;
@@ -26,28 +27,29 @@ interface VariantConfig extends VariantStyles {
 }
 
 type VariantKey = 'dos_donts' | 'pros_cons' | 'versus' | 'before_after';
+type ViewMode = 'side-by-side' | 'stacked';
 
 // Static styles - defined outside component to avoid recreation
 const VARIANT_STYLES: Record<VariantKey, VariantStyles> = {
   dos_donts: {
     leftIcon: Check,
     rightIcon: X,
-    leftHeaderClass: 'border-b border-emerald-500/30',
-    rightHeaderClass: 'border-b border-rose-500/30',
-    leftLabelClass: 'text-emerald-600/80 dark:text-emerald-400/80',
-    rightLabelClass: 'text-rose-600/80 dark:text-rose-400/80',
-    leftBulletClass: 'bg-emerald-500/60',
-    rightBulletClass: 'bg-rose-500/60',
+    leftHeaderClass: 'border-b border-success/30',
+    rightHeaderClass: 'border-b border-destructive/30',
+    leftLabelClass: 'text-success',
+    rightLabelClass: 'text-destructive',
+    leftBulletClass: 'bg-success/60',
+    rightBulletClass: 'bg-destructive/60',
   },
   pros_cons: {
     leftIcon: ThumbsUp,
     rightIcon: ThumbsDown,
-    leftHeaderClass: 'border-b border-sky-500/30',
-    rightHeaderClass: 'border-b border-orange-500/30',
-    leftLabelClass: 'text-sky-600/80 dark:text-sky-400/80',
-    rightLabelClass: 'text-orange-600/80 dark:text-orange-400/80',
-    leftBulletClass: 'bg-sky-500/60',
-    rightBulletClass: 'bg-orange-500/60',
+    leftHeaderClass: 'border-b border-info/30',
+    rightHeaderClass: 'border-b border-warning/30',
+    leftLabelClass: 'text-info',
+    rightLabelClass: 'text-warning',
+    leftBulletClass: 'bg-info/60',
+    rightBulletClass: 'bg-warning/60',
   },
   versus: {
     leftIcon: null,
@@ -62,12 +64,12 @@ const VARIANT_STYLES: Record<VariantKey, VariantStyles> = {
   before_after: {
     leftIcon: null,
     rightIcon: Sparkles,
-    leftHeaderClass: 'border-b border-slate-400/30',
-    rightHeaderClass: 'border-b border-violet-500/30',
-    leftLabelClass: 'text-slate-500/80 dark:text-slate-400/80',
-    rightLabelClass: 'text-violet-600/80 dark:text-violet-400/80',
-    leftBulletClass: 'bg-slate-400/60',
-    rightBulletClass: 'bg-violet-500/60',
+    leftHeaderClass: 'border-b border-muted-foreground/30',
+    rightHeaderClass: 'border-b border-primary/30',
+    leftLabelClass: 'text-muted-foreground',
+    rightLabelClass: 'text-primary',
+    leftBulletClass: 'bg-muted-foreground/60',
+    rightBulletClass: 'bg-primary/60',
   },
 };
 
@@ -81,9 +83,11 @@ const DEFAULT_LABELS: Record<VariantKey, { left: string; right: string }> = {
 
 /**
  * Renders a side-by-side comparison with variant-specific styling.
+ * Toggle between side-by-side and stacked layouts.
  * Variants: dos_donts (green/red), pros_cons (blue/orange), versus (neutral), before_after (timeline)
  */
 export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: ComparisonRendererProps) {
+  const [viewMode, setViewMode] = useState<ViewMode>('side-by-side');
   const variant = block.variant || 'versus';
   const variantKey = variant as VariantKey;
 
@@ -100,45 +104,105 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
   const LeftIcon = config.leftIcon;
   const RightIcon = config.rightIcon;
 
+  const isSideBySide = viewMode === 'side-by-side';
+
   return (
+    <BlockWrapper variant="card">
     <div className="rounded-lg border border-border/40 overflow-hidden">
-      <div className="grid grid-cols-1 sm:grid-cols-2">
-        {/* Left column */}
-        <div className="p-4 sm:border-r border-border/40">
-          <div className={cn('flex items-center gap-1.5 pb-2 mb-3', config.leftHeaderClass)}>
+      {/* Header row with labels and toggle */}
+      <div className={cn(
+        'text-center glass-surface',
+        isSideBySide ? 'grid grid-cols-2' : 'flex flex-col'
+      )}>
+        {/* Toggle button */}
+        <div className="absolute right-2 top-2 z-10">
+          <button
+            type="button"
+            onClick={() => setViewMode(isSideBySide ? 'stacked' : 'side-by-side')}
+            className={cn(
+              'inline-flex items-center gap-1 text-xs px-1.5 py-1 rounded transition-colors',
+              'text-muted-foreground hover:bg-muted/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50'
+            )}
+            aria-label={isSideBySide ? 'Switch to stacked view' : 'Switch to side-by-side view'}
+          >
+            {isSideBySide ? (
+              <Rows3 className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <Columns2 className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+          </button>
+        </div>
+
+        <div className={cn('px-4 py-2', config.leftHeaderClass)}>
+          <div className="flex items-center justify-center gap-1.5">
             {LeftIcon && <LeftIcon className={cn('h-3.5 w-3.5', config.leftLabelClass)} aria-hidden="true" />}
-            <span className={cn('text-xs font-medium', config.leftLabelClass)}>
+            <span className={cn('text-xs font-bold uppercase tracking-wider', config.leftLabelClass)}>
               {config.leftLabel}
             </span>
           </div>
-          <ul className="space-y-1.5">
+        </div>
+        {isSideBySide && (
+          <div className={cn('px-4 py-2', config.rightHeaderClass)}>
+            <div className="flex items-center justify-center gap-1.5">
+              {RightIcon && <RightIcon className={cn('h-3.5 w-3.5', config.rightLabelClass)} aria-hidden="true" />}
+              <span className={cn('text-xs font-bold uppercase tracking-wider', config.rightLabelClass)}>
+                {config.rightLabel}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className={cn(
+        isSideBySide ? 'grid grid-cols-1 sm:grid-cols-2' : 'flex flex-col'
+      )}>
+        {/* Left column */}
+        <div className={cn("p-4", isSideBySide && "sm:border-r border-border/40", variantKey === 'dos_donts' && 'bg-success/[0.04]', variantKey === 'pros_cons' && 'bg-info/[0.04]')}>
+          <ul className="space-y-0 stagger-children">
             {block.left.items.map((item, index) => (
-              <li key={index} className="flex items-baseline gap-2.5 text-sm">
-                <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.leftBulletClass)} />
-                <span className="text-muted-foreground">{item}</span>
+              <li key={index}>
+                <div className="flex items-baseline gap-2.5 text-sm py-1.5">
+                  <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.leftBulletClass)} />
+                  <span className="text-muted-foreground">{item}</span>
+                </div>
+                {index < block.left.items.length - 1 && (
+                  <div className="fade-divider" aria-hidden="true" />
+                )}
               </li>
             ))}
           </ul>
         </div>
 
-        {/* Right column */}
-        <div className="p-4 border-t sm:border-t-0 border-border/40">
-          <div className={cn('flex items-center gap-1.5 pb-2 mb-3', config.rightHeaderClass)}>
-            {RightIcon && <RightIcon className={cn('h-3.5 w-3.5', config.rightLabelClass)} aria-hidden="true" />}
-            <span className={cn('text-xs font-medium', config.rightLabelClass)}>
-              {config.rightLabel}
-            </span>
+        {/* Right column header (stacked mode only) */}
+        {!isSideBySide && (
+          <div className={cn('px-4 py-2 text-center', config.rightHeaderClass)}>
+            <div className="flex items-center justify-center gap-1.5">
+              {RightIcon && <RightIcon className={cn('h-3.5 w-3.5', config.rightLabelClass)} aria-hidden="true" />}
+              <span className={cn('text-xs font-bold uppercase tracking-wider', config.rightLabelClass)}>
+                {config.rightLabel}
+              </span>
+            </div>
           </div>
-          <ul className="space-y-1.5">
+        )}
+
+        {/* Right column */}
+        <div className={cn("p-4 border-t sm:border-t-0 border-border/40", !isSideBySide && 'border-t-0', variantKey === 'dos_donts' && 'bg-destructive/[0.04]', variantKey === 'pros_cons' && 'bg-warning/[0.04]')}>
+          <ul className="space-y-0 stagger-children">
             {block.right.items.map((item, index) => (
-              <li key={index} className="flex items-baseline gap-2.5 text-sm">
-                <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.rightBulletClass)} />
-                <span className="text-muted-foreground">{item}</span>
+              <li key={index}>
+                <div className="flex items-baseline gap-2.5 text-sm py-1.5">
+                  <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.rightBulletClass)} />
+                  <span className="text-muted-foreground">{item}</span>
+                </div>
+                {index < block.right.items.length - 1 && (
+                  <div className="fade-divider" aria-hidden="true" />
+                )}
               </li>
             ))}
           </ul>
         </div>
       </div>
     </div>
+    </BlockWrapper>
   );
 });

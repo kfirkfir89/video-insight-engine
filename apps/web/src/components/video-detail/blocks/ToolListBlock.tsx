@@ -34,17 +34,24 @@ export const ToolListBlock = memo(function ToolListBlock({ block }: ToolListBloc
     <BlockWrapper
       blockId={block.blockId}
       label={BLOCK_LABELS.tools}
+      variant="inline"
     >
       <div className="space-y-2">
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
           <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
           <span>{BLOCK_LABELS.tools}</span>
         </div>
-        <ul className="space-y-1.5" role="list">
+        <ul className="grid gap-2 sm:grid-cols-2" role="list">
           {tools.map((tool, index) => {
             const isChecked = checkedTools.has(index) || tool.checked;
             return (
-              <li key={index} className="flex items-start gap-2.5 text-sm">
+              <li
+                key={index}
+                className={cn(
+                  'flex items-start gap-2.5 text-sm p-2.5 rounded-lg border border-border/30 hover:border-border/60 transition-colors hover-lift',
+                  isChecked && 'opacity-60'
+                )}
+              >
                 <button
                   type="button"
                   onClick={() => toggleTool(index)}
@@ -55,7 +62,7 @@ export const ToolListBlock = memo(function ToolListBlock({ block }: ToolListBloc
                   aria-label={isChecked ? `Uncheck ${tool.name}` : `Check ${tool.name}`}
                 >
                   {isChecked ? (
-                    <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                    <Check className="h-4 w-4 text-success dark:drop-shadow-[0_0_4px_currentColor]" aria-hidden="true" />
                   ) : (
                     <Square className="h-4 w-4 text-muted-foreground/50" aria-hidden="true" />
                   )}

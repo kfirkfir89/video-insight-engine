@@ -1,5 +1,7 @@
 import { memo, useState, useRef, useEffect, useCallback } from 'react';
-import { Code2, Copy } from 'lucide-react';
+import { Code2, Copy, Terminal } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { BlockWrapper } from './BlockWrapper';
 
 interface ExampleBlockProps {
   title?: string;
@@ -46,63 +48,78 @@ export const ExampleBlock = memo(function ExampleBlock({ title, code, explanatio
 
   // Terminal command variant: ultra-minimal
   if (variant === 'terminal_command') {
+    const terminalCopyButton = (
+      <button
+        onClick={handleCopy}
+        aria-label={copied ? 'Copied to clipboard' : 'Copy code to clipboard'}
+        className={cn(
+          'flex items-center gap-1 text-xs ml-3 shrink-0 transition-colors',
+          copied ? 'text-success code-copied-glow' : 'text-zinc-500 hover:text-zinc-300'
+        )}
+      >
+        <Copy className="h-3 w-3" aria-hidden="true" />
+        {copied ? 'Copied!' : 'Copy'}
+      </button>
+    );
+
     return (
-      <div className="rounded-lg bg-zinc-950 dark:bg-black p-3 overflow-hidden">
-        <div className="flex items-center justify-between">
+      <BlockWrapper
+        label="Terminal command"
+        variant="code"
+        headerIcon={<Terminal className="h-4 w-4" />}
+        headerLabel="Terminal"
+        headerAction={terminalCopyButton}
+      >
+        <div className="p-3">
           <pre className="text-sm overflow-x-auto">
-            <code className="font-mono text-emerald-400">
-              <span className="text-emerald-500/70 mr-2">$</span>
+            <code className="font-mono text-zinc-100">
+              <span className="text-success code-prompt-glow mr-2">$</span>
               {code}
             </code>
           </pre>
-          <button
-            onClick={handleCopy}
-            aria-label={copied ? 'Copied to clipboard' : 'Copy code to clipboard'}
-            className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 ml-3 shrink-0"
-          >
-            <Copy className="h-3 w-3" aria-hidden="true" />
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
+          {explanation && (
+            <p className="mt-2 text-xs text-zinc-500">{explanation}</p>
+          )}
         </div>
-        {explanation && (
-          <p className="mt-2 text-xs text-zinc-500">{explanation}</p>
-        )}
-      </div>
+      </BlockWrapper>
     );
   }
 
   // Default code example
+  const defaultCopyButton = (
+    <button
+      onClick={handleCopy}
+      aria-label={copied ? 'Copied to clipboard' : 'Copy code to clipboard'}
+      className={cn(
+        'flex items-center gap-1 text-xs transition-colors',
+        copied ? 'text-success' : 'text-muted-foreground hover:text-foreground'
+      )}
+    >
+      <Copy className="h-3 w-3" aria-hidden="true" />
+      {copied ? 'Copied!' : 'Copy'}
+    </button>
+  );
+
   return (
-    <div className="rounded-lg border overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/50">
-        <div className="flex items-center gap-1.5">
-          <Code2 className="h-3.5 w-3.5 text-muted-foreground/60" aria-hidden="true" />
-          <span className="text-xs text-muted-foreground/70">
-            {title || 'Example'}
-          </span>
-        </div>
-        <button
-          onClick={handleCopy}
-          aria-label={copied ? 'Copied to clipboard' : 'Copy code to clipboard'}
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Copy className="h-3 w-3" aria-hidden="true" />
-          {copied ? 'Copied!' : 'Copy'}
-        </button>
-      </div>
+    <BlockWrapper
+      label="Code example"
+      variant="card"
+      headerIcon={<Code2 className="h-4 w-4" />}
+      headerLabel={title || 'Example'}
+      headerAction={defaultCopyButton}
+    >
       {/* Code area */}
-      <div className="bg-zinc-950 dark:bg-zinc-900 px-4 py-3">
+      <div className="block-code-container rounded-none border-0 px-4 py-3">
         <pre className="text-sm overflow-x-auto">
           <code className="font-mono text-zinc-300">{code}</code>
         </pre>
       </div>
       {/* Explanation footer */}
       {explanation && (
-        <div className="px-3 py-2 border-t bg-muted/30">
+        <div className="px-3 py-2 border-t border-border/30 bg-muted/30">
           <p className="text-sm text-muted-foreground">{explanation}</p>
         </div>
       )}
-    </div>
+    </BlockWrapper>
   );
 });

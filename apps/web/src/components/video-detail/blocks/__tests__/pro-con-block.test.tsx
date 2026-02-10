@@ -119,19 +119,19 @@ describe('ProConBlock', () => {
   });
 
   describe('styling', () => {
-    it('should have green styling for pros section', () => {
+    it('should have success styling for pros section', () => {
       const { container } = render(<ProConBlock block={createMockBlock()} />);
 
-      // Pros section should have emerald/green coloring
-      const prosHeader = container.querySelector('[class*="emerald"]');
+      // Pros section should have success semantic coloring
+      const prosHeader = container.querySelector('[class*="text-success"]');
       expect(prosHeader).toBeInTheDocument();
     });
 
-    it('should have red styling for cons section', () => {
+    it('should have destructive styling for cons section', () => {
       const { container } = render(<ProConBlock block={createMockBlock()} />);
 
-      // Cons section should have rose/red coloring
-      const consHeader = container.querySelector('[class*="rose"]');
+      // Cons section should have destructive semantic coloring
+      const consHeader = container.querySelector('[class*="text-destructive"]');
       expect(consHeader).toBeInTheDocument();
     });
   });
