@@ -20,18 +20,16 @@ export const ItineraryBlock = memo(function ItineraryBlock({ block }: ItineraryB
     <BlockWrapper
       blockId={block.blockId}
       label={BLOCK_LABELS.itinerary}
+      variant="card"
+      headerIcon={<Calendar className="h-4 w-4" />}
+      headerLabel={BLOCK_LABELS.itinerary}
     >
       <div className="space-y-4">
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
-          <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>{BLOCK_LABELS.itinerary}</span>
-        </div>
-
         <div className="space-y-6">
           {days.map((day) => (
             <div key={day.day} className="space-y-3">
               <div className="flex items-center gap-2">
-                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[var(--category-accent,#10B981)]/10 text-[var(--category-accent,#10B981)] text-sm font-medium">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full glass-surface bg-primary/10 text-primary text-sm font-bold text-gradient-primary day-number-glow">
                   {day.day}
                 </span>
                 <div>
@@ -40,12 +38,16 @@ export const ItineraryBlock = memo(function ItineraryBlock({ block }: ItineraryB
                 </div>
               </div>
 
-              <div className="ml-4 pl-6 border-l border-border/50 space-y-3">
+              <div className="ml-4 pl-6 relative space-y-3 stagger-children">
+                {/* Gradient connecting line */}
+                <div className="timeline-line" aria-hidden="true" />
                 {day.activities.map((activity, actIndex) => (
-                  <div key={actIndex} className="space-y-1">
+                  <div key={actIndex} className="relative pl-4 space-y-1">
+                    {/* Activity dot */}
+                    <div className="absolute left-[-4px] top-1.5 w-2 h-2 rounded-full bg-primary/40 z-10" aria-hidden="true" />
                     <div className="flex items-center gap-2 text-sm">
                       {activity.time && (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground/70 tabular-nums">
+                        <span className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground tabular-nums">
                           <Clock className="h-3 w-3" aria-hidden="true" />
                           {activity.time}
                         </span>

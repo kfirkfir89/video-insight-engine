@@ -77,8 +77,8 @@ export const TravelView = memo(function TravelView({
     <div className="space-y-4">
       {/* Locations Section - Destinations at the top */}
       {hasLocations && (
-        <div className="bg-cyan-50/50 dark:bg-cyan-950/20 rounded-lg p-4 border border-cyan-200/50 dark:border-cyan-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-cyan-700 dark:text-cyan-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '0ms' }}>
+          <h4 className="glass-section-header">
             <MapPin className="h-4 w-4" aria-hidden="true" />
             <span>Destinations</span>
           </h4>
@@ -105,8 +105,8 @@ export const TravelView = memo(function TravelView({
 
       {/* Itinerary Section */}
       {hasItinerary && (
-        <div className="bg-blue-50/50 dark:bg-blue-950/20 rounded-lg p-4 border border-blue-200/50 dark:border-blue-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '100ms' }}>
+          <h4 className="glass-section-header">
             <Calendar className="h-4 w-4" aria-hidden="true" />
             <span>Itinerary</span>
           </h4>
@@ -122,8 +122,8 @@ export const TravelView = memo(function TravelView({
 
       {/* Cost Breakdown Section */}
       {hasCosts && (
-        <div className="bg-emerald-50/50 dark:bg-emerald-950/20 rounded-lg p-4 border border-emerald-200/50 dark:border-emerald-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '200ms' }}>
+          <h4 className="glass-section-header">
             <DollarSign className="h-4 w-4" aria-hidden="true" />
             <span>Cost Breakdown</span>
           </h4>
@@ -159,7 +159,7 @@ export const TravelView = memo(function TravelView({
       {/* Travel Tips */}
       {hasTips && (
         <div className="mt-4 space-y-2">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-cyan-600 dark:text-cyan-400 mb-2">
+          <h4 className="glass-section-header">
             <Lightbulb className="h-4 w-4" aria-hidden="true" />
             <span>Travel Tips</span>
           </h4>

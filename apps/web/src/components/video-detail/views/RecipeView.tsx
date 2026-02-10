@@ -77,8 +77,8 @@ export const RecipeView = memo(function RecipeView({
     <div className="space-y-4">
       {/* Ingredients Section - Always at top for recipes */}
       {hasIngredients && (
-        <div className="bg-amber-50/50 dark:bg-amber-950/20 rounded-lg p-4 border border-amber-200/50 dark:border-amber-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '0ms' }}>
+          <h4 className="glass-section-header">
             <ListChecks className="h-4 w-4" aria-hidden="true" />
             <span>Ingredients</span>
           </h4>
@@ -105,8 +105,8 @@ export const RecipeView = memo(function RecipeView({
 
       {/* Cooking Steps Section */}
       {hasSteps && (
-        <div className="bg-emerald-50/50 dark:bg-emerald-950/20 rounded-lg p-4 border border-emerald-200/50 dark:border-emerald-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '100ms' }}>
+          <h4 className="glass-section-header">
             <ChefHat className="h-4 w-4" aria-hidden="true" />
             <span>Cooking Steps</span>
           </h4>
@@ -142,7 +142,7 @@ export const RecipeView = memo(function RecipeView({
       {/* Chef Tips */}
       {hasTips && (
         <div className="mt-4 space-y-2">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-amber-600 dark:text-amber-400 mb-2">
+          <h4 className="glass-section-header">
             <Lightbulb className="h-4 w-4" aria-hidden="true" />
             <span>Chef Tips</span>
           </h4>

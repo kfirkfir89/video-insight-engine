@@ -26,11 +26,11 @@ export const RatingBlock = memo(function RatingBlock({ block }: RatingBlockProps
     return (
       <div className="flex items-center gap-0.5" aria-hidden="true">
         {Array.from({ length: fullStars }).map((_, i) => (
-          <Star key={`full-${i}`} className="h-4 w-4 fill-amber-400 text-amber-400" />
+          <Star key={`full-${i}`} className="h-4 w-4 shrink-0 fill-warning text-warning dark:drop-shadow-[0_0_6px_oklch(78%_0.14_85/0.4)]" />
         ))}
-        {hasHalfStar && <StarHalf className="h-4 w-4 fill-amber-400 text-amber-400" />}
+        {hasHalfStar && <StarHalf className="h-4 w-4 shrink-0 fill-warning text-warning dark:drop-shadow-[0_0_6px_oklch(78%_0.14_85/0.4)]" />}
         {Array.from({ length: emptyStars }).map((_, i) => (
-          <Star key={`empty-${i}`} className="h-4 w-4 text-muted-foreground/30" />
+          <Star key={`empty-${i}`} className="h-4 w-4 shrink-0 text-muted-foreground/30" />
         ))}
       </div>
     );
@@ -43,7 +43,7 @@ export const RatingBlock = memo(function RatingBlock({ block }: RatingBlockProps
       <div className="flex items-center gap-2 flex-1">
         <div className="flex-1 h-2 bg-muted/50 rounded-full overflow-hidden">
           <div
-            className="h-full bg-[var(--category-accent,#F59E0B)] rounded-full transition-all"
+            className="h-full rounded-full transition-all duration-500 ease-out bg-warning progress-bar-gradient progress-bar-animated"
             style={{ width: `${percentage}%` }}
           />
         </div>
@@ -58,20 +58,23 @@ export const RatingBlock = memo(function RatingBlock({ block }: RatingBlockProps
     <BlockWrapper
       blockId={block.blockId}
       label={BLOCK_LABELS.rating(clampedScore, maxScore)}
+      variant="card"
+      headerIcon={<Star className="h-4 w-4 shrink-0" aria-hidden="true" />}
+      headerLabel="Rating"
     >
-      <div className="rounded-lg border border-border/50 p-4 space-y-4">
+      <div className="rounded-lg border border-border/50 p-4 space-y-4 shadow-[inset_0_2px_4px_oklch(0%_0_0/0.04)]">
         {/* Main rating */}
         <div className="flex items-center justify-between">
           <div className="space-y-1">
             {label && <span className="text-sm text-muted-foreground">{label}</span>}
             <div className="flex items-center gap-3">
               <span
-                className="text-3xl font-bold"
+                className="text-4xl font-black tabular-nums text-gradient-warm"
                 aria-label={BLOCK_LABELS.rating(clampedScore, maxScore)}
               >
                 {clampedScore}
               </span>
-              <span className="text-lg text-muted-foreground/60">/ {maxScore}</span>
+              <span className="text-lg text-muted-foreground/40">/ {maxScore}</span>
             </div>
           </div>
           {maxScore <= 5 ? renderStars(clampedScore, maxScore) : renderBar(clampedScore, maxScore)}
@@ -79,14 +82,14 @@ export const RatingBlock = memo(function RatingBlock({ block }: RatingBlockProps
 
         {/* Breakdown */}
         {breakdown && breakdown.length > 0 && (
-          <div className="pt-3 border-t border-border/30 space-y-2">
+          <div className="pt-3 space-y-2">
             {breakdown.map((item, index) => (
               <div key={index} className="flex items-center gap-3 text-sm">
                 <span className="text-muted-foreground w-24 shrink-0 truncate">{item.category}</span>
                 <div className="flex-1 h-1.5 bg-muted/50 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-[var(--category-accent,#F59E0B)]/80 rounded-full"
-                    style={{ width: `${(item.score / (item.maxScore || maxScore)) * 100}%` }}
+                    className="h-full bg-warning/80 rounded-full progress-bar-gradient"
+                    style={{ width: `${(item.score / (item.maxScore || maxScore)) * 100}%`, animationDelay: `${index * 80}ms` }}
                   />
                 </div>
                 <span className="text-xs text-muted-foreground tabular-nums w-8 text-right">

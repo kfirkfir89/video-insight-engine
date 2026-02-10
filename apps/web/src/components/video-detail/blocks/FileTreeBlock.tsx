@@ -1,5 +1,5 @@
 import { memo, useState, useCallback } from 'react';
-import { ChevronRight, Folder, FolderOpen, File, FileCode, FileText, FileImage, FileJson } from 'lucide-react';
+import { ChevronRight, Folder, FolderOpen, FolderTree, File, FileCode, FileText, FileImage, FileJson } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
 import type { FileTreeBlock as FileTreeBlockType, FileTreeNode } from '@vie/types';
@@ -82,7 +82,7 @@ const TreeNode = memo(function TreeNode({ node, level, expandedFolders, toggleFo
         <FileIcon
           className={cn(
             'h-4 w-4 shrink-0',
-            isFolder ? 'text-amber-500 dark:text-amber-400' : 'text-muted-foreground/70'
+            isFolder ? 'text-warning dark:drop-shadow-[0_0_4px_currentColor]' : 'text-muted-foreground/70'
           )}
           aria-hidden="true"
         />
@@ -150,6 +150,9 @@ export const FileTreeBlock = memo(function FileTreeBlock({ block }: FileTreeBloc
     <BlockWrapper
       blockId={block.blockId}
       label="File tree"
+      variant="card"
+      headerIcon={<FolderTree className="h-4 w-4" />}
+      headerLabel="File Structure"
     >
       <div className="rounded-lg border border-border/50 p-3 bg-muted/20 font-mono text-sm" role="tree">
         {tree.map((node, index) => (

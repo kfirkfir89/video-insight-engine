@@ -172,18 +172,20 @@ describe('TranscriptBlock', () => {
         { time: '1:00', seconds: 60, text: 'Third' },
       ];
 
-      render(<TranscriptBlock block={createMockBlock({ lines })} activeSeconds={35} />);
+      const { container } = render(<TranscriptBlock block={createMockBlock({ lines })} activeSeconds={35} />);
 
       // The second line should be highlighted (35 seconds is between 30 and 60)
-      const secondLine = screen.getByText('Second').closest('div');
-      expect(secondLine).toHaveClass('bg-primary/10');
+      const highlightedDiv = container.querySelector('.bg-info-soft');
+      expect(highlightedDiv).toBeInTheDocument();
+      expect(highlightedDiv).toHaveTextContent('Second');
     });
 
     it('should highlight first line when activeSeconds is 0', () => {
-      render(<TranscriptBlock block={createMockBlock()} activeSeconds={0} />);
+      const { container } = render(<TranscriptBlock block={createMockBlock()} activeSeconds={0} />);
 
-      const firstLine = screen.getByText('First line').closest('div');
-      expect(firstLine).toHaveClass('bg-primary/10');
+      const highlightedDiv = container.querySelector('.bg-info-soft');
+      expect(highlightedDiv).toBeInTheDocument();
+      expect(highlightedDiv).toHaveTextContent('First line');
     });
   });
 

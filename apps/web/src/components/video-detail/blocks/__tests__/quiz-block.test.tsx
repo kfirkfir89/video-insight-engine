@@ -87,8 +87,8 @@ describe('QuizBlock', () => {
       // Select correct answer (Paris, index 1)
       fireEvent.click(screen.getByRole('button', { name: /paris/i }));
 
-      // Check for green/success styling
-      const correctButton = container.querySelector('.bg-emerald-500\\/10');
+      // Check for success semantic styling
+      const correctButton = container.querySelector('.bg-success-soft');
       expect(correctButton).toBeInTheDocument();
     });
 
@@ -98,8 +98,8 @@ describe('QuizBlock', () => {
       // Select wrong answer (London, index 0)
       fireEvent.click(screen.getByRole('button', { name: /london/i }));
 
-      // Check for red/error styling
-      const wrongButton = container.querySelector('.bg-rose-500\\/10');
+      // Check for destructive semantic styling
+      const wrongButton = container.querySelector('.bg-destructive\\/10');
       expect(wrongButton).toBeInTheDocument();
     });
 

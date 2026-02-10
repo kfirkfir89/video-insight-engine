@@ -40,7 +40,15 @@ import {
   FormulaBlock,
   // Podcast blocks (V2.1)
   GuestBlock,
+  // Generic blocks
+  TableBlock,
 } from './blocks';
+
+/** Fallback type for unrecognized block types */
+interface UnknownBlock {
+  type: string;
+  text?: string;
+}
 
 interface ContentBlockRendererProps {
   block: ContentBlock;
@@ -227,9 +235,15 @@ export function ContentBlockRenderer({
     case 'guest':
       return <GuestBlock block={block} />;
 
+    // ─────────────────────────────────────────────────────
+    // Generic blocks
+    // ─────────────────────────────────────────────────────
+    case 'table':
+      return <TableBlock block={block} />;
+
     default: {
       // Handle unknown block types gracefully
-      const unknownBlock = block as { type: string; text?: string };
+      const unknownBlock = block as UnknownBlock;
 
       // Log warning in development for debugging
       if (import.meta.env.DEV) {

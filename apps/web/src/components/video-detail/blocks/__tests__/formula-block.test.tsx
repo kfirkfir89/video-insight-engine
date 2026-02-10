@@ -128,11 +128,11 @@ describe('FormulaBlock', () => {
   });
 
   describe('styling', () => {
-    it('should use monospace font', () => {
+    it('should use serif font for block formula', () => {
       const { container } = render(<FormulaBlock block={createMockBlock()} />);
 
-      const monoElement = container.querySelector('.font-mono');
-      expect(monoElement).toBeInTheDocument();
+      const serifElement = container.querySelector('.font-serif');
+      expect(serifElement).toBeInTheDocument();
     });
 
     it('should center block formulas', () => {

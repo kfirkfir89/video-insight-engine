@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import type { KeyValueBlock } from '@vie/types';
 import { Cpu, DollarSign, BarChart3, Info, MapPin } from 'lucide-react';
+import { BlockWrapper } from './BlockWrapper';
 
 interface KeyValueRendererProps {
   block: KeyValueBlock;
@@ -29,22 +30,33 @@ export const KeyValueRenderer = memo(function KeyValueRenderer({ block }: KeyVal
   const Icon = config.icon;
 
   return (
-    <div className="space-y-1.5">
-      {/* Header with icon */}
-      <div className="flex items-center gap-1.5 mb-1">
-        <Icon className="h-3.5 w-3.5 text-muted-foreground/60" aria-hidden="true" />
-        <span className="text-xs text-muted-foreground/70">{config.label}</span>
-      </div>
+    <BlockWrapper
+      blockId={block.blockId}
+      variant="transparent"
+      label={config.label}
+    >
+      <div className="space-y-1.5">
+        {/* Header with icon */}
+        <div className="flex items-center gap-1.5 mb-1">
+          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" aria-hidden="true" />
+          <span className="text-xs text-muted-foreground/70">{config.label}</span>
+        </div>
 
-      {/* Key-value grid */}
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-        {block.items.map((item, index) => (
-          <div key={index} className="contents">
-            <dt className="text-muted-foreground/70">{item.key}</dt>
-            <dd className="text-muted-foreground font-medium">{item.value}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
+        {/* Key-value rows with fade dividers */}
+        <dl className="space-y-0">
+          {block.items.map((item, index) => (
+            <div key={index}>
+              <div className="flex items-baseline justify-between gap-3 py-1.5 text-sm even:bg-muted/[0.04]">
+                <dt className="text-xs font-bold uppercase text-muted-foreground/70 tracking-wide">{item.key}</dt>
+                <dd className="text-sm font-medium text-muted-foreground">{item.value}</dd>
+              </div>
+              {index < block.items.length - 1 && (
+                <div className="fade-divider" aria-hidden="true" />
+              )}
+            </div>
+          ))}
+        </dl>
+      </div>
+    </BlockWrapper>
   );
 });

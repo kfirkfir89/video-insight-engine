@@ -72,8 +72,8 @@ export const GamingView = memo(function GamingView({
     <div className="space-y-4">
       {/* Strategies Section */}
       {hasStrategies && (
-        <div className="bg-violet-50/50 dark:bg-violet-950/20 rounded-lg p-4 border border-violet-200/50 dark:border-violet-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-violet-700 dark:text-violet-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '0ms' }}>
+          <h4 className="glass-section-header">
             <Target className="h-4 w-4" aria-hidden="true" />
             <span>Strategies</span>
           </h4>
@@ -89,8 +89,8 @@ export const GamingView = memo(function GamingView({
 
       {/* Highlights Section */}
       {hasHighlights && (
-        <div className="bg-amber-50/50 dark:bg-amber-950/20 rounded-lg p-4 border border-amber-200/50 dark:border-amber-800/30">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-300 mb-3">
+        <div className="glass-panel block-entrance" style={{ animationDelay: '100ms' }}>
+          <h4 className="glass-section-header">
             <Trophy className="h-4 w-4" aria-hidden="true" />
             <span>Highlights</span>
           </h4>
@@ -137,7 +137,7 @@ export const GamingView = memo(function GamingView({
       {/* Tips & Tricks */}
       {hasTips && (
         <div className="mt-4 space-y-2">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-violet-600 dark:text-violet-400 mb-2">
+          <h4 className="glass-section-header">
             <Lightbulb className="h-4 w-4" aria-hidden="true" />
             <span>Tips & Tricks</span>
           </h4>

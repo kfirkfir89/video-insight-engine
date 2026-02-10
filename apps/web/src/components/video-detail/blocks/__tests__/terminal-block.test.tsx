@@ -58,19 +58,19 @@ describe('TerminalBlock', () => {
     it('should have terminal styling', () => {
       const { container } = render(<TerminalBlock block={createMockBlock()} />);
 
-      // Terminal has dark background
-      const terminalContainer = container.querySelector('.bg-zinc-900');
+      // Terminal uses block-code-container via BlockWrapper variant="code"
+      const terminalContainer = container.querySelector('.block-code-container');
       expect(terminalContainer).toBeInTheDocument();
     });
   });
 
   describe('terminal decoration', () => {
-    it('should render traffic light buttons', () => {
+    it('should render code header with terminal label', () => {
       const { container } = render(<TerminalBlock block={createMockBlock()} />);
 
-      expect(container.querySelector('.bg-red-500\\/80')).toBeInTheDocument();
-      expect(container.querySelector('.bg-yellow-500\\/80')).toBeInTheDocument();
-      expect(container.querySelector('.bg-green-500\\/80')).toBeInTheDocument();
+      // Uses block-code-header from BlockWrapper variant="code"
+      const codeHeader = container.querySelector('.block-code-header');
+      expect(codeHeader).toBeInTheDocument();
     });
   });
 

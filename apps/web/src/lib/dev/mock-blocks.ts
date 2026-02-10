@@ -47,6 +47,7 @@ import type {
   QuizBlock,
   FormulaBlock,
   GuestBlock,
+  TableBlock,
 } from '@vie/types';
 
 // ─────────────────────────────────────────────────────
@@ -500,6 +501,26 @@ export function createGuestBlock(
 }
 
 // ─────────────────────────────────────────────────────
+// Generic Blocks (1)
+// ─────────────────────────────────────────────────────
+
+export function createTableBlock(
+  columns: { key: string; label: string; align?: 'left' | 'center' | 'right' }[],
+  rows: Record<string, string | number>[],
+  caption?: string,
+  highlightRows?: number[]
+): TableBlock {
+  return {
+    blockId: uuid(),
+    type: 'table',
+    columns,
+    rows,
+    caption,
+    highlightRows,
+  };
+}
+
+// ─────────────────────────────────────────────────────
 // Sample Data for Showcase
 // ─────────────────────────────────────────────────────
 
@@ -741,7 +762,26 @@ export const sampleBlocks = {
       ],
     },
   ]),
+
+  // Generic blocks
+  table: createTableBlock(
+    [
+      { key: 'feature', label: 'Feature' },
+      { key: 'basic', label: 'Basic', align: 'center' },
+      { key: 'pro', label: 'Pro', align: 'center' },
+      { key: 'enterprise', label: 'Enterprise', align: 'center' },
+    ],
+    [
+      { feature: 'Storage', basic: '5 GB', pro: '100 GB', enterprise: 'Unlimited' },
+      { feature: 'Users', basic: 1, pro: 10, enterprise: 'Unlimited' },
+      { feature: 'API Access', basic: 'No', pro: 'Yes', enterprise: 'Yes' },
+      { feature: 'Support', basic: 'Email', pro: 'Priority', enterprise: '24/7 Dedicated' },
+      { feature: 'Price/mo', basic: '$9', pro: '$29', enterprise: '$99' },
+    ],
+    'Plan Comparison',
+    [2, 4]
+  ),
 };
 
 // Export all block types for type checking
-export const BLOCK_TYPE_COUNT = 31;
+export const BLOCK_TYPE_COUNT = 32;

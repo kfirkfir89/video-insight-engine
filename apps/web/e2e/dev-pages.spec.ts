@@ -33,7 +33,7 @@ test.describe('Dev Pages', () => {
       await expect(page.getByRole('heading', { name: 'Color Palette' })).toBeVisible();
       await expect(page.getByText('background', { exact: true })).toBeVisible();
       await expect(page.getByText('primary', { exact: true }).first()).toBeVisible();
-      await expect(page.getByText('destructive', { exact: true })).toBeVisible();
+      await expect(page.getByText('destructive', { exact: true }).first()).toBeVisible();
     });
 
     test('shows Typography section', async ({ page }) => {

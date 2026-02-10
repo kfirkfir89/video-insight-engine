@@ -408,6 +408,19 @@ export interface GuestBlock extends Partial<BaseBlock> {
   }[];
 }
 
+// Generic table block
+export interface TableBlock extends Partial<BaseBlock> {
+  type: 'table';
+  caption?: string;
+  columns: {
+    key: string;
+    label: string;
+    align?: 'left' | 'center' | 'right';
+  }[];
+  rows: Record<string, string | number>[];
+  highlightRows?: number[];
+}
+
 // ===== CONTENT BLOCK UNION (V2.1) =====
 
 export type ContentBlock =
@@ -451,7 +464,9 @@ export type ContentBlock =
   | QuizBlock
   | FormulaBlock
   // Podcast blocks (V2.1)
-  | GuestBlock;
+  | GuestBlock
+  // Generic blocks
+  | TableBlock;
 
 /** All possible block type strings */
 export type ContentBlockType = ContentBlock['type'];

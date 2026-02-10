@@ -28,29 +28,27 @@ export const GuestBlock = memo(function GuestBlock({ block }: GuestBlockProps) {
     <BlockWrapper
       blockId={block.blockId}
       label={BLOCK_LABELS.guests}
+      variant="card"
+      headerIcon={<User className="h-4 w-4" />}
+      headerLabel={BLOCK_LABELS.guests}
     >
       <div className="space-y-3">
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
-          <User className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>{BLOCK_LABELS.guests}</span>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 stagger-children">
           {guests.map((guest, index) => (
             <div
               key={index}
-              className="rounded-lg border border-border/50 p-4 flex gap-4"
+              className="rounded-lg border border-border/50 p-4 flex gap-4 hover-lift"
             >
               {/* Avatar */}
               {guest.imageUrl ? (
                 <img
                   src={guest.imageUrl}
                   alt={guest.name}
-                  className="w-16 h-16 rounded-full object-cover shrink-0"
+                  className="w-16 h-16 rounded-full object-cover shrink-0 ring-2 ring-border avatar-glow"
                   loading="lazy"
                 />
               ) : (
-                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center shrink-0">
+                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center shrink-0 ring-2 ring-border/20 avatar-glow">
                   <User className="h-8 w-8 text-muted-foreground/50" aria-hidden="true" />
                 </div>
               )}
@@ -87,7 +85,7 @@ export const GuestBlock = memo(function GuestBlock({ block }: GuestBlockProps) {
                           )}
                           aria-label={`${guest.name} on ${link.platform}`}
                         >
-                          <IconComponent className="h-4 w-4" aria-hidden="true" />
+                          <IconComponent className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                         </a>
                       );
                     })}

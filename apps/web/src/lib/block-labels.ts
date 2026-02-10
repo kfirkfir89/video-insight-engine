@@ -95,6 +95,13 @@ export const BLOCK_LABELS = {
   transcript: 'Transcript',
   jumpTo: 'Jump to',
 
+  // Table
+  table: 'Table',
+
+  // Copy
+  copyQuote: 'Copy quote',
+  copyValue: 'Copy value',
+
   // General
   showMore: 'Show more',
   showLess: 'Show less',

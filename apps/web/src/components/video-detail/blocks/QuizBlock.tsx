@@ -46,13 +46,11 @@ export const QuizBlock = memo(function QuizBlock({ block }: QuizBlockProps) {
     <BlockWrapper
       blockId={block.blockId}
       label={BLOCK_LABELS.quiz}
+      variant="card"
+      headerIcon={<HelpCircle className="h-4 w-4" />}
+      headerLabel={BLOCK_LABELS.quiz}
     >
       <div className="space-y-4">
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
-          <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>{BLOCK_LABELS.quiz}</span>
-        </div>
-
         <div className="space-y-6">
           {questions.map((question, qIndex) => {
             const isRevealed = revealedAnswers.has(qIndex);
@@ -63,10 +61,15 @@ export const QuizBlock = memo(function QuizBlock({ block }: QuizBlockProps) {
               <div key={qIndex} className="rounded-lg border border-border/50 overflow-hidden">
                 {/* Question */}
                 <div className="bg-muted/30 px-4 py-3">
-                  <span className="text-xs text-muted-foreground/70">
-                    {BLOCK_LABELS.question} {qIndex + 1}
-                  </span>
-                  <p className="font-medium text-sm mt-1">{question.question}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-bold text-primary/30 tabular-nums" aria-hidden="true">{qIndex + 1}</span>
+                    <div>
+                      <span className="text-xs text-muted-foreground/70">
+                        {BLOCK_LABELS.question} {qIndex + 1}
+                      </span>
+                      <p className="font-medium text-sm mt-0.5">{question.question}</p>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Options */}
@@ -83,24 +86,30 @@ export const QuizBlock = memo(function QuizBlock({ block }: QuizBlockProps) {
                         onClick={() => !isRevealed && selectAnswer(qIndex, oIndex)}
                         disabled={isRevealed}
                         className={cn(
-                          'w-full text-left px-3 py-2 rounded-md text-sm transition-colors',
+                          'w-full text-left px-3 py-2 rounded-md text-sm transition-all duration-150',
                           'border focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                          isRevealed && isCorrectOption && 'bg-emerald-500/10 border-emerald-500/50',
-                          showResult && !isCorrect && 'bg-rose-500/10 border-rose-500/50',
+                          !isRevealed && 'hover-scale',
+                          isRevealed && isCorrectOption && 'bg-success-soft border-success/50 glow-success',
+                          showResult && !isCorrect && 'bg-destructive/10 border-destructive/50',
                           !isRevealed && 'border-border/50 hover:bg-muted/50',
                           !isRevealed && isSelected && 'bg-primary/10 border-primary/50'
                         )}
                       >
                         <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full border flex items-center justify-center text-xs shrink-0">
+                          <span className={cn(
+                            'w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs shrink-0 font-medium',
+                            isRevealed && isCorrectOption && 'border-success text-success',
+                            showResult && !isCorrect && 'border-destructive text-destructive',
+                            !isRevealed && 'border-border'
+                          )}>
                             {String.fromCharCode(65 + oIndex)}
                           </span>
                           <span className="flex-1">{option}</span>
                           {isRevealed && isCorrectOption && (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" aria-hidden="true" />
+                            <CheckCircle2 className="h-4 w-4 text-success shrink-0" aria-hidden="true" />
                           )}
                           {showResult && !isCorrect && (
-                            <XCircle className="h-4 w-4 text-rose-500 shrink-0" aria-hidden="true" />
+                            <XCircle className="h-4 w-4 text-destructive shrink-0" aria-hidden="true" />
                           )}
                         </div>
                       </button>

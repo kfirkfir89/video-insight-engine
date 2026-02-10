@@ -112,6 +112,13 @@ const blockGroups: BlockGroup[] = [
     ],
   },
   {
+    name: 'Generic Blocks',
+    description: '1 block for tabular data',
+    blocks: [
+      { key: 'table', label: 'Table', block: sampleBlocks.table },
+    ],
+  },
+  {
     name: 'Special Callouts',
     description: 'Additional callout variants',
     blocks: [
@@ -125,9 +132,9 @@ function BlockCard({ label, block }: { label: string; block: ContentBlock }) {
   const [showJson, setShowJson] = useState(false);
 
   return (
-    <div className="rounded-lg border bg-card overflow-hidden">
+    <div className="rounded-xl border border-border/40 bg-card/80 backdrop-blur-sm overflow-hidden shadow-sm hover:shadow-md transition-shadow">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-2 bg-muted/30">
+      <div className="flex items-center justify-between border-b border-border/30 px-4 py-2 bg-muted/20 backdrop-blur-sm">
         <div className="flex items-center gap-2">
           <span className="font-medium">{label}</span>
           <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
@@ -203,7 +210,23 @@ function BlockGroupSection({ group }: { group: BlockGroup }) {
 }
 
 export function BlockShowcase() {
+  const [filter, setFilter] = useState('');
   const totalBlocks = blockGroups.reduce((sum, g) => sum + g.blocks.length, 0);
+
+  const filteredGroups = filter
+    ? blockGroups
+        .map((group) => ({
+          ...group,
+          blocks: group.blocks.filter(
+            (b) =>
+              b.label.toLowerCase().includes(filter.toLowerCase()) ||
+              b.block.type.toLowerCase().includes(filter.toLowerCase())
+          ),
+        }))
+        .filter((g) => g.blocks.length > 0)
+    : blockGroups;
+
+  const filteredCount = filteredGroups.reduce((sum, g) => sum + g.blocks.length, 0);
 
   return (
     <div className="space-y-8">
@@ -215,12 +238,29 @@ export function BlockShowcase() {
         </p>
       </div>
 
+      {/* Search/Filter */}
+      <div className="relative">
+        <input
+          type="text"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter blocks by name or type..."
+          className="w-full rounded-xl border border-border/40 bg-background/80 backdrop-blur-sm px-4 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring shadow-sm"
+          aria-label="Filter blocks"
+        />
+        {filter && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+            {filteredCount} of {totalBlocks}
+          </span>
+        )}
+      </div>
+
       {/* Block count summary */}
       <div className="flex flex-wrap gap-2">
         {blockGroups.map((group) => (
           <span
             key={group.name}
-            className="inline-flex items-center rounded-full bg-muted px-3 py-1 text-sm"
+            className="inline-flex items-center rounded-full bg-muted/60 backdrop-blur-sm border border-border/30 px-3 py-1 text-sm"
           >
             {group.name}
             <span className="ml-1.5 rounded-full bg-background px-1.5 py-0.5 text-xs font-medium">
@@ -232,9 +272,12 @@ export function BlockShowcase() {
 
       {/* Block groups */}
       <div className="space-y-8">
-        {blockGroups.map((group) => (
+        {filteredGroups.map((group) => (
           <BlockGroupSection key={group.name} group={group} />
         ))}
+        {filteredGroups.length === 0 && (
+          <p className="text-center text-muted-foreground py-8">No blocks match "{filter}"</p>
+        )}
       </div>
     </div>
   );

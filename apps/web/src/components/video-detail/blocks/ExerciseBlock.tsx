@@ -11,9 +11,9 @@ interface ExerciseBlockProps {
 }
 
 const DIFFICULTY_CONFIG = {
-  beginner: { label: BLOCK_LABELS.beginner, class: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
-  intermediate: { label: BLOCK_LABELS.intermediate, class: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
-  advanced: { label: BLOCK_LABELS.advanced, class: 'bg-rose-500/10 text-rose-600 dark:text-rose-400' },
+  beginner: { label: BLOCK_LABELS.beginner, class: 'bg-success-soft text-success badge-glow-success' },
+  intermediate: { label: BLOCK_LABELS.intermediate, class: 'bg-warning-soft text-warning badge-glow-warning' },
+  advanced: { label: BLOCK_LABELS.advanced, class: 'bg-destructive/10 text-destructive badge-glow-destructive' },
 };
 
 /**
@@ -28,21 +28,19 @@ export const ExerciseBlock = memo(function ExerciseBlock({ block, onPlay }: Exer
     <BlockWrapper
       blockId={block.blockId}
       label={BLOCK_LABELS.exercises}
+      variant="card"
+      headerIcon={<Dumbbell className="h-4 w-4" />}
+      headerLabel={BLOCK_LABELS.exercises}
     >
       <div className="space-y-3">
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
-          <Dumbbell className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>{BLOCK_LABELS.exercises}</span>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 stagger-children">
           {exercises.map((exercise, index) => {
             const difficultyConfig = exercise.difficulty ? DIFFICULTY_CONFIG[exercise.difficulty] : null;
 
             return (
               <div
                 key={index}
-                className="rounded-lg border border-border/50 p-3 space-y-2 bg-card"
+                className="rounded-lg border border-border/50 p-4 space-y-2 bg-card hover-lift"
               >
                 <div className="flex items-start justify-between gap-2">
                   <h4 className="font-medium text-sm">{exercise.name}</h4>

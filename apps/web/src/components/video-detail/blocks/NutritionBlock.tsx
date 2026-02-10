@@ -20,19 +20,18 @@ export const NutritionBlock = memo(function NutritionBlock({ block }: NutritionB
     <BlockWrapper
       blockId={block.blockId}
       label={BLOCK_LABELS.nutrition}
+      variant="card"
+      headerIcon={<Apple className="h-4 w-4 shrink-0" aria-hidden="true" />}
+      headerLabel={BLOCK_LABELS.nutrition}
     >
       <div className="rounded-lg border border-border/50 overflow-hidden">
-        <div className="bg-muted/30 px-4 py-2 border-b border-border/50">
-          <div className="flex items-center gap-2">
-            <Apple className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <span className="text-sm font-medium">{BLOCK_LABELS.nutrition}</span>
-          </div>
-          {block.servingSize && (
-            <p className="text-xs text-muted-foreground mt-1">
+        {block.servingSize && (
+          <div className="glass-surface px-4 py-2">
+            <p className="text-xs text-muted-foreground">
               {BLOCK_LABELS.perServing}: {block.servingSize}
             </p>
-          )}
-        </div>
+          </div>
+        )}
 
         <table className="w-full text-sm">
           <thead className="sr-only">
@@ -42,9 +41,9 @@ export const NutritionBlock = memo(function NutritionBlock({ block }: NutritionB
               <th>Daily Value</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border/30">
+          <tbody className="divide-y divide-border/20 stagger-children">
             {items.map((item, index) => (
-              <tr key={index} className="hover:bg-muted/20 transition-colors">
+              <tr key={index} className="even:bg-muted/[0.08] hover:bg-muted/20 transition-colors">
                 <td className="px-4 py-2 text-muted-foreground">{item.nutrient}</td>
                 <td className="px-4 py-2 font-medium text-right tabular-nums">
                   {item.amount}

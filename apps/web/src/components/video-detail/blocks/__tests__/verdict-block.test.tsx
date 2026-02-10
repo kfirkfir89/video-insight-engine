@@ -113,30 +113,30 @@ describe('VerdictBlock', () => {
   });
 
   describe('styling', () => {
-    it('should have green styling for recommended', () => {
+    it('should have success styling for recommended', () => {
       const { container } = render(
         <VerdictBlock block={createMockBlock({ verdict: 'recommended' })} />
       );
 
-      const card = container.querySelector('.bg-emerald-500\\/10');
+      const card = container.querySelector('.bg-success\\/\\[0\\.06\\]');
       expect(card).toBeInTheDocument();
     });
 
-    it('should have red styling for not_recommended', () => {
+    it('should have destructive styling for not_recommended', () => {
       const { container } = render(
         <VerdictBlock block={createMockBlock({ verdict: 'not_recommended' })} />
       );
 
-      const card = container.querySelector('.bg-rose-500\\/10');
+      const card = container.querySelector('.bg-destructive\\/\\[0\\.06\\]');
       expect(card).toBeInTheDocument();
     });
 
-    it('should have amber styling for conditional', () => {
+    it('should have warning styling for conditional', () => {
       const { container } = render(
         <VerdictBlock block={createMockBlock({ verdict: 'conditional' })} />
       );
 
-      const card = container.querySelector('.bg-amber-500\\/10');
+      const card = container.querySelector('.bg-warning\\/\\[0\\.06\\]');
       expect(card).toBeInTheDocument();
     });
   });
