@@ -2,6 +2,7 @@ import { memo, useState } from 'react';
 import { Check, Clock, Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
+import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { StepBlock as StepBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
@@ -81,7 +82,7 @@ export const StepBlock = memo(function StepBlock({ block }: StepBlockProps) {
                 </button>
 
                 <div className={cn('flex-1 space-y-1', isCompleted && 'line-through')}>
-                  <p className="text-sm text-muted-foreground">{step.instruction}</p>
+                  <p className="text-sm text-muted-foreground"><ConceptHighlighter text={step.instruction} /></p>
 
                   <div className="flex items-center gap-3 flex-wrap">
                     {step.duration && (
@@ -92,7 +93,7 @@ export const StepBlock = memo(function StepBlock({ block }: StepBlockProps) {
                     )}
                     {step.tips && (
                       <span className="text-xs text-muted-foreground/60 italic">
-                        Tip: {step.tips}
+                        Tip: <ConceptHighlighter text={step.tips} />
                       </span>
                     )}
                   </div>

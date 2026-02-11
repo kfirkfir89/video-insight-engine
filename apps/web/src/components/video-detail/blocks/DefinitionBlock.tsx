@@ -1,6 +1,7 @@
 import { memo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { BlockWrapper } from './BlockWrapper';
+import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { DefinitionBlock as DefinitionBlockType } from '@vie/types';
 
 interface DefinitionBlockProps {
@@ -30,7 +31,7 @@ export const DefinitionBlock = memo(function DefinitionBlock({ block }: Definiti
           {isLongDefinition && !expanded ? (
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground line-clamp-3">
-                {block.meaning}
+                <ConceptHighlighter text={block.meaning} />
               </p>
               <button
                 type="button"
@@ -43,7 +44,7 @@ export const DefinitionBlock = memo(function DefinitionBlock({ block }: Definiti
             </div>
           ) : (
             <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">{block.meaning}</p>
+              <p className="text-sm text-muted-foreground"><ConceptHighlighter text={block.meaning} /></p>
               {isLongDefinition && (
                 <button
                   type="button"

@@ -1,4 +1,5 @@
 import type { ContentBlock } from '@vie/types';
+import { ConceptHighlighter } from './ConceptHighlighter';
 import {
   // Existing blocks
   KeyValueRenderer,
@@ -90,7 +91,9 @@ export function ContentBlockRenderer({
     case 'paragraph':
       return (
         <div className="relative pl-3 border-l-2 border-border/50">
-          <p className="text-muted-foreground leading-[1.75]">{block.text}</p>
+          <p className="text-muted-foreground leading-[1.75]">
+            <ConceptHighlighter text={block.text} />
+          </p>
         </div>
       );
 

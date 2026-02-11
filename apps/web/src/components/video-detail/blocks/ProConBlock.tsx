@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Plus, Minus } from 'lucide-react';
 import { BlockWrapper } from './BlockWrapper';
+import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { ProConBlock as ProConBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
@@ -55,7 +56,7 @@ export const ProConBlock = memo(function ProConBlock({ block }: ProConBlockProps
                 {block.pros.map((pro, index) => (
                   <li key={index} className="flex items-baseline gap-2.5 text-sm">
                     <Plus className="h-3 w-3 shrink-0 text-success/60 translate-y-0.5" aria-hidden="true" />
-                    <span className="text-muted-foreground">{pro || '—'}</span>
+                    <span className="text-muted-foreground">{pro ? <ConceptHighlighter text={pro} /> : '—'}</span>
                   </li>
                 ))}
               </ul>
@@ -75,7 +76,7 @@ export const ProConBlock = memo(function ProConBlock({ block }: ProConBlockProps
                 {block.cons.map((con, index) => (
                   <li key={index} className="flex items-baseline gap-2.5 text-sm">
                     <Minus className="h-3 w-3 shrink-0 text-destructive/60 translate-y-0.5" aria-hidden="true" />
-                    <span className="text-muted-foreground">{con || '—'}</span>
+                    <span className="text-muted-foreground">{con ? <ConceptHighlighter text={con} /> : '—'}</span>
                   </li>
                 ))}
               </ul>

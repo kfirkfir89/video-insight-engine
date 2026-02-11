@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { ChefHat } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
+import { ConceptHighlighter } from '../ConceptHighlighter';
 
 interface NumberedBlockProps {
   items: string[];
@@ -42,7 +43,7 @@ export const NumberedBlock = memo(function NumberedBlock({ items, variant }: Num
               {index + 1}
             </span>
             <span className="text-muted-foreground leading-relaxed">
-              {item}
+              <ConceptHighlighter text={item} />
             </span>
           </li>
         ))}

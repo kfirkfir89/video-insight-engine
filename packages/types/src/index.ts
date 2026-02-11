@@ -484,6 +484,8 @@ export interface SummaryChapter {
   generatedTitle?: string;     // AI-generated explanation subtitle
   isCreatorChapter: boolean;   // Flag for dual-title display
   content?: ContentBlock[];    // Dynamic content blocks with blockId - source of truth
+  /** Per-chapter view for specialized rendering. Falls back to global category if absent. */
+  view?: VideoCategory;
   /** Raw transcript slice for this chapter's time range (for RAG/display) */
   transcript?: string;
 }

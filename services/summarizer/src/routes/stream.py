@@ -30,7 +30,7 @@ from src.config import settings
 from src.dependencies import get_video_repository, get_llm_service, create_llm_provider
 from src.models.schemas import ProcessingStatus, ErrorCode, ProviderConfig
 from src.repositories.mongodb_repository import MongoDBVideoRepository
-from src.services.llm import LLMService, seconds_to_timestamp
+from src.services.llm import LLMService, seconds_to_timestamp, build_concept_dicts
 from src.services.transcript import (
     get_transcript,
     clean_transcript,
@@ -98,6 +98,7 @@ class ParallelResults:
     description_analysis: DescriptionAnalysis | None = None
     synthesis: dict[str, Any] = field(default_factory=lambda: {"tldr": "", "keyTakeaways": []})
     first_chapter: dict[str, Any] | None = None
+    concepts: list[dict[str, Any]] = field(default_factory=list)
     failed_tasks: list[str] = field(default_factory=list)
 
 
@@ -287,9 +288,10 @@ async def run_parallel_analysis(
     llm_service: LLMService,
     video_data: VideoData,
     persona: str,
+    timestamped_transcript: str,
 ) -> AsyncGenerator[str | ParallelResults, None]:
     """
-    Run parallel tasks: description analysis, TLDR, and first section.
+    Run parallel tasks: description analysis, TLDR, first section, and concepts.
 
     Yields SSE events as tasks complete, then yields ParallelResults.
     """
@@ -311,9 +313,15 @@ async def run_parallel_analysis(
             ),
             name="tldr"
         ),
+        "concepts": asyncio.create_task(
+            llm_service.extract_concepts(timestamped_transcript),
+            name="concepts"
+        ),
     }
 
     # Add first chapter task if chapters exist
+    # Note: first chapter runs WITHOUT concept names (acceptable — it runs
+    # in parallel with concept extraction)
     if video_data.has_chapters and len(video_data.chapters) > 0:
         first_chapter_text = video_data.get_chapter_transcript(0)
         if first_chapter_text:
@@ -351,6 +359,9 @@ async def run_parallel_analysis(
                 "tldr": result.get("tldr", ""),
                 "keyTakeaways": result.get("keyTakeaways", []),
             })
+
+        elif task_name == "concepts" and isinstance(result, list):
+            parallel_results.concepts = build_concept_dicts(result)
 
         elif task_name == "first_chapter" and isinstance(result, dict):
             parallel_results.first_chapter = result
@@ -394,6 +405,10 @@ def build_chapter_dict(
         "content": summary_data.get("content", []),
     }
 
+    # Add per-chapter view when present
+    if summary_data.get("view"):
+        chapter["view"] = summary_data["view"]
+
     # Add sliced transcript for RAG/display
     if transcript_slice:
         chapter["transcript"] = transcript_slice
@@ -411,6 +426,7 @@ async def process_creator_chapters(
     persona: str,
     first_chapter_result: dict[str, Any] | None,
     normalized_segments: list[dict[str, Any]],
+    concept_names: list[str] | None = None,
 ) -> AsyncGenerator[str | list[dict[str, Any]], None]:
     """
     Process creator-defined chapters.
@@ -465,6 +481,7 @@ async def process_creator_chapters(
                         raw["title"],
                         has_creator_title=True,
                         persona=persona,
+                        concept_names=concept_names,
                     )
                 )
                 batch_tasks.append((idx, raw, task))
@@ -491,6 +508,7 @@ async def process_ai_chapters(
     duration: int,
     persona: str,
     normalized_segments: list[dict[str, Any]],
+    concept_names: list[str] | None = None,
 ) -> AsyncGenerator[str | list[dict[str, Any]], None]:
     """
     Detect and process chapters using AI (fallback when no creator chapters).
@@ -533,7 +551,9 @@ async def process_ai_chapters(
             chapter_text = " ".join([s.get("text", "") for s in chapter_segments])
 
             task = asyncio.create_task(
-                llm_service.summarize_chapter(chapter_text, raw.get("title", ""), persona=persona)
+                llm_service.summarize_chapter(
+                    chapter_text, raw.get("title", ""), persona=persona, concept_names=concept_names,
+                )
             )
             batch_tasks.append((idx, raw, start, end, task))
 
@@ -751,10 +771,9 @@ async def stream_summarization(
 
     Phases:
     1. INSTANT: Metadata + chapters via yt-dlp
-    2. PARALLEL: Description analysis + TLDR + first section
-    3. SECTIONS: Remaining sections in batches
-    4. CONCEPTS: Key concept extraction
-    5. MASTER: Master summary generation
+    2. PARALLEL: Description analysis + TLDR + first section + concepts
+    3. SECTIONS: Remaining sections in batches (with concept anchoring)
+    4. MASTER: Master summary generation
     """
     start_time = time.time()
 
@@ -875,9 +894,11 @@ async def stream_summarization(
             raw_transcript_ref=raw_transcript_ref,
         )
 
-        # ── Phase 2: Parallel Analysis ──
+        # ── Phase 2: Parallel Analysis (includes concept extraction) ──
         parallel_results: ParallelResults | None = None
-        async for item in run_parallel_analysis(llm_service, video_data, persona):
+        async for item in run_parallel_analysis(
+            llm_service, video_data, persona, timestamped_transcript
+        ):
             if isinstance(item, str):
                 yield item
             else:
@@ -887,12 +908,19 @@ async def stream_summarization(
         description_analysis = parallel_results.description_analysis if parallel_results else None
         first_chapter_result = parallel_results.first_chapter if parallel_results else None
 
-        # ── Phase 3: Chapters ──
+        # Extract concepts from parallel results
+        concepts = parallel_results.concepts if parallel_results else []
+        if concepts:
+            yield sse_event("concepts_complete", {"concepts": concepts})
+        concept_names = [c["name"] for c in concepts]
+
+        # ── Phase 3: Chapters (with concept names for anchoring) ──
         chapters: list[dict[str, Any]] = []
 
         if video_data.has_chapters:
             async for item in process_creator_chapters(
-                llm_service, video_data, persona, first_chapter_result, normalized_segments
+                llm_service, video_data, persona, first_chapter_result,
+                normalized_segments, concept_names=concept_names,
             ):
                 if isinstance(item, str):
                     yield item
@@ -900,22 +928,15 @@ async def stream_summarization(
                     chapters = item
         else:
             async for item in process_ai_chapters(
-                llm_service, segments, clean_text, video_data.duration, persona, normalized_segments
+                llm_service, segments, clean_text, video_data.duration, persona,
+                normalized_segments, concept_names=concept_names,
             ):
                 if isinstance(item, str):
                     yield item
                 else:
                     chapters = item
 
-        # ── Phase 4: Concepts ──
-        concepts: list[dict[str, Any]] = []
-        async for item in extract_concepts(llm_service, timestamped_transcript):
-            if isinstance(item, str):
-                yield item
-            else:
-                concepts = item
-
-        # ── Phase 5: Master Summary ──
+        # ── Phase 4: Master Summary ──
         master_summary: str | None = None
         async for item in generate_master_summary(
             llm_service, video_data, video_data.duration, persona, synthesis, chapters, concepts
@@ -990,10 +1011,9 @@ async def stream_summary(
 
     Progressive architecture delivers content in phases:
     1. INSTANT (~1 sec): Metadata + chapters from yt-dlp
-    2. PARALLEL (~2-5 sec): Description analysis + TLDR + first section
-    3. SECTIONS: Remaining sections in batches
-    4. CONCEPTS: Key concept extraction
-    5. MASTER: Master summary generation
+    2. PARALLEL (~2-5 sec): Description analysis + TLDR + first section + concepts
+    3. SECTIONS: Remaining sections in batches (with concept anchoring)
+    4. MASTER: Master summary generation
     """
     # Validate ObjectId format
     try:

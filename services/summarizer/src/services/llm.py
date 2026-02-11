@@ -7,9 +7,8 @@ import asyncio
 import json
 import logging
 import uuid
-from functools import lru_cache
 from pathlib import Path
-from typing import AsyncGenerator, Callable, Literal
+from typing import Any, AsyncGenerator, Callable, Literal
 
 from src.config import settings
 from src.services.llm_provider import LLMProvider
@@ -29,6 +28,28 @@ VALID_PERSONAS: frozenset[str] = frozenset([
     'code', 'recipe', 'interview', 'review', 'standard',
     'fitness', 'travel', 'education'
 ])
+
+# ── Per-Chapter View Constants ──
+
+# Valid view values matching VideoCategory type
+VALID_VIEWS: frozenset[str] = frozenset([
+    'cooking', 'coding', 'reviews', 'travel', 'fitness',
+    'education', 'podcast', 'diy', 'gaming', 'standard',
+])
+
+# Signature blocks used for soft correction of LLM view
+VIEW_SIGNATURE_BLOCKS: dict[str, set[str]] = {
+    'cooking': {'ingredient', 'step', 'nutrition'},
+    'coding': {'code', 'terminal', 'file_tree'},
+    'reviews': {'pro_con', 'rating', 'verdict'},
+    'travel': {'location', 'itinerary'},
+    'fitness': {'exercise', 'workout_timer'},
+    'education': {'quiz', 'formula'},
+    'podcast': {'guest', 'transcript'},
+    'diy': {'tool_list', 'step'},       # 'step' overlaps with cooking — handled by 2+ threshold
+    'gaming': set(),                     # No unique signature blocks — relies on LLM
+    'standard': set(),
+}
 
 # Category to preferred V2.1 block types mapping
 # Used for logging metrics and future prompt injection
@@ -54,7 +75,6 @@ def load_prompt(name: str) -> str:
     return path.read_text()
 
 
-@lru_cache(maxsize=8)
 def load_persona(name: str) -> str:
     """Load persona guidelines from file.
 
@@ -65,8 +85,8 @@ def load_persona(name: str) -> str:
         Persona guidelines text. Falls back to 'standard' if invalid or not found.
 
     Note:
-        Results are cached to avoid repeated disk reads.
-        Validates name against whitelist to prevent path traversal.
+        Not cached — reads from disk each call so changes in
+        volume-mounted prompt files are picked up immediately.
     """
     # Validate against whitelist to prevent path traversal
     if name not in VALID_PERSONAS:
@@ -79,7 +99,6 @@ def load_persona(name: str) -> str:
     return (PERSONAS_DIR / "standard.txt").read_text()
 
 
-@lru_cache(maxsize=8)
 def load_examples(name: str) -> str:
     """Load persona-specific JSON examples from file.
 
@@ -90,8 +109,8 @@ def load_examples(name: str) -> str:
         JSON examples text. Falls back to 'standard' if invalid or not found.
 
     Note:
-        Results are cached to avoid repeated disk reads.
-        Validates name against whitelist to prevent path traversal.
+        Not cached — reads from disk each call so changes in
+        volume-mounted prompt files are picked up immediately.
     """
     # Validate against whitelist to prevent path traversal
     if name not in VALID_PERSONAS:
@@ -102,6 +121,127 @@ def load_examples(name: str) -> str:
     if path.exists():
         return path.read_text()
     return (EXAMPLES_DIR / "standard.txt").read_text()
+
+
+def load_persona_system() -> str:
+    """Load the unified persona system prompt (Author + Domain Experts).
+
+    Returns:
+        Persona system text. Falls back to empty string if file missing.
+
+    Note:
+        Not cached — reads from disk each call so changes in
+        volume-mounted prompt files are picked up immediately.
+    """
+    path = PROMPTS_DIR / "persona_system.txt"
+    if path.exists():
+        return path.read_text()
+    logger.warning("persona_system.txt not found, using empty persona context")
+    return ""
+
+
+def build_concept_dicts(raw_concepts: list[dict]) -> list[dict[str, Any]]:
+    """Build normalized concept dicts with UUIDs from raw LLM output.
+
+    Args:
+        raw_concepts: Raw concept dicts from LLM (must have "name" key).
+
+    Returns:
+        List of concept dicts with id, name, definition, timestamp.
+    """
+    return [
+        {
+            "id": str(uuid.uuid4()),
+            "name": c.get("name", ""),
+            "definition": c.get("definition"),
+            "timestamp": c.get("timestamp"),
+        }
+        for c in raw_concepts
+        if isinstance(c, dict) and c.get("name")
+    ]
+
+
+def _build_concepts_anchor(concept_names: list[str] | None) -> str:
+    """Build the CONCEPT ANCHORING prompt section for chapter summaries.
+
+    Args:
+        concept_names: List of concept names to anchor, or None.
+
+    Returns:
+        Formatted anchor section, or empty string if no concepts.
+    """
+    if not concept_names:
+        return ""
+    return (
+        "\nCONCEPT ANCHORING:\n"
+        "These key concepts appear in this video's glossary. When your content discusses "
+        "these topics, use the EXACT concept name at least once so readers can discover "
+        "definitions via inline highlights. Only include concepts relevant to THIS chapter:\n"
+        + "\n".join(f"- {name}" for name in concept_names)
+        + "\n"
+    )
+
+
+def _infer_view_from_blocks(content: list[dict]) -> str | None:
+    """Infer view from content blocks using signature block matching.
+
+    Only overrides LLM view when 2+ distinct signature blocks match
+    a single view. Returns None to defer to LLM when no strong match.
+
+    Args:
+        content: List of content block dictionaries
+
+    Returns:
+        View name if strong match found, None otherwise.
+    """
+    if not content:
+        return None
+
+    block_types = {b.get("type") for b in content if isinstance(b, dict) and b.get("type")}
+
+    # Count matching signature blocks per view
+    matches: dict[str, int] = {}
+    for view, sig_blocks in VIEW_SIGNATURE_BLOCKS.items():
+        if not sig_blocks:
+            continue
+        count = len(block_types & sig_blocks)
+        if count >= 2:
+            matches[view] = count
+
+    if not matches:
+        return None
+
+    # If exactly one view has 2+ matches, return it
+    if len(matches) == 1:
+        return next(iter(matches))
+
+    # Tie between views — defer to LLM
+    return None
+
+
+def _resolve_view(content: list[dict], llm_view_raw: str, title: str) -> str:
+    """Resolve final per-chapter view from LLM output + block inference.
+
+    Uses the LLM-provided view as primary signal, with soft correction
+    when 2+ signature blocks point to a different view.
+
+    Args:
+        content: List of content block dictionaries
+        llm_view_raw: Raw view string from LLM response
+        title: Chapter title for logging context
+
+    Returns:
+        Resolved view string (always a valid view value).
+    """
+    llm_view = llm_view_raw if llm_view_raw in VALID_VIEWS else "standard"
+    inferred = _infer_view_from_blocks(content)
+    if inferred and inferred != llm_view:
+        logger.warning(
+            "View mismatch for '%s': LLM=%s, inferred=%s. Using inferred.",
+            title, llm_view, inferred,
+        )
+        return inferred
+    return llm_view
 
 
 def seconds_to_timestamp(seconds: int) -> str:
@@ -172,6 +312,7 @@ def _log_block_metrics(
     content: list[dict],
     chapter_title: str,
     persona: str,
+    view: str = 'standard',
 ) -> None:
     """Log block generation metrics for analysis.
 
@@ -184,6 +325,7 @@ def _log_block_metrics(
         content: List of content blocks
         chapter_title: Title for logging context
         persona: Content persona used
+        view: Per-chapter view value
     """
     if not content:
         return
@@ -207,6 +349,7 @@ def _log_block_metrics(
         extra={
             "chapter_title": chapter_title[:50],
             "persona": persona,
+            "view": view,
             "total_blocks": total_blocks,
             "unique_block_types": len(unique_types),
             "block_types": list(block_types),
@@ -319,6 +462,7 @@ class LLMService:
         title: str,
         has_creator_title: bool = False,
         persona: str = 'standard',
+        concept_names: list[str] | None = None,
     ) -> dict:
         """Generate dynamic content blocks for a chapter.
 
@@ -326,13 +470,12 @@ class LLMService:
             chapter_text: The transcript text for this chapter
             title: The chapter title (either creator's chapter title or AI-generated)
             has_creator_title: If True, also generates an explanatory subtitle
-            persona: Content persona for styling ('code', 'recipe', 'standard')
+            persona: Content persona hint for selecting example files
 
         Returns:
             dict with:
             - "content": array of content blocks with blockId
-            - "summary": extracted text for backward compatibility
-            - "bullets": extracted list items for backward compatibility
+            - "view": per-chapter view string (e.g., "cooking", "coding")
             - "generatedTitle": optional explanatory subtitle
         """
         # Build dynamic prompt parts based on whether we need an explanation title
@@ -349,8 +492,11 @@ class LLMService:
 
         logger.debug(f"summarize_chapter: chapter_text length={len(chapter_text)} chars, title='{title}'")
 
-        # Get persona-specific guidelines and examples from files
-        persona_guidelines = load_persona(persona)
+        concepts_anchor = _build_concepts_anchor(concept_names)
+
+        # Load unified persona system (Author + Domain Experts)
+        persona_system = load_persona_system()
+        # Load persona-specific examples (use global persona as hint)
         variant_examples = load_examples(persona)
 
         prompt = load_prompt("chapter_summary").format(
@@ -358,8 +504,9 @@ class LLMService:
             content=chapter_text,
             extra_instruction=extra_instruction,
             generated_title_field=generated_title_field,
-            persona_guidelines=persona_guidelines,
+            persona_system=persona_system,
             variant_examples=variant_examples,
+            concepts_anchor=concepts_anchor,
         )
 
         text = await self._call_llm(prompt, max_tokens=1500)
@@ -373,12 +520,15 @@ class LLMService:
         # Inject blockId into each content block
         content = inject_block_ids(content)
 
-        # Log block metrics for analysis
-        _log_block_metrics(content, title, persona)
+        # Resolve per-chapter view (LLM signal + soft block-inference correction)
+        view = _resolve_view(content, result.get("view", ""), title)
 
-        # Content blocks are the single source of truth (data-simplification)
+        # Log block metrics for analysis
+        _log_block_metrics(content, title, persona, view=view)
+
         return {
             "content": content,
+            "view": view,
             "generatedTitle": result.get("generatedTitle"),
         }
 
@@ -432,9 +582,17 @@ class LLMService:
         raw_chapters = await self.detect_chapters(transcript, segments)
 
         if on_progress:
+            on_progress(20, "Extracting concepts...")
+
+        # 2. Extract concepts early so names can be passed to chapter summaries
+        raw_concepts = await self.extract_concepts(transcript)
+        concepts = build_concept_dicts(raw_concepts)
+        concept_names = [c["name"] for c in concepts]
+
+        if on_progress:
             on_progress(30, "Summarizing chapters...")
 
-        # 2. Summarize each chapter
+        # 3. Summarize each chapter (with concept names for anchoring)
         chapters = []
         for i, raw in enumerate(raw_chapters):
             start = raw.get("startSeconds", 0)
@@ -446,35 +604,25 @@ class LLMService:
             ]
             chapter_text = " ".join([s["text"] for s in chapter_segments])
 
-            summary_data = await self.summarize_chapter(chapter_text, raw["title"])
+            summary_data = await self.summarize_chapter(
+                chapter_text, raw["title"], concept_names=concept_names,
+            )
 
-            chapters.append({
+            chapter_dict: dict = {
                 "id": str(uuid.uuid4()),
                 "timestamp": seconds_to_timestamp(start),
                 "start_seconds": start,
                 "end_seconds": end,
                 "title": raw["title"],
                 "content": summary_data.get("content", []),
-            })
+            }
+            if summary_data.get("view"):
+                chapter_dict["view"] = summary_data["view"]
+            chapters.append(chapter_dict)
 
             if on_progress:
                 progress = 30 + int((i + 1) / len(raw_chapters) * 40)
                 on_progress(progress, f"Summarizing chapter {i + 1}/{len(raw_chapters)}...")
-
-        if on_progress:
-            on_progress(70, "Extracting concepts...")
-
-        # 3. Extract concepts
-        raw_concepts = await self.extract_concepts(transcript)
-        concepts = [
-            {
-                "id": str(uuid.uuid4()),
-                "name": c["name"],
-                "definition": c.get("definition"),
-                "timestamp": c.get("timestamp"),
-            }
-            for c in raw_concepts
-        ]
 
         if on_progress:
             on_progress(90, "Generating summary...")
@@ -560,23 +708,30 @@ class LLMService:
         yield ("complete", chapters)
 
     async def stream_summarize_chapter(
-        self, chapter_text: str, title: str, persona: str = 'standard'
+        self,
+        chapter_text: str,
+        title: str,
+        persona: str = 'standard',
+        concept_names: list[str] | None = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """Stream chapter summary with tokens and final result.
 
         Args:
             chapter_text: The transcript text for this chapter
             title: The chapter title
-            persona: Content persona for styling ('code', 'recipe', 'standard')
+            persona: Content persona hint for selecting example files
+            concept_names: Optional list of concept names for anchoring
 
         Yields:
             ("token", str) for each token
-            ("complete", dict) with content blocks (with blockId) and legacy summary/bullets
+            ("complete", dict) with content blocks (with blockId) and view
         """
         logger.debug(f"stream_summarize_chapter: chapter_text length={len(chapter_text)} chars, title='{title}'")
 
-        # Get persona-specific guidelines and examples from files
-        persona_guidelines = load_persona(persona)
+        concepts_anchor = _build_concepts_anchor(concept_names)
+
+        # Load unified persona system (Author + Domain Experts)
+        persona_system = load_persona_system()
         variant_examples = load_examples(persona)
 
         prompt = load_prompt("chapter_summary").format(
@@ -584,8 +739,9 @@ class LLMService:
             content=chapter_text,
             extra_instruction="",
             generated_title_field="",
-            persona_guidelines=persona_guidelines,
+            persona_system=persona_system,
             variant_examples=variant_examples,
+            concepts_anchor=concepts_anchor,
         )
 
         async for event_type, data in self._stream_and_parse(prompt, max_tokens=1500):
@@ -599,13 +755,17 @@ class LLMService:
                         content = []
                     # Inject blockId into each content block
                     content = inject_block_ids(content)
-                    # Log block metrics for analysis
-                    _log_block_metrics(content, title, persona)
+
+                    # Resolve per-chapter view (LLM signal + soft block-inference correction)
+                    view = _resolve_view(content, data.get("view", ""), title)
+
+                    _log_block_metrics(content, title, persona, view=view)
                     summary_data = {
                         "content": content,
+                        "view": view,
                     }
                 else:
-                    summary_data = {"content": []}
+                    summary_data = {"content": [], "view": "standard"}
                 yield ("complete", summary_data)
 
     async def stream_extract_concepts(

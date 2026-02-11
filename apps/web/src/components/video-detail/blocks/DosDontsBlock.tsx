@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Check, X } from 'lucide-react';
 import { BlockWrapper } from './BlockWrapper';
+import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { DoDoNotBlock } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
@@ -39,7 +40,7 @@ export const DosDontsBlock = memo(function DosDontsBlock({ block }: DosDontsBloc
                 {block.do.map((item, index) => (
                   <li key={index} className="flex items-baseline gap-2.5 text-sm">
                     <span className="w-1 h-1 rounded-full bg-success-soft shrink-0 translate-y-1.5" />
-                    <span className="text-muted-foreground">{item}</span>
+                    <span className="text-muted-foreground"><ConceptHighlighter text={item} /></span>
                   </li>
                 ))}
               </ul>
@@ -59,7 +60,7 @@ export const DosDontsBlock = memo(function DosDontsBlock({ block }: DosDontsBloc
                 {block.dont.map((item, index) => (
                   <li key={index} className="flex items-baseline gap-2.5 text-sm">
                     <span className="w-1 h-1 rounded-full bg-destructive/10 shrink-0 translate-y-1.5" />
-                    <span className="text-muted-foreground">{item}</span>
+                    <span className="text-muted-foreground"><ConceptHighlighter text={item} /></span>
                   </li>
                 ))}
               </ul>
