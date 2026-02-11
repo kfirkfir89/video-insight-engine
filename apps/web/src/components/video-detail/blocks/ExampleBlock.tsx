@@ -2,6 +2,7 @@ import { memo, useState, useRef, useEffect, useCallback } from 'react';
 import { Code2, Copy, Terminal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
+import { ConceptHighlighter } from '../ConceptHighlighter';
 
 interface ExampleBlockProps {
   title?: string;
@@ -78,7 +79,7 @@ export const ExampleBlock = memo(function ExampleBlock({ title, code, explanatio
             </code>
           </pre>
           {explanation && (
-            <p className="mt-2 text-xs text-zinc-500">{explanation}</p>
+            <p className="mt-2 text-xs text-zinc-500"><ConceptHighlighter text={explanation} /></p>
           )}
         </div>
       </BlockWrapper>
@@ -117,7 +118,7 @@ export const ExampleBlock = memo(function ExampleBlock({ title, code, explanatio
       {/* Explanation footer */}
       {explanation && (
         <div className="px-3 py-2 border-t border-border/30 bg-muted/30">
-          <p className="text-sm text-muted-foreground">{explanation}</p>
+          <p className="text-sm text-muted-foreground"><ConceptHighlighter text={explanation} /></p>
         </div>
       )}
     </BlockWrapper>

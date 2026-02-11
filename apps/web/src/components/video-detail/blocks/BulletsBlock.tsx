@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { UtensilsCrossed, Square, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
+import { ConceptHighlighter } from '../ConceptHighlighter';
 
 interface BulletsBlockProps {
   items: string[];
@@ -36,7 +37,7 @@ export const BulletsBlock = memo(function BulletsBlock({ items, variant }: Bulle
                 <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success/50 translate-y-0.5" aria-hidden="true" />
               )}
               <span className="text-muted-foreground">
-                {item}
+                <ConceptHighlighter text={item} />
               </span>
             </div>
             {index < items.length - 1 && (

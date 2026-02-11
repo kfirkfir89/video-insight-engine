@@ -100,6 +100,35 @@ Fix flawed architecture where video category is derived from persona detection. 
 
 ---
 
+### Per-Chapter Views + Concept Tooltips
+**Status**: Ready for Implementation
+**Location**: `dev/active/per-chapter-views/`
+**Effort**: Large (L) - 4-5.5 developer-days
+
+Per-chapter view detection via dual-persona LLM architecture + inline concept tooltips that surface definitions where concepts are mentioned in text.
+
+**Files**:
+- `per-chapter-views-plan.md` - Implementation plan (4 phases)
+- `per-chapter-views-context.md` - Key files, decisions, data flow
+- `per-chapter-views-tasks.md` - 43 tasks with acceptance criteria
+
+**Key Changes**:
+- Dual-persona system: Author + 10 Domain Expert consultants
+- LLM independently selects view per chapter (with soft block-inference correction)
+- `view?: VideoCategory` on `SummaryChapter` type
+- React Context-based ConceptHighlighter with Radix Popover
+- Inline tooltips in paragraph, callout, quote, definition blocks
+
+**Phases**:
+1. **Backend per-chapter view** (L) - persona_system.txt, llm.py (3 methods), stream.py
+2. **Types + frontend view** (S) - One type field + one-line ArticleSection change
+3. **Concept tooltips** (M) - ConceptsContext, ConceptHighlighter, 4 block integrations
+4. **Verification** (M) - E2E testing, backward compat, mobile
+
+**Dependencies**: None - builds on existing VideoCategory and view infrastructure
+
+---
+
 ### Context Block Library V2.1
 **Status**: Ready for Implementation
 **Location**: `dev/active/context-block-library/`

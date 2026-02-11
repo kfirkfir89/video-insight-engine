@@ -2,6 +2,7 @@ import { memo, useState } from 'react';
 import { Wrench, Check, Square } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
+import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { ToolListBlock as ToolListBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
@@ -73,7 +74,7 @@ export const ToolListBlock = memo(function ToolListBlock({ block }: ToolListBloc
                     <span className="text-muted-foreground"> — {tool.quantity}</span>
                   )}
                   {tool.notes && (
-                    <span className="text-xs text-muted-foreground/70 ml-1">({tool.notes})</span>
+                    <span className="text-xs text-muted-foreground/70 ml-1">(<ConceptHighlighter text={tool.notes} />)</span>
                   )}
                 </div>
               </li>

@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { BlockWrapper } from './BlockWrapper';
+import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { TimelineBlock as TimelineBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
@@ -42,9 +43,9 @@ export const TimelineBlock = memo(function TimelineBlock({ block }: TimelineBloc
                     {event.time}
                   </time>
                 )}
-                <h4 className="text-sm font-medium">{event.title}</h4>
+                <h4 className="text-sm font-medium"><ConceptHighlighter text={event.title} /></h4>
                 {event.description && (
-                  <p className="text-sm text-muted-foreground">{event.description}</p>
+                  <p className="text-sm text-muted-foreground"><ConceptHighlighter text={event.description} /></p>
                 )}
               </div>
             </li>

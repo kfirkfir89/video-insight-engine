@@ -24,7 +24,7 @@ const envSchema = z.object({
   PLAYLIST_PREVIEW_RATE_LIMIT: z.string().default('30').transform(Number),
   PLAYLIST_IMPORT_RATE_LIMIT: z.string().default('5').transform(Number),
   // Video creation daily limit (0 = unlimited for admins/dev)
-  VIDEO_DAILY_LIMIT: z.string().default('10').transform(Number),
+  VIDEO_DAILY_LIMIT: z.string().default('100').transform(Number),
 });
 
 const parsedConfig = envSchema.parse(process.env);

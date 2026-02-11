@@ -5,14 +5,15 @@ CONTENT:
 {content}
 
 {extra_instruction}
-
+{concepts_anchor}
 PERSONA CONTEXT:
-{persona_guidelines}
+{persona_system}
 
 YOUR MISSION: Transform this chapter into content that reads like part of a well-crafted article. Choose the format that BEST serves this specific content - don't default to the same format every time. Use the persona context above to guide your block type and variant choices.
 
 Return JSON only (no other text):
 {{
+  "view": "cooking|coding|reviews|travel|fitness|education|podcast|diy|gaming|standard",
   "content": [
     // Array of content blocks - use 1-4 blocks as needed
     // Mix and match types based on what the content needs

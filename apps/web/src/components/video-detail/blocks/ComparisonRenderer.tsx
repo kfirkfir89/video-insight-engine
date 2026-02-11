@@ -1,6 +1,7 @@
 import { memo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
+import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { ComparisonBlock } from '@vie/types';
 import { Check, X, ThumbsUp, ThumbsDown, Sparkles, Columns2, Rows3, type LucideIcon } from 'lucide-react';
 
@@ -163,7 +164,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
               <li key={index}>
                 <div className="flex items-baseline gap-2.5 text-sm py-1.5">
                   <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.leftBulletClass)} />
-                  <span className="text-muted-foreground">{item}</span>
+                  <span className="text-muted-foreground"><ConceptHighlighter text={item} /></span>
                 </div>
                 {index < block.left.items.length - 1 && (
                   <div className="fade-divider" aria-hidden="true" />
@@ -192,7 +193,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
               <li key={index}>
                 <div className="flex items-baseline gap-2.5 text-sm py-1.5">
                   <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.rightBulletClass)} />
-                  <span className="text-muted-foreground">{item}</span>
+                  <span className="text-muted-foreground"><ConceptHighlighter text={item} /></span>
                 </div>
                 {index < block.right.items.length - 1 && (
                   <div className="fade-divider" aria-hidden="true" />

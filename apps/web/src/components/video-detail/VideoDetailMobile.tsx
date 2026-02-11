@@ -82,6 +82,7 @@ export function VideoDetailMobile({
                   onStop={handleStopChapter}
                   isVideoActive={activePlayChapter === chapter.id}
                   concepts={conceptMatchResult.byChapter.get(chapter.id) || []}
+                  allConcepts={summary.concepts}
                   playerRef={playerRef}
                   youtubeId={video.youtubeId}
                   startSeconds={activePlayChapter === chapter.id ? activeStartSeconds : chapter.startSeconds}

@@ -82,6 +82,7 @@ class MongoDBVideoRepository:
                         "generatedTitle": s.get("generatedTitle") or s.get("generated_title"),
                         "isCreatorChapter": s.get("isCreatorChapter") or s.get("is_creator_chapter"),
                         "content": s.get("content"),  # Dynamic content blocks - source of truth
+                        "view": s.get("view"),
                         # Sliced transcript for this chapter (RAG/display)
                         "transcript": s.get("transcript"),
                     }

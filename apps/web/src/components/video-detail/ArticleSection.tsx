@@ -16,6 +16,7 @@ import {
   DIYView,
   GamingView,
 } from "./views";
+import { ConceptsProvider } from "./ConceptsContext";
 import type { SummaryChapter, Concept, VideoCategory } from "@vie/types";
 
 
@@ -25,7 +26,10 @@ interface ArticleSectionProps {
   onPlay: (chapterId: string, startSeconds: number) => void;
   onStop?: () => void;
   isVideoActive?: boolean;
+  /** Per-chapter concepts for sidebar display */
   concepts?: Concept[];
+  /** All video concepts for inline text highlighting */
+  allConcepts?: Concept[];
   playerRef?: RefObject<YouTubePlayerRef | null>;
   youtubeId?: string;
   startSeconds?: number;
@@ -40,6 +44,7 @@ export const ArticleSection = memo(function ArticleSection({
   onStop,
   isVideoActive,
   concepts = [],
+  allConcepts,
   playerRef,
   youtubeId,
   startSeconds,
@@ -70,6 +75,12 @@ export const ArticleSection = memo(function ArticleSection({
     [onPlay, chapter.id]
   );
 
+  // Stabilize concepts reference to prevent unnecessary regex rebuilds in ConceptHighlighter
+  const stableConcepts = useMemo(() => allConcepts ?? concepts, [allConcepts, concepts]);
+
+  // Per-chapter view: use chapter.view if present, fall back to global category
+  const effectiveCategory = chapter.view ?? category ?? 'standard';
+
   // Memoized category view with stable dependencies (V2.1)
   const categoryView = useMemo(() => {
     const viewProps = {
@@ -80,7 +91,7 @@ export const ArticleSection = memo(function ArticleSection({
       activeStartSeconds: startSeconds,
     };
 
-    switch (category) {
+    switch (effectiveCategory) {
       case 'coding':
         return <CodeView {...viewProps} />;
       case 'cooking':
@@ -103,7 +114,7 @@ export const ArticleSection = memo(function ArticleSection({
       default:
         return <StandardView {...viewProps} />;
     }
-  }, [category, chapter, handleBlockPlay, onStop, isVideoActive, startSeconds]);
+  }, [effectiveCategory, chapter, handleBlockPlay, onStop, isVideoActive, startSeconds]);
 
   return (
     <article
@@ -244,7 +255,9 @@ export const ArticleSection = memo(function ArticleSection({
 
         {/* Chapter content - uses specialized view based on category */}
         {chapter.content && chapter.content.length > 0 ? (
-          categoryView
+          <ConceptsProvider concepts={stableConcepts}>
+            {categoryView}
+          </ConceptsProvider>
         ) : (
           <div className="flex items-center gap-2 text-muted-foreground pl-2 pr-8 py-4">
             <FileText className="h-4 w-4 shrink-0" />
