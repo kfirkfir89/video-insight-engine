@@ -1,6 +1,13 @@
 import { useState, useRef, useCallback, useEffect, lazy, Suspense } from "react";
 import type { ReactNode } from "react";
-import { Header } from "./Header";
+import { PanelLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useUIStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
 
@@ -13,12 +20,25 @@ const Sidebar = lazy(() =>
 // Skeleton placeholder for sidebar while loading
 function SidebarSkeleton() {
   return (
-    <div className="h-full bg-muted/30 animate-pulse flex flex-col gap-4 p-4">
-      <div className="h-8 bg-muted rounded-md w-3/4" />
-      <div className="h-6 bg-muted rounded-md w-1/2" />
-      <div className="space-y-2">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-10 bg-muted rounded-md" />
+    <div className="h-full bg-card border-r animate-pulse flex flex-col">
+      {/* Header skeleton */}
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/50">
+        <div className="h-7 w-7 bg-muted rounded-lg" />
+        <div className="h-4 bg-muted rounded w-24" />
+      </div>
+      {/* Input skeleton */}
+      <div className="px-3 py-2">
+        <div className="h-8 bg-muted rounded-md" />
+      </div>
+      {/* Tabs skeleton */}
+      <div className="flex gap-4 px-3 py-2 border-b border-border/50">
+        <div className="h-4 bg-muted rounded w-20" />
+        <div className="h-4 bg-muted rounded w-20" />
+      </div>
+      {/* Items skeleton */}
+      <div className="flex-1 p-3 space-y-2">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-8 bg-muted rounded-md" />
         ))}
       </div>
     </div>
@@ -32,6 +52,7 @@ interface LayoutProps {
 
 export function Layout({ children, showSidebar = true }: LayoutProps) {
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
+  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const [sidebarWidth, setSidebarWidth] = useState(380);
   const [isResizing, setIsResizing] = useState(false);
 
@@ -93,34 +114,51 @@ export function Layout({ children, showSidebar = true }: LayoutProps) {
   }, [handleMouseMove, handleMouseUp]);
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <Header />
-
-      <div className="flex-1 flex overflow-hidden">
-        {showSidebar && sidebarOpen && (
-          <>
-            <div
-              className="shrink-0 h-full"
-              style={{ width: sidebarWidth }}
-            >
-              <Suspense fallback={<SidebarSkeleton />}>
-                <Sidebar />
-              </Suspense>
-            </div>
-            {/* Resize Handle */}
-            <div
-              className={cn(
-                "w-1 bg-border hover:bg-primary/20 cursor-col-resize shrink-0 transition-colors",
-                isResizing && "bg-primary/30"
-              )}
-              onMouseDown={handleMouseDown}
-            />
-          </>
+    <div className="h-screen flex bg-background overflow-hidden">
+      {showSidebar && sidebarOpen && (
+        <>
+          <div
+            className="shrink-0 h-full"
+            style={{ width: sidebarWidth }}
+          >
+            <Suspense fallback={<SidebarSkeleton />}>
+              <Sidebar />
+            </Suspense>
+          </div>
+          {/* Resize Handle */}
+          <div
+            className={cn(
+              "w-1 cursor-col-resize shrink-0 transition-colors hover:bg-primary/20",
+              isResizing ? "bg-primary/30" : "bg-transparent"
+            )}
+            onMouseDown={handleMouseDown}
+          />
+        </>
+      )}
+      <main className="flex-1 overflow-auto p-4 md:p-6 relative">
+        {/* Floating sidebar toggle when sidebar is closed */}
+        {showSidebar && !sidebarOpen && (
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute top-3 left-3 h-8 w-8 z-10"
+                  onClick={toggleSidebar}
+                  title="Show sidebar"
+                >
+                  <PanelLeft className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">
+                Show sidebar
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
-        <main className="flex-1 overflow-auto p-4 md:p-6">
-          {children}
-        </main>
-      </div>
+        {children}
+      </main>
     </div>
   );
 }

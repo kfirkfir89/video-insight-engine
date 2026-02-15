@@ -47,7 +47,7 @@ export function SidebarToolbar() {
   };
 
   return (
-    <div className="flex flex-col gap-1.5 px-3 py-1.5 border-b border-border/50 bg-muted/30">
+    <div className="flex flex-col gap-1.5 px-3 py-1.5 border-b border-border/50">
       {/* Search input row */}
       <SearchInput
         value={searchQuery}
@@ -57,18 +57,18 @@ export function SidebarToolbar() {
       />
 
       {/* Controls row */}
-      <div className="flex items-center justify-end gap-1">
+      <div className="flex items-center justify-end gap-0.5">
         {/* Multi-select toggle */}
         <button
           onClick={handleSelectionToggle}
           className={cn(
-            "p-1.5 rounded-sm hover:bg-accent transition-colors",
+            "p-1.5 rounded-md hover:bg-accent transition-colors",
             selectionMode && "bg-accent text-primary"
           )}
           title={selectionMode ? "Exit selection mode" : "Select multiple items"}
           aria-label={selectionMode ? "Exit selection mode" : "Select multiple items"}
         >
-          <CheckSquare className={cn("h-4 w-4", selectionMode ? "text-primary" : "text-muted-foreground")} />
+          <CheckSquare className={cn("h-3.5 w-3.5", selectionMode ? "text-primary" : "text-muted-foreground")} />
         </button>
 
         {/* Collapse All Folders */}
@@ -76,14 +76,17 @@ export function SidebarToolbar() {
           onClick={collapseAllFolders}
           disabled={!hasExpandedFolders}
           className={cn(
-            "p-1.5 rounded-sm hover:bg-accent transition-colors",
+            "p-1.5 rounded-md hover:bg-accent transition-colors",
             !hasExpandedFolders && "opacity-40 cursor-not-allowed"
           )}
           title="Collapse all folders"
           aria-label="Collapse all folders"
         >
-          <ChevronsDownUp className="h-4 w-4 text-muted-foreground" />
+          <ChevronsDownUp className="h-3.5 w-3.5 text-muted-foreground" />
         </button>
+
+        {/* Separator */}
+        <div className="w-px h-4 bg-border/50 mx-0.5" />
 
         {/* Sort Dropdown */}
         <SortDropdown value={sortOption} onChange={setSortOption} />
@@ -92,11 +95,11 @@ export function SidebarToolbar() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="p-1.5 rounded-sm hover:bg-accent transition-colors"
+              className="p-1.5 rounded-md hover:bg-accent transition-colors"
               title={`Text size: ${currentSize}`}
               aria-label="Change text size"
             >
-              <ALargeSmall className="h-4 w-4 text-muted-foreground" />
+              <ALargeSmall className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-32">

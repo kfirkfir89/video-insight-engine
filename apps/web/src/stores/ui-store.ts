@@ -52,7 +52,7 @@ function computeRangeSelection(
   };
 }
 
-type ActiveSection = "summarized" | "memorized";
+export type ActiveSection = "summarized" | "memorized";
 
 export type SidebarTextSize = "small" | "medium" | "large";
 export type SortOption = "name-asc" | "name-desc" | "created-asc" | "created-desc";
@@ -64,10 +64,6 @@ interface UIState {
   // Content context
   activeSection: ActiveSection;
   selectedFolderId: string | null;
-
-  // Section collapse states
-  summarizedSectionOpen: boolean;
-  memorizedSectionOpen: boolean;
 
   // Folder expansion state (persisted as array, used as Set in memory)
   expandedFolderIds: string[];
@@ -81,8 +77,8 @@ interface UIState {
   // Search query (not persisted, cleared on reload)
   sidebarSearchQuery: string;
 
-  // Legacy (keep for AddVideoDialog if needed elsewhere)
-  addVideoDialogOpen: boolean;
+  // New folder input visibility (triggered from SidebarTabs, consumed by SidebarSection)
+  showNewFolderInput: boolean;
 
   // Selection mode state (for bulk operations)
   selectionMode: boolean;
@@ -97,15 +93,12 @@ interface UIState {
   toggleSidebar: () => void;
   setActiveSection: (section: ActiveSection) => void;
   setSelectedFolder: (id: string | null) => void;
-  toggleSummarizedSection: () => void;
-  toggleMemorizedSection: () => void;
   toggleFolderExpansion: (folderId: string) => void;
   expandFolder: (folderId: string) => void;
   collapseFolder: (folderId: string) => void;
   collapseAllFolders: () => void;
   isFolderExpanded: (folderId: string) => boolean;
-  openAddVideoDialog: () => void;
-  closeAddVideoDialog: () => void;
+  setShowNewFolderInput: (show: boolean) => void;
   setSidebarTextSize: (size: SidebarTextSize) => void;
   setSidebarSortOption: (option: SortOption) => void;
   setSidebarSearchQuery: (query: string) => void;
@@ -133,13 +126,11 @@ export const useUIStore = create<UIState>()(
       sidebarOpen: true,
       activeSection: "summarized",
       selectedFolderId: null,
-      summarizedSectionOpen: true,
-      memorizedSectionOpen: true,
       expandedFolderIds: [],
       sidebarTextSize: "medium",
       sidebarSortOption: "name-asc",
       sidebarSearchQuery: "",
-      addVideoDialogOpen: false,
+      showNewFolderInput: false,
 
       // Selection mode state
       selectionMode: false,
@@ -152,12 +143,8 @@ export const useUIStore = create<UIState>()(
 
       // Actions
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
-      setActiveSection: (section) => set({ activeSection: section }),
+      setActiveSection: (section) => set({ activeSection: section, showNewFolderInput: false }),
       setSelectedFolder: (id) => set({ selectedFolderId: id }),
-      toggleSummarizedSection: () =>
-        set((s) => ({ summarizedSectionOpen: !s.summarizedSectionOpen })),
-      toggleMemorizedSection: () =>
-        set((s) => ({ memorizedSectionOpen: !s.memorizedSectionOpen })),
       toggleFolderExpansion: (folderId) =>
         set((s) => {
           const ids = s.expandedFolderIds;
@@ -180,8 +167,7 @@ export const useUIStore = create<UIState>()(
         })),
       collapseAllFolders: () => set({ expandedFolderIds: [] }),
       isFolderExpanded: (folderId) => get().expandedFolderIds.includes(folderId),
-      openAddVideoDialog: () => set({ addVideoDialogOpen: true }),
-      closeAddVideoDialog: () => set({ addVideoDialogOpen: false }),
+      setShowNewFolderInput: (show) => set({ showNewFolderInput: show }),
       setSidebarTextSize: (size) => set({ sidebarTextSize: size }),
       setSidebarSortOption: (option) => set({ sidebarSortOption: option }),
       setSidebarSearchQuery: (query) => set({ sidebarSearchQuery: query }),
@@ -349,8 +335,6 @@ export const useUIStore = create<UIState>()(
       partialize: (state) => ({
         sidebarOpen: state.sidebarOpen,
         activeSection: state.activeSection,
-        summarizedSectionOpen: state.summarizedSectionOpen,
-        memorizedSectionOpen: state.memorizedSectionOpen,
         expandedFolderIds: state.expandedFolderIds,
         sidebarTextSize: state.sidebarTextSize,
         sidebarSortOption: state.sidebarSortOption,
@@ -366,7 +350,6 @@ export const useActiveSection = () => useUIStore((s) => s.activeSection);
 export const useSidebarTextSize = () => useUIStore((s) => s.sidebarTextSize);
 export const useSidebarSortOption = () => useUIStore((s) => s.sidebarSortOption);
 export const useSidebarSearchQuery = () => useUIStore((s) => s.sidebarSearchQuery);
-
 // Selection mode selectors
 export const useSelectionMode = () => useUIStore((s) => s.selectionMode);
 export const useSelectedVideoIds = () => useUIStore((s) => s.selectedVideoIds);

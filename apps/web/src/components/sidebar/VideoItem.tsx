@@ -136,7 +136,7 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
               isDragging && "opacity-50 z-50",
               isSelected && "bg-accent border-l-2 border-l-primary",
               // Highlight the currently viewed video
-              isActiveVideo && !isSelected && "bg-accent/70 font-medium"
+              isActiveVideo && !isSelected && "bg-primary/8 border-l-2 border-l-primary font-medium"
             )}
             onPointerDown={longPress.onPointerDown}
             onPointerUp={longPress.onPointerUp}
@@ -157,7 +157,7 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
               <span className="w-4 shrink-0" />
             )}
 
-            {/* Film Icon */}
+            {/* Video Icon */}
             <Film className={cn(textClasses.iconSize, "shrink-0 text-muted-foreground ml-1")} />
 
             {/* Video link */}
