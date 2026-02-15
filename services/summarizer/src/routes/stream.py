@@ -54,7 +54,7 @@ from src.services.sponsorblock import (
 )
 from src.exceptions import TranscriptError
 from src.services.transcript_store import transcript_store
-from src.services.s3_client import s3_client
+from src.services.s3_client import s3_client, S3Client
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -126,10 +126,40 @@ async def fetch_transcript(
     duration: int,
 ) -> AsyncGenerator[str | TranscriptData, None]:
     """
-    Fetch transcript using fallback chain: yt-dlp → API → Whisper.
+    Fetch transcript using fallback chain: S3 cache → yt-dlp → API → Whisper.
 
     Yields SSE events for phase changes, then yields TranscriptData as final item.
     """
+    # Priority 0: S3 cached transcript (avoids all YouTube calls)
+    if S3Client.is_available():
+        try:
+            cached = await transcript_store.get(youtube_id)
+            if cached:
+                logger.info(f"Using S3 cached transcript: {len(cached.segments)} segments")
+                yield sse_event("phase", {"phase": "transcript_cached"})
+                # S3 stores normalized segments (startMs/endMs).
+                # Convert to start/duration (seconds) for pipeline compatibility
+                # (format_transcript_with_timestamps, sponsor filtering, etc.)
+                segments = []
+                for seg in cached.segments:
+                    start_ms = seg.get("startMs", 0)
+                    end_ms = seg.get("endMs", start_ms)
+                    segments.append({
+                        "text": seg.get("text", ""),
+                        "start": start_ms / 1000.0,
+                        "duration": (end_ms - start_ms) / 1000.0,
+                    })
+                raw_text = " ".join(seg["text"] for seg in segments)
+                yield TranscriptData(
+                    segments=segments,
+                    raw_text=raw_text,
+                    transcript_type=f"cached-{cached.source}",
+                    source="s3",
+                )
+                return
+        except Exception as e:
+            logger.warning(f"S3 transcript retrieval failed, continuing with fallback chain: {e}")
+
     # Priority 1: yt-dlp subtitles
     if video_data.subtitles:
         segments = [
@@ -380,6 +410,18 @@ async def run_parallel_analysis(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _has_empty_content(summary_data: dict[str, Any], idx: int, title: str) -> bool:
+    """Check if LLM output has empty content and log a warning."""
+    content = summary_data.get("content", [])
+    if not content:
+        logger.warning(
+            "Dropping chapter %d '%s' — empty content after LLM processing",
+            idx, title,
+        )
+        return True
+    return False
+
+
 def build_chapter_dict(
     raw: dict[str, Any],
     summary_data: dict[str, Any],
@@ -448,8 +490,8 @@ async def process_creator_chapters(
         for ch in video_chapters
     ]
 
-    # Add first chapter if already processed
-    if first_chapter_result:
+    # Add first chapter if already processed (drop if empty content)
+    if first_chapter_result and first_chapter_result.get("content"):
         first_ch = video_chapters[0]
         transcript_slice = slice_transcript_for_chapter(
             normalized_segments, int(first_ch.start_time), int(first_ch.end_time)
@@ -462,6 +504,8 @@ async def process_creator_chapters(
         )
         chapters_result.append(chapter)
         yield sse_event("chapter_ready", {"index": 0, "chapter": chapter})
+    elif first_chapter_result:
+        logger.warning("Dropping chapter 0 '%s' — empty content", video_chapters[0].title)
 
     # Process remaining chapters in batches
     start_idx = 1 if first_chapter_result else 0
@@ -489,6 +533,8 @@ async def process_creator_chapters(
         for idx, raw, task in batch_tasks:
             try:
                 summary_data = await task
+                if _has_empty_content(summary_data, idx, raw.get("title", "")):
+                    continue
                 transcript_slice = slice_transcript_for_chapter(
                     normalized_segments, raw["startSeconds"], raw["endSeconds"]
                 )
@@ -546,8 +592,8 @@ async def process_ai_chapters(
         for i, raw in enumerate(batch):
             idx = batch_start + i
             start = raw.get("startSeconds", 0)
-            end = raw.get("endSeconds", start + 300)
-            chapter_segments = [s for s in segments if start <= s.get("start", 0) <= end]
+            end = raw.get("endSeconds", 0) or (start + 300)
+            chapter_segments = [s for s in segments if start <= s.get("start", 0) < end]
             chapter_text = " ".join([s.get("text", "") for s in chapter_segments])
 
             task = asyncio.create_task(
@@ -560,6 +606,8 @@ async def process_ai_chapters(
         for idx, raw, start, end, task in batch_tasks:
             try:
                 summary_data = await task
+                if _has_empty_content(summary_data, idx, raw.get("title", "")):
+                    continue
                 transcript_slice = slice_transcript_for_chapter(normalized_segments, start, end)
                 chapter = build_chapter_dict(
                     {"title": raw.get("title", ""), "startSeconds": start, "endSeconds": end},
@@ -850,23 +898,22 @@ async def stream_summarization(
         normalized_segments = normalize_segments(transcript_data.segments)
 
         # Store raw transcript in S3 BEFORE sponsor filtering
-        # This is intentional: we preserve the complete transcript for:
-        # - Regeneration with different sponsor rules
-        # - Audit trail of original content
-        # - Future RAG/search that may want full content
+        # Skip if already loaded from S3 (resummarize/retry)
         raw_transcript_ref: str | None = None
-        try:
-            transcript_source = transcript_data.source
-            raw_transcript_ref = await transcript_store.store(
-                youtube_id=youtube_id,
-                segments=normalized_segments,
-                source=transcript_source,  # type: ignore[arg-type]
-                language=None,  # TODO: detect language from yt-dlp
-            )
-            logger.debug(f"Stored transcript in S3: {raw_transcript_ref}")
-        except Exception as e:
-            # S3 storage is non-critical - log and continue
-            logger.warning(f"Failed to store transcript in S3: {e}")
+        if transcript_data.source == "s3":
+            raw_transcript_ref = f"transcripts/{youtube_id}.json"
+            logger.debug("Transcript loaded from S3, skipping re-store")
+        else:
+            try:
+                raw_transcript_ref = await transcript_store.store(
+                    youtube_id=youtube_id,
+                    segments=normalized_segments,
+                    source=transcript_data.source,  # type: ignore[arg-type]
+                    language=None,  # TODO: detect language from yt-dlp
+                )
+                logger.debug(f"Stored transcript in S3: {raw_transcript_ref}")
+            except Exception as e:
+                logger.warning(f"Failed to store transcript in S3: {e}")
 
         # Filter sponsor content
         segments = transcript_data.segments

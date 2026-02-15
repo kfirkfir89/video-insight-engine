@@ -1,5 +1,5 @@
 import { memo, useState } from 'react';
-import { Wrench, Check, Square } from 'lucide-react';
+import { LayoutList, Check, Square } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
 import { ConceptHighlighter } from '../ConceptHighlighter';
@@ -38,18 +38,18 @@ export const ToolListBlock = memo(function ToolListBlock({ block }: ToolListBloc
       variant="inline"
     >
       <div className="space-y-2">
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
-          <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
+        <div className="block-label-minimal">
+          <LayoutList className="h-3 w-3" aria-hidden="true" />
           <span>{BLOCK_LABELS.tools}</span>
         </div>
-        <ul className="grid gap-2 sm:grid-cols-2" role="list">
+        <ul className="grid gap-0 sm:grid-cols-2" role="list">
           {tools.map((tool, index) => {
             const isChecked = checkedTools.has(index) || tool.checked;
             return (
               <li
                 key={index}
                 className={cn(
-                  'flex items-start gap-2.5 text-sm p-2.5 rounded-lg border border-border/30 hover:border-border/60 transition-colors hover-lift',
+                  'flex items-start gap-2.5 text-sm py-2 transition-colors',
                   isChecked && 'opacity-60'
                 )}
               >

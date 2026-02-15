@@ -22,7 +22,7 @@ export const ProConBlock = memo(function ProConBlock({ block }: ProConBlockProps
   return (
     <BlockWrapper
       blockId={block.blockId}
-      variant="card"
+      variant="transparent"
       label="Pros and cons comparison"
     >
       {/* Split color bar */}
@@ -41,48 +41,46 @@ export const ProConBlock = memo(function ProConBlock({ block }: ProConBlockProps
         </div>
       )}
 
-      <div className="rounded-lg border border-border/40 overflow-hidden">
-        <div className="grid grid-cols-1 md:grid-cols-2">
-          {/* Pros column */}
-          {hasPros && (
-            <div className="p-4 md:border-r border-border/40 bg-success/[0.04] transition-all duration-200 hover:bg-success/[0.07]">
-              <div className="flex items-center gap-1.5 pb-2 mb-3 border-b border-success/30">
-                <Plus className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />
-                <span className="text-xs font-medium text-success">
-                  {BLOCK_LABELS.pros}
-                </span>
-              </div>
-              <ul className="space-y-1.5 stagger-children" aria-label={BLOCK_LABELS.pros}>
-                {block.pros.map((pro, index) => (
-                  <li key={index} className="flex items-baseline gap-2.5 text-sm">
-                    <Plus className="h-3 w-3 shrink-0 text-success/60 translate-y-0.5" aria-hidden="true" />
-                    <span className="text-muted-foreground">{pro ? <ConceptHighlighter text={pro} /> : '—'}</span>
-                  </li>
-                ))}
-              </ul>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* Pros column */}
+        {hasPros && (
+          <div className="p-4 bg-success/[0.04] rounded-lg">
+            <div className="flex items-center gap-1.5 pb-2 mb-3 border-b border-success/20">
+              <Plus className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />
+              <span className="text-xs font-medium text-success">
+                {BLOCK_LABELS.pros}
+              </span>
             </div>
-          )}
+            <ul className="space-y-1.5 stagger-children" aria-label={BLOCK_LABELS.pros}>
+              {block.pros.map((pro, index) => (
+                <li key={index} className="flex items-baseline gap-2.5 text-sm">
+                  <Plus className="h-3 w-3 shrink-0 text-success/60 translate-y-0.5" aria-hidden="true" />
+                  <span className="text-muted-foreground">{pro ? <ConceptHighlighter text={pro} /> : '—'}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
-          {/* Cons column */}
-          {hasCons && (
-            <div className="p-4 border-t md:border-t-0 border-border/40 bg-destructive/[0.04] transition-all duration-200 hover:bg-destructive/[0.07]">
-              <div className="flex items-center gap-1.5 pb-2 mb-3 border-b border-destructive/30">
-                <Minus className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
-                <span className="text-xs font-medium text-destructive">
-                  {BLOCK_LABELS.cons}
-                </span>
-              </div>
-              <ul className="space-y-1.5 stagger-children" aria-label={BLOCK_LABELS.cons}>
-                {block.cons.map((con, index) => (
-                  <li key={index} className="flex items-baseline gap-2.5 text-sm">
-                    <Minus className="h-3 w-3 shrink-0 text-destructive/60 translate-y-0.5" aria-hidden="true" />
-                    <span className="text-muted-foreground">{con ? <ConceptHighlighter text={con} /> : '—'}</span>
-                  </li>
-                ))}
-              </ul>
+        {/* Cons column */}
+        {hasCons && (
+          <div className="p-4 bg-destructive/[0.04] rounded-lg">
+            <div className="flex items-center gap-1.5 pb-2 mb-3 border-b border-destructive/20">
+              <Minus className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
+              <span className="text-xs font-medium text-destructive">
+                {BLOCK_LABELS.cons}
+              </span>
             </div>
-          )}
-        </div>
+            <ul className="space-y-1.5 stagger-children" aria-label={BLOCK_LABELS.cons}>
+              {block.cons.map((con, index) => (
+                <li key={index} className="flex items-baseline gap-2.5 text-sm">
+                  <Minus className="h-3 w-3 shrink-0 text-destructive/60 translate-y-0.5" aria-hidden="true" />
+                  <span className="text-muted-foreground">{con ? <ConceptHighlighter text={con} /> : '—'}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </BlockWrapper>
   );

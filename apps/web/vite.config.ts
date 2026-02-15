@@ -110,6 +110,10 @@ export default defineConfig({
           if (id.includes("node_modules/zustand/")) {
             return "vendor-zustand";
           }
+          // Shiki syntax highlighting (lazy-loaded)
+          if (id.includes("node_modules/shiki/") || id.includes("node_modules/@shikijs/")) {
+            return "vendor-shiki";
+          }
         }),
       },
     },

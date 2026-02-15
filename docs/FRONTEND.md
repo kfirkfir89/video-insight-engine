@@ -133,7 +133,8 @@ apps/web/
     │   ├── use-summary-stream.ts     # SSE streaming for video detail
     │   ├── use-processing-manager.ts # Auto-resume & sidebar sync
     │   ├── use-websocket.ts          # Real-time updates
-    │   └── use-long-press.ts         # Long press gesture hook
+    │   ├── use-long-press.ts         # Long press gesture hook
+    │   └── use-syntax-highlight.ts  # Shiki async syntax highlighting
     │
     ├── pages/
     │   ├── LoginPage.tsx
@@ -150,7 +151,8 @@ apps/web/
         ├── utils.ts
         ├── api.ts
         ├── query-keys.ts
-        └── block-labels.ts      # i18n-ready block labels
+        ├── block-labels.ts      # i18n-ready block labels
+        └── syntax-highlighter.ts # Shiki singleton (lazy-loaded)
 ```
 
 ---
@@ -824,9 +826,11 @@ Which blocks use which premium CSS utilities:
 | `text-gradient-primary` | NumberedBlock (numbers), RatingBlock (large scores), FormulaBlock (display), StepBlock (numbers) |
 | `text-gradient-warm` | RatingBlock (star scores), NutritionBlock (daily values) |
 | `fade-divider` | IngredientBlock, ExerciseBlock, CostBlock, ItineraryBlock, NutritionBlock, ToolListBlock, TranscriptBlock |
-| `block-card` | Most blocks via `BlockWrapper variant="card"` |
+| `block-card` | Interactive blocks via `BlockWrapper variant="card"` (IngredientBlock, StepBlock, QuizBlock, WorkoutTimerBlock, FileTreeBlock, TranscriptBlock, CostBlock) |
 | `block-accent` | CalloutBlock, DefinitionBlock, QuoteRenderer |
 | `block-code-container` | CodeBlock, TerminalBlock |
+| `block-label-minimal` | Transparent blocks with small muted label (RatingBlock, VerdictBlock, LocationBlock, NutritionBlock, GuestBlock, ItineraryBlock, ExerciseBlock) |
+| `table-fade-dividers` | TableBlock — gradient fade-edge dividers on inner lines only |
 
 ### Dark Mode Glow Usage
 
@@ -963,7 +967,7 @@ Displays nutritional information in table format.
 
 ### CodeBlock
 
-Syntax-highlighted code with copy functionality.
+Syntax-highlighted code with copy functionality. Uses **Shiki** (WASM-based, VS Code-quality) for per-language syntax coloring with `github-dark`/`github-light` themes. Shiki is lazy-loaded in a separate vendor chunk (`vendor-shiki`).
 
 ```tsx
 <CodeBlock
@@ -979,11 +983,13 @@ Syntax-highlighted code with copy functionality.
 ```
 
 **Features:**
+- Shiki syntax highlighting (JS, TS, Python, Bash, JSON, HTML, CSS + on-demand)
 - Language badge
 - Copy to clipboard with feedback
 - Line numbers
 - Line highlighting
 - Filename header
+- Graceful fallback to plain text while Shiki loads
 
 ### TerminalBlock
 

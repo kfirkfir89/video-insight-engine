@@ -118,7 +118,7 @@ describe('VerdictBlock', () => {
         <VerdictBlock block={createMockBlock({ verdict: 'recommended' })} />
       );
 
-      const card = container.querySelector('.bg-success\\/\\[0\\.06\\]');
+      const card = container.querySelector('.bg-success\\/\\[0\\.03\\]');
       expect(card).toBeInTheDocument();
     });
 
@@ -127,7 +127,7 @@ describe('VerdictBlock', () => {
         <VerdictBlock block={createMockBlock({ verdict: 'not_recommended' })} />
       );
 
-      const card = container.querySelector('.bg-destructive\\/\\[0\\.06\\]');
+      const card = container.querySelector('.bg-destructive\\/\\[0\\.03\\]');
       expect(card).toBeInTheDocument();
     });
 
@@ -136,7 +136,7 @@ describe('VerdictBlock', () => {
         <VerdictBlock block={createMockBlock({ verdict: 'conditional' })} />
       );
 
-      const card = container.querySelector('.bg-warning\\/\\[0\\.06\\]');
+      const card = container.querySelector('.bg-warning\\/\\[0\\.03\\]');
       expect(card).toBeInTheDocument();
     });
   });

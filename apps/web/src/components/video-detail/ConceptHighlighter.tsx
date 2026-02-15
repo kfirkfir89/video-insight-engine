@@ -158,7 +158,7 @@ export const ConceptHighlighter = memo(function ConceptHighlighter({ text }: Con
                 aria-label={`Definition: ${concept.name}`}
               >
                 {seg.value}
-                <Lightbulb className="h-2.5 w-2.5 shrink-0 self-start opacity-40 group-hover/concept:opacity-100 transition-opacity" aria-hidden="true" />
+                <Lightbulb className="h-2.5 w-2.5 shrink-0 self-start text-warning/60 group-hover/concept:text-warning transition-colors" aria-hidden="true" />
               </button>
             </Popover.Trigger>
             <Popover.Portal>

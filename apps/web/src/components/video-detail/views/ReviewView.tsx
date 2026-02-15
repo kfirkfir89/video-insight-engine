@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import { Star, Award, Clock, Lightbulb } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
@@ -77,36 +77,24 @@ export const ReviewView = memo(function ReviewView({
     <div className="space-y-4">
       {/* Verdict Section - Final assessment at the top */}
       {hasVerdicts && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '0ms' }}>
-          <h4 className="glass-section-header">
-            <Award className="h-4 w-4" aria-hidden="true" />
-            <span>Verdict</span>
-          </h4>
-          <ContentBlocks
-            blocks={verdictBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={verdictBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Ratings Section */}
       {hasRatings && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '100ms' }}>
-          <h4 className="glass-section-header">
-            <Star className="h-4 w-4" aria-hidden="true" />
-            <span>Ratings</span>
-          </h4>
-          <ContentBlocks
-            blocks={ratingBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={ratingBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Pros & Cons Section */}
@@ -133,19 +121,13 @@ export const ReviewView = memo(function ReviewView({
 
       {/* Comparison Section */}
       {hasComparisons && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '200ms' }}>
-          <h4 className="glass-section-header">
-            <Lightbulb className="h-4 w-4" aria-hidden="true" />
-            <span>Comparison</span>
-          </h4>
-          <ContentBlocks
-            blocks={comparisonBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={comparisonBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Timestamps for Key Moments */}

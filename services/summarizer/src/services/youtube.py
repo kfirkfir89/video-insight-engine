@@ -18,11 +18,14 @@ import asyncio
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Protocol, TypedDict, runtime_checkable
+from urllib.parse import quote
 
+import requests
 import tenacity
 import yt_dlp  # type: ignore[import-untyped]
 
@@ -676,17 +679,56 @@ def _parse_chapters(info: dict[str, Any]) -> list[Chapter]:
     return chapters
 
 def _fetch_subtitles_from_url(url: str) -> list[SubtitleSegment]:
-    """Fetch and parse subtitles from a URL (json3 format)."""
-    import json
-    from urllib.request import urlopen, Request
+    """Fetch and parse subtitles from a URL (json3 format).
 
+    Tries direct connection first, then proxy on 429.
+    """
     segments: list[SubtitleSegment] = []
 
-    try:
-        req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urlopen(req, timeout=30) as response:
-            data = json.loads(response.read().decode('utf-8'))
+    # Build list of proxy configs to try: direct first, then proxy
+    proxy_configs: list[dict[str, str] | None] = [None]
+    if settings.WEBSHARE_PROXY_USERNAME and settings.WEBSHARE_PROXY_PASSWORD:
+        user = quote(settings.WEBSHARE_PROXY_USERNAME, safe="")
+        pwd = quote(settings.WEBSHARE_PROXY_PASSWORD, safe="")
+        proxy_url = f"http://{user}-rotate:{pwd}@p.webshare.io:80"
+        proxy_configs.append({'http': proxy_url, 'https': proxy_url})
 
+    # Strategy: try direct, on 429 wait 2s and switch to proxy immediately
+    data = None
+    try:
+        response = requests.get(
+            url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == 429 and len(proxy_configs) > 1:
+            logger.warning("Subtitle fetch 429 (direct), retrying via proxy in 2s")
+            time.sleep(2)
+        else:
+            logger.warning(f"Subtitle fetch HTTP error (direct): {e}")
+    except Exception as e:
+        logger.warning(f"Subtitle fetch error (direct): {e}")
+
+    # Proxy attempt if direct failed
+    if not data and len(proxy_configs) > 1:
+        try:
+            response = requests.get(
+                url, headers={'User-Agent': 'Mozilla/5.0'},
+                proxies=proxy_configs[1], timeout=30,
+            )
+            response.raise_for_status()
+            data = response.json()
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response is not None else "unknown"
+            logger.warning(f"Subtitle fetch HTTP {status} (proxy): {e}")
+        except Exception as e:
+            logger.warning(f"Subtitle fetch error (proxy): {e}")
+
+    if not data:
+        return segments
+
+    try:
         # json3 format has 'events' array
         events = data.get('events', [])
 
@@ -713,7 +755,7 @@ def _fetch_subtitles_from_url(url: str) -> list[SubtitleSegment]:
                 ))
 
     except Exception as e:
-        logger.warning(f"Failed to fetch subtitles from URL: {e}")
+        logger.warning(f"Failed to parse subtitles: {e}")
 
     return segments
 

@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import { Dumbbell, Timer, Heart, Clock } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
@@ -72,19 +72,13 @@ export const FitnessView = memo(function FitnessView({
     <div className="space-y-4">
       {/* Workout Timer Section - Interactive timer at the top */}
       {hasTimers && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '0ms' }}>
-          <h4 className="glass-section-header">
-            <Timer className="h-4 w-4" aria-hidden="true" />
-            <span>Workout Timer</span>
-          </h4>
-          <ContentBlocks
-            blocks={timerBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={timerBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Main content (non-categorized blocks) */}
@@ -100,19 +94,13 @@ export const FitnessView = memo(function FitnessView({
 
       {/* Exercise List Section */}
       {hasExercises && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '100ms' }}>
-          <h4 className="glass-section-header">
-            <Dumbbell className="h-4 w-4" aria-hidden="true" />
-            <span>Exercises</span>
-          </h4>
-          <ContentBlocks
-            blocks={exerciseBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={exerciseBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Timestamps for Exercise Demonstrations */}
@@ -136,19 +124,13 @@ export const FitnessView = memo(function FitnessView({
 
       {/* Form Tips */}
       {hasTips && (
-        <div className="mt-4 space-y-2">
-          <h4 className="glass-section-header">
-            <Heart className="h-4 w-4" aria-hidden="true" />
-            <span>Form Tips</span>
-          </h4>
-          <ContentBlocks
-            blocks={tipBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={tipBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
     </div>
   );

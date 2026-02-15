@@ -2,6 +2,7 @@ import { memo, useState, useCallback } from 'react';
 import { Copy, Check, FileCode } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
+import { useSyntaxHighlight } from '@/hooks/use-syntax-highlight';
 import type { CodeBlock as CodeBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
@@ -11,10 +12,11 @@ interface CodeBlockProps {
 
 /**
  * Renders syntax-highlighted code with copy functionality.
- * Uses basic highlighting - can be enhanced with Shiki/Prism for full syntax highlighting.
+ * Uses Shiki for per-language syntax coloring with async loading and plain-text fallback.
  */
 export const CodeBlock = memo(function CodeBlock({ block }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
+  const { html: shikiHtml } = useSyntaxHighlight(block.code, block.language);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -71,35 +73,43 @@ export const CodeBlock = memo(function CodeBlock({ block }: CodeBlockProps) {
       headerLabel={headerLabel}
       headerAction={copyButton}
     >
-      {/* Code content */}
+      {/* Code content — Shiki HTML when available, plain-text fallback while loading */}
       <div className="overflow-x-auto">
-        <pre className="p-4 text-sm">
-          <code className="font-mono">
-            {showLineNumbers ? (
-              <table className="border-collapse">
-                <tbody>
-                  {lines.map((line, index) => {
-                    const lineNum = index + 1;
-                    const isHighlighted = block.highlightLines?.includes(lineNum);
-                    return (
-                      <tr
-                        key={index}
-                        className={cn(isHighlighted && 'bg-primary/10 shadow-[inset_3px_0_0_var(--primary)]')}
-                      >
-                        <td className="pr-4 text-right text-zinc-600 select-none tabular-nums">
-                          {lineNum}
-                        </td>
-                        <td className="whitespace-pre">{line || ' '}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            ) : (
-              <span className="whitespace-pre-wrap">{block.code}</span>
-            )}
-          </code>
-        </pre>
+        {shikiHtml ? (
+          // Safe: Shiki only generates <span> tags with inline styles — no scripts or user HTML
+          <div
+            className="p-4 text-sm [&>pre]:!bg-transparent [&>pre]:!m-0 [&>pre]:!p-0 [&_code]:font-mono"
+            dangerouslySetInnerHTML={{ __html: shikiHtml }}
+          />
+        ) : (
+          <pre className="p-4 text-sm">
+            <code className="font-mono">
+              {showLineNumbers ? (
+                <table className="border-collapse">
+                  <tbody>
+                    {lines.map((line, index) => {
+                      const lineNum = index + 1;
+                      const isHighlighted = block.highlightLines?.includes(lineNum);
+                      return (
+                        <tr
+                          key={index}
+                          className={cn(isHighlighted && 'bg-primary/10 shadow-[inset_3px_0_0_var(--primary)]')}
+                        >
+                          <td className="pr-4 text-right text-zinc-600 select-none tabular-nums">
+                            {lineNum}
+                          </td>
+                          <td className="whitespace-pre">{line || ' '}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <span className="whitespace-pre-wrap">{block.code}</span>
+              )}
+            </code>
+          </pre>
+        )}
       </div>
     </BlockWrapper>
   );

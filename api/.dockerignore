@@ -3,3 +3,11 @@ dist
 *.log
 .env*
 package-lock.json
+
+# Monorepo folders you don't need for API build
+apps
+services
+tests
+.git
+.idea
+.vscode

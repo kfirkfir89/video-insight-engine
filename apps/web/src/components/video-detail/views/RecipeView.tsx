@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import { ChefHat, ListChecks, Clock, Lightbulb } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
@@ -77,19 +77,13 @@ export const RecipeView = memo(function RecipeView({
     <div className="space-y-4">
       {/* Ingredients Section - Always at top for recipes */}
       {hasIngredients && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '0ms' }}>
-          <h4 className="glass-section-header">
-            <ListChecks className="h-4 w-4" aria-hidden="true" />
-            <span>Ingredients</span>
-          </h4>
-          <ContentBlocks
-            blocks={ingredientBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={ingredientBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Main content (non-categorized blocks) */}
@@ -105,19 +99,13 @@ export const RecipeView = memo(function RecipeView({
 
       {/* Cooking Steps Section */}
       {hasSteps && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '100ms' }}>
-          <h4 className="glass-section-header">
-            <ChefHat className="h-4 w-4" aria-hidden="true" />
-            <span>Cooking Steps</span>
-          </h4>
-          <ContentBlocks
-            blocks={stepBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={stepBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Timestamps for Techniques */}
@@ -141,19 +129,13 @@ export const RecipeView = memo(function RecipeView({
 
       {/* Chef Tips */}
       {hasTips && (
-        <div className="mt-4 space-y-2">
-          <h4 className="glass-section-header">
-            <Lightbulb className="h-4 w-4" aria-hidden="true" />
-            <span>Chef Tips</span>
-          </h4>
-          <ContentBlocks
-            blocks={tipBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={tipBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
     </div>

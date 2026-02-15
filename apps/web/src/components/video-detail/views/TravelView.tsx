@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import { MapPin, Calendar, DollarSign, Compass, Lightbulb } from 'lucide-react';
+import { Compass } from 'lucide-react';
 import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
@@ -77,19 +77,13 @@ export const TravelView = memo(function TravelView({
     <div className="space-y-4">
       {/* Locations Section - Destinations at the top */}
       {hasLocations && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '0ms' }}>
-          <h4 className="glass-section-header">
-            <MapPin className="h-4 w-4" aria-hidden="true" />
-            <span>Destinations</span>
-          </h4>
-          <ContentBlocks
-            blocks={locationBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={locationBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Main content (non-categorized blocks) */}
@@ -105,36 +99,24 @@ export const TravelView = memo(function TravelView({
 
       {/* Itinerary Section */}
       {hasItinerary && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '100ms' }}>
-          <h4 className="glass-section-header">
-            <Calendar className="h-4 w-4" aria-hidden="true" />
-            <span>Itinerary</span>
-          </h4>
-          <ContentBlocks
-            blocks={itineraryBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={itineraryBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Cost Breakdown Section */}
       {hasCosts && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '200ms' }}>
-          <h4 className="glass-section-header">
-            <DollarSign className="h-4 w-4" aria-hidden="true" />
-            <span>Cost Breakdown</span>
-          </h4>
-          <ContentBlocks
-            blocks={costBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={costBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Timestamps for Key Moments */}
@@ -158,19 +140,13 @@ export const TravelView = memo(function TravelView({
 
       {/* Travel Tips */}
       {hasTips && (
-        <div className="mt-4 space-y-2">
-          <h4 className="glass-section-header">
-            <Lightbulb className="h-4 w-4" aria-hidden="true" />
-            <span>Travel Tips</span>
-          </h4>
-          <ContentBlocks
-            blocks={tipBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={tipBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
     </div>
   );

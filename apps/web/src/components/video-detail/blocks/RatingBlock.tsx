@@ -58,11 +58,13 @@ export const RatingBlock = memo(function RatingBlock({ block }: RatingBlockProps
     <BlockWrapper
       blockId={block.blockId}
       label={BLOCK_LABELS.rating(clampedScore, maxScore)}
-      variant="card"
-      headerIcon={<Star className="h-4 w-4 shrink-0" aria-hidden="true" />}
-      headerLabel="Rating"
+      variant="transparent"
     >
-      <div className="rounded-lg border border-border/50 p-4 space-y-4 shadow-[inset_0_2px_4px_oklch(0%_0_0/0.04)]">
+      <div className="block-label-minimal">
+        <Star className="h-3 w-3" aria-hidden="true" />
+        <span>Rating</span>
+      </div>
+      <div className="space-y-4">
         {/* Main rating */}
         <div className="flex items-center justify-between">
           <div className="space-y-1">
@@ -82,22 +84,25 @@ export const RatingBlock = memo(function RatingBlock({ block }: RatingBlockProps
 
         {/* Breakdown */}
         {breakdown && breakdown.length > 0 && (
-          <div className="pt-3 space-y-2">
-            {breakdown.map((item, index) => (
-              <div key={index} className="flex items-center gap-3 text-sm">
-                <span className="text-muted-foreground w-24 shrink-0 truncate">{item.category}</span>
-                <div className="flex-1 h-1.5 bg-muted/50 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-warning/80 rounded-full progress-bar-gradient"
-                    style={{ width: `${(item.score / (item.maxScore || maxScore)) * 100}%`, animationDelay: `${index * 80}ms` }}
-                  />
+          <>
+            <div className="fade-divider" aria-hidden="true" />
+            <div className="space-y-2">
+              {breakdown.map((item, index) => (
+                <div key={index} className="flex items-center gap-3 text-sm">
+                  <span className="text-muted-foreground w-24 shrink-0 truncate">{item.category}</span>
+                  <div className="flex-1 h-1.5 bg-muted/50 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-warning/80 rounded-full progress-bar-gradient"
+                      style={{ width: `${(item.score / (item.maxScore || maxScore)) * 100}%`, animationDelay: `${index * 80}ms` }}
+                    />
+                  </div>
+                  <span className="text-xs text-muted-foreground tabular-nums w-8 text-right">
+                    {item.score}
+                  </span>
                 </div>
-                <span className="text-xs text-muted-foreground tabular-nums w-8 text-right">
-                  {item.score}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </BlockWrapper>

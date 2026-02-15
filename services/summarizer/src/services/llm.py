@@ -509,13 +509,33 @@ class LLMService:
             concepts_anchor=concepts_anchor,
         )
 
-        text = await self._call_llm(prompt, max_tokens=1500)
-        result = _parse_json_response(text, {"content": []})
+        # Retry once if LLM returns empty content for non-empty input
+        max_attempts = 2 if chapter_text.strip() else 1
+        content: list[dict] = []
+        result: dict = {"content": []}
 
-        # Ensure content is always an array
-        content = result.get("content", [])
-        if not isinstance(content, list):
-            content = []
+        for attempt in range(max_attempts):
+            text = await self._call_llm(prompt, max_tokens=1500)
+            result = _parse_json_response(text, {"content": []})
+
+            # Ensure content is always an array
+            content = result.get("content", [])
+            if not isinstance(content, list):
+                content = []
+
+            if content or attempt == max_attempts - 1:
+                break
+
+            logger.warning(
+                "Empty content from LLM for chapter '%s' (%d chars input), retrying...",
+                title, len(chapter_text),
+            )
+
+        if not content and chapter_text.strip():
+            logger.error(
+                "LLM returned empty content for chapter '%s' after %d attempts (%d chars input)",
+                title, max_attempts, len(chapter_text),
+            )
 
         # Inject blockId into each content block
         content = inject_block_ids(content)
@@ -596,11 +616,11 @@ class LLMService:
         chapters = []
         for i, raw in enumerate(raw_chapters):
             start = raw.get("startSeconds", 0)
-            end = raw.get("endSeconds", start + 300)
+            end = raw.get("endSeconds", 0) or (start + 300)
 
             chapter_segments = [
                 s for s in segments
-                if start <= s["start"] <= end
+                if start <= s["start"] < end
             ]
             chapter_text = " ".join([s["text"] for s in chapter_segments])
 
@@ -608,13 +628,21 @@ class LLMService:
                 chapter_text, raw["title"], concept_names=concept_names,
             )
 
+            if not summary_data.get("content"):
+                logger.warning(
+                    "Dropping chapter %d '%s' — empty content after LLM processing",
+                    i, raw["title"],
+                )
+                continue
+            content = summary_data["content"]
+
             chapter_dict: dict = {
                 "id": str(uuid.uuid4()),
                 "timestamp": seconds_to_timestamp(start),
                 "start_seconds": start,
                 "end_seconds": end,
                 "title": raw["title"],
-                "content": summary_data.get("content", []),
+                "content": content,
             }
             if summary_data.get("view"):
                 chapter_dict["view"] = summary_data["view"]

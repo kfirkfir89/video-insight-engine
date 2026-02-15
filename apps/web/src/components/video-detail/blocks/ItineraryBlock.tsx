@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Calendar, Clock, MapPin } from 'lucide-react';
+import { Route, Clock, MapPin } from 'lucide-react';
 import { BlockWrapper } from './BlockWrapper';
 import type { ItineraryBlock as ItineraryBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
@@ -20,10 +20,12 @@ export const ItineraryBlock = memo(function ItineraryBlock({ block }: ItineraryB
     <BlockWrapper
       blockId={block.blockId}
       label={BLOCK_LABELS.itinerary}
-      variant="card"
-      headerIcon={<Calendar className="h-4 w-4" />}
-      headerLabel={BLOCK_LABELS.itinerary}
+      variant="transparent"
     >
+      <div className="block-label-minimal">
+        <Route className="h-3 w-3" aria-hidden="true" />
+        <span>{BLOCK_LABELS.itinerary}</span>
+      </div>
       <div className="space-y-4">
         <div className="space-y-6">
           {days.map((day) => (

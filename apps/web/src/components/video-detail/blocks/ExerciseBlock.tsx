@@ -28,20 +28,19 @@ export const ExerciseBlock = memo(function ExerciseBlock({ block, onPlay }: Exer
     <BlockWrapper
       blockId={block.blockId}
       label={BLOCK_LABELS.exercises}
-      variant="card"
-      headerIcon={<Dumbbell className="h-4 w-4" />}
-      headerLabel={BLOCK_LABELS.exercises}
+      variant="transparent"
     >
-      <div className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2 stagger-children">
-          {exercises.map((exercise, index) => {
-            const difficultyConfig = exercise.difficulty ? DIFFICULTY_CONFIG[exercise.difficulty] : null;
+      <div className="block-label-minimal">
+        <Dumbbell className="h-3 w-3" aria-hidden="true" />
+        <span>{BLOCK_LABELS.exercises}</span>
+      </div>
+      <div className="stagger-children">
+        {exercises.map((exercise, index) => {
+          const difficultyConfig = exercise.difficulty ? DIFFICULTY_CONFIG[exercise.difficulty] : null;
 
-            return (
-              <div
-                key={index}
-                className="rounded-lg border border-border/50 p-4 space-y-2 bg-card hover-lift"
-              >
+          return (
+            <div key={index}>
+              <div className="py-3 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <h4 className="font-medium text-sm">{exercise.name}</h4>
                   {difficultyConfig && (
@@ -96,9 +95,12 @@ export const ExerciseBlock = memo(function ExerciseBlock({ block, onPlay }: Exer
                   </button>
                 )}
               </div>
-            );
-          })}
-        </div>
+              {index < exercises.length - 1 && (
+                <div className="fade-divider" aria-hidden="true" />
+              )}
+            </div>
+          );
+        })}
       </div>
     </BlockWrapper>
   );

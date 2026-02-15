@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import { Trophy, Target, Clock, Lightbulb } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
@@ -72,36 +72,24 @@ export const GamingView = memo(function GamingView({
     <div className="space-y-4">
       {/* Strategies Section */}
       {hasStrategies && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '0ms' }}>
-          <h4 className="glass-section-header">
-            <Target className="h-4 w-4" aria-hidden="true" />
-            <span>Strategies</span>
-          </h4>
-          <ContentBlocks
-            blocks={strategyBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={strategyBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Highlights Section */}
       {hasHighlights && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '100ms' }}>
-          <h4 className="glass-section-header">
-            <Trophy className="h-4 w-4" aria-hidden="true" />
-            <span>Highlights</span>
-          </h4>
-          <ContentBlocks
-            blocks={highlightBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={highlightBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Main content (non-categorized blocks) */}
@@ -136,19 +124,13 @@ export const GamingView = memo(function GamingView({
 
       {/* Tips & Tricks */}
       {hasTips && (
-        <div className="mt-4 space-y-2">
-          <h4 className="glass-section-header">
-            <Lightbulb className="h-4 w-4" aria-hidden="true" />
-            <span>Tips & Tricks</span>
-          </h4>
-          <ContentBlocks
-            blocks={tipBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={tipBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
     </div>
   );

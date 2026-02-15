@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import { Wrench, ListChecks, Clock, Lightbulb, Hammer } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
@@ -77,43 +77,26 @@ export const DIYView = memo(function DIYView({
 
   return (
     <div className="space-y-4">
-      {/* Tools & Materials Section */}
-      {(hasTools || hasMaterials) && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {/* Tools */}
-          {hasTools && (
-            <div className="glass-panel block-entrance" style={{ animationDelay: '0ms' }}>
-              <h4 className="glass-section-header">
-                <Wrench className="h-4 w-4" aria-hidden="true" />
-                <span>Tools Needed</span>
-              </h4>
-              <ContentBlocks
-                blocks={toolBlocks}
-                onPlay={onPlay}
-                onStop={onStop}
-                isVideoActive={isVideoActive}
-                activeStartSeconds={activeStartSeconds}
-              />
-            </div>
-          )}
+      {/* Tools Section */}
+      {hasTools && (
+        <ContentBlocks
+          blocks={toolBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
+      )}
 
-          {/* Materials */}
-          {hasMaterials && (
-            <div className="glass-panel block-entrance" style={{ animationDelay: '50ms' }}>
-              <h4 className="glass-section-header">
-                <ListChecks className="h-4 w-4" aria-hidden="true" />
-                <span>Materials</span>
-              </h4>
-              <ContentBlocks
-                blocks={materialBlocks}
-                onPlay={onPlay}
-                onStop={onStop}
-                isVideoActive={isVideoActive}
-                activeStartSeconds={activeStartSeconds}
-              />
-            </div>
-          )}
-        </div>
+      {/* Materials Section */}
+      {hasMaterials && (
+        <ContentBlocks
+          blocks={materialBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Main content (non-categorized blocks) */}
@@ -129,19 +112,13 @@ export const DIYView = memo(function DIYView({
 
       {/* Step-by-Step Instructions */}
       {hasSteps && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '100ms' }}>
-          <h4 className="glass-section-header">
-            <Hammer className="h-4 w-4" aria-hidden="true" />
-            <span>Instructions</span>
-          </h4>
-          <ContentBlocks
-            blocks={stepBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={stepBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Timestamps for Demonstrations */}
@@ -165,19 +142,13 @@ export const DIYView = memo(function DIYView({
 
       {/* Safety & Pro Tips */}
       {hasTips && (
-        <div className="mt-4 space-y-2">
-          <h4 className="glass-section-header">
-            <Lightbulb className="h-4 w-4" aria-hidden="true" />
-            <span>Tips & Safety</span>
-          </h4>
-          <ContentBlocks
-            blocks={tipBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={tipBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
     </div>
   );

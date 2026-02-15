@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { UtensilsCrossed, Square, CheckCircle2 } from 'lucide-react';
+import { UtensilsCrossed, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
 import { ConceptHighlighter } from '../ConceptHighlighter';
@@ -31,11 +31,10 @@ export const BulletsBlock = memo(function BulletsBlock({ items, variant }: Bulle
         {items.map((item, index) => (
           <li key={index}>
             <div className="flex items-baseline gap-2.5 text-sm py-1.5">
-              {isChecklist ? (
-                <Square className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 translate-y-0.5" aria-hidden="true" />
-              ) : (
-                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success/50 translate-y-0.5" aria-hidden="true" />
-              )}
+              <CheckCircle2 className={cn(
+                "h-3.5 w-3.5 shrink-0 translate-y-0.5",
+                isChecklist ? "text-primary/50" : "text-success/50"
+              )} aria-hidden="true" />
               <span className="text-muted-foreground">
                 <ConceptHighlighter text={item} />
               </span>

@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { ThumbsUp, ThumbsDown, HelpCircle, Minus, Users, UserX, Scale } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, HelpCircle, Minus, Users, UserX, Award } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
 import { ConceptHighlighter } from '../ConceptHighlighter';
@@ -14,34 +14,26 @@ const VERDICT_CONFIG = {
   recommended: {
     icon: ThumbsUp,
     label: BLOCK_LABELS.recommended,
-    bgClass: 'bg-success/[0.06]',
-    borderClass: 'border-success/30',
+    bgClass: 'bg-success/[0.03]',
     iconClass: 'text-success',
-    glowClass: 'glow-success',
   },
   not_recommended: {
     icon: ThumbsDown,
     label: BLOCK_LABELS.notRecommended,
-    bgClass: 'bg-destructive/[0.06]',
-    borderClass: 'border-destructive/30',
+    bgClass: 'bg-destructive/[0.03]',
     iconClass: 'text-destructive',
-    glowClass: 'glow-destructive',
   },
   conditional: {
     icon: HelpCircle,
     label: BLOCK_LABELS.conditional,
-    bgClass: 'bg-warning/[0.06]',
-    borderClass: 'border-warning/30',
+    bgClass: 'bg-warning/[0.03]',
     iconClass: 'text-warning',
-    glowClass: 'glow-warning',
   },
   neutral: {
     icon: Minus,
     label: BLOCK_LABELS.neutral,
-    bgClass: 'bg-muted/[0.06]',
-    borderClass: 'border-border/50',
+    bgClass: 'bg-muted/[0.03]',
     iconClass: 'text-muted-foreground',
-    glowClass: '',
   },
 };
 
@@ -60,11 +52,13 @@ export const VerdictBlock = memo(function VerdictBlock({ block }: VerdictBlockPr
     <BlockWrapper
       blockId={block.blockId}
       label={`${BLOCK_LABELS.verdict}: ${config.label}`}
-      variant="card"
-      headerIcon={<Scale className="h-4 w-4" />}
-      headerLabel={BLOCK_LABELS.verdict}
+      variant="transparent"
     >
-      <div className={cn('rounded-lg border p-4 space-y-3', config.bgClass, config.borderClass, config.glowClass)}>
+      <div className="block-label-minimal">
+        <Award className="h-3 w-3" aria-hidden="true" />
+        <span>{BLOCK_LABELS.verdict}</span>
+      </div>
+      <div className={cn('rounded-lg p-4 space-y-3', config.bgClass)}>
         {/* Verdict badge */}
         <div className="flex items-center gap-2">
           <Icon className={cn('h-5 w-5', config.iconClass)} aria-hidden="true" style={{ animation: 'breathe 3s ease-in-out infinite' }} />

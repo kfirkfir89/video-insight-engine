@@ -29,15 +29,17 @@ export const LocationBlock = memo(function LocationBlock({ block }: LocationBloc
     <BlockWrapper
       blockId={block.blockId}
       label={`Location: ${block.name}`}
-      variant="card"
-      headerIcon={<MapPin className="h-4 w-4" />}
-      headerLabel="Location"
+      variant="transparent"
     >
-      <div className="relative rounded-lg border border-border/50 overflow-hidden bg-card location-compass">
+      <div className="block-label-minimal">
+        <MapPin className="h-3 w-3" aria-hidden="true" />
+        <span>Location</span>
+      </div>
+      <div className="relative rounded-lg overflow-hidden location-compass">
         {/* Layout: content left ~70%, decorative right ~30% */}
         <div className="flex min-h-[100px]">
           {/* Content area */}
-          <div className="relative flex-1 p-4 space-y-2 z-10">
+          <div className="relative flex-1 py-2 space-y-2 z-10">
             <div className="flex items-start gap-2">
               <div className="shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mt-0.5" aria-hidden="true">
                 <MapPin className="h-4 w-4 text-primary" />
@@ -87,7 +89,7 @@ export const LocationBlock = memo(function LocationBlock({ block }: LocationBloc
                 className="absolute inset-0 w-full h-full object-cover"
                 loading="lazy"
               />
-              <div className="absolute inset-0 bg-gradient-to-r from-card via-card/60 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-r from-background via-background/60 to-transparent" />
             </div>
           ) : (
             <div className="location-map-bg" aria-hidden="true" />
