@@ -1,4 +1,4 @@
-import type { Concept, SummaryChapter } from "@vie/types";
+import type { Concept, ContentBlock, SummaryChapter } from "@vie/types";
 
 /**
  * Parse timestamp string to seconds
@@ -59,10 +59,49 @@ function normalizeChapterRanges(chapters: SummaryChapter[]): SummaryChapter[] {
 }
 
 /**
- * Match concepts to chapters based on timestamp overlap.
- * A concept matches a chapter if its timestamp falls within [startSeconds, endSeconds).
+ * Extract searchable text from a content block.
+ * Uses `in` checks to safely access common text fields across block types.
+ */
+export function extractBlockText(block: ContentBlock): string {
+  const parts: string[] = [];
+
+  if ("text" in block && typeof block.text === "string") parts.push(block.text);
+  if ("term" in block && typeof block.term === "string") parts.push(block.term);
+  if ("meaning" in block && typeof block.meaning === "string") parts.push(block.meaning);
+  if ("label" in block && typeof block.label === "string") parts.push(block.label);
+
+  if ("steps" in block && Array.isArray(block.steps)) {
+    for (const step of block.steps) {
+      if (step?.instruction) parts.push(step.instruction);
+      if (step?.tips) parts.push(step.tips);
+    }
+  }
+  if ("items" in block && Array.isArray(block.items)) {
+    for (const item of block.items) {
+      if (typeof item === "string") {
+        parts.push(item);
+      } else if (item != null) {
+        // Items union is too heterogeneous for `in` narrowing — safe cast
+        const obj = item as Record<string, unknown>;
+        if (typeof obj.name === "string") parts.push(obj.name);
+        if (typeof obj.notes === "string") parts.push(obj.notes);
+        if (typeof obj.text === "string") parts.push(obj.text);
+      }
+    }
+  }
+
+  return parts.join(" ");
+}
+
+/**
+ * Match concepts to chapters using both content and timestamp signals.
  *
- * Fixes endSeconds=0 issues by calculating from next chapter's startSeconds.
+ * Both signals run independently so we can compare how synced they are.
+ * A concept appears in a chapter if:
+ * - Its name is mentioned in the chapter's content blocks (content match)
+ * - OR its timestamp falls within the chapter's time range (timestamp match)
+ *
+ * Future: remove timestamp matching entirely — concepts belong where you read them.
  */
 export function matchConceptsToChapters(
   concepts: Concept[],
@@ -81,27 +120,45 @@ export function matchConceptsToChapters(
   // Initialize all chapters with empty arrays
   normalizedChapters.forEach((c) => byChapter.set(c.id, []));
 
+  // Pre-compute lowercased chapter text to avoid re-extracting per concept
+  const chapterTextMap = new Map<string, string>(
+    normalizedChapters.map((ch) => [
+      ch.id,
+      (ch.content ?? []).map(extractBlockText).join(" ").toLowerCase(),
+    ])
+  );
+
   for (const concept of concepts) {
-    if (!concept.timestamp) {
-      orphaned.push(concept);
-      continue;
+    let matched = false;
+    const needle = concept.name.toLowerCase();
+
+    // 1. Content-based: add to every chapter where concept name appears in blocks
+    for (const ch of normalizedChapters) {
+      if (chapterTextMap.get(ch.id)?.includes(needle)) {
+        byChapter.get(ch.id)?.push(concept);
+        matched = true;
+      }
     }
 
-    const conceptSeconds = parseTimestamp(concept.timestamp);
-    if (conceptSeconds === 0 && concept.timestamp !== "0:00") {
-      // Failed to parse timestamp
-      orphaned.push(concept);
-      continue;
+    // 2. Timestamp-based: also add to the chapter matching by time range
+    if (concept.timestamp) {
+      const conceptSeconds = parseTimestamp(concept.timestamp);
+      if (conceptSeconds > 0 || concept.timestamp === "0:00") {
+        const timeChapter = normalizedChapters.find(
+          (c) => conceptSeconds >= c.startSeconds && conceptSeconds < c.endSeconds
+        );
+        if (timeChapter) {
+          // Avoid duplicate if content already matched this same chapter
+          const existing = byChapter.get(timeChapter.id);
+          if (existing && !existing.includes(concept)) {
+            existing.push(concept);
+          }
+          matched = true;
+        }
+      }
     }
 
-    // Find matching chapter by time range
-    const matchingChapter = normalizedChapters.find(
-      (c) => conceptSeconds >= c.startSeconds && conceptSeconds < c.endSeconds
-    );
-
-    if (matchingChapter) {
-      byChapter.get(matchingChapter.id)?.push(concept);
-    } else {
+    if (!matched) {
       orphaned.push(concept);
     }
   }

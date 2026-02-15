@@ -34,8 +34,29 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   const fastify = Fastify({
     logger: options?.logger ?? {
       level: isDev ? 'debug' : 'info',
+      ...(isDev && {
+        transport: {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            singleLine: true,
+            translateTime: 'SYS:HH:MM:ss',
+            ignore: 'pid,hostname',
+          },
+        },
+      }),
     },
+    disableRequestLogging: isDev,
   });
+
+  // Dev: single-line request logging (replaces Fastify's verbose two-line default)
+  if (isDev) {
+    fastify.addHook('onResponse', (req, reply, done) => {
+      const ms = reply.elapsedTime.toFixed(0);
+      fastify.log.info(`${req.method} ${req.url} ${reply.statusCode} (${ms}ms)`);
+      done();
+    });
+  }
 
   // Register plugins
   await fastify.register(helmetPlugin);

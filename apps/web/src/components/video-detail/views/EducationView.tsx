@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import { HelpCircle, Calculator, BookOpen, Clock, Lightbulb } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
@@ -77,19 +77,13 @@ export const EducationView = memo(function EducationView({
     <div className="space-y-4">
       {/* Key Definitions Section */}
       {hasDefinitions && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '0ms' }}>
-          <h4 className="glass-section-header">
-            <BookOpen className="h-4 w-4" aria-hidden="true" />
-            <span>Key Concepts</span>
-          </h4>
-          <ContentBlocks
-            blocks={definitionBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={definitionBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Main content (non-categorized blocks) */}
@@ -105,36 +99,24 @@ export const EducationView = memo(function EducationView({
 
       {/* Formulas Section */}
       {hasFormulas && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '100ms' }}>
-          <h4 className="glass-section-header">
-            <Calculator className="h-4 w-4" aria-hidden="true" />
-            <span>Formulas & Equations</span>
-          </h4>
-          <ContentBlocks
-            blocks={formulaBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={formulaBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Quiz Section */}
       {hasQuizzes && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '200ms' }}>
-          <h4 className="glass-section-header">
-            <HelpCircle className="h-4 w-4" aria-hidden="true" />
-            <span>Knowledge Check</span>
-          </h4>
-          <ContentBlocks
-            blocks={quizBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={quizBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Timestamps for Key Explanations */}
@@ -158,19 +140,13 @@ export const EducationView = memo(function EducationView({
 
       {/* Learning Tips */}
       {hasTips && (
-        <div className="mt-4 space-y-2">
-          <h4 className="glass-section-header">
-            <Lightbulb className="h-4 w-4" aria-hidden="true" />
-            <span>Learning Tips</span>
-          </h4>
-          <ContentBlocks
-            blocks={tipBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={tipBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
     </div>
   );

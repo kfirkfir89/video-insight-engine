@@ -121,10 +121,10 @@ describe('TableBlock', () => {
       expect(screen.getByRole('table')).toBeInTheDocument();
     });
 
-    it('should have aria-hidden on header icon', () => {
+    it('should render without header icons (transparent variant)', () => {
       const { container } = render(<TableBlock block={createMockBlock()} />);
       const icons = container.querySelectorAll('svg[aria-hidden="true"]');
-      expect(icons.length).toBeGreaterThan(0);
+      expect(icons.length).toBe(0);
     });
   });
 });

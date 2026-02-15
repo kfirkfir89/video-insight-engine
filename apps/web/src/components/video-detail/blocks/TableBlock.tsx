@@ -1,5 +1,4 @@
 import { memo } from 'react';
-import { Table2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
 import type { TableBlock as TableBlockType } from '@vie/types';
@@ -16,7 +15,7 @@ const ALIGN_CLASS: Record<string, string> = {
 };
 
 /**
- * Renders a generic data table with column alignment, row highlighting, and optional caption.
+ * Renders a generic data table with fade-edge dividers, column alignment, and row highlighting.
  */
 export const TableBlock = memo(function TableBlock({ block }: TableBlockProps) {
   const rows = block.rows ?? [];
@@ -30,24 +29,22 @@ export const TableBlock = memo(function TableBlock({ block }: TableBlockProps) {
     <BlockWrapper
       blockId={block.blockId}
       label={block.caption ?? BLOCK_LABELS.table}
-      variant="card"
-      headerIcon={<Table2 className="h-4 w-4 shrink-0" aria-hidden="true" />}
-      headerLabel={BLOCK_LABELS.table}
+      variant="transparent"
     >
-      <div className="overflow-x-auto -mx-1">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm table-fade-dividers">
           {block.caption && (
             <caption className="text-xs text-muted-foreground mb-2 text-left px-4">
               {block.caption}
             </caption>
           )}
           <thead>
-            <tr className="glass-surface">
+            <tr>
               {columns.map((col) => (
                 <th
                   key={col.key}
                   className={cn(
-                    'px-4 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border/50',
+                    'px-4 py-2.5 font-medium text-muted-foreground/50',
                     ALIGN_CLASS[col.align ?? 'left']
                   )}
                 >
@@ -56,7 +53,7 @@ export const TableBlock = memo(function TableBlock({ block }: TableBlockProps) {
               ))}
             </tr>
           </thead>
-          <tbody className="stagger-children divide-y divide-border/20">
+          <tbody className="stagger-children">
             {rows.map((row, rowIndex) => {
               const isHighlighted = highlightSet.has(rowIndex);
               return (

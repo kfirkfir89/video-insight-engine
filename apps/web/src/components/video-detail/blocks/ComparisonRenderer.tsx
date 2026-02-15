@@ -108,15 +108,15 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
   const isSideBySide = viewMode === 'side-by-side';
 
   return (
-    <BlockWrapper variant="card">
-    <div className="rounded-lg border border-border/40 overflow-hidden">
+    <BlockWrapper variant="transparent">
+    <div className="overflow-hidden">
       {/* Header row with labels and toggle */}
       <div className={cn(
-        'text-center glass-surface',
+        'text-center relative',
         isSideBySide ? 'grid grid-cols-2' : 'flex flex-col'
       )}>
         {/* Toggle button */}
-        <div className="absolute right-2 top-2 z-10">
+        <div className="absolute right-0 top-0 z-10">
           <button
             type="button"
             onClick={() => setViewMode(isSideBySide ? 'stacked' : 'side-by-side')}
@@ -158,7 +158,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
         isSideBySide ? 'grid grid-cols-1 sm:grid-cols-2' : 'flex flex-col'
       )}>
         {/* Left column */}
-        <div className={cn("p-4", isSideBySide && "sm:border-r border-border/40", variantKey === 'dos_donts' && 'bg-success/[0.04]', variantKey === 'pros_cons' && 'bg-info/[0.04]')}>
+        <div className={cn("p-4", isSideBySide && "relative", variantKey === 'dos_donts' && 'bg-success/[0.04] rounded-lg', variantKey === 'pros_cons' && 'bg-info/[0.04] rounded-lg')}>
           <ul className="space-y-0 stagger-children">
             {block.left.items.map((item, index) => (
               <li key={index}>
@@ -172,6 +172,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
               </li>
             ))}
           </ul>
+          {isSideBySide && <div className="fade-divider-vertical absolute right-0 top-2 bottom-2" aria-hidden="true" />}
         </div>
 
         {/* Right column header (stacked mode only) */}
@@ -187,7 +188,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
         )}
 
         {/* Right column */}
-        <div className={cn("p-4 border-t sm:border-t-0 border-border/40", !isSideBySide && 'border-t-0', variantKey === 'dos_donts' && 'bg-destructive/[0.04]', variantKey === 'pros_cons' && 'bg-warning/[0.04]')}>
+        <div className={cn("p-4", !isSideBySide && 'pt-2', variantKey === 'dos_donts' && 'bg-destructive/[0.04] rounded-lg', variantKey === 'pros_cons' && 'bg-warning/[0.04] rounded-lg')}>
           <ul className="space-y-0 stagger-children">
             {block.right.items.map((item, index) => (
               <li key={index}>

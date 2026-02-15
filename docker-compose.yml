@@ -1,7 +1,6 @@
 # ============================================
 # Video Insight Engine - Development
 # ============================================
-
 services:
   # ----------------------------------------
   # Infrastructure
@@ -26,27 +25,6 @@ services:
       retries: 5
       start_period: 10s
 
-  vie-localstack:
-    image: localstack/localstack:latest
-    container_name: vie-localstack
-    restart: unless-stopped
-    ports:
-      - "4566:4566"
-    volumes:
-      - vie_localstack_data:/var/lib/localstack
-    environment:
-      SERVICES: s3
-      DEFAULT_REGION: us-east-1
-      EAGER_SERVICE_LOADING: 1
-    networks:
-      - vie-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
-
   # ----------------------------------------
   # Application Services
   # ----------------------------------------
@@ -54,7 +32,8 @@ services:
   vie-api:
     build:
       context: .
-      dockerfile: ./api/Dockerfile
+      dockerfile: api/Dockerfile
+    image: vie-api:latest
     container_name: vie-api
     restart: unless-stopped
     ports:
@@ -84,6 +63,7 @@ services:
     build:
       context: ./services/summarizer
       dockerfile: Dockerfile
+    image: vie-summarizer:latest
     container_name: vie-summarizer
     restart: unless-stopped
     ports:
@@ -122,13 +102,12 @@ services:
     depends_on:
       vie-mongodb:
         condition: service_healthy
-      # vie-localstack:  # Optional: uncomment if using LocalStack
-      #   condition: service_healthy
 
   vie-explainer:
     build:
       context: ./services/explainer
       dockerfile: Dockerfile
+    image: vie-explainer:latest
     container_name: vie-explainer
     restart: unless-stopped
     ports:
@@ -163,6 +142,7 @@ services:
     build:
       context: .
       dockerfile: ./apps/web/Dockerfile
+    image: vie-web:latest
     container_name: vie-web
     restart: unless-stopped
     ports:
@@ -195,5 +175,3 @@ networks:
 volumes:
   vie_mongodb_data:
     name: vie_mongodb_data
-  vie_localstack_data:
-    name: vie_localstack_data

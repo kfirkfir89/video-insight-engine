@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { User, ExternalLink, Twitter, Github, Linkedin } from 'lucide-react';
+import { User, Users, ExternalLink, Twitter, Github, Linkedin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { sanitizeUrl } from '@/lib/url-utils';
 import { BlockWrapper } from './BlockWrapper';
@@ -29,17 +29,16 @@ export const GuestBlock = memo(function GuestBlock({ block }: GuestBlockProps) {
     <BlockWrapper
       blockId={block.blockId}
       label={BLOCK_LABELS.guests}
-      variant="card"
-      headerIcon={<User className="h-4 w-4" />}
-      headerLabel={BLOCK_LABELS.guests}
+      variant="transparent"
     >
-      <div className="space-y-3">
-        <div className="grid gap-4 sm:grid-cols-2 stagger-children">
-          {guests.map((guest, index) => (
-            <div
-              key={index}
-              className="rounded-lg border border-border/50 p-4 flex gap-4 hover-lift"
-            >
+      <div className="block-label-minimal">
+        <Users className="h-3 w-3" aria-hidden="true" />
+        <span>{BLOCK_LABELS.guests}</span>
+      </div>
+      <div className="stagger-children">
+        {guests.map((guest, index) => (
+          <div key={index}>
+            <div className="flex gap-4 py-3">
               {/* Avatar */}
               {guest.imageUrl ? (
                 <img
@@ -94,8 +93,11 @@ export const GuestBlock = memo(function GuestBlock({ block }: GuestBlockProps) {
                 )}
               </div>
             </div>
-          ))}
-        </div>
+            {index < guests.length - 1 && (
+              <div className="fade-divider" aria-hidden="true" />
+            )}
+          </div>
+        ))}
       </div>
     </BlockWrapper>
   );

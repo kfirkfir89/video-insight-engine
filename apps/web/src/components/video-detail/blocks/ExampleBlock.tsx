@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useEffect, useCallback } from 'react';
-import { Code2, Copy, Terminal } from 'lucide-react';
+import { Copy, Terminal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
 import { ConceptHighlighter } from '../ConceptHighlighter';
@@ -87,37 +87,37 @@ export const ExampleBlock = memo(function ExampleBlock({ title, code, explanatio
   }
 
   // Default code example
-  const defaultCopyButton = (
-    <button
-      onClick={handleCopy}
-      aria-label={copied ? 'Copied to clipboard' : 'Copy code to clipboard'}
-      className={cn(
-        'flex items-center gap-1 text-xs transition-colors',
-        copied ? 'text-success' : 'text-muted-foreground hover:text-foreground'
-      )}
-    >
-      <Copy className="h-3 w-3" aria-hidden="true" />
-      {copied ? 'Copied!' : 'Copy'}
-    </button>
-  );
-
   return (
     <BlockWrapper
       label="Code example"
-      variant="card"
-      headerIcon={<Code2 className="h-4 w-4" />}
-      headerLabel={title || 'Example'}
-      headerAction={defaultCopyButton}
+      variant="transparent"
     >
-      {/* Code area */}
-      <div className="block-code-container rounded-none border-0 px-4 py-3">
-        <pre className="text-sm overflow-x-auto">
-          <code className="font-mono text-zinc-300">{code}</code>
-        </pre>
+      <div className="block-code-container overflow-hidden">
+        {/* Header bar with title and copy */}
+        <div className="flex items-center justify-between px-4 py-2 bg-muted/30 border-b border-border/30">
+          <span className="text-xs text-muted-foreground font-medium">{title || 'Example'}</span>
+          <button
+            onClick={handleCopy}
+            aria-label={copied ? 'Copied to clipboard' : 'Copy code to clipboard'}
+            className={cn(
+              'flex items-center gap-1 text-xs transition-colors',
+              copied ? 'text-success code-copied-glow' : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Copy className="h-3 w-3" aria-hidden="true" />
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+        {/* Code area */}
+        <div className="px-4 py-3">
+          <pre className="text-sm overflow-x-auto">
+            <code className="font-mono">{code}</code>
+          </pre>
+        </div>
       </div>
       {/* Explanation footer */}
       {explanation && (
-        <div className="px-3 py-2 border-t border-border/30 bg-muted/30">
+        <div className="px-1 py-2">
           <p className="text-sm text-muted-foreground"><ConceptHighlighter text={explanation} /></p>
         </div>
       )}

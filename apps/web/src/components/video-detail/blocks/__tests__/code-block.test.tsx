@@ -3,6 +3,11 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { CodeBlock } from '../CodeBlock';
 import type { CodeBlock as CodeBlockType } from '@vie/types';
 
+// Mock syntax highlighting hook — tests verify CodeBlock behavior, not Shiki
+vi.mock('@/hooks/use-syntax-highlight', () => ({
+  useSyntaxHighlight: () => ({ html: null, isLoading: false }),
+}));
+
 const createMockBlock = (overrides: Partial<CodeBlockType> = {}): CodeBlockType => ({
   type: 'code',
   blockId: 'block-1',

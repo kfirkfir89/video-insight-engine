@@ -391,11 +391,10 @@
     background: var(--card);
     border: 1px solid var(--border);
     box-shadow: 0 1px 2px oklch(0% 0 0 / 0.03), 0 1px 3px oklch(0% 0 0 / 0.04);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: box-shadow 0.2s ease;
   }
 
   .block-card:hover {
-    transform: translateY(-1px);
     box-shadow: 0 2px 4px oklch(0% 0 0 / 0.04), 0 4px 12px oklch(0% 0 0 / 0.06);
   }
 
@@ -409,8 +408,8 @@
 
   /* ── Card header — clean separator ── */
   .block-card-header {
-    @apply mb-4 flex items-center gap-2.5 pb-2.5;
-    border-bottom: 1px solid oklch(from var(--border) l c h / 0.5);
+    @apply mb-3 flex items-center gap-2 pb-2;
+    border-bottom: 1px solid oklch(from var(--border) l c h / 0.4);
   }
 
   .block-card-header-icon {
@@ -418,9 +417,20 @@
   }
 
   .block-card-header-label {
-    @apply flex-1 text-xs font-semibold uppercase tracking-widest;
-    color: var(--muted-foreground);
+    @apply flex-1 text-xs font-medium uppercase tracking-wider;
+    color: oklch(from var(--muted-foreground) l c h / 0.7);
   }
+
+  /* ── Minimal label — lightweight disabled-style label for transparent blocks ── */
+  .block-label-minimal {
+    @apply flex items-center gap-1.5 text-[10px] text-muted-foreground/30 mb-2;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+  }
+  .block-label-minimal svg {
+    @apply h-3 w-3 shrink-0;
+  }
+
 
   /* ── Accent-left variant — clean left border ── */
   .block-accent {
@@ -751,6 +761,43 @@
   .timeline-line-animated {
     transform-origin: top;
     animation: var(--animate-line-grow);
+  }
+
+  /* ── Table with fade dividers — inner lines only, no outer border ── */
+  .table-fade-dividers {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  /* Horizontal fade between rows */
+  .table-fade-dividers tbody tr + tr td {
+    border-image: linear-gradient(
+      to right, transparent,
+      oklch(from var(--border) l c h / 0.3) 15%,
+      oklch(from var(--border) l c h / 0.3) 85%,
+      transparent
+    ) 1 / 1px;
+  }
+
+  /* Vertical fade between columns */
+  .table-fade-dividers th + th,
+  .table-fade-dividers td + td {
+    border-image: linear-gradient(
+      to bottom, transparent,
+      oklch(from var(--border) l c h / 0.3) 15%,
+      oklch(from var(--border) l c h / 0.3) 85%,
+      transparent
+    ) 1 / 1px;
+  }
+
+  /* Header bottom separator - slightly stronger */
+  .table-fade-dividers thead th {
+    border-image: linear-gradient(
+      to right, transparent,
+      oklch(from var(--border) l c h / 0.4) 10%,
+      oklch(from var(--border) l c h / 0.4) 90%,
+      transparent
+    ) 1 / 1px;
   }
 
   /* ── Timeline dot pulse (first dot only) ── */

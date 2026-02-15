@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import { User, MessageSquare, Clock, Quote } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import type { SummaryChapter, ContentBlock } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 
@@ -72,36 +72,24 @@ export const PodcastView = memo(function PodcastView({
     <div className="space-y-4">
       {/* Guests Section - Bio cards at the top */}
       {hasGuests && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '0ms' }}>
-          <h4 className="glass-section-header">
-            <User className="h-4 w-4" aria-hidden="true" />
-            <span>Featured Guests</span>
-          </h4>
-          <ContentBlocks
-            blocks={guestBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={guestBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Key Quotes Section */}
       {hasQuotes && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '100ms' }}>
-          <h4 className="glass-section-header">
-            <Quote className="h-4 w-4" aria-hidden="true" />
-            <span>Key Quotes</span>
-          </h4>
-          <ContentBlocks
-            blocks={quoteBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={quoteBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Main content (non-categorized blocks) */}
@@ -117,19 +105,13 @@ export const PodcastView = memo(function PodcastView({
 
       {/* Transcript Segments */}
       {hasTranscripts && (
-        <div className="glass-panel block-entrance" style={{ animationDelay: '200ms' }}>
-          <h4 className="glass-section-header">
-            <MessageSquare className="h-4 w-4" aria-hidden="true" />
-            <span>Transcript Highlights</span>
-          </h4>
-          <ContentBlocks
-            blocks={transcriptBlocks}
-            onPlay={onPlay}
-            onStop={onStop}
-            isVideoActive={isVideoActive}
-            activeStartSeconds={activeStartSeconds}
-          />
-        </div>
+        <ContentBlocks
+          blocks={transcriptBlocks}
+          onPlay={onPlay}
+          onStop={onStop}
+          isVideoActive={isVideoActive}
+          activeStartSeconds={activeStartSeconds}
+        />
       )}
 
       {/* Topic Timestamps */}

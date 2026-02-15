@@ -102,11 +102,11 @@ describe('DosDontsBlock', () => {
       expect(grid).toBeInTheDocument();
     });
 
-    it('should render with border', () => {
+    it('should render with column tints', () => {
       const { container } = render(<DosDontsBlock block={createMockBlock()} />);
 
-      const wrapper = container.querySelector('.border');
-      expect(wrapper).toBeInTheDocument();
+      const doColumn = container.querySelector('.bg-success\\/\\[0\\.04\\]');
+      expect(doColumn).toBeInTheDocument();
     });
   });
 });

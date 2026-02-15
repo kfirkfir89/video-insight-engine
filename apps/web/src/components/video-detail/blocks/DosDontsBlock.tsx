@@ -22,51 +22,49 @@ export const DosDontsBlock = memo(function DosDontsBlock({ block }: DosDontsBloc
   return (
     <BlockWrapper
       blockId={block.blockId}
-      variant="card"
+      variant="transparent"
       label="Do's and Don'ts comparison"
     >
-      <div className="rounded-lg border border-border/40 overflow-hidden">
-        <div className="grid grid-cols-1 sm:grid-cols-2">
-          {/* Do column */}
-          {hasDos && (
-            <div className="p-4 sm:border-r border-border/40 bg-success/[0.04] transition-colors hover:bg-success/[0.07]">
-              <div className="flex items-center gap-1.5 pb-2 mb-3 border-b border-success/30">
-                <Check className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />
-                <span className="text-xs font-medium text-success">
-                  {BLOCK_LABELS.dos}
-                </span>
-              </div>
-              <ul className="space-y-1.5 stagger-children" aria-label={BLOCK_LABELS.dos}>
-                {block.do.map((item, index) => (
-                  <li key={index} className="flex items-baseline gap-2.5 text-sm">
-                    <span className="w-1 h-1 rounded-full bg-success-soft shrink-0 translate-y-1.5" />
-                    <span className="text-muted-foreground"><ConceptHighlighter text={item} /></span>
-                  </li>
-                ))}
-              </ul>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Do column */}
+        {hasDos && (
+          <div className="p-4 bg-success/[0.04] rounded-lg">
+            <div className="flex items-center gap-1.5 pb-2 mb-3 border-b border-success/20">
+              <Check className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />
+              <span className="text-xs font-medium text-success">
+                {BLOCK_LABELS.dos}
+              </span>
             </div>
-          )}
+            <ul className="space-y-1.5 stagger-children" aria-label={BLOCK_LABELS.dos}>
+              {block.do.map((item, index) => (
+                <li key={index} className="flex items-baseline gap-2.5 text-sm">
+                  <span className="w-1 h-1 rounded-full bg-success-soft shrink-0 translate-y-1.5" />
+                  <span className="text-muted-foreground"><ConceptHighlighter text={item} /></span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
-          {/* Don't column */}
-          {hasDonts && (
-            <div className="p-4 border-t sm:border-t-0 border-border/40 bg-destructive/[0.04] transition-colors hover:bg-destructive/[0.07]">
-              <div className="flex items-center gap-1.5 pb-2 mb-3 border-b border-destructive/30">
-                <X className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
-                <span className="text-xs font-medium text-destructive">
-                  {BLOCK_LABELS.donts}
-                </span>
-              </div>
-              <ul className="space-y-1.5 stagger-children" aria-label={BLOCK_LABELS.donts}>
-                {block.dont.map((item, index) => (
-                  <li key={index} className="flex items-baseline gap-2.5 text-sm">
-                    <span className="w-1 h-1 rounded-full bg-destructive/10 shrink-0 translate-y-1.5" />
-                    <span className="text-muted-foreground"><ConceptHighlighter text={item} /></span>
-                  </li>
-                ))}
-              </ul>
+        {/* Don't column */}
+        {hasDonts && (
+          <div className="p-4 bg-destructive/[0.04] rounded-lg">
+            <div className="flex items-center gap-1.5 pb-2 mb-3 border-b border-destructive/20">
+              <X className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
+              <span className="text-xs font-medium text-destructive">
+                {BLOCK_LABELS.donts}
+              </span>
             </div>
-          )}
-        </div>
+            <ul className="space-y-1.5 stagger-children" aria-label={BLOCK_LABELS.donts}>
+              {block.dont.map((item, index) => (
+                <li key={index} className="flex items-baseline gap-2.5 text-sm">
+                  <span className="w-1 h-1 rounded-full bg-destructive/10 shrink-0 translate-y-1.5" />
+                  <span className="text-muted-foreground"><ConceptHighlighter text={item} /></span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </BlockWrapper>
   );

@@ -97,7 +97,7 @@ export const IngredientBlock = memo(function IngredientBlock({ block }: Ingredie
         </div>
       }
     >
-      <div className="space-y-0 p-4 rounded-lg bg-card border border-border/20">
+      <div className="space-y-0">
         <ul className="space-y-0 stagger-children" role="list">
           {items.map((item, index) => {
             const isChecked = checkedItems.has(index) || item.checked;
