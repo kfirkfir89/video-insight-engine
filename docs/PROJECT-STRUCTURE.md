@@ -250,9 +250,7 @@ video-insight-engine/
 │           │   │   ├── skeleton.tsx
 │           │   │   └── toast.tsx
 │           │   ├── layout/
-│           │   │   ├── Layout.tsx
-│           │   │   ├── Header.tsx
-│           │   │   └── Sidebar.tsx
+│           │   │   └── Layout.tsx
 │           │   ├── folders/
 │           │   │   ├── FolderTree.tsx
 │           │   │   ├── FolderItem.tsx

@@ -45,7 +45,10 @@ export function SortDropdown({ value, onChange }: SortDropdownProps) {
           <CurrentIcon className="h-4 w-4 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-40">
+      <DropdownMenuContent align="end" className="w-44">
+        <div className="px-2 py-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+          Sort by
+        </div>
         {SORT_OPTIONS.map((option) => {
           const Icon = option.icon;
           return (

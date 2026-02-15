@@ -67,7 +67,7 @@ export function SearchInput({
         value={localValue}
         onChange={(e) => handleChange(e.target.value)}
         placeholder={placeholder}
-        className="h-7 pl-7 pr-7 text-xs"
+        className="h-7 pl-7 pr-7 text-xs bg-muted/30 border-border/50"
         aria-label="Search folders and videos"
       />
       {localValue && (

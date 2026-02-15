@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Loader2, Folder, Video, ListVideo } from "lucide-react";
+import { Plus, Loader2, Folder, Link2, ListVideo } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -159,7 +159,7 @@ export function AddVideoInput() {
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="p-3">
+      <form onSubmit={handleSubmit} className="px-3 py-2">
         <div className="relative flex items-center">
           {/* Mode toggle button */}
           <TooltipProvider delayDuration={300}>
@@ -174,7 +174,7 @@ export function AddVideoInput() {
                   disabled={isLoading}
                 >
                   {mode === "video" ? (
-                    <Video className="h-4 w-4 text-muted-foreground" />
+                    <Link2 className="h-4 w-4 text-muted-foreground" />
                   ) : (
                     <ListVideo className="h-4 w-4 text-primary" />
                   )}
@@ -194,7 +194,7 @@ export function AddVideoInput() {
               setUrl(e.target.value);
               if (error) setError(null);
             }}
-            className="h-9 pl-9 pr-[70px] text-sm"
+            className="h-8 pl-9 pr-[70px] text-xs bg-muted/40 border-border/50"
             disabled={isLoading}
           />
 

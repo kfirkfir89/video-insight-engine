@@ -161,7 +161,7 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
     "group flex items-center cursor-pointer hover:bg-accent/50 rounded-sm transition-colors",
     "has-[[data-state=open]]:bg-accent/50",
     textClasses.rowHeight,
-    isSelected && !isFolderSelectionSelected && "bg-accent",
+    isSelected && !isFolderSelectionSelected && "bg-accent/60 border-l-2 border-l-primary",
     isOver && !isDragging && "ring-1 ring-primary/50",
     isDragging && "opacity-50",
     isFolderSelectionSelected && "bg-accent border-l-2 border-l-primary"
@@ -245,11 +245,14 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
   );
 
   // Video count badge
-  const countBadge = (
-    <span className={cn("text-muted-foreground opacity-60 shrink-0 ml-1 w-5 text-right tabular-nums", textClasses.badgeText)}>
-      {folderVideos.length > 0 ? folderVideos.length : ""}
+  const countBadge = folderVideos.length > 0 ? (
+    <span className={cn(
+      "shrink-0 ml-1 px-1.5 py-0.5 rounded-full text-muted-foreground bg-muted/60 tabular-nums leading-none",
+      textClasses.badgeText
+    )}>
+      {folderVideos.length}
     </span>
-  );
+  ) : null;
 
   return (
     <div

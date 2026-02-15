@@ -113,7 +113,7 @@ export function SelectionToolbar() {
 
   return (
     <>
-      <div className="absolute bottom-0 left-0 right-0 bg-card border-t p-2 flex items-center gap-2 shadow-lg z-10">
+      <div className="absolute bottom-0 left-0 right-0 bg-card border-t p-2 flex items-center gap-2 shadow-xl rounded-t-lg z-10">
         {/* Selection count */}
         <span className="text-sm text-muted-foreground flex-1">
           {selectionCount} selected

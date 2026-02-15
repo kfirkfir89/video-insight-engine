@@ -55,9 +55,7 @@ apps/web/
     │   ├── ui/                   # shadcn components
     │   │
     │   ├── layout/
-    │   │   ├── Layout.tsx
-    │   │   ├── Header.tsx
-    │   │   └── Sidebar.tsx
+    │   │   └── Layout.tsx              # Sidebar + main content (no header)
     │   │
     │   ├── video-detail/
     │   │   ├── VideoDetailLayout.tsx     # Orchestrator (responsive)
@@ -102,6 +100,16 @@ apps/web/
     │   │   └── RAGChatPanel.tsx          # Chat interface
     │   │
     │   ├── sidebar/
+    │   │   ├── Sidebar.tsx             # Main sidebar container
+    │   │   ├── SidebarHeader.tsx       # Logo + close button
+    │   │   ├── SidebarTabs.tsx         # Summaries/Memorized tab bar
+    │   │   ├── SidebarSection.tsx      # Tab content area (folder tree)
+    │   │   ├── SidebarToolbar.tsx      # Search, sort, selection controls
+    │   │   ├── SidebarFooter.tsx       # Video count + theme + user
+    │   │   ├── AddVideoInput.tsx       # URL input (video/playlist)
+    │   │   ├── SearchInput.tsx         # Debounced search input
+    │   │   ├── SortDropdown.tsx        # Sort options dropdown
+    │   │   ├── SelectionToolbar.tsx    # Bulk actions toolbar
     │   │   ├── VideoItem.tsx           # Video row with drag-drop
     │   │   ├── VideoContextMenu.tsx    # Video actions menu
     │   │   ├── FolderItem.tsx          # Folder row with drag-drop
