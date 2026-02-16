@@ -16,78 +16,87 @@ Professional code review with structured output, severity levels, and before/aft
 
 1. **Identify changes** - `git diff` or specified files
 2. **Detect technologies** - Map files to skills (backend-node, backend-python, react-vite)
-3. **Load compliance checks** - Based on detected tech
-4. **Analyze with labels** - Categorize each issue
-5. **Assign severity** - Critical, Warning, or Info
-6. **Generate report** - Structured output with before/after code
+3. **Load skill files** - Read the detected skill SKILL.md files:
+   - `api/` changes → read `.claude/skills/backend-node/SKILL.md`
+   - `services/` changes → read `.claude/skills/backend-python/SKILL.md`
+   - `apps/web/` changes → read `.claude/skills/react-vite/SKILL.md`
+4. **Run compliance checks** - Verify against BOTH the checks below AND patterns/conventions from loaded skills
+5. **Analyze with labels** - Categorize each issue
+6. **Assign severity** - Critical, Warning, or Info
+7. **Generate report** - Structured output with before/after code
 
 ---
 
 ## Issue Labels
 
-| Label | When to Use |
-|-------|-------------|
-| `security` | Secrets exposure, injection, XSS, CSRF, auth bypass |
-| `bug` | Logic errors, crashes, incorrect behavior |
-| `possible bug` | Suspicious patterns that might be bugs |
-| `performance` | Inefficient operations, N+1 queries, blocking calls |
-| `best practice` | Pattern violations from project skills |
-| `maintainability` | High coupling, complexity, poor readability |
-| `enhancement` | Optional improvements, nice-to-haves |
+| Label             | When to Use                                         |
+| ----------------- | --------------------------------------------------- |
+| `security`        | Secrets exposure, injection, XSS, CSRF, auth bypass |
+| `bug`             | Logic errors, crashes, incorrect behavior           |
+| `possible bug`    | Suspicious patterns that might be bugs              |
+| `performance`     | Inefficient operations, N+1 queries, blocking calls |
+| `best practice`   | Pattern violations from project skills              |
+| `maintainability` | High coupling, complexity, poor readability         |
+| `enhancement`     | Optional improvements, nice-to-haves                |
 
 ---
 
 ## Severity Levels
 
-| Severity | Criteria | Action |
-|----------|----------|--------|
-| 🔴 **Critical** | Security issues, crashes, data loss, blocking bugs | Must fix before merge |
-| 🟡 **Warning** | Performance issues, pattern violations, tech debt | Should fix, creates debt |
-| 🔵 **Info** | Style improvements, optional suggestions | Consider for next iteration |
+| Severity        | Criteria                                           | Action                      |
+| --------------- | -------------------------------------------------- | --------------------------- |
+| 🔴 **Critical** | Security issues, crashes, data loss, blocking bugs | Must fix before merge       |
+| 🟡 **Warning**  | Performance issues, pattern violations, tech debt  | Should fix, creates debt    |
+| 🔵 **Info**     | Style improvements, optional suggestions           | Consider for next iteration |
 
 ---
 
 ## Compliance Checks
 
+> **Important:** These checks are the MINIMUM. Always cross-reference
+> with the loaded SKILL.md files for project-specific patterns,
+> naming conventions, architectural rules, and best practices.
+> Flag any deviation from skill patterns as `best practice` warnings.
+
 ### All Code
 
-| Check | Objective | Failure Criteria |
-|-------|-----------|------------------|
-| Single Responsibility | Each function has ONE reason to change | Function combines multiple unrelated operations |
-| Guard Clauses | Early returns prevent deep nesting | More than 2-3 levels of nesting |
-| Functions Under 50 Lines | Target 10-30 lines | Function exceeds 50 lines |
-| Dependency Injection | External services injected, not hardcoded | Direct instantiation of dependencies |
-| Error Handling | Typed errors, no swallowed exceptions | Empty catch blocks, generic errors |
+| Check                    | Objective                                 | Failure Criteria                                |
+| ------------------------ | ----------------------------------------- | ----------------------------------------------- |
+| Single Responsibility    | Each function has ONE reason to change    | Function combines multiple unrelated operations |
+| Guard Clauses            | Early returns prevent deep nesting        | More than 2-3 levels of nesting                 |
+| Functions Under 50 Lines | Target 10-30 lines                        | Function exceeds 50 lines                       |
+| Dependency Injection     | External services injected, not hardcoded | Direct instantiation of dependencies            |
+| Error Handling           | Typed errors, no swallowed exceptions     | Empty catch blocks, generic errors              |
 
 ### Backend Node.js (api/)
 
-| Check | Objective | Failure Criteria |
-|-------|-----------|------------------|
-| No `any` Types | Proper TypeScript types everywhere | Using `any` or implicit any |
-| Layer Separation | Services don't know HTTP | Services use status codes, reply objects |
-| Async Parallelization | Independent ops run in parallel | Sequential await for independent operations |
-| Repository Returns Domain | No raw `_id` documents | Repository returns MongoDB documents directly |
-| Structured Logging | Context included in logs | Using console.log or logs without request context |
+| Check                     | Objective                          | Failure Criteria                                  |
+| ------------------------- | ---------------------------------- | ------------------------------------------------- |
+| No `any` Types            | Proper TypeScript types everywhere | Using `any` or implicit any                       |
+| Layer Separation          | Services don't know HTTP           | Services use status codes, reply objects          |
+| Async Parallelization     | Independent ops run in parallel    | Sequential await for independent operations       |
+| Repository Returns Domain | No raw `_id` documents             | Repository returns MongoDB documents directly     |
+| Structured Logging        | Context included in logs           | Using console.log or logs without request context |
 
 ### Backend Python (services/)
 
-| Check | Objective | Failure Criteria |
-|-------|-----------|------------------|
-| Type Hints | Parameters and return types annotated | Missing type hints on functions |
-| No Blocking in Async | Use httpx, asyncio primitives | Using requests, time.sleep in async |
-| Layer Separation | Services don't know HTTP | Services raise HTTPException directly |
-| Pydantic at Boundaries | API inputs/outputs validated | Raw dicts at API boundaries |
-| Specific Exceptions | Always specify exception type | Bare `except:` clauses |
+| Check                  | Objective                             | Failure Criteria                      |
+| ---------------------- | ------------------------------------- | ------------------------------------- |
+| Type Hints             | Parameters and return types annotated | Missing type hints on functions       |
+| No Blocking in Async   | Use httpx, asyncio primitives         | Using requests, time.sleep in async   |
+| Layer Separation       | Services don't know HTTP              | Services raise HTTPException directly |
+| Pydantic at Boundaries | API inputs/outputs validated          | Raw dicts at API boundaries           |
+| Specific Exceptions    | Always specify exception type         | Bare `except:` clauses                |
 
 ### React/Frontend (apps/web/)
 
-| Check | Objective | Failure Criteria |
-|-------|-----------|------------------|
-| Components Under 50 JSX Lines | Keep components focused | JSX return exceeds 50 lines |
-| No Conditional Hooks | Hooks at top level only | Hooks inside if/loops/conditions |
-| Server State Uses React Query | Not local useState for API data | useState for remote data fetching |
-| Props Typed With Interfaces | Named interfaces for props | Inline types or missing types |
-| No Storing Derived State | Compute during render | useState for values derived from other state |
+| Check                         | Objective                       | Failure Criteria                             |
+| ----------------------------- | ------------------------------- | -------------------------------------------- |
+| Components Under 50 JSX Lines | Keep components focused         | JSX return exceeds 50 lines                  |
+| No Conditional Hooks          | Hooks at top level only         | Hooks inside if/loops/conditions             |
+| Server State Uses React Query | Not local useState for API data | useState for remote data fetching            |
+| Props Typed With Interfaces   | Named interfaces for props      | Inline types or missing types                |
+| No Storing Derived State      | Compute during render           | useState for values derived from other state |
 
 ---
 
@@ -95,7 +104,7 @@ Professional code review with structured output, severity levels, and before/aft
 
 Generate the following markdown structure:
 
-```markdown
+````markdown
 ## Code Review Report
 
 **Files:** {count} | **Effort:** ⭐⭐⭐ ({1-5}/5) | **Issues:** {n} critical, {n} warnings, {n} info
@@ -104,12 +113,13 @@ Generate the following markdown structure:
 
 ### 🔴 Critical Issues
 
-| Label | File | Lines | Issue |
-|-------|------|-------|-------|
-| `security` | `api/src/routes/auth.ts` | 45-48 | API key exposed in error response |
-| `bug` | `api/src/services/playlist.ts` | 67 | Unhandled promise rejection |
+| Label      | File                           | Lines | Issue                             |
+| ---------- | ------------------------------ | ----- | --------------------------------- |
+| `security` | `api/src/routes/auth.ts`       | 45-48 | API key exposed in error response |
+| `bug`      | `api/src/services/playlist.ts` | 67    | Unhandled promise rejection       |
 
 #### Issue #1: {Short Title}
+
 **File:** `{path}:{start_line}-{end_line}`
 **Label:** `{label}`
 
@@ -122,18 +132,21 @@ Generate the following markdown structure:
 // ✅ Fixed
 {improved_code}
 ```
+````
+
 **Summary:** {one_sentence_summary}
 
 ---
 
 ### 🟡 Warnings
 
-| Label | File | Lines | Issue |
-|-------|------|-------|-------|
-| `performance` | `api/src/services/video.ts` | 23-26 | Sequential awaits for independent ops |
-| `best practice` | `apps/web/src/components/List.tsx` | 15 | Derived state stored in useState |
+| Label           | File                               | Lines | Issue                                 |
+| --------------- | ---------------------------------- | ----- | ------------------------------------- |
+| `performance`   | `api/src/services/video.ts`        | 23-26 | Sequential awaits for independent ops |
+| `best practice` | `apps/web/src/components/List.tsx` | 15    | Derived state stored in useState      |
 
 #### Warning #1: {Short Title}
+
 **File:** `{path}:{line}`
 **Label:** `{label}`
 
@@ -146,16 +159,17 @@ Generate the following markdown structure:
 // ✅ Improved
 {improved_code}
 ```
+
 **Summary:** {one_sentence_summary}
 
 ---
 
 ### 🔵 Suggestions
 
-| Label | File | Suggestion |
-|-------|------|------------|
-| `maintainability` | `api/src/services/auth.ts` | Extract token validation to separate function |
-| `enhancement` | `apps/web/src/hooks/useVideo.ts` | Add loading state to improve UX |
+| Label             | File                             | Suggestion                                    |
+| ----------------- | -------------------------------- | --------------------------------------------- |
+| `maintainability` | `api/src/services/auth.ts`       | Extract token validation to separate function |
+| `enhancement`     | `apps/web/src/hooks/useVideo.ts` | Add loading state to improve UX               |
 
 ---
 
@@ -175,7 +189,8 @@ Generate the following markdown structure:
 ### Summary
 
 {2-3 sentence summary of overall code quality and main areas to address}
-```
+
+````
 
 ---
 
@@ -224,19 +239,21 @@ catch (error) {
   request.log.error({ message: error.message, code: error.code }, 'Auth failed');
   reply.status(500).send({ message: 'Internal error' });
 }
-```
+````
+
 **Summary:** Sanitize logged objects to prevent secret exposure.
 
 ---
 
 ### 🟡 Warnings
 
-| Label | File | Lines | Issue |
-|-------|------|-------|-------|
-| `performance` | `api/src/services/video.ts` | 23-26 | Sequential awaits for independent operations |
-| `best practice` | `apps/web/src/components/VideoList.tsx` | 15-18 | Storing derived state in useState |
+| Label           | File                                    | Lines | Issue                                        |
+| --------------- | --------------------------------------- | ----- | -------------------------------------------- |
+| `performance`   | `api/src/services/video.ts`             | 23-26 | Sequential awaits for independent operations |
+| `best practice` | `apps/web/src/components/VideoList.tsx` | 15-18 | Storing derived state in useState            |
 
 #### Warning #1: Sequential Awaits
+
 **File:** `api/src/services/video.ts:23-26`
 **Label:** `performance`
 
@@ -253,9 +270,11 @@ const [metadata, transcript] = await Promise.all([
   fetchTranscript(videoId),
 ]);
 ```
+
 **Summary:** Parallelize independent async operations with Promise.all.
 
 #### Warning #2: Derived State in useState
+
 **File:** `apps/web/src/components/VideoList.tsx:15-18`
 **Label:** `best practice`
 
@@ -267,24 +286,25 @@ const [videos, setVideos] = useState<Video[]>([]);
 const [filteredVideos, setFilteredVideos] = useState<Video[]>([]);
 
 useEffect(() => {
-  setFilteredVideos(videos.filter(v => v.title.includes(searchQuery)));
+  setFilteredVideos(videos.filter((v) => v.title.includes(searchQuery)));
 }, [videos, searchQuery]);
 
 // ✅ Improved
 const [videos, setVideos] = useState<Video[]>([]);
 const filteredVideos = useMemo(
-  () => videos.filter(v => v.title.includes(searchQuery)),
-  [videos, searchQuery]
+  () => videos.filter((v) => v.title.includes(searchQuery)),
+  [videos, searchQuery],
 );
 ```
+
 **Summary:** Compute derived values during render instead of syncing state.
 
 ---
 
 ### 🔵 Suggestions
 
-| Label | File | Suggestion |
-|-------|------|------------|
+| Label             | File                        | Suggestion                                          |
+| ----------------- | --------------------------- | --------------------------------------------------- |
 | `maintainability` | `api/src/services/video.ts` | Consider extracting retry logic to a shared utility |
 
 ---
@@ -304,6 +324,7 @@ const filteredVideos = useMemo(
 ### Summary
 
 Overall code quality is good. One critical security issue needs immediate attention: API keys could be exposed through error logging. Two performance/best-practice warnings should be addressed to prevent tech debt. Consider the maintainability suggestion for future iterations.
+
 ```
 
 ---
@@ -317,3 +338,4 @@ For deeper guidance on patterns:
 | backend-node | `.claude/skills/backend-node/SKILL.md` |
 | backend-python | `.claude/skills/backend-python/SKILL.md` |
 | react-vite | `.claude/skills/react-vite/SKILL.md` |
+```

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { TldrHero } from "./TldrHero";
 import { ArticleSection } from "./ArticleSection";
+import { OrphanedConcepts } from "./OrphanedConcepts";
 import { MobileChapterNav } from "./MobileChapterNav";
 import { ChapterList } from "./ChapterList";
 import { ResourcesPanel } from "./ResourcesPanel";
@@ -92,6 +93,9 @@ export function VideoDetailMobile({
             ))}
           </div>
         )}
+
+        {/* Orphaned concepts — not matched to any chapter */}
+        <OrphanedConcepts concepts={conceptMatchResult.orphaned} />
 
         {/* Resources from description analysis */}
         {effectiveDescriptionAnalysis && (

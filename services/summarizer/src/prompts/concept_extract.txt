@@ -53,4 +53,10 @@ WHAT TO SKIP:
 - Concepts only mentioned in passing without explanation
 - Common words that don't add value (e.g., "code", "programming")
 
+NAMING RULES:
+- Use the full name first, abbreviation in parentheses: "Search Engine Optimization (SEO)" not "SEO"
+- Do not start with articles: "Dependency Injection" not "The Dependency Injection"
+- Ideal length: 2-6 words
+- If the concept is commonly known by an abbreviation, include it: "Duration, Path, and Outcome (DPO)"
+
 Include 5-15 concepts maximum. Prioritize concepts that have clear definitions or explanations in the video.

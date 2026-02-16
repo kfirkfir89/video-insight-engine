@@ -91,6 +91,8 @@ class Concept(BaseModel):
     name: str
     definition: Optional[str] = None
     timestamp: Optional[str] = None
+    aliases: list[str] = []
+    chapter_index: int | None = None
 
 
 class VideoSummary(BaseModel):

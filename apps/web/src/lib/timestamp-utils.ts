@@ -1,4 +1,5 @@
 import type { Concept, ContentBlock, SummaryChapter } from "@vie/types";
+import { getNameVariants } from "./concept-utils";
 
 /**
  * Parse timestamp string to seconds
@@ -90,28 +91,54 @@ export function extractBlockText(block: ContentBlock): string {
     }
   }
 
+  // Quiz blocks: extract question text and explanations
+  if ("questions" in block && Array.isArray(block.questions)) {
+    for (const q of block.questions) {
+      if (q?.question) parts.push(q.question);
+      if (q?.explanation) parts.push(q.explanation);
+    }
+  }
+
+  // Itinerary blocks: extract activity names and notes
+  if ("days" in block && Array.isArray(block.days)) {
+    for (const day of block.days) {
+      if (day?.title) parts.push(day.title);
+      if (Array.isArray(day?.activities)) {
+        for (const activity of day.activities) {
+          if (activity?.activity) parts.push(activity.activity);
+          if (activity?.notes) parts.push(activity.notes);
+        }
+      }
+    }
+  }
+
   return parts.join(" ");
 }
 
 /**
- * Match concepts to chapters using both content and timestamp signals.
+ * Match each concept to exactly ONE chapter (deduplication).
  *
- * Both signals run independently so we can compare how synced they are.
- * A concept appears in a chapter if:
- * - Its name is mentioned in the chapter's content blocks (content match)
- * - OR its timestamp falls within the chapter's time range (timestamp match)
+ * Assignment priority:
+ * 1. First content match — assign to the FIRST chapter (in array order) whose
+ *    content mentions the concept name.
+ * 2. Timestamp fallback — if no content match, assign to the chapter whose
+ *    time range contains the concept's timestamp.
+ * 3. Orphan — if neither signal matches, the concept is orphaned.
  *
- * Future: remove timestamp matching entirely — concepts belong where you read them.
+ * Within each chapter, concepts are sorted by their first content-mention
+ * position (character offset), so they appear in reading order.
+ *
+ * `allConcepts` (passed separately) still powers inline tooltips everywhere.
  */
 export function matchConceptsToChapters(
   concepts: Concept[],
   chapters: SummaryChapter[]
 ): ConceptMatchResult {
-  const byChapter = new Map<string, Concept[]>();
+  const byChapter = new Map<string, { concept: Concept; contentOffset: number }[]>();
   const orphaned: Concept[] = [];
 
   if (chapters.length === 0) {
-    return { byChapter, orphaned: concepts };
+    return { byChapter: new Map(), orphaned: concepts };
   }
 
   // Normalize chapters to fix missing endSeconds values
@@ -129,39 +156,71 @@ export function matchConceptsToChapters(
   );
 
   for (const concept of concepts) {
-    let matched = false;
-    const needle = concept.name.toLowerCase();
+    let assignedChapterId: string | null = null;
+    let contentOffset = Infinity;
 
-    // 1. Content-based: add to every chapter where concept name appears in blocks
-    for (const ch of normalizedChapters) {
-      if (chapterTextMap.get(ch.id)?.includes(needle)) {
-        byChapter.get(ch.id)?.push(concept);
-        matched = true;
+    // 0. chapterIndex fast path: if the backend provided a chapter index, use it directly
+    if (concept.chapterIndex != null) {
+      const targetChapter = normalizedChapters[concept.chapterIndex];
+      if (targetChapter) {
+        assignedChapterId = targetChapter.id;
+        // Still compute contentOffset for ordering within the chapter
+        const needles = getNameVariants(concept.name);
+        const text = chapterTextMap.get(targetChapter.id) ?? "";
+        for (const needle of needles) {
+          const idx = text.indexOf(needle);
+          if (idx !== -1) {
+            contentOffset = idx;
+            break;
+          }
+        }
       }
     }
 
-    // 2. Timestamp-based: also add to the chapter matching by time range
-    if (concept.timestamp) {
+    // 1. Content-based fallback: for old data without chapterIndex
+    if (!assignedChapterId) {
+      const needles = getNameVariants(concept.name);
+      //    Try each needle variant; use the first that matches any chapter.
+      for (const needle of needles) {
+        for (const ch of normalizedChapters) {
+          const text = chapterTextMap.get(ch.id) ?? "";
+          const idx = text.indexOf(needle);
+          if (idx !== -1) {
+            assignedChapterId = ch.id;
+            contentOffset = idx;
+            break;
+          }
+        }
+        if (assignedChapterId) break;
+      }
+    }
+
+    // 2. Timestamp fallback: if no content match, assign by time range
+    if (!assignedChapterId && concept.timestamp) {
       const conceptSeconds = parseTimestamp(concept.timestamp);
       if (conceptSeconds > 0 || concept.timestamp === "0:00") {
         const timeChapter = normalizedChapters.find(
           (c) => conceptSeconds >= c.startSeconds && conceptSeconds < c.endSeconds
         );
         if (timeChapter) {
-          // Avoid duplicate if content already matched this same chapter
-          const existing = byChapter.get(timeChapter.id);
-          if (existing && !existing.includes(concept)) {
-            existing.push(concept);
-          }
-          matched = true;
+          assignedChapterId = timeChapter.id;
         }
       }
     }
 
-    if (!matched) {
+    if (assignedChapterId) {
+      byChapter.get(assignedChapterId)!.push({ concept, contentOffset });
+    } else {
       orphaned.push(concept);
     }
   }
 
-  return { byChapter, orphaned };
+  // Sort each chapter's concepts by content position, then flatten
+  const result = new Map<string, Concept[]>();
+  for (const [chapterId, entries] of byChapter) {
+    entries.sort((a, b) => a.contentOffset - b.contentOffset);
+    result.set(chapterId, entries.map((e) => e.concept));
+  }
+
+  return { byChapter: result, orphaned };
 }
