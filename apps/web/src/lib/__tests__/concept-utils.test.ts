@@ -81,6 +81,7 @@ describe('concept-utils', () => {
       const variants = getNameVariants('Dopamine');
       expect(variants).toContain('dopamine');
       expect(variants).toContain('dopamines'); // plural
+      expect(variants).not.toContain('dopamining'); // noun suffix -ine skipped
       expect(variants).toHaveLength(2);
     });
 
@@ -226,8 +227,17 @@ describe('concept-utils', () => {
     it('should fall back to individual words when all two-word pairs are stop-word blocked', () => {
       const variants = getNameVariants('Screenshot and drag');
       // Both pairs "screenshot and" / "and drag" are blocked by stop word "and"
-      // Fallback should add "screenshot" (10 chars >= 5)
+      // Fallback should add "screenshot" (10 chars >= 8)
       expect(variants).toContain('screenshot');
+      // "drag" (4 chars) is too short even for fallback
+      expect(variants).not.toContain('drag');
+    });
+
+    it('should not fall back to short individual words', () => {
+      const variants = getNameVariants('quality of the product');
+      // "product" (7) and "quality" (7) are under the 8-char minimum
+      expect(variants).not.toContain('product');
+      expect(variants).not.toContain('quality');
     });
 
     it('should not fall back to individual words when valid pairs exist', () => {
@@ -255,18 +265,75 @@ describe('concept-utils', () => {
     // Gerund stripping
     // ─────────────────────────────────────────────────────
 
-    it('should strip gerund to base form with -e', () => {
+    it('should strip gerund to full-phrase form for multi-word concepts', () => {
       const variants = getNameVariants('escaping the interrupts');
-      // "escaping" → "escape" (strip -ing, add -e)
-      expect(variants).toContain('escape');
-      // Full name variant with base form
+      // Multi-word: standalone stem blocked, full phrase still works
+      expect(variants).not.toContain('escape');
       expect(variants).toContain('escape the interrupts');
+    });
+
+    it('should strip gerund to standalone form for single-word concepts', () => {
+      const variants = getNameVariants('escaping');
+      expect(variants).toContain('escape');
+    });
+
+    it('should not produce standalone stem from multi-word gerund concept', () => {
+      const variants = getNameVariants('making contributions');
+      expect(variants).not.toContain('make');
+      expect(variants).toContain('make contributions');
     });
 
     it('should not produce invalid stems for short -ing words', () => {
       const variants = getNameVariants('ping');
       // "ping" is only 4 chars, too short for gerund stripping (needs >= 6)
       expect(variants).not.toContain('pe');
+    });
+
+    // ─────────────────────────────────────────────────────
+    // Gerund addition
+    // ─────────────────────────────────────────────────────
+
+    it('should add -ing to base form: "engineer" → "engineering"', () => {
+      const variants = getNameVariants('engineer');
+      expect(variants).toContain('engineering');
+    });
+
+    it('should add -ing in multi-word phrase: "social engineer" → "social engineering"', () => {
+      const variants = getNameVariants('social engineer');
+      expect(variants).toContain('social engineering');
+    });
+
+    it('should not produce standalone gerund for multi-word concepts', () => {
+      const variants = getNameVariants('social engineer');
+      expect(variants).not.toContain('engineering');
+    });
+
+    it('should drop silent -e before -ing: "code" → "coding"', () => {
+      const variants = getNameVariants('code');
+      expect(variants).toContain('coding');
+    });
+
+    it('should keep -ee ending: "free" → "freeing" (not "freing")', () => {
+      const variants = getNameVariants('free');
+      expect(variants).toContain('freeing');
+      expect(variants).not.toContain('freing');
+    });
+
+    it('should skip words already ending in -ing', () => {
+      const variants = getNameVariants('testing');
+      expect(variants).not.toContain('testinging');
+    });
+
+    it('should skip words shorter than 4 chars for gerund addition', () => {
+      const variants = getNameVariants('use');
+      expect(variants).not.toContain('using');
+    });
+
+    it('should skip noun suffixes to avoid noise gerunds', () => {
+      expect(getNameVariants('dopamine')).not.toContain('dopamining');       // -ine
+      expect(getNameVariants('architecture')).not.toContain('architecturing'); // -ure
+      expect(getNameVariants('abstraction')).not.toContain('abstractioning'); // -tion
+      expect(getNameVariants('awareness')).not.toContain('awarenesing');     // -ness
     });
 
     // ─────────────────────────────────────────────────────

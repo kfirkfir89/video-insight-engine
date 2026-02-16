@@ -26,10 +26,8 @@ interface ArticleSectionProps {
   onPlay: (chapterId: string, startSeconds: number) => void;
   onStop?: () => void;
   isVideoActive?: boolean;
-  /** Per-chapter concepts for sidebar display */
+  /** Per-chapter concepts for sidebar display and inline text highlighting */
   concepts?: Concept[];
-  /** All video concepts for inline text highlighting */
-  allConcepts?: Concept[];
   playerRef?: RefObject<YouTubePlayerRef | null>;
   youtubeId?: string;
   startSeconds?: number;
@@ -44,7 +42,6 @@ export const ArticleSection = memo(function ArticleSection({
   onStop,
   isVideoActive,
   concepts = [],
-  allConcepts,
   playerRef,
   youtubeId,
   startSeconds,
@@ -76,7 +73,7 @@ export const ArticleSection = memo(function ArticleSection({
   );
 
   // Stabilize concepts reference to prevent unnecessary regex rebuilds in ConceptHighlighter
-  const stableConcepts = useMemo(() => allConcepts ?? concepts, [allConcepts, concepts]);
+  const stableConcepts = useMemo(() => concepts, [concepts]);
 
   // Per-chapter view: use chapter.view if present, fall back to global category
   const effectiveCategory = chapter.view ?? category ?? 'standard';
