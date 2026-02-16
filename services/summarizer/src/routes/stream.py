@@ -30,11 +30,10 @@ from src.config import settings
 from src.dependencies import get_video_repository, get_llm_service, create_llm_provider
 from src.models.schemas import ProcessingStatus, ErrorCode, ProviderConfig
 from src.repositories.mongodb_repository import MongoDBVideoRepository
-from src.services.llm import LLMService, seconds_to_timestamp, build_concept_dicts
+from src.services.llm import LLMService, seconds_to_timestamp, build_concept_dicts, merge_chapter_concepts
 from src.services.transcript import (
     get_transcript,
     clean_transcript,
-    format_transcript_with_timestamps,
 )
 from src.utils.transcript_slicer import slice_transcript_for_chapter
 from src.services.youtube import (
@@ -318,18 +317,20 @@ async def run_parallel_analysis(
     llm_service: LLMService,
     video_data: VideoData,
     persona: str,
-    timestamped_transcript: str,
 ) -> AsyncGenerator[str | ParallelResults, None]:
     """
-    Run parallel tasks: description analysis, TLDR, first section, and concepts.
+    Run parallel tasks: description analysis, TLDR, and first section.
+
+    Concept extraction is now handled per-chapter during Phase 3.
 
     Yields SSE events as tasks complete, then yields ParallelResults.
     """
     yield sse_event("phase", {"phase": "parallel_analysis"})
 
     chapter_titles = [ch.title for ch in video_data.chapters] if video_data.has_chapters else []
+    total_chapters = len(video_data.chapters) if video_data.has_chapters else 0
 
-    # Build parallel tasks
+    # Build parallel tasks (concepts removed — now per-chapter)
     tasks: dict[str, asyncio.Task[Any]] = {
         "description": asyncio.create_task(
             analyze_description(video_data.description, fast_model=llm_service.fast_model),
@@ -343,15 +344,10 @@ async def run_parallel_analysis(
             ),
             name="tldr"
         ),
-        "concepts": asyncio.create_task(
-            llm_service.extract_concepts(timestamped_transcript),
-            name="concepts"
-        ),
     }
 
     # Add first chapter task if chapters exist
-    # Note: first chapter runs WITHOUT concept names (acceptable — it runs
-    # in parallel with concept extraction)
+    # First chapter also extracts concepts (no "already extracted" list yet)
     if video_data.has_chapters and len(video_data.chapters) > 0:
         first_chapter_text = video_data.get_chapter_transcript(0)
         if first_chapter_text:
@@ -361,6 +357,9 @@ async def run_parallel_analysis(
                     video_data.chapters[0].title,
                     has_creator_title=True,
                     persona=persona,
+                    extract_concepts=True,
+                    total_chapters=total_chapters,
+                    already_extracted_names=None,
                 ),
                 name="first_chapter"
             )
@@ -389,9 +388,6 @@ async def run_parallel_analysis(
                 "tldr": result.get("tldr", ""),
                 "keyTakeaways": result.get("keyTakeaways", []),
             })
-
-        elif task_name == "concepts" and isinstance(result, list):
-            parallel_results.concepts = build_concept_dicts(result)
 
         elif task_name == "first_chapter" and isinstance(result, dict):
             parallel_results.first_chapter = result
@@ -462,23 +458,54 @@ def build_chapter_dict(
     return chapter
 
 
+def _collect_chapter_concepts(
+    summary_data: dict[str, Any],
+    chapter_idx: int,
+    all_chapter_concepts: list[tuple[int, list[dict]]],
+    already_extracted_names: list[str],
+) -> None:
+    """Extract concepts from a chapter result and append to the running accumulators.
+
+    Mutates *all_chapter_concepts* and *already_extracted_names* in place.
+    """
+    raw_concepts = summary_data.get("concepts", [])
+    if not raw_concepts:
+        return
+    all_chapter_concepts.append((chapter_idx, raw_concepts))
+    already_extracted_names.extend(
+        c.get("name", "")
+        for c in raw_concepts
+        if isinstance(c, dict) and c.get("name")
+    )
+
+
 async def process_creator_chapters(
     llm_service: LLMService,
     video_data: VideoData,
     persona: str,
     first_chapter_result: dict[str, Any] | None,
     normalized_segments: list[dict[str, Any]],
-    concept_names: list[str] | None = None,
-) -> AsyncGenerator[str | list[dict[str, Any]], None]:
+) -> AsyncGenerator[str | dict[str, Any], None]:
     """
-    Process creator-defined chapters.
+    Process creator-defined chapters with per-chapter concept extraction.
 
-    Yields SSE events for each chapter, then yields the chapters list.
+    Concept anchoring is derived from already-extracted names: chapters 2+
+    get anchoring from prior chapters' concepts so the LLM uses consistent
+    terminology for inline highlighting.
+
+    Yields SSE events for each chapter, then yields a dict with:
+    - "chapters": list of chapter dicts
+    - "concepts": merged, deduplicated concept list
     """
     yield sse_event("phase", {"phase": "chapter_summaries"})
 
     chapters_result: list[dict[str, Any]] = []
     video_chapters = video_data.chapters
+    total_chapters = len(video_chapters)
+
+    # Track per-chapter concepts for merge
+    all_chapter_concepts: list[tuple[int, list[dict]]] = []
+    already_extracted_names: list[str] = []
 
     # Build raw chapters from video chapters
     raw_chapters = [
@@ -489,6 +516,13 @@ async def process_creator_chapters(
         }
         for ch in video_chapters
     ]
+
+    # Collect concepts from first chapter regardless of content status
+    # (mutates all_chapter_concepts and already_extracted_names in place)
+    if first_chapter_result:
+        _collect_chapter_concepts(
+            first_chapter_result, 0, all_chapter_concepts, already_extracted_names,
+        )
 
     # Add first chapter if already processed (drop if empty content)
     if first_chapter_result and first_chapter_result.get("content"):
@@ -515,6 +549,10 @@ async def process_creator_chapters(
         batch_indices = remaining_indices[batch_start:batch_start + CHAPTER_BATCH_SIZE]
         batch_tasks: list[tuple[int, dict[str, Any], asyncio.Task[Any]]] = []
 
+        # Snapshot: all tasks in a batch see the same already-extracted list.
+        # Intra-batch duplicates are expected and handled by merge_chapter_concepts().
+        batch_already_extracted = list(already_extracted_names)
+
         for idx in batch_indices:
             raw = raw_chapters[idx]
             chapter_text = video_data.get_chapter_transcript(idx)
@@ -525,7 +563,10 @@ async def process_creator_chapters(
                         raw["title"],
                         has_creator_title=True,
                         persona=persona,
-                        concept_names=concept_names,
+                        concept_names=batch_already_extracted or None,
+                        extract_concepts=True,
+                        total_chapters=total_chapters,
+                        already_extracted_names=batch_already_extracted,
                     )
                 )
                 batch_tasks.append((idx, raw, task))
@@ -533,6 +574,10 @@ async def process_creator_chapters(
         for idx, raw, task in batch_tasks:
             try:
                 summary_data = await task
+                _collect_chapter_concepts(
+                    summary_data, idx, all_chapter_concepts, already_extracted_names,
+                )
+
                 if _has_empty_content(summary_data, idx, raw.get("title", "")):
                     continue
                 transcript_slice = slice_transcript_for_chapter(
@@ -544,7 +589,11 @@ async def process_creator_chapters(
             except Exception as e:
                 logger.error(f"Chapter {idx} processing error: {e}")
 
-    yield chapters_result
+    # Merge all chapter concepts with fuzzy dedup
+    concepts = merge_chapter_concepts(all_chapter_concepts)
+    logger.info(f"Per-chapter concept extraction: {sum(len(c) for _, c in all_chapter_concepts)} raw → {len(concepts)} merged")
+
+    yield {"chapters": chapters_result, "concepts": concepts}
 
 
 async def process_ai_chapters(
@@ -554,12 +603,17 @@ async def process_ai_chapters(
     duration: int,
     persona: str,
     normalized_segments: list[dict[str, Any]],
-    concept_names: list[str] | None = None,
-) -> AsyncGenerator[str | list[dict[str, Any]], None]:
+) -> AsyncGenerator[str | dict[str, Any], None]:
     """
     Detect and process chapters using AI (fallback when no creator chapters).
+    Includes per-chapter concept extraction with fuzzy dedup.
 
-    Yields SSE events for progress, then yields the chapters list.
+    Concept anchoring is derived from already-extracted names so subsequent
+    chapters use consistent terminology for inline highlighting.
+
+    Yields SSE events for progress, then yields a dict with:
+    - "chapters": list of chapter dicts
+    - "concepts": merged, deduplicated concept list
     """
     yield sse_event("phase", {"phase": "chapter_detect"})
 
@@ -582,12 +636,18 @@ async def process_ai_chapters(
     })
     yield sse_event("phase", {"phase": "chapter_summaries"})
 
-    # Process chapters in batches
+    # Process chapters in batches with per-chapter concept extraction
     chapters_result: list[dict[str, Any]] = []
+    total_chapters = len(raw_chapters)
+    all_chapter_concepts: list[tuple[int, list[dict]]] = []
+    already_extracted_names: list[str] = []
 
     for batch_start in range(0, len(raw_chapters), CHAPTER_BATCH_SIZE):
         batch = raw_chapters[batch_start:batch_start + CHAPTER_BATCH_SIZE]
         batch_tasks: list[tuple[int, dict[str, Any], int, int, asyncio.Task[Any]]] = []
+
+        # Snapshot for this batch
+        batch_already_extracted = list(already_extracted_names)
 
         for i, raw in enumerate(batch):
             idx = batch_start + i
@@ -598,7 +658,13 @@ async def process_ai_chapters(
 
             task = asyncio.create_task(
                 llm_service.summarize_chapter(
-                    chapter_text, raw.get("title", ""), persona=persona, concept_names=concept_names,
+                    chapter_text,
+                    raw.get("title", ""),
+                    persona=persona,
+                    concept_names=batch_already_extracted or None,
+                    extract_concepts=True,
+                    total_chapters=total_chapters,
+                    already_extracted_names=batch_already_extracted,
                 )
             )
             batch_tasks.append((idx, raw, start, end, task))
@@ -606,6 +672,10 @@ async def process_ai_chapters(
         for idx, raw, start, end, task in batch_tasks:
             try:
                 summary_data = await task
+                _collect_chapter_concepts(
+                    summary_data, idx, all_chapter_concepts, already_extracted_names,
+                )
+
                 if _has_empty_content(summary_data, idx, raw.get("title", "")):
                     continue
                 transcript_slice = slice_transcript_for_chapter(normalized_segments, start, end)
@@ -620,7 +690,11 @@ async def process_ai_chapters(
             except Exception as e:
                 logger.error(f"Chapter {idx} processing error: {e}")
 
-    yield chapters_result
+    # Merge all chapter concepts with fuzzy dedup
+    concepts = merge_chapter_concepts(all_chapter_concepts)
+    logger.info(f"Per-chapter concept extraction: {sum(len(c) for _, c in all_chapter_concepts)} raw → {len(concepts)} merged")
+
+    yield {"chapters": chapters_result, "concepts": concepts}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -648,15 +722,7 @@ async def extract_concepts(
 
     logger.debug(f"Extracted {len(raw_concepts)} concepts")
 
-    concepts = [
-        {
-            "id": str(uuid.uuid4()),
-            "name": c.get("name", ""),
-            "definition": c.get("definition"),
-            "timestamp": c.get("timestamp"),
-        }
-        for c in raw_concepts
-    ]
+    concepts = build_concept_dicts(raw_concepts)
 
     yield sse_event("concepts_complete", {"concepts": concepts})
     yield concepts
@@ -927,7 +993,6 @@ async def stream_summarization(
             logger.info(f"Filtered transcript: {original_count} -> {len(segments)} segments")
 
         clean_text = clean_transcript(transcript_data.raw_text)
-        timestamped_transcript = format_transcript_with_timestamps(segments)
 
         # Build pipeline context
         ctx = PipelineContext(
@@ -941,10 +1006,10 @@ async def stream_summarization(
             raw_transcript_ref=raw_transcript_ref,
         )
 
-        # ── Phase 2: Parallel Analysis (includes concept extraction) ──
+        # ── Phase 2: Parallel Analysis (TLDR + first chapter with concepts) ──
         parallel_results: ParallelResults | None = None
         async for item in run_parallel_analysis(
-            llm_service, video_data, persona, timestamped_transcript
+            llm_service, video_data, persona,
         ):
             if isinstance(item, str):
                 yield item
@@ -955,33 +1020,34 @@ async def stream_summarization(
         description_analysis = parallel_results.description_analysis if parallel_results else None
         first_chapter_result = parallel_results.first_chapter if parallel_results else None
 
-        # Extract concepts from parallel results
-        concepts = parallel_results.concepts if parallel_results else []
-        if concepts:
-            yield sse_event("concepts_complete", {"concepts": concepts})
-        concept_names = [c["name"] for c in concepts]
-
-        # ── Phase 3: Chapters (with concept names for anchoring) ──
+        # ── Phase 3: Chapters with per-chapter concept extraction ──
         chapters: list[dict[str, Any]] = []
+        concepts: list[dict[str, Any]] = []
 
         if video_data.has_chapters:
             async for item in process_creator_chapters(
                 llm_service, video_data, persona, first_chapter_result,
-                normalized_segments, concept_names=concept_names,
+                normalized_segments,
             ):
                 if isinstance(item, str):
                     yield item
-                else:
-                    chapters = item
+                elif isinstance(item, dict):
+                    chapters = item.get("chapters", [])
+                    concepts = item.get("concepts", [])
         else:
             async for item in process_ai_chapters(
                 llm_service, segments, clean_text, video_data.duration, persona,
-                normalized_segments, concept_names=concept_names,
+                normalized_segments,
             ):
                 if isinstance(item, str):
                     yield item
-                else:
-                    chapters = item
+                elif isinstance(item, dict):
+                    chapters = item.get("chapters", [])
+                    concepts = item.get("concepts", [])
+
+        # Emit concepts after all chapters processed
+        if concepts:
+            yield sse_event("concepts_complete", {"concepts": concepts})
 
         # ── Phase 4: Master Summary ──
         master_summary: str | None = None

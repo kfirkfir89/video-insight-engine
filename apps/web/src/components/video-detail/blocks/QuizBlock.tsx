@@ -3,6 +3,7 @@ import { HelpCircle, CheckCircle2, XCircle, ChevronDown, ChevronUp } from 'lucid
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { BlockWrapper } from './BlockWrapper';
+import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { QuizBlock as QuizBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
@@ -67,7 +68,7 @@ export const QuizBlock = memo(function QuizBlock({ block }: QuizBlockProps) {
                       <span className="text-xs text-muted-foreground/70">
                         {BLOCK_LABELS.question} {qIndex + 1}
                       </span>
-                      <p className="font-medium text-sm mt-0.5">{question.question}</p>
+                      <p className="font-medium text-sm mt-0.5"><ConceptHighlighter text={question.question} /></p>
                     </div>
                   </div>
                 </div>
@@ -124,7 +125,7 @@ export const QuizBlock = memo(function QuizBlock({ block }: QuizBlockProps) {
                       <span className="font-medium text-xs text-muted-foreground block mb-1">
                         {BLOCK_LABELS.explanation}
                       </span>
-                      <p className="text-muted-foreground">{question.explanation}</p>
+                      <p className="text-muted-foreground"><ConceptHighlighter text={question.explanation} /></p>
                     </div>
                   </div>
                 )}

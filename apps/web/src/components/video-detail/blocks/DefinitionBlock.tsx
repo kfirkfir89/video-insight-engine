@@ -26,7 +26,9 @@ export const DefinitionBlock = memo(function DefinitionBlock({ block }: Definiti
       label={`Definition of ${block.term}`}
     >
       <dl className="definition-item hover:bg-muted/10 rounded-sm transition-colors">
-        <dt className="text-sm font-semibold hover:text-primary transition-colors">{block.term}</dt>
+        <dt className="text-sm font-semibold hover:text-primary transition-colors">
+          <ConceptHighlighter text={block.term} />
+        </dt>
         <dd className="mt-1">
           {isLongDefinition && !expanded ? (
             <div className="space-y-1">

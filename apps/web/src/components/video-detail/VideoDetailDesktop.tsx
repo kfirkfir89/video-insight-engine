@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { useIsLargeDesktop } from "@/hooks/use-media-query";
 import { TldrHero } from "./TldrHero";
 import { ArticleSection } from "./ArticleSection";
+import { OrphanedConcepts } from "./OrphanedConcepts";
 import { StickyChapterNav } from "./StickyChapterNav";
 import { MobileChapterNav } from "./MobileChapterNav";
 import { ChapterList } from "./ChapterList";
@@ -123,6 +124,9 @@ export function VideoDetailDesktop({
               ))}
             </div>
           )}
+
+          {/* Orphaned concepts — not matched to any chapter */}
+          <OrphanedConcepts concepts={conceptMatchResult.orphaned} />
 
           {/* Resources from description analysis */}
           {effectiveDescriptionAnalysis && (

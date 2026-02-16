@@ -496,6 +496,10 @@ export interface Concept {
   name: string;
   definition: string | null;
   timestamp: string | null;
+  /** Optional LLM-provided aliases/short forms for improved content matching */
+  aliases?: string[];
+  /** 0-based chapter index where this concept was extracted (per-chapter extraction) */
+  chapterIndex?: number;
 }
 
 export interface VideoSummary {

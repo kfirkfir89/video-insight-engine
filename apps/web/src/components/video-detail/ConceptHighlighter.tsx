@@ -2,6 +2,7 @@ import { memo, useMemo } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { Lightbulb } from 'lucide-react';
 import { useConcepts } from './ConceptsContext';
+import { getNameVariants } from '@/lib/concept-utils';
 import type { Concept } from '@vie/types';
 
 function escapeRegex(str: string): string {
@@ -18,60 +19,29 @@ interface ConceptHighlighterProps {
 
 /**
  * Highlights concept names in text with clickable popovers showing definitions.
- * Uses regex matching with word boundaries that support accented characters.
+ * Uses the shared getNameVariants() for consistent matching with sidebar.
  * Each popover manages its own open/close state independently.
  */
 export const ConceptHighlighter = memo(function ConceptHighlighter({ text }: ConceptHighlighterProps) {
   const concepts = useConcepts();
 
-  // Build regex and concept lookup map from concepts list
+  // Build regex and concept lookup map using shared variant generation
   const { regex, conceptMap } = useMemo(() => {
     if (!concepts || concepts.length === 0) {
       return { regex: null, conceptMap: new Map<string, Concept>() };
     }
 
-    // Build map keyed by lowercase name for O(1) lookup
+    // Build map keyed by lowercase variant for O(1) lookup
     const map = new Map<string, Concept>();
     for (const c of concepts) {
       if (!c.name) continue;
-      const lower = c.name.toLowerCase();
-      map.set(lower, c);
 
-      // Extract abbreviation from parentheses: "Search Engine Optimization (SEO)" → "seo"
-      const abbrMatch = c.name.match(/\(([^)]+)\)\s*$/);
-      if (abbrMatch && abbrMatch[1].length >= 2) {
-        const abbr = abbrMatch[1].toLowerCase();
-        if (!map.has(abbr)) {
-          map.set(abbr, c);
+      // Use shared getNameVariants() — same logic as sidebar matching
+      const variants = getNameVariants(c.name);
+      for (const variant of variants) {
+        if (!map.has(variant)) {
+          map.set(variant, c);
         }
-        // Also register the name without the parenthetical
-        const baseName = c.name.replace(/\s*\([^)]+\)\s*$/, '').trim().toLowerCase();
-        if (baseName.length >= 3 && !map.has(baseName)) {
-          map.set(baseName, c);
-        }
-      }
-
-      // Split on " / " separator: "Reputation Lists / Spam Houses" → each part
-      if (c.name.includes(' / ')) {
-        for (const part of c.name.split(' / ')) {
-          const trimmed = part.trim().toLowerCase();
-          if (trimmed.length >= 3 && !map.has(trimmed)) {
-            map.set(trimmed, c);
-          }
-        }
-      }
-    }
-
-    // Generate plural variants for better matching (add 's' only)
-    const existingKeys = Array.from(map.keys());
-    for (const key of existingKeys) {
-      if (key.length < 3) continue;
-
-      // Only add plural form — skip singular derivation to avoid false matches
-      // (e.g. "DNS" → "DN", "class" → "clas")
-      if (!key.endsWith('s') && !key.endsWith('x') && !key.endsWith('z')) {
-        const plural = key + 's';
-        if (!map.has(plural)) map.set(plural, map.get(key)!);
       }
     }
 
@@ -153,8 +123,8 @@ export const ConceptHighlighter = memo(function ConceptHighlighter({ text }: Con
             <Popover.Trigger asChild>
               <button
                 type="button"
-                className="group/concept inline-flex items-baseline gap-0.5 cursor-pointer border-b border-primary/40 text-inherit hover:border-primary hover:text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:rounded-sm"
-                style={{ borderBottomStyle: 'dotted' }}
+                data-concept-id={concept.id}
+                className="group/concept inline-flex items-baseline gap-0.5 cursor-pointer border-b border-dotted border-primary/40 text-inherit hover:border-primary hover:text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:rounded-sm data-[first-appearance]:border-solid data-[first-appearance]:border-b-2 data-[first-appearance]:border-primary/60 data-[first-appearance]:hover:border-primary"
                 aria-label={`Definition: ${concept.name}`}
               >
                 {seg.value}

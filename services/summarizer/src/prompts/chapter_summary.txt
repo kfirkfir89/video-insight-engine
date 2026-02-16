@@ -5,6 +5,7 @@ CONTENT:
 {content}
 
 {extra_instruction}
+{concept_extraction_section}
 {concepts_anchor}
 PERSONA CONTEXT:
 {persona_system}
@@ -18,7 +19,7 @@ Return JSON only (no other text):
     // Array of content blocks - use 1-4 blocks as needed
     // Mix and match types based on what the content needs
     // Use variants appropriate to the persona when applicable
-  ]{generated_title_field}
+  ]{concepts_field}{generated_title_field}
 }}
 
 AVAILABLE CONTENT BLOCK TYPES:
