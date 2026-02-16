@@ -1,8 +1,10 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
-import { Lightbulb } from 'lucide-react';
+import { Lightbulb, BookOpen, Loader2 } from 'lucide-react';
 import { useConcepts } from './ConceptsContext';
+import { useVideoSummaryId } from './VideoSummaryIdContext';
 import { getNameVariants } from '@/lib/concept-utils';
+import { useExplainAuto } from '@/hooks/use-explain-auto';
 import type { Concept } from '@vie/types';
 
 function escapeRegex(str: string): string {
@@ -12,6 +14,60 @@ function escapeRegex(str: string): string {
 // Word-boundary character class for regex lookahead/lookbehind.
 // Uses explicit whitespace/punctuation instead of \b for Unicode (accented char) support.
 const BOUNDARY = '[\\s.,;:!?()"\'\\[\\]\\-\\/\\u2013\\u2014*_`#~]';
+
+/**
+ * Tell Me More: lazy-loaded expansion for a concept, shown inside the popover.
+ */
+const TellMeMore = memo(function TellMeMore({ conceptId }: { conceptId: string }) {
+  const videoSummaryId = useVideoSummaryId();
+  const [expanded, setExpanded] = useState(false);
+
+  const { data, isLoading, error } = useExplainAuto(
+    expanded ? videoSummaryId : undefined,
+    "concept",
+    expanded ? conceptId : undefined
+  );
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="flex items-center gap-1 text-xs text-primary/80 hover:text-primary mt-1.5 transition-colors"
+      >
+        <BookOpen className="h-3 w-3" aria-hidden="true" />
+        Tell me more
+      </button>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1.5">
+        <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+        Loading...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <p className="text-xs text-destructive mt-1.5">Failed to load.</p>
+    );
+  }
+
+  if (data?.expansion) {
+    return (
+      <div className="mt-1.5 pt-1.5 border-t border-border/50">
+        <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
+          {data.expansion}
+        </p>
+      </div>
+    );
+  }
+
+  return null;
+});
 
 interface ConceptHighlighterProps {
   text: string;
@@ -147,6 +203,7 @@ export const ConceptHighlighter = memo(function ConceptHighlighter({ text }: Con
                 {concept.timestamp && (
                   <p className="text-xs text-muted-foreground/60 mt-1 font-mono">{concept.timestamp}</p>
                 )}
+                <TellMeMore conceptId={concept.id} />
                 <Popover.Arrow className="fill-border" />
               </Popover.Content>
             </Popover.Portal>

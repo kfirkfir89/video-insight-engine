@@ -55,21 +55,21 @@ export function SidebarTabs() {
     key === "summarized" ? summarizedCount : memorizedCount;
 
   return (
-    <div className="flex items-center border-b border-border/50 shrink-0 px-1">
-      {TABS.map((tab) => {
+    <div className="flex items-center border-b border-border/50 shrink-0 px-2">
+      {TABS.map((tab, index) => {
         const isActive = activeSection === tab.key;
         const count = getCounts(tab.key);
         const Icon = tab.icon;
-
         return (
           <button
             key={tab.key}
             onClick={() => setActiveSection(tab.key)}
             className={cn(
-              "flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors relative",
+              "flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors relative ",
               isActive
-                ? "text-primary"
-                : "text-muted-foreground hover:text-foreground"
+                ? "text-primary bg-primary/10"
+                : "text-muted-foreground hover:text-foreground",
+              index === 0 ? "rounded-l-md" : "rounded-r-md",
             )}
           >
             <Icon className="h-3.5 w-3.5" />
@@ -85,11 +85,6 @@ export function SidebarTabs() {
               >
                 {count}
               </span>
-            )}
-
-            {/* Active indicator underline */}
-            {isActive && (
-              <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary rounded-full" />
             )}
           </button>
         );

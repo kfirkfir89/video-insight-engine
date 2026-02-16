@@ -1,51 +1,27 @@
-"""FastAPI dependency injection providers for vie-explainer service.
+"""Dependency management for vie-explainer MCP server.
 
-This module provides all dependencies using FastAPI's Depends() pattern,
-enabling easy testing through dependency overrides.
+Non-FastAPI dependency injection using module-level getters.
+MongoDB client is initialized during Starlette lifespan.
 """
 
-from typing import Annotated
+from typing import Any
 
-from fastapi import Depends
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 from src.config import settings
 from src.logging_config import get_logger
-from src.repositories import (
-    MongoChatRepository,
+from src.repositories.mongodb_repository import (
     MongoExpansionRepository,
-    MongoMemorizedItemRepository,
     MongoVideoSummaryRepository,
-)
-from src.repositories.base import (
-    ChatRepositoryProtocol,
-    ExpansionRepositoryProtocol,
-    MemorizedItemRepositoryProtocol,
-    VideoSummaryRepositoryProtocol,
 )
 from src.services.llm import LLMService
 from src.services.llm_provider import LLMProvider
 
 logger = get_logger(__name__)
 
+# ── MongoDB Connection ──
 
-# ============================================================
-# MongoDB Connection
-# ============================================================
-
-# Global client managed via lifespan events
 _mongo_client: AsyncIOMotorClient | None = None
-
-
-def get_mongo_client() -> AsyncIOMotorClient:
-    """Get the global MongoDB client.
-
-    The client is created during app startup and closed during shutdown.
-    See lifespan handler in main.py.
-    """
-    if _mongo_client is None:
-        raise RuntimeError("MongoDB client not initialized. Call init_mongo_client first.")
-    return _mongo_client
 
 
 def init_mongo_client() -> AsyncIOMotorClient:
@@ -59,11 +35,19 @@ def init_mongo_client() -> AsyncIOMotorClient:
 
 async def close_mongo_client() -> None:
     """Close the global MongoDB client (called during shutdown)."""
-    global _mongo_client
+    global _mongo_client, _services
     if _mongo_client is not None:
         logger.info("Closing async MongoDB client connection")
         _mongo_client.close()
         _mongo_client = None
+    _services = None
+
+
+def get_mongo_client() -> AsyncIOMotorClient:
+    """Get the global MongoDB client."""
+    if _mongo_client is None:
+        raise RuntimeError("MongoDB client not initialized. Call init_mongo_client first.")
+    return _mongo_client
 
 
 def get_database() -> AsyncIOMotorDatabase:
@@ -72,62 +56,19 @@ def get_database() -> AsyncIOMotorDatabase:
     return client.get_default_database()
 
 
-# ============================================================
-# Repository Dependencies
-# ============================================================
+# ── Service Getters ──
+
+_services: dict[str, Any] | None = None
 
 
-def get_video_summary_repo(
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_database)],
-) -> MongoVideoSummaryRepository:
-    """Get video summary repository instance."""
-    return MongoVideoSummaryRepository(db)
-
-
-def get_expansion_repo(
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_database)],
-) -> MongoExpansionRepository:
-    """Get expansion repository instance."""
-    return MongoExpansionRepository(db)
-
-
-def get_memorized_item_repo(
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_database)],
-) -> MongoMemorizedItemRepository:
-    """Get memorized item repository instance."""
-    return MongoMemorizedItemRepository(db)
-
-
-def get_chat_repo(
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_database)],
-) -> MongoChatRepository:
-    """Get chat repository instance."""
-    return MongoChatRepository(db)
-
-
-# ============================================================
-# LLM Service Dependencies
-# ============================================================
-
-
-def get_llm_provider() -> LLMProvider:
-    """Get LLM provider instance."""
-    return LLMProvider()
-
-
-def get_llm_service(
-    provider: Annotated[LLMProvider, Depends(get_llm_provider)],
-) -> LLMService:
-    """Get LLM service instance."""
-    return LLMService(provider)
-
-
-# ============================================================
-# Type Aliases for Route Signatures
-# ============================================================
-
-VideoSummaryRepoDep = Annotated[VideoSummaryRepositoryProtocol, Depends(get_video_summary_repo)]
-ExpansionRepoDep = Annotated[ExpansionRepositoryProtocol, Depends(get_expansion_repo)]
-MemorizedItemRepoDep = Annotated[MemorizedItemRepositoryProtocol, Depends(get_memorized_item_repo)]
-ChatRepoDep = Annotated[ChatRepositoryProtocol, Depends(get_chat_repo)]
-LLMServiceDep = Annotated[LLMService, Depends(get_llm_service)]
+def get_services() -> dict[str, Any]:
+    """Get all service instances for MCP tool handlers (cached singleton)."""
+    global _services
+    if _services is None:
+        db = get_database()
+        _services = {
+            "video_summary_repo": MongoVideoSummaryRepository(db),
+            "expansion_repo": MongoExpansionRepository(db),
+            "llm_service": LLMService(LLMProvider()),
+        }
+    return _services

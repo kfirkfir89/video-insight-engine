@@ -92,92 +92,96 @@ describe('explain routes', () => {
     });
   });
 
-  describe('POST /api/explain/chat', () => {
-    it('should call explainerClient.explainChat with correct params', async () => {
-      const expectedResult = { chatId: 'chat123', response: 'AI response' };
-      mockContainer.memorizeRepository.findById.mockResolvedValue({ id: 'item123', userId: 'test-user-id' });
-      mockContainer.explainerClient.explainChat.mockResolvedValue(expectedResult);
+  describe('POST /api/explain/video-chat', () => {
+    it('should call explainerClient.videoChat with correct params', async () => {
+      const expectedResult = { response: 'AI response about the video' };
+      mockContainer.videoRepository.userHasAccessToSummary.mockResolvedValue(true);
+      mockContainer.explainerClient.videoChat.mockResolvedValue(expectedResult);
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/explain/chat',
+        url: '/api/explain/video-chat',
         headers: {
           authorization: authHeader,
           'content-type': 'application/json',
         },
         payload: {
-          memorizedItemId: 'item123',
-          message: 'Explain this concept',
+          videoSummaryId: 'video123',
+          message: 'What is this video about?',
         },
       });
 
       expect(response.statusCode).toBe(200);
-      expect(mockContainer.explainerClient.explainChat).toHaveBeenCalledWith({
-        memorizedItemId: 'item123',
-        message: 'Explain this concept',
-        userId: 'test-user-id',
-      });
+      expect(mockContainer.videoRepository.userHasAccessToSummary).toHaveBeenCalledWith('test-user-id', 'video123');
+      expect(mockContainer.explainerClient.videoChat).toHaveBeenCalledWith(
+        'video123',
+        'What is this video about?',
+        undefined
+      );
       expect(response.json()).toEqual(expectedResult);
     });
 
-    it('should include chatId when provided', async () => {
-      const expectedResult = { chatId: 'chat123', response: 'AI response' };
-      mockContainer.memorizeRepository.findById.mockResolvedValue({ id: 'item123', userId: 'test-user-id' });
-      mockContainer.explainerClient.explainChat.mockResolvedValue(expectedResult);
+    it('should pass chatHistory when provided', async () => {
+      const chatHistory = [
+        { role: 'user', content: 'Hello' },
+        { role: 'assistant', content: 'Hi there!' },
+      ];
+      const expectedResult = { response: 'Follow-up response' };
+      mockContainer.videoRepository.userHasAccessToSummary.mockResolvedValue(true);
+      mockContainer.explainerClient.videoChat.mockResolvedValue(expectedResult);
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/explain/chat',
+        url: '/api/explain/video-chat',
         headers: {
           authorization: authHeader,
           'content-type': 'application/json',
         },
         payload: {
-          memorizedItemId: 'item123',
+          videoSummaryId: 'video123',
           message: 'Follow up question',
-          chatId: 'existing-chat-id',
+          chatHistory,
         },
       });
 
       expect(response.statusCode).toBe(200);
-      expect(mockContainer.explainerClient.explainChat).toHaveBeenCalledWith({
-        memorizedItemId: 'item123',
-        message: 'Follow up question',
-        chatId: 'existing-chat-id',
-        userId: 'test-user-id',
-      });
+      expect(mockContainer.explainerClient.videoChat).toHaveBeenCalledWith(
+        'video123',
+        'Follow up question',
+        chatHistory
+      );
     });
 
-    it('should return 404 when user does not own memorized item', async () => {
-      mockContainer.memorizeRepository.findById.mockResolvedValue(null);
+    it('should return 404 when user does not have access', async () => {
+      mockContainer.videoRepository.userHasAccessToSummary.mockResolvedValue(false);
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/explain/chat',
+        url: '/api/explain/video-chat',
         headers: {
           authorization: authHeader,
           'content-type': 'application/json',
         },
         payload: {
-          memorizedItemId: 'item123',
-          message: 'Explain this concept',
+          videoSummaryId: 'video123',
+          message: 'Test message',
         },
       });
 
       expect(response.statusCode).toBe(404);
-      expect(response.json()).toHaveProperty('error', 'MEMORIZED_ITEM_NOT_FOUND');
+      expect(response.json()).toHaveProperty('error', 'VIDEO_NOT_FOUND');
     });
 
     it('should return 400 for missing required fields', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: '/api/explain/chat',
+        url: '/api/explain/video-chat',
         headers: {
           authorization: authHeader,
           'content-type': 'application/json',
         },
         payload: {
-          memorizedItemId: 'item123',
+          videoSummaryId: 'video123',
           // missing message
         },
       });
@@ -188,86 +192,36 @@ describe('explain routes', () => {
     it('should return 401 without auth token', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: '/api/explain/chat',
+        url: '/api/explain/video-chat',
         headers: { 'content-type': 'application/json' },
         payload: {
-          memorizedItemId: 'item123',
+          videoSummaryId: 'video123',
           message: 'Test message',
         },
       });
 
       expect(response.statusCode).toBe(401);
     });
-  });
 
-  describe('POST /api/explain/chat/stream', () => {
-    it('should call explainerClient.explainChatStream with correct params', async () => {
-      // Setup authorization mock
-      mockContainer.memorizeRepository.findById.mockResolvedValue({ id: 'item123', userId: 'test-user-id' });
+    it('should return 500 when explainerClient throws', async () => {
+      mockContainer.videoRepository.userHasAccessToSummary.mockResolvedValue(true);
+      mockContainer.explainerClient.videoChat.mockRejectedValue(new Error('Service unavailable'));
 
-      // Mock streaming response
-      const mockBody = {
-        getReader: vi.fn().mockReturnValue({
-          read: vi.fn()
-            .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: {"chunk": "test"}\n\n') })
-            .mockResolvedValueOnce({ done: true, value: undefined }),
-          cancel: vi.fn(),
-        }),
-      };
-      mockContainer.explainerClient.explainChatStream.mockResolvedValue({ body: mockBody });
-
-      await app.inject({
+      const response = await app.inject({
         method: 'POST',
-        url: '/api/explain/chat/stream',
+        url: '/api/explain/video-chat',
         headers: {
           authorization: authHeader,
           'content-type': 'application/json',
         },
         payload: {
-          memorizedItemId: 'item123',
-          message: 'Stream this explanation',
-        },
-      });
-
-      expect(mockContainer.explainerClient.explainChatStream).toHaveBeenCalledWith({
-        memorizedItemId: 'item123',
-        message: 'Stream this explanation',
-        userId: 'test-user-id',
-      });
-    });
-
-    it('should return 404 when user does not own memorized item', async () => {
-      mockContainer.memorizeRepository.findById.mockResolvedValue(null);
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/explain/chat/stream',
-        headers: {
-          authorization: authHeader,
-          'content-type': 'application/json',
-        },
-        payload: {
-          memorizedItemId: 'item123',
-          message: 'Stream this explanation',
-        },
-      });
-
-      expect(response.statusCode).toBe(404);
-      expect(response.json()).toHaveProperty('error', 'MEMORIZED_ITEM_NOT_FOUND');
-    });
-
-    it('should return 401 without auth token', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/explain/chat/stream',
-        headers: { 'content-type': 'application/json' },
-        payload: {
-          memorizedItemId: 'item123',
+          videoSummaryId: 'video123',
           message: 'Test message',
         },
       });
 
-      expect(response.statusCode).toBe(401);
+      expect(response.statusCode).toBe(500);
+      expect(response.json()).toHaveProperty('error', 'Internal Server Error');
     });
   });
 });

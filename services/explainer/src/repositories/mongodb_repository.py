@@ -51,7 +51,7 @@ class MongoVideoSummaryRepository:
                 timestamp=s.get("timestamp", "00:00"),
                 content=s.get("content", []),
             )
-            for s in summary_data.get("sections", [])
+            for s in summary_data.get("chapters", [])
         ]
 
         concepts = [

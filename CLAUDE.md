@@ -34,7 +34,7 @@ Personal video knowledge management system.
 | **vie-api**        | Node.js + Fastify + TypeScript + AI          | 3000  |
 | **vie-web**        | React + Vite + TypeScript + AI SDK           | 5173  |
 | **vie-summarizer** | Python + FastAPI + LiteLLM (Multi-Provider)  | 8000  |
-| **vie-explainer**  | Python + FastAPI + LiteLLM (Multi-Provider)  | 8001  |
+| **vie-explainer**  | Python + Starlette + FastMCP + LiteLLM       | 8001  |
 | **vie-mongodb**    | MongoDB 7                                    | 27017 |
 
 ---

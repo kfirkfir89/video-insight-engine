@@ -1,6 +1,4 @@
 import { CheckCircle } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -15,30 +13,31 @@ export function TldrHero({ tldr, keyTakeaways, isStreaming = false }: TldrHeroPr
   const showCursor = isStreaming && tldr;
 
   return (
-    <Card
+    <div
       data-slot="tldr-hero"
-      className="relative overflow-hidden border-0 bg-gradient-to-br from-card to-muted/30"
+      className="relative overflow-hidden rounded-xl py-5 px-6"
     >
-      {/* Subtle gradient accent */}
-      <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent pointer-events-none" />
+      {/* Low-opacity gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.06] via-primary/[0.03] to-transparent pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/[0.04] to-transparent pointer-events-none" />
 
-      <CardContent className="relative py-8 px-6">
-        <Badge variant="secondary" className="mb-3 font-medium">
+      <div className="relative">
+        <span className="text-[10px] font-semibold text-primary/60 uppercase tracking-widest">
           TL;DR
-        </Badge>
+        </span>
         {showSkeleton ? (
-          <div className="space-y-2">
-            <Skeleton className="h-5 w-full" />
-            <Skeleton className="h-5 w-4/5" />
-            <Skeleton className="h-5 w-3/5" />
+          <div className="space-y-2 mt-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-4/5" />
+            <Skeleton className="h-4 w-3/5" />
           </div>
         ) : (
-          <p className="text-lg leading-relaxed text-foreground">
+          <p className="text-sm leading-relaxed text-foreground mt-1.5">
             {tldr}
             {showCursor && (
               <span
                 className={cn(
-                  "inline-block w-0.5 h-5 ml-0.5 bg-primary align-middle",
+                  "inline-block w-0.5 h-4 ml-0.5 bg-primary align-middle",
                   "animate-pulse"
                 )}
               />
@@ -46,18 +45,17 @@ export function TldrHero({ tldr, keyTakeaways, isStreaming = false }: TldrHeroPr
           </p>
         )}
 
-        {/* Key takeaways as bullets */}
         {keyTakeaways.length > 0 && (
-          <ul className="mt-6 space-y-2">
+          <ul className="mt-3 space-y-1">
             {keyTakeaways.map((item, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm">
-                <CheckCircle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+              <li key={i} className="flex items-start gap-2 text-xs">
+                <CheckCircle className="h-3 w-3 text-primary/70 shrink-0 mt-0.5" />
                 <span className="text-muted-foreground">{item}</span>
               </li>
             ))}
           </ul>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

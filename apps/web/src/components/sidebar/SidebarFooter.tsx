@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Film, LogOut, User } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { LogOut, Sun, Moon, Monitor } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -19,50 +19,63 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuthStore } from "@/stores/auth-store";
-import { useAllVideos } from "@/hooks/use-videos";
+import { useTheme } from "@/hooks/use-theme";
+import { getInitials } from "@/lib/string-utils";
+import type { Theme } from "@/components/theme-context";
+
+const themeOptions: { value: Theme; label: string; icon: typeof Sun }[] = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+  { value: "system", label: "System", icon: Monitor },
+];
 
 export function SidebarFooter() {
   const { user, logout, isAuthenticated } = useAuthStore();
-  const { data: videosData } = useAllVideos();
-  const totalVideos = videosData?.videos?.length ?? 0;
+  const { theme, setTheme } = useTheme();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  if (!isAuthenticated) return null;
 
   return (
     <>
-      <div className="flex items-center justify-between px-3 py-1.5 border-t border-border/50 text-xs text-muted-foreground shrink-0">
-        {/* Video count */}
-        <div className="flex items-center gap-1.5">
-          <Film className="h-3 w-3 shrink-0" />
-          <span>
-            {totalVideos} video{totalVideos !== 1 ? "s" : ""}
-          </span>
-        </div>
-
-        {/* Theme + User profile */}
-        <div className="flex items-center gap-0.5">
-          <ThemeToggle />
-
-          {isAuthenticated && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7">
-                  <div className="h-5 w-5 rounded-full bg-primary/20 flex items-center justify-center">
-                    <User className="h-3 w-3 text-primary" />
-                  </div>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" side="top" className="w-48">
-                <div className="px-2 py-1.5 text-sm font-medium border-b border-border/50 mb-1">
-                  {user?.name || "User"}
-                </div>
-                <DropdownMenuItem onClick={() => setShowLogoutConfirm(true)}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
+      <div className="border-t border-border/50 shrink-0">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 transition-colors text-left">
+              <div className="h-8 w-8 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                <span className="text-xs font-medium text-primary">
+                  {getInitials(user?.name)}
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">{user?.name || "User"}</p>
+                {user?.email && (
+                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                )}
+              </div>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="top" className="w-56">
+            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+              Theme
+            </DropdownMenuLabel>
+            {themeOptions.map(({ value, label, icon: Icon }) => (
+              <DropdownMenuItem
+                key={value}
+                onClick={() => setTheme(value)}
+                className={theme === value ? "bg-muted" : ""}
+              >
+                <Icon className="mr-2 h-4 w-4" />
+                {label}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setShowLogoutConfirm(true)}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>

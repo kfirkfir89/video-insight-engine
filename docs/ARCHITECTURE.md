@@ -29,12 +29,12 @@ System overview and data flows.
            ▼                                                  ▼
 ┌────────────────────┐  ┌───────────────────┐  ┌─────────────────────────────┐
 │   vie-summarizer   │  │   vie-mongodb     │  │      vie-explainer           │
-│  Python + FastAPI  │  │    MongoDB 7      │  │    Python + MCP SDK         │
+│  Python + FastAPI  │  │    MongoDB 7      │  │  Python + Starlette + MCP   │
 │    Port: 8000      │  │   Port: 27017     │  │      Port: 8001             │
 │                    │  │                   │  │                             │
 │ • Receive HTTP req │  │ System Cache:     │  │ MCP Tools:                  │
 │ • Fetch transcript │  │ • videoSummaryCache│ │ • explain_auto (cached)      │
-│ • Process with LLM │  │ • systemExpansion │  │ • explain_chat (per-user)    │
+│ • Process with LLM │  │ • systemExpansion │  │ • video_chat (ephemeral)     │
 │ • Save to cache    │  │   Cache           │  │                             │
 │                    │  │                   │  │                             │
 └─────────┬──────────┘  │ User Data:        │  └─────────────────────────────┘
@@ -136,29 +136,29 @@ User clicks "Explain" on section
      Return expansion
 ```
 
-### 3. Explain Chat (Not Cached)
+### 3. Video Chat (Ephemeral)
 
 ```
-User sends message on memorized item
+User sends message about video
          │
          ▼
 ┌─────────────────────┐
 │ vie-api calls MCP   │
-│ explain_chat tool    │
+│ video_chat tool      │
 └──────────┬──────────┘
            │
            ▼
 ┌─────────────────────┐
 │ vie-explainer:       │
-│ 1. Load context     │
-│ 2. Load chat history│
-│ 3. Call Claude API  │
-│ 4. Save to userChats│
+│ 1. Load video summary│
+│ 2. Build context    │
+│ 3. Call LLM         │
 └──────────┬──────────┘
            │
            ▼
      Return response
-     (never cached)
+     (ephemeral, no persistence)
+     Chat history in React state
 ```
 
 ### 4. Memorize

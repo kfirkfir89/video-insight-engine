@@ -49,8 +49,7 @@ export interface MockContainer {
   };
   explainerClient: {
     explainAuto: ReturnType<typeof vi.fn>;
-    explainChat: ReturnType<typeof vi.fn>;
-    explainChatStream: ReturnType<typeof vi.fn>;
+    videoChat: ReturnType<typeof vi.fn>;
   };
   summarizerClient: {
     triggerSummarization: ReturnType<typeof vi.fn>;
@@ -102,8 +101,7 @@ export function createMockContainer(): MockContainer {
     },
     explainerClient: {
       explainAuto: vi.fn(),
-      explainChat: vi.fn(),
-      explainChatStream: vi.fn(),
+      videoChat: vi.fn(),
     },
     summarizerClient: {
       triggerSummarization: vi.fn(),
