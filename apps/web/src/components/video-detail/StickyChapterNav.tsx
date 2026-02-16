@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { ChapterNavItem } from "./ChapterNavItem";
-import type { SummaryChapter } from "@vie/types";
+import type { SummaryChapter, Concept } from "@vie/types";
+
+const EMPTY_CONCEPTS: Concept[] = [];
 
 interface StickyChapterNavProps {
   chapters: SummaryChapter[];
@@ -9,6 +11,7 @@ interface StickyChapterNavProps {
   onScrollToChapter: (chapterId: string) => void;
   onPlayFromChapter: (chapterId: string, startSeconds: number) => void;
   onStopChapter: () => void;
+  conceptsByChapter?: Map<string, Concept[]>;
 }
 
 export function StickyChapterNav({
@@ -18,6 +21,7 @@ export function StickyChapterNav({
   onScrollToChapter,
   onPlayFromChapter,
   onStopChapter,
+  conceptsByChapter,
 }: StickyChapterNavProps) {
   const navRef = useRef<HTMLElement>(null);
   // Store chapters ref to avoid dependency in effect
@@ -45,7 +49,7 @@ export function StickyChapterNav({
         navRef.current.scrollTo({ top: 0, behavior: "smooth" });
       } else {
         const activeElement = navRef.current.querySelector(
-          `[data-chapter-id="${activeChapter}"]`
+          `[data-chapter-id="${CSS.escape(activeChapter)}"]`
         );
         if (activeElement) {
           // Scroll the active chapter into view within the nav container
@@ -63,7 +67,7 @@ export function StickyChapterNav({
   return (
     <aside
       data-slot="sticky-chapter-nav"
-      className="h-[calc(100vh-4rem)] w-full"
+      className="h-full w-full"
     >
       {/* Chapter List */}
       <nav
@@ -85,6 +89,7 @@ export function StickyChapterNav({
               onPlay={() => onPlayFromChapter(chapter.id, chapter.startSeconds)}
               onStop={onStopChapter}
               dataChapterId={chapter.id}
+              concepts={conceptsByChapter?.get(chapter.id) ?? EMPTY_CONCEPTS}
             />
           ))}
         </div>

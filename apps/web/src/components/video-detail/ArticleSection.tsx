@@ -1,6 +1,5 @@
-import { type RefObject, useState, memo, useCallback, useMemo } from "react";
-import { Play, StopCircle, Lightbulb, ChevronRight, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { type RefObject, memo, useCallback, useMemo } from "react";
+import { Play, StopCircle, FileText, BookOpen } from "lucide-react";
 import { YouTubePlayer, type YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +32,10 @@ interface ArticleSectionProps {
   startSeconds?: number;
   /** Content category for specialized view rendering (V2.1) */
   category?: VideoCategory;
+  /** Go Deeper callback */
+  onGoDeeper?: () => void;
+  /** Whether Go Deeper is expanded for this chapter */
+  isGoDeepExpanded?: boolean;
 }
 
 // Memoized to prevent re-renders when parent re-renders with same props
@@ -46,34 +49,17 @@ export const ArticleSection = memo(function ArticleSection({
   youtubeId,
   startSeconds,
   category = 'standard',
+  onGoDeeper,
+  isGoDeepExpanded = false,
 }: ArticleSectionProps) {
   // Check if this is a creator chapter with dual titles
   const hasCreatorChapter = chapter.isCreatorChapter && chapter.originalTitle;
-  const hasConcepts = concepts.length > 0;
-
-  // Track expanded concepts
-  const [expandedConcepts, setExpandedConcepts] = useState<Set<string>>(new Set());
-
-  const toggleConcept = useCallback((conceptId: string) => {
-    setExpandedConcepts((prev) => {
-      const next = new Set(prev);
-      if (next.has(conceptId)) {
-        next.delete(conceptId);
-      } else {
-        next.add(conceptId);
-      }
-      return next;
-    });
-  }, []);
 
   // Memoized callback to avoid recreating on every render
   const handleBlockPlay = useCallback(
     (seconds: number) => onPlay(chapter.id, seconds),
     [onPlay, chapter.id]
   );
-
-  // Stabilize concepts reference to prevent unnecessary regex rebuilds in ConceptHighlighter
-  const stableConcepts = useMemo(() => concepts, [concepts]);
 
   // Per-chapter view: use chapter.view if present, fall back to global category
   const effectiveCategory = chapter.view ?? category ?? 'standard';
@@ -116,125 +102,84 @@ export const ArticleSection = memo(function ArticleSection({
   return (
     <article
       id={`chapter-${chapter.id}`}
-      data-slot="article-chapter"
-      className="flex flex-col lg:flex-row gap-4 lg:gap-0"
+      data-slot="article-section"
+      className="relative group mr-12"
     >
-      {/* Title Column - Left side on desktop, top on mobile */}
-      <div className="lg:w-40 xl:w-48 lg:shrink-0 lg:pr-4 xl:pr-6 flex flex-col gap-2">
-        {hasCreatorChapter ? (
-          <>
-            <h3 className="font-medium text-sm leading-tight text-muted-foreground/70">
-              {chapter.originalTitle}
-            </h3>
-            {chapter.generatedTitle && (
-              <p className="text-xs text-muted-foreground/50 leading-tight">
-                {chapter.generatedTitle}
-              </p>
-            )}
-          </>
-        ) : (
-          <h3 className="font-medium text-sm leading-tight text-muted-foreground/70">
-            {chapter.title}
-          </h3>
-        )}
-
-        {/* Play/Stop button */}
+      {/* Buttons — absolute positioned outside right edge */}
+      <div className="absolute -right-10 top-0 flex flex-col items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         {isVideoActive ? (
-          <Button
-            size="sm"
-            variant="ghost"
+          <button
             onClick={onStop}
-            className="w-fit gap-1.5 text-destructive hover:bg-destructive/10 -ml-2"
+            className="h-7 w-7 flex items-center justify-center rounded-md text-destructive hover:bg-destructive/10 transition-colors opacity-100"
             aria-label="Stop video"
           >
-            <StopCircle className="h-4 w-4" aria-hidden="true" />
-            <span className="font-mono text-xs">Stop</span>
-          </Button>
+            <StopCircle className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
         ) : (
-          <Button
-            size="sm"
-            variant="ghost"
+          <button
             onClick={() => onPlay(chapter.id, chapter.startSeconds)}
-            className="w-fit gap-1.5 text-primary hover:bg-primary/10 -ml-2"
+            className="h-7 w-7 flex items-center justify-center rounded-md text-primary hover:bg-primary/10 transition-colors"
             aria-label={`Play from ${chapter.timestamp}`}
           >
-            <Play className="h-4 w-4" aria-hidden="true" />
-            <span className="font-mono text-xs">{chapter.timestamp}</span>
-          </Button>
+            <Play className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
         )}
-
-        {/* Concepts - always visible */}
-        {hasConcepts && (
-          <div className="pt-2 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
-              <Lightbulb className="h-3 w-3" aria-hidden="true" />
-              <span>Concepts</span>
-            </div>
-            <ul className="space-y-0.5">
-              {concepts.map((concept) => {
-                const isExpanded = expandedConcepts.has(concept.id);
-                const hasDefinition = !!concept.definition;
-
-                const definitionId = `concept-definition-${concept.id}`;
-
-                return (
-                  <li key={concept.id}>
-                    <button
-                      id={`concept-btn-${concept.id}`}
-                      type="button"
-                      onClick={() => hasDefinition && toggleConcept(concept.id)}
-                      className={cn(
-                        "flex items-start gap-1 text-xs text-muted-foreground/80 leading-tight text-left w-full rounded-sm",
-                        "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1",
-                        hasDefinition && "hover:text-muted-foreground cursor-pointer"
-                      )}
-                      disabled={!hasDefinition}
-                      aria-expanded={hasDefinition ? isExpanded : undefined}
-                      aria-controls={hasDefinition ? definitionId : undefined}
-                    >
-                      {hasDefinition && (
-                        <ChevronRight
-                          className={cn(
-                            "h-3 w-3 shrink-0 mt-0.5 transition-transform duration-200",
-                            isExpanded && "rotate-90"
-                          )}
-                          aria-hidden="true"
-                        />
-                      )}
-                      <span className={!hasDefinition ? "ml-4" : ""}>
-                        {concept.name}
-                      </span>
-                    </button>
-                    {/* Expandable definition */}
-                    {hasDefinition && (
-                      <div
-                        id={definitionId}
-                        role="region"
-                        aria-labelledby={`concept-btn-${concept.id}`}
-                        className={cn(
-                          "grid transition-[grid-template-rows,opacity] duration-200 ease-out ml-4",
-                          isExpanded
-                            ? "grid-rows-[1fr] opacity-100"
-                            : "grid-rows-[0fr] opacity-0"
-                        )}
-                      >
-                        <div className="overflow-hidden min-h-0">
-                          <p className="text-xs text-muted-foreground/60 leading-relaxed pt-0.5 pb-1">
-                            {concept.definition}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+        {onGoDeeper && (
+          <button
+            onClick={onGoDeeper}
+            className={cn(
+              "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+              isGoDeepExpanded
+                ? "text-primary opacity-100"
+                : "text-muted-foreground hover:text-primary"
+            )}
+            aria-label={isGoDeepExpanded ? "Close deeper view" : "Go deeper"}
+          >
+            <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
         )}
       </div>
 
-      {/* Content Column - Right side with vertical line on desktop */}
-      <div className="flex-1 lg:border-l lg:border-border lg:pl-6 min-w-0">
+      {/* Always-visible active state indicator */}
+      {(isVideoActive || isGoDeepExpanded) && (
+        <div className="absolute -right-10 top-0 flex flex-col items-center gap-1">
+          {isVideoActive && (
+            <button
+              onClick={onStop}
+              className="h-7 w-7 flex items-center justify-center rounded-md text-destructive hover:bg-destructive/10 transition-colors"
+              aria-label="Stop video"
+            >
+              <StopCircle className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          )}
+          {isGoDeepExpanded && onGoDeeper && (
+            <button
+              onClick={onGoDeeper}
+              className="h-7 w-7 flex items-center justify-center rounded-md text-primary"
+              aria-label="Close deeper view"
+              style={{ marginTop: isVideoActive ? 0 : undefined }}
+            >
+              <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Chapter title with decorative line */}
+      <div className="mb-2 flex items-center gap-3">
+        <h3 className="font-normal text-xs leading-tight text-muted-foreground/40 shrink-0 whitespace-nowrap">
+          {hasCreatorChapter ? chapter.originalTitle : chapter.title}
+        </h3>
+        {hasCreatorChapter && chapter.generatedTitle && (
+          <span className="text-[11px] text-muted-foreground/30 leading-tight shrink-0">
+            {chapter.generatedTitle}
+          </span>
+        )}
+        <div className="flex-1 h-px fade-divider" />
+      </div>
+
+      {/* Full-width content */}
+      <div className="min-w-0">
         {/* Video player at top of content when active */}
         {youtubeId && isVideoActive && (
           <div className="grid grid-rows-[1fr] opacity-100 transition-[grid-template-rows,opacity] duration-500 ease-out mb-4">
@@ -250,9 +195,9 @@ export const ArticleSection = memo(function ArticleSection({
           </div>
         )}
 
-        {/* Chapter content - uses specialized view based on category */}
+        {/* Chapter content */}
         {chapter.content && chapter.content.length > 0 ? (
-          <ConceptsProvider concepts={stableConcepts}>
+          <ConceptsProvider concepts={concepts}>
             {categoryView}
           </ConceptsProvider>
         ) : (

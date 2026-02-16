@@ -1,127 +1,167 @@
 """vie-explainer MCP server entry point.
 
-DEPRECATED: This file is a reference implementation for MCP server mode.
-The production deployment uses main.py (HTTP server via FastAPI) on port 8001.
-
-This file is kept for:
-1. Future MCP integration if needed
-2. Reference for MCP server patterns
-3. Testing MCP tools directly
-
-For production use, see main.py instead.
+Production MCP server using Starlette + FastMCP with Streamable HTTP transport.
+Exposes tools: explain_auto, video_chat
+Endpoints: /mcp (MCP tools), /health (Docker health check)
 """
 
-import asyncio
-import json
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Route
 
-from src.tools.explain_auto import explain_auto
-from src.tools.explain_chat import explain_chat
+from src.config import settings
+from src.dependencies import close_mongo_client, get_services, init_mongo_client
+from src.logging_config import configure_structlog, get_logger
 
-# Create MCP server
-server = Server("vie-explainer")
+# Configure structured logging
+configure_structlog(json_format=settings.log_format == "json")
+logger = get_logger(__name__)
 
-
-@server.list_tools()
-async def list_tools() -> list[Tool]:
-    """List available tools."""
-    return [
-        Tool(
-            name="explain_auto",
-            description="Generate detailed documentation for a video section or concept. Results are cached and reused across all users.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "videoSummaryId": {
-                        "type": "string",
-                        "description": "ID of videoSummaryCache entry",
-                    },
-                    "targetType": {
-                        "type": "string",
-                        "enum": ["section", "concept"],
-                        "description": "Type of content to explain",
-                    },
-                    "targetId": {
-                        "type": "string",
-                        "description": "UUID of the section or concept",
-                    },
-                },
-                "required": ["videoSummaryId", "targetType", "targetId"],
-            },
-        ),
-        Tool(
-            name="explain_chat",
-            description="Interactive conversation about a memorized item. Personalized per user, not cached.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "memorizedItemId": {
-                        "type": "string",
-                        "description": "ID of the memorized item",
-                    },
-                    "userId": {
-                        "type": "string",
-                        "description": "ID of the user",
-                    },
-                    "message": {
-                        "type": "string",
-                        "description": "User's message",
-                    },
-                    "chatId": {
-                        "type": "string",
-                        "description": "Optional - continue existing chat",
-                    },
-                },
-                "required": ["memorizedItemId", "userId", "message"],
-            },
-        ),
-    ]
+# Create MCP server with Docker-compatible host validation
+mcp = FastMCP(
+    "vie-explainer",
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[
+            "127.0.0.1:*",
+            "localhost:*",
+            "[::1]:*",
+            "vie-explainer:*",
+        ],
+    ),
+)
 
 
-@server.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-    """Handle tool calls."""
+@mcp.tool()
+async def explain_auto(
+    video_summary_id: str,
+    target_type: str,
+    target_id: str,
+) -> str:
+    """Generate detailed documentation for a video section or concept.
+
+    Results are cached in systemExpansionCache and reused across all users.
+
+    Args:
+        video_summary_id: MongoDB ObjectId of the video summary
+        target_type: "section" or "concept"
+        target_id: UUID of the section or concept
+
+    Returns:
+        Markdown documentation string
+    """
+    from src.tools.explain_auto import explain_auto as _explain_auto
+
+    services = get_services()
+    return await _explain_auto(
+        video_summary_id=video_summary_id,
+        target_type=target_type,
+        target_id=target_id,
+        video_summary_repo=services["video_summary_repo"],
+        expansion_repo=services["expansion_repo"],
+        llm_service=services["llm_service"],
+    )
+
+
+@mcp.tool()
+async def video_chat(
+    video_summary_id: str,
+    user_message: str,
+    chat_history: list[dict] | None = None,
+) -> str:
+    """Chat about a specific video. Answer questions grounded in video content.
+
+    Args:
+        video_summary_id: MongoDB ObjectId of the video summary
+        user_message: The user's question about the video
+        chat_history: Optional array of previous messages [{role, content}]
+
+    Returns:
+        Assistant response grounded in video content
+    """
+    from src.tools.video_chat import video_chat as _video_chat
+
+    services = get_services()
+
+    return await _video_chat(
+        video_summary_id=video_summary_id,
+        user_message=user_message,
+        chat_history=chat_history or [],
+        video_summary_repo=services["video_summary_repo"],
+        llm_service=services["llm_service"],
+    )
+
+
+# ── Starlette routes ──
+
+
+async def health_endpoint(request: Request) -> JSONResponse:
+    """Docker health check endpoint."""
     try:
-        if name == "explain_auto":
-            content = await explain_auto(
-                video_summary_id=arguments["videoSummaryId"],
-                target_type=arguments["targetType"],
-                target_id=arguments["targetId"],
-            )
-            return [TextContent(type="text", text=content)]
+        from src.dependencies import get_database
 
-        elif name == "explain_chat":
-            result = await explain_chat(
-                memorized_item_id=arguments["memorizedItemId"],
-                user_id=arguments["userId"],
-                message=arguments["message"],
-                chat_id=arguments.get("chatId"),
-            )
-            return [TextContent(type="text", text=json.dumps(result))]
-
-        else:
-            return [TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}))]
-
-    except ValueError as e:
-        return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
+        db = get_database()
+        await db.command("ping")
+        db_status = "connected"
     except Exception as e:
-        return [TextContent(type="text", text=json.dumps({"error": f"Internal error: {str(e)}"}))]
+        logger.warning("Health check DB ping failed", error=str(e))
+        db_status = "disconnected"
+
+    status = "healthy" if db_status == "connected" else "degraded"
+    return JSONResponse({
+        "status": status,
+        "service": "vie-explainer",
+        "version": "2.0.0",
+        "transport": "streamable-http",
+        "model": settings.llm_model,
+        "database": db_status,
+    })
 
 
-async def run_server():
-    """Run the MCP server."""
-    print("Starting vie-explainer MCP server...")
+# ── Build app ──
 
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, server.create_initialization_options())
+# Create MCP Starlette app first (initializes session_manager)
+mcp_app = mcp.streamable_http_app()
+
+
+@asynccontextmanager
+async def lifespan(app: Starlette) -> AsyncGenerator[None, None]:
+    """Combined lifespan: MongoDB + MCP session manager."""
+    logger.info("Starting vie-explainer MCP server")
+    init_mongo_client()
+    # Initialize MCP session manager task group (required for tool calls).
+    # NOTE: _session_manager is a private API — no public alternative in FastMCP yet.
+    # Track as tech debt: replace when FastMCP exposes a public lifespan hook.
+    async with mcp._session_manager.run():
+        yield
+    logger.info("Shutting down vie-explainer MCP server")
+    await close_mongo_client()
+
+
+# Build main Starlette app with combined lifespan
+app = Starlette(
+    routes=[
+        Route("/health", health_endpoint, methods=["GET"]),
+    ],
+    lifespan=lifespan,
+)
+
+# Mount MCP app at root — streamable_http_app() creates internal route at /mcp,
+# so the final endpoint is /mcp (matching what vie-api client connects to).
+app.mount("/", mcp_app)
 
 
 def main():
-    """Entry point for the MCP server."""
-    asyncio.run(run_server())
+    """Entry point for uvicorn."""
+    import uvicorn
+
+    uvicorn.run("src.server:app", host="0.0.0.0", port=8001)
 
 
 if __name__ == "__main__":

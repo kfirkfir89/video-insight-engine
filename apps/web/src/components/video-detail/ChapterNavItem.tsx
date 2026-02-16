@@ -1,6 +1,7 @@
-import { Play, StopCircle } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Play, StopCircle, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { SummaryChapter } from "@vie/types";
+import type { SummaryChapter, Concept } from "@vie/types";
 
 interface ChapterNavItemProps {
   chapter: SummaryChapter;
@@ -10,6 +11,7 @@ interface ChapterNavItemProps {
   onPlay: () => void;
   onStop?: () => void;
   dataChapterId?: string;
+  concepts?: Concept[];
 }
 
 export function ChapterNavItem({
@@ -20,7 +22,29 @@ export function ChapterNavItem({
   onPlay,
   onStop,
   dataChapterId,
+  concepts = [],
 }: ChapterNavItemProps) {
+  const [expandedConcepts, setExpandedConcepts] = useState<Set<string>>(new Set());
+  const [isConceptsOpen, setIsConceptsOpen] = useState(false);
+  const hasConcepts = concepts.length > 0;
+
+  // Auto-expand concepts section when chapter becomes active, collapse when inactive
+  useEffect(() => {
+    setIsConceptsOpen(isActive && hasConcepts);
+  }, [isActive, hasConcepts]);
+
+  const toggleConcept = useCallback((conceptId: string) => {
+    setExpandedConcepts((prev) => {
+      const next = new Set(prev);
+      if (next.has(conceptId)) {
+        next.delete(conceptId);
+      } else {
+        next.add(conceptId);
+      }
+      return next;
+    });
+  }, []);
+
   return (
     <div
       data-slot="chapter-nav-item"
@@ -33,6 +57,7 @@ export function ChapterNavItem({
           : "hover:bg-muted/50"
       )}
     >
+      {/* Chapter row */}
       <div
         className="flex items-center gap-1.5 cursor-pointer"
         onClick={onScrollTo}
@@ -86,6 +111,76 @@ export function ChapterNavItem({
           </button>
         )}
       </div>
+
+      {/* Collapsible concepts section */}
+      {hasConcepts && (
+        <div
+          className={cn(
+            "grid transition-[grid-template-rows,opacity] duration-200 ease-out",
+            isConceptsOpen
+              ? "grid-rows-[1fr] opacity-100"
+              : "grid-rows-[0fr] opacity-0"
+          )}
+        >
+          <div className="overflow-hidden min-h-0">
+            <ul className="pl-[38px] pt-1 pb-0.5 space-y-0.5">
+              {concepts.map((concept) => {
+                const isExpanded = expandedConcepts.has(concept.id);
+                const hasDefinition = !!concept.definition;
+
+                return (
+                  <li key={concept.id}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (hasDefinition) toggleConcept(concept.id);
+                      }}
+                      className={cn(
+                        "flex items-start gap-1 text-[11px] text-muted-foreground/80 leading-tight text-left w-full rounded-sm",
+                        "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1",
+                        hasDefinition && "hover:text-muted-foreground cursor-pointer"
+                      )}
+                      disabled={!hasDefinition}
+                      aria-expanded={hasDefinition ? isExpanded : undefined}
+                    >
+                      {hasDefinition && (
+                        <ChevronRight
+                          className={cn(
+                            "h-2.5 w-2.5 shrink-0 mt-[2px] transition-transform duration-200",
+                            isExpanded && "rotate-90"
+                          )}
+                          aria-hidden="true"
+                        />
+                      )}
+                      <span className={!hasDefinition ? "ml-3.5" : ""}>
+                        {concept.name}
+                      </span>
+                    </button>
+                    {/* Expandable definition */}
+                    {hasDefinition && (
+                      <div
+                        className={cn(
+                          "grid transition-[grid-template-rows,opacity] duration-200 ease-out ml-3.5",
+                          isExpanded
+                            ? "grid-rows-[1fr] opacity-100"
+                            : "grid-rows-[0fr] opacity-0"
+                        )}
+                      >
+                        <div className="overflow-hidden min-h-0">
+                          <p className="text-[10px] text-muted-foreground/60 leading-relaxed pt-0.5 pb-1">
+                            {concept.definition}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

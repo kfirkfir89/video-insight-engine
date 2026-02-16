@@ -60,6 +60,8 @@ export type SortOption = "name-asc" | "name-desc" | "created-asc" | "created-des
 interface UIState {
   // Sidebar visibility
   sidebarOpen: boolean;
+  rightSidebarOpen: boolean;
+  sidebarWidth: number;
 
   // Content context
   activeSection: ActiveSection;
@@ -91,6 +93,8 @@ interface UIState {
 
   // Actions
   toggleSidebar: () => void;
+  toggleRightSidebar: () => void;
+  setSidebarWidth: (width: number) => void;
   setActiveSection: (section: ActiveSection) => void;
   setSelectedFolder: (id: string | null) => void;
   toggleFolderExpansion: (folderId: string) => void;
@@ -124,6 +128,8 @@ export const useUIStore = create<UIState>()(
     (set, get) => ({
       // Initial state
       sidebarOpen: true,
+      rightSidebarOpen: true,
+      sidebarWidth: 380,
       activeSection: "summarized",
       selectedFolderId: null,
       expandedFolderIds: [],
@@ -143,6 +149,8 @@ export const useUIStore = create<UIState>()(
 
       // Actions
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+      toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
+      setSidebarWidth: (width) => set({ sidebarWidth: width }),
       setActiveSection: (section) => set({ activeSection: section, showNewFolderInput: false }),
       setSelectedFolder: (id) => set({ selectedFolderId: id }),
       toggleFolderExpansion: (folderId) =>
@@ -334,6 +342,8 @@ export const useUIStore = create<UIState>()(
       name: "vie-ui-store",
       partialize: (state) => ({
         sidebarOpen: state.sidebarOpen,
+        rightSidebarOpen: state.rightSidebarOpen,
+        sidebarWidth: state.sidebarWidth,
         activeSection: state.activeSection,
         expandedFolderIds: state.expandedFolderIds,
         sidebarTextSize: state.sidebarTextSize,
@@ -345,6 +355,7 @@ export const useUIStore = create<UIState>()(
 
 // Selectors
 export const useSidebarOpen = () => useUIStore((s) => s.sidebarOpen);
+export const useRightSidebarOpen = () => useUIStore((s) => s.rightSidebarOpen);
 export const useSelectedFolder = () => useUIStore((s) => s.selectedFolderId);
 export const useActiveSection = () => useUIStore((s) => s.activeSection);
 export const useSidebarTextSize = () => useUIStore((s) => s.sidebarTextSize);

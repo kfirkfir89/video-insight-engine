@@ -7,41 +7,6 @@ from pydantic import BaseModel, Field
 
 
 # ============================================================
-# Request/Response Models (HTTP API)
-# ============================================================
-
-
-class ExplainAutoRequest(BaseModel):
-    """Request body for explain_auto endpoint."""
-
-    videoSummaryId: str = Field(..., description="MongoDB ObjectId of video summary")
-    targetType: str = Field(..., description="Type of target: 'section' or 'concept'")
-    targetId: str = Field(..., description="UUID of the section or concept")
-
-
-class ExplainChatRequest(BaseModel):
-    """Request body for explain_chat endpoint."""
-
-    memorizedItemId: str = Field(..., description="MongoDB ObjectId of memorized item")
-    userId: str = Field(..., description="MongoDB ObjectId of the user")
-    message: str = Field(..., description="User's chat message")
-    chatId: str | None = Field(None, description="Optional chat ID to continue")
-
-
-class ExplainAutoResponse(BaseModel):
-    """Response for explain_auto endpoint."""
-
-    expansion: str = Field(..., description="Generated markdown documentation")
-
-
-class ExplainChatResponse(BaseModel):
-    """Response for explain_chat endpoint."""
-
-    response: str = Field(..., description="Assistant's response text")
-    chatId: str = Field(..., description="Chat session ID")
-
-
-# ============================================================
 # Domain Models
 # ============================================================
 

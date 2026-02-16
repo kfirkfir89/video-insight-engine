@@ -1,9 +1,9 @@
-# Web Framework (HTTP API)
-fastapi>=0.109.0
+# Web Framework (Starlette for MCP mounting)
+starlette>=0.41.0
 uvicorn>=0.27.0
 
-# MCP Server (kept for reference)
-mcp>=1.0.0
+# MCP Server
+mcp>=1.25,<2
 
 # LLM (multi-provider via LiteLLM)
 litellm>=1.80.0
