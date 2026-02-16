@@ -26,6 +26,8 @@ const VERB_TO_NOUN_T = new Set([
   'detect', 'reflect', 'inject', 'inspect', 'redirect', 'interact',
   'distract', 'subtract', 'react', 'compact', 'attract', 'disrupt',
 ]);
+// Noun suffixes to skip during gerund addition (avoids noise like "dopamining")
+const NOUN_SUFFIX_RE = /(?:ine|tion|sion|ment|ness|ance|ence|ity|ure|ous|ism|ist|ble|ful|less|ship)$/;
 // Cap on total variants to keep regex manageable
 const MAX_VARIANTS = 50;
 
@@ -43,6 +45,7 @@ const MAX_VARIANTS = 50;
  * - Plural form (append 's') and singular form (strip trailing 's')
  * - Strip generic suffix words: "rewind feature" → "rewind"
  * - Two-word substrings for 3+ word names: "initial root directory" → "root directory"
+ * - Gerund addition: "engineer" → "engineering", "code" → "coding"
  *
  * @param name - The concept name to generate variants for
  * @param aliases - Optional LLM-provided aliases to prepend
@@ -153,26 +156,46 @@ export function getNameVariants(name: string, aliases?: string[]): string[] {
 
     if (!hasValidPair) {
       for (const w of words) {
-        if (!STOP_WORDS.has(w) && w.length >= 5) add(w);
+        if (!STOP_WORDS.has(w) && w.length >= 8) add(w);
       }
     }
   }
 
   // 10. Gerund stripping: "escaping" → "escape", "running" → "run"
+  // For multi-word concepts, only add full-phrase replacements (not standalone stems)
+  const isSingleWord = words.length === 1;
   for (const w of words) {
     if (w.length >= 6 && w.endsWith('ing')) {
       const stem = w.slice(0, -3);
       if (stem.length >= 3) {
         // Pattern: stem + e → "escaping" → "escape"
-        add(stem + 'e');
+        if (isSingleWord) add(stem + 'e');
         add(name.toLowerCase().replace(w, stem + 'e'));
         // Double-consonant pattern: "running" → "run", "setting" → "set"
         if (stem.length >= 4 && stem[stem.length - 1] === stem[stem.length - 2]) {
-          add(stem.slice(0, -1));
+          if (isSingleWord) add(stem.slice(0, -1));
           add(name.toLowerCase().replace(w, stem.slice(0, -1)));
         }
       }
     }
+  }
+
+  // 10b. Gerund addition: "engineer" → "engineering", "code" → "coding"
+  // Reverse of step 10: given a non-gerund word, produce the -ing form.
+  // Skip common noun suffixes to avoid noise like "dopamining", "architecturing".
+  for (const w of words) {
+    if (w.length < 4 || w.endsWith('ing')) continue;
+    if (NOUN_SUFFIX_RE.test(w)) continue;
+
+    let gerund: string;
+    if (w.endsWith('e') && !w.endsWith('ee') && !w.endsWith('oe') && !w.endsWith('ye')) {
+      gerund = w.slice(0, -1) + 'ing'; // "code" → "coding"
+    } else {
+      gerund = w + 'ing'; // "engineer" → "engineering"
+    }
+
+    if (isSingleWord) add(gerund);
+    add(name.toLowerCase().replace(w, gerund));
   }
 
   // 11. Verb-to-noun suffix (whitelisted verbs only)

@@ -156,7 +156,7 @@ export function extractBlockText(block: ContentBlock): string {
  * Within each chapter, concepts are sorted by their first content-mention
  * position (character offset), so they appear in reading order.
  *
- * `allConcepts` (passed separately) still powers inline tooltips everywhere.
+ * Each chapter highlights only its own per-chapter concepts (no global allConcepts).
  */
 export function matchConceptsToChapters(
   concepts: Concept[],
