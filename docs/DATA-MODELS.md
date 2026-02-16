@@ -303,7 +303,9 @@ One entry per YouTube video. Shared across all users.
       id: string,                 // UUID
       name: string,
       definition: string | null,
-      timestamp: string | null
+      timestamp: string | null,
+      chapterIndex: number | null, // Per-chapter assignment
+      aliases: string[]            // LLM-provided short forms for matching
     }]
   } | null,
 

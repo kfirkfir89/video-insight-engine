@@ -95,6 +95,7 @@ class MongoDBVideoRepository:
                         "definition": c.get("definition"),
                         "timestamp": c.get("timestamp"),
                         "chapterIndex": c.get("chapter_index"),
+                        "aliases": c.get("aliases", []),
                     }
                     for c in result["summary"]["concepts"]
                 ],

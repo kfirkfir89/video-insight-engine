@@ -2,6 +2,7 @@ import { memo, useState, useCallback } from 'react';
 import { Copy, Check, Terminal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
+import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { TerminalBlock as TerminalBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
@@ -59,14 +60,14 @@ export const TerminalBlock = memo(function TerminalBlock({ block }: TerminalBloc
       <div className="p-4 font-mono text-sm">
         <div className="flex items-start gap-2">
           <span className="text-success code-prompt-glow select-none">$</span>
-          <span className="text-zinc-100 whitespace-pre-wrap">{block.command}</span>
+          <span className="text-zinc-100 whitespace-pre-wrap"><ConceptHighlighter text={block.command} /></span>
         </div>
 
         {/* Output */}
         {block.output && (
           <div className="mt-3 pt-3 border-t border-white/10">
             <div className="text-xs text-zinc-500 mb-1">{BLOCK_LABELS.output}:</div>
-            <pre className="text-zinc-400 whitespace-pre-wrap text-xs">{block.output}</pre>
+            <pre className="text-zinc-400 whitespace-pre-wrap text-xs"><ConceptHighlighter text={block.output} /></pre>
           </div>
         )}
       </div>

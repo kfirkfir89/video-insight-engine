@@ -133,5 +133,154 @@ describe('concept-utils', () => {
       const seoCount = variants.filter(v => v === 'seo').length;
       expect(seoCount).toBe(1);
     });
+
+    // ─────────────────────────────────────────────────────
+    // Hyphen/space swaps
+    // ─────────────────────────────────────────────────────
+
+    it('should produce hyphenated variant from spaced name', () => {
+      const variants = getNameVariants('text to speech');
+      expect(variants).toContain('text to speech');
+      expect(variants).toContain('text-to-speech');
+    });
+
+    it('should produce spaced variant from hyphenated name', () => {
+      const variants = getNameVariants('auto-compaction');
+      expect(variants).toContain('auto-compaction');
+      expect(variants).toContain('auto compaction');
+    });
+
+    // ─────────────────────────────────────────────────────
+    // Singular form stripping
+    // ─────────────────────────────────────────────────────
+
+    it('should strip trailing s for singular form', () => {
+      const variants = getNameVariants('Trigger words');
+      expect(variants).toContain('trigger words');
+      expect(variants).toContain('trigger word'); // singular
+    });
+
+    it('should not produce invalid singular for names ending in ss', () => {
+      const variants = getNameVariants('Congress');
+      expect(variants).not.toContain('congres');
+    });
+
+    // ─────────────────────────────────────────────────────
+    // Generic suffix stripping
+    // ─────────────────────────────────────────────────────
+
+    it('should strip generic suffix words', () => {
+      const variants = getNameVariants('rewind feature');
+      expect(variants).toContain('rewind feature');
+      expect(variants).toContain('rewind');
+    });
+
+    it('should strip generic suffix "system"', () => {
+      const variants = getNameVariants('validation system');
+      expect(variants).toContain('validation');
+    });
+
+    it('should not strip non-generic last words', () => {
+      const variants = getNameVariants('deep learning');
+      // "learning" is not in the generic suffixes list
+      expect(variants).not.toContain('deep');
+    });
+
+    // ─────────────────────────────────────────────────────
+    // Two-word substrings
+    // ─────────────────────────────────────────────────────
+
+    it('should produce two-word substrings for 3+ word names', () => {
+      const variants = getNameVariants('initial root directory');
+      expect(variants).toContain('initial root');
+      expect(variants).toContain('root directory');
+    });
+
+    it('should not produce two-word substrings for 2-word names', () => {
+      const variants = getNameVariants('Cloud Code');
+      // Only 2 words, no substrings needed
+      expect(variants).not.toContain('cloud');
+    });
+
+    it('should skip stop-word-only pairs in two-word substrings', () => {
+      const variants = getNameVariants('escaping the interrupts');
+      // "the interrupts" should be skipped (starts with stop word "the")
+      expect(variants).not.toContain('the interrupts');
+      // But "escaping the" pair should also be skipped (ends with stop word)
+      expect(variants).not.toContain('escaping the');
+    });
+
+    // ─────────────────────────────────────────────────────
+    // Generic suffix: "language"
+    // ─────────────────────────────────────────────────────
+
+    it('should strip generic suffix "language"', () => {
+      const variants = getNameVariants('DSL language');
+      expect(variants).toContain('dsl');
+    });
+
+    // ─────────────────────────────────────────────────────
+    // Individual word fallback
+    // ─────────────────────────────────────────────────────
+
+    it('should fall back to individual words when all two-word pairs are stop-word blocked', () => {
+      const variants = getNameVariants('Screenshot and drag');
+      // Both pairs "screenshot and" / "and drag" are blocked by stop word "and"
+      // Fallback should add "screenshot" (10 chars >= 5)
+      expect(variants).toContain('screenshot');
+    });
+
+    it('should not fall back to individual words when valid pairs exist', () => {
+      const variants = getNameVariants('initial root directory');
+      // "initial root" and "root directory" are valid pairs
+      // Should NOT add "initial" as standalone fallback
+      expect(variants).not.toContain('initial');
+    });
+
+    // ─────────────────────────────────────────────────────
+    // Abbreviation expansion
+    // ─────────────────────────────────────────────────────
+
+    it('should expand common abbreviations', () => {
+      const variants = getNameVariants('throwaway envs');
+      expect(variants).toContain('throwaway environments');
+    });
+
+    it('should expand multiple abbreviations in compound name', () => {
+      const variants = getNameVariants('dev config');
+      expect(variants).toContain('development configuration');
+    });
+
+    // ─────────────────────────────────────────────────────
+    // Gerund stripping
+    // ─────────────────────────────────────────────────────
+
+    it('should strip gerund to base form with -e', () => {
+      const variants = getNameVariants('escaping the interrupts');
+      // "escaping" → "escape" (strip -ing, add -e)
+      expect(variants).toContain('escape');
+      // Full name variant with base form
+      expect(variants).toContain('escape the interrupts');
+    });
+
+    it('should not produce invalid stems for short -ing words', () => {
+      const variants = getNameVariants('ping');
+      // "ping" is only 4 chars, too short for gerund stripping (needs >= 6)
+      expect(variants).not.toContain('pe');
+    });
+
+    // ─────────────────────────────────────────────────────
+    // Verb-to-noun suffix
+    // ─────────────────────────────────────────────────────
+
+    it('should add -ion suffix for verb-to-noun: "course correct" → "course correction"', () => {
+      const variants = getNameVariants('course correct');
+      expect(variants).toContain('course correction');
+    });
+
+    it('should add -tion suffix for -te ending: "create" → "creation"', () => {
+      const variants = getNameVariants('data create');
+      expect(variants).toContain('data creation');
+    });
   });
 });

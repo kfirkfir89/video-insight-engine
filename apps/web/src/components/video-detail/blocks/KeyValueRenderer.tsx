@@ -2,6 +2,7 @@ import { memo } from 'react';
 import type { KeyValueBlock } from '@vie/types';
 import { Cpu, DollarSign, BarChart3, Info, MapPin } from 'lucide-react';
 import { BlockWrapper } from './BlockWrapper';
+import { ConceptHighlighter } from '../ConceptHighlighter';
 
 interface KeyValueRendererProps {
   block: KeyValueBlock;
@@ -48,7 +49,7 @@ export const KeyValueRenderer = memo(function KeyValueRenderer({ block }: KeyVal
             <div key={index}>
               <div className="flex items-baseline justify-between gap-3 py-1.5 text-sm even:bg-muted/[0.04]">
                 <dt className="text-xs font-bold uppercase text-muted-foreground/70 tracking-wide">{item.key}</dt>
-                <dd className="text-sm font-medium text-muted-foreground">{item.value}</dd>
+                <dd className="text-sm font-medium text-muted-foreground"><ConceptHighlighter text={item.value} /></dd>
               </div>
               {index < block.items.length - 1 && (
                 <div className="fade-divider" aria-hidden="true" />

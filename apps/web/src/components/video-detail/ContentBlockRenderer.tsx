@@ -257,7 +257,7 @@ export function ContentBlockRenderer({
       if ('text' in unknownBlock && typeof unknownBlock.text === 'string') {
         return (
           <div className="relative pl-3 border-l-2 border-border/50">
-            <p className="text-muted-foreground leading-[1.75]">{unknownBlock.text}</p>
+            <p className="text-muted-foreground leading-[1.75]"><ConceptHighlighter text={unknownBlock.text} /></p>
           </div>
         );
       }

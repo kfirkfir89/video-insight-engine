@@ -11,7 +11,7 @@ function escapeRegex(str: string): string {
 
 // Word-boundary character class for regex lookahead/lookbehind.
 // Uses explicit whitespace/punctuation instead of \b for Unicode (accented char) support.
-const BOUNDARY = '[\\s.,;:!?()"\'\\[\\]\\-\\/\\u2013\\u2014]';
+const BOUNDARY = '[\\s.,;:!?()"\'\\[\\]\\-\\/\\u2013\\u2014*_`#~]';
 
 interface ConceptHighlighterProps {
   text: string;
@@ -37,7 +37,7 @@ export const ConceptHighlighter = memo(function ConceptHighlighter({ text }: Con
       if (!c.name) continue;
 
       // Use shared getNameVariants() — same logic as sidebar matching
-      const variants = getNameVariants(c.name);
+      const variants = getNameVariants(c.name, c.aliases);
       for (const variant of variants) {
         if (!map.has(variant)) {
           map.set(variant, c);
@@ -124,7 +124,7 @@ export const ConceptHighlighter = memo(function ConceptHighlighter({ text }: Con
               <button
                 type="button"
                 data-concept-id={concept.id}
-                className="group/concept inline-flex items-baseline gap-0.5 cursor-pointer border-b border-dotted border-primary/40 text-inherit hover:border-primary hover:text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:rounded-sm data-[first-appearance]:border-solid data-[first-appearance]:border-b-2 data-[first-appearance]:border-primary/60 data-[first-appearance]:hover:border-primary"
+                className="group/concept inline-flex items-baseline gap-0.5 cursor-pointer border-b border-dotted border-primary/40 text-inherit normal-case hover:border-primary hover:text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:rounded-sm data-[first-appearance]:border-solid data-[first-appearance]:border-b-2 data-[first-appearance]:border-primary/60 data-[first-appearance]:hover:border-primary"
                 aria-label={`Definition: ${concept.name}`}
               >
                 {seg.value}
