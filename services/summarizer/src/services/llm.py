@@ -163,6 +163,13 @@ def _validate_timestamp(ts: Any) -> str | None:
     return None
 
 
+def _normalize_aliases(raw: Any) -> list[str]:
+    """Normalize LLM-provided aliases to a clean list of strings."""
+    if not isinstance(raw, list):
+        return []
+    return [a.strip() for a in raw if isinstance(a, str) and a.strip()][:5]
+
+
 def _normalize_for_dedup(name: str) -> str:
     """Normalize a concept name for fuzzy dedup comparison.
 
@@ -389,6 +396,7 @@ def merge_chapter_concepts(
                 "definition": definition,
                 "timestamp": timestamp,
                 "chapter_index": chapter_idx,
+                "aliases": _normalize_aliases(c.get("aliases", [])),
             })
 
     return merged
@@ -439,12 +447,21 @@ def _build_concept_extraction_section(
         f"- Concepts only mentioned in passing without explanation\n"
         f"- Common words that don't add value\n"
         f"\n"
-        f"SELF-ANCHORING RULE:\n"
-        f"For each concept you extract, ensure its exact name (or recognized short form) "
-        f"appears at least once in your content blocks above. This enables inline "
-        f'highlighting. For example, if you extract a concept named "Dependency Injection", '
-        f'the phrase "dependency injection" must appear in at least one paragraph, '
-        f"definition, or callout block.\n"
+        f"SELF-ANCHORING RULE (CRITICAL):\n"
+        f"Before finalizing your concepts array, verify EACH concept name appears "
+        f"verbatim in at least one content block above. If a concept name does NOT "
+        f"appear in your content blocks, either:\n"
+        f"  1. Rewrite the concept name to match a phrase that IS in your content, OR\n"
+        f"  2. Remove the concept entirely.\n"
+        f"Concepts whose names don't appear in the content will be invisible to users.\n"
+        f'Example: If content says "prompt queuing" but concept is named '
+        f'"Prompt Queuing System", rename to "Prompt Queuing".\n'
+        f"\n"
+        f"COMMON MISTAKES TO AVOID:\n"
+        f"- 'throwaway envs' when content says 'throwaway environments' (use full words)\n"
+        f"- 'escaping the interrupts' when content says 'escape interrupts' (match exact verb form)\n"
+        f"- 'course correct' when content says 'course correction' (match exact noun/verb form)\n"
+        f"- 'workflow triggers' when 'workflow' and 'triggers' appear in separate sentences (name must be a contiguous phrase)\n"
     )
 
     if already_extracted:
@@ -472,7 +489,8 @@ def _build_concept_prompt_parts(
         section = _build_concept_extraction_section(total_chapters, already_extracted_names)
         field = (
             ',\n  "concepts": [\n'
-            '    {"name": "Concept Name", "definition": "Actual definition", "timestamp": "M:SS"}\n'
+            '    {"name": "Concept Name", "definition": "Actual definition", '
+            '"timestamp": "M:SS", "aliases": ["optional short form"]}\n'
             '  ]'
         )
         return section, field, 2000
@@ -526,6 +544,7 @@ def build_concept_dicts(raw_concepts: list[dict]) -> list[dict[str, Any]]:
             "name": name,
             "definition": definition,
             "timestamp": timestamp,
+            "aliases": _normalize_aliases(c.get("aliases", [])),
         })
 
     return result

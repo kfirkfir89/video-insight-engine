@@ -720,7 +720,9 @@ describe('timestamp-utils', () => {
     it('should assign concept to chapter via chapterIndex', () => {
       const chapters: SummaryChapter[] = [
         createChapter('s1', 0, 60),
-        createChapter('s2', 60, 120),
+        createChapter('s2', 60, 120, [
+          { blockId: 'b1', type: 'paragraph', text: 'Understanding Neuroplasticity and brain adaptation' },
+        ]),
         createChapter('s3', 120, 180),
       ];
       const concepts: Concept[] = [
@@ -729,7 +731,7 @@ describe('timestamp-utils', () => {
 
       const result = matchConceptsToChapters(concepts, chapters);
 
-      // chapterIndex=1 maps to s2, regardless of timestamp (2:30 = 150s would be in s3)
+      // chapterIndex=1 maps to s2 (concept name appears in content), regardless of timestamp (2:30 = 150s would be in s3)
       expect(result.byChapter.get('s1')).toHaveLength(0);
       expect(result.byChapter.get('s2')).toHaveLength(1);
       expect(result.byChapter.get('s2')![0].name).toBe('Neuroplasticity');
@@ -794,14 +796,14 @@ describe('timestamp-utils', () => {
     it('should handle mix of chapterIndex and legacy concepts', () => {
       const chapters: SummaryChapter[] = [
         createChapter('s1', 0, 60, [
-          { blockId: 'b1', type: 'paragraph', text: 'Intro content' },
+          { blockId: 'b1', type: 'paragraph', text: 'Intro about Dopamine receptors' },
         ]),
         createChapter('s2', 60, 120, [
           { blockId: 'b2', type: 'paragraph', text: 'Deep dive into Cortisol response' },
         ]),
       ];
       const concepts: Concept[] = [
-        { ...createConcept('c1', 'Dopamine', null), chapterIndex: 0 },   // new: chapterIndex
+        { ...createConcept('c1', 'Dopamine', null), chapterIndex: 0 },   // new: chapterIndex, name in content
         createConcept('c2', 'Cortisol', '1:15'),                          // legacy: content + timestamp
       ];
 
@@ -811,6 +813,27 @@ describe('timestamp-utils', () => {
       expect(result.byChapter.get('s1')![0].name).toBe('Dopamine');
       expect(result.byChapter.get('s2')).toHaveLength(1);
       expect(result.byChapter.get('s2')![0].name).toBe('Cortisol');
+    });
+
+    it('should fall through to content search when concept not in assigned chapter', () => {
+      const chapters: SummaryChapter[] = [
+        createChapter('s1', 0, 60, [
+          { blockId: 'b1', type: 'paragraph', text: 'Early mention of tokens and limits' },
+        ]),
+        createChapter('s2', 60, 120, [
+          { blockId: 'b2', type: 'paragraph', text: 'Unrelated content here' },
+        ]),
+      ];
+      const concepts: Concept[] = [
+        { ...createConcept('c1', 'tokens', '1:00'), chapterIndex: 1 }, // assigned to s2 but "tokens" is in s1
+      ];
+
+      const result = matchConceptsToChapters(concepts, chapters);
+
+      // Should fall through to content-based matching and land in s1
+      expect(result.byChapter.get('s1')).toHaveLength(1);
+      expect(result.byChapter.get('s1')![0].name).toBe('tokens');
+      expect(result.byChapter.get('s2')).toHaveLength(0);
     });
   });
 

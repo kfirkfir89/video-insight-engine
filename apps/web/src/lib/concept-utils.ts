@@ -5,6 +5,30 @@
  * highlighting (ConceptHighlighter.tsx) to ensure consistent behavior.
  */
 
+// Module-scope constants to avoid re-allocation per call
+const GENERIC_SUFFIXES = ['feature', 'system', 'tool', 'technique', 'method', 'process', 'mechanism', 'language'];
+const STOP_WORDS = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'in', 'on', 'to', 'for', 'with', 'by']);
+const ABBREVIATIONS: Record<string, string> = {
+  env: 'environment', envs: 'environments',
+  config: 'configuration', configs: 'configurations',
+  dir: 'directory', dirs: 'directories',
+  repo: 'repository', repos: 'repositories',
+  auth: 'authentication', impl: 'implementation',
+  dev: 'development', prod: 'production',
+  deps: 'dependencies', dep: 'dependency',
+  param: 'parameter', params: 'parameters',
+  func: 'function', funcs: 'functions',
+};
+// Whitelist of verbs where -t → -tion is valid
+const VERB_TO_NOUN_T = new Set([
+  'correct', 'construct', 'destruct', 'extract', 'abstract', 'direct',
+  'select', 'collect', 'connect', 'protect', 'restrict', 'instruct',
+  'detect', 'reflect', 'inject', 'inspect', 'redirect', 'interact',
+  'distract', 'subtract', 'react', 'compact', 'attract', 'disrupt',
+]);
+// Cap on total variants to keep regex manageable
+const MAX_VARIANTS = 50;
+
 /**
  * Generate search variants from a concept name to improve content matching.
  *
@@ -15,7 +39,10 @@
  * - Reversed pattern: short base + long parens content
  *   "EMDR (Eye Movement Desensitization Reprocessing)" → "emdr", "eye movement desensitization reprocessing"
  * - Slash parts: "Client/Server Architecture" → "client", "server"
- * - Simple plural form (append 's')
+ * - Hyphen/space swaps: "text to speech" → "text-to-speech", "auto-compaction" → "auto compaction"
+ * - Plural form (append 's') and singular form (strip trailing 's')
+ * - Strip generic suffix words: "rewind feature" → "rewind"
+ * - Two-word substrings for 3+ word names: "initial root directory" → "root directory"
  *
  * @param name - The concept name to generate variants for
  * @param aliases - Optional LLM-provided aliases to prepend
@@ -28,6 +55,7 @@ export function getNameVariants(name: string, aliases?: string[]): string[] {
   const variants: string[] = [];
 
   const add = (v: string) => {
+    if (variants.length >= MAX_VARIANTS) return;
     const lower = v.toLowerCase().trim();
     if (lower.length > 0 && !seen.has(lower)) {
       seen.add(lower);
@@ -74,13 +102,110 @@ export function getNameVariants(name: string, aliases?: string[]): string[] {
     }
   }
 
-  // 4. Plural variants: add 's' suffix to non-trivial variants
+  // 4. Hyphen ↔ space variants
+  // "text to speech" → "text-to-speech", "dangerously-skip-permissions" → "dangerously skip permissions"
+  if (name.includes(' ')) {
+    add(name.replace(/\s+/g, '-'));
+  }
+  if (name.includes('-')) {
+    add(name.replace(/-/g, ' '));
+  }
+
+  // 5. Plural variants: add 's' suffix to non-trivial variants
   const baseVariants = [...variants]; // snapshot before adding plurals
   for (const v of baseVariants) {
     if (v.length < 3) continue;
     if (!v.endsWith('s') && !v.endsWith('x') && !v.endsWith('z')) {
       add(v + 's');
     }
+  }
+
+  // 6. Singular form: strip trailing 's' for names ending in 's'
+  for (const v of [...variants]) {
+    if (v.length > 4 && v.endsWith('s') && !v.endsWith('ss')) {
+      add(v.slice(0, -1));
+    }
+  }
+
+  // 7. Strip generic trailing words: "rewind feature" → "rewind"
+  const words = name.toLowerCase().split(/[\s-]+/);
+  if (words.length >= 2 && GENERIC_SUFFIXES.includes(words[words.length - 1])) {
+    add(words.slice(0, -1).join(' '));
+  }
+
+  // 8. Two-word substrings for 3+ word concepts: "initial root directory" → "initial root", "root directory"
+  if (words.length >= 3) {
+    for (let i = 0; i <= words.length - 2; i++) {
+      if (STOP_WORDS.has(words[i]) || STOP_WORDS.has(words[i + 1])) continue;
+      const pair = words[i] + ' ' + words[i + 1];
+      if (pair.length >= 5) add(pair);
+    }
+  }
+
+  // 9. Individual word fallback for names where ALL two-word pairs are stop-word blocked
+  if (words.length >= 3) {
+    const hasValidPair = (() => {
+      for (let i = 0; i <= words.length - 2; i++) {
+        if (!STOP_WORDS.has(words[i]) && !STOP_WORDS.has(words[i + 1])) return true;
+      }
+      return false;
+    })();
+
+    if (!hasValidPair) {
+      for (const w of words) {
+        if (!STOP_WORDS.has(w) && w.length >= 5) add(w);
+      }
+    }
+  }
+
+  // 10. Gerund stripping: "escaping" → "escape", "running" → "run"
+  for (const w of words) {
+    if (w.length >= 6 && w.endsWith('ing')) {
+      const stem = w.slice(0, -3);
+      if (stem.length >= 3) {
+        // Pattern: stem + e → "escaping" → "escape"
+        add(stem + 'e');
+        add(name.toLowerCase().replace(w, stem + 'e'));
+        // Double-consonant pattern: "running" → "run", "setting" → "set"
+        if (stem.length >= 4 && stem[stem.length - 1] === stem[stem.length - 2]) {
+          add(stem.slice(0, -1));
+          add(name.toLowerCase().replace(w, stem.slice(0, -1)));
+        }
+      }
+    }
+  }
+
+  // 11. Verb-to-noun suffix (whitelisted verbs only)
+  for (const w of words) {
+    if (w.length >= 5) {
+      // -t → -tion: "correct" → "correction" (whitelist only)
+      if (w.endsWith('t') && !w.endsWith('tion') && VERB_TO_NOUN_T.has(w)) {
+        add(name.toLowerCase().replace(w, w + 'ion'));
+      }
+      // -te → -tion: "create" → "creation" (general pattern, safe)
+      if (w.endsWith('te') && !w.endsWith('tion')) {
+        add(name.toLowerCase().replace(w, w.slice(0, -2) + 'tion'));
+      }
+    }
+  }
+
+  // 12. Common abbreviation expansion
+  let hasAbbreviation = false;
+  for (const w of words) {
+    const expansion = ABBREVIATIONS[w];
+    if (expansion) {
+      hasAbbreviation = true;
+      add(name.toLowerCase().replace(w, expansion));
+    }
+  }
+  // Also produce fully-expanded variant when multiple abbreviations present
+  if (hasAbbreviation) {
+    let fully = name.toLowerCase();
+    for (const w of words) {
+      const expansion = ABBREVIATIONS[w];
+      if (expansion) fully = fully.replace(w, expansion);
+    }
+    add(fully);
   }
 
   return variants;

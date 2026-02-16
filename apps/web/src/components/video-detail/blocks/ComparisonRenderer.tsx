@@ -138,7 +138,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
           <div className="flex items-center justify-center gap-1.5">
             {LeftIcon && <LeftIcon className={cn('h-3.5 w-3.5', config.leftLabelClass)} aria-hidden="true" />}
             <span className={cn('text-xs font-bold uppercase tracking-wider', config.leftLabelClass)}>
-              {config.leftLabel}
+              <ConceptHighlighter text={config.leftLabel} />
             </span>
           </div>
         </div>
@@ -147,7 +147,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
             <div className="flex items-center justify-center gap-1.5">
               {RightIcon && <RightIcon className={cn('h-3.5 w-3.5', config.rightLabelClass)} aria-hidden="true" />}
               <span className={cn('text-xs font-bold uppercase tracking-wider', config.rightLabelClass)}>
-                {config.rightLabel}
+                <ConceptHighlighter text={config.rightLabel} />
               </span>
             </div>
           </div>
@@ -181,7 +181,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
             <div className="flex items-center justify-center gap-1.5">
               {RightIcon && <RightIcon className={cn('h-3.5 w-3.5', config.rightLabelClass)} aria-hidden="true" />}
               <span className={cn('text-xs font-bold uppercase tracking-wider', config.rightLabelClass)}>
-                {config.rightLabel}
+                <ConceptHighlighter text={config.rightLabel} />
               </span>
             </div>
           </div>

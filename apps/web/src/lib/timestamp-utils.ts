@@ -112,6 +112,34 @@ export function extractBlockText(block: ContentBlock): string {
     }
   }
 
+  // Terminal blocks: extract command and output
+  if ("command" in block && typeof block.command === "string") {
+    parts.push(block.command);
+  }
+  if ("output" in block && typeof block.output === "string") {
+    parts.push(block.output);
+  }
+
+  // Comparison blocks: extract column labels and items
+  if ("left" in block && typeof block.left === "object" && block.left != null) {
+    const left = block.left as Record<string, unknown>;
+    if (typeof left.label === "string") parts.push(left.label);
+    if (Array.isArray(left.items)) {
+      for (const item of left.items) {
+        if (typeof item === "string") parts.push(item);
+      }
+    }
+  }
+  if ("right" in block && typeof block.right === "object" && block.right != null) {
+    const right = block.right as Record<string, unknown>;
+    if (typeof right.label === "string") parts.push(right.label);
+    if (Array.isArray(right.items)) {
+      for (const item of right.items) {
+        if (typeof item === "string") parts.push(item);
+      }
+    }
+  }
+
   return parts.join(" ");
 }
 
@@ -163,13 +191,13 @@ export function matchConceptsToChapters(
     if (concept.chapterIndex != null) {
       const targetChapter = normalizedChapters[concept.chapterIndex];
       if (targetChapter) {
-        assignedChapterId = targetChapter.id;
-        // Still compute contentOffset for ordering within the chapter
-        const needles = getNameVariants(concept.name);
+        // Only assign to this chapter if the concept name actually appears in its content
+        const needles = getNameVariants(concept.name, concept.aliases);
         const text = chapterTextMap.get(targetChapter.id) ?? "";
         for (const needle of needles) {
           const idx = text.indexOf(needle);
           if (idx !== -1) {
+            assignedChapterId = targetChapter.id;
             contentOffset = idx;
             break;
           }
@@ -179,7 +207,7 @@ export function matchConceptsToChapters(
 
     // 1. Content-based fallback: for old data without chapterIndex
     if (!assignedChapterId) {
-      const needles = getNameVariants(concept.name);
+      const needles = getNameVariants(concept.name, concept.aliases);
       //    Try each needle variant; use the first that matches any chapter.
       for (const needle of needles) {
         for (const ch of normalizedChapters) {
