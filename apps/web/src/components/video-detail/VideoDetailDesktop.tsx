@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, MessageCircle, Copy, Download, Check, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useIsLargeDesktop } from "@/hooks/use-media-query";
 import { useMarkdownExport } from "@/hooks/use-markdown-export";
 import { TldrHero } from "./TldrHero";
@@ -17,7 +18,7 @@ import type { Concept } from "@vie/types";
 
 const EMPTY_CONCEPTS: Concept[] = [];
 
-interface VideoDetailDesktopProps extends VideoDetailCommonProps {}
+interface VideoDetailDesktopProps extends VideoDetailCommonProps { }
 
 /**
  * Desktop layout for video detail page.
@@ -52,111 +53,115 @@ export function VideoDetailDesktop({
 
   const videoSummaryId = video.videoSummaryId ?? "";
 
+  const thumbnailUrl = video.thumbnailUrl?.startsWith("https://")
+    ? video.thumbnailUrl
+    : video.youtubeId
+      ? `https://img.youtube.com/vi/${encodeURIComponent(video.youtubeId)}/maxresdefault.jpg`
+      : null;
+
   return (
     <div className="pb-24">
       {/* Main content */}
       <div className="min-w-0">
-        {/* Hero section */}
-        <div className="relative -mx-4 md:-mx-6 -mt-4 md:-mt-6 px-4 md:px-6 pt-4 mb-3">
-          {/* Background image layer */}
-          {(video.thumbnailUrl || video.youtubeId) && (() => {
-            const url = video.thumbnailUrl?.startsWith("https://")
-              ? video.thumbnailUrl
-              : video.youtubeId
-                ? `https://img.youtube.com/vi/${encodeURIComponent(video.youtubeId)}/maxresdefault.jpg`
-                : null;
-            return url ? (
-              <div
-                className="absolute inset-0 bg-cover bg-center"
-                style={{ backgroundImage: `url(${url})`, opacity: 0.6 }}
-              />
-            ) : null;
-          })()}
-          {/* Gradient overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
+        {/* Hero section — two-zone layout */}
+        <div className="relative -mx-4 md:-mx-6 -mt-4 md:-mt-6 mb-3">
 
-          {/* Content on top of background */}
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-4">
-              <Link to="/">
-                <Button variant="ghost">
-                  <ArrowLeft className="mr-2 h-4 w-4" /> Back
-                </Button>
-              </Link>
-
-              {/* Action buttons */}
-              <div className="flex items-center gap-2">
-                {/* Quick Read — near the copy/export actions */}
-                {summary?.masterSummary && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onOpenMasterSummary}
-                    className="gap-1.5 text-xs"
-                  >
-                    <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-                    Quick Read
-                  </Button>
-                )}
-                {(summary.chapters ?? []).length > 0 && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleCopyMarkdown}
-                      className="gap-1.5 text-xs"
-                      aria-label="Copy as Markdown"
-                    >
-                      {copiedState ? (
-                        <Check className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />
-                      ) : (
-                        <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+          {/* Zone 1: Header Bar */}
+          <div className="relative z-10 bg-primary/[0.12] border-b border-primary/[0.10]">
+            <div className={cn(
+              "relative py-3",
+              isLargeDesktop ? "px-4 md:px-8 lg:px-16 xl:px-24" : "px-4 md:px-6"
+            )}>
+              <div>
+                <VideoHeaderSection
+                  video={video}
+                  summary={summary}
+                  isStreaming={isStreaming}
+                  onStopSummarization={onStopSummarization}
+                  backButton={
+                    <Link to="/" className="shrink-0">
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <ArrowLeft className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                  }
+                  actions={
+                    <>
+                      {summary?.masterSummary && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={onOpenMasterSummary}
+                          className="gap-1.5 h-auto py-1 px-3 text-xs rounded-full border-primary/40 bg-primary/[0.12] text-primary hover:bg-primary/[0.20] font-semibold"
+                        >
+                          <FileText className="h-3 w-3" aria-hidden="true" />
+                          Quick Read
+                        </Button>
                       )}
-                      {copiedState ? "Copied" : "Copy"}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleDownloadMarkdown}
-                      className="gap-1.5 text-xs"
-                      aria-label="Download as Markdown"
-                    >
-                      <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                      Export
-                    </Button>
-                  </>
-                )}
-                {/* Chat toggle only shown on non-large-desktop */}
-                {!isLargeDesktop && (
-                  <Button
-                    variant={isChatOpen ? "secondary" : "ghost"}
-                    size="sm"
-                    onClick={onToggleChat}
-                    className="gap-1.5 text-xs"
-                    aria-label="Toggle video chat"
-                  >
-                    <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                    Chat
-                  </Button>
-                )}
+                      {(summary.chapters ?? []).length > 0 && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleCopyMarkdown}
+                            className="gap-1.5 h-auto py-1 px-3 text-xs rounded-full border-primary/40 bg-primary/[0.12] text-primary hover:bg-primary/[0.20] font-semibold"
+                            aria-label="Copy as Markdown"
+                          >
+                            {copiedState ? (
+                              <Check className="h-3 w-3 text-green-500" aria-hidden="true" />
+                            ) : (
+                              <Copy className="h-3 w-3" aria-hidden="true" />
+                            )}
+                            {copiedState ? "Copied" : "Copy"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleDownloadMarkdown}
+                            className="gap-1.5 h-auto py-1 px-3 text-xs rounded-full border-primary/40 bg-primary/[0.12] text-primary hover:bg-primary/[0.20] font-semibold"
+                            aria-label="Download as Markdown"
+                          >
+                            <Download className="h-3 w-3" aria-hidden="true" />
+                            Export
+                          </Button>
+                        </>
+                      )}
+                      {!isLargeDesktop && (
+                        <Button
+                          variant={isChatOpen ? "secondary" : "outline"}
+                          size="sm"
+                          onClick={onToggleChat}
+                          className={cn(
+                            "gap-1.5 h-auto py-1 px-3 text-xs rounded-full font-semibold",
+                            !isChatOpen && "border-primary/40 bg-primary/[0.12] text-primary hover:bg-primary/[0.20]"
+                          )}
+                          aria-label="Toggle video chat"
+                        >
+                          <MessageCircle className="h-3 w-3" aria-hidden="true" />
+                          Chat
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
               </div>
             </div>
+          </div>
 
-            <VideoHeaderSection
-              video={video}
-              summary={summary}
-              isStreaming={isStreaming}
-              onStopSummarization={onStopSummarization}
-            />
-
-            {/* TLDR with Key Takeaways */}
-            <div className={isLargeDesktop ? "px-4 md:px-8 lg:px-16 xl:px-24 pb-4" : "pb-6"}>
+          {/* Zone 2: TLDR Section */}
+          <div className="relative z-10 px-60 bg-primary/[0.04]">
+            <div className={cn(
+              isLargeDesktop ? "py-8 px-4 md:px-8 lg:px-16 xl:px-24" : "py-6 px-4 md:px-6"
+            )}>
               <TldrHero
                 tldr={summary.tldr}
                 keyTakeaways={summary.keyTakeaways}
                 isStreaming={isStreaming}
+                thumbnailUrl={thumbnailUrl}
               />
             </div>
+            {/* Bottom edge gradient for smooth transition */}
+            <div className="h-8 bg-gradient-to-b from-transparent to-background" />
           </div>
         </div>
 
