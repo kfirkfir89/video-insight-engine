@@ -1,5 +1,6 @@
 import { Clock, Layers, Lightbulb, StopCircle, ExternalLink, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { VideoTags } from "./VideoTags";
 import type { VideoResponse, VideoSummary } from "@vie/types";
 
@@ -8,6 +9,8 @@ interface VideoHeaderSectionProps {
   summary: VideoSummary | null;
   isStreaming: boolean;
   onStopSummarization?: () => void;
+  actions?: React.ReactNode;
+  backButton?: React.ReactNode;
 }
 
 /**
@@ -19,6 +22,8 @@ export function VideoHeaderSection({
   summary,
   isStreaming,
   onStopSummarization,
+  actions,
+  backButton,
 }: VideoHeaderSectionProps) {
   const formatDuration = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -48,15 +53,16 @@ export function VideoHeaderSection({
   const conceptCount = summary?.concepts?.length ?? 0;
 
   return (
-    <header id="video-header" className="mb-3">
-      {/* Title */}
-      <div className="mb-1.5">
+    <header id="video-header" className="mb-0">
+      {/* Title with inline back button */}
+      <div className={cn("mb-1 flex items-center gap-1", backButton && "-ml-9")}>
+        {backButton}
         {youtubeUrl ? (
           <a
             href={youtubeUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="group inline-flex items-start gap-2 hover:text-primary transition-colors"
+            className="group inline-flex items-start gap-2 hover:text-primary transition-colors min-w-0"
           >
             <h1 className="text-xl font-bold leading-snug">{video.title}</h1>
             <ExternalLink className="h-3.5 w-3.5 mt-1.5 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
@@ -93,7 +99,7 @@ export function VideoHeaderSection({
       </div>
 
       {/* Colorful stat pills */}
-      <div className="flex items-center gap-2 flex-wrap mb-2">
+      <div className="flex items-center gap-2 flex-wrap mb-1">
         {video.duration && (
           <span
             className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
@@ -133,6 +139,13 @@ export function VideoHeaderSection({
             <StopCircle className="h-3 w-3" />
             Stop
           </Button>
+        )}
+
+        {/* Action buttons slot — pushed to far right */}
+        {actions && (
+          <div className="ml-auto flex items-center gap-2 shrink-0">
+            {actions}
+          </div>
         )}
       </div>
 

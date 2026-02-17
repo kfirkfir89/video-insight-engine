@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -406,7 +407,7 @@
     display: none;
   }
 
-  /* Thin auto-hiding scrollbar — matches sidebar style */
+  /* Thin auto-hiding scrollbar — transparent bg, no arrows, line only while scrolling */
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: transparent transparent;
@@ -418,14 +419,18 @@
     width: 6px;
   }
   .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
+    background-color: transparent;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: transparent;
-    border-radius: 3px;
+    background-color: transparent;
   }
   .scrollbar-thin:hover::-webkit-scrollbar-thumb {
     background: oklch(from var(--border) l c h / 0.5);
+  }
+  .scrollbar-thin::-webkit-scrollbar-button {
+    display: none;
+    height: 0;
+    width: 0;
   }
 
   /* Safe area padding for mobile devices with notches */
