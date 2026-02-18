@@ -645,3 +645,86 @@ test('Icon button has accessible name', () => {
 | A | Minimum - keyboard, alt text |
 | AA | Standard - contrast, resize |
 | AAA | Enhanced - sign language |
+
+---
+
+## Reduced Motion
+
+Users with vestibular disorders can enable `prefers-reduced-motion`. Respect this preference for all animations.
+
+### DO ✅
+
+```css
+/* Default: no motion. Opt-in when user allows it */
+.animated-element {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animated-element {
+    animation: fade-slide-up 0.3s ease-out;
+  }
+}
+```
+
+```tsx
+// Hook to check motion preference
+function usePrefersReducedMotion() {
+  const [prefersReduced, setPrefersReduced] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setPrefersReduced(query.matches);
+
+    const handler = (e: MediaQueryListEvent) => setPrefersReduced(e.matches);
+    query.addEventListener('change', handler);
+    return () => query.removeEventListener('change', handler);
+  }, []);
+
+  return prefersReduced;
+}
+
+// Usage — skip animation when reduced motion preferred
+function FadeIn({ children }: { children: React.ReactNode }) {
+  const prefersReduced = usePrefersReducedMotion();
+
+  return (
+    <div className={prefersReduced ? '' : 'animate-fade-in'}>
+      {children}
+    </div>
+  );
+}
+```
+
+```tsx
+// Tailwind: use motion-safe / motion-reduce variants
+<div className="motion-safe:animate-bounce motion-reduce:animate-none">
+  Bouncing element (only when motion is allowed)
+</div>
+
+<div className="transition-transform motion-safe:hover:scale-105">
+  Hover scale (respects motion preference)
+</div>
+```
+
+### DON'T ❌
+
+```css
+/* Animations with no reduced-motion fallback */
+.hero {
+  animation: slide-in 0.5s ease-out; /* Always animates — bad */
+}
+
+/* Disabling animation but causing layout jump */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; } /* Nuclear option — breaks transitions too */
+}
+```
+
+### Key Rules
+
+- **Default to no animation.** Add motion only inside `@media (prefers-reduced-motion: no-preference)`
+- **Transitions are usually fine** — short `opacity` and `transform` transitions (< 200ms) are generally acceptable
+- **Avoid autoplay video/parallax** without motion preference check
+- **Test by enabling** "Reduce motion" in OS accessibility settings

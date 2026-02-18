@@ -1,125 +1,127 @@
-# Explainer V2 — Task Checklist
+# Explainer V2.1 — Task Checklist
 
-> Last Updated: 2026-02-16
+> Last Updated: 2026-02-17
 
-## Phase 1A — Explainer Becomes MCP Server
+## V1 Phases (COMPLETE — 2026-02-16)
 
-### 1A.1 Delete Dead Code [S] ✅
-- [x] Delete `services/explainer/src/tools/explain_chat.py`
-- [x] Delete `services/explainer/src/tools/explain_chat_stream.py`
-- [x] Delete `services/explainer/src/tools/chat_utils.py`
-- [x] Delete `services/explainer/src/prompts/chat_system.txt`
-- [x] Delete `services/explainer/src/services/usage_tracker.py`
-- [x] Delete `services/explainer/tests/test_explain_chat.py`
-- [x] Clean up `services/explainer/src/tools/__init__.py` imports
-- [x] Clean up any other files that import deleted modules
-- [x] Verify: no import errors
-
-### 1A.2 Rewrite server.py as MCP Entry Point [L] ✅
-- [x] Update `requirements.txt`: pin `mcp>=1.25,<2`, add `starlette>=0.41.0`
-- [x] Update `pyproject.toml` dependencies to match
-- [x] Rewrite `services/explainer/src/server.py` (Starlette + FastMCP)
-- [x] Rewrite `dependencies.py` for non-FastAPI context
-- [x] Delete `services/explainer/src/main.py`
-
-### 1A.3 Update Dockerfile [S] ✅
-- [x] Change CMD to uvicorn src.server:app
-
-### 1A.4 Refactor API Explainer Client to MCP [L] ✅
-- [x] Rewrite `api/src/services/explainer-client.ts` to MCP SDK client
-- [x] Update `api/src/test/helpers.ts` — mock container (explainChat → videoChat)
-- [x] Rewrite `api/src/services/__tests__/explainer-client.test.ts` for MCP
-- [x] Verify: API tests pass (515 tests, 0 failures)
-
-### 1A.5 Update API Routes [M] ✅
-- [x] Refactor `api/src/routes/explain.routes.ts` (remove dead chat routes)
-- [x] Rewrite `api/src/routes/explain.routes.test.ts` (remove chat tests, add video-chat)
-- [x] Verify: All API tests pass
+| Phase | Status |
+|-------|--------|
+| 1A — MCP Server | ✅ Complete |
+| 1B — Video Chat | ✅ Complete |
+| 1C — Go Deeper / Tell Me More | ✅ Complete |
+| 1D — Export | ✅ Complete |
+| Testing + Docs | ✅ Complete |
 
 ---
 
-## Phase 1B — Video-Scoped Chat
+## V2.1 — Enterprise Quality Hardening
 
-### 1B.1 New MCP Tool: video_chat [L] ✅
-- [x] Create `services/explainer/src/tools/video_chat.py`
-- [x] Create `services/explainer/src/prompts/video_chat_system.txt`
-- [x] Register `video_chat` as MCP tool in `server.py`
+### Phase 1: Security Hardening [M] ✅
 
-### 1B.2 API Route for Video Chat [M] ✅
-- [x] Add `POST /api/explain/video-chat` to explain.routes.ts
-- [x] Add `videoChat()` method to ExplainerClient
-- [x] Add route tests
+#### 1.1 Safe String Templating [S]
+- [x] `services/explainer/src/services/llm.py`: Replace `template.format(**context)` with `Template(template).safe_substitute(context)`
+- [x] `services/explainer/src/tools/video_chat.py`: Replace `.format()` with `Template.safe_substitute()`
+- [x] `services/explainer/src/prompts/video_chat_system.txt`: Change `{var}` to `$var`
+- [x] `services/explainer/src/prompts/explain_concept.txt`: Change `{var}` to `$var`
+- [x] `services/explainer/src/prompts/explain_section.txt`: Change `{var}` to `$var`
 
-### 1B.3 Frontend: Video Chat Panel [L] ✅
-- [x] Create `apps/web/src/components/video-detail/VideoChatPanel.tsx`
-- [x] Create `apps/web/src/hooks/use-video-chat.ts` (ephemeral, React state)
-- [x] Create `apps/web/src/api/explain.ts` (API client)
+#### 1.2 Harden Chat System Prompt [S]
+- [x] Rewrite `video_chat_system.txt` with anti-jailbreak instructions
+- [x] Add anti-injection: refuse to follow embedded override instructions
+- [x] Add conciseness constraint: 2-5 sentences default
+- [x] Add markdown formatting requirement
 
-### 1B.4 Wire into VideoDetail Layouts [M] ✅
-- [x] Desktop: chat panel replaces sticky chapter nav in sidebar
-- [x] Mobile: full-screen chat drawer (fixed inset-0 z-50)
-- [x] Layout: chat state management (isChatOpen, onToggleChat)
-- [x] VideoSummaryIdProvider context for nested components
+#### 1.3 Truncate User Messages [S]
+- [x] `video_chat.py`: Truncate `user_message` to 2000 chars
 
----
-
-## Phase 1C — Wire Go Deeper & Tell Me More
-
-### 1C.1 Go Deeper on Chapters [M] ✅
-- [x] Add "Go Deeper" button to `ArticleSection.tsx`
-- [x] Create `GoDeepDrawer.tsx` component with loading/error/content states
-- [x] Uses `useExplainAuto` hook (React Query, 30min staleTime)
-- [x] Wired into Desktop and Mobile layouts with expandedChapterId state
-
-### 1C.2 Tell Me More on Concepts [M] ✅
-- [x] Add `TellMeMore` component inside `ConceptHighlighter.tsx`
-- [x] Lazy-loads explanation on click via `useExplainAuto`
-- [x] Shows inside concept popover
-- [x] Uses `VideoSummaryIdContext` to get videoSummaryId
-
-### 1C.3 Loading States & Error Handling [S] ✅
-- [x] Spinner during LLM generation (GoDeepDrawer, TellMeMore)
-- [x] Error state with message
-- [x] Service unavailable handled gracefully
+#### 1.4 Anti-Injection in Expansion Prompts [S]
+- [x] Prepend anti-injection instruction to `explain_concept.txt`
+- [x] Prepend anti-injection instruction to `explain_section.txt`
 
 ---
 
-## Phase 1D — Export: Markdown + Copy
+### Phase 2: Response Quality [M] ✅
 
-### 1D.1 Block-to-Markdown Utility [L] ✅
-- [x] Create `apps/web/src/lib/block-to-markdown.ts`
-- [x] Handles all ContentBlock types: paragraph, bullets, numbered, code, quote, table, callout, timestamp, definition, keyvalue, comparison, example, do_dont, statistic + fallback
-- [x] `chaptersToMarkdown(title, chapters)`, `copyToClipboard(text)`, `downloadAsFile(content, filename)`
+#### 2.1 Per-Use-Case max_tokens [S]
+- [x] `llm.py`: Add `max_tokens` param to `generate_expansion()`, `chat_completion()`, `chat_completion_stream()`
+- [x] `explain_auto.py`: concept=800, section=1500
+- [x] `video_chat.py`: chat=1000
 
-### 1D.2 Copy & Download Buttons [M] ✅
-- [x] Desktop: "Copy as Markdown" + "Download as Markdown" buttons in header
-- [x] Mobile: icon-only buttons in header bar
-- [x] Copy: clipboard API with copied feedback (2s timeout)
-- [x] Download: Blob → createObjectURL → anchor click → revokeObjectURL
+#### 2.2 Rewrite Concept Prompt [M]
+- [x] Rewrite `explain_concept.txt` for short format (150-250 words)
+- [x] NO headings, NO code blocks (unless concept is code)
+- [x] Structure: define → why it matters → example → related concept
+
+#### 2.3 Rewrite Section Prompt [M]
+- [x] Rewrite `explain_section.txt` for medium format (300-500 words)
+- [x] One ## heading, 2-3 ### sub-sections max
+- [x] Structure: core explanation → key details → practical takeaway
 
 ---
 
-## Cross-Phase Tasks
+### Phase 3: Frontend Markdown Rendering [M] ✅
 
-### Test Coverage ✅
-- [x] API: MCP client tests (explainer-client.test.ts — rewritten)
-- [x] API: Route tests (explain.routes.test.ts — rewritten)
-- [x] Web unit tests: 49 files, 1057 tests, 0 failures
-- [x] API unit tests: 29 files, 515 tests, 0 failures
-- [x] TypeScript compilation: both API and web pass clean (0 errors)
-- [x] Playwright E2E: 16 tests all passing
-  - Desktop: 7 tests (chat, Go Deeper, export, toggles)
-  - Layout & Overflow: 4 tests (1440px, 1024px, 1280px, HTML hierarchy)
-  - Responsivity: 5 tests (375px mobile, 768px tablet, chat drawer, Go Deeper, export)
+#### 3.1 Install Typography Plugin [S]
+- [x] Run `pnpm add @tailwindcss/typography` in `apps/web/`
+- [x] Add `@plugin "@tailwindcss/typography";` to `index.css` (Tailwind v4 syntax)
+- [x] Verify: `npm run build` passes
 
-### Documentation Updates ✅
-- [x] Update `docs/SERVICE-EXPLAINER.md` — Rewritten: Starlette + FastMCP, video_chat, removed dead code
-- [x] Update `docs/API-REFERENCE.md` — New video-chat endpoint, removed dead chat/stream endpoints, updated MCP section
-- [x] Update `CLAUDE.md` — explainer tech stack = Starlette + FastMCP + LiteLLM
-- [x] Update `docs/ARCHITECTURE.md` — Updated service diagram, video_chat flow replaces explain_chat
+#### 3.2 Create Shared MarkdownContent Component [M]
+- [x] Create `apps/web/src/components/ui/markdown-content.tsx`
+- [x] Support `compact` mode (no headings, tighter spacing for popovers)
+- [x] Support default mode (full markdown for drawers and chat)
 
-### Schema Cleanup ✅
-- [x] Remove dead `ExplainChatRequest`, `ExplainChatResponse`, `ExplainAutoRequest`, `ExplainAutoResponse` from `schemas.py`
+#### 3.3 Update GoDeepDrawer [S]
+- [x] Replace plain text with `<MarkdownContent content={data.expansion} />`
+- [x] Remove `whitespace-pre-wrap` class
+
+#### 3.4 Update TellMeMore Popover [S]
+- [x] Use `<MarkdownContent compact />` in TellMeMore component
+- [x] Widen popover: `max-w-xs` → `max-w-sm`
+- [x] Add `max-h-64 overflow-y-auto` to expansion content
+
+#### 3.5 Update VideoChatPanel [S]
+- [x] Assistant messages: Use `<MarkdownContent />`
+- [x] User messages: Keep plain text
+
+#### 3.6 Refactor MasterSummaryModal [S]
+- [x] Replace inline ReactMarkdown with shared `<MarkdownContent />`
+
+#### 3.7 Build Verification [S]
+- [x] TypeScript: 0 errors
+- [x] Web tests: 49 files, 1057 tests passed
+- [x] API tests: 29 files, 515 tests passed
+
+---
+
+### Phase 4: Error Handling [S] ✅
+
+#### 4.1 Wrap LLM Errors [S]
+- [x] `llm_provider.py`: Import `LLMError` from `exceptions.py`
+- [x] `complete_with_messages()`: Wrap `RateLimitError`, `Timeout`, `AuthenticationError`, `ServiceUnavailableError`, `APIError` → `LLMError`
+- [x] `stream_with_messages()`: Same wrapping
+
+#### 4.2 Handle LLMError in MCP Tools [S]
+- [x] `server.py` `explain_auto` wrapper: Catch `LLMError` → return friendly string
+- [x] `server.py` `video_chat` wrapper: Same
+
+---
+
+### Playwright Visual Testing ✅ (2026-02-17)
+
+| Viewport | Size | Result |
+|----------|------|--------|
+| Desktop | 1440x900 | ✅ Clean layout, sidebar + content + right panel icons |
+| Tablet | 768x1024 | ✅ Sidebar collapses to icon strip, content fills width |
+| Mobile | 375x812 | ✅ Icon strip + full content, no overflow |
+| Go Deeper drawer | Desktop | ✅ Full markdown: h2/h3 headings, bold, bullet lists |
+| Concept popover | Desktop | ✅ Wider max-w-sm, compact markdown, scroll overflow |
+
+---
+
+### Post-Deploy
+
+- [ ] Clear `systemExpansionCache` collection in MongoDB (stale from old prompts)
 
 ---
 
@@ -127,9 +129,9 @@
 
 | Phase | Status | Completed |
 |-------|--------|-----------|
-| 1A — MCP Server | ✅ Complete | 2026-02-16 |
-| 1B — Video Chat | ✅ Complete | 2026-02-16 |
-| 1C — Go Deeper / Tell Me More | ✅ Complete | 2026-02-16 |
-| 1D — Export | ✅ Complete | 2026-02-16 |
-| Testing | ✅ Complete | 2026-02-16 |
-| Documentation | ✅ Complete | 2026-02-16 |
+| Phase 1 — Security | ✅ Complete | 2026-02-17 |
+| Phase 2 — Quality | ✅ Complete | 2026-02-17 |
+| Phase 3 — Frontend | ✅ Complete | 2026-02-17 |
+| Phase 4 — Errors | ✅ Complete | 2026-02-17 |
+| Playwright Testing | ✅ Complete | 2026-02-17 |
+| Post-Deploy | ⬜ Pending | — |

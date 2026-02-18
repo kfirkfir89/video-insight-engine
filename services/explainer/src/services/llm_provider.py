@@ -20,6 +20,7 @@ from litellm.exceptions import (
 from pydantic import BaseModel
 
 from src.config import settings
+from src.exceptions import LLMError
 
 logger = logging.getLogger(__name__)
 
@@ -148,19 +149,19 @@ class LLMProvider:
 
         except RateLimitError as e:
             logger.warning(f"Rate limited by {self._extract_provider(self._model)}: {e}")
-            raise
+            raise LLMError("Service is temporarily busy. Please try again.") from e
         except AuthenticationError as e:
             logger.error(f"Auth error for {self._extract_provider(self._model)}: {e}")
-            raise
+            raise LLMError("AI service configuration error.") from e
         except Timeout as e:
             logger.warning(f"Timeout after {self._timeout}s: {e}")
-            raise
+            raise LLMError("Request timed out. Please try again.") from e
         except ServiceUnavailableError as e:
             logger.warning(f"Service unavailable: {e}")
-            raise
+            raise LLMError("Service is temporarily unavailable. Please try again.") from e
         except APIError as e:
             logger.error(f"API error: {e}")
-            raise
+            raise LLMError("An unexpected error occurred.") from e
 
     async def complete_with_tracking(
         self,
@@ -289,16 +290,16 @@ class LLMProvider:
 
         except RateLimitError as e:
             logger.warning(f"Rate limited during stream: {e}")
-            raise
+            raise LLMError("Service is temporarily busy. Please try again.") from e
         except AuthenticationError as e:
             logger.error(f"Auth error during stream: {e}")
-            raise
+            raise LLMError("AI service configuration error.") from e
         except Timeout as e:
             logger.warning(f"Stream timeout: {e}")
-            raise
+            raise LLMError("Request timed out. Please try again.") from e
         except APIError as e:
             logger.error(f"API error during stream: {e}")
-            raise
+            raise LLMError("An unexpected error occurred.") from e
 
 
 __all__ = ["LLMProvider", "Message", "CompletionResult"]

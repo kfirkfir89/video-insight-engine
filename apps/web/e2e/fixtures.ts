@@ -277,8 +277,8 @@ export const test = base.extend<{ authenticatedPage: Page }>({
     await page.goto("/");
 
     // Wait for auth check to complete and dashboard to render
-    // The sidebar (complementary) or main content should appear once authenticated
-    await page.waitForSelector('[role="complementary"], main', { timeout: AUTH_TIMEOUT });
+    // Look for sidebar (complementary/aside), main content, or any heading — all indicate the app has rendered
+    await page.waitForSelector('[role="complementary"], main, aside, h1, h2', { timeout: AUTH_TIMEOUT });
 
     // eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not React hook
     await use(page);

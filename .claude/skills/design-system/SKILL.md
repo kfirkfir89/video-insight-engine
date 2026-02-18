@@ -1,6 +1,6 @@
 ---
 name: design-system
-description: Design system patterns for icons, tokens, and components. Enforces consistency across vie-web using Tailwind v4, shadcn/ui, lucide-react, and CVA.
+description: Design system patterns for icons, tokens, and components. Enforces consistency using Tailwind v4, shadcn/ui, lucide-react, and CVA.
 version: 1.0.0
 updated: 2026-02-05
 ---
@@ -48,8 +48,8 @@ Every design decision should be defined in ONE place.
 ```
 Configuration Location
 ──────────────────────
-Tokens & Colors    →  apps/web/src/index.css
-Components         →  apps/web/src/components/ui/
+Tokens & Colors    →  Main CSS file (e.g., index.css or globals.css)
+Components         →  UI component directory (e.g., components/ui/)
 Icons              →  lucide-react (never custom SVGs)
 ```
 
@@ -89,7 +89,7 @@ Content types have dedicated color systems:
 ### Which Icon Should I Use?
 
 1. Check `icons.md` for semantic mappings
-2. Search existing usage: `grep -r "IconName" apps/web/src`
+2. Search existing usage in your component directory
 3. Check lucide.dev for icon names
 4. Add to `icons.md` if new concept
 

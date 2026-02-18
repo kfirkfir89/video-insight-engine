@@ -43,7 +43,7 @@ export function TldrHero({ tldr, keyTakeaways, isStreaming = false, thumbnailUrl
       {/* Vertical TL;DR label strip — stretches full height */}
       <div className="relative w-8 shrink-0 bg-primary/[0.08] border-r border-primary/[0.10] flex items-center justify-center self-stretch">
         <span
-          className="text-[10px] font-bold text-primary/70 uppercase tracking-[0.2em] select-none"
+          className="text-[14px] font-mono font-bold tracking-[0.5rem] text-primary/70 uppercase select-none"
           style={{ writingMode: "vertical-lr", transform: "rotate(180deg)" }}
         >
           TL;DR

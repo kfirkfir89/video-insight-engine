@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { ChapterNavItem } from "./ChapterNavItem";
+import { ScrollContainer } from "@/components/ui/scroll-container";
 import type { SummaryChapter, Concept } from "@vie/types";
 
 const EMPTY_CONCEPTS: Concept[] = [];
@@ -23,7 +24,7 @@ export function StickyChapterNav({
   onStopChapter,
   conceptsByChapter,
 }: StickyChapterNavProps) {
-  const navRef = useRef<HTMLElement>(null);
+  const navRef = useRef<HTMLDivElement>(null);
   // Store chapters ref to avoid dependency in effect
   const chaptersRef = useRef(chapters);
 
@@ -70,30 +71,25 @@ export function StickyChapterNav({
       className="h-full w-full"
     >
       {/* Chapter List */}
-      <nav
-        ref={navRef}
-        className="h-full overflow-y-auto scrollbar-hide"
-        aria-label="Chapters"
-      >
-        <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 px-3">
-          Chapters
-        </h2>
-        <div className="space-y-1">
-          {chapters.map((chapter) => (
-            <ChapterNavItem
-              key={chapter.id}
-              chapter={chapter}
-              isActive={activeChapter === chapter.id}
-              isPlaying={activePlayChapter === chapter.id}
-              onScrollTo={() => onScrollToChapter(chapter.id)}
-              onPlay={() => onPlayFromChapter(chapter.id, chapter.startSeconds)}
-              onStop={onStopChapter}
-              dataChapterId={chapter.id}
-              concepts={conceptsByChapter?.get(chapter.id) ?? EMPTY_CONCEPTS}
-            />
-          ))}
-        </div>
-      </nav>
+      <ScrollContainer ref={navRef} wrapperClassName="h-full">
+        <nav aria-label="Chapters">
+          <div className="space-y-1">
+            {chapters.map((chapter) => (
+              <ChapterNavItem
+                key={chapter.id}
+                chapter={chapter}
+                isActive={activeChapter === chapter.id}
+                isPlaying={activePlayChapter === chapter.id}
+                onScrollTo={() => onScrollToChapter(chapter.id)}
+                onPlay={() => onPlayFromChapter(chapter.id, chapter.startSeconds)}
+                onStop={onStopChapter}
+                dataChapterId={chapter.id}
+                concepts={conceptsByChapter?.get(chapter.id) ?? EMPTY_CONCEPTS}
+              />
+            ))}
+          </div>
+        </nav>
+      </ScrollContainer>
     </aside>
   );
 }

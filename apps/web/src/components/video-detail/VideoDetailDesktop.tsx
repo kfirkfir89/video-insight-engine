@@ -8,11 +8,11 @@ import { useMarkdownExport } from "@/hooks/use-markdown-export";
 import { TldrHero } from "./TldrHero";
 import { ArticleSection } from "./ArticleSection";
 import { OrphanedConcepts } from "./OrphanedConcepts";
-import { MobileChapterNav } from "./MobileChapterNav";
 import { ChapterList } from "./ChapterList";
 import { ResourcesPanel } from "./ResourcesPanel";
 import { VideoHeaderSection } from "./VideoHeaderSection";
 import { GoDeepDrawer } from "./GoDeepDrawer";
+import { GlobalConceptScanner } from "./ConceptsContext";
 import type { VideoDetailCommonProps } from "./video-detail-types";
 import type { Concept } from "@vie/types";
 
@@ -38,8 +38,6 @@ export function VideoDetailDesktop({
   handlePlayFromChapter,
   handleStopChapter,
   handleSeekToChapter,
-  activeId,
-  scrollToChapter,
   conceptMatchResult,
   playerRef,
   isChatOpen,
@@ -62,12 +60,12 @@ export function VideoDetailDesktop({
   return (
     <div className="pb-24">
       {/* Main content */}
-      <div className="min-w-0">
+      <div className="flex flex-col min-w-0">
         {/* Hero section — two-zone layout */}
         <div className="relative -mx-4 md:-mx-6 -mt-4 md:-mt-6 mb-3">
 
           {/* Zone 1: Header Bar */}
-          <div className="relative z-10 bg-primary/[0.12] border-b border-primary/[0.10]">
+          <div className="bg-primary/[0.12] border-b border-primary/[0.10]">
             <div className={cn(
               "relative py-3",
               isLargeDesktop ? "px-4 md:px-8 lg:px-16 xl:px-24" : "px-4 md:px-6"
@@ -149,7 +147,7 @@ export function VideoDetailDesktop({
           </div>
 
           {/* Zone 2: TLDR Section */}
-          <div className="relative z-10 px-60 bg-primary/[0.04]">
+          <div className="relative bg-primary/[0.04]">
             <div className={cn(
               isLargeDesktop ? "py-8 px-4 md:px-8 lg:px-16 xl:px-24" : "py-6 px-4 md:px-6"
             )}>
@@ -178,7 +176,7 @@ export function VideoDetailDesktop({
 
           {/* Article chapters */}
           {(summary.chapters ?? []).length > 0 && (
-            <div>
+            <GlobalConceptScanner>
               {(summary.chapters ?? []).map((chapter) => (
                 <Fragment key={chapter.id}>
                   <ArticleSection
@@ -186,7 +184,8 @@ export function VideoDetailDesktop({
                     onPlay={handlePlayFromChapter}
                     onStop={handleStopChapter}
                     isVideoActive={activePlayChapter === chapter.id}
-                    concepts={conceptMatchResult.byChapter.get(chapter.id) ?? EMPTY_CONCEPTS}
+                    // Pass all concepts — GlobalConceptScanner marks first DOM appearance globally
+                    concepts={summary.concepts ?? EMPTY_CONCEPTS}
                     playerRef={playerRef}
                     youtubeId={video.youtubeId}
                     startSeconds={activePlayChapter === chapter.id ? activeStartSeconds : chapter.startSeconds}
@@ -203,7 +202,7 @@ export function VideoDetailDesktop({
                   )}
                 </Fragment>
               ))}
-            </div>
+            </GlobalConceptScanner>
           )}
 
           {/* Orphaned concepts */}
@@ -216,14 +215,6 @@ export function VideoDetailDesktop({
         </div>
       </div>
 
-      {/* Bottom Navigation for smaller desktops (1024-1280px) */}
-      {!isLargeDesktop && (
-        <MobileChapterNav
-          chapters={(summary.chapters ?? [])}
-          activeChapter={activeId}
-          onScrollToChapter={scrollToChapter}
-        />
-      )}
     </div>
   );
 }

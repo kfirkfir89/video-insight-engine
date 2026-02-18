@@ -54,79 +54,92 @@ export function VideoHeaderSection({
 
   return (
     <header id="video-header" className="mb-0">
-      {/* Title with inline back button */}
-      <div className={cn("mb-1 flex items-center gap-1", backButton && "-ml-9")}>
+      <div className="flex gap-2">
         {backButton}
-        {youtubeUrl ? (
-          <a
-            href={youtubeUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group inline-flex items-start gap-2 hover:text-primary transition-colors min-w-0"
-          >
-            <h1 className="text-xl font-bold leading-snug">{video.title}</h1>
-            <ExternalLink className="h-3.5 w-3.5 mt-1.5 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
-          </a>
-        ) : (
-          <h1 className="text-xl font-bold leading-snug">{video.title}</h1>
-        )}
-      </div>
+        <div className="flex-col w-full">
+          {/* Title + Actions row */}
+          <div className={cn("flex items-start justify-between gap-4 mb-1")}>
+            <div className="flex items-center gap-1 min-w-0">
+              {youtubeUrl ? (
+                <a
+                  href={youtubeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group inline-flex items-start gap-2 hover:text-primary transition-colors min-w-0"
+                >
+                  <h1 className="text-xl font-bold leading-snug">{video.title}</h1>
+                  <ExternalLink className="h-3.5 w-3.5 mt-1.5 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
+                </a>
+              ) : (
+                <h1 className="text-xl font-bold leading-snug">{video.title}</h1>
+              )}
+            </div>
+          </div>
 
-      {/* Breadcrumb subtitle: channel · summarized time */}
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2.5">
-        {video.channel && (
-          <>
-            <span className="font-medium">{video.channel}</span>
-            <span className="text-muted-foreground/30">&middot;</span>
-          </>
-        )}
-        <span>
-          {video.status === "completed"
-            ? `Summarized ${timeAgo(video.createdAt)}`
-            : video.status === "processing"
-              ? "Processing..."
-              : video.status}
-        </span>
-        {isStreaming && (
-          <>
-            <span className="text-muted-foreground/30">&middot;</span>
-            <span className="flex items-center gap-1 text-primary">
-              <Radio className="h-3 w-3 animate-pulse" />
-              Live
+          {/* Breadcrumb subtitle: channel · summarized time */}
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
+            {video.channel && (
+              <>
+                <span className="font-medium">{video.channel}</span>
+                <span className="text-muted-foreground/30">&middot;</span>
+              </>
+            )}
+            <span>
+              {video.status === "completed"
+                ? `Summarized ${timeAgo(video.createdAt)}`
+                : video.status === "processing"
+                  ? "Processing..."
+                  : video.status}
             </span>
-          </>
-        )}
+            {isStreaming && (
+              <>
+                <span className="text-muted-foreground/30">&middot;</span>
+                <span className="flex items-center gap-1 text-primary">
+                  <Radio className="h-3 w-3 animate-pulse" />
+                  Live
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Author + Tags */}
+          {video.context?.displayTags && video.context.displayTags.length > 0 && (
+            <VideoTags tags={video.context.displayTags} className="mb-2" />
+          )}
+        </div>
       </div>
 
       {/* Colorful stat pills */}
-      <div className="flex items-center gap-2 flex-wrap mb-1">
-        {video.duration && (
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
-            style={{ background: "oklch(88% 0.08 250)", color: "oklch(40% 0.18 255)" }}
-          >
-            <Clock className="h-3 w-3" />
-            {formatDuration(video.duration)}
-          </span>
-        )}
-        {chapterCount > 0 && (
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
-            style={{ background: "oklch(88% 0.08 155)", color: "oklch(40% 0.14 160)" }}
-          >
-            <Layers className="h-3 w-3" />
-            {chapterCount} Chapters
-          </span>
-        )}
-        {conceptCount > 0 && (
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
-            style={{ background: "oklch(90% 0.08 80)", color: "oklch(42% 0.12 55)" }}
-          >
-            <Lightbulb className="h-3 w-3" />
-            {conceptCount} Concepts
-          </span>
-        )}
+      <div className="flex justify-between gap-2 flex-wrap">
+        <div>
+          {video.duration && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
+              style={{ background: "oklch(88% 0.08 250)", color: "oklch(40% 0.18 255)" }}
+            >
+              <Clock className="h-3 w-3" />
+              {formatDuration(video.duration)}
+            </span>
+          )}
+          {chapterCount > 0 && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
+              style={{ background: "oklch(88% 0.08 155)", color: "oklch(40% 0.14 160)" }}
+            >
+              <Layers className="h-3 w-3" />
+              {chapterCount} Chapters
+            </span>
+          )}
+          {conceptCount > 0 && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
+              style={{ background: "oklch(90% 0.08 80)", color: "oklch(42% 0.12 55)" }}
+            >
+              <Lightbulb className="h-3 w-3" />
+              {conceptCount} Concepts
+            </span>
+          )}
+        </div>
 
         {/* Streaming stop button as a pill */}
         {isStreaming && onStopSummarization && (
@@ -140,19 +153,12 @@ export function VideoHeaderSection({
             Stop
           </Button>
         )}
-
-        {/* Action buttons slot — pushed to far right */}
         {actions && (
-          <div className="ml-auto flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {actions}
           </div>
         )}
       </div>
-
-      {/* Tags */}
-      {video.context?.displayTags && video.context.displayTags.length > 0 && (
-        <VideoTags tags={video.context.displayTags} className="mb-1" />
-      )}
     </header>
   );
 }
