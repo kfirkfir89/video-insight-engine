@@ -500,6 +500,195 @@ styles/
 
 ---
 
+## Fluid Typography & Spacing
+
+### `clamp()` for Responsive Values
+
+Use `clamp()` instead of fixed breakpoints for typography and spacing that scales smoothly.
+
+```css
+/* Fluid font sizes — no breakpoints needed */
+h1 { font-size: clamp(1.75rem, 4vw, 3rem); }
+h2 { font-size: clamp(1.5rem, 3vw, 2.25rem); }
+body { font-size: clamp(1rem, 1.5vw, 1.125rem); }
+
+/* Fluid spacing */
+.section { padding: clamp(1rem, 3vw, 3rem); }
+.container { gap: clamp(0.75rem, 2vw, 2rem); }
+```
+
+### How `clamp()` Works
+
+```
+clamp(minimum, preferred, maximum)
+       │          │         │
+       │          │         └── Never larger than this
+       │          └──────────── Scales with viewport
+       └─────────────────────── Never smaller than this
+```
+
+### `min()` and `max()` for Layout
+
+```css
+/* Container that's responsive but capped */
+.container {
+  width: min(90vw, 1200px);    /* 90% of viewport, max 1200px */
+  margin-inline: auto;
+}
+
+/* Sidebar that shrinks on small screens */
+.sidebar {
+  width: max(200px, 25vw);     /* At least 200px, grows to 25vw */
+}
+```
+
+---
+
+## Container Queries
+
+Use `@container` when a component's layout depends on its own size, not the viewport. This makes components truly reusable — they adapt to wherever they're placed.
+
+### DO ✅
+
+```css
+/* Define a containment context */
+.card-container {
+  container-type: inline-size;
+  container-name: card;
+}
+
+/* Component responds to its container, not viewport */
+@container card (min-width: 400px) {
+  .card-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@container card (max-width: 399px) {
+  .card-content {
+    display: flex;
+    flex-direction: column;
+  }
+}
+```
+
+### When to Use
+
+| Layout depends on... | Use |
+|---|---|
+| Viewport width | `@media` queries |
+| Parent/container width | `@container` queries |
+| Both | `@media` for page layout, `@container` for component internals |
+
+---
+
+## Z-Index Scale
+
+Define a z-index system. Never use arbitrary values.
+
+### DO ✅
+
+```css
+:root {
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}
+
+.dropdown { z-index: var(--z-dropdown); }
+.sticky-header { z-index: var(--z-sticky); }
+.modal-backdrop { z-index: var(--z-overlay); }
+.modal { z-index: var(--z-modal); }
+.toast { z-index: var(--z-toast); }
+```
+
+### DON'T ❌
+
+```css
+.dropdown { z-index: 10; }
+.modal { z-index: 9999; }     /* Arms race begins */
+.toast { z-index: 99999; }    /* Madness */
+.tooltip { z-index: 999999; } /* Nuclear option */
+```
+
+---
+
+## Logical Properties
+
+Use logical properties instead of physical directions for internationalization support (RTL languages).
+
+### DO ✅
+
+```css
+/* Logical — works in LTR and RTL */
+.card {
+  margin-inline: auto;           /* horizontal margin */
+  padding-block: 1rem;           /* vertical padding */
+  padding-inline: 1.5rem;        /* horizontal padding */
+  border-inline-start: 3px solid var(--accent);  /* "left" in LTR, "right" in RTL */
+  text-align: start;             /* left in LTR, right in RTL */
+}
+
+.icon {
+  margin-inline-end: 0.5rem;     /* Spacing after icon, direction-aware */
+}
+```
+
+### Physical → Logical Mapping
+
+| Physical | Logical | Tailwind |
+|----------|---------|----------|
+| `margin-left` / `margin-right` | `margin-inline-start` / `margin-inline-end` | `ms-*` / `me-*` |
+| `padding-left` / `padding-right` | `padding-inline-start` / `padding-inline-end` | `ps-*` / `pe-*` |
+| `margin-top` / `margin-bottom` | `margin-block-start` / `margin-block-end` | — |
+| `left` / `right` | `inset-inline-start` / `inset-inline-end` | `start-*` / `end-*` |
+| `text-align: left` | `text-align: start` | `text-start` |
+| `border-left` | `border-inline-start` | `border-s-*` |
+
+---
+
+## Touch Target Sizing
+
+All interactive elements must meet minimum touch target size on mobile.
+
+### Rules
+
+- **Minimum 44x44px** hit area for all buttons, links, inputs on touch devices
+- Use `min-height` and `min-width` or padding to meet the target
+- Spacing between targets should be at least 8px
+
+### DO ✅
+
+```css
+/* Ensure touch targets meet minimum size */
+button, a, input, select {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Small visual button with adequate hit area */
+.icon-button {
+  width: 32px;
+  height: 32px;
+  padding: 6px;               /* Visual size: 32px */
+  /* Hit area extended by negative margin + padding trick or touch-action */
+}
+```
+
+### DON'T ❌
+
+```css
+/* Tiny tappable element — frustrating on mobile */
+.small-link {
+  font-size: 12px;
+  padding: 2px 4px;           /* Total: ~20x16px — way too small */
+}
+```
+
 ## Resources
 
 For framework-specific implementation:

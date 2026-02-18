@@ -3,13 +3,14 @@ import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Layout } from "@/components/layout/Layout";
 import type { YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
 import { useActiveChapter } from "@/hooks/use-active-chapter";
 import { useIsDesktop, useIsLargeDesktop } from "@/hooks/use-media-query";
 import { useRightSidebar } from "@/hooks/use-right-sidebar";
+import { useUIStore } from "@/stores/ui-store";
 import { matchConceptsToChapters } from "@/lib/timestamp-utils";
+import { RightPanelStack } from "./RightPanelStack";
 import { StickyChapterNav } from "./StickyChapterNav";
 import { VideoChatPanel } from "./VideoChatPanel";
 import { ChapterList } from "./ChapterList";
@@ -55,6 +56,7 @@ export function VideoDetailLayout({
   const playerRef = useRef<YouTubePlayerRef>(null);
   const isDesktop = useIsDesktop();
   const isLargeDesktop = useIsLargeDesktop();
+  const activeRightPanel = useUIStore((s) => s.activeRightPanel);
 
   // Chapter play state
   const [activePlayChapter, setActivePlayChapter] = useState<string | null>(null);
@@ -152,8 +154,8 @@ export function VideoDetailLayout({
   const rightSidebarContent = useMemo(() => {
     if (!summary) return null;
     return (
-      <ResizablePanelGroup direction="vertical" className="h-full">
-        <ResizablePanel defaultSize={60} minSize={30}>
+      <RightPanelStack
+        chaptersContent={
           <StickyChapterNav
             chapters={summary.chapters ?? []}
             activeChapter={activeId}
@@ -163,18 +165,15 @@ export function VideoDetailLayout({
             onStopChapter={handleStopChapter}
             conceptsByChapter={conceptMatchResult.byChapter}
           />
-        </ResizablePanel>
-        <ResizableHandle className="relative h-[3px] bg-transparent data-[panel-group-direction=vertical]:h-[3px]">
-          <div className="absolute inset-x-3 top-1/2 h-px -translate-y-1/2 bg-border" />
-        </ResizableHandle>
-        <ResizablePanel defaultSize={40} minSize={25}>
+        }
+        chatContent={
           <VideoChatPanel
             videoSummaryId={videoSummaryId}
             videoTitle={video.title}
             className="h-full"
           />
-        </ResizablePanel>
-      </ResizablePanelGroup>
+        }
+      />
     );
   }, [
     summary, activeId, activePlayChapter, scrollToChapter,
@@ -182,7 +181,9 @@ export function VideoDetailLayout({
     videoSummaryId, video.title,
   ]);
 
+  // Large desktop: cubes in Layout aside. Smaller screens: floating cubes rendered inline.
   useRightSidebar(rightSidebarContent, isLargeDesktop && !!summary);
+  const showFloatingCubes = !isLargeDesktop && !!summary;
 
   return (
     <Layout>
@@ -275,6 +276,19 @@ export function VideoDetailLayout({
             />
           )}
         </VideoSummaryIdProvider>
+      )}
+
+      {/* Floating cube panel for smaller screens (<1280px) */}
+      {showFloatingCubes && rightSidebarContent && (
+        <div
+          className="fixed bottom-4 right-3 z-50 transition-[width,height] duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)]"
+          style={{
+            width: activeRightPanel !== "none" ? 320 : 56,
+            height: activeRightPanel !== "none" ? "70vh" : "auto",
+          }}
+        >
+          {rightSidebarContent}
+        </div>
       )}
 
       {/* Master Summary Modal */}

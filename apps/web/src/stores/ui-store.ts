@@ -54,13 +54,15 @@ function computeRangeSelection(
 
 export type ActiveSection = "summarized" | "memorized";
 
+export type RightPanelId = "none" | "minimap" | "chapters" | "chat";
+
 export type SidebarTextSize = "small" | "medium" | "large";
 export type SortOption = "name-asc" | "name-desc" | "created-asc" | "created-desc";
 
 interface UIState {
   // Sidebar visibility
   sidebarOpen: boolean;
-  rightSidebarOpen: boolean;
+  activeRightPanel: RightPanelId;
   sidebarWidth: number;
 
   // Content context
@@ -93,7 +95,8 @@ interface UIState {
 
   // Actions
   toggleSidebar: () => void;
-  toggleRightSidebar: () => void;
+  setActiveRightPanel: (panel: RightPanelId) => void;
+  toggleRightPanel: (panel: RightPanelId) => void;
   setSidebarWidth: (width: number) => void;
   setActiveSection: (section: ActiveSection) => void;
   setSelectedFolder: (id: string | null) => void;
@@ -128,8 +131,8 @@ export const useUIStore = create<UIState>()(
     (set, get) => ({
       // Initial state
       sidebarOpen: true,
-      rightSidebarOpen: true,
-      sidebarWidth: 380,
+      activeRightPanel: "none" as RightPanelId,
+      sidebarWidth: 360,
       activeSection: "summarized",
       selectedFolderId: null,
       expandedFolderIds: [],
@@ -149,7 +152,10 @@ export const useUIStore = create<UIState>()(
 
       // Actions
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
-      toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
+      setActiveRightPanel: (panel) => set({ activeRightPanel: panel }),
+      toggleRightPanel: (panel) => set((s) => ({
+        activeRightPanel: s.activeRightPanel === panel ? "none" : panel,
+      })),
       setSidebarWidth: (width) => set({ sidebarWidth: width }),
       setActiveSection: (section) => set({ activeSection: section, showNewFolderInput: false }),
       setSelectedFolder: (id) => set({ selectedFolderId: id }),
@@ -342,7 +348,7 @@ export const useUIStore = create<UIState>()(
       name: "vie-ui-store",
       partialize: (state) => ({
         sidebarOpen: state.sidebarOpen,
-        rightSidebarOpen: state.rightSidebarOpen,
+        activeRightPanel: state.activeRightPanel,
         sidebarWidth: state.sidebarWidth,
         activeSection: state.activeSection,
         expandedFolderIds: state.expandedFolderIds,
@@ -355,7 +361,8 @@ export const useUIStore = create<UIState>()(
 
 // Selectors
 export const useSidebarOpen = () => useUIStore((s) => s.sidebarOpen);
-export const useRightSidebarOpen = () => useUIStore((s) => s.rightSidebarOpen);
+export const useActiveRightPanel = () => useUIStore((s) => s.activeRightPanel);
+export const useIsRightPanelOpen = () => useUIStore((s) => s.activeRightPanel !== "none");
 export const useSelectedFolder = () => useUIStore((s) => s.selectedFolderId);
 export const useActiveSection = () => useUIStore((s) => s.activeSection);
 export const useSidebarTextSize = () => useUIStore((s) => s.sidebarTextSize);

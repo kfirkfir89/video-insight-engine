@@ -368,3 +368,206 @@ npm run build
 | Inline objects in props | Breaks memoization |
 | useEffect for derived state | Extra re-renders |
 | Huge component tree | Everything re-renders together |
+
+---
+
+## Layout Stability (CLS Prevention)
+
+Content Layout Shift ruins perceived performance. Reserve space before content loads.
+
+### DO ✅
+
+```tsx
+// Always set dimensions on images
+<img src={src} alt={alt} width={800} height={450} loading="lazy" />
+
+// Use aspect-ratio for responsive containers
+<div className="aspect-video w-full">
+  <iframe src={embedUrl} className="w-full h-full" />
+</div>
+
+// Skeleton that matches final layout size
+function CardSkeleton() {
+  return (
+    <div className="h-[200px] rounded-lg animate-pulse bg-gray-200" />
+  );
+}
+```
+
+### DON'T ❌
+
+```tsx
+// No dimensions — shifts layout when image loads
+<img src={src} alt={alt} />
+
+// No min-height — content jumps when data arrives
+<div>{isLoading ? <Spinner /> : <LargeContent />}</div>
+```
+
+---
+
+## Transform-Based Panel Animations
+
+Sidebars, drawers, and panels must stay in document flow. Toggle visibility with `transform`, never by animating `width` or toggling `display`.
+
+### DO ✅
+
+```tsx
+// Sidebar always in DOM, slides with transform
+function Sidebar({ isOpen }: { isOpen: boolean }) {
+  return (
+    <aside
+      className={cn(
+        'fixed top-0 left-0 h-full w-64 transition-transform duration-200',
+        isOpen ? 'translate-x-0' : '-translate-x-full'
+      )}
+    >
+      {/* content */}
+    </aside>
+  );
+}
+```
+
+### DON'T ❌
+
+```tsx
+// Animating width — triggers layout on every frame
+<aside style={{ width: isOpen ? 256 : 0, transition: 'width 0.2s' }} />
+
+// display: none — element removed from flow, causes layout shift
+{isOpen && <aside>...</aside>}
+```
+
+---
+
+## Avoiding Forced Synchronous Layout
+
+Never read layout properties immediately after writing styles in the same frame.
+
+### DO ✅
+
+```tsx
+// Batch reads and writes separately
+function animateElement(el: HTMLElement) {
+  // READ first
+  const currentHeight = el.offsetHeight;
+
+  // WRITE after
+  requestAnimationFrame(() => {
+    el.style.height = `${currentHeight + 100}px`;
+  });
+}
+```
+
+### DON'T ❌
+
+```tsx
+// Read-write-read-write thrashing
+elements.forEach(el => {
+  el.style.width = '100px';      // WRITE
+  const h = el.offsetHeight;     // READ — forces layout!
+  el.style.height = `${h}px`;   // WRITE
+});
+```
+
+---
+
+## Font Optimization
+
+Fonts are one of the largest sources of layout shift and slow LCP.
+
+### DO ✅
+
+```css
+/* Use font-display: swap and woff2 only */
+@font-face {
+  font-family: 'CustomFont';
+  src: url('/fonts/custom.woff2') format('woff2');
+  font-display: swap;
+  unicode-range: U+0000-00FF; /* Subset to Latin if possible */
+}
+
+/* Match fallback metrics to prevent layout shift */
+@font-face {
+  font-family: 'CustomFont Fallback';
+  src: local('Arial');
+  size-adjust: 105%;
+  ascent-override: 95%;
+  descent-override: 22%;
+  line-gap-override: 0%;
+}
+```
+
+### DON'T ❌
+
+```css
+/* Loading full font file, blocks rendering */
+@font-face {
+  font-family: 'CustomFont';
+  src: url('/fonts/custom.ttf');  /* ttf is larger than woff2 */
+  font-display: block;           /* Invisible text until loaded */
+}
+```
+
+---
+
+## Critical Asset Preloading
+
+Preload above-the-fold resources to improve LCP.
+
+### DO ✅
+
+```html
+<!-- In <head> — preload critical assets -->
+<link rel="preload" href="/fonts/main.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="/hero.webp" as="image" />
+```
+
+```tsx
+// Inline critical CSS, async-load the rest
+<style>{criticalCSS}</style>
+<link rel="stylesheet" href="/styles.css" media="print" onLoad="this.media='all'" />
+```
+
+---
+
+## Bundle Budget
+
+Keep the main JS bundle under 100KB gzipped. Split everything else.
+
+### DO ✅
+
+```tsx
+// Route-level code splitting
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Settings = lazy(() => import('./pages/Settings'));
+
+// Heavy libraries loaded on demand
+const loadChartLib = () => import('chart-library');
+
+function ChartSection() {
+  const [Chart, setChart] = useState(null);
+
+  useEffect(() => {
+    loadChartLib().then(mod => setChart(() => mod.default));
+  }, []);
+
+  return Chart ? <Chart data={data} /> : <Skeleton />;
+}
+```
+
+### Measurement
+
+```bash
+# Analyze bundle composition
+npx vite-bundle-visualizer
+# or
+npx source-map-explorer dist/assets/*.js
+```
+
+| Target | Budget |
+|--------|--------|
+| Main bundle (gzipped) | < 100KB |
+| Per-route chunk | < 50KB |
+| Total initial load | < 200KB |
+| Largest dependency | Flag if > 30KB |

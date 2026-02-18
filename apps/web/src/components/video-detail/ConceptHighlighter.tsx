@@ -5,6 +5,7 @@ import { useConcepts } from './ConceptsContext';
 import { useVideoSummaryId } from './VideoSummaryIdContext';
 import { getNameVariants } from '@/lib/concept-utils';
 import { useExplainAuto } from '@/hooks/use-explain-auto';
+import { MarkdownContent } from '@/components/ui/markdown-content';
 import type { Concept } from '@vie/types';
 
 function escapeRegex(str: string): string {
@@ -58,10 +59,8 @@ const TellMeMore = memo(function TellMeMore({ conceptId }: { conceptId: string }
 
   if (data?.expansion) {
     return (
-      <div className="mt-1.5 pt-1.5 border-t border-border/50">
-        <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
-          {data.expansion}
-        </p>
+      <div className="mt-1.5 pt-1.5 border-t border-border/50 max-h-64 overflow-y-auto">
+        <MarkdownContent compact content={data.expansion} />
       </div>
     );
   }
@@ -180,10 +179,10 @@ export const ConceptHighlighter = memo(function ConceptHighlighter({ text }: Con
               <button
                 type="button"
                 data-concept-id={concept.id}
-                className="group/concept inline-flex items-baseline gap-0.5 cursor-pointer border-b border-dotted border-primary/40 text-inherit normal-case hover:border-primary hover:text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:rounded-sm data-[first-appearance]:border-solid data-[first-appearance]:border-b-2 data-[first-appearance]:border-primary/60 data-[first-appearance]:hover:border-primary"
+                className="group/concept inline-flex items-baseline gap-0.5 cursor-pointer text-inherit normal-case focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                 aria-label={`Definition: ${concept.name}`}
               >
-                {seg.value}
+                <span className="group-data-[first-appearance]/concept:shadow-[inset_0_-0.7em_0_rgb(253_224_71_/_0.4)] dark:group-data-[first-appearance]/concept:shadow-[inset_0_-0.7em_0_rgb(250_204_21_/_0.2)]">{seg.value}</span>
                 <Lightbulb className="h-2.5 w-2.5 shrink-0 self-start text-warning/60 group-hover/concept:text-warning transition-colors" aria-hidden="true" />
               </button>
             </Popover.Trigger>
@@ -194,7 +193,7 @@ export const ConceptHighlighter = memo(function ConceptHighlighter({ text }: Con
                 sideOffset={6}
                 collisionPadding={12}
                 avoidCollisions
-                className="z-50 max-w-xs rounded-lg border border-border bg-popover px-3 py-2 shadow-md animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
+                className="z-50 max-w-sm rounded-lg border border-border bg-popover px-3 py-2 shadow-md animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
               >
                 <p className="text-sm font-semibold text-foreground mb-1">{concept.name}</p>
                 {concept.definition && (

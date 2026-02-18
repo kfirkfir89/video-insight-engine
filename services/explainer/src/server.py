@@ -17,6 +17,7 @@ from starlette.routing import Route
 
 from src.config import settings
 from src.dependencies import close_mongo_client, get_services, init_mongo_client
+from src.exceptions import LLMError
 from src.logging_config import configure_structlog, get_logger
 
 # Configure structured logging
@@ -59,14 +60,18 @@ async def explain_auto(
     from src.tools.explain_auto import explain_auto as _explain_auto
 
     services = get_services()
-    return await _explain_auto(
-        video_summary_id=video_summary_id,
-        target_type=target_type,
-        target_id=target_id,
-        video_summary_repo=services["video_summary_repo"],
-        expansion_repo=services["expansion_repo"],
-        llm_service=services["llm_service"],
-    )
+    try:
+        return await _explain_auto(
+            video_summary_id=video_summary_id,
+            target_type=target_type,
+            target_id=target_id,
+            video_summary_repo=services["video_summary_repo"],
+            expansion_repo=services["expansion_repo"],
+            llm_service=services["llm_service"],
+        )
+    except LLMError as e:
+        logger.warning("explain_auto LLM error", error=str(e))
+        return f"Sorry, I couldn't generate the explanation. {e.message}"
 
 
 @mcp.tool()
@@ -89,13 +94,17 @@ async def video_chat(
 
     services = get_services()
 
-    return await _video_chat(
-        video_summary_id=video_summary_id,
-        user_message=user_message,
-        chat_history=chat_history or [],
-        video_summary_repo=services["video_summary_repo"],
-        llm_service=services["llm_service"],
-    )
+    try:
+        return await _video_chat(
+            video_summary_id=video_summary_id,
+            user_message=user_message,
+            chat_history=chat_history or [],
+            video_summary_repo=services["video_summary_repo"],
+            llm_service=services["llm_service"],
+        )
+    except LLMError as e:
+        logger.warning("video_chat LLM error", error=str(e))
+        return f"Sorry, I couldn't respond right now. {e.message}"
 
 
 # ── Starlette routes ──

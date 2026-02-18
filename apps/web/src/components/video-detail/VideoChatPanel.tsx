@@ -3,6 +3,8 @@ import { MessageCircle, Send, Loader2, User, Bot, Trash2, RefreshCw } from "luci
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MarkdownContent } from "@/components/ui/markdown-content";
+import { ScrollContainer } from "@/components/ui/scroll-container";
 import { useVideoChat, type ChatMessage } from "@/hooks/use-video-chat";
 
 interface VideoChatPanelProps {
@@ -42,13 +44,17 @@ const MessageBubble = memo(function MessageBubble({
       >
         <div
           className={cn(
-            "inline-block rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap",
+            "inline-block rounded-lg px-3 py-2 text-sm leading-relaxed",
             isUser
-              ? "bg-primary text-primary-foreground"
+              ? "bg-primary text-primary-foreground whitespace-pre-wrap"
               : "bg-muted"
           )}
         >
-          {message.content}
+          {isUser ? (
+            message.content
+          ) : (
+            <MarkdownContent content={message.content} />
+          )}
         </div>
       </div>
     </div>
@@ -91,13 +97,7 @@ export const VideoChatPanel = memo(function VideoChatPanel({
   return (
     <div className={cn("flex flex-col h-full", className)}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b">
-        <div className="flex items-center gap-2 min-w-0">
-          <MessageCircle className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
-          <span className="text-sm font-medium truncate">
-            Chat about this video
-          </span>
-        </div>
+      <div className="flex items-center justify-between px-4 border-b">
         {messages.length > 0 && (
           <Button
             variant="ghost"
@@ -112,7 +112,7 @@ export const VideoChatPanel = memo(function VideoChatPanel({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <ScrollContainer wrapperClassName="flex-1 min-h-0" className="p-4 space-y-4">
         {messages.length === 0 ? (
           <div className="h-full flex items-center justify-center text-center text-muted-foreground">
             <div className="space-y-2 px-4">
@@ -158,7 +158,7 @@ export const VideoChatPanel = memo(function VideoChatPanel({
         )}
 
         <div ref={messagesEndRef} />
-      </div>
+      </ScrollContainer>
 
       {/* Input */}
       <div className="p-3 border-t">
@@ -168,6 +168,7 @@ export const VideoChatPanel = memo(function VideoChatPanel({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about this video..."
+            maxLength={2000}
             disabled={isLoading}
             className="flex-1 h-9 text-sm"
           />

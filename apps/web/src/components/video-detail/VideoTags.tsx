@@ -23,10 +23,7 @@ function sanitizeTag(tag: string): string {
 }
 
 /**
- * YouTube-style tag display component.
- *
- * Renders tags as pill badges with # prefix, using flex-wrap for multiple rows.
- * Handles empty arrays gracefully by rendering nothing.
+ * Minimal tag display — plain #text in muted color, no pills or backgrounds.
  * Sanitizes tags to prevent layout issues from malformed data.
  */
 export const VideoTags = memo(function VideoTags({ tags, className }: VideoTagsProps) {
@@ -38,7 +35,7 @@ export const VideoTags = memo(function VideoTags({ tags, className }: VideoTagsP
   return (
     <div
       data-slot="video-tags"
-      className={cn("flex flex-wrap gap-2", className)}
+      className={cn("flex items-center flex-wrap gap-x-2 gap-y-1", className)}
     >
       {tags.map((tag, index) => {
         const sanitized = sanitizeTag(tag);
@@ -48,16 +45,8 @@ export const VideoTags = memo(function VideoTags({ tags, className }: VideoTagsP
         return (
           <span
             key={`${sanitized}-${index}`}
-            className={cn(
-              // Base styles: pill shape with subtle background
-              "inline-flex items-center rounded-full px-2.5 py-1",
-              "bg-muted text-xs text-muted-foreground",
-              // Hover state: slightly darker background
-              "transition-colors hover:bg-muted/80",
-              // Truncate very long tags
-              "max-w-[200px] truncate"
-            )}
-            title={tag.length > 25 ? `#${tag}` : undefined}
+            className="text-xs text-muted-foreground/70 max-w-[200px] truncate"
+            title={tag.length > 25 ? tag : undefined}
           >
             #{sanitized}
           </span>

@@ -82,8 +82,9 @@ async def explain_auto(
         }
         template = "explain_concept"
 
-    # 5. Generate with LLM
-    content = await llm_service.generate_expansion(template, context)
+    # 5. Generate with LLM (per-type token limits: concept=800, section=1500)
+    max_tokens = 800 if target_type == "concept" else 1500
+    content = await llm_service.generate_expansion(template, context, max_tokens=max_tokens)
 
     # 6. Save to cache
     await expansion_repo.save(

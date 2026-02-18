@@ -199,6 +199,8 @@ const handleSubmit = () => console.log(inputRef.current?.value);
 
 ## Error Boundaries
 
+Wrap every major section in an error boundary so one broken component doesn't crash the entire page.
+
 ### DO ✅
 
 ```tsx
@@ -206,19 +208,52 @@ import { ErrorBoundary } from 'react-error-boundary';
 
 function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   return (
-    <div role="alert">
-      <p>Something went wrong:</p>
-      <pre>{error.message}</pre>
-      <button onClick={resetErrorBoundary}>Try again</button>
+    <div role="alert" className="p-4 rounded-lg bg-red-50 text-red-800">
+      <p className="font-medium">Something went wrong</p>
+      <pre className="text-sm mt-2">{error.message}</pre>
+      <button onClick={resetErrorBoundary} className="mt-3 underline">
+        Try again
+      </button>
     </div>
   );
 }
 
-// Usage - wrap feature boundaries
-<ErrorBoundary FallbackComponent={ErrorFallback}>
-  <UserProfile />
-</ErrorBoundary>
+// Wrap every major section — sidebar, header, main content, widgets
+function App() {
+  return (
+    <div className="flex">
+      <ErrorBoundary FallbackComponent={ErrorFallback}>
+        <Sidebar />
+      </ErrorBoundary>
+
+      <main className="flex-1">
+        <ErrorBoundary FallbackComponent={ErrorFallback}>
+          <Header />
+        </ErrorBoundary>
+
+        <ErrorBoundary FallbackComponent={ErrorFallback}>
+          <MainContent />
+        </ErrorBoundary>
+      </main>
+    </div>
+  );
+}
 ```
+
+### Strategy
+
+| Boundary Level | Purpose |
+|----------------|---------|
+| Route level | Prevents blank page — catches any error in the route |
+| Feature level | Sidebar crash doesn't break main content |
+| Widget level | Individual card failure shows fallback, rest works |
+
+### Key Rules
+
+- **Every async data section** needs a boundary — API failures are the most common crash source
+- **Never catch errors silently** — always show a fallback UI with a retry option
+- **Log errors** — use `onError` prop to send to your error tracking service
+- **Don't wrap individual tiny components** — that's overkill. Wrap at the feature/section level
 
 ---
 
