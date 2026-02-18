@@ -33,9 +33,9 @@ export interface VideoDetailCommonProps {
   };
   // Player ref for mobile scroll-to-play
   playerRef: RefObject<YouTubePlayerRef | null>;
-  // Video chat state
-  isChatOpen: boolean;
-  onToggleChat: () => void;
+  // Video chat state (used by mobile/tablet overlay, not large desktop cube stack)
+  isChatOpen?: boolean;
+  onToggleChat?: (() => void) | undefined;
   // Explain auto handler (Go Deeper)
   onGoDeeper: (chapterId: string) => void;
   expandedChapterId: string | null;

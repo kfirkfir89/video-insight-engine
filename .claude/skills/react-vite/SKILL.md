@@ -643,31 +643,27 @@ When working on specific topics, these resources work together:
 
 For implementation details on specific technologies:
 
-| Need to...                                     | Read this                                              |
-| ---------------------------------------------- | ------------------------------------------------------ |
-| Write components, hooks, patterns              | [react.md](resources/react.md)                         |
-| Manage state, forms, server data               | [state.md](resources/state.md)                         |
-| Generic CSS architecture and design principles | [styling.md](resources/styling.md)                     |
-| Tailwind best practices                        | [tailwind.md](resources/tailwind.md)                   |
-| Use Lucide icons correctly (Tailwind, a11y)    | [lucide.md](resources/lucide.md)                       |
-| Optimize performance, lazy load                | [performance.md](resources/performance.md)             |
-| Handle routing, navigation                     | [routing.md](resources/routing.md)                     |
-| Write tests, mock data                         | [testing.md](resources/testing.md)                     |
-| Handle forms, validation                       | [forms.md](resources/forms.md)                         |
-| Integrate AI/LLM (Vercel AI SDK)               | [ai-integration.md](resources/ai-integration.md)       |
-| Secure your app (XSS, tokens, CSRF)            | [security.md](resources/security.md)                   |
-| Build accessible UIs (ARIA, keyboard)          | [accessibility.md](resources/accessibility.md)         |
-| Internationalize your app (i18n)               | [i18n.md](resources/i18n.md)                           |
-| See full working examples                      | [complete-examples.md](resources/complete-examples.md) |
+| Need to...                                     | Read this                                                  |
+| ---------------------------------------------- | ---------------------------------------------------------- |
+| Write components, hooks, patterns              | [react.md](resources/react.md)                             |
+| Manage state, forms, server data               | [state.md](resources/state.md)                             |
+| Generic CSS architecture and design principles | [styling.md](resources/styling.md)                         |
+| Tailwind, CVA, shadcn styling patterns         | [tailwind.md](resources/tailwind.md)                       |
+| Use Lucide icons correctly (Tailwind, a11y)    | [lucide.md](resources/lucide.md)                           |
+| Optimize performance, lazy load, CLS           | [performance.md](resources/performance.md)                 |
+| Handle routing, navigation                     | [routing.md](resources/routing.md)                         |
+| Write tests, mock data                         | [testing.md](resources/testing.md)                         |
+| Handle forms, validation                       | [forms.md](resources/forms.md)                             |
+| Integrate AI/LLM (Vercel AI SDK)               | [ai-integration.md](resources/ai-integration.md)           |
+| Secure your app (XSS, tokens, CSRF)            | [security.md](resources/security.md)                       |
+| Build accessible UIs (ARIA, keyboard, motion)  | [accessibility.md](resources/accessibility.md)             |
+| Internationalize your app (i18n)               | [i18n.md](resources/i18n.md)                               |
+| Pre-flight checklist before shipping            | [frontend-checklist.md](resources/frontend-checklist.md)   |
+| See full working examples                      | [complete-examples.md](resources/complete-examples.md)     |
 
 ---
 
 ## Project-Specific Documentation
 
-For THIS project's specifics, see the docs/ folder:
-
-| Need                | Reference                                               |
-| ------------------- | ------------------------------------------------------- |
-| System architecture | [docs/ARCHITECTURE.md](../../../docs/ARCHITECTURE.md)   |
-| Frontend guide      | [docs/FRONTEND.md](../../../docs/FRONTEND.md)           |
-| API integration     | [docs/API-REFERENCE.md](../../../docs/API-REFERENCE.md) |
+<!-- TEMPLATE: Update these links when adopting this skill for a new project -->
+For project-specific details, check the docs/ folder in the project root.

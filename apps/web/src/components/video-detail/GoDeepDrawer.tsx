@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Loader2, BookOpen, RefreshCw } from "lucide-react";
 import { useExplainAuto } from "@/hooks/use-explain-auto";
 import { Button } from "@/components/ui/button";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 import { cn } from "@/lib/utils";
 
 interface GoDeepDrawerProps {
@@ -62,9 +63,7 @@ export const GoDeepDrawer = memo(function GoDeepDrawer({
       )}
 
       {data?.expansion && (
-        <div className="text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap prose prose-sm max-w-none">
-          {data.expansion}
-        </div>
+        <MarkdownContent content={data.expansion} className="text-foreground/90" />
       )}
     </div>
   );

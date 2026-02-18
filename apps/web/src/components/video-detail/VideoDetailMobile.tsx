@@ -6,13 +6,13 @@ import { useMarkdownExport } from "@/hooks/use-markdown-export";
 import { TldrHero } from "./TldrHero";
 import { ArticleSection } from "./ArticleSection";
 import { OrphanedConcepts } from "./OrphanedConcepts";
-import { MobileChapterNav } from "./MobileChapterNav";
 import { ChapterList } from "./ChapterList";
 import { ResourcesPanel } from "./ResourcesPanel";
 import { ConceptsGrid } from "./ConceptsGrid";
 import { VideoHeaderSection } from "./VideoHeaderSection";
 import { VideoChatPanel } from "./VideoChatPanel";
 import { GoDeepDrawer } from "./GoDeepDrawer";
+import { GlobalConceptScanner } from "./ConceptsContext";
 import type { VideoDetailCommonProps } from "./video-detail-types";
 import type { Concept } from "@vie/types";
 
@@ -37,8 +37,6 @@ export function VideoDetailMobile({
   handlePlayFromChapter,
   handleStopChapter,
   handleSeekToChapter,
-  activeId,
-  scrollToChapter,
   conceptMatchResult,
   playerRef,
   isChatOpen,
@@ -143,7 +141,7 @@ export function VideoDetailMobile({
 
         {/* Article chapters */}
         {(summary.chapters ?? []).length > 0 && (
-          <div>
+          <GlobalConceptScanner>
             {(summary.chapters ?? []).map((chapter) => (
               <Fragment key={chapter.id}>
                 <ArticleSection
@@ -151,7 +149,8 @@ export function VideoDetailMobile({
                   onPlay={handlePlayFromChapter}
                   onStop={handleStopChapter}
                   isVideoActive={activePlayChapter === chapter.id}
-                  concepts={conceptMatchResult.byChapter.get(chapter.id) ?? EMPTY_CONCEPTS}
+                  // Pass all concepts — GlobalConceptScanner marks first DOM appearance globally
+                  concepts={summary.concepts ?? EMPTY_CONCEPTS}
                   playerRef={playerRef}
                   youtubeId={video.youtubeId}
                   startSeconds={activePlayChapter === chapter.id ? activeStartSeconds : chapter.startSeconds}
@@ -167,7 +166,7 @@ export function VideoDetailMobile({
                 )}
               </Fragment>
             ))}
-          </div>
+          </GlobalConceptScanner>
         )}
 
         {/* Orphaned concepts — not matched to any chapter */}
@@ -182,12 +181,6 @@ export function VideoDetailMobile({
         <ConceptsGrid concepts={summary.concepts} />
       </div>
 
-      {/* Mobile Bottom Navigation */}
-      <MobileChapterNav
-        chapters={(summary.chapters ?? [])}
-        activeChapter={activeId}
-        onScrollToChapter={scrollToChapter}
-      />
     </div>
   );
 }

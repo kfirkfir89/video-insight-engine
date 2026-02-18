@@ -6,7 +6,7 @@
       "type": "domain",
       "enforcement": "suggest",
       "priority": "high",
-      "description": "Node.js/Fastify backend patterns for vie-api and shared packages",
+      "description": "Node.js/Fastify backend patterns and shared packages",
       "skillPath": ".claude/skills/backend-node/SKILL.md",
       "promptTriggers": {
         "keywords": [
@@ -62,17 +62,13 @@
         "upload|s3|file|image|presigned|multer": "file-uploads.md",
         "websocket|socket|real-time|room|presence": "websockets.md"
       },
-      "additionalDocs": [
-        "docs/SECURITY.md",
-        "docs/ERROR-HANDLING.md",
-        "docs/API-REFERENCE.md"
-      ]
+      "additionalDocs": []
     },
     "backend-python": {
       "type": "domain",
       "enforcement": "suggest",
       "priority": "high",
-      "description": "Python/FastAPI patterns for vie-summarizer and vie-explainer workers",
+      "description": "Python/FastAPI backend patterns for worker services",
       "skillPath": ".claude/skills/backend-python/SKILL.md",
       "promptTriggers": {
         "keywords": [
@@ -126,18 +122,13 @@
         "upload|file|image|storage": "file-uploads.md",
         "websocket|socket|real-time|ws": "websockets.md"
       },
-      "additionalDocs": [
-        "docs/ERROR-HANDLING.md",
-        "docs/API-REFERENCE.md",
-        "docs/SERVICE-SUMMARIZER.md",
-        "docs/SERVICE-EXPLAINER.md"
-      ]
+      "additionalDocs": []
     },
     "react-vite": {
       "type": "domain",
       "enforcement": "suggest",
       "priority": "high",
-      "description": "React/TypeScript frontend patterns for vie-web application",
+      "description": "React/TypeScript frontend patterns and architecture",
       "skillPath": ".claude/skills/react-vite/SKILL.md",
       "promptTriggers": {
         "keywords": [
@@ -175,27 +166,26 @@
       "resourceMapping": {
         "component|hook|context|ref|effect": "react.md",
         "state|zustand|react query|tanstack|server state": "state.md",
-        "tailwind|css|style|theme|dark mode|shadcn": "styling.md",
-        "performance|lazy|suspense|memo|optimization": "performance.md",
+        "tailwind|shadcn|cn|cva|utility class|dark mode": "tailwind.md",
+        "css|style|theme|design token|spacing|color system|responsive": "styling.md",
+        "performance|lazy|suspense|memo|optimization|cls|bundle": "performance.md",
         "route|router|navigation|link": "routing.md",
         "test|vitest|testing library|mock": "testing.md",
         "form|validation|zod|react hook form": "forms.md",
         "security|xss|token|csrf|sanitize": "security.md",
         "chat|ai|streaming|useChat|completion|vercel": "ai-integration.md",
-        "accessible|a11y|aria|keyboard|screen reader|focus": "accessibility.md",
+        "accessible|a11y|aria|keyboard|screen reader|focus|reduced motion": "accessibility.md",
         "i18n|translation|language|locale|intl|rtl": "i18n.md",
-        "lucide|icon": "lucide.md"
+        "lucide|icon": "lucide.md",
+        "checklist|best practice|production|standard|pre-flight|ship": "frontend-checklist.md"
       },
-      "additionalDocs": [
-        "docs/FRONTEND.md",
-        "docs/API-REFERENCE.md"
-      ]
+      "additionalDocs": []
     },
     "design-system": {
       "type": "domain",
       "enforcement": "suggest",
       "priority": "medium",
-      "description": "Design system patterns for icons, tokens, and components in vie-web",
+      "description": "Design system patterns for icons, tokens, and components",
       "skillPath": ".claude/skills/design-system/SKILL.md",
       "promptTriggers": {
         "keywords": [
@@ -232,10 +222,7 @@
         "figma|design file|mockup": "figma.md",
         "storybook|story|documentation": "storybook.md"
       },
-      "additionalDocs": [
-        "docs/FRONTEND.md",
-        "apps/web/src/index.css"
-      ]
+      "additionalDocs": []
     }
   },
   "globalSettings": {

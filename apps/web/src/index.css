@@ -407,30 +407,12 @@
     display: none;
   }
 
-  /* Thin auto-hiding scrollbar — transparent bg, no arrows, line only while scrolling */
+  /* Thin scrollbar — completely hidden native scrollbar, custom indicator via JS */
   .scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: transparent transparent;
-  }
-  .scrollbar-thin:hover {
-    scrollbar-color: oklch(from var(--border) l c h / 0.5) transparent;
+    scrollbar-width: none;
   }
   .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-  }
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background-color: transparent;
-  }
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: transparent;
-  }
-  .scrollbar-thin:hover::-webkit-scrollbar-thumb {
-    background: oklch(from var(--border) l c h / 0.5);
-  }
-  .scrollbar-thin::-webkit-scrollbar-button {
     display: none;
-    height: 0;
-    width: 0;
   }
 
   /* Safe area padding for mobile devices with notches */

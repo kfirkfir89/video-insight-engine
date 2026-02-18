@@ -1380,6 +1380,47 @@ describe('BlockComponent', () => {
 
 ---
 
+# Markdown Rendering
+
+## MarkdownContent Component
+
+Shared markdown renderer used across all explainer and chat surfaces. Uses `react-markdown` with `@tailwindcss/typography` prose classes.
+
+**Location:** `src/components/ui/markdown-content.tsx`
+
+### Usage
+
+```tsx
+import { MarkdownContent } from "@/components/ui/markdown-content";
+
+// Full mode — drawers, modals, chat (headings, lists, bold, code)
+<MarkdownContent content={markdownString} />
+
+// Compact mode — popovers, tooltips (no headings, tighter spacing)
+<MarkdownContent content={markdownString} compact />
+```
+
+### Consumers
+
+| Component | Mode | Context |
+|-----------|------|---------|
+| GoDeepDrawer | full | Section expansion drawer |
+| MasterSummaryModal | full | Quick Read modal |
+| VideoChatPanel | full | Assistant chat messages |
+| ConceptHighlighter (TellMeMore) | compact | Concept popover (max-w-sm, max-h-64 scroll) |
+
+### Typography Plugin
+
+Tailwind v4 CSS-first plugin registration in `index.css`:
+
+```css
+@plugin "@tailwindcss/typography";
+```
+
+This activates `prose prose-sm dark:prose-invert` classes used by MarkdownContent.
+
+---
+
 # AI Integration
 
 ## Vercel AI SDK for Streaming

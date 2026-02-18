@@ -7,6 +7,7 @@ import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from string import Template
 
 from src.config import settings
 from src.services.llm_provider import LLMProvider
@@ -26,7 +27,11 @@ def load_prompt(name: str) -> str:
     Returns:
         Contents of the prompt template file
     """
+    if not all(c.isalnum() or c == "_" for c in name):
+        raise ValueError(f"Invalid prompt name: {name}")
     path = PROMPTS_DIR / f"{name}.txt"
+    if not path.resolve().is_relative_to(PROMPTS_DIR.resolve()):
+        raise ValueError(f"Invalid prompt name: {name}")
     return path.read_text()
 
 
@@ -45,7 +50,7 @@ class LLMService:
         """
         self._provider = provider
 
-    async def generate_expansion(self, template_name: str, context: dict) -> str:
+    async def generate_expansion(self, template_name: str, context: dict, max_tokens: int = 2000) -> str:
         """Generate expansion using template.
 
         Args:
@@ -64,12 +69,12 @@ class LLMService:
         if "bullets" in context and isinstance(context["bullets"], list):
             context = {**context, "bullets": "\n".join(f"- {b}" for b in context["bullets"])}
 
-        prompt = template.format(**context)
+        prompt = Template(template).safe_substitute(context)
 
         async with asyncio.timeout(settings.LLM_TIMEOUT_SECONDS):
-            return await self._provider.complete(prompt, max_tokens=2000)
+            return await self._provider.complete(prompt, max_tokens=max_tokens)
 
-    async def chat_completion(self, system_prompt: str, messages: list[dict]) -> str:
+    async def chat_completion(self, system_prompt: str, messages: list[dict], max_tokens: int = 2000) -> str:
         """Complete chat with context.
 
         Args:
@@ -87,13 +92,14 @@ class LLMService:
 
         async with asyncio.timeout(settings.LLM_TIMEOUT_SECONDS):
             return await self._provider.complete_with_messages(
-                full_messages, max_tokens=2000
+                full_messages, max_tokens=max_tokens
             )
 
     async def chat_completion_stream(
         self,
         system_prompt: str,
         messages: list[dict],
+        max_tokens: int = 2000,
     ) -> AsyncGenerator[str, None]:
         """Stream chat completion tokens.
 
@@ -111,7 +117,7 @@ class LLMService:
 
         try:
             async for token in self._provider.stream_with_messages(
-                full_messages, max_tokens=2000
+                full_messages, max_tokens=max_tokens
             ):
                 yield token
         except asyncio.CancelledError:

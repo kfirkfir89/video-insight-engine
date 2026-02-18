@@ -1,12 +1,14 @@
-import { useState, useRef, useCallback, useEffect, lazy, Suspense } from "react";
+import { useRef, useCallback, useEffect, lazy, Suspense } from "react";
 import type { ReactNode } from "react";
-import { PanelRightClose } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { useRightSidebarContext } from "@/components/layout/RightSidebarContext";
 import { useIsLargeDesktop } from "@/hooks/use-media-query";
 import { LeftSidebarIconStrip } from "./LeftSidebarIconStrip";
-import { RightSidebarIconStrip } from "./RightSidebarIconStrip";
+import { ScrollContainer } from "@/components/ui/scroll-container";
 import { cn } from "@/lib/utils";
+
+const RIGHT_PANEL_WIDTH = 360;
+const CUBE_STRIP_WIDTH = 64;
 
 // Lazy load Sidebar - it includes DnD Kit context (~100KB)
 const Sidebar = lazy(() =>
@@ -43,19 +45,18 @@ interface LayoutProps {
 
 export function Layout({ children, showSidebar = true }: LayoutProps) {
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
-  const rightSidebarOpen = useUIStore((s) => s.rightSidebarOpen);
-  const toggleRightSidebar = useUIStore((s) => s.toggleRightSidebar);
+  const activeRightPanel = useUIStore((s) => s.activeRightPanel);
   const sidebarWidth = useUIStore((s) => s.sidebarWidth);
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
-  const [isResizing, setIsResizing] = useState(false);
 
   const isLargeDesktop = useIsLargeDesktop();
   const { sidebarContent, sidebarEnabled } = useRightSidebarContext();
   const showRightSidebar = isLargeDesktop && sidebarEnabled && !!sidebarContent;
+  const rightPanelExpanded = showRightSidebar && activeRightPanel !== "none";
 
   // Resize refs
   const startXRef = useRef(0);
-  const startWidthRef = useRef(380);
+  const startWidthRef = useRef(360);
   const rafIdRef = useRef<number | null>(null);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -64,7 +65,7 @@ export function Layout({ children, showSidebar = true }: LayoutProps) {
     }
     rafIdRef.current = requestAnimationFrame(() => {
       const newWidth = startWidthRef.current + (e.clientX - startXRef.current);
-      if (newWidth >= 200 && newWidth <= 600) {
+      if (newWidth >= 300 && newWidth <= 500) {
         setSidebarWidth(newWidth);
       }
       rafIdRef.current = null;
@@ -76,14 +77,12 @@ export function Layout({ children, showSidebar = true }: LayoutProps) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
     }
-    setIsResizing(false);
     document.removeEventListener("mousemove", handleMouseMove);
     document.removeEventListener("mouseup", handleMouseUp);
   }, [handleMouseMove]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    setIsResizing(true);
     startXRef.current = e.clientX;
     startWidthRef.current = sidebarWidth;
     document.addEventListener("mousemove", handleMouseMove);
@@ -103,66 +102,58 @@ export function Layout({ children, showSidebar = true }: LayoutProps) {
   return (
     <div className="h-screen flex bg-background overflow-hidden">
       {/* Left sidebar or icon strip */}
-      {showSidebar && (
-        sidebarOpen ? (
-          <>
-            <div className="shrink-0 h-full" style={{ width: sidebarWidth }}>
-              <Suspense fallback={<SidebarSkeleton />}>
-                <Sidebar />
-              </Suspense>
+      <div className="h-screen z-100">
+        {showSidebar && (
+          sidebarOpen ? (
+            <div className="flex relative">
+              <div className="shrink-0 h-full" style={{ width: sidebarWidth }}>
+                <Suspense fallback={<SidebarSkeleton />}>
+                  <Sidebar />
+                </Suspense>
+              </div>
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize sidebar"
+                tabIndex={0}
+                className={cn(
+                  "w-1 h-screen z-100 cursor-col-resize shrink-0 transition-colors hover:bg-primary/20 focus-visible:bg-primary/20 outline-none"
+                )}
+                onMouseDown={handleMouseDown}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowLeft") {
+                    e.preventDefault();
+                    setSidebarWidth(Math.max(300, sidebarWidth - 20));
+                  } else if (e.key === "ArrowRight") {
+                    e.preventDefault();
+                    setSidebarWidth(Math.min(400, sidebarWidth + 20));
+                  }
+                }}
+              />
             </div>
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize sidebar"
-              tabIndex={0}
-              className={cn(
-                "w-1 cursor-col-resize shrink-0 transition-colors hover:bg-primary/20 focus-visible:bg-primary/20 outline-none",
-                isResizing ? "bg-primary/30" : "bg-transparent"
-              )}
-              onMouseDown={handleMouseDown}
-              onKeyDown={(e) => {
-                if (e.key === "ArrowLeft") {
-                  e.preventDefault();
-                  setSidebarWidth(Math.max(200, sidebarWidth - 20));
-                } else if (e.key === "ArrowRight") {
-                  e.preventDefault();
-                  setSidebarWidth(Math.min(600, sidebarWidth + 20));
-                }
-              }}
-            />
-          </>
-        ) : (
-          <LeftSidebarIconStrip />
-        )
-      )}
+          ) : (
+            <LeftSidebarIconStrip />
+          )
+        )}
+      </div>
 
       {/* Main content */}
-      <main className="flex-1 min-w-0 overflow-auto p-4 md:p-6 relative scrollbar-thin">
+      <ScrollContainer
+        wrapperClassName="flex-1 min-w-0"
+        className="p-4 md:p-6"
+      >
         {children}
-      </main>
+      </ScrollContainer>
 
-      {/* Right sidebar or icon strip */}
+      {/* Right panel — cube strip (64px) or expanded panel (360px) */}
       {showRightSidebar && (
-        rightSidebarOpen ? (
-          <aside className="w-[360px] shrink-0 h-full border-l bg-background overflow-hidden flex flex-col">
-            {/* Right sidebar collapse header */}
-            <div className="flex items-center justify-end px-2 py-1.5 border-b border-border/50 shrink-0">
-              <button
-                onClick={toggleRightSidebar}
-                className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                aria-label="Collapse right sidebar"
-              >
-                <PanelRightClose className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="flex-1 min-h-0 overflow-hidden">
-              {sidebarContent}
-            </div>
-          </aside>
-        ) : (
-          <RightSidebarIconStrip />
-        )
+        <aside
+          data-testid="right-cube-rail"
+          className="absolute top-[130px] bottom-0 right-0 z-100 shrink-0 transition-[width] duration-1200 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden"
+          style={{ width: rightPanelExpanded ? RIGHT_PANEL_WIDTH : CUBE_STRIP_WIDTH }}
+        >
+          {sidebarContent}
+        </aside>
       )}
     </div>
   );

@@ -1,5 +1,7 @@
 """video_chat tool: Chat about a specific video grounded in its content."""
 
+from string import Template
+
 from src.exceptions import ResourceNotFoundError
 from src.repositories.base import VideoSummaryRepositoryProtocol
 from src.schemas import VideoSummary
@@ -65,8 +67,8 @@ async def video_chat(
     # Build context from video content
     video_context = _build_video_context(video_summary)
 
-    # Load system prompt and inject video context
-    system_prompt = load_prompt("video_chat_system").format(
+    # Load system prompt and inject video context (safe_substitute prevents format string injection)
+    system_prompt = Template(load_prompt("video_chat_system")).safe_substitute(
         video_title=video_summary.title,
         video_context=video_context,
     )
@@ -78,7 +80,8 @@ async def video_chat(
         if role not in ("user", "assistant"):
             continue
         messages.append({"role": role, "content": str(msg.get("content", ""))[:10000]})
-    messages.append({"role": "user", "content": user_message})
+    # Truncate user message as defense in depth (vie-api validates at 10K)
+    messages.append({"role": "user", "content": user_message[:2000]})
 
     # Generate response
-    return await llm_service.chat_completion(system_prompt, messages)
+    return await llm_service.chat_completion(system_prompt, messages, max_tokens=1000)

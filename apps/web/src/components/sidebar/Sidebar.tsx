@@ -12,10 +12,10 @@ import { useUIStore, useSelectionMode } from "@/stores/ui-store";
 // Lazy load DevToolPanel only in dev mode to ensure tree-shaking in production
 const DevToolPanel = import.meta.env.DEV
   ? lazy(() =>
-      import("@/components/dev/DevToolPanel").then((m) => ({
-        default: m.DevToolPanel,
-      }))
-    )
+    import("@/components/dev/DevToolPanel").then((m) => ({
+      default: m.DevToolPanel,
+    }))
+  )
   : null;
 
 export const Sidebar = memo(function Sidebar() {
@@ -34,16 +34,9 @@ export const Sidebar = memo(function Sidebar() {
   }, [selectionMode, exitSelectionMode]);
 
   return (
-    <aside className="h-full w-full flex flex-col bg-card border-r overflow-hidden relative">
+    <aside className="h-screen w-full flex flex-col bg-secondary border-r overflow-hidden relative">
       {/* Branded header with logo + close button */}
       <SidebarHeader />
-
-      {/* Dev tools panel below header (only in development) */}
-      {DevToolPanel && (
-        <Suspense fallback={null}>
-          <DevToolPanel />
-        </Suspense>
-      )}
 
       {/* Add Video Input */}
       <AddVideoInput />
@@ -61,6 +54,13 @@ export const Sidebar = memo(function Sidebar() {
           <SidebarSection type="memorized" />
         </div>
       </DndProvider>
+
+      {/* Dev tools panel below header (only in development) */}
+      {DevToolPanel && (
+        <Suspense fallback={null}>
+          <DevToolPanel />
+        </Suspense>
+      )}
 
       {/* Footer with video count, theme toggle, user profile */}
       <SidebarFooter />

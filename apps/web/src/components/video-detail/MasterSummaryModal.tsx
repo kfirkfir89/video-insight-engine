@@ -1,4 +1,3 @@
-import ReactMarkdown from "react-markdown";
 import {
   Dialog,
   DialogContent,
@@ -6,6 +5,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { MarkdownContent } from "@/components/ui/markdown-content";
+import { ScrollContainer } from "@/components/ui/scroll-container";
 
 interface MasterSummaryModalProps {
   open: boolean;
@@ -37,58 +38,18 @@ export function MasterSummaryModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-2xl max-h-[80vh] overflow-y-auto"
+        className="max-w-2xl max-h-[80vh] flex flex-col overflow-hidden"
         aria-describedby="master-summary-description"
       >
-        <DialogHeader>
+        <DialogHeader className="shrink-0">
           <DialogTitle className="pr-8">Quick Read: {title}</DialogTitle>
           <DialogDescription id="master-summary-description" className="sr-only">
             AI-generated summary of the video content
           </DialogDescription>
         </DialogHeader>
-        <div className="prose prose-sm dark:prose-invert max-w-none">
-          <ReactMarkdown
-            components={{
-              // Custom heading styles for better hierarchy
-              h2: ({ children }) => (
-                <h2 className="text-lg font-semibold mt-4 mb-2 text-foreground border-b pb-1">
-                  {children}
-                </h2>
-              ),
-              h3: ({ children }) => (
-                <h3 className="text-base font-medium mt-3 mb-1 text-foreground">
-                  {children}
-                </h3>
-              ),
-              // Better list styling
-              ul: ({ children }) => (
-                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                  {children}
-                </ul>
-              ),
-              ol: ({ children }) => (
-                <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-                  {children}
-                </ol>
-              ),
-              li: ({ children }) => (
-                <li className="text-sm">{children}</li>
-              ),
-              // Paragraph styling
-              p: ({ children }) => (
-                <p className="text-sm text-muted-foreground leading-relaxed mb-2">
-                  {children}
-                </p>
-              ),
-              // Strong/bold text
-              strong: ({ children }) => (
-                <strong className="font-semibold text-foreground">{children}</strong>
-              ),
-            }}
-          >
-            {content}
-          </ReactMarkdown>
-        </div>
+        <ScrollContainer wrapperClassName="flex-1 min-h-0">
+          <MarkdownContent content={content} />
+        </ScrollContainer>
       </DialogContent>
     </Dialog>
   );
