@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { Lightbulb, BookOpen, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useConcepts } from './ConceptsContext';
 import { useVideoSummaryId } from './VideoSummaryIdContext';
 import { getNameVariants } from '@/lib/concept-utils';
@@ -31,14 +32,15 @@ const TellMeMore = memo(function TellMeMore({ conceptId }: { conceptId: string }
 
   if (!expanded) {
     return (
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="bare"
         onClick={() => setExpanded(true)}
-        className="flex items-center gap-1 text-xs text-primary/80 hover:text-primary mt-1.5 transition-colors"
+        className="text-xs text-primary/80 hover:text-primary mt-1.5"
       >
         <BookOpen className="h-3 w-3" aria-hidden="true" />
         Tell me more
-      </button>
+      </Button>
     );
   }
 
@@ -176,6 +178,7 @@ export const ConceptHighlighter = memo(function ConceptHighlighter({ text }: Con
             key={`${concept.id}-${i}`}
           >
             <Popover.Trigger asChild>
+              {/* eslint-disable-next-line no-restricted-syntax -- Radix Popover asChild requires raw element */}
               <button
                 type="button"
                 data-concept-id={concept.id}

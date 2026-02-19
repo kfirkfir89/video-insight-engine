@@ -8,6 +8,9 @@
    CSS Custom Properties for theming
    ═══════════════════════════════════════════════════ */
 :root {
+  /* Layout tokens */
+  --app-header-height: 3.25rem;
+
   /* Light mode — Vibrant, colorful, modern (violet-indigo primary, hue ~290) */
   --background: oklch(98.5% 0.006 285);
   --foreground: oklch(16% 0.03 280);

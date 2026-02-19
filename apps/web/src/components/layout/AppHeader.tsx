@@ -46,7 +46,7 @@ export function AppHeader() {
 
   return (
     <>
-      <header className="h-13 shrink-0 border-b bg-card flex items-center px-3 gap-3">
+      <header className="h-(--app-header-height) shrink-0 border-b bg-card flex items-center px-3 gap-3">
         {/* Left: sidebar toggle */}
         <Button
           variant="ghost"
@@ -76,12 +76,14 @@ export function AppHeader() {
           {isAuthenticated && user && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon-bare"
                   aria-label={user.name ?? "Profile"}
-                  className="h-8 w-8 flex items-center justify-center rounded-full bg-primary/15 text-primary text-xs font-medium hover:bg-primary/25 transition-colors"
+                  className="h-8 w-8 rounded-full bg-primary/15 text-primary text-xs font-medium hover:bg-primary/25"
                 >
                   {user.name ? getInitials(user.name) : <User className="h-4 w-4" />}
-                </button>
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <div className="px-2 py-1.5">

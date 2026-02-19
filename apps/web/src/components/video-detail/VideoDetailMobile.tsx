@@ -3,13 +3,12 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, MessageCircle, Copy, Download, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMarkdownExport } from "@/hooks/use-markdown-export";
-import { TldrHero } from "./TldrHero";
 import { ArticleSection } from "./ArticleSection";
 import { OrphanedConcepts } from "./OrphanedConcepts";
 import { ChapterList } from "./ChapterList";
 import { ResourcesPanel } from "./ResourcesPanel";
 import { ConceptsGrid } from "./ConceptsGrid";
-import { VideoHeaderSection } from "./VideoHeaderSection";
+import { VideoHero } from "./VideoHero";
 import { VideoChatPanel } from "./VideoChatPanel";
 import { GoDeepDrawer } from "./GoDeepDrawer";
 import { GlobalConceptScanner } from "./ConceptsContext";
@@ -50,53 +49,6 @@ export function VideoDetailMobile({
 
   return (
     <div className="pb-24">
-      <div className="flex items-center justify-between mb-4">
-        <Link to="/">
-          <Button variant="ghost">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back
-          </Button>
-        </Link>
-
-        {/* Export + Chat buttons */}
-        <div className="flex items-center gap-1">
-          {(summary.chapters ?? []).length > 0 && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleCopyMarkdown}
-                className="h-8 w-8"
-                aria-label="Copy as Markdown"
-              >
-                {copiedState ? (
-                  <Check className="h-4 w-4 text-green-500" aria-hidden="true" />
-                ) : (
-                  <Copy className="h-4 w-4" aria-hidden="true" />
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleDownloadMarkdown}
-                className="h-8 w-8"
-                aria-label="Download as Markdown"
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </>
-          )}
-          <Button
-            variant={isChatOpen ? "secondary" : "ghost"}
-            size="icon"
-            onClick={onToggleChat}
-            className="h-8 w-8"
-            aria-label="Toggle video chat"
-          >
-            <MessageCircle className="h-4 w-4" aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
-
       {/* Chat drawer (slides in on mobile) */}
       {isChatOpen && (
         <div className="fixed inset-0 z-50 bg-background flex flex-col">
@@ -115,21 +67,64 @@ export function VideoDetailMobile({
         </div>
       )}
 
-      <VideoHeaderSection
-        video={video}
-        summary={summary}
-        isStreaming={isStreaming}
-        onStopSummarization={onStopSummarization}
-      />
+      {/* Hero card */}
+      <div className="px-3 pt-3">
+        <VideoHero
+          video={video}
+          summary={summary}
+          isStreaming={isStreaming}
+          onStopSummarization={onStopSummarization}
+          backButton={
+            <Link to="/">
+              <Button variant="ghost" size="sm" className="gap-1">
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Button>
+            </Link>
+          }
+          actions={
+            <div className="flex items-center gap-1">
+              {(summary.chapters ?? []).length > 0 && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleCopyMarkdown}
+                    className="h-8 w-8"
+                    aria-label="Copy as Markdown"
+                  >
+                    {copiedState ? (
+                      <Check className="h-4 w-4 text-green-500" aria-hidden="true" />
+                    ) : (
+                      <Copy className="h-4 w-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleDownloadMarkdown}
+                    className="h-8 w-8"
+                    aria-label="Download as Markdown"
+                  >
+                    <Download className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </>
+              )}
+              <Button
+                variant={isChatOpen ? "secondary" : "ghost"}
+                size="icon"
+                onClick={onToggleChat}
+                className="h-8 w-8"
+                aria-label="Toggle video chat"
+              >
+                <MessageCircle className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </div>
+          }
+        />
+      </div>
 
-      {/* TLDR with Key Takeaways */}
-      <TldrHero
-        tldr={summary.tldr}
-        keyTakeaways={summary.keyTakeaways}
-        isStreaming={isStreaming}
-      />
-
-      <div className="space-y-6 mt-6">
+      <div className="space-y-6 mt-4">
         {/* Show chapters while sections are loading during streaming */}
         {isStreaming && effectiveChapters.length > 0 && (summary.chapters ?? []).length === 0 && (
           <ChapterList
@@ -149,7 +144,6 @@ export function VideoDetailMobile({
                   onPlay={handlePlayFromChapter}
                   onStop={handleStopChapter}
                   isVideoActive={activePlayChapter === chapter.id}
-                  // Pass all concepts — GlobalConceptScanner marks first DOM appearance globally
                   concepts={summary.concepts ?? EMPTY_CONCEPTS}
                   playerRef={playerRef}
                   youtubeId={video.youtubeId}
@@ -180,7 +174,6 @@ export function VideoDetailMobile({
         {/* All concepts on mobile (no sidebar) */}
         <ConceptsGrid concepts={summary.concepts} />
       </div>
-
     </div>
   );
 }

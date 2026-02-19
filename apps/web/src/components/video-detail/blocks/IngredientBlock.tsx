@@ -106,13 +106,11 @@ export const IngredientBlock = memo(function IngredientBlock({ block }: Ingredie
             return (
               <li key={index}>
                 <div className="flex items-start gap-2.5 text-sm py-1.5">
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="icon-bare"
                     onClick={() => toggleItem(index)}
-                    className={cn(
-                      'shrink-0 mt-0.5 transition-colors',
-                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded'
-                    )}
+                    className="shrink-0 mt-0.5 transition-colors"
                     aria-label={isChecked ? `Uncheck ${item.name}` : `Check ${item.name}`}
                   >
                     {isChecked ? (
@@ -120,7 +118,7 @@ export const IngredientBlock = memo(function IngredientBlock({ block }: Ingredie
                     ) : (
                       <Square className="h-4 w-4 text-muted-foreground/50" aria-hidden="true" />
                     )}
-                  </button>
+                  </Button>
                   <div className={cn('flex-1', isChecked && 'line-through text-muted-foreground/50')}>
                     {scaledAmount && (
                       <span className="font-mono text-xs font-bold bg-muted/30 px-1.5 py-0.5 rounded tabular-nums amount-badge-glow">{scaledAmount}</span>

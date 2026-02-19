@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Bookmark, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import type { MemorizedItem } from '@vie/types';
 
 interface MemorizedGridProps {
@@ -22,14 +23,11 @@ const MemorizedCard = memo(function MemorizedCard({
     (item.source?.youtubeId ? `https://img.youtube.com/vi/${item.source.youtubeId}/mqdefault.jpg` : null);
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
+      size="bare"
       onClick={onClick}
-      className={cn(
-        'group text-left rounded-lg border border-border/50 overflow-hidden',
-        'bg-card hover:bg-muted/50 transition-colors',
-        'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50'
-      )}
+      className="group text-left rounded-lg border border-border/50 overflow-hidden bg-card hover:bg-muted/50 w-full flex-col items-stretch whitespace-normal"
     >
       {/* Thumbnail */}
       {thumbnail && (
@@ -79,7 +77,7 @@ const MemorizedCard = memo(function MemorizedCard({
           </div>
         )}
       </div>
-    </button>
+    </Button>
   );
 });
 

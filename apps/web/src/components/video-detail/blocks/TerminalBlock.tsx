@@ -1,6 +1,7 @@
 import { memo, useState, useCallback } from 'react';
 import { Copy, Check, Terminal } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { BlockWrapper } from './BlockWrapper';
 import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { TerminalBlock as TerminalBlockType } from '@vie/types';
@@ -29,12 +30,12 @@ export const TerminalBlock = memo(function TerminalBlock({ block }: TerminalBloc
   if (!block.command) return null;
 
   const copyButton = (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
+      size="icon-bare"
       onClick={handleCopy}
       className={cn(
-        'flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors',
-        'hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+        'text-xs px-2 py-1 transition-colors hover:bg-white/10',
         copied ? 'text-success code-copied-glow' : 'text-zinc-400'
       )}
       aria-label={copied ? BLOCK_LABELS.copied : BLOCK_LABELS.copyCode}
@@ -44,7 +45,7 @@ export const TerminalBlock = memo(function TerminalBlock({ block }: TerminalBloc
       ) : (
         <Copy className="h-3 w-3" aria-hidden="true" />
       )}
-    </button>
+    </Button>
   );
 
   return (

@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useRef, memo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronRight, Folder, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Tooltip,
@@ -198,10 +199,11 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
           onClick={(e) => e.stopPropagation()}
         />
       ) : hasChildren ? (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-bare"
           onClick={handleChevronClick}
-          className="w-4 h-4 flex items-center justify-center shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="w-4 h-4 shrink-0 rounded-sm"
         >
           <ChevronRight
             className={cn(
@@ -210,7 +212,7 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
               isExpanded && "rotate-90"
             )}
           />
-        </button>
+        </Button>
       ) : (
         <span className="w-4 shrink-0" />
       )}
@@ -229,9 +231,10 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
     )}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
-            type="button"
-            className="p-1.5 rounded-sm opacity-0 group-hover:opacity-100 group-has-[[data-state=open]]:opacity-100 hover:bg-accent transition-opacity shrink-0 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          <Button
+            variant="ghost"
+            size="icon-bare"
+            className="p-1.5 rounded-sm opacity-0 group-hover:opacity-100 group-has-[[data-state=open]]:opacity-100 hover:bg-accent transition-opacity shrink-0 focus-visible:opacity-100"
             onClick={handleAddSubfolderClick}
             aria-label="Create subfolder"
           >
@@ -240,7 +243,7 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
               "text-muted-foreground transition-transform duration-200",
               showSubfolderInput && "rotate-45"
             )} />
-          </button>
+          </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="text-xs">
           Create subfolder

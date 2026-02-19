@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Dumbbell, Play, Clock, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { BlockWrapper } from './BlockWrapper';
 import type { ExerciseBlock as ExerciseBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
@@ -82,17 +83,15 @@ export const ExerciseBlock = memo(function ExerciseBlock({ block, onPlay }: Exer
                 )}
 
                 {exercise.timestamp !== undefined && onPlay && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="bare"
                     onClick={() => onPlay(exercise.timestamp!)}
-                    className={cn(
-                      'flex items-center gap-1 text-xs text-primary hover:underline',
-                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded'
-                    )}
+                    className="text-xs text-primary hover:underline"
                   >
                     <Play className="h-3 w-3" aria-hidden="true" />
                     <span>Watch demo</span>
-                  </button>
+                  </Button>
                 )}
               </div>
               {index < exercises.length - 1 && (

@@ -77,6 +77,7 @@ function FolderTreeItem({
       >
         {/* Expand/collapse chevron */}
         {hasChildren && visibleChildren.length > 0 ? (
+          // eslint-disable-next-line no-restricted-syntax -- Radix DropdownMenuItem child requires raw element
           <button
             className="w-4 h-4 flex items-center justify-center shrink-0"
             onClick={(e) => {
