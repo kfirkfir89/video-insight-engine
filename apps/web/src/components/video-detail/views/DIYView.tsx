@@ -76,7 +76,7 @@ export const DIYView = memo(function DIYView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Tools Section */}
       {hasTools && (
         <ContentBlocks

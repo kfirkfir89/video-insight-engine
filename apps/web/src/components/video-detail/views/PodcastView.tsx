@@ -69,7 +69,7 @@ export const PodcastView = memo(function PodcastView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Guests Section - Bio cards at the top */}
       {hasGuests && (
         <ContentBlocks

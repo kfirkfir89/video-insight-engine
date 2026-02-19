@@ -32,8 +32,8 @@ export const FormulaBlock = memo(function FormulaBlock({ block }: FormulaBlockPr
           className={cn(
             'text-center',
             inline
-              ? 'inline font-mono bg-muted/30 px-1.5 py-0.5 rounded text-sm'
-              : 'bg-muted/30 rounded-lg p-4'
+              ? 'inline font-mono bg-muted/20 px-1.5 py-0.5 rounded text-sm'
+              : 'bg-muted/20 rounded-lg p-4'
           )}
           role="math"
           aria-label={latex}

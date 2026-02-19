@@ -82,7 +82,7 @@ export function ResourcesPanel({ analysis, className }: ResourcesPanelProps) {
                   rel="noopener noreferrer"
                   className={cn(
                     "flex items-center gap-2 px-2 py-1.5 rounded-md",
-                    "text-sm text-foreground/80 hover:text-foreground",
+                    "text-sm text-foreground/90 hover:text-foreground",
                     "hover:bg-accent transition-colors group"
                   )}
                 >
@@ -113,7 +113,7 @@ export function ResourcesPanel({ analysis, className }: ResourcesPanelProps) {
                 rel="noopener noreferrer"
                 className={cn(
                   "flex items-center gap-2 px-2 py-1.5 rounded-md",
-                  "text-sm text-foreground/80 hover:text-foreground",
+                  "text-sm text-foreground/90 hover:text-foreground",
                   "hover:bg-accent transition-colors"
                 )}
               >
@@ -140,7 +140,7 @@ export function ResourcesPanel({ analysis, className }: ResourcesPanelProps) {
                 rel="noopener noreferrer"
                 className={cn(
                   "flex items-center gap-2 px-2 py-1.5 rounded-md",
-                  "text-sm text-foreground/80 hover:text-foreground",
+                  "text-sm text-foreground/90 hover:text-foreground",
                   "hover:bg-accent transition-colors"
                 )}
               >

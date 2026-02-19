@@ -36,7 +36,7 @@ export const TerminalBlock = memo(function TerminalBlock({ block }: TerminalBloc
       onClick={handleCopy}
       className={cn(
         'text-xs px-2 py-1 transition-colors hover:bg-white/10',
-        copied ? 'text-success code-copied-glow' : 'text-zinc-400'
+        copied ? 'text-success code-copied-glow' : 'text-[var(--code-muted)]'
       )}
       aria-label={copied ? BLOCK_LABELS.copied : BLOCK_LABELS.copyCode}
     >
@@ -61,14 +61,14 @@ export const TerminalBlock = memo(function TerminalBlock({ block }: TerminalBloc
       <div className="p-4 font-mono text-sm">
         <div className="flex items-start gap-2">
           <span className="text-success code-prompt-glow select-none">$</span>
-          <span className="text-zinc-100 whitespace-pre-wrap"><ConceptHighlighter text={block.command} /></span>
+          <span className="whitespace-pre-wrap"><ConceptHighlighter text={block.command} /></span>
         </div>
 
         {/* Output */}
         {block.output && (
           <div className="mt-3 pt-3 border-t border-white/10">
-            <div className="text-xs text-zinc-500 mb-1">{BLOCK_LABELS.output}:</div>
-            <pre className="text-zinc-400 whitespace-pre-wrap text-xs"><ConceptHighlighter text={block.output} /></pre>
+            <div className="text-xs text-[var(--code-dim)] mb-1">{BLOCK_LABELS.output}:</div>
+            <pre className="text-[var(--code-muted)] whitespace-pre-wrap text-xs"><ConceptHighlighter text={block.output} /></pre>
           </div>
         )}
       </div>

@@ -54,7 +54,7 @@ export const CodeView = memo(function CodeView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Main content */}
       {hasOtherBlocks && (
         <ContentBlocks

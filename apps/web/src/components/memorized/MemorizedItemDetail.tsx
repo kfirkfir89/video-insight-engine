@@ -71,7 +71,7 @@ export const MemorizedItemDetail = memo(function MemorizedItemDetail({
 
       {/* Concept (if this is a memorized concept) */}
       {item.concept && (
-        <div className="p-3 rounded-lg border border-primary/30 bg-primary/5">
+        <div className="p-3 rounded-lg border border-primary/20 bg-primary/5">
           <h3 className="font-medium text-sm">{item.concept.name}</h3>
           {item.concept.definition && (
             <p className="text-sm text-muted-foreground mt-1">
@@ -83,7 +83,7 @@ export const MemorizedItemDetail = memo(function MemorizedItemDetail({
 
       {/* Expansion (if this is a memorized expansion) */}
       {item.expansion && (
-        <div className="p-3 rounded-lg border border-border/50 bg-muted/30">
+        <div className="p-3 rounded-lg border border-border/50 bg-muted/20">
           <p className="text-sm leading-relaxed">{item.expansion.content}</p>
         </div>
       )}

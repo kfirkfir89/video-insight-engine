@@ -142,7 +142,6 @@
   /* Animation tokens */
   --animate-fade-slide-up: fade-slide-up 0.4s
     cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-  --animate-shimmer: shimmer 2.5s linear infinite;
   --animate-scale-in: scale-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-counter-pop: counter-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-line-grow: line-grow 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -161,15 +160,6 @@
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
   }
 }
 
@@ -236,7 +226,12 @@
 
 /* ═══════════════════════════════════════════════════
    CATEGORY ACCENT COLORS
-   Minimal tokens: accent, accent-soft, surface
+   Per-content-type theming. Each .category-* class sets:
+     --category-accent     → main color (hex)
+     --category-accent-soft → translucent background (rgba)
+     --category-surface    → very light tinted surface
+   Dark mode overrides reduce soft/surface opacity.
+   ~60 lines — low cost, high value for category theming.
    ═══════════════════════════════════════════════════ */
 
 /* Focus states - required for keyboard navigation */
@@ -460,9 +455,10 @@
   }
 
   :is(.dark) .block-card {
+    border-color: oklch(from var(--border) l c h / 0.7);
     box-shadow:
-      0 1px 2px oklch(0% 0 0 / 0.15),
-      0 2px 6px oklch(0% 0 0 / 0.12);
+      0 1px 2px oklch(0% 0 0 / 0.2),
+      0 2px 8px oklch(0% 0 0 / 0.15);
   }
 
   :is(.dark) .block-card:hover {
@@ -474,7 +470,7 @@
   /* ── Card header — clean separator ── */
   .block-card-header {
     @apply mb-3 flex items-center gap-2 pb-2;
-    border-bottom: 1px solid oklch(from var(--border) l c h / 0.4);
+    border-bottom: 1px solid oklch(from var(--border) l c h / 0.20);
   }
 
   .block-card-header-icon {
@@ -483,7 +479,7 @@
 
   .block-card-header-label {
     @apply flex-1 text-xs font-medium uppercase tracking-wider;
-    color: oklch(from var(--muted-foreground) l c h / 0.7);
+    color: oklch(from var(--muted-foreground) l c h / 0.5);
   }
 
   /* ── Minimal label — lightweight disabled-style label for transparent blocks ── */
@@ -499,7 +495,11 @@
   /* ── Accent-left variant — clean left border ── */
   .block-accent {
     @apply rounded-lg border-l-[3px] py-3.5 pl-5 pr-4;
-    background: oklch(from var(--muted) l c h / 0.25);
+    background: oklch(from var(--muted) l c h / 0.4);
+  }
+
+  :is(.dark) .block-accent {
+    background: oklch(from var(--muted) l c h / 0.35);
   }
 
   /* ── Code/terminal — dark IDE surface ── */
@@ -516,6 +516,11 @@
       0 4px 12px oklch(0% 0 0 / 0.15),
       inset 0 1px 0 oklch(100% 0 0 / 0.04);
     color: oklch(90% 0.005 250);
+
+    /* Semantic code-surface tokens for block components */
+    --code-text: oklch(90% 0.005 250);
+    --code-muted: oklch(65% 0.01 250);
+    --code-dim: oklch(45% 0.01 250);
   }
 
   /* Code header bar */
@@ -525,24 +530,32 @@
     border-bottom: 1px solid oklch(100% 0 0 / 0.06);
   }
 
-  /* ── Inline variant — no border/bg, compact ── */
+  /* ── Paragraph variant — prominent reading text ── */
+  .block-paragraph {
+    @apply relative;
+  }
+
+  /* ── Inline variant — no border/bg, compact, subtle hierarchy indent ── */
   .block-inline {
-    @apply space-y-1.5;
-  }
-
-  /* ── Progress bar ── */
-  .block-progress-bar {
-    @apply h-2 overflow-hidden rounded-full bg-muted;
-  }
-
-  .block-progress-fill {
-    @apply h-full rounded-full transition-all duration-500 ease-out;
+    @apply space-y-1.5 pl-1;
   }
 
   /* ═══════════════════════════════════════════════════
      VISUAL POLISH UTILITIES
      Premium flourishes: gradients, dividers, decorative elements
      ═══════════════════════════════════════════════════ */
+
+  /* ── Chapter divider — stronger gradient separator between chapters ── */
+  .chapter-divider {
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      oklch(from var(--border) l c h / 0.5) 15%,
+      oklch(from var(--border) l c h / 0.5) 85%,
+      transparent
+    );
+  }
 
   /* ── Fade dividers — gradient horizontal/vertical separators ── */
   .fade-divider {
@@ -885,23 +898,10 @@
   }
 
   /* ── Glow utilities ── */
-  .glow-primary {
-    box-shadow: 0 0 var(--glow-spread)
-      oklch(from var(--primary) l c h / var(--glow-strength));
-  }
   .glow-success {
     box-shadow: 0 0 var(--glow-spread)
       oklch(from var(--success) l c h / var(--glow-strength));
   }
-  .glow-warning {
-    box-shadow: 0 0 var(--glow-spread)
-      oklch(from var(--warning) l c h / var(--glow-strength));
-  }
-  .glow-destructive {
-    box-shadow: 0 0 var(--glow-spread)
-      oklch(from var(--destructive) l c h / var(--glow-strength));
-  }
-
   /* ── Glass surface ── */
   .glass-surface {
     backdrop-filter: blur(12px);
@@ -948,26 +948,6 @@
   }
   .hover-scale:active {
     transform: scale(0.98);
-  }
-
-  /* ── Animated underline ── */
-  .animated-underline {
-    position: relative;
-  }
-  .animated-underline::after {
-    content: "";
-    position: absolute;
-    bottom: -1px;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: var(--primary);
-    transform: scaleX(0);
-    transform-origin: left;
-    transition: transform 0.3s ease;
-  }
-  .animated-underline:hover::after {
-    transform: scaleX(1);
   }
 
   /* ── Timeline animated line ── */
@@ -1047,56 +1027,7 @@
   animation: var(--animate-fade-slide-up);
 }
 
-/* Shimmer loading */
-.shimmer-bg {
-  background: linear-gradient(
-    90deg,
-    transparent 25%,
-    oklch(from var(--muted) l c h / 0.4) 50%,
-    transparent 75%
-  );
-  background-size: 200% 100%;
-  animation: var(--animate-shimmer);
-}
 
-/* Section panel — used in views for grouped content */
-.glass-panel {
-  @apply rounded-xl p-5 relative;
-  background: var(--category-surface, oklch(from var(--muted) l c h / 0.2));
-  border: 1px solid oklch(from var(--border) l c h / 0.4);
-}
-
-:is(.dark) .glass-panel {
-  background: oklch(from var(--card) l c h / 0.5);
-  border-color: oklch(from var(--border) l c h / 0.5);
-}
-
-/* Section header — used in views */
-.glass-section-header {
-  @apply flex items-center gap-2 text-sm font-medium mb-3;
-  color: var(--muted-foreground);
-}
-
-.glass-section-header::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--category-accent, var(--primary));
-  flex-shrink: 0;
-}
-
-.glass-section-header::after {
-  content: "";
-  height: 1px;
-  flex: 1;
-  margin-left: 0.5rem;
-  background: linear-gradient(
-    to right,
-    oklch(from var(--border) l c h / 0.4),
-    transparent
-  );
-}
 
 /* ═══════════════════════════════════════════════════
    DARK MODE PREMIUM ENHANCEMENTS
@@ -1109,16 +1040,6 @@
     0 2px 4px oklch(0% 0 0 / 0.2),
     0 6px 16px oklch(0% 0 0 / 0.18),
     0 0 1px oklch(from var(--primary) l c h / 0.12);
-}
-
-/* Glass panel ambient glow */
-:is(.dark) .glass-panel {
-  box-shadow: 0 0 24px oklch(from var(--primary) l c h / 0.03);
-}
-
-/* Section header dot glow */
-:is(.dark) .glass-section-header::before {
-  box-shadow: 0 0 6px var(--category-accent, var(--primary));
 }
 
 /* Timeline line glow */
@@ -1219,9 +1140,8 @@
   contain: paint;
 }
 
-/* Cards and panels: contain paint for better scroll performance */
-.block-card,
-.glass-panel {
+/* Cards: contain paint for better scroll performance */
+.block-card {
   contain: paint;
 }
 

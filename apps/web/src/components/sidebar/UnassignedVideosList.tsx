@@ -26,7 +26,7 @@ export function UnassignedVideosList({ videos, folders }: UnassignedVideosListPr
         ref={setNodeRef}
         className={cn(
           "py-2 mx-2 rounded-sm transition-colors min-h-[32px]",
-          isOver && "bg-primary/10 ring-1 ring-primary/30"
+          isOver && "bg-primary/10 ring-1 ring-primary/20"
         )}
       />
     );

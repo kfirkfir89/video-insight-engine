@@ -74,7 +74,7 @@ export const RecipeView = memo(function RecipeView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Ingredients Section - Always at top for recipes */}
       {hasIngredients && (
         <ContentBlocks

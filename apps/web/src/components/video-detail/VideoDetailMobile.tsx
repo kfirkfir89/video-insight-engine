@@ -1,6 +1,5 @@
 import { Fragment } from "react";
-import { Link } from "react-router-dom";
-import { ArrowLeft, MessageCircle, Copy, Download, Check, X } from "lucide-react";
+import { MessageCircle, Copy, Download, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMarkdownExport } from "@/hooks/use-markdown-export";
 import { ArticleSection } from "./ArticleSection";
@@ -42,6 +41,7 @@ export function VideoDetailMobile({
   onToggleChat,
   onGoDeeper,
   expandedChapterId,
+  streamingPhaseLabel,
 }: VideoDetailMobileProps) {
   const { copiedState, handleCopyMarkdown, handleDownloadMarkdown } =
     useMarkdownExport(video.title, summary.chapters);
@@ -74,14 +74,7 @@ export function VideoDetailMobile({
           summary={summary}
           isStreaming={isStreaming}
           onStopSummarization={onStopSummarization}
-          backButton={
-            <Link to="/">
-              <Button variant="ghost" size="sm" className="gap-1">
-                <ArrowLeft className="h-4 w-4" />
-                Back
-              </Button>
-            </Link>
-          }
+          streamingPhaseLabel={streamingPhaseLabel}
           actions={
             <div className="flex items-center gap-1">
               {(summary.chapters ?? []).length > 0 && (
@@ -137,8 +130,9 @@ export function VideoDetailMobile({
         {/* Article chapters */}
         {(summary.chapters ?? []).length > 0 && (
           <GlobalConceptScanner>
-            {(summary.chapters ?? []).map((chapter) => (
+            {(summary.chapters ?? []).map((chapter, idx) => (
               <Fragment key={chapter.id}>
+                {idx > 0 && <div className="chapter-divider my-8 mx-3" aria-hidden="true" />}
                 <ArticleSection
                   chapter={chapter}
                   onPlay={handlePlayFromChapter}

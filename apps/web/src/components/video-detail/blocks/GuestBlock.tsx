@@ -63,7 +63,7 @@ export const GuestBlock = memo(function GuestBlock({ block }: GuestBlockProps) {
                 </div>
 
                 {guest.bio && (
-                  <p className="text-xs text-muted-foreground/80 line-clamp-2"><ConceptHighlighter text={guest.bio} /></p>
+                  <p className="text-xs text-muted-foreground/90 line-clamp-2"><ConceptHighlighter text={guest.bio} /></p>
                 )}
 
                 {/* Social links */}
@@ -80,7 +80,7 @@ export const GuestBlock = memo(function GuestBlock({ block }: GuestBlockProps) {
                           target="_blank"
                           rel="noopener noreferrer"
                           className={cn(
-                            'text-muted-foreground/60 hover:text-primary transition-colors',
+                            'text-muted-foreground/70 hover:text-primary transition-colors',
                             'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded'
                           )}
                           aria-label={`${guest.name} on ${link.platform}`}

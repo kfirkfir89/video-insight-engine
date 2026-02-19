@@ -23,7 +23,7 @@ export const BulletsBlock = memo(function BulletsBlock({ items, variant }: Bulle
     <BlockWrapper variant="inline">
       {isIngredients && (
         <div className="flex items-center gap-1.5 mb-2">
-          <UtensilsCrossed className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" aria-hidden="true" />
+          <UtensilsCrossed className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
           <span className="text-xs text-muted-foreground/70">ingredients</span>
         </div>
       )}

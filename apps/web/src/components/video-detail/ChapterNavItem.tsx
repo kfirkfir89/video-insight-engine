@@ -131,7 +131,7 @@ export function ChapterNavItem({
                         if (hasDefinition) toggleConcept(concept.id);
                       }}
                       className={cn(
-                        "items-start text-[11px] text-muted-foreground/80 leading-tight text-left w-full whitespace-normal justify-start",
+                        "items-start text-[11px] text-muted-foreground/90 leading-tight text-left w-full whitespace-normal justify-start",
                         hasDefinition && "hover:text-muted-foreground cursor-pointer"
                       )}
                       disabled={!hasDefinition}
@@ -161,7 +161,7 @@ export function ChapterNavItem({
                         )}
                       >
                         <div className="overflow-hidden min-h-0">
-                          <p className="text-[10px] text-muted-foreground/60 leading-relaxed pt-0.5 pb-1">
+                          <p className="text-[10px] text-muted-foreground/70 leading-relaxed pt-0.5 pb-1">
                             {concept.definition}
                           </p>
                         </div>
