@@ -19,5 +19,25 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      'no-restricted-syntax': [
+        'warn',
+        {
+          selector: 'JSXOpeningElement[name.name="button"]',
+          message: 'Use <Button> from @/components/ui/button instead of raw <button>. See button-consistency task for migration patterns.',
+        },
+      ],
+    },
+  },
+  // Override: allow raw <button> in UI component definitions and dev-only files
+  {
+    files: [
+      'src/components/ui/**/*.{ts,tsx}',
+      'src/components/dev/**/*.{ts,tsx}',
+      'src/pages/dev/**/*.{ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-syntax': 'off',
+    },
   },
 ])

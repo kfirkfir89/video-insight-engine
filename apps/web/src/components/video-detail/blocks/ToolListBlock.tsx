@@ -1,6 +1,7 @@
 import { memo, useState } from 'react';
 import { LayoutList, Check, Square } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { BlockWrapper } from './BlockWrapper';
 import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { ToolListBlock as ToolListBlockType } from '@vie/types';
@@ -53,13 +54,11 @@ export const ToolListBlock = memo(function ToolListBlock({ block }: ToolListBloc
                   isChecked && 'opacity-60'
                 )}
               >
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="icon-bare"
                   onClick={() => toggleTool(index)}
-                  className={cn(
-                    'shrink-0 mt-0.5 transition-colors',
-                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded'
-                  )}
+                  className="shrink-0 mt-0.5 transition-colors"
                   aria-label={isChecked ? `Uncheck ${tool.name}` : `Check ${tool.name}`}
                 >
                   {isChecked ? (
@@ -67,7 +66,7 @@ export const ToolListBlock = memo(function ToolListBlock({ block }: ToolListBloc
                   ) : (
                     <Square className="h-4 w-4 text-muted-foreground/50" aria-hidden="true" />
                   )}
-                </button>
+                </Button>
                 <div className={cn('flex-1', isChecked && 'line-through text-muted-foreground/50')}>
                   <span className="font-medium">{tool.name}</span>
                   {tool.quantity && (

@@ -1,6 +1,7 @@
 import { memo, useState } from 'react';
 import { Check, Clock, Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { formatDurationHuman } from '@/lib/string-utils';
 import { BlockWrapper } from './BlockWrapper';
 import { ConceptHighlighter } from '../ConceptHighlighter';
@@ -56,12 +57,12 @@ export const StepBlock = memo(function StepBlock({ block }: StepBlockProps) {
                   isCompleted && 'opacity-60'
                 )}
               >
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="icon-bare"
                   onClick={() => toggleStep(step.number)}
                   className={cn(
-                    'shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-sm font-medium transition-all duration-200 z-10',
-                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                    'shrink-0 w-7 h-7 rounded-full border-2 text-sm font-medium transition-all duration-200 z-10',
                     isCompleted
                       ? 'bg-success border-success text-white'
                       : colorClass
@@ -73,7 +74,7 @@ export const StepBlock = memo(function StepBlock({ block }: StepBlockProps) {
                   ) : (
                     step.number
                   )}
-                </button>
+                </Button>
 
                 <div className={cn('flex-1 space-y-1', isCompleted && 'line-through')}>
                   <p className="text-sm text-muted-foreground"><ConceptHighlighter text={step.instruction} /></p>

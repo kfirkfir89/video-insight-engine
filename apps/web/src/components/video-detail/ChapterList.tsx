@@ -7,6 +7,7 @@
 
 import { memo } from "react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import type { StreamingChapter, SummaryChapter } from "@vie/types";
 
 interface ChapterListProps {
@@ -58,13 +59,14 @@ export const ChapterList = memo(function ChapterList({
           const isPast = currentTime > chapter.endSeconds;
 
           return (
-            <button
+            <Button
               key={`${chapter.startSeconds}-${chapter.title}`}
+              variant="ghost"
+              size="bare"
               onClick={() => onSeek?.(chapter.startSeconds)}
               className={cn(
-                "w-full text-left px-3 py-2 rounded-md transition-colors",
-                "hover:bg-accent hover:text-accent-foreground",
-                "flex items-center gap-3 group",
+                "w-full text-left px-3 py-2 rounded-md whitespace-normal justify-start",
+                "group",
                 isActive && "bg-accent text-accent-foreground",
                 isPast && !isActive && "text-muted-foreground"
               )}
@@ -82,7 +84,7 @@ export const ChapterList = memo(function ChapterList({
               {isActive && (
                 <span className="text-xs text-primary font-medium">Now</span>
               )}
-            </button>
+            </Button>
           );
         })}
       </div>

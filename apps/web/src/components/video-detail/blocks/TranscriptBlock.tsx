@@ -1,6 +1,7 @@
 import { memo, useState, useCallback } from 'react';
 import { Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { BlockWrapper } from './BlockWrapper';
 import type { TranscriptBlock as TranscriptBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
@@ -78,19 +79,16 @@ export const TranscriptBlock = memo(function TranscriptBlock({
                     {speaker && (
                       <span className="text-xs font-semibold">{speaker}</span>
                     )}
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="bare"
                       onClick={() => handleTimestampClick(line.seconds)}
-                      className={cn(
-                        'flex items-center gap-1 text-xs shrink-0 group font-mono',
-                        'text-muted-foreground hover:text-primary transition-colors',
-                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded'
-                      )}
+                      className="text-xs shrink-0 group font-mono text-muted-foreground hover:text-primary transition-colors"
                       aria-label={`${BLOCK_LABELS.jumpTo} ${line.time}`}
                     >
                       <Play className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true" />
                       <span className="tabular-nums">{line.time}</span>
-                    </button>
+                    </Button>
                   </div>
                   <span className="text-muted-foreground">{line.text}</span>
                 </div>
@@ -104,13 +102,14 @@ export const TranscriptBlock = memo(function TranscriptBlock({
       </div>
 
       {hasMore && (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="bare"
           onClick={() => setExpanded(!expanded)}
-          className="text-xs text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded px-1"
+          className="text-xs text-primary hover:underline px-1"
         >
           {expanded ? BLOCK_LABELS.showLess : `${BLOCK_LABELS.showMore} (${lines.length - 5} more)`}
-        </button>
+        </Button>
       )}
     </BlockWrapper>
   );

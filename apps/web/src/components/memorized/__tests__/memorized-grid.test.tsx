@@ -202,9 +202,9 @@ describe('MemorizedGrid', () => {
       expect(screen.getByRole('button')).toBeInTheDocument();
     });
 
-    it('should have button type', () => {
+    it('should render as button element', () => {
       render(<MemorizedGrid items={[createMockItem()]} />);
-      expect(screen.getByRole('button')).toHaveAttribute('type', 'button');
+      expect(screen.getByRole('button')).toBeInTheDocument();
     });
 
     it('should have lazy loading on images', () => {

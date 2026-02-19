@@ -2,6 +2,7 @@ import { memo, useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import type { QuoteBlock } from '@vie/types';
 import { Star, Play, Copy, Check } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { BlockWrapper } from './BlockWrapper';
 import { ConceptHighlighter } from '../ConceptHighlighter';
 import { BLOCK_LABELS } from '@/lib/block-labels';
@@ -99,15 +100,15 @@ export const QuoteRenderer = memo(function QuoteRenderer({ block, onSeek }: Quot
               )}
 
               {block.timestamp !== undefined && (
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="bare"
                   onClick={handleSeek}
                   disabled={!onSeek}
                   className={cn(
-                    'inline-flex items-center gap-1 text-xs',
-                    'font-mono transition-colors',
+                    'text-xs font-mono transition-colors',
                     onSeek
-                      ? 'cursor-pointer text-primary hover:underline focus:outline-none'
+                      ? 'cursor-pointer text-primary hover:underline'
                       : 'cursor-default text-muted-foreground'
                   )}
                   aria-label={
@@ -118,17 +119,18 @@ export const QuoteRenderer = memo(function QuoteRenderer({ block, onSeek }: Quot
                 >
                   <Play className="h-3.5 w-3.5 shrink-0 fill-current" aria-hidden="true" />
                   {formatTimestamp(block.timestamp)}
-                </button>
+                </Button>
               )}
 
               {/* Copy quote button - visible on hover */}
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="bare"
                 onClick={handleCopy}
                 className={cn(
-                  'ml-auto inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded transition-all duration-150',
+                  'ml-auto text-xs px-1.5 py-0.5 transition-all duration-150',
                   'opacity-0 group-hover/quote:opacity-100 focus:opacity-100',
-                  'hover:bg-muted/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                  'hover:bg-muted/30',
                   copied ? 'text-success opacity-100' : 'text-muted-foreground'
                 )}
                 aria-label={copied ? BLOCK_LABELS.copied : BLOCK_LABELS.copyQuote}
@@ -144,7 +146,7 @@ export const QuoteRenderer = memo(function QuoteRenderer({ block, onSeek }: Quot
                     <span>{BLOCK_LABELS.copyQuote}</span>
                   </>
                 )}
-              </button>
+              </Button>
             </footer>
           </>
         )}

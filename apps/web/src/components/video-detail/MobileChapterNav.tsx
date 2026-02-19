@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import type { SummaryChapter } from "@vie/types";
 
 interface MobileChapterNavProps {
@@ -21,10 +22,12 @@ export function MobileChapterNav({
     >
       <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-hide">
         {chapters.map((chapter) => (
-          <button
+          <Button
             key={chapter.id}
+            variant="ghost"
+            size="bare"
             className={cn(
-              "shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors",
+              "shrink-0 px-4 py-2 rounded-full text-sm font-medium",
               activeChapter === chapter.id
                 ? "bg-primary text-primary-foreground"
                 : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -33,7 +36,7 @@ export function MobileChapterNav({
             aria-current={activeChapter === chapter.id ? "true" : undefined}
           >
             {chapter.title}
-          </button>
+          </Button>
         ))}
       </div>
     </div>

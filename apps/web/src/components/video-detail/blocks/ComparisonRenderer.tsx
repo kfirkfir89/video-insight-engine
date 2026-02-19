@@ -1,5 +1,6 @@
 import { memo, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { BlockWrapper } from './BlockWrapper';
 import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { ComparisonBlock } from '@vie/types';
@@ -117,13 +118,11 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
       )}>
         {/* Toggle button */}
         <div className="absolute right-0 top-0 z-10">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon-bare"
             onClick={() => setViewMode(isSideBySide ? 'stacked' : 'side-by-side')}
-            className={cn(
-              'inline-flex items-center gap-1 text-xs px-1.5 py-1 rounded transition-colors',
-              'text-muted-foreground hover:bg-muted/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50'
-            )}
+            className="text-xs px-1.5 py-1 text-muted-foreground hover:bg-muted/30"
             aria-label={isSideBySide ? 'Switch to stacked view' : 'Switch to side-by-side view'}
           >
             {isSideBySide ? (
@@ -131,7 +130,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
             ) : (
               <Columns2 className="h-3.5 w-3.5" aria-hidden="true" />
             )}
-          </button>
+          </Button>
         </div>
 
         <div className={cn('px-4 py-2', config.leftHeaderClass)}>

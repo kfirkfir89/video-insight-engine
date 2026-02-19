@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { cn } from '@/lib/utils';
 import type { TimestampBlock } from '@vie/types';
 import { Play, StopCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { BlockWrapper } from './BlockWrapper';
 
 interface TimestampRendererProps {
@@ -58,11 +59,12 @@ export const TimestampRenderer = memo(function TimestampRenderer({ block, onSeek
         label={block.label ? `Timestamp ${block.time} - ${block.label}` : `Timestamp ${block.time}`}
       >
         <div className="pl-0.5">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="bare"
             onClick={handleStop}
             onKeyDown={handleKeyDown}
-            className="inline-flex items-center gap-1.5 text-sm cursor-pointer text-destructive hover:text-destructive/80 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="text-sm cursor-pointer text-destructive hover:text-destructive/80"
             aria-label={block.label ? `Stop video at ${block.time} - ${block.label}` : `Stop video at ${block.time}`}
           >
             <StopCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -72,7 +74,7 @@ export const TimestampRenderer = memo(function TimestampRenderer({ block, onSeek
             {block.label && (
               <span className="text-muted-foreground">{block.label}</span>
             )}
-          </button>
+          </Button>
         </div>
       </BlockWrapper>
     );
@@ -86,15 +88,16 @@ export const TimestampRenderer = memo(function TimestampRenderer({ block, onSeek
       label={block.label ? `Timestamp ${block.time} - ${block.label}` : `Timestamp ${block.time}`}
     >
       <div className="pl-0.5">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="bare"
           onClick={handleClick}
           onKeyDown={handleKeyDown}
           disabled={!isClickable}
           className={cn(
-            'inline-flex items-center gap-1.5 text-sm rounded-sm',
+            'text-sm',
             isClickable
-              ? 'cursor-pointer text-primary hover:text-primary/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2'
+              ? 'cursor-pointer text-primary hover:text-primary/80'
               : 'cursor-default text-muted-foreground'
           )}
           aria-label={block.label ? `Jump to ${block.time} - ${block.label}` : `Jump to ${block.time}`}
@@ -111,7 +114,7 @@ export const TimestampRenderer = memo(function TimestampRenderer({ block, onSeek
           {block.label && (
             <span className="text-muted-foreground">{block.label}</span>
           )}
-        </button>
+        </Button>
       </div>
     </BlockWrapper>
   );

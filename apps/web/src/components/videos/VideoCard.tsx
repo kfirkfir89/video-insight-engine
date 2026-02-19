@@ -2,6 +2,7 @@ import { useState, memo, useCallback, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import type { Video } from "@/types";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { Play } from "lucide-react";
 
@@ -49,15 +50,17 @@ export const VideoCard = memo(function VideoCard({ video }: VideoCardProps) {
 
             {/* Play Button Overlay - Only show for completed videos */}
             {video.status === "completed" && video.youtubeId && (
-              <button
+              <Button
+                variant="ghost"
+                size="icon-bare"
                 onClick={handlePlayClick}
-                className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
+                className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 rounded-none"
                 aria-label={`Play ${video.title}`}
               >
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/90 text-primary-foreground hover:bg-primary transition-colors">
                   <Play className="h-8 w-8 ml-1" fill="currentColor" />
                 </div>
-              </button>
+              </Button>
             )}
           </div>
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Play, StopCircle, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { SummaryChapter, Concept } from "@vie/types";
 
@@ -58,57 +59,49 @@ export function ChapterNavItem({
       )}
     >
       {/* Chapter row */}
-      <div
-        className="flex items-center gap-1.5 cursor-pointer"
-        onClick={onScrollTo}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onScrollTo();
-          }
-        }}
-        role="button"
-        tabIndex={0}
-        aria-current={isActive ? "true" : undefined}
-      >
-        {/* Timestamp */}
-        <span className="text-[10px] font-mono text-muted-foreground shrink-0 w-8">
-          {chapter.timestamp}
-        </span>
-
-        {/* Title - truncate to single line */}
-        <span
-          className={cn(
-            "flex-1 text-xs truncate",
-            isActive ? "font-medium text-foreground" : "text-muted-foreground"
-          )}
+      <div className="flex items-center gap-1.5">
+        {/* Timestamp + Title — clickable as a single button */}
+        <Button
+          variant="ghost"
+          size="bare"
+          className="flex-1 min-w-0 text-left justify-start gap-1.5"
+          onClick={onScrollTo}
+          aria-current={isActive ? "true" : undefined}
         >
-          {chapter.title}
-        </span>
+          <span className="text-[10px] font-mono text-muted-foreground shrink-0 w-8">
+            {chapter.timestamp}
+          </span>
+          <span
+            className={cn(
+              "flex-1 text-xs truncate",
+              isActive ? "font-medium text-foreground" : "text-muted-foreground"
+            )}
+          >
+            {chapter.title}
+          </span>
+        </Button>
 
-        {/* Play/Stop button - inline */}
+        {/* Play/Stop button - sibling, not nested */}
         {isPlaying ? (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onStop?.();
-            }}
-            className="p-0.5 rounded hover:bg-destructive/20 text-destructive transition-colors focus:outline-none shrink-0"
+          <Button
+            variant="ghost"
+            size="icon-bare"
+            onClick={() => onStop?.()}
+            className="hover:bg-destructive/20 text-destructive shrink-0"
             aria-label="Stop video"
           >
             <StopCircle className="h-3 w-3" />
-          </button>
+          </Button>
         ) : (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onPlay();
-            }}
-            className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-primary/20 text-primary transition-opacity focus:opacity-100 focus:outline-none shrink-0"
+          <Button
+            variant="ghost"
+            size="icon-bare"
+            onClick={() => onPlay()}
+            className="opacity-0 group-hover:opacity-100 hover:bg-primary/20 text-primary transition-opacity focus:opacity-100 shrink-0"
             aria-label={`Play from ${chapter.timestamp}`}
           >
             <Play className="h-3 w-3" />
-          </button>
+          </Button>
         )}
       </div>
 
@@ -130,15 +123,15 @@ export function ChapterNavItem({
 
                 return (
                   <li key={concept.id}>
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="bare"
                       onClick={(e) => {
                         e.stopPropagation();
                         if (hasDefinition) toggleConcept(concept.id);
                       }}
                       className={cn(
-                        "flex items-start gap-1 text-[11px] text-muted-foreground/80 leading-tight text-left w-full rounded-sm",
-                        "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1",
+                        "items-start text-[11px] text-muted-foreground/80 leading-tight text-left w-full whitespace-normal justify-start",
                         hasDefinition && "hover:text-muted-foreground cursor-pointer"
                       )}
                       disabled={!hasDefinition}
@@ -156,7 +149,7 @@ export function ChapterNavItem({
                       <span className={!hasDefinition ? "ml-3.5" : ""}>
                         {concept.name}
                       </span>
-                    </button>
+                    </Button>
                     {/* Expandable definition */}
                     {hasDefinition && (
                       <div

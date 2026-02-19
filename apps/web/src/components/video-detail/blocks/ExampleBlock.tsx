@@ -1,6 +1,7 @@
 import { memo, useState, useRef, useEffect, useCallback } from 'react';
 import { Copy, Terminal } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { BlockWrapper } from './BlockWrapper';
 import { ConceptHighlighter } from '../ConceptHighlighter';
 
@@ -50,17 +51,19 @@ export const ExampleBlock = memo(function ExampleBlock({ title, code, explanatio
   // Terminal command variant: ultra-minimal
   if (variant === 'terminal_command') {
     const terminalCopyButton = (
-      <button
+      <Button
+        variant="ghost"
+        size="bare"
         onClick={handleCopy}
         aria-label={copied ? 'Copied to clipboard' : 'Copy code to clipboard'}
         className={cn(
-          'flex items-center gap-1 text-xs ml-3 shrink-0 transition-colors',
+          'text-xs ml-3 shrink-0 transition-colors',
           copied ? 'text-success code-copied-glow' : 'text-zinc-500 hover:text-zinc-300'
         )}
       >
         <Copy className="h-3 w-3" aria-hidden="true" />
         {copied ? 'Copied!' : 'Copy'}
-      </button>
+      </Button>
     );
 
     return (
@@ -96,17 +99,19 @@ export const ExampleBlock = memo(function ExampleBlock({ title, code, explanatio
         {/* Header bar with title and copy */}
         <div className="flex items-center justify-between px-4 py-2 bg-muted/30 border-b border-border/30">
           <span className="text-xs text-muted-foreground font-medium">{title || 'Example'}</span>
-          <button
+          <Button
+            variant="ghost"
+            size="bare"
             onClick={handleCopy}
             aria-label={copied ? 'Copied to clipboard' : 'Copy code to clipboard'}
             className={cn(
-              'flex items-center gap-1 text-xs transition-colors',
+              'text-xs transition-colors',
               copied ? 'text-success code-copied-glow' : 'text-muted-foreground hover:text-foreground'
             )}
           >
             <Copy className="h-3 w-3" aria-hidden="true" />
             {copied ? 'Copied!' : 'Copy'}
-          </button>
+          </Button>
         </div>
         {/* Code area */}
         <div className="px-4 py-3">

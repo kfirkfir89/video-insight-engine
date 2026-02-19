@@ -2,6 +2,7 @@ import { memo, useState, useCallback } from 'react';
 import type { StatisticBlock } from '@vie/types';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { BlockWrapper } from './BlockWrapper';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
@@ -51,13 +52,11 @@ export const StatisticRenderer = memo(function StatisticRenderer({ block }: Stat
       <div className="flex flex-wrap items-center gap-0">
         {block.items.map((item, index) => (
           <div key={index} className="flex items-center" style={{ animation: 'var(--animate-counter-pop)', animationDelay: `${index * 100}ms` }}>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="bare"
               onClick={() => handleCopy(item.label, item.value, index)}
-              className={cn(
-                'flex flex-col items-center text-center px-4 py-2 rounded-md transition-colors cursor-pointer',
-                'hover:bg-muted/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50'
-              )}
+              className="flex-col items-center text-center px-4 py-2 rounded-md transition-colors cursor-pointer hover:bg-muted/20"
               aria-label={copiedIndex === index ? BLOCK_LABELS.copied : `${BLOCK_LABELS.copyValue}: ${item.label}: ${item.value}`}
             >
               <div className="flex items-baseline gap-1.5">
@@ -71,7 +70,7 @@ export const StatisticRenderer = memo(function StatisticRenderer({ block }: Stat
               {copiedIndex === index && (
                 <span className="text-[10px] text-success mt-0.5 font-medium">{BLOCK_LABELS.copied}</span>
               )}
-            </button>
+            </Button>
             {index < block.items.length - 1 && (
               <div className="fade-divider-vertical h-12" aria-hidden="true" />
             )}

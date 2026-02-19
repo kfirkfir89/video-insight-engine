@@ -1,6 +1,7 @@
 import { memo, useState, useCallback } from 'react';
 import { Copy, Check, FileCode } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { BlockWrapper } from './BlockWrapper';
 import { useSyntaxHighlight } from '@/hooks/use-syntax-highlight';
 import type { CodeBlock as CodeBlockType } from '@vie/types';
@@ -40,12 +41,12 @@ export const CodeBlock = memo(function CodeBlock({ block }: CodeBlockProps) {
       : 'Code';
 
   const copyButton = (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
+      size="bare"
       onClick={handleCopy}
       className={cn(
-        'flex items-center gap-1 text-xs px-2 py-1 rounded transition-all duration-150',
-        'hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+        'text-xs px-2 py-1 transition-all duration-150 hover:bg-white/10',
         copied ? 'text-success code-copied-glow scale-110' : 'text-zinc-400'
       )}
       aria-label={copied ? BLOCK_LABELS.copied : BLOCK_LABELS.copyCode}
@@ -61,7 +62,7 @@ export const CodeBlock = memo(function CodeBlock({ block }: CodeBlockProps) {
           <span>{BLOCK_LABELS.copyCode}</span>
         </>
       )}
-    </button>
+    </Button>
   );
 
   return (

@@ -1,5 +1,6 @@
 import { memo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { BlockWrapper } from './BlockWrapper';
 import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { DefinitionBlock as DefinitionBlockType } from '@vie/types';
@@ -35,27 +36,29 @@ export const DefinitionBlock = memo(function DefinitionBlock({ block }: Definiti
               <p className="text-sm text-muted-foreground line-clamp-3">
                 <ConceptHighlighter text={block.meaning} />
               </p>
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="bare"
                 onClick={() => setExpanded(true)}
-                className="flex items-center gap-0.5 text-xs text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
+                className="text-xs text-primary hover:underline"
               >
                 <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <span>Show more</span>
-              </button>
+              </Button>
             </div>
           ) : (
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground"><ConceptHighlighter text={block.meaning} /></p>
               {isLongDefinition && (
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="bare"
                   onClick={() => setExpanded(false)}
-                  className="flex items-center gap-0.5 text-xs text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
+                  className="text-xs text-primary hover:underline"
                 >
                   <ChevronRight className="h-3.5 w-3.5 shrink-0 rotate-90" aria-hidden="true" />
                   <span>Show less</span>
-                </button>
+                </Button>
               )}
             </div>
           )}

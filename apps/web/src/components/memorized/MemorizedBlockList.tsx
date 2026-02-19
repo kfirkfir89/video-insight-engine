@@ -1,6 +1,7 @@
 import { memo, useMemo } from 'react';
 import { Bookmark, ChevronRight, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import type { MemorizedItem } from '@vie/types';
 
 interface MemorizedBlockListProps {
@@ -39,10 +40,11 @@ const BlockListItem = memo(function BlockListItem({
     >
       {/* Thumbnail */}
       {thumbnail && (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="bare"
           onClick={onPlay}
-          className="relative w-20 h-16 flex-shrink-0 bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset"
+          className="relative w-20 h-16 flex-shrink-0 bg-muted rounded-none"
           aria-label={`Play ${item.title}`}
         >
           <img
@@ -56,17 +58,15 @@ const BlockListItem = memo(function BlockListItem({
               <Play className="h-5 w-5 text-white drop-shadow-lg" aria-hidden="true" />
             </div>
           </div>
-        </button>
+        </Button>
       )}
 
       {/* Content */}
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="bare"
         onClick={onClick}
-        className={cn(
-          'flex-1 flex items-center gap-3 p-3 text-left min-w-0',
-          'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset'
-        )}
+        className="flex-1 gap-3 p-3 text-left min-w-0 rounded-none whitespace-normal justify-start"
       >
         <div className="flex-1 min-w-0">
           <h3 className="font-medium text-sm truncate">
@@ -107,7 +107,7 @@ const BlockListItem = memo(function BlockListItem({
         </div>
 
         <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-hidden="true" />
-      </button>
+      </Button>
     </div>
   );
 });

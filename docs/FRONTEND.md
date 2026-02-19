@@ -62,7 +62,7 @@ apps/web/
     │   │   ├── VideoDetailDesktop.tsx    # Desktop layout + sticky right panel
     │   │   ├── VideoDetailMobile.tsx     # Mobile single-column layout
     │   │   ├── RightPanelTabs.tsx        # Tab-based right panel (chapters, minimap, chat)
-    │   │   ├── VideoHeaderSection.tsx    # Video metadata header
+    │   │   ├── VideoHero.tsx             # Hero card — metadata + TL;DR
     │   │   ├── video-detail-types.ts     # Shared TypeScript types
     │   │   ├── SectionCard.tsx
     │   │   ├── ContentBlockRenderer.tsx  # Dynamic content blocks
@@ -351,11 +351,25 @@ pnpm dlx shadcn@latest add button card input label form dialog sonner badge skel
 <Button variant="destructive">Delete</Button>
 <Button size="sm">Small</Button>
 <Button size="lg">Large</Button>
+<Button variant="ghost" size="bare">Text-like action</Button>
+<Button variant="ghost" size="icon-bare"><Copy className="h-3 w-3" /></Button>
 <Button disabled>
   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
   Loading...
 </Button>
 ```
+
+**Button size guide:**
+| Size | Use case | Styles |
+|------|----------|--------|
+| `default` | Standard buttons | `h-9 px-4 py-2` |
+| `sm` | Compact buttons | `h-8 px-3` |
+| `lg` | Large CTAs | `h-10 px-6` |
+| `icon` | Icon-only (standard) | `size-9` |
+| `bare` | Text-like inline actions (copy, seek, expand) | `h-auto p-0 gap-1` |
+| `icon-bare` | Icon-only minimal (toggles, play/stop) | `h-auto p-0.5` |
+
+> **ESLint:** Raw `<button>` elements are flagged by `no-restricted-syntax` (warn level). Always use `<Button>` from `@/components/ui/button`. Exceptions: Radix `asChild` composition requires raw elements — use `// eslint-disable-next-line no-restricted-syntax` with justification.
 
 **Card:**
 ```tsx

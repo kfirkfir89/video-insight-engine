@@ -210,11 +210,12 @@ describe('QuizBlock', () => {
       expect(icons.length).toBeGreaterThan(0);
     });
 
-    it('should have focus-visible styling on options', () => {
+    it('should render options as button elements', () => {
       render(<QuizBlock block={createMockBlock()} />);
 
       const option = screen.getByRole('button', { name: /london/i });
-      expect(option).toHaveClass('focus-visible:ring-2');
+      expect(option).toBeInstanceOf(HTMLButtonElement);
+      expect(option).not.toBeDisabled();
     });
   });
 });

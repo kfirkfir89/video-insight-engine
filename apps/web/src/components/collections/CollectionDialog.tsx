@@ -1,5 +1,6 @@
 import { memo, useState, useCallback, useEffect } from 'react';
 import { Folder } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -128,13 +129,15 @@ export const CollectionDialog = memo(function CollectionDialog({
             <Label>Color</Label>
             <div className="flex gap-2 flex-wrap">
               {PRESET_COLORS.map((presetColor) => (
-                <button
+                <Button
                   key={presetColor}
-                  type="button"
+                  variant="ghost"
+                  size="icon-bare"
                   onClick={() => setColor(presetColor)}
-                  className={`w-6 h-6 rounded-full transition-transform ${
-                    color === presetColor ? 'ring-2 ring-primary ring-offset-2 scale-110' : ''
-                  }`}
+                  className={cn(
+                    'w-6 h-6 rounded-full transition-transform',
+                    color === presetColor && 'ring-2 ring-primary ring-offset-2 scale-110'
+                  )}
                   style={{ backgroundColor: presetColor }}
                   aria-label={`Select color ${presetColor}`}
                 />

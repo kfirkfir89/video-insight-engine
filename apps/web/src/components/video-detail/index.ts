@@ -1,8 +1,8 @@
 // Layout & Page Components
 export { VideoDetailLayout } from "./VideoDetailLayout";
 
-// TLDR & Summary
-export { TldrHero } from "./TldrHero";
+// Hero & Summary
+export { VideoHero } from "./VideoHero";
 
 // Chapter Display Components
 // ArticleSection: Primary component - article-style layout with concepts sidebar

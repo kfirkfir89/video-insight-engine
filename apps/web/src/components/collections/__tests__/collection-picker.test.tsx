@@ -234,7 +234,7 @@ describe('CollectionPicker', () => {
       expect(combobox).toHaveAttribute('aria-expanded', 'true');
     });
 
-    it('should have button type on collection items', () => {
+    it('should render collection items as buttons', () => {
       render(
         <CollectionPicker
           collections={mockCollections}
@@ -247,6 +247,7 @@ describe('CollectionPicker', () => {
       fireEvent.click(screen.getByRole('combobox'));
 
       const buttons = screen.getAllByRole('button');
+      expect(buttons.length).toBeGreaterThan(0);
       buttons.forEach(button => {
         expect(button).toHaveAttribute('type', 'button');
       });

@@ -76,13 +76,14 @@ export const CollectionPicker = memo(function CollectionPicker({
               {collections.map((collection) => {
                 const isSelected = selectedIds.includes(collection.id);
                 return (
-                  <button
+                  <Button
                     key={collection.id}
-                    type="button"
+                    variant="ghost"
+                    size="bare"
                     onClick={() => handleToggle(collection.id)}
                     className={cn(
-                      'w-full flex items-center gap-2 px-2 py-1.5 rounded-sm text-sm',
-                      'hover:bg-muted transition-colors text-left',
+                      'w-full px-2 py-1.5 rounded-sm text-sm justify-start whitespace-normal',
+                      'text-left',
                       isSelected && 'bg-primary/10'
                     )}
                   >
@@ -94,7 +95,7 @@ export const CollectionPicker = memo(function CollectionPicker({
                     {isSelected && (
                       <Check className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
                     )}
-                  </button>
+                  </Button>
                 );
               })}
             </div>
@@ -104,17 +105,18 @@ export const CollectionPicker = memo(function CollectionPicker({
           <>
             <div className="border-t" />
             <div className="p-1">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="bare"
                 onClick={() => {
                   setOpen(false);
                   onCreateNew();
                 }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-sm text-sm hover:bg-muted transition-colors text-left text-primary"
+                className="w-full px-2 py-1.5 rounded-sm text-sm justify-start text-primary"
               >
                 <FolderPlus className="h-4 w-4" aria-hidden="true" />
                 <span>Create new collection</span>
-              </button>
+              </Button>
             </div>
           </>
         )}

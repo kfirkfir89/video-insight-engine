@@ -1,6 +1,7 @@
 import { useState, useCallback, memo } from 'react';
 import { Lightbulb, ChevronRight, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import type { Concept } from '@vie/types';
 
 interface OrphanedConceptsProps {
@@ -30,10 +31,11 @@ export const OrphanedConcepts = memo(function OrphanedConcepts({ concepts }: Orp
 
   return (
     <div className="pt-2 pb-4">
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="bare"
         onClick={toggleExpanded}
-        className="flex items-center gap-2 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors w-full"
+        className="text-xs text-muted-foreground/60 hover:text-muted-foreground w-full justify-start"
         aria-expanded={isExpanded}
       >
         {isExpanded ? (
@@ -43,7 +45,7 @@ export const OrphanedConcepts = memo(function OrphanedConcepts({ concepts }: Orp
         )}
         <Lightbulb className="h-3 w-3 shrink-0" aria-hidden="true" />
         <span>Additional Concepts ({concepts.length})</span>
-      </button>
+      </Button>
 
       {isExpanded && (
         <ul className="mt-2 ml-5 space-y-1">
@@ -53,12 +55,12 @@ export const OrphanedConcepts = memo(function OrphanedConcepts({ concepts }: Orp
 
             return (
               <li key={concept.id}>
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="bare"
                   onClick={() => hasDefinition && toggleDefinition(concept.id)}
                   className={cn(
-                    'flex items-start gap-1 text-xs text-muted-foreground/80 leading-tight text-left w-full rounded-sm',
-                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1',
+                    'text-xs text-muted-foreground/80 leading-tight text-left w-full items-start whitespace-normal justify-start',
                     hasDefinition && 'hover:text-muted-foreground cursor-pointer',
                   )}
                   disabled={!hasDefinition}
@@ -76,7 +78,7 @@ export const OrphanedConcepts = memo(function OrphanedConcepts({ concepts }: Orp
                   <span className={!hasDefinition ? 'ml-4' : ''}>
                     {concept.name}
                   </span>
-                </button>
+                </Button>
                 {hasDefinition && isDefExpanded && (
                   <p className="text-xs text-muted-foreground/60 leading-relaxed ml-4 pt-0.5 pb-1">
                     {concept.definition}

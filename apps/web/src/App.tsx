@@ -6,6 +6,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useProcessingManager } from "@/hooks/use-processing-manager";
 import { Loader2, AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 // Lazy load toast components - not needed for initial render
 const Toaster = lazy(() =>
@@ -60,12 +61,9 @@ function ChunkLoadError() {
       <p className="text-muted-foreground max-w-md">
         There was a problem loading this page. This might be due to a network issue or a new version being deployed.
       </p>
-      <button
-        onClick={handleReload}
-        className="mt-2 rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-      >
+      <Button onClick={handleReload} className="mt-2">
         Reload Page
-      </button>
+      </Button>
     </div>
   );
 }

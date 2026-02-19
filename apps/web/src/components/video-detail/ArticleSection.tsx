@@ -1,6 +1,7 @@
 import { type RefObject, memo, useCallback, useMemo } from "react";
 import { Play, StopCircle, FileText, BookOpen } from "lucide-react";
 import { YouTubePlayer, type YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import {
@@ -108,27 +109,33 @@ export const ArticleSection = memo(function ArticleSection({
       {/* Buttons — absolute positioned outside right edge */}
       <div className="absolute -right-7 top-0 flex flex-col items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         {isVideoActive ? (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-bare"
             onClick={onStop}
-            className="h-7 w-7 flex items-center justify-center rounded-md text-destructive hover:bg-destructive/10 transition-colors opacity-100"
+            className="h-7 w-7 rounded-md text-destructive hover:bg-destructive/10 opacity-100"
             aria-label="Stop video"
           >
             <StopCircle className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-bare"
             onClick={() => onPlay(chapter.id, chapter.startSeconds)}
-            className="h-7 w-7 flex items-center justify-center rounded-md text-primary hover:bg-primary/10 transition-colors"
+            className="h-7 w-7 rounded-md text-primary hover:bg-primary/10"
             aria-label={`Play from ${chapter.timestamp}`}
           >
             <Play className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
+          </Button>
         )}
         {onGoDeeper && (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-bare"
             onClick={onGoDeeper}
             className={cn(
-              "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+              "h-7 w-7 rounded-md",
               isGoDeepExpanded
                 ? "text-primary opacity-100"
                 : "text-muted-foreground hover:text-primary"
@@ -136,7 +143,7 @@ export const ArticleSection = memo(function ArticleSection({
             aria-label={isGoDeepExpanded ? "Close deeper view" : "Go deeper"}
           >
             <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
+          </Button>
         )}
       </div>
 
@@ -144,23 +151,27 @@ export const ArticleSection = memo(function ArticleSection({
       {(isVideoActive || isGoDeepExpanded) && (
         <div className="absolute -right-10 top-0 flex flex-col items-center gap-1">
           {isVideoActive && (
-            <button
+            <Button
+              variant="ghost"
+              size="icon-bare"
               onClick={onStop}
-              className="h-7 w-7 flex items-center justify-center rounded-md text-destructive hover:bg-destructive/10 transition-colors"
+              className="h-7 w-7 rounded-md text-destructive hover:bg-destructive/10"
               aria-label="Stop video"
             >
               <StopCircle className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
+            </Button>
           )}
           {isGoDeepExpanded && onGoDeeper && (
-            <button
+            <Button
+              variant="ghost"
+              size="icon-bare"
               onClick={onGoDeeper}
-              className="h-7 w-7 flex items-center justify-center rounded-md text-primary"
+              className="h-7 w-7 rounded-md text-primary"
               aria-label="Close deeper view"
               style={{ marginTop: isVideoActive ? 0 : undefined }}
             >
               <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
+            </Button>
           )}
         </div>
       )}
