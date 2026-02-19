@@ -76,7 +76,7 @@ export const QuoteRenderer = memo(function QuoteRenderer({ block, onSeek }: Quot
       accentColor="info"
       label="Quote"
     >
-      <div className={cn('group/quote relative overflow-hidden', isHighlight ? 'bg-info-soft/30 px-3 py-2 rounded' : undefined)}>
+      <div className={cn('group/quote relative overflow-hidden', isHighlight ? 'bg-info-soft/20 px-3 py-2 rounded' : undefined)}>
         {/* Decorative large quote mark */}
         {!isHighlight && (
           <span className="quote-decorative-mark" aria-hidden="true">"</span>
@@ -130,7 +130,7 @@ export const QuoteRenderer = memo(function QuoteRenderer({ block, onSeek }: Quot
                 className={cn(
                   'ml-auto text-xs px-1.5 py-0.5 transition-all duration-150',
                   'opacity-0 group-hover/quote:opacity-100 focus:opacity-100',
-                  'hover:bg-muted/30',
+                  'hover:bg-muted/20',
                   copied ? 'text-success opacity-100' : 'text-muted-foreground'
                 )}
                 aria-label={copied ? BLOCK_LABELS.copied : BLOCK_LABELS.copyQuote}

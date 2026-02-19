@@ -35,7 +35,7 @@ export const OrphanedConcepts = memo(function OrphanedConcepts({ concepts }: Orp
         variant="ghost"
         size="bare"
         onClick={toggleExpanded}
-        className="text-xs text-muted-foreground/60 hover:text-muted-foreground w-full justify-start"
+        className="text-xs text-muted-foreground/70 hover:text-muted-foreground w-full justify-start"
         aria-expanded={isExpanded}
       >
         {isExpanded ? (
@@ -60,7 +60,7 @@ export const OrphanedConcepts = memo(function OrphanedConcepts({ concepts }: Orp
                   size="bare"
                   onClick={() => hasDefinition && toggleDefinition(concept.id)}
                   className={cn(
-                    'text-xs text-muted-foreground/80 leading-tight text-left w-full items-start whitespace-normal justify-start',
+                    'text-xs text-muted-foreground/90 leading-tight text-left w-full items-start whitespace-normal justify-start',
                     hasDefinition && 'hover:text-muted-foreground cursor-pointer',
                   )}
                   disabled={!hasDefinition}
@@ -80,7 +80,7 @@ export const OrphanedConcepts = memo(function OrphanedConcepts({ concepts }: Orp
                   </span>
                 </Button>
                 {hasDefinition && isDefExpanded && (
-                  <p className="text-xs text-muted-foreground/60 leading-relaxed ml-4 pt-0.5 pb-1">
+                  <p className="text-xs text-muted-foreground/70 leading-relaxed ml-4 pt-0.5 pb-1">
                     {concept.definition}
                   </p>
                 )}

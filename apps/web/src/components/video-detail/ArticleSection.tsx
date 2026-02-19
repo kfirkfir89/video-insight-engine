@@ -16,7 +16,7 @@ import {
   DIYView,
   GamingView,
 } from "./views";
-import { ConceptsProvider } from "./ConceptsContext";
+import { ConceptsProvider, ARTICLE_SECTION_SLOT } from "./ConceptsContext";
 import type { SummaryChapter, Concept, VideoCategory } from "@vie/types";
 
 
@@ -103,7 +103,7 @@ export const ArticleSection = memo(function ArticleSection({
   return (
     <article
       id={`chapter-${chapter.id}`}
-      data-slot="article-section"
+      data-slot={ARTICLE_SECTION_SLOT}
       className="relative group"
     >
       {/* Buttons — absolute positioned outside right edge */}
@@ -177,16 +177,18 @@ export const ArticleSection = memo(function ArticleSection({
       )}
 
       {/* Chapter title with decorative line */}
-      <div className="mb-2 flex items-center gap-3">
-        <h3 className="font-normal text-xs leading-tight text-muted-foreground/40 shrink-0 whitespace-nowrap">
-          {hasCreatorChapter ? chapter.originalTitle : chapter.title}
-        </h3>
-        {hasCreatorChapter && chapter.generatedTitle && (
-          <span className="text-[11px] text-muted-foreground/30 leading-tight shrink-0">
-            {chapter.generatedTitle}
-          </span>
-        )}
-        <div className="flex-1 h-px fade-divider" />
+      <div className="mb-5 pt-2">
+        <div className="flex items-baseline gap-3">
+          <h3 className="font-semibold text-base leading-tight tracking-tight text-foreground shrink-0 whitespace-nowrap">
+            {hasCreatorChapter ? chapter.originalTitle : chapter.title}
+          </h3>
+          {hasCreatorChapter && chapter.generatedTitle && (
+            <span className="text-[11px] text-muted-foreground/40 leading-tight shrink-0">
+              {chapter.generatedTitle}
+            </span>
+          )}
+        </div>
+        <div className="h-px fade-divider mt-2" />
       </div>
 
       {/* Full-width content */}

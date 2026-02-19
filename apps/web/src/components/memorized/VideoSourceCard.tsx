@@ -30,7 +30,7 @@ export const VideoSourceCard = memo(function VideoSourceCard({
   return (
     <div
       className={cn(
-        'flex gap-3 p-3 rounded-lg border border-border/50 bg-muted/30',
+        'flex gap-3 p-3 rounded-lg border border-border/50 bg-muted/20',
         className
       )}
     >

@@ -121,7 +121,7 @@ export const IngredientBlock = memo(function IngredientBlock({ block }: Ingredie
                   </Button>
                   <div className={cn('flex-1', isChecked && 'line-through text-muted-foreground/50')}>
                     {scaledAmount && (
-                      <span className="font-mono text-xs font-bold bg-muted/30 px-1.5 py-0.5 rounded tabular-nums amount-badge-glow">{scaledAmount}</span>
+                      <span className="font-mono text-xs font-bold bg-muted/20 px-1.5 py-0.5 rounded tabular-nums amount-badge-glow">{scaledAmount}</span>
                     )}
                     {scaledAmount && item.unit && ' '}
                     {item.unit && <span className="text-muted-foreground">{item.unit}</span>}

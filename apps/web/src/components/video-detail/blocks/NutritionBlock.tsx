@@ -27,7 +27,7 @@ export const NutritionBlock = memo(function NutritionBlock({ block }: NutritionB
         <span>{BLOCK_LABELS.nutrition}</span>
       </div>
       {block.servingSize && (
-        <p className="text-xs text-muted-foreground/60 mb-2">
+        <p className="text-xs text-muted-foreground/70 mb-2">
           {BLOCK_LABELS.perServing}: {block.servingSize}
         </p>
       )}

@@ -39,7 +39,7 @@ export const KeyValueRenderer = memo(function KeyValueRenderer({ block }: KeyVal
       <div className="space-y-1.5">
         {/* Header with icon */}
         <div className="flex items-center gap-1.5 mb-1">
-          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" aria-hidden="true" />
+          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
           <span className="text-xs text-muted-foreground/70">{config.label}</span>
         </div>
 

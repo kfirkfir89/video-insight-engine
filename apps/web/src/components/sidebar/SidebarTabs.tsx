@@ -69,7 +69,7 @@ export function SidebarTabs() {
                 className={cn(
                   "text-[10px] px-1.5 py-0.5 rounded-full leading-none",
                   isActive
-                    ? "bg-primary/15 text-primary"
+                    ? "bg-primary/10 text-primary"
                     : "bg-muted text-muted-foreground"
                 )}
               >

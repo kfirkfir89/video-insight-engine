@@ -109,7 +109,7 @@ export function BlockWrapper({
             </span>
           )}
           {headerLabel && (
-            <span className="flex-1 text-xs font-medium text-zinc-400">
+            <span className="flex-1 text-xs font-medium text-[var(--code-muted)]">
               {headerLabel}
             </span>
           )}

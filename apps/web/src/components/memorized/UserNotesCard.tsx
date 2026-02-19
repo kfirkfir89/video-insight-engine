@@ -47,12 +47,12 @@ export const UserNotesCard = memo(function UserNotesCard({
   return (
     <div
       className={cn(
-        'p-3 rounded-lg border border-border/50 bg-muted/30',
+        'p-3 rounded-lg border border-border/50 bg-muted/20',
         className
       )}
     >
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
           <StickyNote className="h-3.5 w-3.5" aria-hidden="true" />
           <span>Your Notes</span>
         </div>
@@ -106,7 +106,7 @@ export const UserNotesCard = memo(function UserNotesCard({
       ) : (
         <p className={cn(
           'text-sm leading-relaxed whitespace-pre-wrap',
-          !notes && 'text-muted-foreground/60 italic'
+          !notes && 'text-muted-foreground/70 italic'
         )}>
           {notes || 'No notes yet. Click Edit to add some.'}
         </p>

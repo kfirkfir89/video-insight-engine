@@ -74,7 +74,7 @@ export const TravelView = memo(function TravelView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Locations Section - Destinations at the top */}
       {hasLocations && (
         <ContentBlocks

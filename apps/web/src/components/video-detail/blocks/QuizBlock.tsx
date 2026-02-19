@@ -61,9 +61,9 @@ export const QuizBlock = memo(function QuizBlock({ block }: QuizBlockProps) {
             return (
               <div key={qIndex} className="rounded-lg border border-border/50 overflow-hidden">
                 {/* Question */}
-                <div className="bg-muted/30 px-4 py-3">
+                <div className="bg-muted/20 px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold text-primary/30 tabular-nums" aria-hidden="true">{qIndex + 1}</span>
+                    <span className="text-2xl font-bold text-primary/40 tabular-nums" aria-hidden="true">{qIndex + 1}</span>
                     <div>
                       <span className="text-xs text-muted-foreground/70">
                         {BLOCK_LABELS.question} {qIndex + 1}
@@ -122,7 +122,7 @@ export const QuizBlock = memo(function QuizBlock({ block }: QuizBlockProps) {
                 {/* Explanation */}
                 {isRevealed && question.explanation && (
                   <div className="px-4 pb-4">
-                    <div className="bg-muted/30 rounded-md p-3 text-sm">
+                    <div className="bg-muted/20 rounded-md p-3 text-sm">
                       <span className="font-medium text-xs text-muted-foreground block mb-1">
                         {BLOCK_LABELS.explanation}
                       </span>

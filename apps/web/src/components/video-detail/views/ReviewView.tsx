@@ -74,7 +74,7 @@ export const ReviewView = memo(function ReviewView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Verdict Section - Final assessment at the top */}
       {hasVerdicts && (
         <ContentBlocks

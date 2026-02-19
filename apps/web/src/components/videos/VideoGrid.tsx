@@ -185,7 +185,7 @@ export const VideoGrid = memo(function VideoGrid({
           <section key={folderId || "uncategorized"}>
             {/* Folder Header - clickable to navigate to folder view */}
             <div
-              className="flex items-center gap-2 cursor-pointer hover:bg-accent/30 -mx-2 px-2 py-2 rounded-lg transition-colors"
+              className="flex items-center gap-2 cursor-pointer hover:bg-accent/20 -mx-2 px-2 py-2 rounded-lg transition-colors"
               onClick={() => {
                 if (folder) {
                   setSelectedFolder(folder.id);
@@ -203,7 +203,7 @@ export const VideoGrid = memo(function VideoGrid({
               </span>
             </div>
             {/* Subtle separator */}
-            <div className="border-b border-border/30 -mx-2 mb-4" />
+            <div className="border-b border-border/20 -mx-2 mb-4" />
 
             {/* Videos Grid */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

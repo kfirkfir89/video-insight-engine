@@ -85,7 +85,7 @@ export const VerdictBlock = memo(function VerdictBlock({ block }: VerdictBlockPr
                 <ul className="space-y-0.5 stagger-children">
                   {bestFor.map((item, index) => (
                     <li key={index} className="text-xs text-muted-foreground flex items-baseline gap-1.5">
-                      <span className="w-1 h-1 rounded-full bg-success/60 shrink-0 translate-y-1" />
+                      <span className="w-1 h-1 rounded-full bg-success/70 shrink-0 translate-y-1" />
                       <ConceptHighlighter text={item} />
                     </li>
                   ))}
@@ -102,7 +102,7 @@ export const VerdictBlock = memo(function VerdictBlock({ block }: VerdictBlockPr
                 <ul className="space-y-0.5 stagger-children">
                   {notFor.map((item, index) => (
                     <li key={index} className="text-xs text-muted-foreground flex items-baseline gap-1.5">
-                      <span className="w-1 h-1 rounded-full bg-destructive/60 shrink-0 translate-y-1" />
+                      <span className="w-1 h-1 rounded-full bg-destructive/70 shrink-0 translate-y-1" />
                       <ConceptHighlighter text={item} />
                     </li>
                   ))}

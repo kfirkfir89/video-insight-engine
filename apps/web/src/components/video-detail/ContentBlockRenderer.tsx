@@ -90,8 +90,8 @@ export function ContentBlockRenderer({
     // ─────────────────────────────────────────────────────
     case 'paragraph':
       return (
-        <div className="relative pl-3 border-l-2 border-border/50">
-          <p className="text-muted-foreground leading-[1.75]">
+        <div className="block-paragraph max-w-prose">
+          <p className="text-foreground/90 text-[15px] leading-[1.75]">
             <ConceptHighlighter text={block.text} />
           </p>
         </div>
@@ -256,8 +256,8 @@ export function ContentBlockRenderer({
       // Attempt graceful fallback for text-like blocks
       if ('text' in unknownBlock && typeof unknownBlock.text === 'string') {
         return (
-          <div className="relative pl-3 border-l-2 border-border/50">
-            <p className="text-muted-foreground leading-[1.75]"><ConceptHighlighter text={unknownBlock.text} /></p>
+          <div className="block-paragraph max-w-prose">
+            <p className="text-foreground/90 text-[15px] leading-[1.75]"><ConceptHighlighter text={unknownBlock.text} /></p>
           </div>
         );
       }

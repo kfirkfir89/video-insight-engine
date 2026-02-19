@@ -47,7 +47,7 @@ export const ChapterList = memo(function ChapterList({
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <span className="font-medium">Chapters</span>
         {isCreatorChapters && (
-          <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 rounded">
+          <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400 px-1.5 py-0.5 rounded">
             Creator
           </span>
         )}

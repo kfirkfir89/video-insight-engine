@@ -1,7 +1,6 @@
 import { memo, useState, useCallback } from 'react';
 import type { StatisticBlock } from '@vie/types';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { BlockWrapper } from './BlockWrapper';
 import { BLOCK_LABELS } from '@/lib/block-labels';
@@ -65,7 +64,7 @@ export const StatisticRenderer = memo(function StatisticRenderer({ block }: Stat
               </div>
               <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground mt-1">{item.label}</span>
               {item.context && (
-                <span className="text-xs text-muted-foreground/60 mt-0.5">{item.context}</span>
+                <span className="text-xs text-muted-foreground/70 mt-0.5">{item.context}</span>
               )}
               {copiedIndex === index && (
                 <span className="text-[10px] text-success mt-0.5 font-medium">{BLOCK_LABELS.copied}</span>

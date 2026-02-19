@@ -64,7 +64,7 @@ export const TimestampRenderer = memo(function TimestampRenderer({ block, onSeek
             size="bare"
             onClick={handleStop}
             onKeyDown={handleKeyDown}
-            className="text-sm cursor-pointer text-destructive hover:text-destructive/80"
+            className="text-sm cursor-pointer text-destructive hover:text-destructive/90"
             aria-label={block.label ? `Stop video at ${block.time} - ${block.label}` : `Stop video at ${block.time}`}
           >
             <StopCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -97,7 +97,7 @@ export const TimestampRenderer = memo(function TimestampRenderer({ block, onSeek
           className={cn(
             'text-sm',
             isClickable
-              ? 'cursor-pointer text-primary hover:text-primary/80'
+              ? 'cursor-pointer text-primary hover:text-primary/90'
               : 'cursor-default text-muted-foreground'
           )}
           aria-label={block.label ? `Jump to ${block.time} - ${block.label}` : `Jump to ${block.time}`}

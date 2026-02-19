@@ -69,7 +69,7 @@ export const FitnessView = memo(function FitnessView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Workout Timer Section - Interactive timer at the top */}
       {hasTimers && (
         <ContentBlocks

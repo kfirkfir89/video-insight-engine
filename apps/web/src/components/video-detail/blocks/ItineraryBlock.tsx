@@ -57,7 +57,7 @@ export const ItineraryBlock = memo(function ItineraryBlock({ block }: ItineraryB
                       )}
                       <span className="font-medium"><ConceptHighlighter text={activity.activity} /></span>
                       {activity.duration && (
-                        <span className="text-xs text-muted-foreground/60">({activity.duration})</span>
+                        <span className="text-xs text-muted-foreground/70">({activity.duration})</span>
                       )}
                     </div>
                     {activity.location && (
