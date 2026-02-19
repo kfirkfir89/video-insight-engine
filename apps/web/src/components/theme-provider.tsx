@@ -3,16 +3,19 @@ import { ThemeContext, type Theme } from "./theme-context";
 
 export function ThemeProvider({
   children,
-  defaultTheme = "system",
+  defaultTheme = "dark",
   storageKey = "vie-theme",
 }: {
   children: React.ReactNode;
   defaultTheme?: Theme;
   storageKey?: string;
 }) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
-  );
+  const [theme, setTheme] = useState<Theme>(() => {
+    const stored = localStorage.getItem(storageKey);
+    // Migrate: treat "system" or invalid values as default
+    if (stored === "dark" || stored === "light") return stored;
+    return defaultTheme;
+  });
   const isFirstRender = useRef(true);
 
   useEffect(() => {
@@ -28,16 +31,7 @@ export function ThemeProvider({
       }
 
       root.classList.remove("light", "dark");
-
-      if (theme === "system") {
-        const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
-          .matches
-          ? "dark"
-          : "light";
-        root.classList.add(systemTheme);
-      } else {
-        root.classList.add(theme);
-      }
+      root.classList.add(theme);
 
       // Remove after transition completes (matches 200ms in CSS)
       if (!isFirstRender.current) {

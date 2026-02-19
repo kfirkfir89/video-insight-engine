@@ -4,7 +4,6 @@ import { useDroppable } from "@dnd-kit/core";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FolderTree } from "./FolderTree";
-import { NewFolderInput } from "./NewFolderInput";
 import { UnassignedVideosList } from "./UnassignedVideosList";
 import { VideoItem } from "./VideoItem";
 import { useFolders } from "@/hooks/use-folders";
@@ -34,10 +33,6 @@ export function SidebarSection({ type }: SidebarSectionProps) {
   // Selection mode state
   const selectionMode = useSelectionMode();
   const exitSelectionMode = useUIStore((s) => s.exitSelectionMode);
-
-  // New folder input visibility (shared via store, triggered from SidebarTabs)
-  const showNewFolderInput = useUIStore((s) => s.showNewFolderInput);
-  const setShowNewFolderInput = useUIStore((s) => s.setShowNewFolderInput);
 
   // Data fetching
   const { data: foldersData, isLoading: foldersLoading } = useFolders(type);
@@ -132,19 +127,10 @@ export function SidebarSection({ type }: SidebarSectionProps) {
         <div
           ref={setRootDropRef}
           className={cn(
-            "h-full flex flex-col pb-8 pr-2",
+            "flex flex-col py-2",
             isRootOver && "bg-primary/10"
           )}
         >
-          {/* New folder input */}
-          {showNewFolderInput && (
-            <NewFolderInput
-              type={type}
-              existingFolders={foldersData?.folders || []}
-              onComplete={() => setShowNewFolderInput(false)}
-            />
-          )}
-
           {isLoading ? (
             <div className="px-4 py-2 space-y-2">
               <Skeleton className="h-4 w-full" />
@@ -152,7 +138,7 @@ export function SidebarSection({ type }: SidebarSectionProps) {
             </div>
           ) : isSearching ? (
             filteredVideos.length > 0 ? (
-              <div className="py-1">
+              <>
                 {filteredVideos.map((video) => (
                   <VideoItem
                     key={video.id}
@@ -161,7 +147,7 @@ export function SidebarSection({ type }: SidebarSectionProps) {
                     folders={foldersData?.folders || []}
                   />
                 ))}
-              </div>
+              </>
             ) : (
               <div className="px-4 py-2 text-xs text-muted-foreground">
                 No videos found
@@ -185,8 +171,8 @@ export function SidebarSection({ type }: SidebarSectionProps) {
             </>
           )}
 
-          {/* Empty drop zone at bottom */}
-          <div className="flex-grow min-h-[200px]" />
+          {/* Drop zone at bottom for DnD */}
+          <div className="min-h-16" />
         </div>
       </ScrollArea>
     </div>

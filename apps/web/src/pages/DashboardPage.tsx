@@ -58,7 +58,7 @@ export function DashboardPage() {
   return (
     <Layout showSidebar>
       {activeSection === "summarized" ? (
-        <div>
+        <div className="p-4 md:p-6">
           {/* Header with Breadcrumb */}
           <div className="mb-6 flex items-center gap-3">
             <FolderOpen className="h-6 w-6 text-muted-foreground shrink-0" />
@@ -77,7 +77,7 @@ export function DashboardPage() {
           />
         </div>
       ) : (
-        <div>
+        <div className="p-4 md:p-6">
           {/* Header with Breadcrumb for Memorized */}
           <div className="mb-6 flex items-center gap-3">
             <Brain className="h-6 w-6 text-muted-foreground shrink-0" />

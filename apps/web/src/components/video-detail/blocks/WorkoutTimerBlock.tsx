@@ -1,7 +1,14 @@
 import { memo, useState, useCallback, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw, Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatDuration } from '@/lib/string-utils';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { BlockWrapper } from './BlockWrapper';
 import type { WorkoutTimerBlock as WorkoutTimerBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
@@ -44,18 +51,10 @@ export const WorkoutTimerBlock = memo(function WorkoutTimerBlock({ block }: Work
   const [timeRemaining, setTimeRemaining] = useState(intervals[0]?.duration ?? 0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  if (intervals.length === 0) return null;
-
   const currentInterval = intervals[currentIntervalIndex];
   const isComplete = currentRound > rounds;
 
   const totalDuration = intervals.reduce((sum, interval) => sum + interval.duration, 0) * rounds;
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
 
   const reset = useCallback(() => {
     setIsRunning(false);
@@ -109,6 +108,8 @@ export const WorkoutTimerBlock = memo(function WorkoutTimerBlock({ block }: Work
     };
   }, [isRunning, isComplete, currentIntervalIndex, currentRound, rounds, intervals]);
 
+  if (intervals.length === 0) return null;
+
   const colorClass = currentInterval ? INTERVAL_COLORS[currentInterval.type] : '';
   const intervalLabel = currentInterval ? INTERVAL_LABELS[currentInterval.type] : '';
 
@@ -138,7 +139,7 @@ export const WorkoutTimerBlock = memo(function WorkoutTimerBlock({ block }: Work
           {isComplete ? (
             <div className="space-y-2" role="alert">
               <div className="text-4xl font-bold text-success">{BLOCK_LABELS.complete}</div>
-              <p className="text-sm text-muted-foreground">{BLOCK_LABELS.totalTime}: {formatTime(totalDuration)}</p>
+              <p className="text-sm text-muted-foreground">{BLOCK_LABELS.totalTime}: {formatDuration(totalDuration)}</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -146,7 +147,7 @@ export const WorkoutTimerBlock = memo(function WorkoutTimerBlock({ block }: Work
                 {intervalLabel}: {currentInterval?.name}
               </div>
               <div className="text-5xl font-bold tabular-nums text-gradient-primary timer-glow">
-                {formatTime(timeRemaining)}
+                {formatDuration(timeRemaining)}
               </div>
             </div>
           )}
@@ -185,20 +186,27 @@ export const WorkoutTimerBlock = memo(function WorkoutTimerBlock({ block }: Work
 
         {/* Interval preview with dots */}
         <div className="px-4 pb-4 space-y-2">
-          <div className="flex gap-1 stagger-children">
-            {intervals.map((interval, index) => (
-              <div
-                key={index}
-                className={cn(
-                  'flex-1 h-2 rounded-full transition-colors',
-                  index < currentIntervalIndex ? 'bg-primary' :
-                  index === currentIntervalIndex ? INTERVAL_PROGRESS_COLORS[interval.type] :
-                  'bg-muted'
-                )}
-                title={`${INTERVAL_LABELS[interval.type]}: ${formatTime(interval.duration)}`}
-              />
-            ))}
-          </div>
+          <TooltipProvider delayDuration={400}>
+            <div className="flex gap-1 stagger-children">
+              {intervals.map((interval, index) => (
+                <Tooltip key={index}>
+                  <TooltipTrigger asChild>
+                    <div
+                      className={cn(
+                        'flex-1 h-2 rounded-full transition-colors',
+                        index < currentIntervalIndex ? 'bg-primary' :
+                        index === currentIntervalIndex ? INTERVAL_PROGRESS_COLORS[interval.type] :
+                        'bg-muted'
+                      )}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    {INTERVAL_LABELS[interval.type]}: {formatDuration(interval.duration)}
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+            </div>
+          </TooltipProvider>
           {/* Phase dots indicator */}
           <div className="flex justify-center gap-1.5" aria-hidden="true">
             {intervals.map((_, index) => (

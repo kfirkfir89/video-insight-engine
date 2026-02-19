@@ -1,4 +1,5 @@
 import { useRef, useCallback, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,11 +7,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Layout } from "@/components/layout/Layout";
 import type { YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
 import { useActiveChapter } from "@/hooks/use-active-chapter";
+import { useChapterPlayback } from "@/hooks/use-chapter-playback";
 import { useIsDesktop, useIsLargeDesktop } from "@/hooks/use-media-query";
-import { useRightSidebar } from "@/hooks/use-right-sidebar";
-import { useUIStore } from "@/stores/ui-store";
 import { matchConceptsToChapters } from "@/lib/timestamp-utils";
-import { RightPanelStack } from "./RightPanelStack";
+import { RightPanelTabs } from "./RightPanelTabs";
 import { StickyChapterNav } from "./StickyChapterNav";
 import { VideoChatPanel } from "./VideoChatPanel";
 import { ChapterList } from "./ChapterList";
@@ -56,11 +56,15 @@ export function VideoDetailLayout({
   const playerRef = useRef<YouTubePlayerRef>(null);
   const isDesktop = useIsDesktop();
   const isLargeDesktop = useIsLargeDesktop();
-  const activeRightPanel = useUIStore((s) => s.activeRightPanel);
 
-  // Chapter play state
-  const [activePlayChapter, setActivePlayChapter] = useState<string | null>(null);
-  const [activeStartSeconds, setActiveStartSeconds] = useState<number>(0);
+  // Chapter playback state (play, stop, seek)
+  const {
+    activePlayChapter,
+    activeStartSeconds,
+    handlePlayFromChapter,
+    handleStopChapter,
+    handleSeekToChapter,
+  } = useChapterPlayback(playerRef, isDesktop);
 
   // Master summary modal state
   const [showMasterSummary, setShowMasterSummary] = useState(false);
@@ -89,53 +93,6 @@ export function VideoDetailLayout({
     return matchConceptsToChapters(summary.concepts, (summary.chapters ?? []));
   }, [summary?.concepts, summary?.chapters]);
 
-  // Handle play from chapter - collapses video under the chapter on desktop
-  const handlePlayFromChapter = useCallback((chapterId: string, startSeconds: number) => {
-    if (isDesktop) {
-      setActivePlayChapter(chapterId);
-      setActiveStartSeconds(startSeconds);
-      requestAnimationFrame(() => {
-        const chapterElement = document.getElementById(`chapter-${chapterId}`);
-        if (chapterElement) {
-          const scrollContainer = chapterElement.closest("main");
-          if (scrollContainer) {
-            const containerRect = scrollContainer.getBoundingClientRect();
-            const elementRect = chapterElement.getBoundingClientRect();
-            const relativeTop = elementRect.top - containerRect.top + scrollContainer.scrollTop;
-            const offset = 80;
-            scrollContainer.scrollTo({ top: relativeTop - offset, behavior: "smooth" });
-          } else {
-            chapterElement.scrollIntoView({ behavior: "smooth", block: "start" });
-          }
-        }
-      });
-    } else {
-      const videoElement = document.getElementById("video-header") || document.getElementById("video-player");
-      if (videoElement) {
-        videoElement.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-      requestAnimationFrame(() => {
-        playerRef.current?.seekTo(startSeconds);
-        playerRef.current?.playVideo();
-      });
-    }
-  }, [isDesktop]);
-
-  const handleStopChapter = useCallback(() => {
-    setActivePlayChapter(null);
-  }, []);
-
-  const handleSeekToChapter = useCallback((startSeconds: number) => {
-    const videoElement = document.getElementById("video-header") || document.getElementById("video-player");
-    if (videoElement) {
-      videoElement.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-    requestAnimationFrame(() => {
-      playerRef.current?.seekTo(startSeconds);
-      playerRef.current?.playVideo();
-    });
-  }, []);
-
   const handleOpenMasterSummary = useCallback(() => {
     setShowMasterSummary(true);
   }, []);
@@ -150,46 +107,66 @@ export function VideoDetailLayout({
 
   const videoSummaryId = video.videoSummaryId ?? "";
 
-  // Build right sidebar content for layout-level rendering
-  const rightSidebarContent = useMemo(() => {
+  // Shared panel content — used by both inline (large desktop) and floating (medium) variants
+  const panelContent = useMemo(() => {
     if (!summary) return null;
-    return (
-      <RightPanelStack
-        chaptersContent={
-          <StickyChapterNav
-            chapters={summary.chapters ?? []}
-            activeChapter={activeId}
-            activePlayChapter={activePlayChapter}
-            onScrollToChapter={scrollToChapter}
-            onPlayFromChapter={handlePlayFromChapter}
-            onStopChapter={handleStopChapter}
-            conceptsByChapter={conceptMatchResult.byChapter}
-          />
-        }
-        chatContent={
-          <VideoChatPanel
-            videoSummaryId={videoSummaryId}
-            videoTitle={video.title}
-            className="h-full"
-          />
-        }
-      />
-    );
+    return {
+      chapters: (
+        <StickyChapterNav
+          chapters={summary.chapters ?? []}
+          activeChapter={activeId}
+          activePlayChapter={activePlayChapter}
+          onScrollToChapter={scrollToChapter}
+          onPlayFromChapter={handlePlayFromChapter}
+          onStopChapter={handleStopChapter}
+          conceptsByChapter={conceptMatchResult.byChapter}
+        />
+      ),
+      chat: (
+        <VideoChatPanel
+          videoSummaryId={videoSummaryId}
+          videoTitle={video.title}
+          className="h-full"
+        />
+      ),
+    };
   }, [
     summary, activeId, activePlayChapter, scrollToChapter,
     handlePlayFromChapter, handleStopChapter, conceptMatchResult.byChapter,
     videoSummaryId, video.title,
   ]);
 
-  // Large desktop: cubes in Layout aside. Smaller screens: floating cubes rendered inline.
-  useRightSidebar(rightSidebarContent, isLargeDesktop && !!summary);
-  const showFloatingCubes = !isLargeDesktop && !!summary;
+  // Inline right panel for large desktop (≥1280px)
+  const rightPanelElement = useMemo(() => {
+    if (!panelContent || !isLargeDesktop) return undefined;
+    return (
+      <RightPanelTabs
+        chaptersContent={panelContent.chapters}
+        chatContent={panelContent.chat}
+        variant="inline"
+      />
+    );
+  }, [panelContent, isLargeDesktop]);
+
+  // Floating panel for medium screens (<1280px)
+  const floatingPanel = useMemo(() => {
+    if (!panelContent || !isDesktop || isLargeDesktop) return null;
+    return (
+      <div className="fixed bottom-4 right-3 z-50 w-80 h-[70vh]">
+        <RightPanelTabs
+          chaptersContent={panelContent.chapters}
+          chatContent={panelContent.chat}
+          variant="floating"
+        />
+      </div>
+    );
+  }, [panelContent, isDesktop, isLargeDesktop]);
 
   return (
     <Layout>
       {!summary ? (
         // No summary yet - show loading state
-        <>
+        <div className="p-4 md:p-6">
           <Link to="/">
             <Button variant="ghost" className="mb-4">
               <ArrowLeft className="mr-2 h-4 w-4" /> Back
@@ -223,7 +200,7 @@ export function VideoDetailLayout({
               </Card>
             )}
           </div>
-        </>
+        </div>
       ) : (
         <VideoSummaryIdProvider videoSummaryId={video.videoSummaryId ?? ""}>
           {isDesktop ? (
@@ -249,6 +226,7 @@ export function VideoDetailLayout({
               onToggleChat={handleToggleChat}
               onGoDeeper={handleGoDeeper}
               expandedChapterId={expandedChapterId}
+              rightPanel={rightPanelElement}
             />
           ) : (
             <VideoDetailMobile
@@ -278,18 +256,8 @@ export function VideoDetailLayout({
         </VideoSummaryIdProvider>
       )}
 
-      {/* Floating cube panel for smaller screens (<1280px) */}
-      {showFloatingCubes && rightSidebarContent && (
-        <div
-          className="fixed bottom-4 right-3 z-50 transition-[width,height] duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)]"
-          style={{
-            width: activeRightPanel !== "none" ? 320 : 56,
-            height: activeRightPanel !== "none" ? "70vh" : "auto",
-          }}
-        >
-          {rightSidebarContent}
-        </div>
-      )}
+      {/* Floating panel for medium desktop (<1280px) — portalled to body for reliable fixed positioning */}
+      {floatingPanel && createPortal(floatingPanel, document.body)}
 
       {/* Master Summary Modal */}
       {summary?.masterSummary && (

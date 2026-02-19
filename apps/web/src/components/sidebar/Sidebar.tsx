@@ -1,10 +1,8 @@
 import { memo, useEffect, lazy, Suspense } from "react";
 import { SidebarHeader } from "./SidebarHeader";
-import { AddVideoInput } from "./AddVideoInput";
 import { SidebarToolbar } from "./SidebarToolbar";
 import { SidebarTabs } from "./SidebarTabs";
 import { SidebarSection } from "./SidebarSection";
-import { SidebarFooter } from "./SidebarFooter";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { DndProvider } from "./DndProvider";
 import { useUIStore, useSelectionMode } from "@/stores/ui-store";
@@ -34,18 +32,15 @@ export const Sidebar = memo(function Sidebar() {
   }, [selectionMode, exitSelectionMode]);
 
   return (
-    <aside className="h-screen w-full flex flex-col bg-secondary border-r overflow-hidden relative">
-      {/* Branded header with logo + close button */}
+    <aside className="h-screen w-full flex flex-col bg-muted border-r overflow-hidden relative">
+      {/* Branded header with logo */}
       <SidebarHeader />
 
-      {/* Add Video Input */}
-      <AddVideoInput />
+      {/* Tab bar: Summaries | Memorized — directly after logo */}
+      <SidebarTabs />
 
       {/* Toolbar for sidebar controls */}
       <SidebarToolbar />
-
-      {/* Tab bar: Summaries | Memorized */}
-      <SidebarTabs />
 
       {/* Content area - one section at a time via tabs */}
       <DndProvider>
@@ -61,9 +56,6 @@ export const Sidebar = memo(function Sidebar() {
           <DevToolPanel />
         </Suspense>
       )}
-
-      {/* Footer with video count, theme toggle, user profile */}
-      <SidebarFooter />
 
       {/* Selection toolbar at bottom when in selection mode */}
       <SelectionToolbar />

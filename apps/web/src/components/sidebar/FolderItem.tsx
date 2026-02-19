@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, memo } from "react";
+import { useState, useCallback, useMemo, useRef, memo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronRight, Folder, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ import { useUIStore, useSelectionMode } from "@/stores/ui-store";
 import { useDeleteFolder } from "@/hooks/use-folders";
 import { useSidebarTextClasses } from "@/hooks/use-sidebar-text-size";
 import { useLongPress } from "@/hooks/use-long-press";
+import { useIsTruncated } from "@/hooks/use-is-truncated";
 import { useFolderDragDrop } from "@/hooks/use-folder-drag-drop";
 import { FolderRenameInput } from "./FolderRenameInput";
 import { CreateSubfolderInput } from "./CreateSubfolderInput";
@@ -59,6 +60,11 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
     onLongPress: () => enterSelectionMode(undefined, folder.id),
     disabled: selectionMode,
   });
+
+  // Truncation detection for conditional tooltip
+  const nameRef = useRef<HTMLSpanElement>(null);
+  const isTruncated = useIsTruncated(nameRef);
+  const [tooltipOpen, setTooltipOpen] = useState(false);
 
   // Local UI state
   const [isRenaming, setIsRenaming] = useState(false);
@@ -158,13 +164,13 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
 
   // Shared row classes
   const rowClassName = cn(
-    "group flex items-center cursor-pointer hover:bg-accent/50 rounded-sm transition-colors",
+    "group flex items-center cursor-pointer hover:bg-primary/8 rounded-sm transition-colors",
     "has-[[data-state=open]]:bg-accent/50",
     textClasses.rowHeight,
-    isSelected && !isFolderSelectionSelected && "bg-accent/60 border-l-2 border-l-primary",
+    isSelected && !isFolderSelectionSelected && "bg-primary/8 font-medium",
     isOver && !isDragging && "ring-1 ring-primary/50",
     isDragging && "opacity-50",
-    isFolderSelectionSelected && "bg-accent border-l-2 border-l-primary"
+    isFolderSelectionSelected && "bg-primary/8"
   );
 
   const rowStyle = { paddingLeft: `${paddingLeft}px`, paddingRight: "8px" };
@@ -195,7 +201,7 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
         <button
           type="button"
           onClick={handleChevronClick}
-          className="w-4 h-4 flex items-center justify-center shrink-0 hover:bg-accent rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="w-4 h-4 flex items-center justify-center shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ChevronRight
             className={cn(
@@ -209,7 +215,7 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
         <span className="w-4 shrink-0" />
       )}
       <Folder
-        className={cn(textClasses.iconSize, "shrink-0 text-muted-foreground ml-1")}
+        className={cn(textClasses.iconSize, "shrink-0 text-primary ml-1")}
         style={getFolderColorStyle(folder.color)}
       />
     </>
@@ -221,18 +227,25 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
       "flex items-center shrink-0",
       selectionMode && "invisible pointer-events-none"
     )}>
-      <button
-        type="button"
-        className="p-1.5 rounded-sm opacity-0 group-hover:opacity-100 group-has-[[data-state=open]]:opacity-100 hover:bg-accent transition-opacity shrink-0 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-        onClick={handleAddSubfolderClick}
-        title="Create subfolder"
-      >
-        <Plus className={cn(
-          textClasses.smallIconSize,
-          "text-muted-foreground transition-transform duration-200",
-          showSubfolderInput && "rotate-45"
-        )} />
-      </button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="p-1.5 rounded-sm opacity-0 group-hover:opacity-100 group-has-[[data-state=open]]:opacity-100 hover:bg-accent transition-opacity shrink-0 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            onClick={handleAddSubfolderClick}
+            aria-label="Create subfolder"
+          >
+            <Plus className={cn(
+              textClasses.smallIconSize,
+              "text-muted-foreground transition-transform duration-200",
+              showSubfolderInput && "rotate-45"
+            )} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs">
+          Create subfolder
+        </TooltipContent>
+      </Tooltip>
       {originalFolder && (
         <FolderContextMenu
           folder={originalFolder}
@@ -272,11 +285,11 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
         </div>
       ) : (
         <TooltipProvider delayDuration={400}>
-          <Tooltip>
+          <Tooltip open={isTruncated && tooltipOpen} onOpenChange={setTooltipOpen}>
             <TooltipTrigger asChild>
               <div {...rowProps}>
                 {leftContent}
-                <span className={cn("ml-2 truncate flex-1", textClasses.mainText)}>
+                <span ref={nameRef} className={cn("ml-2 truncate flex-1", textClasses.mainText)}>
                   {folder.name}
                 </span>
                 {actionButtons}
@@ -290,13 +303,14 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
         </TooltipProvider>
       )}
 
-      {/* Subfolder creation input */}
+      {/* Subfolder creation input — only mounted when active */}
       {showSubfolderInput && (
         <CreateSubfolderInput
           parentFolder={folder}
           type={type}
           paddingLeft={paddingLeft}
           indentPerLevel={SIDEBAR_LAYOUT.INDENT_PER_LEVEL}
+          open={showSubfolderInput}
           onComplete={() => setShowSubfolderInput(false)}
           onExpand={ensureExpanded}
         />

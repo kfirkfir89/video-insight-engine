@@ -33,10 +33,12 @@
     <script>
       (function() {
         var theme = localStorage.getItem('vie-theme');
-        // Only apply .dark class if explicitly set to 'dark'
-        // CSS @media query handles 'system' preference automatically
-        if (theme === 'dark') document.documentElement.classList.add('dark');
-        if (theme === 'light') document.documentElement.classList.add('light');
+        // Default to dark if no theme stored or invalid value
+        if (theme === 'light') {
+          document.documentElement.classList.add('light');
+        } else {
+          document.documentElement.classList.add('dark');
+        }
       })();
     </script>
     <div id="root"></div>

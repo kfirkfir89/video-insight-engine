@@ -80,7 +80,7 @@ export function VideoDetailPage() {
   if (isLoading) {
     return (
       <Layout>
-        <div className="flex justify-center py-12">
+        <div className="flex justify-center p-4 md:p-6 py-12">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       </Layout>
@@ -91,7 +91,7 @@ export function VideoDetailPage() {
   if (error || !data || !mergedVideo) {
     return (
       <Layout>
-        <div className="text-center py-12">
+        <div className="text-center p-4 md:p-6 py-12">
           <p className="text-red-500">Failed to load video</p>
           <Link to="/">
             <Button variant="outline" className="mt-4">
@@ -107,7 +107,7 @@ export function VideoDetailPage() {
   if (video?.status === "failed") {
     return (
       <Layout>
-        <div className="text-center py-12">
+        <div className="text-center p-4 md:p-6 py-12">
           <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
           <h2 className="text-lg font-semibold mb-2">Summarization Failed</h2>
           <p className="text-muted-foreground mb-6">
@@ -146,7 +146,7 @@ export function VideoDetailPage() {
   // Issue #13: Error boundary fallback for rendering errors from malformed streaming state
   const errorFallback = (
     <Layout>
-      <div className="text-center py-12">
+      <div className="text-center p-4 md:p-6 py-12">
         <p className="text-red-500">Failed to render video content</p>
         <Button
           variant="outline"

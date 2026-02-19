@@ -1,12 +1,5 @@
 import { useMemo } from "react";
-import { Library, Brain, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Library, Brain } from "lucide-react";
 import { useUIStore, useActiveSection, type ActiveSection } from "@/stores/ui-store";
 import { useAllVideos } from "@/hooks/use-videos";
 import { useFolders } from "@/hooks/use-folders";
@@ -26,9 +19,7 @@ const TABS: TabConfig[] = [
 export function SidebarTabs() {
   const activeSection = useActiveSection();
   const setActiveSection = useUIStore((s) => s.setActiveSection);
-  const setShowNewFolderInput = useUIStore((s) => s.setShowNewFolderInput);
 
-  // Get counts for badges - count each section explicitly
   const { data: videosData } = useAllVideos();
   const { data: summarizedFolders } = useFolders("summarized");
   const { data: memorizedFolders } = useFolders("memorized");
@@ -55,8 +46,8 @@ export function SidebarTabs() {
     key === "summarized" ? summarizedCount : memorizedCount;
 
   return (
-    <div className="flex items-center border-b border-border/50 shrink-0 px-2">
-      {TABS.map((tab, index) => {
+    <div className="flex items-center shrink-0 px-2 gap-1 py-1">
+      {TABS.map((tab) => {
         const isActive = activeSection === tab.key;
         const count = getCounts(tab.key);
         const Icon = tab.icon;
@@ -65,11 +56,10 @@ export function SidebarTabs() {
             key={tab.key}
             onClick={() => setActiveSection(tab.key)}
             className={cn(
-              "flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors relative ",
+              "flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-colors",
               isActive
                 ? "text-primary bg-primary/10"
-                : "text-muted-foreground hover:text-foreground",
-              index === 0 ? "rounded-l-md" : "rounded-r-md",
+                : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
             )}
           >
             <Icon className="h-3.5 w-3.5" />
@@ -89,25 +79,6 @@ export function SidebarTabs() {
           </button>
         );
       })}
-
-      {/* Add folder button */}
-      <TooltipProvider delayDuration={200}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0 mr-1"
-              onClick={() => setShowNewFolderInput(true)}
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            New folder
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
     </div>
   );
 }

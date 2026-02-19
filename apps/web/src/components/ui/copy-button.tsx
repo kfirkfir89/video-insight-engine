@@ -77,7 +77,7 @@ export const CopyButton = memo(function CopyButton({
   }
 
   return (
-    <TooltipProvider>
+    <TooltipProvider delayDuration={400}>
       <Tooltip>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
         <TooltipContent>

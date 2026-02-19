@@ -159,10 +159,10 @@ export function AddVideoInput() {
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="px-3 py-2">
+      <form onSubmit={handleSubmit} className="relative">
         <div className="relative flex items-center">
           {/* Mode toggle button */}
-          <TooltipProvider delayDuration={300}>
+          <TooltipProvider delayDuration={400}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -194,14 +194,14 @@ export function AddVideoInput() {
               setUrl(e.target.value);
               if (error) setError(null);
             }}
-            className="h-8 pl-9 pr-[70px] text-xs bg-muted/40 border-border/50"
+            className="h-8 pl-9 pr-[70px] text-xs bg-muted border-border"
             disabled={isLoading}
           />
 
           {/* Right side: folder + add buttons */}
           <div className="absolute right-1 flex items-center gap-0.5">
             {/* Folder dropdown trigger with tooltip */}
-            <TooltipProvider delayDuration={300}>
+            <TooltipProvider delayDuration={400}>
               <Tooltip>
                 <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
                   <TooltipTrigger asChild>
@@ -257,8 +257,8 @@ export function AddVideoInput() {
           </div>
         </div>
 
-        {/* Error message */}
-        {error && <p className="text-xs text-destructive mt-1">{error}</p>}
+        {/* Error message — absolute to avoid pushing header height */}
+        {error && <p className="absolute top-full left-0 right-0 text-xs text-destructive mt-1 px-1 z-50">{error}</p>}
       </form>
 
       {/* Playlist Preview Dialog */}

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Check,
   ArrowDownAZ,
@@ -11,6 +12,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { SortOption } from "@/stores/ui-store";
 
 interface SortDropdownProps {
@@ -30,21 +37,29 @@ const SORT_OPTIONS: {
 ];
 
 export function SortDropdown({ value, onChange }: SortDropdownProps) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const currentOption =
     SORT_OPTIONS.find((o) => o.value === value) || SORT_OPTIONS[0];
   const CurrentIcon = currentOption.icon;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className="p-1.5 rounded-sm hover:bg-accent transition-colors"
-          title={`Sort: ${currentOption.label}`}
-          aria-label="Change sort order"
-        >
-          <CurrentIcon className="h-4 w-4 text-muted-foreground" />
-        </button>
-      </DropdownMenuTrigger>
+    <TooltipProvider delayDuration={400}>
+      <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+      <Tooltip open={dropdownOpen ? false : undefined}>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="flex items-center justify-center w-full h-full hover:bg-accent/60 transition-colors"
+              aria-label="Change sort order"
+            >
+              <CurrentIcon className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs">
+          Sort: {currentOption.label}
+        </TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="end" className="w-44">
         <div className="px-2 py-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
           Sort by
@@ -68,6 +83,7 @@ export function SortDropdown({ value, onChange }: SortDropdownProps) {
           );
         })}
       </DropdownMenuContent>
-    </DropdownMenu>
+      </DropdownMenu>
+    </TooltipProvider>
   );
 }

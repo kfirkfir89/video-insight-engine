@@ -1,4 +1,4 @@
-import { useState, useCallback, memo } from "react";
+import { useState, useCallback, useRef, memo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
@@ -18,6 +18,7 @@ import { SIDEBAR_LAYOUT } from "@/lib/layout-constants";
 import { useMoveVideo, useDeleteVideo, useRetryVideo } from "@/hooks/use-videos";
 import { useSidebarTextClasses } from "@/hooks/use-sidebar-text-size";
 import { useLongPress } from "@/hooks/use-long-press";
+import { useIsTruncated } from "@/hooks/use-is-truncated";
 import { useUIStore, useSelectionMode } from "@/stores/ui-store";
 
 import type { Video, Folder as FolderData } from "@/types";
@@ -36,6 +37,9 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
   const retryVideo = useRetryVideo();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const textClasses = useSidebarTextClasses();
+  const titleRef = useRef<HTMLAnchorElement>(null);
+  const isTruncated = useIsTruncated(titleRef);
+  const [tooltipOpen, setTooltipOpen] = useState(false);
 
   // Check if this video is currently being viewed (active)
   const isActiveVideo = location.pathname === `/video/${video.id}`;
@@ -74,8 +78,8 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
 
   const style = transform
     ? {
-        transform: CSS.Translate.toString(transform),
-      }
+      transform: CSS.Translate.toString(transform),
+    }
     : undefined;
 
   // Use consistent padding with FolderItem (level already includes +1 from parent)
@@ -122,21 +126,21 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
 
   return (
     <TooltipProvider delayDuration={400}>
-      <Tooltip>
+      <Tooltip open={isTruncated && tooltipOpen} onOpenChange={setTooltipOpen}>
         <TooltipTrigger asChild>
           <div
             ref={setNodeRef}
             data-sidebar-item="video"
             style={{ ...style, paddingLeft: `${paddingLeft}px`, paddingRight: "8px" }}
             className={cn(
-              "group flex items-center hover:bg-accent/50 rounded-sm transition-colors",
+              "group flex items-center rounded-sm transition-colors hover:bg-primary/8",
               // Keep row highlighted when dropdown menu is open
               "has-[[data-state=open]]:bg-accent/50",
               textClasses.rowHeight,
               isDragging && "opacity-50 z-50",
-              isSelected && "bg-accent border-l-2 border-l-primary",
+              isSelected && "bg-primary/6",
               // Highlight the currently viewed video
-              isActiveVideo && !isSelected && "bg-primary/8 border-l-2 border-l-primary font-medium"
+              isActiveVideo && !isSelected && "bg-primary/8 font-medium"
             )}
             onPointerDown={longPress.onPointerDown}
             onPointerUp={longPress.onPointerUp}
@@ -158,10 +162,11 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
             )}
 
             {/* Video Icon */}
-            <Film className={cn(textClasses.iconSize, "shrink-0 text-muted-foreground ml-1")} />
+            <Film className={cn(textClasses.iconSize, "shrink-0 text-primary fill-warning/50 ml-1")} />
 
             {/* Video link */}
             <Link
+              ref={titleRef}
               to={`/video/${video.id}`}
               className={cn("ml-2 truncate flex-1 cursor-pointer", textClasses.mainText)}
               onClick={(e) => {
@@ -218,7 +223,7 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
           side="right"
           align="start"
           sideOffset={8}
-          className="max-w-xs z-[100]"
+          className="max-w-xs z-100"
         >
           {video.title || "Processing..."}
         </TooltipContent>
