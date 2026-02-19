@@ -36,7 +36,7 @@ const TellMeMore = memo(function TellMeMore({ conceptId }: { conceptId: string }
         variant="ghost"
         size="bare"
         onClick={() => setExpanded(true)}
-        className="text-xs text-primary/80 hover:text-primary mt-1.5"
+        className="text-xs text-primary/90 hover:text-primary mt-1.5"
       >
         <BookOpen className="h-3 w-3" aria-hidden="true" />
         Tell me more
@@ -155,14 +155,28 @@ export const ConceptHighlighter = memo(function ConceptHighlighter({ text }: Con
     segments.push({ type: 'text', value: text.slice(lastIndex) });
   }
 
+  // Within-block dedup: only the first occurrence of each concept is interactive
+  const dedupedSegments = (() => {
+    const seen = new Set<string>();
+    return segments.map(seg => {
+      if (seg.type === 'concept' && seg.concept) {
+        if (seen.has(seg.concept.id)) {
+          return { type: 'text' as const, value: seg.value };
+        }
+        seen.add(seg.concept.id);
+      }
+      return seg;
+    });
+  })();
+
   // No matches found — return plain text
-  if (segments.length === 1 && segments[0].type === 'text') {
+  if (dedupedSegments.length === 1 && dedupedSegments[0].type === 'text') {
     return <>{text}</>;
   }
 
   return (
     <>
-      {segments.map((seg, i) => {
+      {dedupedSegments.map((seg, i) => {
         if (seg.type === 'text') {
           return <span key={i}>{seg.value}</span>;
         }
@@ -182,11 +196,11 @@ export const ConceptHighlighter = memo(function ConceptHighlighter({ text }: Con
               <button
                 type="button"
                 data-concept-id={concept.id}
-                className="group/concept inline-flex items-baseline gap-0.5 cursor-pointer text-inherit normal-case focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                className="group/concept inline-flex items-baseline gap-0.5 cursor-pointer text-inherit normal-case focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 data-[chapter-duplicate]:pointer-events-none data-[chapter-duplicate]:cursor-default"
                 aria-label={`Definition: ${concept.name}`}
               >
                 <span className="group-data-[first-appearance]/concept:shadow-[inset_0_-0.7em_0_rgb(253_224_71_/_0.4)] dark:group-data-[first-appearance]/concept:shadow-[inset_0_-0.7em_0_rgb(250_204_21_/_0.2)]">{seg.value}</span>
-                <Lightbulb className="h-2.5 w-2.5 shrink-0 self-start text-warning/60 group-hover/concept:text-warning transition-colors" aria-hidden="true" />
+                <Lightbulb className="h-2.5 w-2.5 shrink-0 self-start text-warning/70 group-hover/concept:text-warning transition-colors group-data-[chapter-duplicate]/concept:hidden" aria-hidden="true" />
               </button>
             </Popover.Trigger>
             <Popover.Portal>
@@ -203,7 +217,7 @@ export const ConceptHighlighter = memo(function ConceptHighlighter({ text }: Con
                   <p className="text-xs text-muted-foreground leading-relaxed">{concept.definition}</p>
                 )}
                 {concept.timestamp && (
-                  <p className="text-xs text-muted-foreground/60 mt-1 font-mono">{concept.timestamp}</p>
+                  <p className="text-xs text-muted-foreground/70 mt-1 font-mono">{concept.timestamp}</p>
                 )}
                 <TellMeMore conceptId={concept.id} />
                 <Popover.Arrow className="fill-border" />

@@ -30,7 +30,7 @@ export const RatingBlock = memo(function RatingBlock({ block }: RatingBlockProps
         ))}
         {hasHalfStar && <StarHalf className="h-4 w-4 shrink-0 fill-warning text-warning dark:drop-shadow-[0_0_6px_oklch(78%_0.14_85/0.4)]" />}
         {Array.from({ length: emptyStars }).map((_, i) => (
-          <Star key={`empty-${i}`} className="h-4 w-4 shrink-0 text-muted-foreground/30" />
+          <Star key={`empty-${i}`} className="h-4 w-4 shrink-0 text-muted-foreground/40" />
         ))}
       </div>
     );
@@ -92,7 +92,7 @@ export const RatingBlock = memo(function RatingBlock({ block }: RatingBlockProps
                   <span className="text-muted-foreground w-24 shrink-0 truncate">{item.category}</span>
                   <div className="flex-1 h-1.5 bg-muted/50 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-warning/80 rounded-full progress-bar-gradient"
+                      className="h-full bg-warning/90 rounded-full progress-bar-gradient"
                       style={{ width: `${(item.score / (item.maxScore || maxScore)) * 100}%`, animationDelay: `${index * 80}ms` }}
                     />
                   </div>

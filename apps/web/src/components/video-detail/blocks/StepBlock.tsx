@@ -87,7 +87,7 @@ export const StepBlock = memo(function StepBlock({ block }: StepBlockProps) {
                       </span>
                     )}
                     {step.tips && (
-                      <span className="text-xs text-muted-foreground/60 italic">
+                      <span className="text-xs text-muted-foreground/70 italic">
                         Tip: <ConceptHighlighter text={step.tips} />
                       </span>
                     )}

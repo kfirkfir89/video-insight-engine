@@ -69,7 +69,7 @@ export const GamingView = memo(function GamingView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Strategies Section */}
       {hasStrategies && (
         <ContentBlocks

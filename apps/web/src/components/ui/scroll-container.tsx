@@ -68,10 +68,10 @@ export const ScrollContainer = forwardRef<HTMLDivElement, ScrollContainerProps>(
     }, []);
 
     return (
-      <div className={cn("relative", wrapperClassName)}>
+      <div className={cn("relative flex flex-col", wrapperClassName)}>
         <div
           ref={scrollRef}
-          className={cn("h-full overflow-auto scrollbar-thin", className)}
+          className={cn("flex-1 min-h-0 overflow-auto scrollbar-thin", className)}
         >
           {children}
         </div>

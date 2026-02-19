@@ -29,14 +29,22 @@ export const ProConBlock = memo(function ProConBlock({ block }: ProConBlockProps
       {hasPros && hasCons && (
         <div className="mb-4">
           <div className="pro-con-bar" aria-hidden="true">
-            <div
-              className="bg-success/60 progress-bar-animated"
-              style={{ width: `${Math.round((block.pros.length / (block.pros.length + block.cons.length)) * 100)}%`, transformOrigin: 'left' }}
-            />
-            <div
-              className="bg-destructive/60 progress-bar-animated"
-              style={{ width: `${Math.round((block.cons.length / (block.pros.length + block.cons.length)) * 100)}%`, transformOrigin: 'right', animationDelay: '150ms' }}
-            />
+            {(() => {
+              const total = block.pros.length + block.cons.length;
+              const prosPct = total > 0 ? Math.round((block.pros.length / total) * 100) : 50;
+              return (
+                <>
+                  <div
+                    className="bg-success/70 progress-bar-animated"
+                    style={{ width: `${prosPct}%`, transformOrigin: 'left' }}
+                  />
+                  <div
+                    className="bg-destructive/70 progress-bar-animated"
+                    style={{ width: `${100 - prosPct}%`, transformOrigin: 'right', animationDelay: '150ms' }}
+                  />
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -54,7 +62,7 @@ export const ProConBlock = memo(function ProConBlock({ block }: ProConBlockProps
             <ul className="space-y-1.5 stagger-children" aria-label={BLOCK_LABELS.pros}>
               {block.pros.map((pro, index) => (
                 <li key={index} className="flex items-baseline gap-2.5 text-sm">
-                  <Plus className="h-3 w-3 shrink-0 text-success/60 translate-y-0.5" aria-hidden="true" />
+                  <Plus className="h-3 w-3 shrink-0 text-success/70 translate-y-0.5" aria-hidden="true" />
                   <span className="text-muted-foreground">{pro ? <ConceptHighlighter text={pro} /> : '—'}</span>
                 </li>
               ))}
@@ -74,7 +82,7 @@ export const ProConBlock = memo(function ProConBlock({ block }: ProConBlockProps
             <ul className="space-y-1.5 stagger-children" aria-label={BLOCK_LABELS.cons}>
               {block.cons.map((con, index) => (
                 <li key={index} className="flex items-baseline gap-2.5 text-sm">
-                  <Minus className="h-3 w-3 shrink-0 text-destructive/60 translate-y-0.5" aria-hidden="true" />
+                  <Minus className="h-3 w-3 shrink-0 text-destructive/70 translate-y-0.5" aria-hidden="true" />
                   <span className="text-muted-foreground">{con ? <ConceptHighlighter text={con} /> : '—'}</span>
                 </li>
               ))}

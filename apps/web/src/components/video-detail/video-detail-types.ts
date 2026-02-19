@@ -39,4 +39,6 @@ export interface VideoDetailCommonProps {
   // Explain auto handler (Go Deeper)
   onGoDeeper: (chapterId: string) => void;
   expandedChapterId: string | null;
+  // Streaming phase label (pre-computed string, e.g. "Summarizing chapter 3 of 7...")
+  streamingPhaseLabel?: string;
 }

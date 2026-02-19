@@ -263,7 +263,7 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
   // Video count badge
   const countBadge = folderVideos.length > 0 ? (
     <span className={cn(
-      "shrink-0 ml-1 px-1.5 py-0.5 rounded-full text-muted-foreground bg-muted/60 tabular-nums leading-none",
+      "shrink-0 ml-1 px-1.5 py-0.5 rounded-full text-muted-foreground bg-muted/70 tabular-nums leading-none",
       textClasses.badgeText
     )}>
       {folderVideos.length}

@@ -13,6 +13,9 @@ export const SIDEBAR_LAYOUT = {
   BASE_PADDING: 8,
 } as const;
 
+/** Tailwind class for the minimized right panel width. */
+export const RIGHT_PANEL_MINIMIZED_WIDTH = "w-11";
+
 /**
  * Sidebar selection constants for click detection and selection mode.
  * Centralized to avoid magic strings scattered across components.

@@ -104,7 +104,7 @@ export function CreateSubfolderInput({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Folder name..."
-            className="h-7 text-xs flex-1 bg-muted/30 border-border/50"
+            className="h-7 text-xs flex-1 bg-muted/20 border-border/50"
             onKeyDown={handleKeyDown}
             disabled={createFolder.isPending}
             onClick={(e) => e.stopPropagation()}

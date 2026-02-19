@@ -25,8 +25,8 @@ This project uses OKLCH (Oklab Lightness Chroma Hue) for perceptually uniform co
 
 ```css
 /* Format: oklch(lightness chroma hue) */
---primary: oklch(55% 0.25 29);
-/*              │    │    └─ Hue (0-360, red is ~29)
+--primary: oklch(58% 0.24 292);
+/*              │    │    └─ Hue (0-360, violet-indigo is ~292)
 /*              │    └────── Chroma (0-0.4, saturation)
 /*              └─────────── Lightness (0-100%) */
 ```
@@ -40,54 +40,54 @@ This project uses OKLCH (Oklab Lightness Chroma Hue) for perceptually uniform co
 
 ## Core Semantic Colors
 
-### Light Mode (Cool blue-gray undertones, hue ~250)
+### Light Mode (Violet-indigo undertones, hue ~285/292)
 
 | Token | OKLCH Value | Usage |
 |-------|-------------|-------|
-| `--background` | `oklch(98% 0.004 250)` | Page background |
-| `--foreground` | `oklch(18% 0.02 260)` | Primary text |
-| `--card` | `oklch(99.5% 0.002 255)` | Card backgrounds |
-| `--card-foreground` | `oklch(18% 0.02 260)` | Card text |
-| `--popover` | `oklch(99.5% 0.002 255)` | Popover backgrounds |
-| `--popover-foreground` | `oklch(18% 0.02 260)` | Popover text |
-| `--primary` | `oklch(55% 0.25 29)` | Brand red, CTAs |
+| `--background` | `oklch(98.5% 0.006 285)` | Page background |
+| `--foreground` | `oklch(16% 0.03 280)` | Primary text |
+| `--card` | `oklch(99% 0.004 285)` | Card backgrounds |
+| `--card-foreground` | `oklch(16% 0.03 280)` | Card text |
+| `--popover` | `oklch(99% 0.004 285)` | Popover backgrounds |
+| `--popover-foreground` | `oklch(16% 0.03 280)` | Popover text |
+| `--primary` | `oklch(58% 0.24 292)` | Violet-indigo, CTAs |
 | `--primary-foreground` | `oklch(99% 0 0)` | Text on primary |
-| `--secondary` | `oklch(94% 0.006 250)` | Secondary buttons |
-| `--secondary-foreground` | `oklch(22% 0.015 255)` | Text on secondary |
-| `--muted` | `oklch(95% 0.006 250)` | Muted backgrounds |
-| `--muted-foreground` | `oklch(42% 0.02 255)` | Muted text |
-| `--accent` | `oklch(96% 0.015 250)` | Hover states |
-| `--accent-foreground` | `oklch(22% 0.015 255)` | Text on accent |
-| `--destructive` | `oklch(55% 0.22 27)` | Error/delete actions |
+| `--secondary` | `oklch(94% 0.012 290)` | Secondary buttons |
+| `--secondary-foreground` | `oklch(25% 0.03 285)` | Text on secondary |
+| `--muted` | `oklch(95% 0.008 285)` | Muted backgrounds |
+| `--muted-foreground` | `oklch(45% 0.025 280)` | Muted text |
+| `--accent` | `oklch(95% 0.02 310)` | Hover states |
+| `--accent-foreground` | `oklch(25% 0.03 285)` | Text on accent |
+| `--destructive` | `oklch(55% 0.22 18)` | Error/delete actions |
 | `--destructive-foreground` | `oklch(99% 0 0)` | Text on destructive |
-| `--border` | `oklch(88% 0.008 250)` | Borders |
-| `--input` | `oklch(88% 0.008 250)` | Input borders |
-| `--ring` | `oklch(55% 0.25 29)` | Focus rings |
-| `--radius` | `0.625rem` | Border radius |
+| `--border` | `oklch(89% 0.012 285)` | Borders |
+| `--input` | `oklch(89% 0.012 285)` | Input borders |
+| `--ring` | `oklch(58% 0.24 292)` | Focus rings |
+| `--radius` | `0.75rem` | Border radius (12px) |
 
-### Dark Mode (Warm amber-brown undertones, hue ~55)
+### Dark Mode (Deep indigo-purple, hue ~280)
 
 | Token | OKLCH Value | Notes |
 |-------|-------------|-------|
-| `--background` | `oklch(13% 0.025 55)` | Warm dark, cozy feel |
-| `--foreground` | `oklch(94% 0.006 60)` | High contrast text |
-| `--card` | `oklch(17% 0.022 55)` | Warm elevated surfaces |
-| `--card-foreground` | `oklch(94% 0.006 60)` | Card text |
-| `--popover` | `oklch(17% 0.022 55)` | Popover backgrounds |
-| `--popover-foreground` | `oklch(94% 0.006 60)` | Popover text |
-| `--primary` | `oklch(62.8% 0.258 29.23)` | Brighter red for dark |
+| `--background` | `oklch(12% 0.03 280)` | Deep indigo-purple |
+| `--foreground` | `oklch(94% 0.008 285)` | High contrast text |
+| `--card` | `oklch(16% 0.025 280)` | Elevated surfaces |
+| `--card-foreground` | `oklch(94% 0.008 285)` | Card text |
+| `--popover` | `oklch(16% 0.025 280)` | Popover backgrounds |
+| `--popover-foreground` | `oklch(94% 0.008 285)` | Popover text |
+| `--primary` | `oklch(68% 0.26 292)` | Brighter violet for dark |
 | `--primary-foreground` | `oklch(99% 0 0)` | Text on primary |
-| `--secondary` | `oklch(23% 0.015 55)` | Warm secondary |
-| `--secondary-foreground` | `oklch(90% 0.006 60)` | Text on secondary |
-| `--muted` | `oklch(21% 0.018 55)` | Warm subtle backgrounds |
-| `--muted-foreground` | `oklch(65% 0.012 55)` | Readable muted text |
-| `--accent` | `oklch(22% 0.02 55)` | Warm hover states |
-| `--accent-foreground` | `oklch(90% 0.006 60)` | Text on accent |
-| `--destructive` | `oklch(65% 0.22 27)` | Brighter red for dark |
+| `--secondary` | `oklch(22% 0.025 280)` | Deep secondary |
+| `--secondary-foreground` | `oklch(90% 0.008 285)` | Text on secondary |
+| `--muted` | `oklch(20% 0.02 280)` | Subtle backgrounds |
+| `--muted-foreground` | `oklch(65% 0.015 280)` | Readable muted text |
+| `--accent` | `oklch(22% 0.03 310)` | Hover states |
+| `--accent-foreground` | `oklch(90% 0.008 285)` | Text on accent |
+| `--destructive` | `oklch(65% 0.22 18)` | Brighter red for dark |
 | `--destructive-foreground` | `oklch(99% 0 0)` | Text on destructive |
-| `--border` | `oklch(26% 0.015 55)` | Warm subtle border |
-| `--input` | `oklch(21% 0.018 55)` | Input borders |
-| `--ring` | `oklch(62.8% 0.258 29.23)` | Focus rings |
+| `--border` | `oklch(25% 0.02 280)` | Subtle border |
+| `--input` | `oklch(20% 0.02 280)` | Input borders |
+| `--ring` | `oklch(68% 0.26 292)` | Focus rings |
 
 ---
 
@@ -99,7 +99,7 @@ Semantic colors for process states:
 |--------|-------|------------|-----------|
 | Pending | `--status-pending` | `oklch(79.5% 0.18 86)` | `oklch(82% 0.16 86)` |
 | Processing | `--status-processing` | `oklch(62% 0.21 250)` | `oklch(68% 0.19 250)` |
-| Success | `--status-success` | `oklch(60% 0.15 145)` | `oklch(65% 0.14 145)` |
+| Success | `--status-success` | `oklch(60% 0.15 155)` | `oklch(65% 0.14 155)` |
 | Error | `--status-error` | `var(--destructive)` | `var(--destructive)` |
 
 **Usage:**
@@ -121,15 +121,15 @@ Semantic colors for contextual feedback (callouts, badges, validation):
 
 | Token | Light Mode | Dark Mode | Usage |
 |-------|------------|-----------|-------|
-| `--success` | `oklch(52% 0.14 145)` | `oklch(68% 0.14 145)` | Positive feedback |
-| `--success-foreground` | `oklch(98% 0.01 145)` | `oklch(15% 0.05 145)` | Text on success |
-| `--success-soft` | `oklch(96% 0.03 145)` | `oklch(20% 0.04 145)` | Soft success background |
-| `--warning` | `oklch(78% 0.14 85)` | `oklch(78% 0.12 85)` | Caution/tip feedback |
-| `--warning-foreground` | `oklch(25% 0.06 85)` | `oklch(15% 0.05 85)` | Text on warning |
-| `--warning-soft` | `oklch(96% 0.03 85)` | `oklch(20% 0.03 85)` | Soft warning background |
-| `--info` | `oklch(62% 0.14 245)` | `oklch(68% 0.12 245)` | Informational feedback |
-| `--info-foreground` | `oklch(98% 0.01 245)` | `oklch(15% 0.05 245)` | Text on info |
-| `--info-soft` | `oklch(96% 0.03 245)` | `oklch(20% 0.03 245)` | Soft info background |
+| `--success` | `oklch(55% 0.16 155)` | `oklch(68% 0.16 155)` | Positive feedback |
+| `--success-foreground` | `oklch(98% 0.01 155)` | `oklch(15% 0.05 155)` | Text on success |
+| `--success-soft` | `oklch(96% 0.04 155)` | `oklch(20% 0.05 155)` | Soft success background |
+| `--warning` | `oklch(78% 0.15 80)` | `oklch(78% 0.13 80)` | Caution/tip feedback |
+| `--warning-foreground` | `oklch(25% 0.06 80)` | `oklch(15% 0.05 80)` | Text on warning |
+| `--warning-soft` | `oklch(96% 0.04 80)` | `oklch(20% 0.04 80)` | Soft warning background |
+| `--info` | `oklch(62% 0.16 255)` | `oklch(68% 0.14 255)` | Informational feedback |
+| `--info-foreground` | `oklch(98% 0.01 255)` | `oklch(15% 0.05 255)` | Text on info |
+| `--info-soft` | `oklch(96% 0.04 255)` | `oklch(20% 0.04 255)` | Soft info background |
 
 **Usage:**
 ```tsx
@@ -237,10 +237,7 @@ Utility classes defined in `@layer components` in `index.css`. These provide the
 | `text-gradient-warm` | Warm gold/amber gradient | `oklch(75% 0.18 40)` to `oklch(82% 0.16 70)`, used for rating scores |
 | `fade-divider` | Gradient horizontal separator | Transparent edges, fades in from sides. Use between list items |
 | `fade-divider-vertical` | Gradient vertical separator | Same as fade-divider but vertical |
-| `glow-primary` | Primary color box-shadow glow | Uses `--glow-strength` and `--glow-spread` tokens |
 | `glow-success` | Success color box-shadow glow | Green glow, stronger in dark mode |
-| `glow-warning` | Warning color box-shadow glow | Yellow glow, stronger in dark mode |
-| `glow-destructive` | Destructive color box-shadow glow | Red glow, stronger in dark mode |
 
 ### Block-Specific Utilities
 
@@ -280,8 +277,6 @@ These classes apply glow effects **only in dark mode** (using `:is(.dark)` selec
 
 Additional dark mode enhancements (applied automatically via `:is(.dark)` selectors):
 - `block-card:hover` — ambient bloom on card hover
-- `glass-panel` — ambient glow halo
-- `glass-section-header::before` — dot glow
 - `timeline-line` — line glow
 - `definition-item::before` — border glow
 - `quote-decorative-mark` — text glow
@@ -348,7 +343,7 @@ Tailwind's default spacing scale (4px base):
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| `--radius` | `0.625rem` | Default (10px) |
+| `--radius` | `0.75rem` | Default (12px) |
 | `rounded-sm` | `calc(var(--radius) - 4px)` | Small elements |
 | `rounded-md` | `calc(var(--radius) - 2px)` | Medium |
 | `rounded-lg` | `var(--radius)` | Cards, buttons |

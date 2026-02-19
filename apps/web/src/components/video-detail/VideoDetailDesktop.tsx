@@ -1,8 +1,10 @@
 import { Fragment, type ReactNode } from "react";
-import { Link } from "react-router-dom";
-import { ArrowLeft, MessageCircle, Copy, Download, Check, FileText } from "lucide-react";
+import { MessageCircle, Copy, Download, Check, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useIsLargeDesktop } from "@/hooks/use-media-query";
+import { useIsRightPanelMinimized } from "@/stores/ui-store";
+import { RIGHT_PANEL_MINIMIZED_WIDTH } from "@/lib/layout-constants";
 import { useMarkdownExport } from "@/hooks/use-markdown-export";
 import { ArticleSection } from "./ArticleSection";
 import { OrphanedConcepts } from "./OrphanedConcepts";
@@ -47,8 +49,10 @@ export function VideoDetailDesktop({
   onGoDeeper,
   expandedChapterId,
   rightPanel,
+  streamingPhaseLabel,
 }: VideoDetailDesktopProps) {
   const isLargeDesktop = useIsLargeDesktop();
+  const isRightPanelMinimized = useIsRightPanelMinimized();
   const { copiedState, handleCopyMarkdown, handleDownloadMarkdown } =
     useMarkdownExport(video.title, summary.chapters);
 
@@ -75,20 +79,14 @@ export function VideoDetailDesktop({
             isStreaming={isStreaming}
             onStopSummarization={onStopSummarization}
             thumbnailUrl={thumbnailUrl}
-            backButton={
-              <Link to="/" className="shrink-0">
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-              </Link>
-            }
+            streamingPhaseLabel={streamingPhaseLabel}
             primaryAction={
               summary?.masterSummary ? (
                 <Button
-                  variant="outline"
+                  variant="default"
                   size="sm"
                   onClick={onOpenMasterSummary}
-                  className="gap-1.5 h-auto py-1 px-3 text-xs rounded-full"
+                  className="gap-1.5 h-auto py-1 px-3 text-xs rounded-full font-semibold"
                 >
                   <FileText className="h-3 w-3" aria-hidden="true" />
                   Quick Read
@@ -101,9 +99,9 @@ export function VideoDetailDesktop({
                   <>
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="sm"
                       onClick={handleCopyMarkdown}
-                      className="h-7 w-7"
+                      className="gap-1.5 h-7 py-0 px-2 text-xs"
                       aria-label="Copy as Markdown"
                     >
                       {copiedState ? (
@@ -111,15 +109,17 @@ export function VideoDetailDesktop({
                       ) : (
                         <Copy className="h-3.5 w-3.5" aria-hidden="true" />
                       )}
+                      {copiedState ? "Copied" : "Copy"}
                     </Button>
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="sm"
                       onClick={handleDownloadMarkdown}
-                      className="h-7 w-7"
+                      className="gap-1.5 h-7 py-0 px-2 text-xs"
                       aria-label="Download as Markdown"
                     >
                       <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                      Export
                     </Button>
                   </>
                 )}
@@ -140,7 +140,10 @@ export function VideoDetailDesktop({
         </div>
 
         {/* Chapters */}
-        <div className="space-y-6 pb-12 px-10 pt-4">
+        <div className={cn(
+          "mx-auto space-y-6 pb-12 px-10 pt-4 transition-[max-width] duration-200",
+          isRightPanelMinimized ? "max-w-[960px]" : "max-w-[820px]"
+        )}>
           {/* Show chapters while sections are loading during streaming */}
           {isStreaming && effectiveChapters.length > 0 && (summary.chapters ?? []).length === 0 && (
             <ChapterList
@@ -153,8 +156,9 @@ export function VideoDetailDesktop({
           {/* Article chapters */}
           {(summary.chapters ?? []).length > 0 && (
             <GlobalConceptScanner>
-              {(summary.chapters ?? []).map((chapter) => (
+              {(summary.chapters ?? []).map((chapter, chapterIdx) => (
                 <Fragment key={chapter.id}>
+                  {chapterIdx > 0 && <div className="chapter-divider my-8" aria-hidden="true" />}
                   <ArticleSection
                     chapter={chapter}
                     onPlay={handlePlayFromChapter}
@@ -193,7 +197,10 @@ export function VideoDetailDesktop({
       {/* Right panel — full height sticky sidebar, flush to top */}
       {rightPanel && (
         <div
-          className="sticky top-0 self-start shrink-0 w-[360px]"
+          className={cn(
+            "sticky top-0 self-start shrink-0 transition-[width] duration-200",
+            isRightPanelMinimized ? RIGHT_PANEL_MINIMIZED_WIDTH : "w-[360px]"
+          )}
           style={{ height: "calc(100vh - var(--app-header-height))" }}
         >
           {rightPanel}

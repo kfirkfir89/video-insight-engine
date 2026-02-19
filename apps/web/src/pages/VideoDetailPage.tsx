@@ -1,13 +1,12 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useCallback, useMemo } from "react";
 import { useVideo, useRetryVideo } from "@/hooks/use-videos";
-import { useSummaryStream, type StreamState } from "@/hooks/use-summary-stream";
+import { useSummaryStream, getStreamingPhaseLabel, type StreamState } from "@/hooks/use-summary-stream";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { Loader2, ArrowLeft, RefreshCw, AlertCircle } from "lucide-react";
 import { VideoDetailLayout } from "@/components/video-detail";
-import { StreamingIndicator } from "@/components/video-detail/StreamingIndicator";
 import type { VideoSummary, SummaryChapter, Concept } from "@vie/types";
 
 export function VideoDetailPage() {
@@ -133,15 +132,15 @@ export function VideoDetailPage() {
     );
   }
 
-  // Show streaming indicator when processing (not done, cancelled, or error)
-  const showStreamingIndicator = isProcessing &&
-    streamState.phase !== "done" &&
-    streamState.phase !== "error" &&
-    streamState.phase !== "cancelled";
   const isStreaming = isProcessing &&
     streamState.phase !== "done" &&
     streamState.phase !== "cancelled" &&
     streamState.phase !== "error";
+
+  // Compute streaming phase label for inline display in VideoHero
+  const streamingPhaseLabel = isStreaming
+    ? getStreamingPhaseLabel(streamState.phase, streamState.currentChapterIndex, streamState.chapters.length)
+    : undefined;
 
   // Issue #13: Error boundary fallback for rendering errors from malformed streaming state
   const errorFallback = (
@@ -160,27 +159,19 @@ export function VideoDetailPage() {
   );
 
   return (
-    <>
-      {showStreamingIndicator && (
-        <StreamingIndicator
-          phase={streamState.phase}
-          currentChapterIndex={streamState.currentChapterIndex}
-          totalChapters={streamState.chapters.length}
-        />
-      )}
-      <ErrorBoundary key={id} fallback={errorFallback}>
-        <VideoDetailLayout
-          video={mergedVideo}
-          summary={summary}
-          isStreaming={isStreaming}
-          streamingState={isProcessing ? streamState : undefined}
-          chapters={isProcessing ? streamState.chapters : video?.chapters}
-          isCreatorChapters={isProcessing ? streamState.isCreatorChapters : video?.chapterSource === "creator"}
-          descriptionAnalysis={isProcessing ? streamState.descriptionAnalysis : video?.descriptionAnalysis}
-          onStopSummarization={isStreaming ? streamState.stop : undefined}
-        />
-      </ErrorBoundary>
-    </>
+    <ErrorBoundary key={id} fallback={errorFallback}>
+      <VideoDetailLayout
+        video={mergedVideo}
+        summary={summary}
+        isStreaming={isStreaming}
+        streamingState={isProcessing ? streamState : undefined}
+        chapters={isProcessing ? streamState.chapters : video?.chapters}
+        isCreatorChapters={isProcessing ? streamState.isCreatorChapters : video?.chapterSource === "creator"}
+        descriptionAnalysis={isProcessing ? streamState.descriptionAnalysis : video?.descriptionAnalysis}
+        onStopSummarization={isStreaming ? streamState.stop : undefined}
+        streamingPhaseLabel={streamingPhaseLabel}
+      />
+    </ErrorBoundary>
   );
 }
 

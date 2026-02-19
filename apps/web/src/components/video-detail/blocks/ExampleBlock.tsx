@@ -58,7 +58,7 @@ export const ExampleBlock = memo(function ExampleBlock({ title, code, explanatio
         aria-label={copied ? 'Copied to clipboard' : 'Copy code to clipboard'}
         className={cn(
           'text-xs ml-3 shrink-0 transition-colors',
-          copied ? 'text-success code-copied-glow' : 'text-zinc-500 hover:text-zinc-300'
+          copied ? 'text-success code-copied-glow' : 'text-[var(--code-dim)] hover:text-[var(--code-text)]'
         )}
       >
         <Copy className="h-3 w-3" aria-hidden="true" />
@@ -76,13 +76,13 @@ export const ExampleBlock = memo(function ExampleBlock({ title, code, explanatio
       >
         <div className="p-3">
           <pre className="text-sm overflow-x-auto">
-            <code className="font-mono text-zinc-100">
+            <code className="font-mono">
               <span className="text-success code-prompt-glow mr-2">$</span>
               {code}
             </code>
           </pre>
           {explanation && (
-            <p className="mt-2 text-xs text-zinc-500"><ConceptHighlighter text={explanation} /></p>
+            <p className="mt-2 text-xs text-[var(--code-dim)]"><ConceptHighlighter text={explanation} /></p>
           )}
         </div>
       </BlockWrapper>

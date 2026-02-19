@@ -29,7 +29,7 @@ export const GoDeepDrawer = memo(function GoDeepDrawer({
   return (
     <div
       className={cn(
-        "border-l-2 border-primary/30 pl-4 py-3 my-3 bg-primary/5 rounded-r-lg",
+        "border-l-2 border-primary/20 pl-4 py-3 my-3 bg-primary/5 rounded-r-lg",
         className
       )}
     >

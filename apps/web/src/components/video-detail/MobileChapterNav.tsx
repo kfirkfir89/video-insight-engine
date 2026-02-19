@@ -30,7 +30,7 @@ export function MobileChapterNav({
               "shrink-0 px-4 py-2 rounded-full text-sm font-medium",
               activeChapter === chapter.id
                 ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
+                : "bg-muted text-muted-foreground hover:bg-muted/90"
             )}
             onClick={() => onScrollToChapter(chapter.id)}
             aria-current={activeChapter === chapter.id ? "true" : undefined}

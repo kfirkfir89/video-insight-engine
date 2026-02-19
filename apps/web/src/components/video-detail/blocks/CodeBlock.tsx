@@ -47,7 +47,7 @@ export const CodeBlock = memo(function CodeBlock({ block }: CodeBlockProps) {
       onClick={handleCopy}
       className={cn(
         'text-xs px-2 py-1 transition-all duration-150 hover:bg-white/10',
-        copied ? 'text-success code-copied-glow scale-110' : 'text-zinc-400'
+        copied ? 'text-success code-copied-glow scale-110' : 'text-[var(--code-muted)]'
       )}
       aria-label={copied ? BLOCK_LABELS.copied : BLOCK_LABELS.copyCode}
     >
@@ -96,7 +96,7 @@ export const CodeBlock = memo(function CodeBlock({ block }: CodeBlockProps) {
                           key={index}
                           className={cn(isHighlighted && 'bg-primary/10 shadow-[inset_3px_0_0_var(--primary)]')}
                         >
-                          <td className="pr-4 text-right text-zinc-600 select-none tabular-nums">
+                          <td className="pr-4 text-right text-[var(--code-dim)] select-none tabular-nums">
                             {lineNum}
                           </td>
                           <td className="whitespace-pre">{line || ' '}</td>

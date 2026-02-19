@@ -136,6 +136,38 @@ export type StreamPhase =
   | "cancelled"
   | "error";
 
+/** Human-readable labels for each streaming phase. Co-located with StreamPhase for single source of truth. */
+export const STREAM_PHASE_LABELS: Record<StreamPhase, string> = {
+  idle: "Preparing...",
+  connecting: "Connecting to AI...",
+  metadata: "Fetching video info...",
+  transcript: "Processing transcript...",
+  parallel_analysis: "Analyzing content...",
+  chapter_detect: "Analyzing video structure...",
+  chapter_summaries: "Summarizing chapters...",
+  concepts: "Extracting key concepts...",
+  master_summary: "Creating quick read...",
+  synthesis: "Generating summary...",
+  done: "Complete!",
+  cancelled: "Summarization cancelled",
+  error: "Error occurred",
+};
+
+/**
+ * Returns a human-readable label for the current streaming phase.
+ * Handles the chapter_summaries special case with chapter index/total context.
+ */
+export function getStreamingPhaseLabel(
+  phase: StreamPhase,
+  currentChapterIndex: number,
+  totalChapters: number,
+): string {
+  if (phase === "chapter_summaries" && currentChapterIndex >= 0) {
+    return `Summarizing chapter ${currentChapterIndex + 1}${totalChapters > 0 ? ` of ${totalChapters}` : ""}...`;
+  }
+  return STREAM_PHASE_LABELS[phase];
+}
+
 // Local types not in shared package
 export interface VideoMetadata {
   title?: string;

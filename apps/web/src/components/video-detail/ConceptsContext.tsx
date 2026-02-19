@@ -3,6 +3,13 @@ import type { Concept } from '@vie/types';
 
 const ConceptsContext = createContext<Concept[]>([]);
 
+/**
+ * Shared data-slot value for article sections.
+ * Used by ArticleSection (sets it) and concept scanning (queries it).
+ */
+export const ARTICLE_SECTION_SLOT = "article-section";
+const ARTICLE_SECTION_SELECTOR = `article[data-slot="${ARTICLE_SECTION_SLOT}"]`;
+
 interface ConceptsProviderProps {
   concepts: Concept[];
   children: ReactNode;
@@ -11,17 +18,37 @@ interface ConceptsProviderProps {
 /**
  * Scan container for concept buttons and mark first appearances via data attribute.
  * Scans in DOM order so the very first element with each concept-id gets marked.
+ * Scopes dedup per-chapter using ARTICLE_SECTION_SELECTOR.
  */
 function markFirstAppearances(container: HTMLElement) {
-  const seen = new Set<string>();
-  const els = container.querySelectorAll<HTMLElement>('[data-concept-id]');
-  for (const el of els) {
-    const id = el.dataset.conceptId!;
-    if (!seen.has(id)) {
-      seen.add(id);
-      el.dataset.firstAppearance = 'true';
-    } else {
-      delete el.dataset.firstAppearance;
+  const globalSeen = new Set<string>();
+  const articles = container.querySelectorAll<HTMLElement>(ARTICLE_SECTION_SELECTOR);
+
+  for (const article of articles) {
+    const chapterSeen = new Set<string>();
+    const els = article.querySelectorAll<HTMLElement>('[data-concept-id]');
+
+    for (const el of els) {
+      const id = el.dataset.conceptId;
+      if (!id) continue;
+
+      if (chapterSeen.has(id)) {
+        el.dataset.chapterDuplicate = 'true';
+        delete el.dataset.firstAppearance;
+        el.setAttribute('tabindex', '-1');
+        el.setAttribute('aria-hidden', 'true');
+      } else {
+        chapterSeen.add(id);
+        delete el.dataset.chapterDuplicate;
+        el.removeAttribute('aria-hidden');
+
+        if (!globalSeen.has(id)) {
+          globalSeen.add(id);
+          el.dataset.firstAppearance = 'true';
+        } else {
+          delete el.dataset.firstAppearance;
+        }
+      }
     }
   }
 }
@@ -53,12 +80,10 @@ export function GlobalConceptScanner({ children }: { children: ReactNode }) {
 
     markFirstAppearances(container);
 
-    let pending = false;
+    let rafId = 0;
     const observer = new MutationObserver(() => {
-      if (pending) return;
-      pending = true;
-      queueMicrotask(() => {
-        pending = false;
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
         if (containerRef.current) markFirstAppearances(containerRef.current);
       });
     });
@@ -66,10 +91,14 @@ export function GlobalConceptScanner({ children }: { children: ReactNode }) {
     observerRef.current = observer;
 
     return () => {
+      cancelAnimationFrame(rafId);
       observer.disconnect();
-      const marked = container.querySelectorAll<HTMLElement>('[data-first-appearance]');
+      const marked = container.querySelectorAll<HTMLElement>('[data-first-appearance], [data-chapter-duplicate]');
       for (const el of marked) {
         delete el.dataset.firstAppearance;
+        delete el.dataset.chapterDuplicate;
+        el.removeAttribute('tabindex');
+        el.removeAttribute('aria-hidden');
       }
     };
   }, []);

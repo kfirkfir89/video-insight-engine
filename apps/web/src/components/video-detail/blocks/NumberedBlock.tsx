@@ -21,7 +21,7 @@ export const NumberedBlock = memo(function NumberedBlock({ items, variant }: Num
     <BlockWrapper variant="inline">
       {isCookingSteps && (
         <div className="flex items-center gap-1.5 mb-2">
-          <ChefHat className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" aria-hidden="true" />
+          <ChefHat className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
           <span className="text-xs text-muted-foreground/70">steps</span>
         </div>
       )}
@@ -35,8 +35,8 @@ export const NumberedBlock = memo(function NumberedBlock({ items, variant }: Num
               className={cn(
                 'absolute left-0 top-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold',
                 isCookingSteps
-                  ? 'border-success/40 text-success/80'
-                  : 'border-primary/40 text-primary/80'
+                  ? 'border-success/40 text-success/90'
+                  : 'border-primary/40 text-primary/90'
               )}
               aria-hidden="true"
             >

@@ -36,7 +36,7 @@ export const RAGSourceCard = memo(function RAGSourceCard({
   return (
     <div
       className={cn(
-        'flex gap-2 p-2 rounded-md border border-border/30 bg-muted/20 text-sm',
+        'flex gap-2 p-2 rounded-md border border-border/20 bg-muted/20 text-sm',
         className
       )}
     >

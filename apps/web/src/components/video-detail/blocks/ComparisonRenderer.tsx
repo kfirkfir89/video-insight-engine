@@ -36,22 +36,22 @@ const VARIANT_STYLES: Record<VariantKey, VariantStyles> = {
   dos_donts: {
     leftIcon: Check,
     rightIcon: X,
-    leftHeaderClass: 'border-b border-success/30',
-    rightHeaderClass: 'border-b border-destructive/30',
+    leftHeaderClass: 'border-b border-success/20',
+    rightHeaderClass: 'border-b border-destructive/20',
     leftLabelClass: 'text-success',
     rightLabelClass: 'text-destructive',
-    leftBulletClass: 'bg-success/60',
-    rightBulletClass: 'bg-destructive/60',
+    leftBulletClass: 'bg-success/70',
+    rightBulletClass: 'bg-destructive/70',
   },
   pros_cons: {
     leftIcon: ThumbsUp,
     rightIcon: ThumbsDown,
-    leftHeaderClass: 'border-b border-info/30',
-    rightHeaderClass: 'border-b border-warning/30',
+    leftHeaderClass: 'border-b border-info/20',
+    rightHeaderClass: 'border-b border-warning/20',
     leftLabelClass: 'text-info',
     rightLabelClass: 'text-warning',
-    leftBulletClass: 'bg-info/60',
-    rightBulletClass: 'bg-warning/60',
+    leftBulletClass: 'bg-info/70',
+    rightBulletClass: 'bg-warning/70',
   },
   versus: {
     leftIcon: null,
@@ -66,12 +66,12 @@ const VARIANT_STYLES: Record<VariantKey, VariantStyles> = {
   before_after: {
     leftIcon: null,
     rightIcon: Sparkles,
-    leftHeaderClass: 'border-b border-muted-foreground/30',
-    rightHeaderClass: 'border-b border-primary/30',
+    leftHeaderClass: 'border-b border-muted-foreground/20',
+    rightHeaderClass: 'border-b border-primary/20',
     leftLabelClass: 'text-muted-foreground',
     rightLabelClass: 'text-primary',
-    leftBulletClass: 'bg-muted-foreground/60',
-    rightBulletClass: 'bg-primary/60',
+    leftBulletClass: 'bg-muted-foreground/70',
+    rightBulletClass: 'bg-primary/70',
   },
 };
 
@@ -122,7 +122,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
             variant="ghost"
             size="icon-bare"
             onClick={() => setViewMode(isSideBySide ? 'stacked' : 'side-by-side')}
-            className="text-xs px-1.5 py-1 text-muted-foreground hover:bg-muted/30"
+            className="text-xs px-1.5 py-1 text-muted-foreground hover:bg-muted/20"
             aria-label={isSideBySide ? 'Switch to stacked view' : 'Switch to side-by-side view'}
           >
             {isSideBySide ? (

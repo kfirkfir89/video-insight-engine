@@ -176,7 +176,7 @@ export function SidebarToolbar() {
                     "flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors",
                     isActive
                       ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                      : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -199,7 +199,7 @@ export function SidebarToolbar() {
                     "flex-1 flex items-center justify-center py-1.5 rounded-md text-xs font-medium transition-colors",
                     isActive
                       ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                      : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
                   )}
                 >
                   {option.label}
@@ -251,7 +251,7 @@ function ToolbarButton({ icon: Icon, label, active, disabled, onClick }: Toolbar
           disabled={disabled}
           className={cn(
             "flex-1 flex items-center justify-center py-2.5 transition-colors",
-            "hover:bg-accent/60",
+            "hover:bg-accent/70",
             active && "text-primary bg-primary/8",
             disabled && "opacity-35 cursor-not-allowed hover:bg-transparent"
           )}

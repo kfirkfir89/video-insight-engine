@@ -49,7 +49,7 @@ export function SortDropdown({ value, onChange }: SortDropdownProps) {
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <button
-              className="flex items-center justify-center w-full h-full hover:bg-accent/60 transition-colors"
+              className="flex items-center justify-center w-full h-full hover:bg-accent/70 transition-colors"
               aria-label="Change sort order"
             >
               <CurrentIcon className="h-4 w-4 text-muted-foreground" />

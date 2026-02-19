@@ -74,7 +74,7 @@ export const EducationView = memo(function EducationView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Key Definitions Section */}
       {hasDefinitions && (
         <ContentBlocks

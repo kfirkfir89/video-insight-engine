@@ -30,15 +30,12 @@ export const StandardView = memo(function StandardView({
   }
 
   return (
-    <div className="space-y-4">
-      {/* All content blocks in natural order */}
-      <ContentBlocks
-        blocks={blocks}
-        onPlay={onPlay}
-        onStop={onStop}
-        isVideoActive={isVideoActive}
-        activeStartSeconds={activeStartSeconds}
-      />
-    </div>
+    <ContentBlocks
+      blocks={blocks}
+      onPlay={onPlay}
+      onStop={onStop}
+      isVideoActive={isVideoActive}
+      activeStartSeconds={activeStartSeconds}
+    />
   );
 });

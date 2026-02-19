@@ -186,7 +186,7 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
               "flex items-center shrink-0",
               selectionMode && "invisible pointer-events-none"
             )}>
-              {/* Status icon on hover with tooltip - always reserve space for consistent layout */}
+              {/* Status icon — always reserve space for consistent alignment */}
               <span className="shrink-0 w-[26px] flex items-center justify-center">
                 {video.status !== "completed" && (
                   <TooltipProvider delayDuration={0}>

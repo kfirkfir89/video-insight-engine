@@ -1,8 +1,5 @@
 import { useRef, useCallback, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Layout } from "@/components/layout/Layout";
 import type { YouTubePlayerRef } from "@/components/videos/YouTubePlayer";
@@ -32,6 +29,7 @@ interface VideoDetailLayoutProps {
   isCreatorChapters?: boolean;
   descriptionAnalysis?: DescriptionAnalysis | null;
   onStopSummarization?: () => void;
+  streamingPhaseLabel?: string;
 }
 
 /**
@@ -47,6 +45,7 @@ export function VideoDetailLayout({
   isCreatorChapters = false,
   descriptionAnalysis = null,
   onStopSummarization,
+  streamingPhaseLabel,
 }: VideoDetailLayoutProps) {
   // Derived values from props or streaming state
   const effectiveChapters = (chapters?.length ?? 0) > 0 ? chapters : streamingState?.chapters || [];
@@ -173,14 +172,7 @@ export function VideoDetailLayout({
               summary={null}
               isStreaming={isStreaming}
               onStopSummarization={onStopSummarization}
-              backButton={
-                <Link to="/">
-                  <Button variant="ghost" size="sm" className="gap-1">
-                    <ArrowLeft className="h-4 w-4" />
-                    Back
-                  </Button>
-                </Link>
-              }
+              streamingPhaseLabel={streamingPhaseLabel}
             />
 
             {effectiveChapters.length > 0 && (
@@ -230,6 +222,7 @@ export function VideoDetailLayout({
               onGoDeeper={handleGoDeeper}
               expandedChapterId={expandedChapterId}
               rightPanel={rightPanelElement}
+              streamingPhaseLabel={streamingPhaseLabel}
             />
           ) : (
             <VideoDetailMobile
@@ -254,6 +247,7 @@ export function VideoDetailLayout({
               onToggleChat={handleToggleChat}
               onGoDeeper={handleGoDeeper}
               expandedChapterId={expandedChapterId}
+              streamingPhaseLabel={streamingPhaseLabel}
             />
           )}
         </VideoSummaryIdProvider>

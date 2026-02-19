@@ -80,7 +80,7 @@ export function AppHeader() {
                   variant="ghost"
                   size="icon-bare"
                   aria-label={user.name ?? "Profile"}
-                  className="h-8 w-8 rounded-full bg-primary/15 text-primary text-xs font-medium hover:bg-primary/25"
+                  className="h-8 w-8 rounded-full bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20"
                 >
                   {user.name ? getInitials(user.name) : <User className="h-4 w-4" />}
                 </Button>

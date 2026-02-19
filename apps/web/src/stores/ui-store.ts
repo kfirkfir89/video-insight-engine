@@ -63,6 +63,7 @@ interface UIState {
   // Sidebar visibility
   sidebarOpen: boolean;
   activeRightPanel: RightPanelId;
+  isRightPanelMinimized: boolean;
   sidebarWidth: number;
 
   // Content context
@@ -97,6 +98,8 @@ interface UIState {
   toggleSidebar: () => void;
   setActiveRightPanel: (panel: RightPanelId) => void;
   toggleRightPanel: (panel: RightPanelId) => void;
+  toggleRightPanelMinimized: () => void;
+  expandRightPanelToTab: (panel: RightPanelId) => void;
   setSidebarWidth: (width: number) => void;
   setActiveSection: (section: ActiveSection) => void;
   setSelectedFolder: (id: string | null) => void;
@@ -132,6 +135,7 @@ export const useUIStore = create<UIState>()(
       // Initial state
       sidebarOpen: true,
       activeRightPanel: "chapters" as RightPanelId,
+      isRightPanelMinimized: false,
       sidebarWidth: 360,
       activeSection: "summarized",
       selectedFolderId: null,
@@ -156,6 +160,13 @@ export const useUIStore = create<UIState>()(
       toggleRightPanel: (panel) => set((s) => ({
         activeRightPanel: s.activeRightPanel === panel ? "none" : panel,
       })),
+      toggleRightPanelMinimized: () => set((s) => ({
+        isRightPanelMinimized: !s.isRightPanelMinimized,
+      })),
+      expandRightPanelToTab: (panel) => set({
+        activeRightPanel: panel,
+        isRightPanelMinimized: false,
+      }),
       setSidebarWidth: (width) => set({ sidebarWidth: width }),
       setActiveSection: (section) => set({ activeSection: section, showNewFolderInput: false }),
       setSelectedFolder: (id) => set({ selectedFolderId: id }),
@@ -349,6 +360,7 @@ export const useUIStore = create<UIState>()(
       partialize: (state) => ({
         sidebarOpen: state.sidebarOpen,
         activeRightPanel: state.activeRightPanel,
+        isRightPanelMinimized: state.isRightPanelMinimized,
         sidebarWidth: state.sidebarWidth,
         activeSection: state.activeSection,
         expandedFolderIds: state.expandedFolderIds,
@@ -363,6 +375,7 @@ export const useUIStore = create<UIState>()(
 export const useSidebarOpen = () => useUIStore((s) => s.sidebarOpen);
 export const useActiveRightPanel = () => useUIStore((s) => s.activeRightPanel);
 export const useIsRightPanelOpen = () => useUIStore((s) => s.activeRightPanel !== "none");
+export const useIsRightPanelMinimized = () => useUIStore((s) => s.isRightPanelMinimized);
 export const useSelectedFolder = () => useUIStore((s) => s.selectedFolderId);
 export const useActiveSection = () => useUIStore((s) => s.activeSection);
 export const useSidebarTextSize = () => useUIStore((s) => s.sidebarTextSize);
