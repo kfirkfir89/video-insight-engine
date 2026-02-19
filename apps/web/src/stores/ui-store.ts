@@ -131,7 +131,7 @@ export const useUIStore = create<UIState>()(
     (set, get) => ({
       // Initial state
       sidebarOpen: true,
-      activeRightPanel: "none" as RightPanelId,
+      activeRightPanel: "chapters" as RightPanelId,
       sidebarWidth: 360,
       activeSection: "summarized",
       selectedFolderId: null,

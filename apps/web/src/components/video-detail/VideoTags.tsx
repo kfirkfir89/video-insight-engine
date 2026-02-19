@@ -1,5 +1,12 @@
-import { memo } from "react";
+import { memo, useRef } from "react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useIsTruncated } from "@/hooks/use-is-truncated";
 
 interface VideoTagsProps {
   tags: string[];
@@ -26,6 +33,29 @@ function sanitizeTag(tag: string): string {
  * Minimal tag display — plain #text in muted color, no pills or backgrounds.
  * Sanitizes tags to prevent layout issues from malformed data.
  */
+function TagItem({ tag, sanitized }: { tag: string; sanitized: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const isTruncated = useIsTruncated(ref);
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          ref={ref}
+          className="text-xs text-muted-foreground/70 max-w-[200px] truncate"
+        >
+          #{sanitized}
+        </span>
+      </TooltipTrigger>
+      {isTruncated && (
+        <TooltipContent side="bottom" className="text-xs">
+          {tag}
+        </TooltipContent>
+      )}
+    </Tooltip>
+  );
+}
+
 export const VideoTags = memo(function VideoTags({ tags, className }: VideoTagsProps) {
   // Render nothing if no tags
   if (!tags || tags.length === 0) {
@@ -33,25 +63,20 @@ export const VideoTags = memo(function VideoTags({ tags, className }: VideoTagsP
   }
 
   return (
-    <div
-      data-slot="video-tags"
-      className={cn("flex items-center flex-wrap gap-x-2 gap-y-1", className)}
-    >
-      {tags.map((tag, index) => {
-        const sanitized = sanitizeTag(tag);
-        // Skip empty tags after sanitization
-        if (!sanitized) return null;
+    <TooltipProvider delayDuration={400}>
+      <div
+        data-slot="video-tags"
+        className={cn("flex items-center flex-wrap gap-x-2 gap-y-1", className)}
+      >
+        {tags.map((tag) => {
+          const sanitized = sanitizeTag(tag);
+          if (!sanitized) return null;
 
-        return (
-          <span
-            key={`${sanitized}-${index}`}
-            className="text-xs text-muted-foreground/70 max-w-[200px] truncate"
-            title={tag.length > 25 ? tag : undefined}
-          >
-            #{sanitized}
-          </span>
-        );
-      })}
-    </div>
+          return (
+            <TagItem key={tag} tag={tag} sanitized={sanitized} />
+          );
+        })}
+      </div>
+    </TooltipProvider>
   );
 });

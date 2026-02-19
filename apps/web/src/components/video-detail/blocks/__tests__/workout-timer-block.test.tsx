@@ -178,7 +178,8 @@ describe('WorkoutTimerBlock', () => {
     it('should render progress indicators for intervals', () => {
       const { container } = render(<WorkoutTimerBlock block={createMockBlock()} />);
 
-      const progressBars = container.querySelectorAll('[title]');
+      // Progress bars are flex-1 rounded-full divs (phase dots use w-2 instead)
+      const progressBars = container.querySelectorAll('.flex-1.rounded-full');
       expect(progressBars.length).toBe(3);
     });
   });

@@ -36,7 +36,7 @@ export function UnassignedVideosList({ videos, folders }: UnassignedVideosListPr
     <div
       ref={setNodeRef}
       className={cn(
-        "py-1 transition-colors",
+        "transition-colors",
         isOver && "bg-primary/10"
       )}
     >

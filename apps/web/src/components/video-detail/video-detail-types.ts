@@ -33,7 +33,7 @@ export interface VideoDetailCommonProps {
   };
   // Player ref for mobile scroll-to-play
   playerRef: RefObject<YouTubePlayerRef | null>;
-  // Video chat state (used by mobile/tablet overlay, not large desktop cube stack)
+  // Video chat state (used by mobile/tablet overlay, not large desktop right panel)
   isChatOpen?: boolean;
   onToggleChat?: (() => void) | undefined;
   // Explain auto handler (Go Deeper)
