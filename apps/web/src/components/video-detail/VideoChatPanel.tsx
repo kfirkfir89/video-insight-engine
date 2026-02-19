@@ -78,7 +78,8 @@ export const VideoChatPanel = memo(function VideoChatPanel({
     useVideoChat({ videoSummaryId });
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messages.length === 0) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
 
   const handleSubmit = useCallback(

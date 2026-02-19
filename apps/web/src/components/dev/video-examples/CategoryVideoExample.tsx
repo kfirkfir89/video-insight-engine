@@ -12,6 +12,7 @@ if (!import.meta.env.DEV) {
 import { useState } from 'react';
 import type { VideoCategory, SummaryChapter } from '@vie/types';
 import { getMockVideo } from '@/lib/dev/mock-videos';
+import { formatDuration } from '@/lib/string-utils';
 import { ChevronDown, ChevronRight, Clock, Play } from 'lucide-react';
 
 // Import real components for rendering
@@ -101,12 +102,6 @@ function VideoHeader({
   channel: string | null;
   duration: number | null;
 }) {
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   return (
     <div className="space-y-2">
       <h1 className="text-2xl font-bold tracking-tight">{title}</h1>

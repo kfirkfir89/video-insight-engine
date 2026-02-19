@@ -1,7 +1,6 @@
 import { useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
-import { RightSidebarProvider } from "@/components/layout/RightSidebarContext";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWebSocket } from "@/hooks/use-websocket";
@@ -150,11 +149,9 @@ function AppRoutes() {
 
 function App() {
   return (
-    <ThemeProvider defaultTheme="system" storageKey="vie-theme">
+    <ThemeProvider defaultTheme="dark" storageKey="vie-theme">
       <BrowserRouter>
-        <RightSidebarProvider>
-          <AppRoutes />
-        </RightSidebarProvider>
+        <AppRoutes />
       </BrowserRouter>
       <Suspense fallback={null}>
         <Toaster />

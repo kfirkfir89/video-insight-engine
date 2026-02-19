@@ -6,6 +6,8 @@ const SCROLL_TOP_THRESHOLD = 100;
 /** Scroll position threshold (px) from bottom to trigger last chapter selection */
 const SCROLL_BOTTOM_THRESHOLD = 100;
 
+import { findScrollParent } from "@/lib/dom-utils";
+
 /**
  * Tracks which chapter is currently visible in the viewport using IntersectionObserver.
  * Returns the active chapter ID and a function to manually set the active chapter.
@@ -18,13 +20,13 @@ export function useActiveChapter(chapterIds: string[]) {
   useEffect(() => {
     if (chapterIds.length === 0) return;
 
-    // Find the scrollable main container - chapters scroll within <main>
-    const scrollContainer = document.querySelector("main");
+    // Find the scroll container from the first chapter element
+    const firstChapter = document.getElementById(`chapter-${chapterIds[0]}`);
+    const scrollContainer = firstChapter ? findScrollParent(firstChapter) : null;
+    if (!scrollContainer) return;
 
     // Handle scroll events to detect when at top or bottom
     const handleScroll = () => {
-      if (!scrollContainer) return;
-
       // When near top, always select first chapter
       if (scrollContainer.scrollTop < SCROLL_TOP_THRESHOLD) {
         setActiveId(chapterIds[0]);
@@ -41,8 +43,6 @@ export function useActiveChapter(chapterIds: string[]) {
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (!scrollContainer) return;
-
         // Skip if near top - scroll handler takes precedence
         if (scrollContainer.scrollTop < SCROLL_TOP_THRESHOLD) {
           return;
@@ -63,7 +63,6 @@ export function useActiveChapter(chapterIds: string[]) {
         }
       },
       {
-        // Use the scroll container as root (null = viewport)
         root: scrollContainer,
         // Trigger when chapter is 20% from top, 60% from bottom
         // This gives a good "active" zone in the middle of the viewport
@@ -81,32 +80,26 @@ export function useActiveChapter(chapterIds: string[]) {
     });
 
     // Add scroll listener for top-of-page detection
-    scrollContainer?.addEventListener("scroll", handleScroll, { passive: true });
+    scrollContainer.addEventListener("scroll", handleScroll, { passive: true });
 
     // Initial check for top-of-page
     handleScroll();
 
     return () => {
       observer.disconnect();
-      scrollContainer?.removeEventListener("scroll", handleScroll);
+      scrollContainer.removeEventListener("scroll", handleScroll);
     };
   }, [chapterIds]);
 
   const scrollToChapter = useCallback((chapterId: string) => {
     const element = document.getElementById(`chapter-${chapterId}`);
     if (element) {
-      // Find the scrollable main container - don't use scrollIntoView as it scrolls window
-      const scrollContainer = document.querySelector("main");
-      if (scrollContainer) {
-        const containerRect = scrollContainer.getBoundingClientRect();
-        const elementRect = element.getBoundingClientRect();
-        const relativeTop = elementRect.top - containerRect.top + scrollContainer.scrollTop;
-        const offset = 80; // px from top of container
-        scrollContainer.scrollTo({ top: relativeTop - offset, behavior: "smooth" });
-      } else {
-        // Fallback to scrollIntoView
-        element.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+      const scrollContainer = findScrollParent(element);
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const elementRect = element.getBoundingClientRect();
+      const relativeTop = elementRect.top - containerRect.top + scrollContainer.scrollTop;
+      const offset = 80; // px from top of container
+      scrollContainer.scrollTo({ top: relativeTop - offset, behavior: "smooth" });
       // Set active immediately for better UX
       setActiveId(chapterId);
     }

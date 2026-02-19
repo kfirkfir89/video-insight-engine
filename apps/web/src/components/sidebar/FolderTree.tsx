@@ -20,7 +20,7 @@ export const FolderTree = memo(function FolderTree({ folders, type, videos, allF
   }
 
   return (
-    <div className="py-1">
+    <>
       {folders.map((folder) => (
         <FolderItem
           key={folder.id}
@@ -31,6 +31,6 @@ export const FolderTree = memo(function FolderTree({ folders, type, videos, allF
           allFolders={allFolders}
         />
       ))}
-    </div>
+    </>
   );
 });

@@ -1,6 +1,7 @@
 import { memo, useState } from 'react';
 import { Check, Clock, Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatDurationHuman } from '@/lib/string-utils';
 import { BlockWrapper } from './BlockWrapper';
 import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { StepBlock as StepBlockType } from '@vie/types';
@@ -31,13 +32,6 @@ export const StepBlock = memo(function StepBlock({ block }: StepBlockProps) {
       }
       return next;
     });
-  };
-
-  const formatDuration = (seconds: number): string => {
-    if (seconds < 60) return `${seconds}s`;
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
   };
 
   return (
@@ -88,7 +82,7 @@ export const StepBlock = memo(function StepBlock({ block }: StepBlockProps) {
                     {step.duration && (
                       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/70 bg-muted/50 px-2 py-0.5 rounded">
                         <Clock className="h-3 w-3" aria-hidden="true" />
-                        {formatDuration(step.duration)}
+                        {formatDurationHuman(step.duration)}
                       </span>
                     )}
                     {step.tips && (

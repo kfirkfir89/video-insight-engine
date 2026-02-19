@@ -2,19 +2,13 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Check, Clock, Loader2, PlayCircle } from "lucide-react";
+import { formatDuration } from "@/lib/string-utils";
 import type { PlaylistPreview as PlaylistPreviewType } from "@/api/playlists";
 
 interface PlaylistPreviewProps {
   playlist: PlaylistPreviewType;
   onImport: () => void;
   isImporting: boolean;
-}
-
-function formatDuration(seconds: number | null): string {
-  if (seconds == null || seconds < 0) return "--:--";
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
 export function PlaylistPreview({

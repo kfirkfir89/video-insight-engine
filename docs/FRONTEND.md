@@ -59,8 +59,9 @@ apps/web/
     │   │
     │   ├── video-detail/
     │   │   ├── VideoDetailLayout.tsx     # Orchestrator (responsive)
-    │   │   ├── VideoDetailDesktop.tsx    # Desktop two-column layout
+    │   │   ├── VideoDetailDesktop.tsx    # Desktop layout + sticky right panel
     │   │   ├── VideoDetailMobile.tsx     # Mobile single-column layout
+    │   │   ├── RightPanelTabs.tsx        # Tab-based right panel (chapters, minimap, chat)
     │   │   ├── VideoHeaderSection.tsx    # Video metadata header
     │   │   ├── video-detail-types.ts     # Shared TypeScript types
     │   │   ├── SectionCard.tsx

@@ -103,10 +103,10 @@ export const ArticleSection = memo(function ArticleSection({
     <article
       id={`chapter-${chapter.id}`}
       data-slot="article-section"
-      className="relative group mr-12"
+      className="relative group"
     >
       {/* Buttons — absolute positioned outside right edge */}
-      <div className="absolute -right-10 top-0 flex flex-col items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="absolute -right-7 top-0 flex flex-col items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         {isVideoActive ? (
           <button
             onClick={onStop}
