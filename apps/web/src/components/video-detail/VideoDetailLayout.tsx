@@ -16,7 +16,7 @@ import { VideoChatPanel } from "./VideoChatPanel";
 import { ChapterList } from "./ChapterList";
 import { ResourcesPanel } from "./ResourcesPanel";
 import { MasterSummaryModal } from "./MasterSummaryModal";
-import { VideoHeaderSection } from "./VideoHeaderSection";
+import { VideoHero } from "./VideoHero";
 import { VideoDetailDesktop } from "./VideoDetailDesktop";
 import { VideoDetailMobile } from "./VideoDetailMobile";
 import { VideoSummaryIdProvider } from "./VideoSummaryIdContext";
@@ -167,17 +167,20 @@ export function VideoDetailLayout({
       {!summary ? (
         // No summary yet - show loading state
         <div className="p-4 md:p-6">
-          <Link to="/">
-            <Button variant="ghost" className="mb-4">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back
-            </Button>
-          </Link>
-          <div className="space-y-6">
-            <VideoHeaderSection
+          <div className="space-y-6 max-w-3xl mx-auto">
+            <VideoHero
               video={video}
               summary={null}
               isStreaming={isStreaming}
               onStopSummarization={onStopSummarization}
+              backButton={
+                <Link to="/">
+                  <Button variant="ghost" size="sm" className="gap-1">
+                    <ArrowLeft className="h-4 w-4" />
+                    Back
+                  </Button>
+                </Link>
+              }
             />
 
             {effectiveChapters.length > 0 && (

@@ -81,14 +81,15 @@ export const QuizBlock = memo(function QuizBlock({ block }: QuizBlockProps) {
                     const showResult = isRevealed && isSelected;
 
                     return (
-                      <button
+                      <Button
                         key={oIndex}
-                        type="button"
+                        variant="ghost"
+                        size="bare"
                         onClick={() => !isRevealed && selectAnswer(qIndex, oIndex)}
                         disabled={isRevealed}
                         className={cn(
-                          'w-full text-left px-3 py-2 rounded-md text-sm transition-all duration-150',
-                          'border focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                          'w-full text-left px-3 py-2 rounded-md text-sm transition-all duration-150 whitespace-normal justify-start',
+                          'border',
                           !isRevealed && 'hover-scale',
                           isRevealed && isCorrectOption && 'bg-success-soft border-success/50 glow-success',
                           showResult && !isCorrect && 'bg-destructive/10 border-destructive/50',
@@ -113,7 +114,7 @@ export const QuizBlock = memo(function QuizBlock({ block }: QuizBlockProps) {
                             <XCircle className="h-4 w-4 text-destructive shrink-0" aria-hidden="true" />
                           )}
                         </div>
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>
