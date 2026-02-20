@@ -1,7 +1,9 @@
-import { memo, useMemo } from 'react';
-import { Clock } from 'lucide-react';
-import type { SummaryChapter, ContentBlock } from '@vie/types';
+import { Fragment, memo, type ReactNode } from 'react';
+import { BookOpen, Calculator, HelpCircle, Clock } from 'lucide-react';
+import type { SummaryChapter } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
+import { useGroupedBlocks, type BlockGroupRule } from '@/hooks/use-grouped-blocks';
+import { SectionHeader } from './SectionHeader';
 
 interface EducationViewProps {
   chapter: SummaryChapter;
@@ -10,6 +12,14 @@ interface EducationViewProps {
   isVideoActive?: boolean;
   activeStartSeconds?: number;
 }
+
+const EDUCATION_RULES: readonly BlockGroupRule[] = [
+  { name: 'definitions', match: (b) => b.type === 'definition' },
+  { name: 'formulas', match: (b) => b.type === 'formula' },
+  { name: 'quizzes', match: (b) => b.type === 'quiz' },
+  { name: 'tips', match: (b) => b.type === 'callout' && b.variant === 'learning_tip' },
+  { name: 'timestamps', match: (b) => b.type === 'timestamp' },
+];
 
 /**
  * Specialized view for educational content.
@@ -26,128 +36,72 @@ export const EducationView = memo(function EducationView({
   isVideoActive,
   activeStartSeconds,
 }: EducationViewProps) {
-  // Group blocks by type for education-optimized layout
-  const { definitionBlocks, formulaBlocks, quizBlocks, tipBlocks, timestampBlocks, otherBlocks } = useMemo(() => {
-    const definitions: ContentBlock[] = [];
-    const formulas: ContentBlock[] = [];
-    const quizzes: ContentBlock[] = [];
-    const tips: ContentBlock[] = [];
-    const timestamps: ContentBlock[] = [];
-    const other: ContentBlock[] = [];
+  const groups = useGroupedBlocks(chapter.content, EDUCATION_RULES);
 
-    for (const block of chapter.content ?? []) {
-      if (block.type === 'definition') {
-        definitions.push(block);
-      } else if (block.type === 'formula') {
-        formulas.push(block);
-      } else if (block.type === 'quiz') {
-        quizzes.push(block);
-      } else if (block.type === 'callout' && block.variant === 'learning_tip') {
-        tips.push(block);
-      } else if (block.type === 'timestamp') {
-        timestamps.push(block);
-      } else {
-        other.push(block);
-      }
-    }
+  const blockProps = { onPlay, onStop, isVideoActive, activeStartSeconds };
 
-    return {
-      definitionBlocks: definitions,
-      formulaBlocks: formulas,
-      quizBlocks: quizzes,
-      tipBlocks: tips,
-      timestampBlocks: timestamps,
-      otherBlocks: other,
-    };
-  }, [chapter.content]);
+  const sections: { key: string; node: ReactNode }[] = [];
 
-  const hasDefinitions = definitionBlocks.length > 0;
-  const hasFormulas = formulaBlocks.length > 0;
-  const hasQuizzes = quizBlocks.length > 0;
-  const hasTips = tipBlocks.length > 0;
-  const hasTimestamps = timestampBlocks.length > 0;
-  const hasOtherBlocks = otherBlocks.length > 0;
-
-  // Early return for empty content
-  if (!hasDefinitions && !hasFormulas && !hasQuizzes && !hasTips && !hasTimestamps && !hasOtherBlocks) {
-    return null;
+  if (groups.definitions.length > 0) {
+    sections.push({ key: 'definitions', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={BookOpen} label="Definitions" />
+        <ContentBlocks blocks={groups.definitions} {...blockProps} />
+      </div>
+    )});
   }
+
+  if (groups.other.length > 0) {
+    sections.push({ key: 'other', node: (
+      <ContentBlocks blocks={groups.other} {...blockProps} />
+    )});
+  }
+
+  if (groups.formulas.length > 0) {
+    sections.push({ key: 'formulas', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={Calculator} label="Formulas" />
+        <ContentBlocks blocks={groups.formulas} {...blockProps} />
+      </div>
+    )});
+  }
+
+  if (groups.quizzes.length > 0) {
+    sections.push({ key: 'quizzes', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={HelpCircle} label="Questions" />
+        <ContentBlocks blocks={groups.quizzes} {...blockProps} />
+      </div>
+    )});
+  }
+
+  if (groups.tips.length > 0) {
+    sections.push({ key: 'tips', node: (
+      <ContentBlocks blocks={groups.tips} {...blockProps} />
+    )});
+  }
+
+  if (groups.timestamps.length > 0) {
+    sections.push({ key: 'timestamps', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={Clock} label="Timestamps" />
+        <div className="flex flex-wrap gap-2">
+          <ContentBlocks blocks={groups.timestamps} {...blockProps} />
+        </div>
+      </div>
+    )});
+  }
+
+  if (sections.length === 0) return null;
 
   return (
     <div className="space-y-6">
-      {/* Key Definitions Section */}
-      {hasDefinitions && (
-        <ContentBlocks
-          blocks={definitionBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Main content (non-categorized blocks) */}
-      {hasOtherBlocks && (
-        <ContentBlocks
-          blocks={otherBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Formulas Section */}
-      {hasFormulas && (
-        <ContentBlocks
-          blocks={formulaBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Quiz Section */}
-      {hasQuizzes && (
-        <ContentBlocks
-          blocks={quizBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Timestamps for Key Explanations */}
-      {hasTimestamps && (
-        <div className="mt-3">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
-            <Clock className="h-4 w-4" aria-hidden="true" />
-            <span>Key Explanations</span>
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            <ContentBlocks
-              blocks={timestampBlocks}
-              onPlay={onPlay}
-              onStop={onStop}
-              isVideoActive={isVideoActive}
-              activeStartSeconds={activeStartSeconds}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Learning Tips */}
-      {hasTips && (
-        <ContentBlocks
-          blocks={tipBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
+      {sections.map((section, i) => (
+        <Fragment key={section.key}>
+          {i > 0 && <div className="fade-divider" />}
+          {section.node}
+        </Fragment>
+      ))}
     </div>
   );
 });

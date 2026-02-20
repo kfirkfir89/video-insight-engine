@@ -1,7 +1,9 @@
-import { memo, useMemo } from 'react';
-import { Code2, GitCompare } from 'lucide-react';
-import type { SummaryChapter, ContentBlock } from '@vie/types';
+import { Fragment, memo, type ReactNode } from 'react';
+import { Code2, GitCompare, Clock } from 'lucide-react';
+import type { SummaryChapter } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
+import { useGroupedBlocks, type BlockGroupRule } from '@/hooks/use-grouped-blocks';
+import { SectionHeader } from './SectionHeader';
 
 interface CodeViewProps {
   chapter: SummaryChapter;
@@ -10,6 +12,12 @@ interface CodeViewProps {
   isVideoActive?: boolean;
   activeStartSeconds?: number;
 }
+
+const CODE_RULES: readonly BlockGroupRule[] = [
+  { name: 'code', match: (b) => b.type === 'example' || (b.type === 'bullets' && b.variant === 'terminal_command') },
+  { name: 'comparisons', match: (b) => b.type === 'comparison' },
+  { name: 'timestamps', match: (b) => b.type === 'timestamp' },
+];
 
 /**
  * Specialized view for code/programming content.
@@ -25,85 +33,57 @@ export const CodeView = memo(function CodeView({
   isVideoActive,
   activeStartSeconds,
 }: CodeViewProps) {
-  // Group blocks by type for code-optimized layout
-  const { codeBlocks, comparisonBlocks, otherBlocks } = useMemo(() => {
-    const code: ContentBlock[] = [];
-    const comparisons: ContentBlock[] = [];
-    const other: ContentBlock[] = [];
+  const groups = useGroupedBlocks(chapter.content, CODE_RULES);
 
-    for (const block of chapter.content ?? []) {
-      if (block.type === 'example' || (block.type === 'bullets' && block.variant === 'terminal_command')) {
-        code.push(block);
-      } else if (block.type === 'comparison') {
-        comparisons.push(block);
-      } else {
-        other.push(block);
-      }
-    }
+  const blockProps = { onPlay, onStop, isVideoActive, activeStartSeconds };
 
-    return { codeBlocks: code, comparisonBlocks: comparisons, otherBlocks: other };
-  }, [chapter.content]);
+  const sections: { key: string; node: ReactNode }[] = [];
 
-  const hasCodeBlocks = codeBlocks.length > 0;
-  const hasComparisons = comparisonBlocks.length > 0;
-  const hasOtherBlocks = otherBlocks.length > 0;
-
-  // Early return for empty content to avoid rendering empty wrapper
-  if (!hasCodeBlocks && !hasComparisons && !hasOtherBlocks) {
-    return null;
+  if (groups.other.length > 0) {
+    sections.push({ key: 'other', node: (
+      <ContentBlocks blocks={groups.other} {...blockProps} />
+    )});
   }
+
+  if (groups.code.length > 0) {
+    sections.push({ key: 'code', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={Code2} label="Code Examples" />
+        <ContentBlocks blocks={groups.code} {...blockProps} />
+      </div>
+    )});
+  }
+
+  if (groups.comparisons.length > 0) {
+    sections.push({ key: 'comparisons', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={GitCompare} label="Comparisons" />
+        <ContentBlocks blocks={groups.comparisons} {...blockProps} />
+      </div>
+    )});
+  }
+
+  if (groups.timestamps.length > 0) {
+    sections.push({ key: 'timestamps', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={Clock} label="Timestamps" />
+        <div className="flex flex-wrap gap-2">
+          <ContentBlocks blocks={groups.timestamps} {...blockProps} />
+        </div>
+      </div>
+    )});
+  }
+
+  if (sections.length === 0) return null;
 
   return (
     <div className="space-y-6">
-      {/* Main content */}
-      {hasOtherBlocks && (
-        <ContentBlocks
-          blocks={otherBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Code Examples Section */}
-      {hasCodeBlocks && (
-        <div className="mt-4">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
-            <Code2 className="h-4 w-4" aria-hidden="true" />
-            <span>Code Examples</span>
-          </h4>
-          <div className="space-y-3 pl-1">
-            <ContentBlocks
-              blocks={codeBlocks}
-              onPlay={onPlay}
-              onStop={onStop}
-              isVideoActive={isVideoActive}
-              activeStartSeconds={activeStartSeconds}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Comparisons Section (dos/donts, before/after) */}
-      {hasComparisons && (
-        <div className="mt-4">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
-            <GitCompare className="h-4 w-4" aria-hidden="true" />
-            <span>Comparisons</span>
-          </h4>
-          <div className="space-y-3 pl-1">
-            <ContentBlocks
-              blocks={comparisonBlocks}
-              onPlay={onPlay}
-              onStop={onStop}
-              isVideoActive={isVideoActive}
-              activeStartSeconds={activeStartSeconds}
-            />
-          </div>
-        </div>
-      )}
-
+      {sections.map((section, i) => (
+        <Fragment key={section.key}>
+          {i > 0 && <div className="fade-divider" />}
+          {section.node}
+        </Fragment>
+      ))}
     </div>
   );
 });

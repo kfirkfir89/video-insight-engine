@@ -13,7 +13,7 @@ interface BlockWrapperProps {
   role?: string;
   /** Visual variant */
   variant?: BlockVariant;
-  /** Accent color for accent variant left border */
+  /** Accent color for accent variant top fade-edge */
   accentColor?: AccentColor;
   /** Lucide icon element for auto-rendered header */
   headerIcon?: ReactNode;
@@ -39,12 +39,12 @@ const variantClasses: Record<BlockVariant, string> = {
   transparent: '',
 };
 
-const accentColorClasses: Record<AccentColor, string> = {
-  primary: 'border-l-primary',
-  destructive: 'border-l-destructive',
-  success: 'border-l-success',
-  warning: 'border-l-warning',
-  info: 'border-l-info',
+const accentColorStyles: Record<AccentColor, React.CSSProperties> = {
+  primary: { '--accent-line-color': 'var(--primary)' } as React.CSSProperties,
+  destructive: { '--accent-line-color': 'var(--destructive)' } as React.CSSProperties,
+  success: { '--accent-line-color': 'var(--success)' } as React.CSSProperties,
+  warning: { '--accent-line-color': 'var(--warning)' } as React.CSSProperties,
+  info: { '--accent-line-color': 'var(--info)' } as React.CSSProperties,
 };
 
 /**
@@ -76,11 +76,13 @@ export function BlockWrapper({
       className={cn(
         'block-container',
         variantClasses[variant],
-        variant === 'accent' && accentColor && accentColorClasses[accentColor],
         animate && 'block-entrance',
         className
       )}
-      style={animate && index !== undefined ? { animationDelay: `${index * 75}ms` } : undefined}
+      style={{
+        ...(animate && index !== undefined ? { animationDelay: `${index * 75}ms` } : {}),
+        ...(variant === 'accent' && accentColor ? accentColorStyles[accentColor] : {}),
+      }}
     >
       {hasHeader && variant === 'card' && (
         <div className="block-card-header">

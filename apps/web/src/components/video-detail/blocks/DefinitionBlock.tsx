@@ -22,12 +22,11 @@ export const DefinitionBlock = memo(function DefinitionBlock({ block }: Definiti
   return (
     <BlockWrapper
       blockId={block.blockId}
-      variant="accent"
-      accentColor="primary"
+      variant="card"
       label={`Definition of ${block.term}`}
     >
       <dl className="definition-item hover:bg-muted/10 rounded-sm transition-colors">
-        <dt className="text-sm font-semibold hover:text-primary transition-colors">
+        <dt className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">
           <ConceptHighlighter text={block.term} />
         </dt>
         <dd className="mt-1">

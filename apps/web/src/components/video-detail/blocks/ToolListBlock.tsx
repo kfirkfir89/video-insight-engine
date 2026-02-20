@@ -43,38 +43,40 @@ export const ToolListBlock = memo(function ToolListBlock({ block }: ToolListBloc
           <LayoutList className="h-3 w-3" aria-hidden="true" />
           <span>{BLOCK_LABELS.tools}</span>
         </div>
-        <ul className="grid gap-0 sm:grid-cols-2" role="list">
+        <ul className="space-y-0 stagger-children" role="list">
           {tools.map((tool, index) => {
             const isChecked = checkedTools.has(index) || tool.checked;
             return (
-              <li
-                key={index}
-                className={cn(
-                  'flex items-start gap-2.5 text-sm py-2 transition-colors',
-                  isChecked && 'opacity-60'
-                )}
-              >
-                <Button
-                  variant="ghost"
-                  size="icon-bare"
-                  onClick={() => toggleTool(index)}
-                  className="shrink-0 mt-0.5 transition-colors"
-                  aria-label={isChecked ? `Uncheck ${tool.name}` : `Check ${tool.name}`}
+              <li key={index}>
+                {index > 0 && <div className="fade-divider my-1" aria-hidden="true" />}
+                <div
+                  className={cn(
+                    'flex items-start gap-2.5 text-sm py-2 transition-colors',
+                    isChecked && 'opacity-60'
+                  )}
                 >
-                  {isChecked ? (
-                    <Check className="h-4 w-4 text-success dark:drop-shadow-[0_0_4px_currentColor]" aria-hidden="true" />
-                  ) : (
-                    <Square className="h-4 w-4 text-muted-foreground/50" aria-hidden="true" />
-                  )}
-                </Button>
-                <div className={cn('flex-1', isChecked && 'line-through text-muted-foreground/50')}>
-                  <span className="font-medium">{tool.name}</span>
-                  {tool.quantity && (
-                    <span className="text-muted-foreground"> — {tool.quantity}</span>
-                  )}
-                  {tool.notes && (
-                    <span className="text-xs text-muted-foreground/70 ml-1">(<ConceptHighlighter text={tool.notes} />)</span>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon-bare"
+                    onClick={() => toggleTool(index)}
+                    className="shrink-0 mt-0.5 transition-colors"
+                    aria-label={isChecked ? `Uncheck ${tool.name}` : `Check ${tool.name}`}
+                  >
+                    {isChecked ? (
+                      <Check className="h-4 w-4 text-success dark:drop-shadow-[0_0_4px_currentColor]" aria-hidden="true" />
+                    ) : (
+                      <Square className="h-4 w-4 text-muted-foreground/50" aria-hidden="true" />
+                    )}
+                  </Button>
+                  <div className={cn('flex-1', isChecked && 'line-through text-muted-foreground/50')}>
+                    <span className="font-medium">{tool.name}</span>
+                    {tool.quantity && (
+                      <span className="text-muted-foreground"> — {tool.quantity}</span>
+                    )}
+                    {tool.notes && (
+                      <span className="text-xs text-muted-foreground/70 ml-1">(<ConceptHighlighter text={tool.notes} />)</span>
+                    )}
+                  </div>
                 </div>
               </li>
             );

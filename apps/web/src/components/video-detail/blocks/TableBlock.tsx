@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { Table2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
 import type { TableBlock as TableBlockType } from '@vie/types';
@@ -29,22 +30,19 @@ export const TableBlock = memo(function TableBlock({ block }: TableBlockProps) {
     <BlockWrapper
       blockId={block.blockId}
       label={block.caption ?? BLOCK_LABELS.table}
-      variant="transparent"
+      variant="card"
+      headerIcon={<Table2 className="h-4 w-4" />}
+      headerLabel={block.caption ?? BLOCK_LABELS.table}
     >
       <div className="overflow-x-auto">
         <table className="w-full text-sm table-fade-dividers">
-          {block.caption && (
-            <caption className="text-xs text-muted-foreground mb-2 text-left px-4">
-              {block.caption}
-            </caption>
-          )}
           <thead>
             <tr>
               {columns.map((col) => (
                 <th
                   key={col.key}
                   className={cn(
-                    'px-4 py-2.5 font-medium text-muted-foreground/50',
+                    'px-4 py-2.5 font-medium text-foreground',
                     ALIGN_CLASS[col.align ?? 'left']
                   )}
                 >
