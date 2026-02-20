@@ -1,7 +1,9 @@
-import { memo, useMemo } from 'react';
-import { Compass } from 'lucide-react';
-import type { SummaryChapter, ContentBlock } from '@vie/types';
+import { Fragment, memo, type ReactNode } from 'react';
+import { MapPin, Route, DollarSign, Lightbulb, Clock } from 'lucide-react';
+import type { SummaryChapter } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
+import { useGroupedBlocks, type BlockGroupRule } from '@/hooks/use-grouped-blocks';
+import { SectionHeader } from './SectionHeader';
 
 interface TravelViewProps {
   chapter: SummaryChapter;
@@ -10,6 +12,14 @@ interface TravelViewProps {
   isVideoActive?: boolean;
   activeStartSeconds?: number;
 }
+
+const TRAVEL_RULES: readonly BlockGroupRule[] = [
+  { name: 'locations', match: (b) => b.type === 'location' },
+  { name: 'itinerary', match: (b) => b.type === 'itinerary' },
+  { name: 'costs', match: (b) => b.type === 'cost' },
+  { name: 'tips', match: (b) => b.type === 'callout' && b.variant === 'travel_tip' },
+  { name: 'timestamps', match: (b) => b.type === 'timestamp' },
+];
 
 /**
  * Specialized view for travel content.
@@ -26,128 +36,75 @@ export const TravelView = memo(function TravelView({
   isVideoActive,
   activeStartSeconds,
 }: TravelViewProps) {
-  // Group blocks by type for travel-optimized layout
-  const { locationBlocks, itineraryBlocks, costBlocks, tipBlocks, timestampBlocks, otherBlocks } = useMemo(() => {
-    const locations: ContentBlock[] = [];
-    const itinerary: ContentBlock[] = [];
-    const costs: ContentBlock[] = [];
-    const tips: ContentBlock[] = [];
-    const timestamps: ContentBlock[] = [];
-    const other: ContentBlock[] = [];
+  const groups = useGroupedBlocks(chapter.content, TRAVEL_RULES);
 
-    for (const block of chapter.content ?? []) {
-      if (block.type === 'location') {
-        locations.push(block);
-      } else if (block.type === 'itinerary') {
-        itinerary.push(block);
-      } else if (block.type === 'cost') {
-        costs.push(block);
-      } else if (block.type === 'callout' && block.variant === 'travel_tip') {
-        tips.push(block);
-      } else if (block.type === 'timestamp') {
-        timestamps.push(block);
-      } else {
-        other.push(block);
-      }
-    }
+  const blockProps = { onPlay, onStop, isVideoActive, activeStartSeconds };
 
-    return {
-      locationBlocks: locations,
-      itineraryBlocks: itinerary,
-      costBlocks: costs,
-      tipBlocks: tips,
-      timestampBlocks: timestamps,
-      otherBlocks: other,
-    };
-  }, [chapter.content]);
+  const sections: { key: string; node: ReactNode }[] = [];
 
-  const hasLocations = locationBlocks.length > 0;
-  const hasItinerary = itineraryBlocks.length > 0;
-  const hasCosts = costBlocks.length > 0;
-  const hasTips = tipBlocks.length > 0;
-  const hasTimestamps = timestampBlocks.length > 0;
-  const hasOtherBlocks = otherBlocks.length > 0;
-
-  // Early return for empty content
-  if (!hasLocations && !hasItinerary && !hasCosts && !hasTips && !hasTimestamps && !hasOtherBlocks) {
-    return null;
+  if (groups.locations.length > 0) {
+    sections.push({ key: 'locations', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={MapPin} label="Itineraries" />
+        <ContentBlocks blocks={groups.locations} {...blockProps} />
+      </div>
+    )});
   }
+
+  if (groups.other.length > 0) {
+    sections.push({ key: 'other', node: (
+      <ContentBlocks blocks={groups.other} {...blockProps} />
+    )});
+  }
+
+  if (groups.itinerary.length > 0) {
+    sections.push({ key: 'itinerary', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={Route} label="Routes" />
+        <ContentBlocks blocks={groups.itinerary} {...blockProps} />
+      </div>
+    )});
+  }
+
+  if (groups.costs.length > 0) {
+    sections.push({ key: 'costs', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={DollarSign} label="Costs" />
+        <ContentBlocks blocks={groups.costs} {...blockProps} />
+      </div>
+    )});
+  }
+
+  if (groups.tips.length > 0) {
+    sections.push({ key: 'tips', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={Lightbulb} label="Tips" />
+        <ContentBlocks blocks={groups.tips} {...blockProps} />
+      </div>
+    )});
+  }
+
+  if (groups.timestamps.length > 0) {
+    sections.push({ key: 'timestamps', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={Clock} label="Timestamps" />
+        <div className="flex flex-wrap gap-2">
+          <ContentBlocks blocks={groups.timestamps} {...blockProps} />
+        </div>
+      </div>
+    )});
+  }
+
+  if (sections.length === 0) return null;
 
   return (
     <div className="space-y-6">
-      {/* Locations Section - Destinations at the top */}
-      {hasLocations && (
-        <ContentBlocks
-          blocks={locationBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Main content (non-categorized blocks) */}
-      {hasOtherBlocks && (
-        <ContentBlocks
-          blocks={otherBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Itinerary Section */}
-      {hasItinerary && (
-        <ContentBlocks
-          blocks={itineraryBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Cost Breakdown Section */}
-      {hasCosts && (
-        <ContentBlocks
-          blocks={costBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Timestamps for Key Moments */}
-      {hasTimestamps && (
-        <div className="mt-3">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
-            <Compass className="h-4 w-4" aria-hidden="true" />
-            <span>Key Moments</span>
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            <ContentBlocks
-              blocks={timestampBlocks}
-              onPlay={onPlay}
-              onStop={onStop}
-              isVideoActive={isVideoActive}
-              activeStartSeconds={activeStartSeconds}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Travel Tips */}
-      {hasTips && (
-        <ContentBlocks
-          blocks={tipBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
+      {sections.map((section, i) => (
+        <Fragment key={section.key}>
+          {i > 0 && <div className="fade-divider" />}
+          {section.node}
+        </Fragment>
+      ))}
     </div>
   );
 });

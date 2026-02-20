@@ -72,8 +72,7 @@ export const QuoteRenderer = memo(function QuoteRenderer({ block, onSeek }: Quot
   return (
     <BlockWrapper
       blockId={block.blockId}
-      variant={isHighlight ? 'transparent' : 'accent'}
-      accentColor="info"
+      variant="transparent"
       label="Quote"
     >
       <div className={cn('group/quote relative overflow-hidden', isHighlight ? 'bg-info-soft/20 px-3 py-2 rounded' : undefined)}>

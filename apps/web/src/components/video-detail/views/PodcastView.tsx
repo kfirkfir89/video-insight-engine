@@ -1,7 +1,9 @@
-import { memo, useMemo } from 'react';
-import { Clock } from 'lucide-react';
-import type { SummaryChapter, ContentBlock } from '@vie/types';
+import { Fragment, memo, type ReactNode } from 'react';
+import { Users, Quote, FileText, Clock } from 'lucide-react';
+import type { SummaryChapter } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
+import { useGroupedBlocks, type BlockGroupRule } from '@/hooks/use-grouped-blocks';
+import { SectionHeader } from './SectionHeader';
 
 interface PodcastViewProps {
   chapter: SummaryChapter;
@@ -10,6 +12,13 @@ interface PodcastViewProps {
   isVideoActive?: boolean;
   activeStartSeconds?: number;
 }
+
+const PODCAST_RULES: readonly BlockGroupRule[] = [
+  { name: 'guests', match: (b) => b.type === 'guest' },
+  { name: 'quotes', match: (b) => b.type === 'quote' },
+  { name: 'transcripts', match: (b) => b.type === 'transcript' },
+  { name: 'timestamps', match: (b) => b.type === 'timestamp' },
+];
 
 /**
  * Specialized view for podcast/interview content.
@@ -26,112 +35,66 @@ export const PodcastView = memo(function PodcastView({
   isVideoActive,
   activeStartSeconds,
 }: PodcastViewProps) {
-  // Group blocks by type for podcast-optimized layout
-  const { guestBlocks, quoteBlocks, transcriptBlocks, timestampBlocks, otherBlocks } = useMemo(() => {
-    const guests: ContentBlock[] = [];
-    const quotes: ContentBlock[] = [];
-    const transcripts: ContentBlock[] = [];
-    const timestamps: ContentBlock[] = [];
-    const other: ContentBlock[] = [];
+  const groups = useGroupedBlocks(chapter.content, PODCAST_RULES);
 
-    for (const block of chapter.content ?? []) {
-      if (block.type === 'guest') {
-        guests.push(block);
-      } else if (block.type === 'quote') {
-        quotes.push(block);
-      } else if (block.type === 'transcript') {
-        transcripts.push(block);
-      } else if (block.type === 'timestamp') {
-        timestamps.push(block);
-      } else {
-        other.push(block);
-      }
-    }
+  const blockProps = { onPlay, onStop, isVideoActive, activeStartSeconds };
 
-    return {
-      guestBlocks: guests,
-      quoteBlocks: quotes,
-      transcriptBlocks: transcripts,
-      timestampBlocks: timestamps,
-      otherBlocks: other,
-    };
-  }, [chapter.content]);
+  const sections: { key: string; node: ReactNode }[] = [];
 
-  const hasGuests = guestBlocks.length > 0;
-  const hasQuotes = quoteBlocks.length > 0;
-  const hasTranscripts = transcriptBlocks.length > 0;
-  const hasTimestamps = timestampBlocks.length > 0;
-  const hasOtherBlocks = otherBlocks.length > 0;
-
-  // Early return for empty content
-  if (!hasGuests && !hasQuotes && !hasTranscripts && !hasTimestamps && !hasOtherBlocks) {
-    return null;
+  if (groups.guests.length > 0) {
+    sections.push({ key: 'guests', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={Users} label="Guests" />
+        <ContentBlocks blocks={groups.guests} {...blockProps} />
+      </div>
+    )});
   }
+
+  if (groups.quotes.length > 0) {
+    sections.push({ key: 'quotes', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={Quote} label="Quotes" />
+        <ContentBlocks blocks={groups.quotes} {...blockProps} />
+      </div>
+    )});
+  }
+
+  if (groups.other.length > 0) {
+    sections.push({ key: 'other', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={FileText} label="Topics" />
+        <ContentBlocks blocks={groups.other} {...blockProps} />
+      </div>
+    )});
+  }
+
+  if (groups.transcripts.length > 0) {
+    sections.push({ key: 'transcripts', node: (
+      <ContentBlocks blocks={groups.transcripts} {...blockProps} />
+    )});
+  }
+
+  if (groups.timestamps.length > 0) {
+    sections.push({ key: 'timestamps', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={Clock} label="Timestamps" />
+        <div className="flex flex-wrap gap-2">
+          <ContentBlocks blocks={groups.timestamps} {...blockProps} />
+        </div>
+      </div>
+    )});
+  }
+
+  if (sections.length === 0) return null;
 
   return (
     <div className="space-y-6">
-      {/* Guests Section - Bio cards at the top */}
-      {hasGuests && (
-        <ContentBlocks
-          blocks={guestBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Key Quotes Section */}
-      {hasQuotes && (
-        <ContentBlocks
-          blocks={quoteBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Main content (non-categorized blocks) */}
-      {hasOtherBlocks && (
-        <ContentBlocks
-          blocks={otherBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Transcript Segments */}
-      {hasTranscripts && (
-        <ContentBlocks
-          blocks={transcriptBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Topic Timestamps */}
-      {hasTimestamps && (
-        <div className="mt-3">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
-            <Clock className="h-4 w-4" aria-hidden="true" />
-            <span>Topics Discussed</span>
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            <ContentBlocks
-              blocks={timestampBlocks}
-              onPlay={onPlay}
-              onStop={onStop}
-              isVideoActive={isVideoActive}
-              activeStartSeconds={activeStartSeconds}
-            />
-          </div>
-        </div>
-      )}
+      {sections.map((section, i) => (
+        <Fragment key={section.key}>
+          {i > 0 && <div className="fade-divider" />}
+          {section.node}
+        </Fragment>
+      ))}
     </div>
   );
 });

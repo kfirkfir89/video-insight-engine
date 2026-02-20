@@ -33,31 +33,31 @@ interface CalloutConfig {
 const CALLOUT_CONFIG: Record<CalloutStyle, CalloutConfig> = {
   tip: {
     accentColor: 'warning',
-    icon: <Lightbulb className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    icon: <Lightbulb className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />,
     label: 'Tip',
     bgTint: 'callout-gradient-tip',
   },
   warning: {
     accentColor: 'destructive',
-    icon: <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    icon: <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />,
     label: 'Warning',
     bgTint: 'callout-gradient-warning',
   },
   note: {
     accentColor: 'info',
-    icon: <Info className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    icon: <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />,
     label: 'Note',
     bgTint: 'callout-gradient-note',
   },
   security: {
     accentColor: 'destructive',
-    icon: <ShieldAlert className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    icon: <ShieldAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />,
     label: 'Security',
     bgTint: 'callout-gradient-security',
   },
   chef_tip: {
     accentColor: 'warning',
-    icon: <ChefHat className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    icon: <ChefHat className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />,
     label: 'Chef Tip',
     bgTint: 'callout-gradient-tip',
   },
@@ -79,9 +79,9 @@ export const CalloutBlock = memo(function CalloutBlock({ style, variant, text, b
       label={config.label}
       className={config.bgTint}
     >
-      <div className="flex items-start gap-2">
-        <span className={cn('mt-0.5 animate-breathe', ACCENT_TEXT_COLOR[config.accentColor])}>{config.icon}</span>
-        <p className="text-sm text-muted-foreground"><ConceptHighlighter text={text} /></p>
+      <div className="flex items-start gap-1.5">
+        <span className={cn('mt-0.5', ACCENT_TEXT_COLOR[config.accentColor])}>{config.icon}</span>
+        <p className="text-xs text-muted-foreground"><ConceptHighlighter text={text} /></p>
       </div>
     </BlockWrapper>
   );

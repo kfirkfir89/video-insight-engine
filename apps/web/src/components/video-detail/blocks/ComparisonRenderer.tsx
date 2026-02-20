@@ -85,7 +85,7 @@ const DEFAULT_LABELS: Record<VariantKey, { left: string; right: string }> = {
 
 /**
  * Renders a side-by-side comparison with variant-specific styling.
- * Toggle between side-by-side and stacked layouts.
+ * Row-aligned grid with fade dividers. Toggle between side-by-side and stacked layouts.
  * Variants: dos_donts (green/red), pros_cons (blue/orange), versus (neutral), before_after (timeline)
  */
 export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: ComparisonRendererProps) {
@@ -107,6 +107,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
   const RightIcon = config.rightIcon;
 
   const isSideBySide = viewMode === 'side-by-side';
+  const maxRows = Math.max(block.left.items.length, block.right.items.length);
 
   return (
     <BlockWrapper variant="transparent">
@@ -153,29 +154,64 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
         )}
       </div>
 
-      <div className={cn(
-        isSideBySide ? 'grid grid-cols-1 sm:grid-cols-2' : 'flex flex-col'
-      )}>
-        {/* Left column */}
-        <div className={cn("p-4", isSideBySide && "relative", variantKey === 'dos_donts' && 'bg-success/[0.04] rounded-lg', variantKey === 'pros_cons' && 'bg-info/[0.04] rounded-lg')}>
-          <ul className="space-y-0 stagger-children">
-            {block.left.items.map((item, index) => (
-              <li key={index}>
-                <div className="flex items-baseline gap-2.5 text-sm py-1.5">
-                  <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.leftBulletClass)} />
-                  <span className="text-muted-foreground"><ConceptHighlighter text={item} /></span>
+      {isSideBySide ? (
+        /* Row-aligned grid */
+        <div className="relative">
+          {/* Vertical center divider */}
+          <div className="fade-divider-vertical absolute left-1/2 top-2 bottom-2 -translate-x-px" aria-hidden="true" />
+          {Array.from({ length: maxRows }).map((_, rowIndex) => {
+            const leftItem = block.left.items[rowIndex];
+            const rightItem = block.right.items[rowIndex];
+            return (
+              <div key={rowIndex}>
+                {rowIndex > 0 && <div className="fade-divider" aria-hidden="true" />}
+                <div className="grid grid-cols-2">
+                  <div className={cn('p-2 px-4', variantKey === 'dos_donts' && 'bg-success/[0.04]', variantKey === 'pros_cons' && 'bg-info/[0.04]')}>
+                    {leftItem ? (
+                      <div className="flex items-baseline gap-2.5 text-sm py-1">
+                        <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.leftBulletClass)} />
+                        <span className="text-muted-foreground"><ConceptHighlighter text={leftItem} /></span>
+                      </div>
+                    ) : (
+                      <div className="py-1 min-h-[1.75rem]" />
+                    )}
+                  </div>
+                  <div className={cn('p-2 px-4', variantKey === 'dos_donts' && 'bg-destructive/[0.04]', variantKey === 'pros_cons' && 'bg-warning/[0.04]')}>
+                    {rightItem ? (
+                      <div className="flex items-baseline gap-2.5 text-sm py-1">
+                        <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.rightBulletClass)} />
+                        <span className="text-muted-foreground"><ConceptHighlighter text={rightItem} /></span>
+                      </div>
+                    ) : (
+                      <div className="py-1 min-h-[1.75rem]" />
+                    )}
+                  </div>
                 </div>
-                {index < block.left.items.length - 1 && (
-                  <div className="fade-divider" aria-hidden="true" />
-                )}
-              </li>
-            ))}
-          </ul>
-          {isSideBySide && <div className="fade-divider-vertical absolute right-0 top-2 bottom-2" aria-hidden="true" />}
+              </div>
+            );
+          })}
         </div>
+      ) : (
+        /* Stacked layout */
+        <div className="flex flex-col">
+          {/* Left column */}
+          <div className={cn("p-4", variantKey === 'dos_donts' && 'bg-success/[0.04] rounded-lg', variantKey === 'pros_cons' && 'bg-info/[0.04] rounded-lg')}>
+            <ul className="space-y-0 stagger-children">
+              {block.left.items.map((item, index) => (
+                <li key={index}>
+                  <div className="flex items-baseline gap-2.5 text-sm py-1.5">
+                    <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.leftBulletClass)} />
+                    <span className="text-muted-foreground"><ConceptHighlighter text={item} /></span>
+                  </div>
+                  {index < block.left.items.length - 1 && (
+                    <div className="fade-divider" aria-hidden="true" />
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
 
-        {/* Right column header (stacked mode only) */}
-        {!isSideBySide && (
+          {/* Right column header (stacked mode) */}
           <div className={cn('px-4 py-2 text-center', config.rightHeaderClass)}>
             <div className="flex items-center justify-center gap-1.5">
               {RightIcon && <RightIcon className={cn('h-3.5 w-3.5', config.rightLabelClass)} aria-hidden="true" />}
@@ -184,25 +220,25 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
               </span>
             </div>
           </div>
-        )}
 
-        {/* Right column */}
-        <div className={cn("p-4", !isSideBySide && 'pt-2', variantKey === 'dos_donts' && 'bg-destructive/[0.04] rounded-lg', variantKey === 'pros_cons' && 'bg-warning/[0.04] rounded-lg')}>
-          <ul className="space-y-0 stagger-children">
-            {block.right.items.map((item, index) => (
-              <li key={index}>
-                <div className="flex items-baseline gap-2.5 text-sm py-1.5">
-                  <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.rightBulletClass)} />
-                  <span className="text-muted-foreground"><ConceptHighlighter text={item} /></span>
-                </div>
-                {index < block.right.items.length - 1 && (
-                  <div className="fade-divider" aria-hidden="true" />
-                )}
-              </li>
-            ))}
-          </ul>
+          {/* Right column */}
+          <div className={cn("p-4 pt-2", variantKey === 'dos_donts' && 'bg-destructive/[0.04] rounded-lg', variantKey === 'pros_cons' && 'bg-warning/[0.04] rounded-lg')}>
+            <ul className="space-y-0 stagger-children">
+              {block.right.items.map((item, index) => (
+                <li key={index}>
+                  <div className="flex items-baseline gap-2.5 text-sm py-1.5">
+                    <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.rightBulletClass)} />
+                    <span className="text-muted-foreground"><ConceptHighlighter text={item} /></span>
+                  </div>
+                  {index < block.right.items.length - 1 && (
+                    <div className="fade-divider" aria-hidden="true" />
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
-      </div>
+      )}
     </div>
     </BlockWrapper>
   );
