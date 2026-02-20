@@ -1,7 +1,9 @@
-import { memo, useMemo } from 'react';
-import { Clock } from 'lucide-react';
-import type { SummaryChapter, ContentBlock } from '@vie/types';
+import { Fragment, memo, type ReactNode } from 'react';
+import { Target, Sparkles, Clock } from 'lucide-react';
+import type { SummaryChapter } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
+import { useGroupedBlocks, type BlockGroupRule } from '@/hooks/use-grouped-blocks';
+import { SectionHeader } from './SectionHeader';
 
 interface GamingViewProps {
   chapter: SummaryChapter;
@@ -10,6 +12,13 @@ interface GamingViewProps {
   isVideoActive?: boolean;
   activeStartSeconds?: number;
 }
+
+const GAMING_RULES: readonly BlockGroupRule[] = [
+  { name: 'strategies', match: (b) => b.type === 'numbered' && b.variant === 'strategy' },
+  { name: 'highlights', match: (b) => b.type === 'bullets' && b.variant === 'highlights' },
+  { name: 'tips', match: (b) => b.type === 'callout' && (b.variant === 'pro_tip' || b.variant === 'strategy_tip') },
+  { name: 'timestamps', match: (b) => b.type === 'timestamp' },
+];
 
 /**
  * Specialized view for gaming content.
@@ -26,112 +35,63 @@ export const GamingView = memo(function GamingView({
   isVideoActive,
   activeStartSeconds,
 }: GamingViewProps) {
-  // Group blocks by type for gaming-optimized layout
-  const { strategyBlocks, highlightBlocks, tipBlocks, timestampBlocks, otherBlocks } = useMemo(() => {
-    const strategies: ContentBlock[] = [];
-    const highlights: ContentBlock[] = [];
-    const tips: ContentBlock[] = [];
-    const timestamps: ContentBlock[] = [];
-    const other: ContentBlock[] = [];
+  const groups = useGroupedBlocks(chapter.content, GAMING_RULES);
 
-    for (const block of chapter.content ?? []) {
-      if (block.type === 'numbered' && block.variant === 'strategy') {
-        strategies.push(block);
-      } else if (block.type === 'bullets' && block.variant === 'highlights') {
-        highlights.push(block);
-      } else if (block.type === 'callout' && (block.variant === 'pro_tip' || block.variant === 'strategy_tip')) {
-        tips.push(block);
-      } else if (block.type === 'timestamp') {
-        timestamps.push(block);
-      } else {
-        other.push(block);
-      }
-    }
+  const blockProps = { onPlay, onStop, isVideoActive, activeStartSeconds };
 
-    return {
-      strategyBlocks: strategies,
-      highlightBlocks: highlights,
-      tipBlocks: tips,
-      timestampBlocks: timestamps,
-      otherBlocks: other,
-    };
-  }, [chapter.content]);
+  const sections: { key: string; node: ReactNode }[] = [];
 
-  const hasStrategies = strategyBlocks.length > 0;
-  const hasHighlights = highlightBlocks.length > 0;
-  const hasTips = tipBlocks.length > 0;
-  const hasTimestamps = timestampBlocks.length > 0;
-  const hasOtherBlocks = otherBlocks.length > 0;
-
-  // Early return for empty content
-  if (!hasStrategies && !hasHighlights && !hasTips && !hasTimestamps && !hasOtherBlocks) {
-    return null;
+  if (groups.strategies.length > 0) {
+    sections.push({ key: 'strategies', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={Target} label="Strategies" />
+        <ContentBlocks blocks={groups.strategies} {...blockProps} />
+      </div>
+    )});
   }
+
+  if (groups.highlights.length > 0) {
+    sections.push({ key: 'highlights', node: (
+      <ContentBlocks blocks={groups.highlights} {...blockProps} />
+    )});
+  }
+
+  if (groups.other.length > 0) {
+    sections.push({ key: 'other', node: (
+      <ContentBlocks blocks={groups.other} {...blockProps} />
+    )});
+  }
+
+  if (groups.tips.length > 0) {
+    sections.push({ key: 'tips', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={Sparkles} label="Tips" />
+        <ContentBlocks blocks={groups.tips} {...blockProps} />
+      </div>
+    )});
+  }
+
+  if (groups.timestamps.length > 0) {
+    sections.push({ key: 'timestamps', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={Clock} label="Timestamps" />
+        <div className="flex flex-wrap gap-2">
+          <ContentBlocks blocks={groups.timestamps} {...blockProps} />
+        </div>
+      </div>
+    )});
+  }
+
+  if (sections.length === 0) return null;
 
   return (
     <div className="space-y-6">
-      {/* Strategies Section */}
-      {hasStrategies && (
-        <ContentBlocks
-          blocks={strategyBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Highlights Section */}
-      {hasHighlights && (
-        <ContentBlocks
-          blocks={highlightBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Main content (non-categorized blocks) */}
-      {hasOtherBlocks && (
-        <ContentBlocks
-          blocks={otherBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Key Moments Timestamps */}
-      {hasTimestamps && (
-        <div className="mt-3">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
-            <Clock className="h-4 w-4" aria-hidden="true" />
-            <span>Key Moments</span>
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            <ContentBlocks
-              blocks={timestampBlocks}
-              onPlay={onPlay}
-              onStop={onStop}
-              isVideoActive={isVideoActive}
-              activeStartSeconds={activeStartSeconds}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Tips & Tricks */}
-      {hasTips && (
-        <ContentBlocks
-          blocks={tipBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
+      {sections.map((section, i) => (
+        <Fragment key={section.key}>
+          {i > 0 && <div className="fade-divider" />}
+          {section.node}
+        </Fragment>
+      ))}
     </div>
   );
 });

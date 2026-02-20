@@ -1,7 +1,9 @@
-import { memo, useMemo } from 'react';
-import { Clock } from 'lucide-react';
-import type { SummaryChapter, ContentBlock } from '@vie/types';
+import { Fragment, memo, useMemo, type ReactNode } from 'react';
+import { UtensilsCrossed, ListOrdered, Lightbulb, Clock } from 'lucide-react';
+import type { SummaryChapter } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
+import { useGroupedBlocks, type BlockGroupRule } from '@/hooks/use-grouped-blocks';
+import { SectionHeader } from './SectionHeader';
 
 interface RecipeViewProps {
   chapter: SummaryChapter;
@@ -10,6 +12,14 @@ interface RecipeViewProps {
   isVideoActive?: boolean;
   activeStartSeconds?: number;
 }
+
+const RECIPE_RULES: readonly BlockGroupRule[] = [
+  { name: 'ingredients', match: (b) => b.type === 'bullets' && b.variant === 'ingredients' },
+  { name: 'steps', match: (b) => b.type === 'numbered' && b.variant === 'cooking_steps' },
+  { name: 'tips', match: (b) => b.type === 'callout' && b.variant === 'chef_tip' },
+  { name: 'timestamps', match: (b) => b.type === 'timestamp' },
+  { name: 'recipeInfo', match: (b) => b.type === 'keyvalue' && b.variant === 'info' },
+];
 
 /**
  * Specialized view for recipe/cooking content.
@@ -26,118 +36,71 @@ export const RecipeView = memo(function RecipeView({
   isVideoActive,
   activeStartSeconds,
 }: RecipeViewProps) {
-  // Group blocks by type for recipe-optimized layout
-  const { ingredientBlocks, stepBlocks, tipBlocks, timestampBlocks, otherBlocks } = useMemo(() => {
-    const recipeInfo: ContentBlock[] = [];
-    const ingredients: ContentBlock[] = [];
-    const steps: ContentBlock[] = [];
-    const tips: ContentBlock[] = [];
-    const timestamps: ContentBlock[] = [];
-    const other: ContentBlock[] = [];
+  const groups = useGroupedBlocks(chapter.content, RECIPE_RULES);
 
-    for (const block of chapter.content ?? []) {
-      if (block.type === 'bullets' && block.variant === 'ingredients') {
-        ingredients.push(block);
-      } else if (block.type === 'numbered' && block.variant === 'cooking_steps') {
-        steps.push(block);
-      } else if (block.type === 'callout' && block.variant === 'chef_tip') {
-        tips.push(block);
-      } else if (block.type === 'timestamp') {
-        timestamps.push(block);
-      } else if (block.type === 'keyvalue' && block.variant === 'info') {
-        // Recipe info (prep time, servings, etc.) collected separately
-        recipeInfo.push(block);
-      } else {
-        other.push(block);
-      }
-    }
+  const ingredientBlocks = useMemo(
+    () => [...groups.recipeInfo, ...groups.ingredients],
+    [groups.recipeInfo, groups.ingredients]
+  );
 
-    // Combine info blocks at top with ingredients (O(1) spread vs O(n) unshift)
-    return {
-      ingredientBlocks: [...recipeInfo, ...ingredients],
-      stepBlocks: steps,
-      tipBlocks: tips,
-      timestampBlocks: timestamps,
-      otherBlocks: other,
-    };
-  }, [chapter.content]);
+  const blockProps = { onPlay, onStop, isVideoActive, activeStartSeconds };
 
-  const hasIngredients = ingredientBlocks.length > 0;
-  const hasSteps = stepBlocks.length > 0;
-  const hasTips = tipBlocks.length > 0;
-  const hasTimestamps = timestampBlocks.length > 0;
-  const hasOtherBlocks = otherBlocks.length > 0;
+  const sections: { key: string; node: ReactNode }[] = [];
 
-  // Early return for empty content to avoid rendering empty wrapper
-  if (!hasIngredients && !hasSteps && !hasTips && !hasTimestamps && !hasOtherBlocks) {
-    return null;
+  if (ingredientBlocks.length > 0) {
+    sections.push({ key: 'ingredients', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={UtensilsCrossed} label="Ingredients" />
+        <ContentBlocks blocks={ingredientBlocks} {...blockProps} />
+      </div>
+    )});
   }
+
+  if (groups.other.length > 0) {
+    sections.push({ key: 'other', node: (
+      <ContentBlocks blocks={groups.other} {...blockProps} />
+    )});
+  }
+
+  if (groups.steps.length > 0) {
+    sections.push({ key: 'steps', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={ListOrdered} label="Steps" />
+        <ContentBlocks blocks={groups.steps} {...blockProps} />
+      </div>
+    )});
+  }
+
+  if (groups.tips.length > 0) {
+    sections.push({ key: 'tips', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={Lightbulb} label="Tips" />
+        <ContentBlocks blocks={groups.tips} {...blockProps} />
+      </div>
+    )});
+  }
+
+  if (groups.timestamps.length > 0) {
+    sections.push({ key: 'timestamps', node: (
+      <div className="space-y-2">
+        <SectionHeader icon={Clock} label="Timestamps" />
+        <div className="flex flex-wrap gap-2">
+          <ContentBlocks blocks={groups.timestamps} {...blockProps} />
+        </div>
+      </div>
+    )});
+  }
+
+  if (sections.length === 0) return null;
 
   return (
     <div className="space-y-6">
-      {/* Ingredients Section - Always at top for recipes */}
-      {hasIngredients && (
-        <ContentBlocks
-          blocks={ingredientBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Main content (non-categorized blocks) */}
-      {hasOtherBlocks && (
-        <ContentBlocks
-          blocks={otherBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Cooking Steps Section */}
-      {hasSteps && (
-        <ContentBlocks
-          blocks={stepBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
-      {/* Timestamps for Techniques */}
-      {hasTimestamps && (
-        <div className="mt-3">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
-            <Clock className="h-4 w-4" aria-hidden="true" />
-            <span>Key Moments</span>
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            <ContentBlocks
-              blocks={timestampBlocks}
-              onPlay={onPlay}
-              onStop={onStop}
-              isVideoActive={isVideoActive}
-              activeStartSeconds={activeStartSeconds}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Chef Tips */}
-      {hasTips && (
-        <ContentBlocks
-          blocks={tipBlocks}
-          onPlay={onPlay}
-          onStop={onStop}
-          isVideoActive={isVideoActive}
-          activeStartSeconds={activeStartSeconds}
-        />
-      )}
-
+      {sections.map((section, i) => (
+        <Fragment key={section.key}>
+          {i > 0 && <div className="fade-divider" />}
+          {section.node}
+        </Fragment>
+      ))}
     </div>
   );
 });

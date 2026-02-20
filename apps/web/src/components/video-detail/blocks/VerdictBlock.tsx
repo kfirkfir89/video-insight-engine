@@ -75,40 +75,71 @@ export const VerdictBlock = memo(function VerdictBlock({ block }: VerdictBlockPr
           </>
         )}
         {(bestFor?.length || notFor?.length) && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            {bestFor && bestFor.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 text-xs font-medium text-success mb-1.5">
+          <div className="relative pt-1">
+            {/* Column headers */}
+            <div className="grid grid-cols-1 sm:grid-cols-2">
+              {bestFor && bestFor.length > 0 && (
+                <div className="flex items-center gap-1.5 text-xs font-medium text-success px-2 mb-1.5">
                   <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   <span>{BLOCK_LABELS.bestFor}</span>
                 </div>
-                <ul className="space-y-0.5 stagger-children">
-                  {bestFor.map((item, index) => (
-                    <li key={index} className="text-xs text-muted-foreground flex items-baseline gap-1.5">
-                      <span className="w-1 h-1 rounded-full bg-success/70 shrink-0 translate-y-1" />
-                      <ConceptHighlighter text={item} />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {notFor && notFor.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 text-xs font-medium text-destructive mb-1.5">
+              )}
+              {notFor && notFor.length > 0 && (
+                <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-destructive px-2 mb-1.5">
                   <UserX className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   <span>{BLOCK_LABELS.notFor}</span>
                 </div>
-                <ul className="space-y-0.5 stagger-children">
-                  {notFor.map((item, index) => (
-                    <li key={index} className="text-xs text-muted-foreground flex items-baseline gap-1.5">
-                      <span className="w-1 h-1 rounded-full bg-destructive/70 shrink-0 translate-y-1" />
-                      <ConceptHighlighter text={item} />
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              )}
+            </div>
+
+            {/* Vertical center divider (desktop, when both columns exist) */}
+            {bestFor && bestFor.length > 0 && notFor && notFor.length > 0 && (
+              <div className="fade-divider-vertical absolute left-1/2 top-6 bottom-1 -translate-x-px hidden sm:block" aria-hidden="true" />
             )}
+
+            {/* Row-by-row rendering */}
+            {Array.from({ length: Math.max(bestFor?.length ?? 0, notFor?.length ?? 0) }).map((_, rowIndex) => {
+              const bestItem = bestFor?.[rowIndex];
+              const notItem = notFor?.[rowIndex];
+              return (
+                <div key={rowIndex}>
+                  {rowIndex > 0 && <div className="fade-divider" aria-hidden="true" />}
+                  <div className="grid grid-cols-1 sm:grid-cols-2">
+                    {bestFor && bestFor.length > 0 && (
+                      <div className="px-2 py-0.5">
+                        {bestItem ? (
+                          <span className="text-xs text-muted-foreground flex items-baseline gap-1.5">
+                            <span className="w-1 h-1 rounded-full bg-success/70 shrink-0 translate-y-1" />
+                            <ConceptHighlighter text={bestItem} />
+                          </span>
+                        ) : (
+                          <div className="min-h-[1.25rem]" />
+                        )}
+                      </div>
+                    )}
+                    {notFor && notFor.length > 0 && (
+                      <div className="px-2 py-0.5">
+                        {/* Mobile not-for header */}
+                        {rowIndex === 0 && (
+                          <div className="flex sm:hidden items-center gap-1.5 text-xs font-medium text-destructive mb-1">
+                            <UserX className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            <span>{BLOCK_LABELS.notFor}</span>
+                          </div>
+                        )}
+                        {notItem ? (
+                          <span className="text-xs text-muted-foreground flex items-baseline gap-1.5">
+                            <span className="w-1 h-1 rounded-full bg-destructive/70 shrink-0 translate-y-1" />
+                            <ConceptHighlighter text={notItem} />
+                          </span>
+                        ) : (
+                          <div className="min-h-[1.25rem]" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

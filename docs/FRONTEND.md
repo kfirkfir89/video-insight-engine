@@ -143,7 +143,8 @@ apps/web/
     │   ├── use-processing-manager.ts # Auto-resume & sidebar sync
     │   ├── use-websocket.ts          # Real-time updates
     │   ├── use-long-press.ts         # Long press gesture hook
-    │   └── use-syntax-highlight.ts  # Shiki async syntax highlighting
+    │   ├── use-syntax-highlight.ts  # Shiki async syntax highlighting
+    │   └── use-grouped-blocks.ts   # Block grouping for persona views
     │
     ├── pages/
     │   ├── LoginPage.tsx
@@ -848,9 +849,9 @@ Which blocks use which premium CSS utilities:
 | `glass-surface` | IngredientBlock (scaler), WorkoutTimerBlock (controls), NutritionBlock (header), CostBlock (total) |
 | `text-gradient-primary` | NumberedBlock (numbers), RatingBlock (large scores), FormulaBlock (display), StepBlock (numbers) |
 | `text-gradient-warm` | RatingBlock (star scores), NutritionBlock (daily values) |
-| `fade-divider` | IngredientBlock, ExerciseBlock, CostBlock, ItineraryBlock, NutritionBlock, ToolListBlock, TranscriptBlock |
-| `block-card` | Interactive blocks via `BlockWrapper variant="card"` (IngredientBlock, StepBlock, QuizBlock, WorkoutTimerBlock, FileTreeBlock, TranscriptBlock, CostBlock) |
-| `block-accent` | CalloutBlock, DefinitionBlock, QuoteRenderer |
+| `fade-divider` | IngredientBlock, ExerciseBlock, CostBlock, ItineraryBlock, NutritionBlock, ToolListBlock, TranscriptBlock, NumberedBlock, RatingBlock |
+| `block-card` | Interactive blocks via `BlockWrapper variant="card"` (IngredientBlock, StepBlock, QuizBlock, WorkoutTimerBlock, FileTreeBlock, TranscriptBlock, CostBlock, DefinitionBlock) |
+| `block-accent` | CalloutBlock (top fade-edge gradient line via `::before`, no left border) |
 | `block-code-container` | CodeBlock, TerminalBlock |
 | `block-label-minimal` | Transparent blocks with small muted label (RatingBlock, VerdictBlock, LocationBlock, NutritionBlock, GuestBlock, ItineraryBlock, ExerciseBlock) |
 | `table-fade-dividers` | TableBlock — gradient fade-edge dividers on inner lines only |

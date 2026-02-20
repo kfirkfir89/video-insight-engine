@@ -25,9 +25,11 @@ export const NumberedBlock = memo(function NumberedBlock({ items, variant }: Num
           <span className="text-xs text-muted-foreground/70">steps</span>
         </div>
       )}
-      <ol className="space-y-2 stagger-children">
+      <ol className="space-y-0 stagger-children">
         {items.map((item, index) => (
-          <li key={index} className="relative pl-10 text-sm min-h-[2rem]">
+          <li key={index}>
+            {index > 0 && <div className="fade-divider my-1" aria-hidden="true" />}
+            <div className="relative pl-10 text-sm min-h-[2rem]">
             {/* Ghost watermark number */}
             <span className="numbered-ghost" aria-hidden="true">{index + 1}</span>
             {/* Gradient badge */}
@@ -45,6 +47,7 @@ export const NumberedBlock = memo(function NumberedBlock({ items, variant }: Num
             <span className="text-muted-foreground leading-relaxed">
               <ConceptHighlighter text={item} />
             </span>
+            </div>
           </li>
         ))}
       </ol>

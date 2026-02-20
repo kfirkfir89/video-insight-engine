@@ -87,16 +87,23 @@ describe('ProConBlock', () => {
     });
   });
 
-  describe('list structure', () => {
-    it('should render pros as unordered list', () => {
-      render(<ProConBlock block={createMockBlock()} />);
+  describe('grid structure', () => {
+    it('should render as a row-aligned grid when both pros and cons exist', () => {
+      const { container } = render(<ProConBlock block={createMockBlock()} />);
+
+      const grids = container.querySelectorAll('.grid');
+      expect(grids.length).toBeGreaterThan(0);
+    });
+
+    it('should render single-column list when only pros exist', () => {
+      render(<ProConBlock block={createMockBlock({ cons: [] })} />);
 
       const prosList = screen.getByRole('list', { name: /pros/i });
       expect(prosList).toBeInTheDocument();
     });
 
-    it('should render cons as unordered list', () => {
-      render(<ProConBlock block={createMockBlock()} />);
+    it('should render single-column list when only cons exist', () => {
+      render(<ProConBlock block={createMockBlock({ pros: [] })} />);
 
       const consList = screen.getByRole('list', { name: /cons/i });
       expect(consList).toBeInTheDocument();
@@ -104,11 +111,17 @@ describe('ProConBlock', () => {
   });
 
   describe('accessibility', () => {
-    it('should have accessible lists with labels', () => {
+    it('should have labeled sections in grid mode', () => {
       render(<ProConBlock block={createMockBlock()} />);
 
+      expect(screen.getByText('Pros')).toBeInTheDocument();
+      expect(screen.getByText('Cons')).toBeInTheDocument();
+    });
+
+    it('should have accessible list in single-column mode', () => {
+      render(<ProConBlock block={createMockBlock({ cons: [] })} />);
+
       expect(screen.getByRole('list', { name: /pros/i })).toBeInTheDocument();
-      expect(screen.getByRole('list', { name: /cons/i })).toBeInTheDocument();
     });
 
     it('should have aria-hidden on icons', () => {

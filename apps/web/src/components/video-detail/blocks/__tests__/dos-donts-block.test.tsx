@@ -64,26 +64,48 @@ describe('DosDontsBlock', () => {
     });
   });
 
-  describe('accessibility', () => {
-    it('should have accessible lists', () => {
-      render(<DosDontsBlock block={createMockBlock()} />);
+  describe('grid structure', () => {
+    it('should render as row-aligned grid when both columns exist', () => {
+      const { container } = render(<DosDontsBlock block={createMockBlock()} />);
 
-      const lists = screen.getAllByRole('list');
-      expect(lists).toHaveLength(2);
+      const grids = container.querySelectorAll('.grid');
+      expect(grids.length).toBeGreaterThan(0);
     });
 
-    it('should have aria-label on lists', () => {
+    it('should render single-column list when only dos exist', () => {
+      render(<DosDontsBlock block={createMockBlock({ dont: [] })} />);
+
+      const doList = screen.getByRole('list', { name: 'Do' });
+      expect(doList).toBeInTheDocument();
+    });
+
+    it('should render single-column list when only donts exist', () => {
+      render(<DosDontsBlock block={createMockBlock({ do: [] })} />);
+
+      const dontList = screen.getByRole('list', { name: "Don't" });
+      expect(dontList).toBeInTheDocument();
+    });
+  });
+
+  describe('accessibility', () => {
+    it('should have labeled column headers in grid mode', () => {
       render(<DosDontsBlock block={createMockBlock()} />);
+
+      expect(screen.getByText('Do')).toBeInTheDocument();
+      expect(screen.getByText("Don't")).toBeInTheDocument();
+    });
+
+    it('should have accessible list in single-column mode', () => {
+      render(<DosDontsBlock block={createMockBlock({ dont: [] })} />);
 
       expect(screen.getByRole('list', { name: 'Do' })).toBeInTheDocument();
-      expect(screen.getByRole('list', { name: "Don't" })).toBeInTheDocument();
     });
 
-    it('should have list items', () => {
-      render(<DosDontsBlock block={createMockBlock()} />);
+    it('should have list items in single-column mode', () => {
+      render(<DosDontsBlock block={createMockBlock({ dont: [] })} />);
 
       const listItems = screen.getAllByRole('listitem');
-      expect(listItems).toHaveLength(4);
+      expect(listItems).toHaveLength(2);
     });
 
     it('should have aria-hidden on icons', () => {

@@ -448,6 +448,22 @@
     transition: box-shadow 0.2s ease;
   }
 
+  .block-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 15%;
+    right: 15%;
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      oklch(from var(--border) l c h / 0.3) 30%,
+      oklch(from var(--border) l c h / 0.3) 70%,
+      transparent
+    );
+  }
+
   .block-card:hover {
     box-shadow:
       0 2px 4px oklch(0% 0 0 / 0.04),
@@ -492,14 +508,35 @@
     @apply h-3 w-3 shrink-0;
   }
 
-  /* ── Accent-left variant — clean left border ── */
+  /* ── Accent variant — top fade-edge gradient line ── */
   .block-accent {
-    @apply rounded-lg border-l-[3px] py-3.5 pl-5 pr-4;
+    @apply relative rounded-lg py-3 pl-4 pr-3;
     background: oklch(from var(--muted) l c h / 0.4);
+  }
+
+  .block-accent::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    border-radius: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--accent-line-color, var(--primary)) 30%,
+      var(--accent-line-color, var(--primary)) 70%,
+      transparent
+    );
   }
 
   :is(.dark) .block-accent {
     background: oklch(from var(--muted) l c h / 0.35);
+  }
+
+  :is(.dark) .block-accent::before {
+    opacity: 0.85;
   }
 
   /* ── Code/terminal — dark IDE surface ── */
@@ -581,6 +618,26 @@
     );
   }
 
+  :is(.dark) .fade-divider {
+    background: linear-gradient(
+      to right,
+      transparent,
+      oklch(from var(--border) l c h / 0.4) 20%,
+      oklch(from var(--border) l c h / 0.4) 80%,
+      transparent
+    );
+  }
+
+  :is(.dark) .fade-divider-vertical {
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      oklch(from var(--border) l c h / 0.4) 20%,
+      oklch(from var(--border) l c h / 0.4) 80%,
+      transparent
+    );
+  }
+
   /* ── Timeline gradient line ── */
   .timeline-line {
     position: absolute;
@@ -600,29 +657,29 @@
   .callout-gradient-tip {
     background: linear-gradient(
       135deg,
-      oklch(from var(--warning-soft) l c h / 0.6) 0%,
-      oklch(from var(--warning-soft) l c h / 0.15) 100%
+      oklch(from var(--warning-soft) l c h / 0.35) 0%,
+      oklch(from var(--warning-soft) l c h / 0.08) 100%
     );
   }
   .callout-gradient-warning {
     background: linear-gradient(
       135deg,
-      oklch(from var(--destructive) l c h / 0.08) 0%,
-      oklch(from var(--destructive) l c h / 0.02) 100%
+      oklch(from var(--destructive) l c h / 0.06) 0%,
+      oklch(from var(--destructive) l c h / 0.015) 100%
     );
   }
   .callout-gradient-note {
     background: linear-gradient(
       135deg,
-      oklch(from var(--info-soft) l c h / 0.6) 0%,
-      oklch(from var(--info-soft) l c h / 0.15) 100%
+      oklch(from var(--info-soft) l c h / 0.35) 0%,
+      oklch(from var(--info-soft) l c h / 0.08) 100%
     );
   }
   .callout-gradient-security {
     background: linear-gradient(
       135deg,
-      oklch(from var(--destructive) l c h / 0.08) 0%,
-      oklch(from var(--destructive) l c h / 0.02) 100%
+      oklch(from var(--destructive) l c h / 0.06) 0%,
+      oklch(from var(--destructive) l c h / 0.015) 100%
     );
   }
 

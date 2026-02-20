@@ -101,8 +101,8 @@ describe('StepBlock', () => {
       const step1Button = screen.getByRole('button', { name: /mark step 1 complete/i });
       fireEvent.click(step1Button);
 
-      const listItem = step1Button.closest('li');
-      expect(listItem).toHaveClass('opacity-60');
+      const stepContainer = step1Button.closest('.step-connector');
+      expect(stepContainer).toHaveClass('opacity-60');
     });
 
     it('should apply strikethrough to completed step text', () => {

@@ -86,9 +86,11 @@ export const RatingBlock = memo(function RatingBlock({ block }: RatingBlockProps
         {breakdown && breakdown.length > 0 && (
           <>
             <div className="fade-divider" aria-hidden="true" />
-            <div className="space-y-2">
+            <div className="space-y-0">
               {breakdown.map((item, index) => (
-                <div key={index} className="flex items-center gap-3 text-sm">
+                <div key={index}>
+                  {index > 0 && <div className="fade-divider my-1.5" aria-hidden="true" />}
+                  <div className="flex items-center gap-3 text-sm">
                   <span className="text-muted-foreground w-24 shrink-0 truncate">{item.category}</span>
                   <div className="flex-1 h-1.5 bg-muted/50 rounded-full overflow-hidden">
                     <div
@@ -99,6 +101,7 @@ export const RatingBlock = memo(function RatingBlock({ block }: RatingBlockProps
                   <span className="text-xs text-muted-foreground tabular-nums w-8 text-right">
                     {item.score}
                   </span>
+                  </div>
                 </div>
               ))}
             </div>

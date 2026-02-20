@@ -50,13 +50,14 @@ export const StepBlock = memo(function StepBlock({ block }: StepBlockProps) {
             const colorClass = STEP_COLORS[stepIndex % STEP_COLORS.length];
 
             return (
-              <li
-                key={step.number}
-                className={cn(
-                  'step-connector flex gap-3 transition-opacity',
-                  isCompleted && 'opacity-60'
-                )}
-              >
+              <li key={step.number}>
+                {stepIndex > 0 && <div className="fade-divider my-1.5" aria-hidden="true" />}
+                <div
+                  className={cn(
+                    'step-connector flex gap-3 transition-opacity',
+                    isCompleted && 'opacity-60'
+                  )}
+                >
                 <Button
                   variant="ghost"
                   size="icon-bare"
@@ -92,6 +93,7 @@ export const StepBlock = memo(function StepBlock({ block }: StepBlockProps) {
                       </span>
                     )}
                   </div>
+                </div>
                 </div>
               </li>
             );
