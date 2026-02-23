@@ -48,7 +48,10 @@ class Settings(BaseSettings):
     INTERNAL_SECRET: str = "dev-internal-secret-change-me"
 
     # Limits
-    MAX_VIDEO_DURATION_MINUTES: int = 240
+    # WARNING: 600 min (10 hours) is the hard cap.  Audio transcription of very
+    # long videos is expensive ($3.60 Whisper + up to 30 min processing for 10h).
+    # Deploy rate-limiting on the API gateway before exposing to untrusted users.
+    MAX_VIDEO_DURATION_MINUTES: int = 600
     MIN_VIDEO_DURATION_SECONDS: int = 60
     LLM_TIMEOUT_SECONDS: float = 60.0
     LLM_NUM_RETRIES: int = 2
@@ -62,6 +65,10 @@ class Settings(BaseSettings):
     # Issue #18: Configurable batch size for parallel chapter processing
     CHAPTER_BATCH_SIZE: int = 3
 
+    # Timeout constants for pipeline stages
+    TRANSCRIPT_FETCH_TIMEOUT: float = 30.0
+    GEMINI_UPLOAD_TIMEOUT: float = 300.0
+
     # SponsorBlock API timeout
     SPONSORBLOCK_TIMEOUT: float = 5.0
 
@@ -70,8 +77,10 @@ class Settings(BaseSettings):
     WEBSHARE_PROXY_PASSWORD: str | None = None
 
     # Whisper fallback (Phase 4 - for videos without captions)
+    # Max duration set to 600 min (10 hours) to support ultra-long content.
+    # Cost implication: 10-hour video ≈ $3.60 Whisper API + up to 30 min processing.
     WHISPER_ENABLED: bool = True
-    WHISPER_MAX_DURATION_MINUTES: int = 60
+    WHISPER_MAX_DURATION_MINUTES: int = 600
 
     # Logging
     log_level: str = "INFO"

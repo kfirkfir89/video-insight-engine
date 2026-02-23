@@ -12,7 +12,7 @@ interface RatingBlockProps {
  * Renders a rating display with stars or score.
  */
 export const RatingBlock = memo(function RatingBlock({ block }: RatingBlockProps) {
-  const { score, maxScore, label, breakdown } = block;
+  const { score, maxScore, breakdown } = block;
 
   // Clamp score to valid range
   const clampedScore = Math.max(0, Math.min(score, maxScore));
@@ -54,6 +54,8 @@ export const RatingBlock = memo(function RatingBlock({ block }: RatingBlockProps
     );
   };
 
+  const hasBreakdown = breakdown && breakdown.length > 0;
+
   return (
     <BlockWrapper
       blockId={block.blockId}
@@ -64,48 +66,42 @@ export const RatingBlock = memo(function RatingBlock({ block }: RatingBlockProps
         <Star className="h-3 w-3" aria-hidden="true" />
         <span>Rating</span>
       </div>
-      <div className="space-y-4">
-        {/* Main rating */}
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            {label && <span className="text-sm text-muted-foreground">{label}</span>}
-            <div className="flex items-center gap-3">
-              <span
-                className="text-4xl font-black tabular-nums text-gradient-warm"
-                aria-label={BLOCK_LABELS.rating(clampedScore, maxScore)}
-              >
-                {clampedScore}
-              </span>
-              <span className="text-lg text-muted-foreground/40">/ {maxScore}</span>
-            </div>
+      <div className={hasBreakdown ? 'flex flex-col md:flex-row gap-4' : ''} data-testid="rating-layout">
+        {/* Score column */}
+        <div className={hasBreakdown ? 'shrink-0 md:w-[120px]' : ''}>
+          <div className="flex items-center gap-3">
+            <span
+              className="text-4xl font-black tabular-nums text-gradient-warm"
+              aria-label={BLOCK_LABELS.rating(clampedScore, maxScore)}
+            >
+              {clampedScore}
+            </span>
+            <span className="text-lg text-muted-foreground/40">/ {maxScore}</span>
           </div>
           {maxScore <= 5 ? renderStars(clampedScore, maxScore) : renderBar(clampedScore, maxScore)}
         </div>
 
-        {/* Breakdown */}
-        {breakdown && breakdown.length > 0 && (
-          <>
-            <div className="fade-divider" aria-hidden="true" />
-            <div className="space-y-0">
-              {breakdown.map((item, index) => (
-                <div key={index}>
-                  {index > 0 && <div className="fade-divider my-1.5" aria-hidden="true" />}
-                  <div className="flex items-center gap-3 text-sm">
+        {/* Breakdown column */}
+        {hasBreakdown && (
+          <div className="flex-1 min-w-0 space-y-0">
+            {breakdown.map((item, index) => (
+              <div key={index}>
+                {index > 0 && <div className="fade-divider my-1.5" aria-hidden="true" />}
+                <div className="flex items-center gap-3 text-sm">
                   <span className="text-muted-foreground w-24 shrink-0 truncate">{item.category}</span>
                   <div className="flex-1 h-1.5 bg-muted/50 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-warning/90 rounded-full progress-bar-gradient"
-                      style={{ width: `${(item.score / (item.maxScore || maxScore)) * 100}%`, animationDelay: `${index * 80}ms` }}
+                      style={{ width: `${Math.min(100, (item.score / ((item.maxScore ?? maxScore) || 1)) * 100)}%`, animationDelay: `${index * 80}ms` }}
                     />
                   </div>
                   <span className="text-xs text-muted-foreground tabular-nums w-8 text-right">
                     {item.score}
                   </span>
-                  </div>
                 </div>
-              ))}
-            </div>
-          </>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </BlockWrapper>
