@@ -160,8 +160,8 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
           {/* Vertical center divider */}
           <div className="fade-divider-vertical absolute left-1/2 top-2 bottom-2 -translate-x-px" aria-hidden="true" />
           {Array.from({ length: maxRows }).map((_, rowIndex) => {
-            const leftItem = block.left.items[rowIndex];
-            const rightItem = block.right.items[rowIndex];
+            const leftItem = block.left.items?.[rowIndex];
+            const rightItem = block.right.items?.[rowIndex];
             return (
               <div key={rowIndex}>
                 {rowIndex > 0 && <div className="fade-divider" aria-hidden="true" />}

@@ -1,4 +1,4 @@
-# Block Design System Overhaul — Plan
+# Block Design Overhaul — Phase 3: Multi-Column Views & Layout Engine
 
 **Last Updated: 2026-02-20**
 
@@ -6,199 +6,207 @@
 
 ## Executive Summary
 
-Redesign the visual system for 33 content block types across 10+ views to create a cohesive, editorial reading experience. The current design suffers from heavy left borders (`.block-accent` with `border-l-[3px]`), oversized callouts, misaligned comparison columns, and inconsistent use of the fade-divider design language. This overhaul replaces the dashboard aesthetic with a clean, magazine-inspired visual grammar built on fade-edge lines as the signature design element.
+The block design system has reached visual maturity (Phases 1-7: accent gradients, compact callouts, row-aligned grids, fade-edge system, view deduplication, section headers, table modernization — 1041 tests pass). However, **all 10 views render as single-column vertical stacks**, wasting horizontal space and making every chapter look identical regardless of content type. This phase introduces multi-column layouts, compact block fixes, and a smart auto-flow engine to create distinct, space-efficient view templates.
 
-**Scope:** Pure frontend — CSS + component structure changes. No backend/summarizer changes required.
+**Scope:** Pure frontend — layout components, view refactors, block fixes. No backend/summarizer changes required.
 
 ---
 
 ## Current State Analysis
 
+### What's Working
+- 33 block types with consistent fade-edge visual language
+- 10 specialized views with `SectionHeader` + fade-dividers between sections
+- `useGroupedBlocks` hook for clean block categorization
+- `ContentBlocks` component with smart size-based grid layout (half=2-col, compact=3-col)
+- `block-layout.ts` with BLOCK_SIZE_MAP (full/half/compact) and spacing matrix
+- Per-chapter `view` field from summarizer + global `category`
+
 ### Problems
+1. **Single-column monotony** — Every view stacks sections vertically. RecipeView's ingredients take full width when they could sit beside steps
+2. **NutritionBlock inconsistency** — Uses `<table className="table-fade-dividers">` instead of div-based fade-divider pattern used by all other list blocks
+3. **RatingBlock too spacious** — Label line, large score, then breakdown below a divider. Wastes vertical space when breakdown could sit beside the score
+4. **LocationBlock map too faint** — Background pattern at 6% opacity (light) / 10% (dark) is barely visible
+5. **No layout composition system** — Views can't express "sidebar + main" or "2-col top row" patterns
 
-1. **Heavy left borders** — `.block-accent` uses `border-l-[3px]` on callouts, quotes, and definitions, creating visual clutter
-2. **Oversized callouts** — Warning/info/tip blocks use large padding + thick borders + high-opacity gradients, competing with content for attention
-3. **Comparison column misalignment** — Unequal item counts between left/right columns break visual row alignment
-4. **Inconsistent design language** — `fade-divider` exists but usage is sporadic; blocks lack unified visual grammar
-5. **Comparison component duplication** — `ComparisonRenderer`, `ProConBlock`, `DosDontsBlock` solve the same layout problem differently
-
-### Current Block Variant System
-
-| Variant | CSS Class | Current Style |
-|---------|-----------|--------------|
-| card | `.block-card` | Rounded-xl, border, shadow, hover elevation |
-| accent | `.block-accent` | `border-l-[3px]`, muted bg, rounded-lg |
-| code | `.block-code-container` | Dark IDE surface, traffic lights |
-| inline | `.block-inline` | No border/bg, compact |
-| transparent | (none) | No wrapper styling |
-
-### Blocks Using Accent Variant (to be changed)
-
-| Block | Component | Current Usage |
-|-------|-----------|---------------|
-| Callout | `CalloutBlock.tsx` | `variant="accent"` + `accentColor` based on style |
-| Quote (speaker/testimonial) | `QuoteRenderer.tsx` | `variant="accent"` + `accentColor="info"` |
-| Definition | `DefinitionBlock.tsx` | `variant="accent"` + `accentColor="primary"` |
+### Content Area Constraints
+- Container: `max-w-[820px]` with `px-10` = ~640-760px usable width
+- Sidebar: ~280px works well for data-dense blocks (ratings, nutrition, keyvalue, stats)
+- Main: remaining ~360-480px for full-width content (steps, code, comparisons)
+- Mobile: all layouts collapse to single-column via `flex-col` → `md:flex-row`
 
 ---
 
 ## Proposed Future State
 
-### New Accent Variant — Top Fade-Edge Line
+### Layout Composition System
+New `ViewLayout`, `LayoutRow`, `LayoutColumn`, `LayoutSection` primitives let views declare multi-column layouts declaratively. On mobile (< md breakpoint), everything collapses to single-column.
 
-Replace `border-l-[3px]` with a **2px horizontal gradient at the top** of the block, colored by a CSS custom property `--accent-line-color`. The pseudo-element fades at both edges, matching the fade-divider language.
+### View-Specific Templates
+Each view gets a curated layout:
+- **RecipeView**: Sidebar (ingredients/info) + Main (steps)
+- **ReviewView**: Top row (verdict + rating side-by-side) + full-width proCons/comparisons
+- **TravelView**: Sidebar (costs/locations) + Main (itineraries/routes)
+- **EducationView**: Sidebar (formulas/keyvalues) + Main (definitions)
+- **FitnessView**: Sidebar (nutrition/stats) + Main (exercises)
+- **PodcastView**: Equal 2-col top (guests + quotes)
+- **DIYView**: Sidebar (tools) + Main (steps)
+- **CodeView/GamingView**: Stay single-column (content needs full width)
 
-```css
-.block-accent {
-  /* Remove: border-l-[3px] */
-  /* Add: position relative for ::before */
-  /* Reduce: py-3.5 pl-5 pr-4 → py-3 pl-4 pr-3 */
-}
-.block-accent::before {
-  position: absolute; top: 0; left: 10%; right: 10%;
-  height: 2px;
-  background: linear-gradient(to right, transparent, var(--accent-line-color) 30%, var(--accent-line-color) 70%, transparent);
-}
-```
-
-### Accent Color via CSS Custom Property
-
-```tsx
-// BlockWrapper.tsx — replace border-l-X classes with style prop
-const accentColorStyles: Record<AccentColor, React.CSSProperties> = {
-  primary:     { '--accent-line-color': 'var(--primary)' },
-  destructive: { '--accent-line-color': 'var(--destructive)' },
-  success:     { '--accent-line-color': 'var(--success)' },
-  warning:     { '--accent-line-color': 'var(--warning)' },
-  info:        { '--accent-line-color': 'var(--info)' },
-};
-```
-
-### Compact Callouts
-
-- Text: `text-sm` → `text-xs`
-- Icon: `h-4 w-4` → `h-3.5 w-3.5`
-- Gap: `gap-2` → `gap-1.5`
-- Remove `animate-breathe` from icon
-- Reduce gradient opacity ~40%
-
-### Comparison Grid — Tic-Tac-Toe Layout
-
-```
-  Do                    |  Don't
- ───────fade────────────┼────────fade──────────
-  Item 1                |  Item 1
- ───────fade────────────┼────────fade──────────
-  Item 2                |  Item 2
- ───────fade────────────┼────────fade──────────
-  Item 3                |  (empty)
-```
-
-Row-by-row rendering with `maxRows = Math.max(left.length, right.length)`. Horizontal `fade-divider` between rows. Vertical `fade-divider-vertical` at center column.
-
-### Fade-Edge Design Language
-
-All blocks adopt `fade-divider` as the primary visual separator:
-- Between items in BulletsBlock, NumberedBlock, KeyValueRenderer
-- Between rating categories in RatingBlock
-- Between sections in GuestBlock
-- Subtle 1px `.block-card::before` top fade line on card variant
-
-### Block Migration Away From Accent
-
-| Block | From | To | Rationale |
-|-------|------|-----|-----------|
-| Quote (speaker/testimonial) | `variant="accent"` | `variant="transparent"` | Blockquote has its own decorative mark |
-| Definition | `variant="accent"` | `variant="card"` | Standalone knowledge unit, card is appropriate |
+### Auto-Flow Engine
+`StandardView` (and fallback) uses an algorithm to automatically pair sidebar-compatible blocks with full-width blocks, creating multi-column rows without manual templates.
 
 ---
 
 ## Implementation Phases
 
-### Phase 1: Accent Variant Redesign — Kill the Left Border [M]
+### Phase A: Block-Level Fixes [S] — Effort: S
 
-**Goal:** Replace heavy `border-l-[3px]` with top-edge gradient indicator.
+**Goal:** Fix 3 specific block-level visual issues.
 
-1. Redesign `.block-accent` in `index.css` — remove border-l, add `position: relative`, reduce padding
-2. Add `.block-accent::before` pseudo-element with fade-gradient line at top
-3. Replace `accentColorClasses` in `BlockWrapper.tsx` with CSS custom property approach via `style` prop
-4. Verify all accent consumers render correctly (CalloutBlock, QuoteRenderer, DefinitionBlock)
+**A.1 — NutritionBlock: Table → Div-Based Fade-Dividers**
+- File: `apps/web/src/components/video-detail/blocks/NutritionBlock.tsx`
+- Replace `<table>/<tbody>/<tr>` with `<div>` flex rows
+- Add `<div className="fade-divider my-1" />` between items
+- Keep nutrient left, amount right, dailyValue far-right
+- Keep `stagger-children` class
+- Acceptance: NutritionBlock renders with fade-dividers between rows, same data layout
 
-### Phase 2: Compact Callouts [S]
+**A.2 — RatingBlock: Compact Horizontal Layout**
+- File: `apps/web/src/components/video-detail/blocks/RatingBlock.tsx`
+- Remove label line (`{label && <span>...}`)
+- Horizontal layout: score+stars left (~120px), breakdown bars right (flex-1)
+- Remove fade-divider between main rating and breakdown
+- If no breakdown, keep current single-column
+- Acceptance: Rating + breakdown render side-by-side, saving ~50% vertical space
 
-**Goal:** Make callouts smaller, less visually dominant.
+**A.3 — LocationBlock: Enhanced Map Background**
+- File: `apps/web/src/index.css` (`.location-map-bg`)
+- Light: opacity 0.06 → 0.12, Dark: 0.1 → 0.18
+- Add 2 more contour ellipse gradients (smaller + larger)
+- Grid line opacity 0.15 → 0.22
+- Acceptance: Map pattern clearly visible in both light and dark modes
 
-1. Reduce CalloutBlock text/icon sizing and gap
-2. Remove `animate-breathe` from callout icon
-3. Reduce callout gradient opacity ~40% in `index.css`
+**Dependencies:** None
+**Tests:** Update nutrition-block, rating-block tests; no new test files
 
-### Phase 3: Comparison Grid System [L]
+---
 
-**Goal:** Unify all two-column comparison blocks with row-aligned grid.
+### Phase B: Layout Infrastructure [M] — Effort: M
 
-1. Create `.comparison-grid` CSS utility in `index.css`
-2. Refactor `ComparisonRenderer.tsx` — row-aligned grid with maxRows, fade dividers
-3. Refactor `ProConBlock.tsx` — same grid pattern, keep ratio bar above
-4. Refactor `DosDontsBlock.tsx` — same grid pattern
-5. Update `VerdictBlock.tsx` bestFor/notFor section to use comparison-grid
+**Goal:** Create reusable layout primitives for multi-column views.
 
-### Phase 4: Fade-Edge Design Language [M]
+**B.1 — ViewLayout Components**
+- New file: `apps/web/src/components/video-detail/views/ViewLayout.tsx`
+- `ViewLayout` — root container with `space-y-6` + auto fade-dividers between children
+- `LayoutRow` — `flex flex-col md:flex-row {gap}` for horizontal multi-column
+- `LayoutColumn` — width variants: `sidebar` (md:w-[280px] shrink-0), `main` (flex-1 min-w-0), `equal` (flex-1)
+- `LayoutSection` — optional SectionHeader + children wrapper
+- Acceptance: Components render correctly, mobile collapses to single-column
 
-**Goal:** Establish fade-edge lines as THE signature design element.
+**B.2 — Sidebar-Compatible Classification**
+- File: `apps/web/src/lib/block-layout.ts`
+- Add `SIDEBAR_COMPATIBLE_TYPES: Set<ContentBlockType>` (rating, nutrition, cost, keyvalue, statistic, ingredient, tool_list, guest, timestamp, formula)
+- Add `partitionForSidebar(blocks): { sidebar, main }` helper
+- Acceptance: Function correctly partitions blocks; existing tests pass
 
-1. Audit and apply `fade-divider` to: BulletsBlock, NumberedBlock, KeyValueRenderer, RatingBlock, GuestBlock
-2. Add subtle `.block-card::before` top fade line (1px, very subtle)
-3. Refine `fade-divider` / `fade-divider-vertical` opacity for dark mode (0.3 → 0.4)
+**Dependencies:** None
+**Tests:** New `views/__tests__/view-layout.test.tsx` for layout components
 
-### Phase 5: Block-by-Block Polish [M]
+---
 
-**Goal:** Migrate blocks away from accent variant, simplify styling.
+### Phase C: View Templates [L] — Effort: L
 
-1. QuoteRenderer — `variant="accent"` → `variant="transparent"`, rely on decorative quote mark
-2. DefinitionBlock — `variant="accent"` → `variant="card"`, term gets `text-primary`
-3. ExampleBlock — verify uses `card` variant correctly
-4. RatingBlock — add fade dividers between categories
-5. GuestBlock — add structural fade dividers
+**Goal:** Refactor 7 views to use multi-column layouts. CodeView and GamingView stay single-column.
 
-### Phase 6: View System Deduplication [S]
+Each view keeps its existing `useGroupedBlocks` rules — only the composition changes.
 
-**Goal:** Extract shared block-grouping logic.
+**C.1 — RecipeView: Sidebar + Main**
+- Sidebar: recipeInfo + ingredients
+- Main: steps (+ other)
+- Below: tips, timestamps full-width
 
-1. Create `useGroupedBlocks` hook in `apps/web/src/hooks/use-grouped-blocks.ts`
-2. Update 10 view files to use the hook, removing ~20-30 lines boilerplate each
+**C.2 — ReviewView: Top Row + Full Width**
+- Top row: verdict (main) + rating (sidebar)
+- Below: proCons, comparisons, other, timestamps
 
-### Phase 7: Summarizer Assessment [S]
+**C.3 — TravelView: Sidebar + Main**
+- Sidebar: costs + locations (new rule)
+- Main: itineraries + routes
+- Below: tips, other, timestamps
+- Add `locations` to TRAVEL_RULES
 
-**Goal:** Confirm no backend changes needed.
+**C.4 — CodeView: No Change**
 
-1. Verify: 33 block types map correctly to new visual system
-2. Confirm: No new block types required, changes are frontend-only
+**C.5 — EducationView: Sidebar + Main**
+- Sidebar: formulas + keyvalues (new rule)
+- Main: definitions
+- Below: questions, other, timestamps
+
+**C.6 — FitnessView: Sidebar + Main**
+- Sidebar: nutrition + stats (new rule)
+- Main: exercises
+- Below: timers, other, timestamps
+
+**C.7 — PodcastView: Equal 2-Col Top**
+- Top row: guests (equal) + quotes (equal)
+- Below: topics, other, timestamps
+
+**C.8 — DIYView: Sidebar + Main**
+- Sidebar: tools
+- Main: steps (+ other)
+- Below: tips, timestamps
+
+**C.9 — GamingView: No Change**
+
+**C.10 — StandardView: Auto-Flow (Phase D)**
+
+**Dependencies:** Phase B (layout components)
+**Tests:** Existing view tests should still pass; add layout-specific assertions
+
+---
+
+### Phase D: Auto-Flow Layout Engine [M] — Effort: M
+
+**Goal:** Smart automatic layout for StandardView and fallback.
+
+**D.1 — Auto-Flow Algorithm**
+- New file: `apps/web/src/lib/auto-flow-layout.ts`
+- `computeAutoFlowLayout(blocks): FlowRow[]`
+- FlowRow types: `sidebar-main`, `equal-2`, `full`
+- Pairs sidebar-compatible blocks with adjacent full-width blocks
+- Complementary pairs prioritized: verdict+rating, cost+nutrition, guest+quote
+- Consecutive half-width blocks → equal-2 row
+
+**D.2 — StandardView Integration**
+- Update `StandardView` to use auto-flow for `other` group
+- Use `ViewLayout` + `LayoutRow`/`LayoutColumn` to render FlowRows
+
+**D.3 — Auto-Flow Hook**
+- New file: `apps/web/src/hooks/use-auto-flow-layout.ts`
+- Memoized wrapper: `useAutoFlowLayout(blocks): FlowRow[]`
+
+**Dependencies:** Phase B (layout components), Phase C (tested view pattern)
+**Tests:** New `lib/__tests__/auto-flow-layout.test.ts` with comprehensive algorithm tests
 
 ---
 
 ## Execution Order & Dependencies
 
 ```
-Phase 1 (Accent) ──────┬──→ Phase 4 (Fade Language) ──→ Phase 5 (Polish)
-                        │
-Phase 2 (Callouts) ─────┘
+Phase A (Block Fixes) ──→ independent, do first
 
-Phase 3 (Comparison Grid) ──→ (independent, can parallel with 1-2)
-
-Phase 6 (View Dedup) ──→ (independent)
-
-Phase 7 (Assessment) ──→ (N/A, no changes)
+Phase B (Infrastructure) ──→ Phase C (View Templates) ──→ Phase D (Auto-Flow)
 ```
 
 | Priority | Phase | Effort | Depends On |
 |----------|-------|--------|-----------|
-| 1 | Phase 1: Accent Redesign | M | None |
-| 2 | Phase 2: Compact Callouts | S | Phase 1 |
-| 3 | Phase 3: Comparison Grid | L | None |
-| 4 | Phase 4: Fade Language | M | Phase 1 |
-| 5 | Phase 5: Block Polish | M | Phase 1, 4 |
-| 6 | Phase 6: View Dedup | S | None |
-| 7 | Phase 7: Assessment | S | N/A |
+| 1 | Phase A: Block Fixes | S | None |
+| 2 | Phase B: Layout Infrastructure | M | None |
+| 3 | Phase C: View Templates | L | Phase B |
+| 4 | Phase D: Auto-Flow Engine | M | Phase B, C |
+
+Phases A and B can run in parallel.
 
 ---
 
@@ -206,23 +214,39 @@ Phase 7 (Assessment) ──→ (N/A, no changes)
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|-----------|
-| Dark mode regressions | Medium | High | Test every change in both modes |
-| Mobile responsive breakage | Low | Medium | Test at sm/md breakpoints after comparison grid |
-| CSS specificity conflicts | Low | Medium | Use `@layer components` consistently |
-| Comparison grid empty cell rendering | Medium | Low | Handle gracefully with min-height on empty cells |
-| View dedup hook breaks view-specific logic | Low | High | Extract only common grouping logic, keep view-specific rendering |
+| Multi-column breaks at edge widths | Medium | Medium | Test at 640px, 768px, 1024px; ensure flex-col fallback |
+| Sidebar content overflows 280px | Medium | High | Test nutrition/rating/keyvalue blocks at 280px; use min-w-0 |
+| Auto-flow creates awkward pairings | Low | Medium | Conservative algorithm; fall back to full-width for ambiguous cases |
+| Existing view tests break | Medium | Low | Views keep same block grouping; only composition changes |
+| NutritionBlock layout shift | Low | Low | Match existing spacing/alignment exactly |
+| Mobile stacking order wrong | Low | Medium | Use `reverse` prop on LayoutRow when sidebar should come after on mobile |
 
 ---
 
 ## Success Metrics
 
 - [ ] `cd apps/web && npx tsc --noEmit` passes
-- [ ] `cd apps/web && npm run build` succeeds
-- [ ] `cd apps/web && npm test` passes
-- [ ] No left borders anywhere — accent blocks use top fade-edge line
-- [ ] Callouts are compact — smaller text, muted gradients
-- [ ] Comparison blocks align rows across columns (tic-tac-toe grid)
-- [ ] Fade-edge lines used consistently across all blocks
-- [ ] Dark mode renders correctly for all blocks
-- [ ] Mobile responsive breakpoints work
-- [ ] Light mode contrast and readability good
+- [ ] `cd apps/web && npm test` — all unit tests pass (existing + new)
+- [ ] Playwright e2e — block-design-overhaul (24) + block-ux-v2 (12) still pass
+- [ ] RecipeView: ingredients sidebar + steps main (visual check)
+- [ ] ReviewView: verdict + rating side-by-side (visual check)
+- [ ] StandardView: auto-flow pairs sidebar-compatible blocks (visual check)
+- [ ] NutritionBlock: div-based with fade-dividers (visual check)
+- [ ] RatingBlock: compact horizontal layout (visual check)
+- [ ] LocationBlock: map pattern clearly visible (visual check)
+- [ ] Mobile (375px): all layouts collapse to single column
+- [ ] Dark mode: all new layouts render correctly
+
+---
+
+## Key Files Reference
+
+| File | Role |
+|------|------|
+| `apps/web/src/lib/block-layout.ts` | Block size classification, spacing matrix |
+| `apps/web/src/hooks/use-grouped-blocks.ts` | Block grouping hook used by all views |
+| `apps/web/src/components/video-detail/ContentBlocks.tsx` | Block renderer with grid layout |
+| `apps/web/src/components/video-detail/views/SectionHeader.tsx` | Reusable section header |
+| `apps/web/src/components/video-detail/ArticleSection.tsx` | View selection (chapter.view ?? category) |
+| `apps/web/src/components/video-detail/blocks/VerdictBlock.tsx` | Reference: fade-divider + bullet pattern |
+| `apps/web/src/index.css` | All custom CSS (fade-divider, location-map-bg, etc.) |

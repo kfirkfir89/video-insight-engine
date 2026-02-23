@@ -8,6 +8,7 @@ import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
 from src.services.youtube import (
+    VALID_CATEGORIES,
     VideoData,
     VideoContext,
     Chapter,
@@ -867,6 +868,165 @@ class TestClassifyCategoryWithLLM:
         )
 
         assert result == "standard"
+
+    async def test_music_is_valid_llm_category(self, mock_llm_provider):
+        """Test that LLM can return 'music' as a valid category."""
+        mock_llm_provider.complete_fast.return_value = "music"
+
+        result = await classify_category_with_llm(
+            title="Official Music Video",
+            channel="VEVO",
+            tags=["music", "official video"],
+            description="Official music video",
+            llm_provider=mock_llm_provider,
+        )
+
+        assert result == "music"
+
+
+class TestMusicCategoryDetection:
+    """Tests for Phase 2: Music category detection."""
+
+    def test_music_in_valid_categories(self):
+        """Test that 'music' is in VALID_CATEGORIES."""
+        assert "music" in VALID_CATEGORIES
+
+    def test_music_persona_mapping(self):
+        """Test that music category maps to music persona."""
+        persona = _select_persona("music")
+        assert persona == "music"
+
+    @patch("src.services.youtube._load_category_rules")
+    def test_detects_music_from_youtube_category(self, mock_rules):
+        """Test detecting music from YouTube Music category."""
+        mock_rules.return_value = {
+            "detection_config": {
+                "llm_fallback_threshold": 0.4,
+                "weights": {
+                    "keywords": 0.40,
+                    "youtube_category": 0.30,
+                    "title": 0.15,
+                    "channel": 0.15,
+                },
+            },
+            "categories": {
+                "music": {
+                    "keywords": {
+                        "primary": ["music", "song", "album", "official video", "lyrics"],
+                        "secondary": ["remix", "cover", "acoustic", "feat", "ft"],
+                    },
+                    "youtube_categories": {
+                        "primary": ["Music"],
+                        "secondary": ["Entertainment"],
+                    },
+                    "channel_patterns": ["vevo"],
+                    "title_patterns": ["official (music )?video", "lyrics"],
+                },
+            },
+            "default_category": "standard",
+        }
+
+        category, confidence = _detect_category(
+            youtube_category="Music",
+            tags=["music", "song", "official video"],
+            hashtags=["music"],
+            channel="ArtistVEVO",
+            title="Artist - Song (Official Music Video)",
+        )
+
+        assert category == "music"
+        assert confidence > 0.4
+
+    @patch("src.services.youtube._load_category_rules")
+    def test_detects_music_from_title_pattern(self, mock_rules):
+        """Test detecting music from title with 'ft.' pattern."""
+        mock_rules.return_value = {
+            "detection_config": {
+                "llm_fallback_threshold": 0.4,
+                "weights": {
+                    "keywords": 0.40,
+                    "youtube_category": 0.30,
+                    "title": 0.15,
+                    "channel": 0.15,
+                },
+            },
+            "categories": {
+                "music": {
+                    "keywords": {
+                        "primary": ["music", "song", "official video"],
+                        "secondary": ["feat", "ft"],
+                    },
+                    "youtube_categories": {
+                        "primary": ["Music"],
+                        "secondary": ["Entertainment"],
+                    },
+                    "channel_patterns": [],
+                    "title_patterns": ["\\bft\\.?\\b", "\\bfeat\\.?\\b"],
+                },
+            },
+            "default_category": "standard",
+        }
+
+        category, confidence = _detect_category(
+            youtube_category="Music",
+            tags=["music", "song"],
+            hashtags=[],
+            title="Artist ft. Another - Song Title",
+        )
+
+        assert category == "music"
+        assert confidence > 0.3
+
+    @patch("src.services.youtube._load_category_rules")
+    def test_music_review_not_detected_as_music(self, mock_rules):
+        """Test that a music review video is NOT detected as music."""
+        mock_rules.return_value = {
+            "detection_config": {
+                "llm_fallback_threshold": 0.4,
+                "weights": {
+                    "keywords": 0.40,
+                    "youtube_category": 0.30,
+                    "title": 0.15,
+                    "channel": 0.15,
+                },
+            },
+            "categories": {
+                "reviews": {
+                    "keywords": {
+                        "primary": ["review", "unboxing", "comparison"],
+                        "secondary": ["test", "rating", "impressions"],
+                    },
+                    "youtube_categories": {
+                        "primary": ["Science & Technology"],
+                        "secondary": ["Gaming"],
+                    },
+                    "channel_patterns": [],
+                    "title_patterns": ["review"],
+                },
+                "music": {
+                    "keywords": {
+                        "primary": ["music", "song", "official video"],
+                        "secondary": ["remix", "cover"],
+                    },
+                    "youtube_categories": {
+                        "primary": ["Music"],
+                        "secondary": ["Entertainment"],
+                    },
+                    "channel_patterns": [],
+                    "title_patterns": ["official video"],
+                },
+            },
+            "default_category": "standard",
+        }
+
+        category, _ = _detect_category(
+            youtube_category="Entertainment",
+            tags=["review", "album review", "rating"],
+            hashtags=["review"],
+            title="Album Review: Artist's New Album",
+        )
+
+        assert category == "reviews"
 
 
 class TestGetLLMFallbackThreshold:

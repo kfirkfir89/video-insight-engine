@@ -71,7 +71,7 @@ class Settings(BaseSettings):
 
     # Whisper fallback (Phase 4 - for videos without captions)
     WHISPER_ENABLED: bool = True
-    WHISPER_MAX_DURATION_MINUTES: int = 60
+    WHISPER_MAX_DURATION_MINUTES: int = 180
 
     # Logging
     log_level: str = "INFO"

@@ -9,7 +9,7 @@ interface NutritionBlockProps {
 }
 
 /**
- * Renders nutrition facts in a table layout.
+ * Renders nutrition facts in a list layout with fade-dividers.
  */
 export const NutritionBlock = memo(function NutritionBlock({ block }: NutritionBlockProps) {
   const items = block.items ?? [];
@@ -32,31 +32,25 @@ export const NutritionBlock = memo(function NutritionBlock({ block }: NutritionB
         </p>
       )}
 
-      <table className="w-full text-sm table-fade-dividers">
-        <thead className="sr-only">
-          <tr>
-            <th>Nutrient</th>
-            <th>Amount</th>
-            <th>Daily Value</th>
-          </tr>
-        </thead>
-        <tbody className="stagger-children">
-          {items.map((item, index) => (
-            <tr key={index} className="even:bg-muted/[0.08] hover:bg-muted/20 transition-colors">
-              <td className="px-4 py-2 text-muted-foreground">{item.nutrient}</td>
-              <td className="px-4 py-2 font-medium text-right tabular-nums">
+      <div className="stagger-children" role="list" aria-label="Nutrition facts">
+        {items.map((item, index) => (
+          <div key={index}>
+            {index > 0 && <div className="fade-divider my-1" aria-hidden="true" />}
+            <div className="flex items-center gap-3 px-4 py-2 hover:bg-muted/20 transition-colors" role="listitem">
+              <span className="text-muted-foreground flex-1 min-w-0 truncate">{item.nutrient}</span>
+              <span className="font-medium text-right tabular-nums shrink-0">
                 {item.amount}
                 {item.unit && <span className="text-muted-foreground ml-0.5">{item.unit}</span>}
-              </td>
+              </span>
               {item.dailyValue && (
-                <td className="px-4 py-2 text-muted-foreground/70 text-right text-xs tabular-nums">
+                <span className="text-muted-foreground/70 text-right text-xs tabular-nums w-10 shrink-0">
                   {item.dailyValue}
-                </td>
+                </span>
               )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+            </div>
+          </div>
+        ))}
+      </div>
     </BlockWrapper>
   );
 });

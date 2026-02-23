@@ -24,11 +24,31 @@ describe('RatingBlock', () => {
 
       expect(screen.getByText('/ 5')).toBeInTheDocument();
     });
+  });
 
-    it('should render label when present', () => {
-      render(<RatingBlock block={createMockBlock({ label: 'Overall Rating' })} />);
+  describe('compact layout', () => {
+    it('should render side-by-side layout when breakdown exists', () => {
+      render(
+        <RatingBlock
+          block={createMockBlock({
+            breakdown: [
+              { category: 'Performance', score: 4 },
+              { category: 'Design', score: 5 },
+            ],
+          })}
+        />
+      );
 
-      expect(screen.getByText('Overall Rating')).toBeInTheDocument();
+      const layout = screen.getByTestId('rating-layout');
+      expect(layout.className).toContain('flex');
+      expect(layout.className).toContain('gap-4');
+    });
+
+    it('should render single column when no breakdown', () => {
+      render(<RatingBlock block={createMockBlock()} />);
+
+      const layout = screen.getByTestId('rating-layout');
+      expect(layout.className).toBe('');
     });
   });
 

@@ -6,7 +6,7 @@ from pydantic import BaseModel
 Provider = Literal["anthropic", "openai", "gemini"]
 
 # Transcript source types for tracking fetch method
-TranscriptSource = Literal["ytdlp", "api", "proxy", "whisper"]
+TranscriptSource = Literal["ytdlp", "api", "proxy", "whisper", "gemini", "metadata"]
 
 
 class ProcessingStatus(str, Enum):
@@ -21,6 +21,7 @@ class ErrorCode(str, Enum):
     VIDEO_TOO_LONG = "VIDEO_TOO_LONG"
     VIDEO_TOO_SHORT = "VIDEO_TOO_SHORT"
     VIDEO_UNAVAILABLE = "VIDEO_UNAVAILABLE"
+    DOWNLOAD_ERROR = "DOWNLOAD_ERROR"
     VIDEO_RESTRICTED = "VIDEO_RESTRICTED"
     LIVE_STREAM = "LIVE_STREAM"
     LLM_ERROR = "LLM_ERROR"

@@ -1,9 +1,9 @@
-import { Fragment, memo, type ReactNode } from 'react';
-import { BookOpen, Calculator, HelpCircle, Clock } from 'lucide-react';
+import { memo, type ReactNode } from 'react';
+import { BookOpen, Calculator, Hash, HelpCircle, Clock } from 'lucide-react';
 import type { SummaryChapter } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 import { useGroupedBlocks, type BlockGroupRule } from '@/hooks/use-grouped-blocks';
-import { SectionHeader } from './SectionHeader';
+import { ViewLayout, LayoutSection, buildPairedSection, renderSections } from './ViewLayout';
 
 interface EducationViewProps {
   chapter: SummaryChapter;
@@ -16,6 +16,7 @@ interface EducationViewProps {
 const EDUCATION_RULES: readonly BlockGroupRule[] = [
   { name: 'definitions', match: (b) => b.type === 'definition' },
   { name: 'formulas', match: (b) => b.type === 'formula' },
+  { name: 'keyvalues', match: (b) => b.type === 'keyvalue' },
   { name: 'quizzes', match: (b) => b.type === 'quiz' },
   { name: 'tips', match: (b) => b.type === 'callout' && b.variant === 'learning_tip' },
   { name: 'timestamps', match: (b) => b.type === 'timestamp' },
@@ -23,11 +24,7 @@ const EDUCATION_RULES: readonly BlockGroupRule[] = [
 
 /**
  * Specialized view for educational content.
- * Emphasizes:
- * - Key concepts/definitions at the top
- * - Formulas and equations
- * - Interactive quizzes
- * - Learning tips and callouts
+ * Layout: sidebar (formulas/keyvalues) + main (definitions), quizzes/tips full-width below.
  */
 export const EducationView = memo(function EducationView({
   chapter,
@@ -42,36 +39,79 @@ export const EducationView = memo(function EducationView({
 
   const sections: { key: string; node: ReactNode }[] = [];
 
-  if (groups.definitions.length > 0) {
-    sections.push({ key: 'definitions', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={BookOpen} label="Definitions" />
-        <ContentBlocks blocks={groups.definitions} {...blockProps} />
-      </div>
-    )});
-  }
+  // Top row: sidebar (formulas + keyvalues) + main (definitions)
+  const sidebarBlocks = [...groups.formulas, ...groups.keyvalues];
+  const hasSidebar = sidebarBlocks.length > 0;
+  const hasDefinitions = groups.definitions.length > 0;
 
-  if (groups.other.length > 0) {
-    sections.push({ key: 'other', node: (
-      <ContentBlocks blocks={groups.other} {...blockProps} />
-    )});
-  }
+  if (hasSidebar && hasDefinitions) {
+    sections.push(buildPairedSection(
+      { width: 'sidebar', node: (
+        <>
+          {groups.formulas.length > 0 && (
+            <LayoutSection icon={Calculator} label="Formulas">
+              <ContentBlocks blocks={groups.formulas} {...blockProps} />
+            </LayoutSection>
+          )}
+          {groups.keyvalues.length > 0 && (
+            <div className={groups.formulas.length > 0 ? 'mt-6' : ''}>
+              <LayoutSection icon={Hash} label="Key Facts">
+                <ContentBlocks blocks={groups.keyvalues} {...blockProps} />
+              </LayoutSection>
+            </div>
+          )}
+        </>
+      )},
+      { width: 'main', node: (
+        <>
+          <LayoutSection icon={BookOpen} label="Definitions">
+            <ContentBlocks blocks={groups.definitions} {...blockProps} />
+          </LayoutSection>
+          {groups.other.length > 0 && (
+            <div className="mt-6">
+              <ContentBlocks blocks={groups.other} {...blockProps} />
+            </div>
+          )}
+        </>
+      )},
+    ));
+  } else {
+    if (hasDefinitions) {
+      sections.push({ key: 'definitions', node: (
+        <LayoutSection icon={BookOpen} label="Definitions">
+          <ContentBlocks blocks={groups.definitions} {...blockProps} />
+        </LayoutSection>
+      )});
+    }
 
-  if (groups.formulas.length > 0) {
-    sections.push({ key: 'formulas', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={Calculator} label="Formulas" />
-        <ContentBlocks blocks={groups.formulas} {...blockProps} />
-      </div>
-    )});
+    if (groups.other.length > 0) {
+      sections.push({ key: 'other', node: (
+        <ContentBlocks blocks={groups.other} {...blockProps} />
+      )});
+    }
+
+    if (groups.formulas.length > 0) {
+      sections.push({ key: 'formulas', node: (
+        <LayoutSection icon={Calculator} label="Formulas">
+          <ContentBlocks blocks={groups.formulas} {...blockProps} />
+        </LayoutSection>
+      )});
+    }
+
+    if (groups.keyvalues.length > 0) {
+      sections.push({ key: 'keyvalues', node: (
+        <LayoutSection icon={Hash} label="Key Facts">
+          <ContentBlocks blocks={groups.keyvalues} {...blockProps} />
+        </LayoutSection>
+      )});
+    }
   }
 
   if (groups.quizzes.length > 0) {
     sections.push({ key: 'quizzes', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={HelpCircle} label="Questions" />
+      <LayoutSection icon={HelpCircle} label="Questions">
         <ContentBlocks blocks={groups.quizzes} {...blockProps} />
-      </div>
+      </LayoutSection>
     )});
   }
 
@@ -83,25 +123,19 @@ export const EducationView = memo(function EducationView({
 
   if (groups.timestamps.length > 0) {
     sections.push({ key: 'timestamps', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={Clock} label="Timestamps" />
+      <LayoutSection icon={Clock} label="Timestamps">
         <div className="flex flex-wrap gap-2">
           <ContentBlocks blocks={groups.timestamps} {...blockProps} />
         </div>
-      </div>
+      </LayoutSection>
     )});
   }
 
   if (sections.length === 0) return null;
 
   return (
-    <div className="space-y-6">
-      {sections.map((section, i) => (
-        <Fragment key={section.key}>
-          {i > 0 && <div className="fade-divider" />}
-          {section.node}
-        </Fragment>
-      ))}
-    </div>
+    <ViewLayout>
+      {renderSections(sections)}
+    </ViewLayout>
   );
 });

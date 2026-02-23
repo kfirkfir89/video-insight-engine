@@ -1,9 +1,9 @@
-import { Fragment, memo, type ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { MapPin, Route, DollarSign, Lightbulb, Clock } from 'lucide-react';
 import type { SummaryChapter } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 import { useGroupedBlocks, type BlockGroupRule } from '@/hooks/use-grouped-blocks';
-import { SectionHeader } from './SectionHeader';
+import { ViewLayout, LayoutSection, buildPairedSection, renderSections } from './ViewLayout';
 
 interface TravelViewProps {
   chapter: SummaryChapter;
@@ -23,11 +23,7 @@ const TRAVEL_RULES: readonly BlockGroupRule[] = [
 
 /**
  * Specialized view for travel content.
- * Emphasizes:
- * - Location highlights at the top
- * - Itinerary/day-by-day plans
- * - Cost breakdowns
- * - Travel tips and callouts
+ * Layout: sidebar (costs/locations) + main (itineraries/routes), tips/timestamps full-width below.
  */
 export const TravelView = memo(function TravelView({
   chapter,
@@ -42,69 +38,97 @@ export const TravelView = memo(function TravelView({
 
   const sections: { key: string; node: ReactNode }[] = [];
 
-  if (groups.locations.length > 0) {
-    sections.push({ key: 'locations', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={MapPin} label="Itineraries" />
-        <ContentBlocks blocks={groups.locations} {...blockProps} />
-      </div>
-    )});
-  }
+  // Top row: sidebar (costs + locations) + main (itineraries)
+  const sidebarBlocks = [...groups.costs, ...groups.locations];
+  const hasSidebar = sidebarBlocks.length > 0;
+  const hasMain = groups.itinerary.length > 0;
 
-  if (groups.other.length > 0) {
-    sections.push({ key: 'other', node: (
-      <ContentBlocks blocks={groups.other} {...blockProps} />
-    )});
-  }
+  if (hasSidebar && hasMain) {
+    sections.push(buildPairedSection(
+      { width: 'sidebar', node: (
+        <>
+          {groups.costs.length > 0 && (
+            <LayoutSection icon={DollarSign} label="Costs">
+              <ContentBlocks blocks={groups.costs} {...blockProps} />
+            </LayoutSection>
+          )}
+          {groups.locations.length > 0 && (
+            <div className={groups.costs.length > 0 ? 'mt-6' : ''}>
+              <LayoutSection icon={MapPin} label="Locations">
+                <ContentBlocks blocks={groups.locations} {...blockProps} />
+              </LayoutSection>
+            </div>
+          )}
+        </>
+      )},
+      { width: 'main', node: (
+        <>
+          <LayoutSection icon={Route} label="Routes">
+            <ContentBlocks blocks={groups.itinerary} {...blockProps} />
+          </LayoutSection>
+          {groups.other.length > 0 && (
+            <div className="mt-6">
+              <ContentBlocks blocks={groups.other} {...blockProps} />
+            </div>
+          )}
+        </>
+      )},
+    ));
+  } else {
+    if (groups.locations.length > 0) {
+      sections.push({ key: 'locations', node: (
+        <LayoutSection icon={MapPin} label="Locations">
+          <ContentBlocks blocks={groups.locations} {...blockProps} />
+        </LayoutSection>
+      )});
+    }
 
-  if (groups.itinerary.length > 0) {
-    sections.push({ key: 'itinerary', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={Route} label="Routes" />
-        <ContentBlocks blocks={groups.itinerary} {...blockProps} />
-      </div>
-    )});
-  }
+    if (groups.other.length > 0) {
+      sections.push({ key: 'other', node: (
+        <ContentBlocks blocks={groups.other} {...blockProps} />
+      )});
+    }
 
-  if (groups.costs.length > 0) {
-    sections.push({ key: 'costs', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={DollarSign} label="Costs" />
-        <ContentBlocks blocks={groups.costs} {...blockProps} />
-      </div>
-    )});
+    if (groups.itinerary.length > 0) {
+      sections.push({ key: 'itinerary', node: (
+        <LayoutSection icon={Route} label="Routes">
+          <ContentBlocks blocks={groups.itinerary} {...blockProps} />
+        </LayoutSection>
+      )});
+    }
+
+    if (groups.costs.length > 0) {
+      sections.push({ key: 'costs', node: (
+        <LayoutSection icon={DollarSign} label="Costs">
+          <ContentBlocks blocks={groups.costs} {...blockProps} />
+        </LayoutSection>
+      )});
+    }
   }
 
   if (groups.tips.length > 0) {
     sections.push({ key: 'tips', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={Lightbulb} label="Tips" />
+      <LayoutSection icon={Lightbulb} label="Tips">
         <ContentBlocks blocks={groups.tips} {...blockProps} />
-      </div>
+      </LayoutSection>
     )});
   }
 
   if (groups.timestamps.length > 0) {
     sections.push({ key: 'timestamps', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={Clock} label="Timestamps" />
+      <LayoutSection icon={Clock} label="Timestamps">
         <div className="flex flex-wrap gap-2">
           <ContentBlocks blocks={groups.timestamps} {...blockProps} />
         </div>
-      </div>
+      </LayoutSection>
     )});
   }
 
   if (sections.length === 0) return null;
 
   return (
-    <div className="space-y-6">
-      {sections.map((section, i) => (
-        <Fragment key={section.key}>
-          {i > 0 && <div className="fade-divider" />}
-          {section.node}
-        </Fragment>
-      ))}
-    </div>
+    <ViewLayout>
+      {renderSections(sections)}
+    </ViewLayout>
   );
 });

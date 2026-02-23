@@ -1,9 +1,9 @@
-import { Fragment, memo, useMemo, type ReactNode } from 'react';
+import { memo, useMemo, type ReactNode } from 'react';
 import { UtensilsCrossed, ListOrdered, Lightbulb, Clock } from 'lucide-react';
 import type { SummaryChapter } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 import { useGroupedBlocks, type BlockGroupRule } from '@/hooks/use-grouped-blocks';
-import { SectionHeader } from './SectionHeader';
+import { ViewLayout, LayoutSection, buildPairedSection, renderSections } from './ViewLayout';
 
 interface RecipeViewProps {
   chapter: SummaryChapter;
@@ -14,8 +14,9 @@ interface RecipeViewProps {
 }
 
 const RECIPE_RULES: readonly BlockGroupRule[] = [
-  { name: 'ingredients', match: (b) => b.type === 'bullets' && b.variant === 'ingredients' },
-  { name: 'steps', match: (b) => b.type === 'numbered' && b.variant === 'cooking_steps' },
+  { name: 'ingredients', match: (b) => b.type === 'ingredient' || (b.type === 'bullets' && b.variant === 'ingredients') },
+  { name: 'steps', match: (b) => b.type === 'step' || (b.type === 'numbered' && b.variant === 'cooking_steps') },
+  { name: 'nutrition', match: (b) => b.type === 'nutrition' },
   { name: 'tips', match: (b) => b.type === 'callout' && b.variant === 'chef_tip' },
   { name: 'timestamps', match: (b) => b.type === 'timestamp' },
   { name: 'recipeInfo', match: (b) => b.type === 'keyvalue' && b.variant === 'info' },
@@ -23,11 +24,7 @@ const RECIPE_RULES: readonly BlockGroupRule[] = [
 
 /**
  * Specialized view for recipe/cooking content.
- * Emphasizes:
- * - Ingredients lists at the top
- * - Numbered cooking steps
- * - Chef tips and callouts
- * - Timestamps for technique demonstrations
+ * Layout: sidebar (ingredients/info) + main (steps), full-width tips/timestamps below.
  */
 export const RecipeView = memo(function RecipeView({
   chapter,
@@ -39,68 +36,88 @@ export const RecipeView = memo(function RecipeView({
   const groups = useGroupedBlocks(chapter.content, RECIPE_RULES);
 
   const ingredientBlocks = useMemo(
-    () => [...groups.recipeInfo, ...groups.ingredients],
-    [groups.recipeInfo, groups.ingredients]
+    () => [...groups.recipeInfo, ...groups.ingredients, ...groups.nutrition],
+    [groups.recipeInfo, groups.ingredients, groups.nutrition],
   );
 
   const blockProps = { onPlay, onStop, isVideoActive, activeStartSeconds };
 
   const sections: { key: string; node: ReactNode }[] = [];
 
-  if (ingredientBlocks.length > 0) {
-    sections.push({ key: 'ingredients', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={UtensilsCrossed} label="Ingredients" />
-        <ContentBlocks blocks={ingredientBlocks} {...blockProps} />
-      </div>
-    )});
-  }
+  // Top row: sidebar (ingredients) + main (steps)
+  const hasSidebar = ingredientBlocks.length > 0;
+  const hasSteps = groups.steps.length > 0;
+  const hasOther = groups.other.length > 0;
 
-  if (groups.other.length > 0) {
-    sections.push({ key: 'other', node: (
-      <ContentBlocks blocks={groups.other} {...blockProps} />
-    )});
-  }
+  if (hasSidebar && (hasSteps || hasOther)) {
+    sections.push(buildPairedSection(
+      { width: 'sidebar', node: (
+        <LayoutSection icon={UtensilsCrossed} label="Ingredients">
+          <ContentBlocks blocks={ingredientBlocks} {...blockProps} />
+        </LayoutSection>
+      )},
+      { width: 'main', node: (
+        <>
+          {hasSteps && (
+            <LayoutSection icon={ListOrdered} label="Steps">
+              <ContentBlocks blocks={groups.steps} {...blockProps} />
+            </LayoutSection>
+          )}
+          {hasOther && (
+            <div className={hasSteps ? 'mt-6' : ''}>
+              <ContentBlocks blocks={groups.other} {...blockProps} />
+            </div>
+          )}
+        </>
+      )},
+    ));
+  } else {
+    if (hasSidebar) {
+      sections.push({ key: 'ingredients', node: (
+        <LayoutSection icon={UtensilsCrossed} label="Ingredients">
+          <ContentBlocks blocks={ingredientBlocks} {...blockProps} />
+        </LayoutSection>
+      )});
+    }
 
-  if (groups.steps.length > 0) {
-    sections.push({ key: 'steps', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={ListOrdered} label="Steps" />
-        <ContentBlocks blocks={groups.steps} {...blockProps} />
-      </div>
-    )});
+    if (hasOther) {
+      sections.push({ key: 'other', node: (
+        <ContentBlocks blocks={groups.other} {...blockProps} />
+      )});
+    }
+
+    if (hasSteps) {
+      sections.push({ key: 'steps', node: (
+        <LayoutSection icon={ListOrdered} label="Steps">
+          <ContentBlocks blocks={groups.steps} {...blockProps} />
+        </LayoutSection>
+      )});
+    }
   }
 
   if (groups.tips.length > 0) {
     sections.push({ key: 'tips', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={Lightbulb} label="Tips" />
+      <LayoutSection icon={Lightbulb} label="Tips">
         <ContentBlocks blocks={groups.tips} {...blockProps} />
-      </div>
+      </LayoutSection>
     )});
   }
 
   if (groups.timestamps.length > 0) {
     sections.push({ key: 'timestamps', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={Clock} label="Timestamps" />
+      <LayoutSection icon={Clock} label="Timestamps">
         <div className="flex flex-wrap gap-2">
           <ContentBlocks blocks={groups.timestamps} {...blockProps} />
         </div>
-      </div>
+      </LayoutSection>
     )});
   }
 
   if (sections.length === 0) return null;
 
   return (
-    <div className="space-y-6">
-      {sections.map((section, i) => (
-        <Fragment key={section.key}>
-          {i > 0 && <div className="fade-divider" />}
-          {section.node}
-        </Fragment>
-      ))}
-    </div>
+    <ViewLayout>
+      {renderSections(sections)}
+    </ViewLayout>
   );
 });

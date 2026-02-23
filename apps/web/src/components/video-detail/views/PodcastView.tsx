@@ -1,9 +1,9 @@
-import { Fragment, memo, type ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { Users, Quote, FileText, Clock } from 'lucide-react';
 import type { SummaryChapter } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 import { useGroupedBlocks, type BlockGroupRule } from '@/hooks/use-grouped-blocks';
-import { SectionHeader } from './SectionHeader';
+import { ViewLayout, LayoutSection, buildPairedOrStack, renderSections } from './ViewLayout';
 
 interface PodcastViewProps {
   chapter: SummaryChapter;
@@ -22,11 +22,7 @@ const PODCAST_RULES: readonly BlockGroupRule[] = [
 
 /**
  * Specialized view for podcast/interview content.
- * Emphasizes:
- * - Guest bios at the top
- * - Key quotes and highlights
- * - Transcript segments
- * - Topic timestamps
+ * Layout: equal 2-col (guests + quotes) top, topics/transcripts/timestamps full-width below.
  */
 export const PodcastView = memo(function PodcastView({
   chapter,
@@ -41,30 +37,25 @@ export const PodcastView = memo(function PodcastView({
 
   const sections: { key: string; node: ReactNode }[] = [];
 
-  if (groups.guests.length > 0) {
-    sections.push({ key: 'guests', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={Users} label="Guests" />
+  // Top row: guests (equal) + quotes (equal) side-by-side
+  sections.push(...buildPairedOrStack(
+    { key: 'guests', width: 'equal', node: groups.guests.length > 0 ? (
+      <LayoutSection icon={Users} label="Guests">
         <ContentBlocks blocks={groups.guests} {...blockProps} />
-      </div>
-    )});
-  }
-
-  if (groups.quotes.length > 0) {
-    sections.push({ key: 'quotes', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={Quote} label="Quotes" />
+      </LayoutSection>
+    ) : null },
+    { key: 'quotes', width: 'equal', node: groups.quotes.length > 0 ? (
+      <LayoutSection icon={Quote} label="Quotes">
         <ContentBlocks blocks={groups.quotes} {...blockProps} />
-      </div>
-    )});
-  }
+      </LayoutSection>
+    ) : null },
+  ));
 
   if (groups.other.length > 0) {
     sections.push({ key: 'other', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={FileText} label="Topics" />
+      <LayoutSection icon={FileText} label="Topics">
         <ContentBlocks blocks={groups.other} {...blockProps} />
-      </div>
+      </LayoutSection>
     )});
   }
 
@@ -76,25 +67,19 @@ export const PodcastView = memo(function PodcastView({
 
   if (groups.timestamps.length > 0) {
     sections.push({ key: 'timestamps', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={Clock} label="Timestamps" />
+      <LayoutSection icon={Clock} label="Timestamps">
         <div className="flex flex-wrap gap-2">
           <ContentBlocks blocks={groups.timestamps} {...blockProps} />
         </div>
-      </div>
+      </LayoutSection>
     )});
   }
 
   if (sections.length === 0) return null;
 
   return (
-    <div className="space-y-6">
-      {sections.map((section, i) => (
-        <Fragment key={section.key}>
-          {i > 0 && <div className="fade-divider" />}
-          {section.node}
-        </Fragment>
-      ))}
-    </div>
+    <ViewLayout>
+      {renderSections(sections)}
+    </ViewLayout>
   );
 });

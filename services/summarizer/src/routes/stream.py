@@ -54,6 +54,8 @@ from src.services.sponsorblock import (
 from src.exceptions import TranscriptError
 from src.services.transcript_store import transcript_store
 from src.services.s3_client import s3_client, S3Client
+from src.services.gemini_transcriber import transcribe_with_gemini
+from src.services.whisper_transcriber import transcribe_with_whisper
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -123,11 +125,18 @@ async def fetch_transcript(
     youtube_id: str,
     video_data: VideoData,
     duration: int,
+    is_music: bool = False,
 ) -> AsyncGenerator[str | TranscriptData, None]:
     """
-    Fetch transcript using fallback chain: S3 cache → yt-dlp → API → Whisper.
+    Fetch transcript using fallback chain: S3 cache → yt-dlp → API → Gemini → Whisper.
 
     Yields SSE events for phase changes, then yields TranscriptData as final item.
+
+    Args:
+        youtube_id: YouTube video ID
+        video_data: Extracted video data
+        duration: Video duration in seconds
+        is_music: If True, use music-specific transcription prompts
     """
     # Priority 0: S3 cached transcript (avoids all YouTube calls)
     if S3Client.is_available():
@@ -179,7 +188,10 @@ async def fetch_transcript(
     yield sse_event("phase", {"phase": "transcript"})
 
     try:
-        segments, raw_text, transcript_type = await get_transcript(youtube_id)
+        segments, raw_text, transcript_type = await asyncio.wait_for(
+            get_transcript(youtube_id),
+            timeout=30.0,  # 30s — proxy hangs shouldn't block the pipeline
+        )
         source = "proxy" if settings.WEBSHARE_PROXY_USERNAME else "api"
         yield TranscriptData(
             segments=segments,
@@ -188,6 +200,20 @@ async def fetch_transcript(
             source=source,
         )
         return
+    except asyncio.TimeoutError:
+        logger.warning(f"get_transcript timed out after 30s for {youtube_id}")
+        if not settings.WHISPER_ENABLED:
+            raise TranscriptError(
+                "Transcript fetch timed out and Whisper is disabled",
+                ErrorCode.NO_TRANSCRIPT,
+            )
+        if duration > settings.WHISPER_MAX_DURATION_MINUTES * 60:
+            logger.warning(f"Video too long for Whisper ({duration // 60} min)")
+            raise TranscriptError(
+                "Transcript fetch timed out and video too long for Whisper",
+                ErrorCode.NO_TRANSCRIPT,
+            )
+        # Fall through to Whisper
     except TranscriptError as e:
         # Priority 4: Whisper fallback for NO_TRANSCRIPT errors
         if e.code != ErrorCode.NO_TRANSCRIPT or not settings.WHISPER_ENABLED:
@@ -196,24 +222,141 @@ async def fetch_transcript(
             logger.warning(f"Video too long for Whisper ({duration // 60} min)")
             raise
 
-    # Whisper transcription
-    logger.info(f"No captions for {youtube_id}, trying Whisper fallback")
-    yield sse_event("phase", {"phase": "whisper_transcription"})
+    # Audio transcription fallback chain: Gemini (fast) → Whisper (reliable)
+    logger.info(f"No captions for {youtube_id}, trying audio transcription")
+    yield sse_event("phase", {"phase": "audio_transcription"})
 
-    from src.services.whisper_transcriber import transcribe_with_whisper
-    whisper_result = await transcribe_with_whisper(youtube_id)
+    # Try Gemini first — faster and cheaper than Whisper
+    gemini_data = await _try_gemini_transcription(youtube_id, duration, is_music)
+    if gemini_data is not None:
+        yield gemini_data
+        return
+
+    # Whisper fallback
+    yield sse_event("phase", {"phase": "whisper_transcription"})
+    whisper_data, whisper_error = await _try_whisper_transcription(youtube_id, duration, is_music)
+    if whisper_data is not None:
+        yield whisper_data
+        return
+
+    # Metadata fallback — only for music videos when all transcript sources fail
+    if is_music:
+        logger.info(f"All transcript sources failed for music video {youtube_id}, using metadata fallback")
+        yield sse_event("phase", {"phase": "metadata_fallback"})
+        metadata_text = _build_metadata_text(video_data)
+        yield TranscriptData(
+            segments=[],
+            raw_text=metadata_text,
+            transcript_type="metadata",
+            source="metadata",
+        )
+        return
+
+    # Not a music video — raise the Whisper error
+    raise whisper_error  # type: ignore[misc]
+
+
+async def _try_gemini_transcription(
+    youtube_id: str,
+    duration: int,
+    is_music: bool,
+) -> TranscriptData | None:
+    """Attempt Gemini audio transcription. Returns TranscriptData on success, None on failure."""
+    if not settings.GEMINI_API_KEY:
+        return None
+
+    gemini_timeout = min(max(120.0, duration * 0.02 + 60), 300.0)
+    logger.info(
+        f"Trying Gemini transcription (timeout: {int(gemini_timeout)}s) "
+        f"for {duration}s video"
+    )
+    try:
+        gemini_result = await asyncio.wait_for(
+            transcribe_with_gemini(youtube_id, is_music=is_music),
+            timeout=gemini_timeout,
+        )
+        segments = [
+            {"text": s.text, "startMs": s.startMs, "endMs": s.endMs}
+            for s in gemini_result.segments
+        ]
+        logger.info(f"Gemini transcription successful: {len(segments)} segments")
+        return TranscriptData(
+            segments=segments,
+            raw_text=gemini_result.text,
+            transcript_type="gemini",
+            source="gemini",
+        )
+    except (TranscriptError, asyncio.TimeoutError) as e:
+        logger.warning(f"Gemini transcription failed, falling back to Whisper: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected Gemini error: {e}", exc_info=True)
+    return None
+
+
+async def _try_whisper_transcription(
+    youtube_id: str,
+    duration: int,
+    is_music: bool,
+) -> tuple[TranscriptData | None, TranscriptError | None]:
+    """Attempt Whisper transcription. Returns (data, None) on success or (None, error) on failure."""
+    logger.info(f"Trying Whisper fallback for {youtube_id}")
+    # Timeout scales with duration: ~1 min download per 30 min video + transcription overhead
+    # Minimum 5 min, max 15 min. A 173-min video gets ~10 min.
+    whisper_timeout = min(max(300.0, duration * 0.055 + 120), 900.0)
+    logger.info(f"Whisper timeout set to {int(whisper_timeout)}s for {duration}s video")
+
+    try:
+        whisper_result = await asyncio.wait_for(
+            transcribe_with_whisper(youtube_id, is_music=is_music),
+            timeout=whisper_timeout,
+        )
+    except asyncio.TimeoutError:
+        return None, TranscriptError(
+            f"Whisper transcription timed out after {int(whisper_timeout)}s",
+            ErrorCode.UNKNOWN_ERROR,
+        )
+    except TranscriptError as e:
+        return None, e
+    except Exception as e:
+        logger.error(f"Whisper transcription failed unexpectedly: {e}", exc_info=True)
+        return None, TranscriptError(
+            f"Whisper transcription failed: {e}",
+            ErrorCode.UNKNOWN_ERROR,
+        )
+
     segments = [
         {"text": s.text, "startMs": s.startMs, "endMs": s.endMs}
         for s in whisper_result.segments
     ]
     logger.info(f"Whisper fallback successful: {len(segments)} segments")
-
-    yield TranscriptData(
+    return TranscriptData(
         segments=segments,
         raw_text=whisper_result.text,
         transcript_type="whisper",
         source="whisper",
-    )
+    ), None
+
+
+def _build_metadata_text(video_data: VideoData) -> str:
+    """Build a text representation from video metadata for fallback summarization.
+
+    Used when all transcript sources fail for music videos. Composes from
+    title, channel, description, tags, and chapter titles.
+    """
+    parts: list[str] = []
+    parts.append(f"Title: {video_data.title}")
+    if video_data.channel:
+        parts.append(f"Channel: {video_data.channel}")
+    if video_data.description:
+        # Truncate long descriptions to avoid LLM overload
+        desc = video_data.description[:2000]
+        parts.append(f"Description: {desc}")
+    if video_data.context and video_data.context.tags:
+        parts.append(f"Tags: {', '.join(video_data.context.tags[:20])}")
+    if video_data.has_chapters:
+        chapter_titles = [ch.title for ch in video_data.chapters]
+        parts.append(f"Chapters: {', '.join(chapter_titles)}")
+    return "\n\n".join(parts)
 
 
 def validate_duration(duration: int) -> None:
@@ -948,8 +1091,9 @@ async def stream_summarization(
 
         # ── Fetch Transcript ──
         transcript_data: TranscriptData | None = None
+        is_music = (context_dict or {}).get("category") == "music"
 
-        async for item in fetch_transcript(youtube_id, video_data, video_data.duration):
+        async for item in fetch_transcript(youtube_id, video_data, video_data.duration, is_music=is_music):
             if isinstance(item, str):
                 yield item  # SSE event
             else:
@@ -960,13 +1104,17 @@ async def stream_summarization(
 
         yield sse_event("transcript_ready", {"duration": video_data.duration})
 
+        is_metadata_source = transcript_data.source == "metadata"
+
         # Normalize segments for consistent handling
-        normalized_segments = normalize_segments(transcript_data.segments)
+        normalized_segments = normalize_segments(transcript_data.segments) if not is_metadata_source else []
 
         # Store raw transcript in S3 BEFORE sponsor filtering
-        # Skip if already loaded from S3 (resummarize/retry)
+        # Skip for metadata fallback (no real transcript to store)
         raw_transcript_ref: str | None = None
-        if transcript_data.source == "s3":
+        if is_metadata_source:
+            logger.debug("Metadata fallback — skipping S3 storage and sponsor filtering")
+        elif transcript_data.source == "s3":
             raw_transcript_ref = f"transcripts/{youtube_id}.json"
             logger.debug("Transcript loaded from S3, skipping re-store")
         else:
@@ -981,9 +1129,9 @@ async def stream_summarization(
             except Exception as e:
                 logger.warning(f"Failed to store transcript in S3: {e}")
 
-        # Filter sponsor content
+        # Filter sponsor content (skip for metadata fallback — no segments)
         segments = transcript_data.segments
-        if sponsor_segments:
+        if sponsor_segments and not is_metadata_source:
             original_count = len(segments)
             segments = filter_transcript_segments(segments, sponsor_segments)
             transcript_data.segments = segments

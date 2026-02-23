@@ -83,6 +83,7 @@ export const VIDEO_CATEGORY_VALUES = [
   'podcast',
   'diy',
   'gaming',
+  'music',
   'standard',
 ] as const;
 
