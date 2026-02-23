@@ -1,145 +1,147 @@
-# Block Design System Overhaul — Context
+# Block Design Overhaul — Context
 
-**Last Updated: 2026-02-20**
-**Status: ALL PHASES COMPLETE**
+**Last Updated: 2026-02-22**
+**Status: COMPLETE — All phases + view grouping rule fixes**
 
 ---
 
 ## Summary
 
-All 7 phases of the block design overhaul are complete. All unit tests (1037/1037) and Playwright e2e tests (24/24 new + 12/12 existing block-ux-v2) pass. Build and TypeScript checks are clean.
+All phases complete. Phase 3 added multi-column view layouts, block-level fixes, and auto-flow layout engine. Post-phase fix addressed two compounding bugs: (1) view grouping rules didn't match actual V2.1 block types, and (2) CodeView was single-column despite having sidebar-compatible stats. 1084 tests pass. TypeScript clean. Security audit: clean. Code review: no critical issues.
 
 ---
 
-## Critical Files Modified
+## Completed Work (All Phases)
 
-### Core Infrastructure
+### Phase 3: Block Fixes + Multi-Column + Auto-Flow
 
-| File | Path | Changes Made |
-|------|------|-------------|
-| BlockWrapper | `apps/web/src/components/video-detail/blocks/BlockWrapper.tsx` | Replaced `accentColorClasses` (border-l-*) with `accentColorStyles` (CSS custom property `--accent-line-color` via style objects) |
-| index.css | `apps/web/src/index.css` | `.block-accent`: removed left border, added `position: relative` + `::before` gradient line. `.block-card::before`: subtle 1px top fade line. Callout gradient opacities reduced ~40%. Dark mode rules for fade-divider/fade-divider-vertical opacity 0.3→0.4 |
+#### Phase A: Block-Level Fixes
+| File | Changes |
+|------|---------|
+| `NutritionBlock.tsx` | Table → div-based list with fade-dividers, role="list" a11y |
+| `RatingBlock.tsx` | Removed label line, compact horizontal layout (score+stars left, breakdown right on md+) |
+| `index.css` | Location map: opacity 0.12/0.18, 2 extra contour ellipses, crosshair marker, grid 0.22 |
 
-### Phase 1-2: Accent + Callouts
+#### Phase B: Layout Infrastructure
+| File | Changes |
+|------|---------|
+| `views/ViewLayout.tsx` | **NEW** — ViewLayout, LayoutRow, LayoutColumn, LayoutSection, renderSections |
+| `lib/block-layout.ts` | Added SIDEBAR_COMPATIBLE_TYPES (10 types), partitionForSidebar() |
 
-| File | Path | Changes |
-|------|------|---------|
-| CalloutBlock | `apps/web/src/components/video-detail/blocks/CalloutBlock.tsx` | Icons h-4→h-3.5, text-sm→text-xs, gap-2→gap-1.5, removed animate-breathe |
+#### Phase C: View Templates (Multi-Column)
+| View | Layout Pattern |
+|------|---------------|
+| RecipeView | Sidebar (ingredients) + Main (steps) |
+| ReviewView | Top row (verdict + rating) + full-width below |
+| TravelView | Sidebar (costs/locations) + Main (itineraries) |
+| EducationView | Sidebar (formulas/keyvalues) + Main (definitions) |
+| FitnessView | Sidebar (nutrition/stats) + Main (exercises) |
+| PodcastView | Equal 2-col (guests + quotes) |
+| DIYView | Sidebar (tools) + Main (steps) |
+| StandardView | Auto-flow layout engine |
+| CodeView | No change (single-column) |
+| GamingView | No change (single-column) |
 
-### Phase 3: Comparison Grid (Row-Aligned)
+#### Phase D: Auto-Flow Engine
+| File | Changes |
+|------|---------|
+| `lib/auto-flow-layout.ts` | **NEW** — computeAutoFlowLayout with complementary pairs |
+| `hooks/use-auto-flow-layout.ts` | **NEW** — Memoized hook wrapper |
 
-| File | Path | Changes |
-|------|------|---------|
-| ComparisonRenderer | `apps/web/src/components/video-detail/blocks/ComparisonRenderer.tsx` | Rewritten: row-by-row rendering with `maxRows = Math.max(left, right)`, vertical center divider, fade-dividers between rows |
-| ProConBlock | `apps/web/src/components/video-detail/blocks/ProConBlock.tsx` | Rewritten: row-aligned grid when both exist, single-column `<ul>` fallback when only one side |
-| DosDontsBlock | `apps/web/src/components/video-detail/blocks/DosDontsBlock.tsx` | Rewritten: row-aligned grid with responsive columns, single-column fallback |
-| VerdictBlock | `apps/web/src/components/video-detail/blocks/VerdictBlock.tsx` | bestFor/notFor section uses row-aligned grid with vertical divider |
+### Phases 1-7 + Phase 2 Visual Polish (Previously Completed)
 
-### Phase 4: Fade-Edge Design Language
+#### Core Infrastructure
+| File | Changes |
+|------|---------|
+| `BlockWrapper.tsx` | CSS custom property `--accent-line-color` via style objects |
+| `index.css` | `.block-accent::before` gradient line, `.block-card::before` top fade, callout opacities, dark mode tuning, `.table-fade-dividers`, `.location-map-bg`, `.step-connector` |
 
-| File | Path | Changes |
-|------|------|---------|
-| NumberedBlock | `apps/web/src/components/video-detail/blocks/NumberedBlock.tsx` | Added fade-dividers between items (space-y-2→space-y-0 + dividers) |
-| RatingBlock | `apps/web/src/components/video-detail/blocks/RatingBlock.tsx` | Added fade-dividers between breakdown categories |
-| BulletsBlock | Already had fade-dividers | No changes needed |
-| KeyValueRenderer | Already had fade-dividers | No changes needed |
-| GuestBlock | Already had fade-dividers | No changes needed |
+#### Blocks Modified
+| Block | Key Change |
+|-------|-----------|
+| CalloutBlock | Compact sizing (h-3.5 icons, text-xs, gap-1.5) |
+| ComparisonRenderer | Row-by-row rendering, vertical center divider |
+| ProConBlock | Row-aligned grid, single-column fallback |
+| DosDontsBlock | Row-aligned grid, responsive columns |
+| VerdictBlock | bestFor/notFor row-aligned grid |
+| NumberedBlock | Fade-dividers between items |
+| QuoteRenderer | `variant="transparent"`, removed accentColor |
+| DefinitionBlock | `variant="card"`, `text-primary` on term |
+| StepBlock | Fade-dividers between steps, `.step-connector` inner div |
+| ToolListBlock | Changed to list layout with fade-dividers |
+| TableBlock | `variant="card"`, Table2 icon header, bold headers |
 
-### Phase 5: Block Polish
+#### Views Modified
+| View | Key Change |
+|------|-----------|
+| All 10 views | Refactored to sections array + Fragment + fade-divider pattern |
+| All 10 views | Added SectionHeader with contextual icons |
+| StandardView | Added timestamp extraction via useGroupedBlocks |
 
-| File | Path | Changes |
-|------|------|---------|
-| QuoteRenderer | `apps/web/src/components/video-detail/blocks/QuoteRenderer.tsx` | `variant="accent"` → `variant="transparent"`, removed `accentColor="info"` |
-| DefinitionBlock | `apps/web/src/components/video-detail/blocks/DefinitionBlock.tsx` | `variant="accent"` → `variant="card"`, removed `accentColor="primary"`, added `text-primary` to term |
-
-### Phase 6: View Deduplication
-
-| File | Path | Changes |
-|------|------|---------|
-| use-grouped-blocks | `apps/web/src/hooks/use-grouped-blocks.ts` | **NEW** — `useGroupedBlocks(blocks, rules)` hook with `BlockGroupRule` interface |
-| 9 View files | `apps/web/src/components/video-detail/views/*.tsx` | CodeView, RecipeView, TravelView, ReviewView, FitnessView, EducationView, PodcastView, DIYView, GamingView — replaced inline useMemo with hook |
-
-### Tests Modified
-
-| File | Path | Changes |
-|------|------|---------|
-| pro-con-block.test.tsx | `apps/web/src/.../blocks/__tests__/pro-con-block.test.tsx` | Updated: grid structure tests replace old `<ul>` role=list assertions; single-column fallback keeps list semantics |
-| dos-donts-block.test.tsx | `apps/web/src/.../blocks/__tests__/dos-donts-block.test.tsx` | Updated: grid structure tests replace old `<ul>` role=list assertions; fixed duplicate "Don't" header issue |
-| block-design-overhaul.spec.ts | `apps/web/e2e/block-design-overhaul.spec.ts` | **NEW** — 24 Playwright tests covering all phases + layout/overflow/responsivity/dark mode |
+#### Files Created (Previous Phases)
+| File | Purpose |
+|------|---------|
+| `views/SectionHeader.tsx` | Reusable section header (LucideIcon + uppercase label) |
+| `views/__tests__/section-header.test.tsx` | 4 unit tests |
+| `hooks/use-grouped-blocks.ts` | Block grouping hook with BlockGroupRule interface |
+| `e2e/block-design-overhaul.spec.ts` | 24 Playwright tests |
 
 ---
 
 ## Key Design Decisions
 
-### Decision 1: CSS Custom Property for Accent Color
-**Chosen:** CSS custom property `--accent-line-color` set via `style` prop
-**Reason:** Pseudo-elements can't read Tailwind classes; CSS variables work cleanly with `::before`
+### Decision 1: Frontend-Only Layouts
+**Chosen:** All layout decisions happen in the frontend
+**Reason:** Summarizer already provides `category` + per-chapter `view`. Block types already classified by size. Layout is purely presentational.
 
-### Decision 2: Top Fade-Edge Instead of Left Border
-**Chosen:** 2px gradient line at top of accent blocks via `::before`
-**Reason:** Matches existing fade-divider language; top position doesn't compete with content reading flow
+### Decision 2: Sidebar Width = 280px
+**Chosen:** Fixed 280px sidebar on md+ screens
+**Reason:** Content area is 640-760px. 280px fits data-dense blocks comfortably. Main column gets 360-480px.
 
-### Decision 3: Row-Aligned Comparison Grid
-**Chosen:** `maxRows = Math.max(left, right)`, render empty cells for shorter column
-**Reason:** Visual row alignment across columns creates a proper table-like reading experience
+### Decision 3: ViewLayout Components (Not CSS Grid)
+**Chosen:** Flexbox-based composition components
+**Reason:** Simpler mental model (sidebar+main, equal-2, full). CSS grid would require track definitions.
 
-### Decision 4: Quote → Transparent, Definition → Card
-**Reason:** Quote has `.quote-decorative-mark` (accent border was redundant). Definition is standalone knowledge unit (card gives containment).
+### Decision 4: Auto-Flow for StandardView Only
+**Chosen:** Only StandardView uses the auto-flow engine; specialized views use manual templates
+**Reason:** Manual templates give precise control. Auto-flow is a smart fallback for generic/mixed content.
 
-### Decision 5: Dual-column grid loses `<ul>` semantics
-**Chosen:** Row-aligned `<div>` grid in dual-column mode, `<ul>` preserved in single-column fallback
-**Reason:** Interleaving left/right items per row makes it impossible to wrap in two separate `<ul>`. Accessibility is maintained via visible column headers and aria-hidden decorative elements. Tests updated to match.
+### Decision 5: Mobile Collapse Strategy
+**Chosen:** `flex-col` on mobile, `md:flex-row` on desktop
+**Reason:** Sidebar content stacks vertically on mobile as safe default.
 
-### Decision 6: DosDontsBlock — Always-visible column headers
-**Chosen:** Both "Do" and "Don't" headers always visible (removed `hidden sm:flex`)
-**Reason:** Eliminates duplicate mobile-only header that caused test failures and simplified the DOM
+### Decision 6: Graceful Degradation
+**Chosen:** Views fall back to single-column when sidebar+main doesn't make sense
+**Reason:** If only sidebar OR main content exists, multi-column adds no value.
 
 ---
 
-## Test Results (Final)
+## Test Results
 
 | Suite | Result |
 |-------|--------|
 | TypeScript (`tsc --noEmit`) | Clean |
-| Build (`vite build`) | Clean |
-| Unit tests (Vitest) | 1037/1037 passed (49 files) |
-| Playwright — block-design-overhaul.spec.ts | 24/24 passed |
-| Playwright — block-ux-v2.spec.ts | 12/12 passed |
-| Playwright — design-system-visual.spec.ts | 18/21 passed (3 pre-existing failures) |
-
-### Pre-existing Playwright Failures (NOT caused by overhaul)
-- `light mode has cool undertone (hue ~250)` — theme hue is 285, not 250
-- `dark mode has warm undertone (hue ~55)` — theme hue is 280, not 55
-- `responsive: block cards adapt to viewport width` — test uses `.rounded-lg.border.bg-card` selector instead of `.block-card`
+| Unit tests (Vitest) | 1085/1085 passed (+44 from Phase 3) |
+| Playwright — block-design-overhaul.spec.ts | Pending visual verification |
+| Playwright — block-ux-v2.spec.ts | Pending visual verification |
 
 ---
 
-## Uncommitted Changes
+## New Files Created (Phase 3)
 
-All changes are uncommitted. Files to commit:
-- `apps/web/src/index.css`
-- `apps/web/src/components/video-detail/blocks/BlockWrapper.tsx`
-- `apps/web/src/components/video-detail/blocks/CalloutBlock.tsx`
-- `apps/web/src/components/video-detail/blocks/ComparisonRenderer.tsx`
-- `apps/web/src/components/video-detail/blocks/ProConBlock.tsx`
-- `apps/web/src/components/video-detail/blocks/DosDontsBlock.tsx`
-- `apps/web/src/components/video-detail/blocks/VerdictBlock.tsx`
-- `apps/web/src/components/video-detail/blocks/NumberedBlock.tsx`
-- `apps/web/src/components/video-detail/blocks/RatingBlock.tsx`
-- `apps/web/src/components/video-detail/blocks/QuoteRenderer.tsx`
-- `apps/web/src/components/video-detail/blocks/DefinitionBlock.tsx`
-- `apps/web/src/hooks/use-grouped-blocks.ts` (NEW)
-- `apps/web/src/components/video-detail/views/CodeView.tsx`
-- `apps/web/src/components/video-detail/views/RecipeView.tsx`
-- `apps/web/src/components/video-detail/views/TravelView.tsx`
-- `apps/web/src/components/video-detail/views/ReviewView.tsx`
-- `apps/web/src/components/video-detail/views/FitnessView.tsx`
-- `apps/web/src/components/video-detail/views/EducationView.tsx`
-- `apps/web/src/components/video-detail/views/PodcastView.tsx`
-- `apps/web/src/components/video-detail/views/DIYView.tsx`
-- `apps/web/src/components/video-detail/views/GamingView.tsx`
-- `apps/web/src/components/video-detail/blocks/__tests__/pro-con-block.test.tsx`
-- `apps/web/src/components/video-detail/blocks/__tests__/dos-donts-block.test.tsx`
-- `apps/web/e2e/block-design-overhaul.spec.ts` (NEW)
+| File | Purpose |
+|------|---------|
+| `views/ViewLayout.tsx` | Layout primitives (ViewLayout, LayoutRow, LayoutColumn, LayoutSection, renderSections) |
+| `views/__tests__/view-layout.test.tsx` | 17 unit tests for layout components |
+| `lib/auto-flow-layout.ts` | Auto-flow layout algorithm with complementary pairs |
+| `lib/__tests__/auto-flow-layout.test.ts` | 13 unit tests for auto-flow algorithm |
+| `hooks/use-auto-flow-layout.ts` | Memoized hook wrapper |
 
-Suggested commit: `feat(web): block design overhaul — accent gradient, compact callouts, row-aligned grids, fade-edge system, view deduplication`
+## Existing Patterns Reused
+
+- **`useGroupedBlocks(blocks, rules)`** — all views still use this
+- **`ContentBlocks`** — renders blocks within each column/section
+- **`SectionHeader`** — used inside LayoutSection
+- **`groupBlocksBySize` / `getBlockSize`** — reused for auto-flow decisions
+- **`.fade-divider` CSS** — no new CSS needed
+- **`BLOCK_SIZE_MAP`** — half-width types already classified

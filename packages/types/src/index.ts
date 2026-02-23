@@ -26,7 +26,7 @@ export interface BaseBlock {
 // Transcript Types (Phase 2 & 3)
 // ─────────────────────────────────────────────────────
 
-export type TranscriptSource = 'ytdlp' | 'api' | 'proxy' | 'whisper';
+export type TranscriptSource = 'ytdlp' | 'api' | 'proxy' | 'whisper' | 'gemini' | 'metadata';
 
 export interface TranscriptSegment {
   text: string;
@@ -83,6 +83,7 @@ export const VIDEO_CATEGORY_VALUES = [
   'podcast',
   'diy',
   'gaming',
+  'music',
   'standard',
 ] as const;
 
@@ -772,6 +773,10 @@ export type WebSocketEvent = VideoStatusEvent | VideoMetadataEvent | ExpansionSt
 export type SummaryStreamPhase =
   | 'metadata'
   | 'transcript'
+  | 'transcript_cached'
+  | 'audio_transcription'
+  | 'whisper_transcription'
+  | 'metadata_fallback'
   | 'parallel_analysis'
   | 'chapter_detect'
   | 'chapter_summaries'

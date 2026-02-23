@@ -117,6 +117,18 @@
       },
       "channel_patterns": ["i like to make stuff", "diy creators", "adam savage"],
       "title_patterns": ["diy", "how to build", "making a", "i built", "building"]
+    },
+    "music": {
+      "keywords": {
+        "primary": ["music", "song", "album", "official video", "lyrics", "music video", "concert", "live performance"],
+        "secondary": ["remix", "cover", "acoustic", "track", "ep", "single", "feat", "ft", "producer", "beat", "instrumental"]
+      },
+      "youtube_categories": {
+        "primary": ["Music"],
+        "secondary": ["Entertainment"]
+      },
+      "channel_patterns": ["vevo", "records", "music"],
+      "title_patterns": ["official (music )?video", "lyrics?( video)?", "\\bft\\.?\\b", "\\bfeat\\.?\\b", "live at", "concert"]
     }
   },
   "default_category": "standard"

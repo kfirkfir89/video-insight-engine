@@ -24,11 +24,30 @@ describe('RatingBlock', () => {
 
       expect(screen.getByText('/ 5')).toBeInTheDocument();
     });
+  });
 
-    it('should render label when present', () => {
-      render(<RatingBlock block={createMockBlock({ label: 'Overall Rating' })} />);
+  describe('compact layout', () => {
+    it('should render breakdown categories when breakdown exists', () => {
+      render(
+        <RatingBlock
+          block={createMockBlock({
+            breakdown: [
+              { category: 'Performance', score: 4 },
+              { category: 'Design', score: 5 },
+            ],
+          })}
+        />
+      );
 
-      expect(screen.getByText('Overall Rating')).toBeInTheDocument();
+      expect(screen.getByText('Performance')).toBeInTheDocument();
+      expect(screen.getByText('Design')).toBeInTheDocument();
+    });
+
+    it('should not render breakdown section when no breakdown provided', () => {
+      render(<RatingBlock block={createMockBlock()} />);
+
+      expect(screen.queryByText('Performance')).not.toBeInTheDocument();
+      expect(screen.queryByText('Design')).not.toBeInTheDocument();
     });
   });
 
