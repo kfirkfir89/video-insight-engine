@@ -124,6 +124,40 @@ async def list_orders(): ...
 
 ---
 
+## JSON Response Performance
+
+Pydantic v2 uses Rust-based serialization internally. When you return a Pydantic model and declare `response_model`, FastAPI skips `jsonable_encoder` entirely and serializes directly via Pydantic's Rust layer — matching `orjson` performance out of the box.
+
+### DO ✅
+
+```python
+# Return Pydantic models with response_model — Rust-fast by default
+@router.post("/summarize", response_model=SummarizeResponse, status_code=202)
+async def summarize(data: SummarizeRequest) -> SummarizeResponse:
+    result = await service.summarize(data)
+    return result
+```
+
+### DON'T ❌
+
+```python
+# ORJSONResponse / UJSONResponse — unnecessary with Pydantic v2
+from fastapi.responses import ORJSONResponse
+
+@router.post("/summarize", response_class=ORJSONResponse)
+async def summarize(data: dict):
+    return ORJSONResponse(content=result.model_dump())
+
+# Returning raw dicts bypasses Pydantic validation and serialization
+@router.get("/items")
+async def list_items():
+    return {"items": [item.__dict__ for item in items]}
+```
+
+**Why:** FastAPI 0.115+ with Pydantic 2.5+ eliminates the need for third-party JSON response classes. Declare `response_model` and return the Pydantic model directly.
+
+---
+
 ## Dependency Injection
 
 ### DO ✅

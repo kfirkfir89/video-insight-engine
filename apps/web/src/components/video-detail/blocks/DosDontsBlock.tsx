@@ -50,8 +50,8 @@ export const DosDontsBlock = memo(function DosDontsBlock({ block }: DosDontsBloc
 
           {/* Row-by-row rendering */}
           {Array.from({ length: maxRows }).map((_, rowIndex) => {
-            const doItem = block.do[rowIndex];
-            const dontItem = block.dont[rowIndex];
+            const doItem = block.do?.[rowIndex];
+            const dontItem = block.dont?.[rowIndex];
             return (
               <div key={rowIndex}>
                 {rowIndex > 0 && <div className="fade-divider" aria-hidden="true" />}

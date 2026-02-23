@@ -1179,16 +1179,23 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
 │                    STREAMING PHASES (SSE Events)                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  PHASE 1: INSTANT (~1-3 seconds)                                           │
+│  PHASE 1: EXTRACTION (~1-30 seconds, depends on transcript source)         │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  yt-dlp Extraction (single call, no LLM)                            │   │
+│  │  yt-dlp Extraction + Transcript Fallback Chain                      │   │
 │  │                                                                      │   │
 │  │  Output events:                                                      │   │
 │  │    - metadata (title, channel, thumbnail, duration)                 │   │
 │  │    - chapters (if creator chapters exist)                            │   │
 │  │    - sponsor_segments (SponsorBlock API)                             │   │
 │  │    - transcript_ready                                                │   │
-│  │    - VideoContext with CATEGORY (coding/cooking/general/etc)        │   │
+│  │    - VideoContext with CATEGORY (coding/cooking/music/etc)          │   │
+│  │                                                                      │   │
+│  │  Transcript source chain (first success wins):                      │   │
+│  │    1. S3 cache          → phase: transcript_cached (~instant)       │   │
+│  │    2. yt-dlp captions   → phase: transcript (~1-3s)                 │   │
+│  │    3. Gemini audio      → phase: audio_transcription (~5-15s)      │   │
+│  │    4. Whisper audio     → phase: whisper_transcription (~10-30s)    │   │
+│  │    5. Metadata fallback → phase: metadata_fallback (music only)    │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  PHASE 2: PARALLEL ANALYSIS (~2-5 seconds)                                 │
@@ -1239,8 +1246,18 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
 ### phase
 
 ```json
-{ "event": "phase", "phase": "metadata" | "transcript" | "parallel_analysis" | "chapter_detect" | "chapter_summaries" | "concepts" | "master_summary" }
+{ "event": "phase", "phase": "metadata" | "transcript" | "transcript_cached" | "audio_transcription" | "whisper_transcription" | "metadata_fallback" | "parallel_analysis" | "chapter_detect" | "chapter_summaries" | "concepts" | "master_summary" }
 ```
+
+**Transcript sub-phases** (emitted within Phase 1 based on transcript source):
+
+| Phase | When |
+|-------|------|
+| `transcript` | Starting transcript extraction (always emitted first) |
+| `transcript_cached` | Transcript found in S3 cache |
+| `audio_transcription` | No captions available; starting audio transcription (Gemini) |
+| `whisper_transcription` | Gemini failed or unavailable; falling back to Whisper |
+| `metadata_fallback` | All transcript sources failed for music video; using title/description as transcript |
 
 ### metadata
 

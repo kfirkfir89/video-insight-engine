@@ -41,7 +41,7 @@ PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 # Valid category values (matches frontend VideoCategory)
 VALID_CATEGORIES: frozenset[str] = frozenset([
     'cooking', 'coding', 'fitness', 'travel', 'education',
-    'podcast', 'reviews', 'gaming', 'diy', 'standard'
+    'podcast', 'reviews', 'gaming', 'diy', 'music', 'standard'
 ])
 
 
@@ -336,6 +336,7 @@ def _select_persona(category: str) -> str:
         'education': 'education',
         'gaming': 'standard',  # No gaming-specific persona yet
         'diy': 'standard',     # No DIY-specific persona yet
+        'music': 'music',
     }
     return category_to_persona.get(category, 'standard')
 
@@ -384,6 +385,7 @@ Categories (pick ONE):
 - reviews: Product reviews, unboxing, comparisons
 - gaming: Gameplay, walkthroughs, gaming content
 - diy: DIY projects, crafts, building
+- music: Music videos, songs, albums, concerts, live performances
 - standard: None of the above
 
 Respond with ONLY the category name, nothing else."""

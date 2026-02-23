@@ -94,6 +94,8 @@ export const ArticleSection = memo(function ArticleSection({
         return <DIYView {...viewProps} />;
       case 'gaming':
         return <GamingView {...viewProps} />;
+      case 'music':
+        return <StandardView {...viewProps} />;
       case 'standard':
       default:
         return <StandardView {...viewProps} />;

@@ -46,7 +46,7 @@ VIEW_SIGNATURE_BLOCKS: dict[str, set[str]] = {
     'travel': {'location', 'itinerary'},
     'fitness': {'exercise', 'workout_timer'},
     'education': {'quiz', 'formula'},
-    'podcast': {'guest', 'transcript'},
+    'podcast': {'guest'},              # Single signature — relies on LLM (transcript removed)
     'diy': {'tool_list', 'step'},       # 'step' overlaps with cooking — handled by 2+ threshold
     'gaming': set(),                     # No unique signature blocks — relies on LLM
     'standard': set(),
@@ -61,7 +61,7 @@ CATEGORY_BLOCKS: dict[str, list[str]] = {
     'fitness': ['exercise', 'workout_timer'],
     'travel': ['location', 'itinerary', 'cost'],
     'education': ['quiz', 'formula', 'timeline', 'definition'],
-    'interview': ['guest', 'quote', 'timestamp', 'transcript'],
+    'interview': ['guest', 'quote', 'timestamp'],
     'standard': [],
 }
 

@@ -91,11 +91,13 @@ const DEFAULT_LABELS: Record<VariantKey, { left: string; right: string }> = {
 export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: ComparisonRendererProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('side-by-side');
   const variant = block.variant || 'versus';
-  const variantKey = variant as VariantKey;
+  const variantKey: VariantKey = variant in VARIANT_STYLES
+    ? (variant as VariantKey)
+    : 'versus';
 
   // Get static styles (no recreation needed)
-  const staticStyles = VARIANT_STYLES[variantKey] ?? VARIANT_STYLES.versus;
-  const defaultLabels = DEFAULT_LABELS[variantKey] ?? DEFAULT_LABELS.versus;
+  const staticStyles = VARIANT_STYLES[variantKey];
+  const defaultLabels = DEFAULT_LABELS[variantKey];
 
   // Build full config with computed labels
   const config: VariantConfig = {
@@ -107,7 +109,9 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
   const RightIcon = config.rightIcon;
 
   const isSideBySide = viewMode === 'side-by-side';
-  const maxRows = Math.max(block.left.items.length, block.right.items.length);
+  const leftItems = block.left.items ?? [];
+  const rightItems = block.right.items ?? [];
+  const maxRows = Math.max(leftItems.length, rightItems.length);
 
   return (
     <BlockWrapper variant="transparent">
@@ -160,8 +164,8 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
           {/* Vertical center divider */}
           <div className="fade-divider-vertical absolute left-1/2 top-2 bottom-2 -translate-x-px" aria-hidden="true" />
           {Array.from({ length: maxRows }).map((_, rowIndex) => {
-            const leftItem = block.left.items[rowIndex];
-            const rightItem = block.right.items[rowIndex];
+            const leftItem = leftItems[rowIndex];
+            const rightItem = rightItems[rowIndex];
             return (
               <div key={rowIndex}>
                 {rowIndex > 0 && <div className="fade-divider" aria-hidden="true" />}
@@ -197,13 +201,13 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
           {/* Left column */}
           <div className={cn("p-4", variantKey === 'dos_donts' && 'bg-success/[0.04] rounded-lg', variantKey === 'pros_cons' && 'bg-info/[0.04] rounded-lg')}>
             <ul className="space-y-0 stagger-children">
-              {block.left.items.map((item, index) => (
+              {leftItems.map((item, index) => (
                 <li key={index}>
                   <div className="flex items-baseline gap-2.5 text-sm py-1.5">
                     <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.leftBulletClass)} />
                     <span className="text-muted-foreground"><ConceptHighlighter text={item} /></span>
                   </div>
-                  {index < block.left.items.length - 1 && (
+                  {index < leftItems.length - 1 && (
                     <div className="fade-divider" aria-hidden="true" />
                   )}
                 </li>
@@ -224,13 +228,13 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
           {/* Right column */}
           <div className={cn("p-4 pt-2", variantKey === 'dos_donts' && 'bg-destructive/[0.04] rounded-lg', variantKey === 'pros_cons' && 'bg-warning/[0.04] rounded-lg')}>
             <ul className="space-y-0 stagger-children">
-              {block.right.items.map((item, index) => (
+              {rightItems.map((item, index) => (
                 <li key={index}>
                   <div className="flex items-baseline gap-2.5 text-sm py-1.5">
                     <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.rightBulletClass)} />
                     <span className="text-muted-foreground"><ConceptHighlighter text={item} /></span>
                   </div>
-                  {index < block.right.items.length - 1 && (
+                  {index < rightItems.length - 1 && (
                     <div className="fade-divider" aria-hidden="true" />
                   )}
                 </li>

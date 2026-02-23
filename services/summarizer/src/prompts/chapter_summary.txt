@@ -195,22 +195,17 @@ AVAILABLE CONTENT BLOCK TYPES:
 
 --- UNIVERSAL BLOCKS ---
 
-29. "transcript" - Timestamped dialogue/speech excerpts
-    {{"type": "transcript", "lines": [{{"time": "0:45", "seconds": 45, "text": "Let me explain how this works..."}}, {{"time": "1:02", "seconds": 62, "text": "The key insight here is..."}}]}}
-    Fields: lines array with time (MM:SS format), seconds (total seconds), text (spoken content)
-    Use when: Quoting multiple sequential statements, dialogue excerpts, key moments with exact timestamps
-
-30. "timeline" - Chronological events
+29. "timeline" - Chronological events
     {{"type": "timeline", "events": [{{"date": "2008", "title": "Bitcoin Whitepaper", "description": "Satoshi Nakamoto publishes the original paper"}}, {{"date": "2015", "title": "Ethereum Launch", "description": "Smart contracts become possible"}}]}}
     Fields: events array with date (optional), time (optional), title (required), description (optional)
     Use when: Historical timelines, product evolution, release history, chronological events
 
-31. "tool_list" - Equipment/tools needed
+30. "tool_list" - Equipment/tools needed
     {{"type": "tool_list", "tools": [{{"name": "Stand mixer", "notes": "with dough hook"}}, {{"name": "9x13 baking pan"}}, {{"name": "Wire rack"}}]}}
     Fields: tools array with name, quantity (optional), notes (optional), checked (optional)
     Use when: Equipment lists, required tools, materials needed
 
-32. "guest" - Podcast/interview guest information
+31. "guest" - Podcast/interview guest information
     {{"type": "guest", "guests": [{{"name": "Jane Smith", "title": "CEO of TechCorp", "bio": "20 years in tech leadership"}}]}}
     Fields: guests array with name (required), title, bio, imageUrl, socialLinks
     Use when: Introducing podcast guests, interview subjects, speakers
@@ -238,7 +233,7 @@ BLOCK SELECTION PRIORITY (prefer specific over generic):
 | Historical timeline, evolution            | timeline             | numbered                     |
 | Tools/equipment needed                    | tool_list            | bullets                      |
 | Podcast/interview guests                  | guest                | paragraph                    |
-| Timestamped dialogue, speech excerpts     | transcript           | quote blocks                 |
+| Notable spoken statements, key quotes     | quote                | paragraph                    |
 
 PERSONA-SPECIFIC EXAMPLES:
 {variant_examples}
@@ -294,7 +289,7 @@ V2.1 CATEGORY-SPECIFIC DECISIONS:
 - Has CHRONOLOGICAL EVENTS? -> timeline block
 - Has EQUIPMENT/TOOLS NEEDED? -> tool_list block
 - Has PODCAST GUESTS? -> guest block
-- Has TIMESTAMPED DIALOGUE? -> transcript block with time/seconds
+- Has NOTABLE QUOTES/DIALOGUE? -> quote block with attribution
 
 ARTICLE FLOW RULES:
 - Don't start with "This chapter..." or "In this part..."

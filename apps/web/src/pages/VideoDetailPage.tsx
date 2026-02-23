@@ -2,6 +2,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useCallback, useMemo } from "react";
 import { useVideo, useRetryVideo } from "@/hooks/use-videos";
 import { useSummaryStream, getStreamingPhaseLabel, type StreamState } from "@/hooks/use-summary-stream";
+import { useProcessingStore } from "@/stores/processing-store";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
@@ -22,6 +23,12 @@ export function VideoDetailPage() {
   // Determine if we should stream
   const isProcessing = video?.status === "pending" || video?.status === "processing";
   const videoSummaryId = video?.videoSummaryId || "";
+
+  // Skip page-level stream when useProcessingManager already has one active
+  // (prevents duplicate SSE requests for the same video)
+  const hasManagerStream = useProcessingStore(
+    (s) => videoSummaryId ? s.streams.has(videoSummaryId) : false
+  );
 
   // Stable callback to avoid recreating on every render
   const handleStreamComplete = useCallback(() => {
@@ -45,7 +52,7 @@ export function VideoDetailPage() {
   // Use streaming hook when processing
   const streamState = useSummaryStream({
     videoSummaryId,
-    enabled: isProcessing && !!videoSummaryId,
+    enabled: isProcessing && !!videoSummaryId && !hasManagerStream,
     onComplete: handleStreamComplete,
   });
 

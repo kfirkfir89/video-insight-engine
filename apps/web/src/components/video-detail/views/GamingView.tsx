@@ -1,9 +1,10 @@
-import { Fragment, memo, type ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { Target, Sparkles, Clock } from 'lucide-react';
 import type { SummaryChapter } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 import { useGroupedBlocks, type BlockGroupRule } from '@/hooks/use-grouped-blocks';
-import { SectionHeader } from './SectionHeader';
+import { useBlockProps } from '@/hooks/use-block-props';
+import { ViewLayout, LayoutSection, renderSections } from './ViewLayout';
 
 interface GamingViewProps {
   chapter: SummaryChapter;
@@ -37,16 +38,15 @@ export const GamingView = memo(function GamingView({
 }: GamingViewProps) {
   const groups = useGroupedBlocks(chapter.content, GAMING_RULES);
 
-  const blockProps = { onPlay, onStop, isVideoActive, activeStartSeconds };
+  const blockProps = useBlockProps(onPlay, onStop, isVideoActive, activeStartSeconds);
 
   const sections: { key: string; node: ReactNode }[] = [];
 
   if (groups.strategies.length > 0) {
     sections.push({ key: 'strategies', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={Target} label="Strategies" />
+      <LayoutSection icon={Target} label="Strategies">
         <ContentBlocks blocks={groups.strategies} {...blockProps} />
-      </div>
+      </LayoutSection>
     )});
   }
 
@@ -64,34 +64,27 @@ export const GamingView = memo(function GamingView({
 
   if (groups.tips.length > 0) {
     sections.push({ key: 'tips', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={Sparkles} label="Tips" />
+      <LayoutSection icon={Sparkles} label="Tips">
         <ContentBlocks blocks={groups.tips} {...blockProps} />
-      </div>
+      </LayoutSection>
     )});
   }
 
   if (groups.timestamps.length > 0) {
     sections.push({ key: 'timestamps', node: (
-      <div className="space-y-2">
-        <SectionHeader icon={Clock} label="Timestamps" />
+      <LayoutSection icon={Clock} label="Timestamps">
         <div className="flex flex-wrap gap-2">
           <ContentBlocks blocks={groups.timestamps} {...blockProps} />
         </div>
-      </div>
+      </LayoutSection>
     )});
   }
 
   if (sections.length === 0) return null;
 
   return (
-    <div className="space-y-6">
-      {sections.map((section, i) => (
-        <Fragment key={section.key}>
-          {i > 0 && <div className="fade-divider" />}
-          {section.node}
-        </Fragment>
-      ))}
-    </div>
+    <ViewLayout>
+      {renderSections(sections)}
+    </ViewLayout>
   );
 });

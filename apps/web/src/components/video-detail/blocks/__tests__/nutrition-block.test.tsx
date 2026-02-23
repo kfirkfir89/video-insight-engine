@@ -69,26 +69,26 @@ describe('NutritionBlock', () => {
     });
   });
 
-  describe('table structure', () => {
-    it('should render as table element', () => {
+  describe('list structure', () => {
+    it('should render as a list element', () => {
       render(<NutritionBlock block={createMockBlock()} />);
 
-      expect(screen.getByRole('table')).toBeInTheDocument();
+      expect(screen.getByRole('list', { name: /nutrition facts/i })).toBeInTheDocument();
     });
 
-    it('should have screen-reader only header row', () => {
+    it('should have correct number of list items', () => {
+      render(<NutritionBlock block={createMockBlock()} />);
+
+      const items = screen.getAllByRole('listitem');
+      expect(items.length).toBe(4);
+    });
+
+    it('should have fade-dividers between items', () => {
       const { container } = render(<NutritionBlock block={createMockBlock()} />);
 
-      const thead = container.querySelector('thead');
-      expect(thead).toHaveClass('sr-only');
-    });
-
-    it('should have correct number of rows', () => {
-      render(<NutritionBlock block={createMockBlock()} />);
-
-      const rows = screen.getAllByRole('row');
-      // 1 header row (sr-only) + 4 data rows
-      expect(rows.length).toBe(5);
+      const dividers = container.querySelectorAll('.fade-divider');
+      // 4 items = 3 dividers between them
+      expect(dividers.length).toBe(3);
     });
   });
 
@@ -99,11 +99,11 @@ describe('NutritionBlock', () => {
       expect(icons.length).toBeGreaterThan(0);
     });
 
-    it('should have proper table semantics', () => {
+    it('should have proper list semantics', () => {
       render(<NutritionBlock block={createMockBlock()} />);
 
-      expect(screen.getByRole('table')).toBeInTheDocument();
-      expect(screen.getAllByRole('row').length).toBeGreaterThan(1);
+      expect(screen.getByRole('list')).toBeInTheDocument();
+      expect(screen.getAllByRole('listitem').length).toBeGreaterThan(1);
     });
   });
 });

@@ -1,6 +1,15 @@
-import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import {
+  forwardRef,
+  useId,
+  useRef,
+  useImperativeHandle,
+  useState,
+  useCallback,
+  useEffect,
+} from "react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { useDragScrollbar } from "@/hooks/use-drag-scrollbar";
 
 interface ScrollContainerProps {
   children: ReactNode;
@@ -10,88 +19,162 @@ interface ScrollContainerProps {
   wrapperClassName?: string;
 }
 
+interface ThumbState {
+  top: number;
+  height: number;
+  hasScroll: boolean;
+  scrollPercent: number;
+}
+
 /**
- * Scrollable container with hidden native scrollbar and a custom
- * right-edge indicator that appears only while scrolling.
+ * Scrollable container with an auto-hiding, interactive overlay scrollbar.
+ * - Auto-hides when idle (visible on scroll, hover, drag)
+ * - No layout push (absolutely positioned, native scrollbar hidden)
+ * - Fully interactive (click track → jump, drag thumb → scroll)
  */
 export const ScrollContainer = forwardRef<HTMLDivElement, ScrollContainerProps>(
   function ScrollContainer({ children, className, wrapperClassName }, ref) {
+    const scrollId = useId();
     const scrollRef = useRef<HTMLDivElement>(null);
-    const timerRef = useRef<ReturnType<typeof setTimeout>>(null);
-    const rafRef = useRef<number | null>(null);
-    const [thumb, setThumb] = useState({ scrolling: false, top: 0, height: 0, hasScroll: false });
+    const hideTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-    useImperativeHandle(ref, () => scrollRef.current!);
+    const [thumb, setThumb] = useState<ThumbState>({
+      top: 0,
+      height: 0,
+      hasScroll: false,
+      scrollPercent: 0,
+    });
+    const [visible, setVisible] = useState(false);
+    const [hovering, setHovering] = useState(false);
 
+    const scheduleHide = useCallback(() => {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = setTimeout(() => setVisible(false), 800);
+    }, []);
+
+    const showThumb = useCallback(() => {
+      clearTimeout(hideTimerRef.current);
+      setVisible(true);
+    }, []);
+
+    const { dragging, handleThumbMouseDown } = useDragScrollbar({
+      scrollRef,
+      onDragStart: showThumb,
+      onDragEnd: scheduleHide,
+    });
+
+    // Ref avoids stale closure in scroll handler when dragging state changes
+    const draggingRef = useRef(false);
+    useEffect(() => {
+      draggingRef.current = dragging;
+    }, [dragging]);
+
+    const updateThumb = useCallback(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      const hasScroll = scrollHeight > clientHeight;
+      if (!hasScroll) {
+        setThumb({ top: 0, height: 0, hasScroll: false, scrollPercent: 0 });
+        return;
+      }
+      const ratio = clientHeight / scrollHeight;
+      const thumbHeight = Math.max(ratio * clientHeight, 24);
+      const maxTop = clientHeight - thumbHeight;
+      const scrollRatio = scrollTop / (scrollHeight - clientHeight);
+      const thumbTop = scrollRatio * maxTop;
+      setThumb({ top: thumbTop, height: thumbHeight, hasScroll: true, scrollPercent: Math.round(scrollRatio * 100) });
+    }, []);
+
+    // Scroll handler — uses draggingRef to avoid stale closure flicker
+    const handleScroll = useCallback(() => {
+      updateThumb();
+      showThumb();
+      if (!draggingRef.current) scheduleHide();
+    }, [updateThumb, showThumb, scheduleHide]);
+
+    // ResizeObserver for content changes
     useEffect(() => {
       const el = scrollRef.current;
       if (!el) return;
-
-      const compute = () => {
-        const { scrollTop, scrollHeight, clientHeight } = el;
-        if (scrollHeight <= clientHeight) return { top: 0, height: 0, hasScroll: false };
-        const h = Math.max(clientHeight * (clientHeight / scrollHeight), 24);
-        const maxTop = clientHeight - h;
-        const ratio = scrollTop / (scrollHeight - clientHeight);
-        return { top: ratio * maxTop, height: h, hasScroll: true };
-      };
-
-      const initial = compute();
-      setThumb((prev) => ({ ...prev, ...initial }));
-
-      const onScroll = () => {
-        if (rafRef.current) return;
-        rafRef.current = requestAnimationFrame(() => {
-          rafRef.current = null;
-          const t = compute();
-          setThumb({ scrolling: true, ...t });
-          if (timerRef.current) clearTimeout(timerRef.current);
-          timerRef.current = setTimeout(() => {
-            setThumb((prev) => ({ ...prev, scrolling: false }));
-          }, 800);
-        });
-      };
-
-      const ro = new ResizeObserver(() => {
-        const t = compute();
-        setThumb((prev) => ({ ...prev, ...t }));
-      });
+      const ro = new ResizeObserver(() => updateThumb());
       ro.observe(el);
-      el.addEventListener("scroll", onScroll, { passive: true });
+      if (el.firstElementChild) ro.observe(el.firstElementChild);
+      updateThumb();
+      return () => ro.disconnect();
+    }, [updateThumb]);
 
-      return () => {
-        el.removeEventListener("scroll", onScroll);
-        ro.disconnect();
-        if (timerRef.current) clearTimeout(timerRef.current);
-        if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      };
+    // Track click → jump to position
+    const handleTrackMouseDown = useCallback(
+      (e: React.MouseEvent<HTMLDivElement>) => {
+        const el = scrollRef.current;
+        if (!el) return;
+        const trackRect = e.currentTarget.getBoundingClientRect();
+        const clickRatio =
+          (e.clientY - trackRect.top) / trackRect.height;
+        const { scrollHeight, clientHeight } = el;
+        el.scrollTop = clickRatio * (scrollHeight - clientHeight);
+      },
+      [],
+    );
+
+    // Keep visible while hovering or dragging
+    useEffect(() => {
+      if (hovering || dragging) {
+        showThumb();
+      } else {
+        scheduleHide();
+      }
+    }, [hovering, dragging, showThumb, scheduleHide]);
+
+    // Cleanup timer on unmount
+    useEffect(() => {
+      return () => clearTimeout(hideTimerRef.current);
     }, []);
+
+    useImperativeHandle(ref, () => scrollRef.current as HTMLDivElement);
 
     return (
       <div className={cn("relative flex flex-col", wrapperClassName)}>
         <div
+          id={scrollId}
           ref={scrollRef}
-          className={cn("flex-1 min-h-0 overflow-auto scrollbar-thin", className)}
+          onScroll={handleScroll}
+          className={cn(
+            "flex-1 min-h-0 overflow-auto scrollbar-thin",
+            className,
+          )}
         >
           {children}
         </div>
+
         {thumb.hasScroll && (
           <div
-            aria-hidden="true"
-            className="absolute top-0 right-0 w-[5px] h-full pointer-events-none z-50"
+            className="absolute top-0 right-0 w-[10px] h-full z-50"
+            onMouseEnter={() => setHovering(true)}
+            onMouseLeave={() => setHovering(false)}
+            onMouseDown={handleTrackMouseDown}
           >
             <div
-              className="absolute right-0.5 w-[3px] rounded-full transition-opacity duration-300"
+              role="scrollbar"
+              aria-controls={scrollId}
+              aria-valuenow={thumb.scrollPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-orientation="vertical"
+              tabIndex={-1}
+              className="absolute right-0.5 w-[5px] rounded-full transition-opacity duration-300 cursor-pointer"
               style={{
                 top: thumb.top,
                 height: thumb.height,
-                opacity: thumb.scrolling ? 0.2 : 0,
+                opacity: visible ? 0.35 : 0,
                 backgroundColor: "var(--foreground)",
               }}
+              onMouseDown={handleThumbMouseDown}
             />
           </div>
         )}
       </div>
     );
-  }
+  },
 );

@@ -47,6 +47,7 @@ export const VerdictBlock = memo(function VerdictBlock({ block }: VerdictBlockPr
 
   const config = VERDICT_CONFIG[verdict] ?? VERDICT_CONFIG.neutral;
   const Icon = config.icon;
+  const audienceRows = Math.max(bestFor?.length ?? 0, notFor?.length ?? 0);
 
   return (
     <BlockWrapper
@@ -98,7 +99,7 @@ export const VerdictBlock = memo(function VerdictBlock({ block }: VerdictBlockPr
             )}
 
             {/* Row-by-row rendering */}
-            {Array.from({ length: Math.max(bestFor?.length ?? 0, notFor?.length ?? 0) }).map((_, rowIndex) => {
+            {Array.from({ length: audienceRows }).map((_, rowIndex) => {
               const bestItem = bestFor?.[rowIndex];
               const notItem = notFor?.[rowIndex];
               return (

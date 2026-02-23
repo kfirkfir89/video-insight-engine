@@ -225,6 +225,7 @@ Persona is determined **immediately from yt-dlp metadata** (NOT from LLM). This 
 | Science & Technology | programming, coding, react, python, api, github... | `code` |
 | Science & Technology | (no code keywords) | `tech` |
 | Howto & Style | recipe, cooking, food, chef, meal, kitchen... | `recipe` |
+| Music / Entertainment | music, song, album, lyrics, official video, concert... | `music` |
 | Education | (any) | `educational` |
 | (other) | (any) | `standard` |
 
@@ -248,7 +249,7 @@ The summarization pipeline uses Server-Sent Events (SSE) to stream results progr
 │  │    - chapters (if creator chapters exist)                            │   │
 │  │    - sponsor_segments (SponsorBlock API)                             │   │
 │  │    - transcript_ready                                                │   │
-│  │    - VideoContext with PERSONA (code/recipe/standard)                │   │
+│  │    - VideoContext with PERSONA (code/recipe/music/standard)          │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  PHASE 2: PARALLEL ANALYSIS (~2-5 seconds)                                 │

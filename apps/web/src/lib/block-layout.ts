@@ -221,3 +221,31 @@ export function computeSpacingMap(
 
   return map;
 }
+
+// ─────────────────────────────────────────────────────
+// Sidebar Classification (Phase 3)
+// ─────────────────────────────────────────────────────
+
+/**
+ * Block types that render well in a narrow sidebar column (~280px).
+ * These are data-dense, compact blocks that don't need full width.
+ *
+ * NOTE: This is separate from BLOCK_SIZE_MAP above. BLOCK_SIZE_MAP controls
+ * the auto-grid in ContentBlocks (full/half/compact columns). This set controls
+ * which blocks can be placed in a ViewLayout sidebar (~280px). Some types like
+ * `ingredient` and `tool_list` are `full` in the grid (they shouldn't share a
+ * row with other blocks) but work well in a dedicated sidebar column.
+ */
+export const SIDEBAR_COMPATIBLE_TYPES: Set<ContentBlockType> = new Set([
+  'rating',
+  'nutrition',
+  'cost',
+  'keyvalue',
+  'statistic',
+  'ingredient',
+  'tool_list',
+  'guest',
+  'timestamp',
+  'formula',
+]);
+

@@ -75,8 +75,8 @@ export const ProConBlock = memo(function ProConBlock({ block }: ProConBlockProps
 
           {/* Row-by-row rendering */}
           {Array.from({ length: maxRows }).map((_, rowIndex) => {
-            const pro = block.pros[rowIndex];
-            const con = block.cons[rowIndex];
+            const pro = block.pros?.[rowIndex];
+            const con = block.cons?.[rowIndex];
             return (
               <div key={rowIndex}>
                 {rowIndex > 0 && <div className="fade-divider" aria-hidden="true" />}
@@ -108,7 +108,7 @@ export const ProConBlock = memo(function ProConBlock({ block }: ProConBlockProps
         </div>
       ) : (
         /* Single column fallback when only pros or only cons exist */
-        <div className="p-4 rounded-lg" style={{ background: hasPros ? 'oklch(from var(--success) l c h / 0.04)' : 'oklch(from var(--destructive) l c h / 0.04)' }}>
+        <div className={cn('p-4 rounded-lg', hasPros ? 'bg-success/[0.04]' : 'bg-destructive/[0.04]')}>
           <div className={cn('flex items-center gap-1.5 pb-2 mb-3 border-b', hasPros ? 'border-success/20' : 'border-destructive/20')}>
             {hasPros ? <Plus className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" /> : <Minus className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />}
             <span className={cn('text-xs font-medium', hasPros ? 'text-success' : 'text-destructive')}>

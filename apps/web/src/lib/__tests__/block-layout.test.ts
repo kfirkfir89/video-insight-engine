@@ -5,6 +5,7 @@ import {
   getSpacingCategory,
   getBlockSpacing,
   computeSpacingMap,
+  SIDEBAR_COMPATIBLE_TYPES,
   type BlockGroup,
 } from '../block-layout';
 import type { ContentBlock } from '@vie/types';
@@ -281,3 +282,27 @@ describe('computeSpacingMap', () => {
     expect(map.get(blocks[1])).toBe('mt-5'); // prose→visual (pro_con is visual category)
   });
 });
+
+describe('SIDEBAR_COMPATIBLE_TYPES', () => {
+  it('should include data-dense block types', () => {
+    expect(SIDEBAR_COMPATIBLE_TYPES.has('rating')).toBe(true);
+    expect(SIDEBAR_COMPATIBLE_TYPES.has('nutrition')).toBe(true);
+    expect(SIDEBAR_COMPATIBLE_TYPES.has('cost')).toBe(true);
+    expect(SIDEBAR_COMPATIBLE_TYPES.has('keyvalue')).toBe(true);
+    expect(SIDEBAR_COMPATIBLE_TYPES.has('statistic')).toBe(true);
+    expect(SIDEBAR_COMPATIBLE_TYPES.has('ingredient')).toBe(true);
+    expect(SIDEBAR_COMPATIBLE_TYPES.has('tool_list')).toBe(true);
+    expect(SIDEBAR_COMPATIBLE_TYPES.has('guest')).toBe(true);
+    expect(SIDEBAR_COMPATIBLE_TYPES.has('timestamp')).toBe(true);
+    expect(SIDEBAR_COMPATIBLE_TYPES.has('formula')).toBe(true);
+  });
+
+  it('should not include full-width block types', () => {
+    expect(SIDEBAR_COMPATIBLE_TYPES.has('paragraph')).toBe(false);
+    expect(SIDEBAR_COMPATIBLE_TYPES.has('code')).toBe(false);
+    expect(SIDEBAR_COMPATIBLE_TYPES.has('comparison')).toBe(false);
+    expect(SIDEBAR_COMPATIBLE_TYPES.has('table')).toBe(false);
+    expect(SIDEBAR_COMPATIBLE_TYPES.has('step')).toBe(false);
+  });
+});
+

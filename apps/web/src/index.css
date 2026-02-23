@@ -405,7 +405,7 @@
     display: none;
   }
 
-  /* Thin scrollbar — completely hidden native scrollbar, custom indicator via JS */
+  /* Thin scrollbar — native hidden, custom overlay via JS */
   .scrollbar-thin {
     scrollbar-width: none;
   }
@@ -752,8 +752,14 @@
     right: 0;
     bottom: 0;
     width: 30%;
-    opacity: 0.06;
+    opacity: 0.12;
     background-image:
+      radial-gradient(
+        ellipse 50px 35px at 70% 20%,
+        transparent 55%,
+        oklch(from var(--primary) l c h / 0.5) 56%,
+        transparent 57%
+      ),
       radial-gradient(
         ellipse 80px 60px at 60% 30%,
         transparent 55%,
@@ -772,16 +778,30 @@
         oklch(from var(--primary) l c h / 0.2) 56%,
         transparent 57%
       ),
+      radial-gradient(
+        ellipse 200px 150px at 55% 55%,
+        transparent 55%,
+        oklch(from var(--primary) l c h / 0.15) 56%,
+        transparent 57%
+      ),
+      radial-gradient(
+        circle 2px at 58% 42%,
+        oklch(from var(--primary) l c h / 0.3) 0%,
+        transparent 100%
+      ),
       linear-gradient(
-        oklch(from var(--border) l c h / 0.15) 1px,
+        oklch(from var(--border) l c h / 0.22) 1px,
         transparent 1px
       ),
       linear-gradient(
         90deg,
-        oklch(from var(--border) l c h / 0.15) 1px,
+        oklch(from var(--border) l c h / 0.22) 1px,
         transparent 1px
       );
     background-size:
+      100% 100%,
+      100% 100%,
+      100% 100%,
       100% 100%,
       100% 100%,
       100% 100%,
@@ -793,7 +813,7 @@
   }
 
   :is(.dark) .location-map-bg {
-    opacity: 0.1;
+    opacity: 0.18;
     filter: drop-shadow(0 0 8px oklch(from var(--primary) l c h / 0.08));
   }
 

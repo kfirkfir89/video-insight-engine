@@ -18,6 +18,7 @@ Python service that processes YouTube videos into structured summaries.
 | pymongo | MongoDB driver |
 | aioboto3 | Async S3 client (for transcript storage) |
 | Pydantic | Validation & Settings |
+| google-genai | Gemini native SDK (audio transcription) |
 | structlog | Structured logging |
 
 ---
@@ -50,7 +51,8 @@ services/summarizer/
     │   ├── usage_tracker.py      # LLM usage tracking
     │   ├── playlist.py           # Playlist extraction (yt-dlp)
     │   ├── sponsorblock.py       # Sponsor segment detection
-    │   ├── whisper_transcriber.py # Whisper fallback
+    │   ├── gemini_transcriber.py  # Gemini Flash transcription (fast, cheap)
+    │   ├── whisper_transcriber.py # Whisper fallback (reliable, slow)
     │   ├── s3_client.py          # Async S3 client (lazy init)
     │   └── transcript_store.py   # Transcript storage service
     │
@@ -88,8 +90,9 @@ LLM_FAST_MAX_TOKENS=2048
 
 # Provider API Keys (set for providers you use)
 ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=                 # Required if using OpenAI
-GOOGLE_API_KEY=                 # Required if using Gemini
+OPENAI_API_KEY=                 # Required if using OpenAI or Whisper
+GEMINI_API_KEY=                 # Enables Gemini audio transcription (faster than Whisper)
+GOOGLE_API_KEY=                 # Required if using Gemini as LLM provider
 
 # S3 Configuration (for transcript storage)
 TRANSCRIPT_S3_BUCKET=vie-transcripts
@@ -124,9 +127,11 @@ LOG_FORMAT=console              # console or json
     └─▶ Get: title, channel, thumbnail
 
  5. FETCH TRANSCRIPT (Multi-Source Fallback Chain)
+    └─▶ 0. S3 cached transcript (avoids all YouTube calls)
     └─▶ 1. yt-dlp subtitles (embedded in video metadata)
     └─▶ 2. youtube-transcript-api (with rate limit retry)
-    └─▶ 3. OpenAI Whisper (audio transcription fallback)
+    └─▶ 3. Gemini Flash (audio transcription, ~30-90s, ~$0.04/26min)
+    └─▶ 4. OpenAI Whisper (audio fallback, ~5-15min, ~$0.16/26min)
     └─▶ Handle: manual > auto-generated
     └─▶ Output: NormalizedTranscript (segments with ms timestamps)
 
@@ -397,7 +402,7 @@ from pydantic import BaseModel
 from typing import Literal
 
 # Transcript system types
-TranscriptSource = Literal["ytdlp", "api", "proxy", "whisper"]
+TranscriptSource = Literal["ytdlp", "api", "proxy", "whisper", "gemini", "metadata"]
 
 class TranscriptSegment(BaseModel):
     text: str
@@ -446,6 +451,11 @@ The summarizer uses a multi-source fallback chain to maximize transcript availab
 │                  TRANSCRIPT SOURCES                     │
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
+│  0. S3 Cached Transcript                               │
+│     └─▶ Avoids all YouTube calls                       │
+│     └─▶ Source: "s3" (cached-{original_source})        │
+│                         │                               │
+│                         ▼                               │
 │  1. yt-dlp Subtitles                                   │
 │     └─▶ Extracted during video metadata fetch           │
 │     └─▶ Source: "ytdlp"                                │
@@ -457,12 +467,31 @@ The summarizer uses a multi-source fallback chain to maximize transcript availab
 │     └─▶ Source: "api" or "proxy"                       │
 │                         │                               │
 │                         ▼                               │
-│  3. OpenAI Whisper (if enabled)                        │
-│     └─▶ Download audio via yt-dlp                      │
+│  3. Gemini Flash (if GEMINI_API_KEY set)               │
+│     └─▶ Download raw audio via yt-dlp (no conversion)  │
+│     └─▶ Upload to Gemini File API (google-genai SDK)   │
+│     └─▶ Transcribe with generate_content()             │
+│     └─▶ ~30-90s, ~$0.04 per 26-min video              │
+│     └─▶ Music-aware prompt when category=music         │
+│     └─▶ Source: "gemini"                               │
+│                         │                               │
+│                         ▼                               │
+│  4. OpenAI Whisper (if enabled)                        │
+│     └─▶ Download audio + convert to MP3 (FFmpeg)       │
+│     └─▶ Chunk large files (>24MB) with pydub           │
 │     └─▶ Transcribe with Whisper API                    │
-│     └─▶ For videos without captions                    │
+│     └─▶ ~5-15min, ~$0.16 per 26-min video             │
 │     └─▶ Max 60 minutes                                 │
 │     └─▶ Source: "whisper"                              │
+│                         │                               │
+│                         ▼                               │
+│  5. Metadata Fallback (music category only)            │
+│     └─▶ Builds text from title, channel, description,  │
+│         tags, and chapter titles                        │
+│     └─▶ Only triggers when category == "music"         │
+│     └─▶ Non-music videos still raise TranscriptError   │
+│     └─▶ Skips sponsor filtering + AI chapter detection │
+│     └─▶ Source: "metadata"                             │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -470,6 +499,9 @@ The summarizer uses a multi-source fallback chain to maximize transcript availab
 ### Configuration
 
 ```bash
+# Gemini transcription (preferred audio fallback)
+GEMINI_API_KEY=...      # Enables Gemini Flash transcription
+
 # Whisper fallback settings
 WHISPER_ENABLED=true
 WHISPER_MAX_DURATION_MINUTES=60
