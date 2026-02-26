@@ -4,7 +4,7 @@ Tracks all LLM calls in MongoDB for visibility into costs and usage patterns.
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from pydantic import BaseModel
@@ -57,7 +57,7 @@ class UsageTracker:
         except Exception as e:
             logger.warning(f"Could not create indexes: {e}")
 
-    async def track_success(
+    def track_success(
         self,
         model: str,
         tokens_in: int,
@@ -99,7 +99,7 @@ class UsageTracker:
         except Exception as e:
             logger.error(f"Failed to track usage: {e}")
 
-    async def track_failure(
+    def track_failure(
         self,
         model: str,
         error_message: str,
@@ -156,8 +156,7 @@ class UsageTracker:
         """
         cutoff = datetime.now(UTC).replace(
             hour=0, minute=0, second=0, microsecond=0
-        )
-        cutoff = cutoff.replace(day=cutoff.day - days) if cutoff.day > days else cutoff
+        ) - timedelta(days=days)
 
         match_stage: dict[str, Any] = {"timestamp": {"$gte": cutoff}}
         if user_id:

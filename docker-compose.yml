@@ -67,8 +67,8 @@ services:
 
   vie-summarizer:
     build:
-      context: ./services/summarizer
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/summarizer/Dockerfile
     image: vie-summarizer:latest
     container_name: vie-summarizer
     restart: unless-stopped
@@ -121,8 +121,8 @@ services:
 
   vie-explainer:
     build:
-      context: ./services/explainer
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/explainer/Dockerfile
     image: vie-explainer:latest
     container_name: vie-explainer
     restart: unless-stopped
@@ -160,6 +160,31 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+
+  vie-admin:
+    build:
+      context: .
+      dockerfile: services/admin/Dockerfile
+    image: vie-admin:latest
+    container_name: vie-admin
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./services/admin/src:/app/src:ro
+    environment:
+      PYTHONUNBUFFERED: 1
+      MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key-change-me}
+      VIE_API_URL: http://vie-api:3000
+      VIE_SUMMARIZER_URL: http://vie-summarizer:8000
+      VIE_EXPLAINER_URL: http://vie-explainer:8001
+      ALERT_COST_THRESHOLD_USD: ${ALERT_COST_THRESHOLD_USD:-0.50}
+    networks:
+      - vie-network
+    depends_on:
+      vie-mongodb:
+        condition: service_healthy
 
   vie-web:
     build:

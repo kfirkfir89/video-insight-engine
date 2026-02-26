@@ -1,4 +1,4 @@
-import sys
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -24,25 +24,36 @@ from src.services.frame_extractor import check_dependencies as check_frame_deps
 configure_structlog(json_format=settings.log_format == "json")
 logger = get_logger(__name__)
 
+_usage_callback = None
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
-    if settings.INTERNAL_SECRET == "dev-internal-secret-change-me":
-        if settings.log_format == "json":
-            # Production uses JSON logging — refuse to start with default secret
-            logger.critical("INTERNAL_SECRET is using the default value — refusing to start in production")
-            print("FATAL: INTERNAL_SECRET must be set in production. Run: export INTERNAL_SECRET=$(openssl rand -base64 32)", file=sys.stderr)
-            raise SystemExit(1)
-        logger.warning("INTERNAL_SECRET is using the default value — acceptable for local dev only")
-    if settings.FRAME_EXTRACTION_ENABLED:
-        await check_frame_deps()
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+    """Application lifespan: register LLM usage tracking callback."""
+    global _usage_callback
+    try:
+        import litellm
+        from llm_common import MongoDBUsageCallback
+
+        client = get_mongo_client()
+        db = client.get_default_database()
+        _usage_callback = MongoDBUsageCallback(db, service="summarizer", mode="sync")
+        litellm.callbacks = [_usage_callback]
+        logger.info("llm_usage_callback_registered", mode="sync")
+    except ImportError:
+        logger.warning("llm_common not installed, usage tracking disabled")
+    except Exception as e:
+        logger.warning("llm_usage_callback_failed", error=str(e))
+
     yield
-    await shutdown_background_validations()
+
+    if _usage_callback:
+        try:
+            _usage_callback.shutdown_sync()
+        except Exception as e:
+            logger.warning("callback_shutdown_failed", error=str(e))
 
 
 app = FastAPI(title="vie-summarizer", lifespan=lifespan)
-
-
 # Add middleware
 add_request_context_middleware(app)
 
