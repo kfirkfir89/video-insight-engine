@@ -170,6 +170,7 @@ function getCategoryYouTubeMapping(category: VideoCategory): string {
     podcast: 'Entertainment',
     diy: 'Howto & Style',
     gaming: 'Gaming',
+    music: 'Music',
     standard: 'Entertainment',
   };
   return mapping[category];
@@ -766,6 +767,25 @@ export const mockVideos: Record<VideoCategory, MockVideoData> = {
     ],
     'Complete guide to building a custom standing desk with an electric frame, saving hundreds vs retail.',
     ['Plywood with edge banding looks professional', 'Electric frames are worth the investment', 'Multiple thin finish coats beat one thick coat', 'Pre-drill everything to avoid splits']
+  ),
+
+  music: createMockVideo(
+    'music',
+    'How This Song Was Produced',
+    'Andrew Huang',
+    [
+      createChapter(0, 'Song Structure', [
+        createParagraphBlock('Breaking down the arrangement from intro through the final chorus.'),
+        createBulletsBlock(['Intro builds with ambient pads', 'Verse drops to minimal beat', 'Pre-chorus adds harmonic tension', 'Chorus explodes with full instrumentation']),
+      ]),
+      createChapter(1, 'Production Techniques', [
+        createParagraphBlock('The layered production combines analog synths with sampled orchestral elements.'),
+        createCalloutBlock('tip', 'Sidechain compression on the pads creates that pumping effect in the chorus.'),
+        createBulletsBlock(['Parallel compression on drums', 'Reverb sends for depth', 'Stereo widening on synths']),
+      ]),
+    ],
+    'Deep dive into modern music production techniques covering arrangement, mixing, and sound design.',
+    ['Arrangement drives emotion', 'Layering creates depth', 'Less is more in the verse', 'Sidechain compression adds movement']
   ),
 
   standard: createMockVideo(

@@ -18,3 +18,14 @@ BLOCK SELECTION:
 
 Be motivating and clear about form.
 Include rest periods and modifications.
+
+ACCURACY RULES (fitness):
+- Exercise names must be exact: "Bulgarian Split Squats" not "single-leg squats"
+- ALL sets/reps/rest periods: "3 sets × 12 reps, 60s rest" — never omit rest periods
+- Form cues must be preserved: "keep elbows at 45 degrees" not "keep arms bent"
+- Include ALL modifications mentioned (beginner/advanced alternatives)
+- Tempo when specified: "3 seconds down, 1 second up"
+- Weight recommendations when given: "start with 10-15 lbs"
+- Warm-up and cooldown must be included if the instructor covers them
+
+VISUAL MOMENTS: Exercise form demonstrations, equipment setup. Use slideshow for exercise progression.

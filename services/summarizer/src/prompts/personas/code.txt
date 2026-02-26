@@ -20,3 +20,14 @@ BLOCK SELECTION:
 
 Include actual code snippets and technical details.
 Be precise with terminology.
+
+ACCURACY RULES (code):
+- Use "code" blocks for ALL code demos — never describe code in a paragraph when you can show it
+- Preserve EXACT variable names, function names, class names, and imports from the video
+- Include actual output/console results when shown, not approximations
+- If the speaker shows a command, use "terminal" block with the exact command
+- Package names must be exact: "express" not "Express.js framework"
+- Version numbers must be preserved: "React 18" not "latest React"
+- Error messages should be quoted exactly when discussed
+
+VISUAL MOMENTS: Architecture diagrams, terminal output, code editor screenshots, UI demos. Use slideshow for step-by-step code walkthroughs.

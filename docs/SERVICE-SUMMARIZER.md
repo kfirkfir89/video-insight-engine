@@ -16,7 +16,7 @@ Python service that processes YouTube videos into structured summaries.
 | yt-dlp | Video metadata + chapters |
 | LiteLLM | Multi-provider LLM abstraction (Anthropic, OpenAI, Gemini) |
 | pymongo | MongoDB driver |
-| aioboto3 | Async S3 client (for transcript storage) |
+| aioboto3 | Async S3 client (transcripts + frame storage) |
 | Pydantic | Validation & Settings |
 | google-genai | Gemini native SDK (audio transcription) |
 | structlog | Structured logging |
@@ -53,8 +53,12 @@ services/summarizer/
     │   ├── sponsorblock.py       # Sponsor segment detection
     │   ├── gemini_transcriber.py  # Gemini Flash transcription (fast, cheap)
     │   ├── whisper_transcriber.py # Whisper fallback (reliable, slow)
-    │   ├── s3_client.py          # Async S3 client (lazy init)
-    │   └── transcript_store.py   # Transcript storage service
+    │   ├── s3_client.py          # Async S3 client (put_json, put_bytes, presigned URLs)
+    │   ├── transcript_store.py   # Transcript storage service
+    │   ├── frame_extractor.py    # Video frame extraction + S3 upload pipeline
+    │   ├── chapter_pipeline.py   # Chapter post-processing orchestrator
+    │   ├── accuracy.py           # Chapter fact extraction
+    │   └── block_postprocessing.py  # Block post-processing
     │
     ├── repositories/
     │   ├── base.py               # Repository protocols
@@ -94,12 +98,12 @@ OPENAI_API_KEY=                 # Required if using OpenAI or Whisper
 GEMINI_API_KEY=                 # Enables Gemini audio transcription (faster than Whisper)
 GOOGLE_API_KEY=                 # Required if using Gemini as LLM provider
 
-# S3 Configuration (for transcript storage)
-TRANSCRIPT_S3_BUCKET=vie-transcripts
+# S3 Media Storage (transcripts, frames, audio)
+S3_BUCKET=vie-transcripts
+S3_PRESIGNED_URL_EXPIRY=3600    # Presigned URL validity (seconds)
 AWS_REGION=us-east-1
-AWS_ENDPOINT_URL=http://vie-localstack:4566  # LocalStack for dev
-AWS_ACCESS_KEY_ID=test
-AWS_SECRET_ACCESS_KEY=test
+AWS_ACCESS_KEY_ID=your-key      # AWS credentials
+AWS_SECRET_ACCESS_KEY=your-secret
 PROMPT_VERSION=v1.0             # For generation tracking
 
 LOG_LEVEL=INFO
@@ -136,8 +140,9 @@ LOG_FORMAT=console              # console or json
     └─▶ Output: NormalizedTranscript (segments with ms timestamps)
 
  5b. STORE RAW TRANSCRIPT (optional)
-    └─▶ Store to S3 (LocalStack/AWS) as JSON
-    └─▶ Key: "transcripts/{youtubeId}.json"
+    └─▶ Store to S3 (AWS) as JSON
+    └─▶ Key: "videos/{youtubeId}/transcript.json"
+    └─▶ Legacy fallback: "transcripts/{youtubeId}.json"
     └─▶ Graceful degradation if S3 unavailable
 
  6. CLEAN TRANSCRIPT
@@ -387,7 +392,7 @@ class LLMService:
 MODEL_MAP = {
     "anthropic": {"default": "anthropic/claude-sonnet-4-20250514", "fast": "anthropic/claude-3-5-haiku-20241022"},
     "openai": {"default": "openai/gpt-4o", "fast": "openai/gpt-4o-mini"},
-    "gemini": {"default": "gemini/gemini-3-flash-preview", "fast": "gemini/gemini-2.5-flash-lite"},
+    "gemini": {"default": "gemini/gemini-2.5-flash", "fast": "gemini/gemini-2.0-flash-lite"},
 }
 ```
 
@@ -510,26 +515,42 @@ OPENAI_API_KEY=sk-...  # Required for Whisper
 
 ---
 
-## Transcript Storage (S3)
+## S3 Media Storage
 
-Raw transcripts are stored in S3 for regeneration and RAG/search capabilities.
+All media (transcripts, frames, future audio) is stored in a unified S3 bucket (`vie-transcripts`).
 
 ### Architecture
 
 ```
+vie-transcripts (S3 bucket)
+└── videos/{youtube_id}/
+    ├── transcript.json       ← processed transcript
+    └── frames/
+        └── {timestamp}.jpg   ← extracted video frames
+```
+
+```
 ┌─────────────────────────────────────────────────────────┐
-│                 TRANSCRIPT STORAGE                       │
+│                 S3 MEDIA STORAGE                         │
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
 │  1. Store Raw Transcript                                │
-│     └─▶ S3 key: "transcripts/{youtubeId}.json"         │
+│     └─▶ S3 key: "videos/{youtubeId}/transcript.json"   │
+│     └─▶ Legacy fallback: "transcripts/{youtubeId}.json"│
 │     └─▶ Contains: segments, source, language, fetchedAt│
 │                                                         │
-│  2. Slice Transcript per Chapter                        │
-│     └─▶ Extract text by startSeconds/endSeconds        │
-│     └─▶ Store slice in chapter.transcript field        │
+│  2. Upload Video Frames                                 │
+│     └─▶ S3 key: "videos/{youtubeId}/frames/{ts}.jpg"   │
+│     └─▶ Parallel upload via asyncio.gather              │
+│     └─▶ S3 exists check skips duplicates                │
+│     └─▶ Blocks store s3_key (permanent) in MongoDB     │
 │                                                         │
-│  3. Track Generation Metadata                           │
+│  3. Serve via Presigned URLs                            │
+│     └─▶ Generated at response time (sync, local signing)│
+│     └─▶ Default expiry: 1 hour (S3_PRESIGNED_URL_EXPIRY)│
+│     └─▶ Cached results refresh URLs before emitting    │
+│                                                         │
+│  4. Track Generation Metadata                           │
 │     └─▶ model: LLM used for summarization              │
 │     └─▶ promptVersion: for tracking prompt changes     │
 │     └─▶ generatedAt: ISO timestamp                     │
@@ -541,23 +562,32 @@ Raw transcripts are stored in S3 for regeneration and RAG/search capabilities.
 
 | Decision | Choice | Why |
 |----------|--------|-----|
+| Single bucket | `vie-transcripts` for all media | Simpler ops, per-video folder isolation |
+| Presigned URLs | All access via signed URLs | Security: private bucket, time-limited access |
+| `s3_key` in MongoDB | Store key, not URL | URLs change (expiry), key is permanent |
+| Sync presigning | No async for URL generation | Local crypto operation (HMAC-SHA256), no network call |
 | Lazy S3 initialization | aioboto3 imported on first use | Container starts without S3 dependency |
 | Graceful degradation | S3 failure doesn't block summarization | Core functionality works without S3 |
-| Regeneration via status reset | Reuses streaming endpoint | No duplicate code |
-| Chapter-level transcripts | Stored in MongoDB | Fast access for RAG/search |
 
-### Migration Script
+### Migration Scripts
 
-Backfill raw transcripts for existing videos:
+**Transcript key migration** (legacy → new path):
 
 ```bash
 # Dry run (preview what would be migrated)
-docker exec vie-summarizer python /app/scripts/backfill-transcripts.py --dry-run
+python scripts/migrate-s3-keys.py --dry-run
 
 # Run migration
-docker exec vie-summarizer python /app/scripts/backfill-transcripts.py
+python scripts/migrate-s3-keys.py --batch-size 10
 
-# Limit batch size
+# Migrate and delete old keys
+python scripts/migrate-s3-keys.py --delete-old
+```
+
+**Backfill raw transcripts** for existing videos:
+
+```bash
+docker exec vie-summarizer python /app/scripts/backfill-transcripts.py --dry-run
 docker exec vie-summarizer python /app/scripts/backfill-transcripts.py --batch-size 100
 ```
 

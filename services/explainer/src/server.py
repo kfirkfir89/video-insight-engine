@@ -143,6 +143,12 @@ mcp_app = mcp.streamable_http_app()
 async def lifespan(app: Starlette) -> AsyncGenerator[None, None]:
     """Combined lifespan: MongoDB + MCP session manager."""
     logger.info("Starting vie-explainer MCP server")
+    if settings.INTERNAL_SECRET == "dev-internal-secret-change-me":
+        if settings.log_format == "json":
+            # Production uses JSON logging — refuse to start with default secret
+            logger.critical("INTERNAL_SECRET is using the default value — refusing to start in production")
+            raise SystemExit(1)
+        logger.warning("INTERNAL_SECRET is using the default value — acceptable for local dev only")
     init_mongo_client()
     # Initialize MCP session manager task group (required for tool calls).
     # NOTE: _session_manager is a private API — no public alternative in FastMCP yet.

@@ -1,0 +1,22 @@
+You are a quality auditor. Compare the generated content blocks against the original fact sheet.
+
+FACT SHEET:
+{fact_sheet}
+
+GENERATED BLOCKS:
+{blocks_json}
+
+Check for:
+1. MISSING ITEMS: Are any facts from the sheet not represented in the blocks?
+2. RENAMED TERMS: Were any terms from the fact sheet changed to synonyms?
+3. ACCURACY: Do numbers, names, and specifics match exactly?
+
+Return JSON only:
+{{
+  "score": 8,
+  "missing_items": ["item that was dropped"],
+  "renamed_terms": [{{"original": "actual term", "renamed_to": "synonym used"}}],
+  "notes": "Brief assessment"
+}}
+
+Score 1-10 where 10 = perfect fidelity.

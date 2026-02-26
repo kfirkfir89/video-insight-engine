@@ -22,7 +22,7 @@ from src.services.youtube import (
     _clean_subtitle_text,
     _load_persona_rules,
     _detect_category,
-    _select_persona,
+    select_persona,
     _load_category_rules,
     classify_category_with_llm,
     get_llm_fallback_threshold,
@@ -759,32 +759,32 @@ class TestSelectPersona:
 
     def test_maps_cooking_to_recipe(self):
         """Test cooking category maps to recipe persona."""
-        persona = _select_persona("cooking")
+        persona = select_persona("cooking")
         assert persona == "recipe"
 
     def test_maps_coding_to_code(self):
         """Test coding category maps to code persona."""
-        persona = _select_persona("coding")
+        persona = select_persona("coding")
         assert persona == "code"
 
     def test_maps_reviews_to_review(self):
         """Test reviews category maps to review persona."""
-        persona = _select_persona("reviews")
+        persona = select_persona("reviews")
         assert persona == "review"
 
     def test_maps_standard_to_standard(self):
         """Test standard category stays standard."""
-        persona = _select_persona("standard")
+        persona = select_persona("standard")
         assert persona == "standard"
 
     def test_unknown_category_defaults_to_standard(self):
         """Test unknown categories default to standard."""
-        persona = _select_persona("unknown_category")
+        persona = select_persona("unknown_category")
         assert persona == "standard"
 
     def test_maps_education_to_education(self):
         """Test education category maps to education persona."""
-        persona = _select_persona("education")
+        persona = select_persona("education")
         assert persona == "education"
 
 
@@ -929,7 +929,7 @@ class TestMusicCategoryDetection:
 
     def test_music_persona_mapping(self):
         """Test that music category maps to music persona."""
-        persona = _select_persona("music")
+        persona = select_persona("music")
         assert persona == "music"
 
     @patch("src.services.youtube._load_category_rules")

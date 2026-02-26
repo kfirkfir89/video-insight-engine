@@ -14,15 +14,16 @@ MODEL_MAP = {
         "fast": "openai/gpt-4o-mini",
     },
     "gemini": {
-        "default": "gemini/gemini-3-flash-preview",
-        "fast": "gemini/gemini-2.5-flash-lite",
+        "default": "gemini/gemini-2.5-flash",
+        "fast": "gemini/gemini-2.0-flash-lite",
     },
 }
 
 
-def get_model(provider: str = "anthropic", tier: str = "default") -> str:
+def get_model(provider: str = "gemini", tier: str = "default") -> str:
     """Get model name for provider and tier."""
-    return MODEL_MAP.get(provider, MODEL_MAP["anthropic"]).get(tier, "default")
+    provider_models = MODEL_MAP.get(provider, MODEL_MAP["gemini"])
+    return provider_models.get(tier, provider_models["default"])
 
 
 class Settings(BaseSettings):
@@ -32,7 +33,8 @@ class Settings(BaseSettings):
     MONGODB_URI: str = "mongodb://vie-mongodb:27017/video-insight-engine"
 
     # LLM Provider Configuration
-    LLM_PROVIDER: str = "anthropic"  # anthropic, openai, gemini
+    # Explainer defaults to gemini (cheaper for interactive chat); summarizer defaults to anthropic.
+    LLM_PROVIDER: str = "gemini"  # anthropic, openai, gemini
     LLM_FAST_PROVIDER: str | None = None  # Optional separate provider for fast model
     LLM_FALLBACK_PROVIDER: str | None = None  # Optional fallback provider
     LLM_MODEL: str | None = None  # Override default model
@@ -42,6 +44,9 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str | None = None
     OPENAI_API_KEY: str | None = None
     GEMINI_API_KEY: str | None = None  # For Gemini (LiteLLM expects this name)
+
+    # Internal service communication
+    INTERNAL_SECRET: str = "dev-internal-secret-change-me"
 
     # LLM limits
     LLM_TIMEOUT_SECONDS: float = 60.0

@@ -175,6 +175,11 @@ describe('getSpacingCategory', () => {
     expect(getSpacingCategory('tool_list')).toBe('list');
   });
 
+  it('should return list for step and ingredient', () => {
+    expect(getSpacingCategory('step')).toBe('list');
+    expect(getSpacingCategory('ingredient')).toBe('list');
+  });
+
   it('should return visual for large block types', () => {
     expect(getSpacingCategory('code')).toBe('visual');
     expect(getSpacingCategory('terminal')).toBe('visual');
@@ -192,6 +197,14 @@ describe('getSpacingCategory', () => {
     expect(getSpacingCategory('rating')).toBe('dense');
     expect(getSpacingCategory('verdict')).toBe('dense');
   });
+
+  it('should return dense for data blocks (reclassified from visual)', () => {
+    expect(getSpacingCategory('pro_con')).toBe('dense');
+    expect(getSpacingCategory('cost')).toBe('dense');
+    expect(getSpacingCategory('nutrition')).toBe('dense');
+    expect(getSpacingCategory('guest')).toBe('dense');
+    expect(getSpacingCategory('formula')).toBe('dense');
+  });
 });
 
 describe('getBlockSpacing', () => {
@@ -201,31 +214,31 @@ describe('getBlockSpacing', () => {
   });
 
   it('should return tight spacing for prose→prose', () => {
-    expect(getBlockSpacing('paragraph', 'paragraph')).toBe('mt-2');
+    expect(getBlockSpacing('paragraph', 'paragraph')).toBe('mt-1.5');
   });
 
-  it('should return wide spacing for prose→visual', () => {
-    expect(getBlockSpacing('paragraph', 'code')).toBe('mt-5');
+  it('should return medium spacing for prose→visual', () => {
+    expect(getBlockSpacing('paragraph', 'code')).toBe('mt-3');
   });
 
-  it('should return wide spacing for visual→prose', () => {
-    expect(getBlockSpacing('code', 'paragraph')).toBe('mt-5');
+  it('should return medium spacing for visual→prose', () => {
+    expect(getBlockSpacing('code', 'paragraph')).toBe('mt-3');
   });
 
   it('should return medium spacing for visual→visual', () => {
-    expect(getBlockSpacing('code', 'terminal')).toBe('mt-4');
+    expect(getBlockSpacing('code', 'terminal')).toBe('mt-2.5');
   });
 
   it('should return tight spacing for dense→dense', () => {
-    expect(getBlockSpacing('callout', 'quote')).toBe('mt-2');
+    expect(getBlockSpacing('callout', 'quote')).toBe('mt-1.5');
   });
 
-  it('should return medium spacing for list→prose', () => {
-    expect(getBlockSpacing('bullets', 'paragraph')).toBe('mt-3');
+  it('should return small spacing for list→prose', () => {
+    expect(getBlockSpacing('bullets', 'paragraph')).toBe('mt-2');
   });
 
-  it('should return wide spacing for list→visual', () => {
-    expect(getBlockSpacing('bullets', 'code')).toBe('mt-5');
+  it('should return medium spacing for list→visual', () => {
+    expect(getBlockSpacing('bullets', 'code')).toBe('mt-3');
   });
 });
 
@@ -256,8 +269,8 @@ describe('computeSpacingMap', () => {
     const map = computeSpacingMap(groups, GRID_CLASSES);
 
     expect(map.get(blocks[0])).toBe('');          // first block
-    expect(map.get(blocks[1])).toBe('mt-5');      // prose→visual
-    expect(map.get(blocks[2])).toBe('mt-5');      // visual→prose
+    expect(map.get(blocks[1])).toBe('mt-3');      // prose→visual
+    expect(map.get(blocks[2])).toBe('mt-3');      // visual→prose
   });
 
   it('should compute container spacing for grid groups', () => {
@@ -268,7 +281,7 @@ describe('computeSpacingMap', () => {
     // paragraph gets empty (first)
     expect(map.get(blocks[0])).toBe('');
     // statistic is first block of compact grid group → prose→dense spacing
-    expect(map.get(blocks[1])).toBe('mt-3');
+    expect(map.get(blocks[1])).toBe('mt-2');
     // keyvalue is NOT in the map (grid group only stores first block's spacing)
     expect(map.has(blocks[2])).toBe(false);
   });
@@ -279,7 +292,7 @@ describe('computeSpacingMap', () => {
     const map = computeSpacingMap(groups, GRID_CLASSES);
 
     // pro_con is a single orphan half block → treated as full-width, gets per-block spacing
-    expect(map.get(blocks[1])).toBe('mt-5'); // prose→visual (pro_con is visual category)
+    expect(map.get(blocks[1])).toBe('mt-2'); // prose→dense (pro_con is dense category)
   });
 });
 

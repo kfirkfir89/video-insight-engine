@@ -400,7 +400,7 @@ class TestHelperFunctions:
 
     def test_build_chapter_dict(self):
         """Test building chapter dictionary."""
-        from src.routes.stream import build_chapter_dict
+        from src.services.chapter_pipeline import build_chapter_dict
 
         raw = {"title": "Test Section", "startSeconds": 60, "endSeconds": 120}
         summary = {
@@ -422,7 +422,7 @@ class TestHelperFunctions:
 
     def test_build_chapter_dict_generated(self):
         """Test building chapter dictionary for AI-generated chapters."""
-        from src.routes.stream import build_chapter_dict
+        from src.services.chapter_pipeline import build_chapter_dict
 
         raw = {"title": "AI Section", "startSeconds": 0, "endSeconds": 60}
         summary = {"content": []}
@@ -535,6 +535,8 @@ class TestPipelineContext:
             source="api",
         )
 
+        from src.routes.stream import PipelineTimer
+
         ctx = PipelineContext(
             video_summary_id="abc123",
             youtube_id="test",
@@ -542,7 +544,7 @@ class TestPipelineContext:
             transcript=transcript,
             persona="standard",
             sponsor_segments=[],
-            start_time=0.0,
+            timer=PipelineTimer(),
         )
 
         assert ctx.video_summary_id == "abc123"
@@ -695,7 +697,7 @@ class TestFinalizeVideoContext:
             ),
         )
 
-    @patch("src.routes.stream.get_llm_fallback_threshold")
+    @patch("src.services.pipeline_helpers.get_llm_fallback_threshold")
     async def test_high_confidence_skips_llm(self, mock_threshold, mock_llm_provider, video_data_high_confidence):
         """Test that high confidence skips LLM fallback."""
         from src.routes.stream import finalize_video_context
@@ -711,8 +713,8 @@ class TestFinalizeVideoContext:
         assert result.context.persona == "recipe"
         assert result.context.category_confidence == 0.54
 
-    @patch("src.routes.stream.classify_category_with_llm")
-    @patch("src.routes.stream.get_llm_fallback_threshold")
+    @patch("src.services.pipeline_helpers.classify_category_with_llm")
+    @patch("src.services.pipeline_helpers.get_llm_fallback_threshold")
     async def test_low_confidence_triggers_llm(self, mock_threshold, mock_classify, mock_llm_provider, video_data_low_confidence):
         """Test that low confidence triggers LLM fallback."""
         from src.routes.stream import finalize_video_context
@@ -729,8 +731,8 @@ class TestFinalizeVideoContext:
         assert result.context.persona == "recipe"
         assert result.context.category_confidence == 0.8  # Updated by LLM
 
-    @patch("src.routes.stream.classify_category_with_llm")
-    @patch("src.routes.stream.get_llm_fallback_threshold")
+    @patch("src.services.pipeline_helpers.classify_category_with_llm")
+    @patch("src.services.pipeline_helpers.get_llm_fallback_threshold")
     async def test_llm_fallback_returns_standard(self, mock_threshold, mock_classify, mock_llm_provider, video_data_low_confidence):
         """Test LLM fallback can return standard category."""
         from src.routes.stream import finalize_video_context

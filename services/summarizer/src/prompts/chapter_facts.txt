@@ -1,0 +1,28 @@
+Extract a structured fact sheet from this chapter transcript. Be exhaustive — capture every specific detail.
+
+CHAPTER: {title}
+TRANSCRIPT:
+{content}
+
+Extract these universal fields:
+- key_terms: List every technical term, proper noun, or domain-specific word used (exact words only)
+- numbers: List every number, measurement, statistic, price, or quantity mentioned
+- quotes: List any memorable or quotable statements (verbatim)
+- analogies: List any analogies, metaphors, or illustrative examples used
+- names: List all people, products, companies, tools, or frameworks mentioned by name
+- steps: If the speaker describes a process or sequence, list each step
+
+{category_fields}
+
+Return JSON only:
+{{
+  "key_terms": ["term1", "term2"],
+  "numbers": ["$299", "120Hz", "8 items"],
+  "quotes": ["exact quote here"],
+  "analogies": ["analogy description"],
+  "names": ["React", "John Smith", "AWS"],
+  "steps": ["step 1 description", "step 2 description"],
+  "category_specific": {{}}
+}}
+
+Be EXHAUSTIVE. Include everything. The summarizer will use this as a checklist.

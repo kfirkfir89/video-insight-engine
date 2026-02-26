@@ -35,13 +35,14 @@ test.describe("Explainer V2 — Desktop", () => {
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/video/video-1");
-    await page.waitForSelector('[data-slot="article-chapter"]', { timeout: 10000 });
+    await page.waitForSelector('[data-slot="article-section"]', { timeout: 10000 });
   });
 
-  test("chat panel is visible in sidebar on large desktop", async ({ authenticatedPage: page }) => {
-    // At 1440px (>= 1280px), chat panel is always visible in sidebar
-    const chatPanel = page.getByText("Chat about this video").first();
-    await expect(chatPanel).toBeVisible();
+  test("chat panel is visible in right panel on large desktop", async ({ authenticatedPage: page }) => {
+    // At 1440px (>= 1280px), chat is in the right panel tabs
+    // Chat tab should be visible
+    const chatTab = page.getByTestId("tab-chat");
+    await expect(chatTab).toBeVisible();
 
     // Chat toggle button is hidden on large desktop (only shown < 1280px)
     const chatButton = page.getByRole("button", { name: "Toggle video chat" });
@@ -57,7 +58,11 @@ test.describe("Explainer V2 — Desktop", () => {
   });
 
   test("can send a message in video chat", async ({ authenticatedPage: page }) => {
-    // At 1440px, chat panel is already visible in sidebar
+    // At 1440px, chat is in the right panel. Click the Chat tab to show it.
+    const chatTab = page.getByTestId("tab-chat");
+    await chatTab.click();
+    await page.waitForTimeout(300);
+
     const input = page.getByPlaceholder("Ask about this video...").first();
     await expect(input).toBeVisible();
     await input.fill("What is this video about?");
@@ -132,7 +137,7 @@ test.describe("Explainer V2 — Layout & Overflow", () => {
   test("desktop two-column layout has no horizontal overflow", async ({ authenticatedPage: page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/video/video-1");
-    await page.waitForSelector('[data-slot="article-chapter"]', { timeout: 10000 });
+    await page.waitForSelector('[data-slot="article-section"]', { timeout: 10000 });
 
     // Check no horizontal scroll
     const hasOverflow = await page.evaluate(() => {
@@ -144,7 +149,7 @@ test.describe("Explainer V2 — Layout & Overflow", () => {
   test("content respects container boundaries at 1024px", async ({ authenticatedPage: page }) => {
     await page.setViewportSize({ width: 1024, height: 768 });
     await page.goto("/video/video-1");
-    await page.waitForSelector('[data-slot="article-chapter"]', { timeout: 10000 });
+    await page.waitForSelector('[data-slot="article-section"]', { timeout: 10000 });
 
     const hasOverflow = await page.evaluate(() => {
       return document.documentElement.scrollWidth > document.documentElement.clientWidth;
@@ -155,11 +160,11 @@ test.describe("Explainer V2 — Layout & Overflow", () => {
   test("chapter content blocks stay within viewport", async ({ authenticatedPage: page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/video/video-1");
-    await page.locator('[data-slot="article-chapter"]').first().waitFor({ timeout: 10000 });
+    await page.locator('[data-slot="article-section"]').first().waitFor({ timeout: 10000 });
 
     // Check each chapter article stays within the viewport width
     const results = await page.evaluate(() => {
-      const chapters = document.querySelectorAll('[data-slot="article-chapter"]');
+      const chapters = document.querySelectorAll('[data-slot="article-section"]');
       const viewportWidth = window.innerWidth;
       const overflows: { right: number; width: number }[] = [];
       for (const ch of chapters) {
@@ -177,7 +182,7 @@ test.describe("Explainer V2 — Layout & Overflow", () => {
   test("semantic HTML hierarchy is correct", async ({ authenticatedPage: page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/video/video-1");
-    await page.locator('[data-slot="article-chapter"]').first().waitFor({ timeout: 10000 });
+    await page.locator('[data-slot="article-section"]').first().waitFor({ timeout: 10000 });
 
     // Check that articles exist with correct structure
     const articleCount = await page.locator("article").count();
@@ -185,7 +190,7 @@ test.describe("Explainer V2 — Layout & Overflow", () => {
 
     // Check heading hierarchy within chapters
     const headingLevels = await page.evaluate(() => {
-      const articles = document.querySelectorAll('[data-slot="article-chapter"]');
+      const articles = document.querySelectorAll('[data-slot="article-section"]');
       const levels: number[] = [];
       for (const article of articles) {
         const h3 = article.querySelector("h3");
@@ -232,15 +237,15 @@ test.describe("Explainer V2 — Responsivity", () => {
   test("mobile layout shows single column at 375px", async ({ authenticatedPage: page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/video/video-1");
-    await page.waitForSelector('[data-slot="article-chapter"]', { timeout: 10000 });
+    await page.waitForSelector('[data-slot="article-section"]', { timeout: 10000 });
 
     // Sticky sidebar should NOT be visible on mobile
     const stickyNav = page.locator('[data-slot="sticky-chapter-nav"]');
     await expect(stickyNav).not.toBeVisible();
 
-    // Mobile bottom nav should be visible
-    const mobileNav = page.locator('[data-slot="mobile-chapter-nav"]');
-    await expect(mobileNav).toBeVisible();
+    // Article sections should be visible (mobile single column layout)
+    const sections = page.locator('[data-slot="article-section"]');
+    await expect(sections.first()).toBeVisible();
 
     // No horizontal overflow
     const hasOverflow = await page.evaluate(() => {
@@ -252,7 +257,7 @@ test.describe("Explainer V2 — Responsivity", () => {
   test("mobile chat opens as full-screen drawer", async ({ authenticatedPage: page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/video/video-1");
-    await page.waitForSelector('[data-slot="article-chapter"]', { timeout: 10000 });
+    await page.waitForSelector('[data-slot="article-section"]', { timeout: 10000 });
 
     // Open chat
     await page.getByRole("button", { name: "Toggle video chat" }).click();
@@ -273,7 +278,7 @@ test.describe("Explainer V2 — Responsivity", () => {
   test("tablet layout at 768px has no overflow", async ({ authenticatedPage: page }) => {
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.goto("/video/video-1");
-    await page.waitForSelector('[data-slot="article-chapter"]', { timeout: 10000 });
+    await page.waitForSelector('[data-slot="article-section"]', { timeout: 10000 });
 
     const hasOverflow = await page.evaluate(() => {
       return document.documentElement.scrollWidth > document.documentElement.clientWidth;
@@ -284,7 +289,7 @@ test.describe("Explainer V2 — Responsivity", () => {
   test("Go Deeper works on mobile", async ({ authenticatedPage: page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/video/video-1");
-    await page.waitForSelector('[data-slot="article-chapter"]', { timeout: 10000 });
+    await page.waitForSelector('[data-slot="article-section"]', { timeout: 10000 });
 
     // Go Deeper button should be visible
     const goDeeper = page.getByRole("button", { name: "Go Deeper" }).first();
@@ -302,7 +307,7 @@ test.describe("Explainer V2 — Responsivity", () => {
   test("export buttons work on mobile (icon-only)", async ({ authenticatedPage: page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/video/video-1");
-    await page.waitForSelector('[data-slot="article-chapter"]', { timeout: 10000 });
+    await page.waitForSelector('[data-slot="article-section"]', { timeout: 10000 });
 
     const copyButton = page.getByRole("button", { name: "Copy as Markdown" });
     const downloadButton = page.getByRole("button", { name: "Download as Markdown" });

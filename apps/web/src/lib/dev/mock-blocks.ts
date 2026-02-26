@@ -47,6 +47,8 @@ import type {
   QuizBlock,
   FormulaBlock,
   GuestBlock,
+  ProblemSolutionBlock,
+  VisualBlock,
   TableBlock,
 } from '@vie/types';
 
@@ -521,6 +523,40 @@ export function createTableBlock(
 }
 
 // ─────────────────────────────────────────────────────
+// Quality Blocks (2)
+// ─────────────────────────────────────────────────────
+
+export function createProblemSolutionBlock(
+  problem: string,
+  solution: string,
+  context?: string
+): ProblemSolutionBlock {
+  return {
+    blockId: uuid(),
+    type: 'problem_solution',
+    problem,
+    solution,
+    context,
+  };
+}
+
+export function createVisualBlock(
+  description: string,
+  variant?: 'diagram' | 'screenshot' | 'demo' | 'whiteboard',
+  timestamp?: number,
+  label?: string
+): VisualBlock {
+  return {
+    blockId: uuid(),
+    type: 'visual',
+    description,
+    variant,
+    timestamp,
+    label,
+  };
+}
+
+// ─────────────────────────────────────────────────────
 // Sample Data for Showcase
 // ─────────────────────────────────────────────────────
 
@@ -763,6 +799,19 @@ export const sampleBlocks = {
     },
   ]),
 
+  // Quality blocks
+  problem_solution: createProblemSolutionBlock(
+    'React re-renders the entire component tree when parent state changes, causing unnecessary renders in child components.',
+    'Use React.memo() for pure presentational components and useMemo/useCallback to stabilize references passed as props.',
+    'This is especially impactful in large lists where each item re-renders on every keystroke.'
+  ),
+  visual: createVisualBlock(
+    'Architecture diagram showing the data flow from API gateway through microservices to the database layer.',
+    'diagram',
+    125,
+    'System Architecture Overview'
+  ),
+
   // Generic blocks
   table: createTableBlock(
     [
@@ -783,5 +832,5 @@ export const sampleBlocks = {
   ),
 };
 
-// Export all block types for type checking
-export const BLOCK_TYPE_COUNT = 32;
+// Derived from sampleBlocks to stay in sync automatically
+export const BLOCK_TYPE_COUNT = Object.keys(sampleBlocks).length;
