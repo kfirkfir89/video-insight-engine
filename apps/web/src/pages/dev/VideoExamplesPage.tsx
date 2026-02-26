@@ -23,6 +23,7 @@ import {
   Mic,
   Hammer,
   Gamepad2,
+  Music,
   FileText,
 } from 'lucide-react';
 import { CategoryVideoExample } from '@/components/dev/video-examples/CategoryVideoExample';
@@ -37,6 +38,7 @@ const categoryIcons: Record<VideoCategory, React.ReactNode> = {
   podcast: <Mic className="h-4 w-4" />,
   diy: <Hammer className="h-4 w-4" />,
   gaming: <Gamepad2 className="h-4 w-4" />,
+  music: <Music className="h-4 w-4" />,
   standard: <FileText className="h-4 w-4" />,
 };
 
@@ -50,6 +52,7 @@ const categoryLabels: Record<VideoCategory, string> = {
   podcast: 'Podcast',
   diy: 'DIY',
   gaming: 'Gaming',
+  music: 'Music',
   standard: 'Standard',
 };
 

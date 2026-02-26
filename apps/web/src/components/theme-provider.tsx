@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { ThemeContext, type Theme } from "./theme-context";
 
+interface ViewTransition {
+  skipTransition(): void;
+  finished: Promise<void>;
+}
+
 export function ThemeProvider({
   children,
   defaultTheme = "dark",
@@ -17,40 +22,36 @@ export function ThemeProvider({
     return defaultTheme;
   });
   const isFirstRender = useRef(true);
+  const activeTransition = useRef<ViewTransition | null>(null);
 
   useEffect(() => {
-    let transitionTimer: ReturnType<typeof setTimeout>;
+    const root = window.document.documentElement;
 
-    // Initial theme is already applied by inline script in index.html
-    const applyTheme = () => {
-      const root = window.document.documentElement;
-
-      // Enable smooth color transitions during theme switch (skip first mount)
-      if (!isFirstRender.current) {
-        root.classList.add("theme-transitioning");
-      }
-
+    const updateDOM = () => {
       root.classList.remove("light", "dark");
       root.classList.add(theme);
-
-      // Remove after transition completes (matches 200ms in CSS)
-      if (!isFirstRender.current) {
-        transitionTimer = setTimeout(() => root.classList.remove("theme-transitioning"), 250);
-      }
-      isFirstRender.current = false;
     };
 
-    // Defer if available, otherwise apply immediately
-    if ("requestIdleCallback" in window) {
-      const id = window.requestIdleCallback(applyTheme, { timeout: 100 });
-      return () => {
-        window.cancelIdleCallback(id);
-        clearTimeout(transitionTimer);
-      };
+    // Use View Transitions API for GPU-accelerated crossfade (skip first mount)
+    const startViewTransition = (document as { startViewTransition?: (cb: () => void) => ViewTransition }).startViewTransition;
+    if (
+      !isFirstRender.current &&
+      startViewTransition &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      // Cancel any in-flight transition to prevent competing animations
+      if (activeTransition.current) {
+        activeTransition.current.skipTransition();
+      }
+      const transition = startViewTransition.call(document, updateDOM);
+      activeTransition.current = transition;
+      // Prevent unhandled rejection if transition is aborted/cancelled
+      transition.finished.catch(() => {});
     } else {
-      applyTheme();
-      return () => clearTimeout(transitionTimer);
+      updateDOM();
     }
+
+    isFirstRender.current = false;
   }, [theme]);
 
   // Memoize setTheme callback to prevent context value recreation

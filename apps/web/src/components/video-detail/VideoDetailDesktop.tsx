@@ -18,7 +18,7 @@ import type { Concept } from "@vie/types";
 
 const EMPTY_CONCEPTS: Concept[] = [];
 
-interface VideoDetailDesktopProps extends VideoDetailCommonProps {
+interface VideoDetailDesktopProps extends Omit<VideoDetailCommonProps, 'activeId' | 'scrollToChapter'> {
   /** Right panel tabs (sticky sidebar), rendered at full height. */
   rightPanel?: ReactNode;
 }
@@ -141,7 +141,7 @@ export function VideoDetailDesktop({
 
         {/* Chapters */}
         <div className={cn(
-          "mx-auto space-y-6 pb-12 px-10 pt-4 transition-[max-width] duration-200",
+          "content-container mx-auto space-y-4 pb-12 px-10 pt-4 transition-[max-width] duration-200",
           isRightPanelMinimized ? "max-w-[960px]" : "max-w-[820px]"
         )}>
           {/* Show chapters while sections are loading during streaming */}
@@ -158,7 +158,7 @@ export function VideoDetailDesktop({
             <GlobalConceptScanner>
               {(summary.chapters ?? []).map((chapter, chapterIdx) => (
                 <Fragment key={chapter.id}>
-                  {chapterIdx > 0 && <div className="chapter-divider my-8" aria-hidden="true" />}
+                  {chapterIdx > 0 && <div className="chapter-divider my-6" aria-hidden="true" />}
                   <ArticleSection
                     chapter={chapter}
                     onPlay={handlePlayFromChapter}

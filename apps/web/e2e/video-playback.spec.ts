@@ -129,10 +129,10 @@ test.describe("Video Playback - Detail Page", () => {
     authenticatedPage: page,
   }) => {
     // Wait for sections
-    await page.waitForSelector('[data-slot="article-chapter"]');
+    await page.waitForSelector('[data-slot="article-section"]');
 
     // Click play button on first section
-    const firstSection = page.locator('[data-slot="article-chapter"]').first();
+    const firstSection = page.locator('[data-slot="article-section"]').first();
     const playButton = firstSection.locator('button[aria-label*="Play from"]');
     await playButton.click();
 
@@ -148,14 +148,14 @@ test.describe("Video Playback - Detail Page", () => {
 
   test("displays video summary sections", async ({ authenticatedPage: page }) => {
     // Wait for summary to load
-    await page.waitForSelector('[data-slot="tldr-hero"]');
+    await page.waitForSelector('#video-header');
 
     // TLDR section
-    await expect(page.locator('[data-slot="tldr-hero"]')).toBeVisible();
+    await expect(page.locator('#video-header')).toBeVisible();
     await expect(page.locator("text=TL;DR")).toBeVisible();
 
     // Key Takeaways are within TL;DR hero
-    await expect(page.locator('[data-slot="tldr-hero"]')).toContainText("Key point 1");
+    await expect(page.locator('#video-header')).toContainText("Key point 1");
 
     // Sections - use h3 headings specifically (in article sections)
     await expect(page.locator("h3", { hasText: "Introduction" })).toBeVisible();
@@ -167,22 +167,23 @@ test.describe("Video Playback - Detail Page", () => {
     authenticatedPage: page,
   }) => {
     // Wait for sections to load
-    await page.waitForSelector('[data-slot="article-chapter"]');
+    await page.waitForSelector('[data-slot="article-section"]');
 
     // Find timestamp play buttons in article sections
-    const timestampButtons = page.locator('[data-slot="article-chapter"] button[aria-label*="Play from"]');
+    const timestampButtons = page.locator('[data-slot="article-section"] button[aria-label*="Play from"]');
     await expect(timestampButtons).toHaveCount(3);
 
-    // First timestamp should show "0:00"
-    await expect(timestampButtons.first()).toContainText("0:00");
+    // First timestamp should have "0:00" in aria-label (icon-only buttons)
+    const firstLabel = await timestampButtons.first().getAttribute("aria-label");
+    expect(firstLabel).toContain("0:00");
   });
 
   test("clicking play button in section triggers video", async ({ authenticatedPage: page }) => {
     // Wait for sections
-    await page.waitForSelector('[data-slot="article-chapter"]');
+    await page.waitForSelector('[data-slot="article-section"]');
 
     // Click a timestamp button in the article section
-    const section = page.locator('[data-slot="article-chapter"]').nth(1); // Main Content section
+    const section = page.locator('[data-slot="article-section"]').nth(1); // Main Content section
     const timestampButton = section.locator('button[aria-label="Play from 0:30"]');
     await timestampButton.click();
 
@@ -191,9 +192,9 @@ test.describe("Video Playback - Detail Page", () => {
     await expect(youtubePlayer).toBeVisible({ timeout: 5000 });
   });
 
-  test("back button navigates to dashboard", async ({ authenticatedPage: page }) => {
-    const backButton = page.locator('button:has-text("Back")');
-    await backButton.click();
+  test("navigates to dashboard via logo/sidebar", async ({ authenticatedPage: page }) => {
+    const homeLink = page.locator('a[href="/"]').first();
+    await homeLink.click();
 
     await expect(page).toHaveURL("/");
   });
@@ -247,9 +248,9 @@ test.describe("Video Playback - Accessibility", () => {
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/video/video-1");
-    await page.waitForSelector('[data-slot="article-chapter"]');
+    await page.waitForSelector('[data-slot="article-section"]');
 
-    const timestampButtons = page.locator('[data-slot="article-chapter"] button[aria-label*="Play from"]');
+    const timestampButtons = page.locator('[data-slot="article-section"] button[aria-label*="Play from"]');
     const count = await timestampButtons.count();
 
     for (let i = 0; i < count; i++) {

@@ -13,27 +13,9 @@ test.describe("Sidebar Header Redesign", () => {
       const brandingText = sidebar.getByText("Video Insight");
       await expect(brandingText).toBeVisible();
 
-      // Theme toggle should be in the sidebar footer
-      const themeToggle = sidebar.getByRole("button", {
-        name: "Toggle theme",
-      });
-      await expect(themeToggle).toBeVisible();
-
-      // User dropdown should be in sidebar footer
-      const userButton = sidebar.locator(
-        '[data-slot="dropdown-menu-trigger"]'
-      );
-      await expect(userButton.first()).toBeVisible();
-
-      // URL input should be present
-      const urlInput = sidebar.getByPlaceholder("Paste YouTube URL...");
-      await expect(urlInput).toBeVisible();
-
-      // Toolbar controls: search, selection, collapse, sort, text size
-      const searchInput = sidebar.getByPlaceholder(
-        "Search folders and videos..."
-      );
-      await expect(searchInput).toBeVisible();
+      // Toolbar: search button visible (search input is in collapsible panel)
+      const searchButton = sidebar.getByLabel("Search");
+      await expect(searchButton).toBeVisible();
 
       // SidebarTabs: Summaries and Memorized tabs
       const summariesTab = sidebar.getByText("Summaries");
@@ -42,9 +24,23 @@ test.describe("Sidebar Header Redesign", () => {
       const memorizedTab = sidebar.getByText("Memorized");
       await expect(memorizedTab).toBeVisible();
 
-      // SidebarFooter: video count
-      const footer = sidebar.getByText(/video/);
-      await expect(footer.last()).toBeVisible();
+      // AppHeader: theme toggle and user dropdown are in the header, not sidebar
+      const header = page.locator("header");
+      await expect(header).toBeVisible();
+
+      const themeToggle = header.getByRole("button", {
+        name: "Toggle theme",
+      });
+      await expect(themeToggle).toBeVisible();
+
+      const userButton = header.locator(
+        '[data-slot="dropdown-menu-trigger"]'
+      );
+      await expect(userButton.first()).toBeVisible();
+
+      // URL input is in the AppHeader
+      const urlInput = header.getByPlaceholder("Paste YouTube URL...");
+      await expect(urlInput).toBeVisible();
     });
 
     test("should have correct visual hierarchy order (top to bottom)", async ({
@@ -53,38 +49,32 @@ test.describe("Sidebar Header Redesign", () => {
       const sidebar = page.locator("aside");
       await expect(sidebar).toBeVisible();
 
-      // Get bounding boxes of key elements to verify order
+      // Get bounding boxes of key sidebar elements to verify order
       const brandingBox = await sidebar
         .getByText("Video Insight")
-        .boundingBox();
-      const urlInputBox = await sidebar
-        .getByPlaceholder("Paste YouTube URL...")
-        .boundingBox();
-      const searchBox = await sidebar
-        .getByPlaceholder("Search folders and videos...")
         .boundingBox();
       const summariesTabBox = await sidebar
         .getByText("Summaries")
         .boundingBox();
+      // Search button is in the toolbar row below tabs
+      const searchButtonBox = await sidebar
+        .getByLabel("Search")
+        .boundingBox();
 
       expect(brandingBox).not.toBeNull();
-      expect(urlInputBox).not.toBeNull();
-      expect(searchBox).not.toBeNull();
       expect(summariesTabBox).not.toBeNull();
+      expect(searchButtonBox).not.toBeNull();
 
-      // Verify top-to-bottom order
-      expect(brandingBox!.y).toBeLessThan(urlInputBox!.y);
-      expect(urlInputBox!.y).toBeLessThan(searchBox!.y);
-      expect(searchBox!.y).toBeLessThan(summariesTabBox!.y);
+      // Verify top-to-bottom order: branding → tabs → toolbar
+      expect(brandingBox!.y).toBeLessThan(summariesTabBox!.y);
+      expect(summariesTabBox!.y).toBeLessThan(searchButtonBox!.y);
     });
 
-    test("should show sidebar toggle in sidebar header", async ({
+    test("should show sidebar toggle in app header", async ({
       authenticatedPage: page,
     }) => {
-      const sidebar = page.locator("aside");
-      await expect(sidebar).toBeVisible();
-
-      const toggleButton = sidebar.getByTitle("Hide sidebar");
+      // Sidebar toggle is in AppHeader, uses aria-label
+      const toggleButton = page.getByLabel("Hide sidebar");
       await expect(toggleButton).toBeVisible();
     });
 
@@ -94,9 +84,9 @@ test.describe("Sidebar Header Redesign", () => {
       const sidebar = page.locator("aside");
       await expect(sidebar).toBeVisible();
 
-      // Find the Plus button (add folder) in the tab bar area
+      // Find the FolderPlus button (add folder) in the sidebar toolbar
       const newFolderTooltipTrigger = sidebar.locator("button").filter({
-        has: page.locator('svg.lucide-plus'),
+        has: page.locator('svg.lucide-folder-plus'),
       });
       await expect(newFolderTooltipTrigger).toBeVisible();
     });
@@ -125,13 +115,28 @@ test.describe("Sidebar Header Redesign", () => {
     });
   });
 
-  test.describe("No Global Header", () => {
-    test("should not have a global header element", async ({
+  test.describe("App Header Layout", () => {
+    // NOTE: The original "No Global Header" test was replaced because the
+    // sidebar-header redesign introduced an AppHeader component. The app
+    // now HAS a global header with sidebar toggle, URL input, and controls.
+    test("should have app header with sidebar toggle, URL input, and controls", async ({
       authenticatedPage: page,
     }) => {
-      // There should be no <header> element on the page
+      // AppHeader renders a <header> element
       const header = page.locator("header");
-      await expect(header).not.toBeVisible();
+      await expect(header).toBeVisible();
+
+      // Sidebar toggle
+      const toggleButton = header.getByLabel("Hide sidebar");
+      await expect(toggleButton).toBeVisible();
+
+      // URL input in center
+      const urlInput = header.getByPlaceholder("Paste YouTube URL...");
+      await expect(urlInput).toBeVisible();
+
+      // Theme toggle on right
+      const themeToggle = header.getByRole("button", { name: "Toggle theme" });
+      await expect(themeToggle).toBeVisible();
     });
 
     test("should have app icon linking to home page", async ({
@@ -147,25 +152,18 @@ test.describe("Sidebar Header Redesign", () => {
       await expect(brandingLink).toBeVisible();
     });
 
-    test("should show theme toggle and user profile in footer", async ({
+    test("should show theme toggle and user profile in header", async ({
       authenticatedPage: page,
     }) => {
-      const sidebar = page.locator("aside");
-      await expect(sidebar).toBeVisible();
+      const header = page.locator("header");
+      await expect(header).toBeVisible();
 
-      // Footer area should have theme toggle and user dropdown
-      const themeToggle = sidebar.getByRole("button", { name: "Toggle theme" });
-      const userDropdown = sidebar.locator('[data-slot="dropdown-menu-trigger"]');
+      // Header should have theme toggle and user dropdown
+      const themeToggle = header.getByRole("button", { name: "Toggle theme" });
+      const userDropdown = header.locator('[data-slot="dropdown-menu-trigger"]');
 
       await expect(themeToggle).toBeVisible();
       await expect(userDropdown.first()).toBeVisible();
-
-      // Verify they're at the bottom of the sidebar
-      const themeBox = await themeToggle.boundingBox();
-      const brandingBox = await sidebar.getByText("Video Insight").boundingBox();
-      expect(themeBox).not.toBeNull();
-      expect(brandingBox).not.toBeNull();
-      expect(themeBox!.y).toBeGreaterThan(brandingBox!.y);
     });
   });
 
@@ -209,9 +207,6 @@ test.describe("Sidebar Header Redesign", () => {
       const branding = sidebar.getByText("Video Insight");
       await expect(branding).toBeVisible();
 
-      const urlInput = sidebar.getByPlaceholder("Paste YouTube URL...");
-      await expect(urlInput).toBeVisible();
-
       const tabs = sidebar.getByText("Summaries");
       await expect(tabs).toBeVisible();
     });
@@ -222,16 +217,16 @@ test.describe("Sidebar Header Redesign", () => {
       const sidebar = page.locator("aside");
       await expect(sidebar).toBeVisible();
 
-      // Click toggle button in sidebar header
-      const hideButton = sidebar.getByTitle("Hide sidebar");
+      // Click toggle button in AppHeader (uses aria-label)
+      const hideButton = page.getByLabel("Hide sidebar");
       await hideButton.click();
       await page.waitForTimeout(300);
 
       // Sidebar should be hidden
       await expect(sidebar).not.toBeVisible();
 
-      // Floating toggle should appear in main content
-      const showButton = page.locator("main").getByTitle("Show sidebar");
+      // Toggle button should now say "Show sidebar"
+      const showButton = page.getByLabel("Show sidebar");
       await expect(showButton).toBeVisible();
       await showButton.click();
       await page.waitForTimeout(300);
@@ -240,51 +235,42 @@ test.describe("Sidebar Header Redesign", () => {
       await expect(sidebar).toBeVisible();
     });
 
-    test("should show floating toggle when sidebar is closed", async ({
+    test("should show icon strip when sidebar is closed", async ({
       authenticatedPage: page,
     }) => {
       const sidebar = page.locator("aside");
       await expect(sidebar).toBeVisible();
 
       // Close sidebar
-      const hideButton = sidebar.getByTitle("Hide sidebar");
+      const hideButton = page.getByLabel("Hide sidebar");
       await hideButton.click();
       await page.waitForTimeout(300);
 
-      // Floating toggle should be visible in main
-      const floatingToggle = page.locator("main").getByTitle("Show sidebar");
-      await expect(floatingToggle).toBeVisible();
+      // Toggle button should change to "Show sidebar"
+      const showButton = page.getByLabel("Show sidebar");
+      await expect(showButton).toBeVisible();
     });
 
-    test("layout should fill viewport without scrollbars", async ({
+    test("layout should fill viewport without horizontal scrollbars", async ({
       authenticatedPage: page,
     }) => {
-      const viewportHeight = await page.evaluate(() => window.innerHeight);
-      const bodyHeight = await page.evaluate(
-        () => document.body.scrollHeight
-      );
-
-      // Body should not exceed viewport (no vertical scrollbar on layout shell)
-      expect(bodyHeight).toBeLessThanOrEqual(viewportHeight + 1); // 1px tolerance
+      const hasOverflow = await page.evaluate(() => {
+        return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+      });
+      expect(hasOverflow).toBe(false);
     });
 
-    test("sidebar and main content should fill available height", async ({
+    test("sidebar should fill full viewport height", async ({
       authenticatedPage: page,
     }) => {
       const sidebar = page.locator("aside");
-      const main = page.locator("main");
-
       const sidebarBox = await sidebar.boundingBox();
-      const mainBox = await main.boundingBox();
-
       expect(sidebarBox).not.toBeNull();
-      expect(mainBox).not.toBeNull();
 
       const viewportHeight = await page.evaluate(() => window.innerHeight);
 
-      // Both sidebar and main should fill the full viewport height (no header)
+      // Sidebar has h-screen so should fill full viewport height
       expect(sidebarBox!.height).toBeGreaterThan(viewportHeight - 5);
-      expect(mainBox!.height).toBeGreaterThan(viewportHeight - 5);
     });
   });
 
@@ -294,34 +280,14 @@ test.describe("Sidebar Header Redesign", () => {
     }) => {
       const sidebar = page.locator("aside");
 
-      // Click the sort button
-      const sortButton = sidebar.getByLabel("Change sort order");
+      // Click the sort toolbar button to expand the sort panel
+      const sortButton = sidebar.getByLabel("Sort");
       await sortButton.click();
+      await page.waitForTimeout(300);
 
-      // The dropdown content should appear
-      const dropdownContent = page.locator(
-        '[data-slot="dropdown-menu-content"]'
-      );
-      await expect(dropdownContent).toBeVisible();
-
-      // Check for backdrop-blur (glass effect)
-      const hasBackdropBlur = await dropdownContent.evaluate((el) => {
-        const style = window.getComputedStyle(el);
-        const backdropFilter = style.getPropertyValue("backdrop-filter");
-        return backdropFilter.includes("blur");
-      });
-      expect(hasBackdropBlur).toBe(true);
-
-      // Check for rounded-lg (border radius)
-      const borderRadius = await dropdownContent.evaluate((el) => {
-        const style = window.getComputedStyle(el);
-        return parseFloat(style.borderRadius);
-      });
-      expect(borderRadius).toBeGreaterThanOrEqual(8); // rounded-lg = 0.5rem = 8px
-
-      // Should have "Sort by" label
-      const sortByLabel = dropdownContent.getByText("Sort by");
-      await expect(sortByLabel).toBeVisible();
+      // Sort panel should expand with sort options (A-Z, Z-A, Newest, Oldest)
+      await expect(sidebar.getByText("A-Z")).toBeVisible();
+      await expect(sidebar.getByText("Newest")).toBeVisible();
     });
   });
 
@@ -346,10 +312,9 @@ test.describe("Sidebar Header Redesign", () => {
       );
       await expect(activeVideo).toBeVisible();
 
-      // Check the element has the active state classes (border-l-2 border-l-primary)
+      // Check the element has the active state classes (bg-primary/8 + font-medium)
       const classAttr = await activeVideo.getAttribute("class");
-      expect(classAttr).toContain("border-l-2");
-      expect(classAttr).toContain("border-l-primary");
+      expect(classAttr).toContain("bg-primary/8");
       expect(classAttr).toContain("font-medium");
     });
 

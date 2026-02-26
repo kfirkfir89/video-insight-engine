@@ -16,7 +16,7 @@ Return JSON only (no other text):
 {{
   "view": "cooking|coding|reviews|travel|fitness|education|podcast|diy|gaming|standard",
   "content": [
-    // Array of content blocks - use 1-4 blocks as needed
+    // Array of content blocks - use 2-7 blocks based on chapter length
     // Mix and match types based on what the content needs
     // Use variants appropriate to the persona when applicable
   ]{concepts_field}{generated_title_field}
@@ -58,6 +58,18 @@ AVAILABLE CONTENT BLOCK TYPES:
    Variants: "chef_tip" (for recipe cooking tips)
    Styles: "tip" (pro tips), "warning" (cautions), "note" (info), "security" (security warnings for code content)
    Use when: Something deserves special attention
+   CALLOUT QUALITY GATE:
+   - Must contain a specific, actionable insight (not a vague platitude)
+   - Must NOT simply restate what the paragraph above already said
+   - Must NOT be generic encouragement ("keep this in mind!", "remember this!")
+   - Maximum 2 sentences — if you need more, use a paragraph instead
+   - Ask: "Would a reader learn something NEW from this callout?" If no, delete it.
+   CALLOUT STYLE VARIETY:
+   - Do NOT default to "tip". Match the content:
+     "tip" → genuinely useful pro tips only
+     "warning" → pitfalls, common mistakes, things that go wrong
+     "note" → context, background, clarifications
+   - If 70%+ of callouts are "tip", rethink.
 
 7. "definition" - For key terms being introduced
    {{"type": "definition", "term": "Term name", "meaning": "What it means"}}
@@ -210,6 +222,42 @@ AVAILABLE CONTENT BLOCK TYPES:
     Fields: guests array with name (required), title, bio, imageUrl, socialLinks
     Use when: Introducing podcast guests, interview subjects, speakers
 
+32. "problem_solution" - For problem→solution patterns
+    {{"type": "problem_solution", "problem": "API calls fail silently when auth token expires", "solution": "Implement token refresh middleware that intercepts 401 responses", "context": "Common in SPAs with long-lived sessions"}}
+    Fields: problem (required), solution (required), context (optional background)
+    Use when: Content presents a problem and its fix, debugging scenarios, troubleshooting, before/after improvements
+
+33. "visual" - For visual demonstrations, diagrams, or on-screen moments
+    SINGLE FRAME (most common):
+    {{"type": "visual", "description": "Architecture diagram showing microservice flow", "timestamp": 245, "label": "Architecture diagram", "variant": "diagram"}}
+
+    MULTI-FRAME (slideshow, step-by-step, multiple screenshots):
+    {{"type": "visual", "description": "Series of UI mockups showing the redesign evolution", "timestamp": 120, "label": "Design progression", "variant": "slideshow", "frames": [
+      {{"timestamp": 120, "caption": "Initial wireframe"}},
+      {{"timestamp": 135, "caption": "Navigation added"}},
+      {{"timestamp": 152, "caption": "Final polished design"}}
+    ]}}
+
+    Fields: description (required), timestamp (required), label (optional), variant (optional), frames (optional array)
+    Variants: "diagram" (technical diagram), "screenshot" (UI/screen), "demo" (live demo), "whiteboard" (hand-drawn), "slideshow" (sequential images/slides), "gallery" (curated collection)
+
+    MULTI-FRAME RULES:
+    - Emit frames[] when speaker shows 2+ distinct visuals in sequence (slides, examples, screens)
+    - Transcript cues: "here's the first...", "next...", "let me show you another", "as you can see on screen"
+    - Frame timestamps MUST be at least 20 seconds apart to capture visually distinct moments
+    - Spread timestamps across the full chapter range — do NOT cluster them within a narrow window
+    - Each frame needs a different timestamp within chapter range
+    - 2-6 frames per block (more is wasteful)
+    - Each caption: 3-8 words describing what that frame shows
+    - DO NOT emit frames[] for a single diagram/screenshot — use single-frame format
+    - The primary timestamp should be the first frame's timestamp
+    - ALL timestamps (block-level and per-frame) MUST fall within this chapter's time range (see CHAPTER TIME RANGE above)
+    - If unsure of exact timestamp, use the chapter's midpoint rather than guessing
+
+    DEDUPLICATION: If the speaker references the same visual shown earlier, do NOT create another visual block for it
+
+    Use when: Speaker shows something on screen — diagram, UI, whiteboard, slide deck, demo
+
 BLOCK SELECTION PRIORITY (prefer specific over generic):
 
 | Content describes...                      | Use block type       | NOT                          |
@@ -234,6 +282,8 @@ BLOCK SELECTION PRIORITY (prefer specific over generic):
 | Tools/equipment needed                    | tool_list            | bullets                      |
 | Podcast/interview guests                  | guest                | paragraph                    |
 | Notable spoken statements, key quotes     | quote                | paragraph                    |
+| Problem with solution/fix/workaround      | problem_solution     | paragraph                    |
+| Visual demonstration/diagram/screen       | visual               | paragraph or timestamp       |
 
 PERSONA-SPECIFIC EXAMPLES:
 {variant_examples}
@@ -297,11 +347,23 @@ ARTICLE FLOW RULES:
 - End in a way that naturally leads to the next topic
 - Each chapter should feel like part of ONE cohesive article
 
-WRITING QUALITY:
-- Be specific and concrete - include actual numbers, names, code when mentioned
-- No meta-commentary about "the video" or "the presenter"
-- Write directly to the reader as if teaching them
-- Make every sentence earn its place - no fluff
+BLOCK COUNT GUIDELINES (content drives the count):
+- Short chapters (under 2 minutes): 2-3 blocks
+- Medium chapters (2-5 minutes): 3-5 blocks
+- Long chapters (5+ minutes): 4-7 blocks
+- Let the density of information determine the count — a 1-minute chapter packed with code examples may need 4 blocks, while a 3-minute intro may need only 2.
+
+ANTI-REPETITION RULES:
+- Maximum 1 callout per chapter. Second callout → convert to paragraph or delete.
+- Maximum 1 comparison per chapter unless genuinely 3+ comparisons exist.
+- Do NOT end consecutive chapters with the same block type.
+- Each chapter MUST include at least 1 block type different from {{paragraph, quote, comparison, callout}}.
+  Underused alternatives: definition, statistic, keyvalue, timestamp, problem_solution, visual, bullets, timeline.
+- Avoid the dominant pattern: paragraph → quote → comparison → callout. Vary structure.
+{diversity_instruction}
+{chapter_time_range}
+
+{accuracy_rules}
 
 EXAMPLES OF GOOD OUTPUT:
 
@@ -377,4 +439,16 @@ For code security best practices:
   ]
 }}
 
-CRITICAL: Your output must be valid JSON. Use 1-4 content blocks. Choose types and variants that BEST serve THIS specific content based on the persona context - variety across chapters makes the article engaging.
+SELF-CHECK (verify before outputting):
+1. ITEM COUNT: If the speaker listed N items, did I include all N? Count them.
+2. TERM FIDELITY: Did I use the speaker's exact terms, or did I rename them?
+3. TIMESTAMP RANGE: Are all timestamps within this chapter's time range?
+4. CALLOUT VALUE: Does each callout teach something specific, or is it generic fluff? Delete fluff.
+5. CODE INCLUDED: If the speaker showed code, did I include it in a code/terminal block?
+6. ANALOGIES PRESENT: If the speaker used an analogy or memorable example, did I preserve it?
+7. NO ORPHAN BLOCKS: Does every block connect to the chapter's content? No invented content.
+8. ATTRIBUTION: Every quote must use a real person's name — never "Expert Name", "Speaker", or "Host".
+{fact_sheet}
+{guest_attribution}
+
+CRITICAL: Your output must be valid JSON. Use 2-7 content blocks based on chapter length and content density. Choose types and variants that BEST serve THIS specific content based on the persona context - variety across chapters makes the article engaging.

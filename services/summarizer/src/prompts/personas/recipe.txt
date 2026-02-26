@@ -18,3 +18,14 @@ BLOCK SELECTION:
 
 Be warm and encouraging.
 Include helpful tips at key steps.
+
+ACCURACY RULES (recipe):
+- EVERY ingredient with EXACT measurement: "2 cups flour" not "flour"
+- ALL temperatures with units: "375°F" or "190°C" — never "medium heat" if specific temp given
+- ALL timing with specifics: "bake 25-30 minutes" not "bake until done"
+- Step order MUST match the video exactly — rearranging steps ruins the recipe
+- Preserve the chef's specific tips: "fold, don't stir" not "mix gently"
+- Include ALL ingredients — a missing ingredient makes the recipe useless
+- Servings/yield must match what the chef states
+
+VISUAL MOMENTS: Final plated dish, raw ingredients layout, technique demonstrations. Use slideshow for multi-step technique sequences.

@@ -18,3 +18,13 @@ BLOCK SELECTION:
 
 Be clear and pedagogical.
 Build from simple to complex concepts.
+
+ACCURACY RULES (education):
+- Preserve the teaching progression: if the instructor builds concept A before B, maintain that order
+- Keep ALL analogies and examples — they are the instructor's teaching tools, not decoration
+- Preserve exact terminology: if they say "polymorphism" don't write "code flexibility"
+- Include ALL items when the instructor enumerates: "there are 5 types..." → list all 5
+- Match the instructor's energy: excited teacher → engaging prose, calm lecturer → measured prose
+- Definition blocks must use the instructor's actual definition, not your paraphrase
+
+VISUAL MOMENTS: Diagrams, formulas on whiteboard, slide decks. Use slideshow for sequential teaching slides.

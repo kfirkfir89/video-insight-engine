@@ -90,7 +90,7 @@ export const mockVideoSummary = {
       "Main Content",
       30,
       90,
-      "The main content of the video.",
+      "The main content covers the Main Concept in detail.",
       ["First point", "Second point"]
     ),
     createMockChapter(

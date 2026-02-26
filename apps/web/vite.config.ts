@@ -1,35 +1,18 @@
 import path from "path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig } from "vite";
 import { visualizer } from "rollup-plugin-visualizer";
 import compression from "vite-plugin-compression";
 
-/**
- * Plugin to make CSS non-render-blocking by using the media="print" trick.
- * This loads CSS asynchronously and applies it after page load.
- */
-function asyncCssPlugin(): Plugin {
-  return {
-    name: "async-css",
-    enforce: "post",
-    transformIndexHtml(html) {
-      // Transform <link rel="stylesheet" ...> to async loading pattern
-      // Uses media="print" onload="this.media='all'" trick
-      return html.replace(
-        /<link rel="stylesheet" crossorigin href="([^"]+)">/g,
-        `<link rel="stylesheet" href="$1" media="print" onload="this.media='all'">
-    <noscript><link rel="stylesheet" href="$1"></noscript>`
-      );
-    },
-  };
-}
-
 export default defineConfig({
   plugins: [
-    react(),
+    react({
+      babel: {
+        plugins: [["babel-plugin-react-compiler"]],
+      },
+    }),
     tailwindcss(),
-    asyncCssPlugin(),
     // Gzip compression - broad browser support
     compression({
       algorithm: "gzip",
