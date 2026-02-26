@@ -13,16 +13,6 @@ export type ProcessingStatus =
   | 'failed';
 
 // ─────────────────────────────────────────────────────
-// Base Block Interface (V2.1)
-// All content blocks extend this for stable identification
-// ─────────────────────────────────────────────────────
-
-export interface BaseBlock {
-  /** Stable UUID for tracking, analytics, and React keys */
-  blockId: string;
-}
-
-// ─────────────────────────────────────────────────────
 // Transcript Types (Phase 2 & 3)
 // ─────────────────────────────────────────────────────
 
@@ -36,7 +26,7 @@ export interface TranscriptSegment {
 
 /**
  * Full transcript stored in S3 for regeneration without re-fetching from YouTube.
- * S3 key format: `transcripts/{youtubeId}.json`
+ * S3 key format: `videos/{youtubeId}/transcript.json`
  */
 export interface RawTranscript {
   youtubeId: string;
@@ -69,9 +59,6 @@ export type TargetType = 'section' | 'concept';
 // Video Context Types
 // ─────────────────────────────────────────────────────
 
-/** @deprecated Use VideoCategory instead */
-export type VideoPersona = 'code' | 'recipe' | 'standard' | 'interview' | 'review';
-
 /** Video category values for UI theming (V2.1) */
 export const VIDEO_CATEGORY_VALUES = [
   'cooking',
@@ -95,6 +82,7 @@ export interface VideoContext {
   youtubeCategory: string;    // Raw YouTube category
   tags: string[];
   displayTags: string[];
+  categoryConfidence?: number; // Detection confidence (0.0-1.0), used internally
 }
 
 // ─────────────────────────────────────────────────────
@@ -104,9 +92,13 @@ export interface VideoContext {
 // ─────────────────────────────────────────────────────
 // Content Block Types (Dynamic Chapter Content)
 // ─────────────────────────────────────────────────────
-// Base interface for all content blocks - provides stable block identifiers
+// Base interface for all content blocks - provides stable block identifiers.
+// blockId is injected by inject_block_ids() in the summarizer before reaching
+// the frontend — always present at runtime. Required in the type to enforce
+// null-safe usage in React keys and analytics.
 export interface BaseBlock {
-  blockId: string;  // UUID - stable identifier for referencing
+  /** Stable UUID for tracking, analytics, and React keys. Injected server-side. */
+  blockId: string;
   type: string;
   variant?: string;
 }
@@ -198,7 +190,7 @@ export interface StatisticBlock extends BaseBlock {
 
 // ===== NEW UNIVERSAL BLOCKS (V2.1) =====
 
-export interface TranscriptBlock extends Partial<BaseBlock> {
+export interface TranscriptBlock extends BaseBlock {
   type: 'transcript';
   lines: {
     time: string;
@@ -207,7 +199,7 @@ export interface TranscriptBlock extends Partial<BaseBlock> {
   }[];
 }
 
-export interface TimelineBlock extends Partial<BaseBlock> {
+export interface TimelineBlock extends BaseBlock {
   type: 'timeline';
   events: {
     date?: string;
@@ -217,7 +209,7 @@ export interface TimelineBlock extends Partial<BaseBlock> {
   }[];
 }
 
-export interface ToolListBlock extends Partial<BaseBlock> {
+export interface ToolListBlock extends BaseBlock {
   type: 'tool_list';
   tools: {
     name: string;
@@ -230,7 +222,7 @@ export interface ToolListBlock extends Partial<BaseBlock> {
 // ===== CATEGORY-SPECIFIC BLOCKS (V2.1) =====
 
 // Cooking blocks
-export interface IngredientBlock extends Partial<BaseBlock> {
+export interface IngredientBlock extends BaseBlock {
   type: 'ingredient';
   servings?: number;
   items: {
@@ -242,7 +234,7 @@ export interface IngredientBlock extends Partial<BaseBlock> {
   }[];
 }
 
-export interface StepBlock extends Partial<BaseBlock> {
+export interface StepBlock extends BaseBlock {
   type: 'step';
   steps: {
     number: number;
@@ -252,7 +244,7 @@ export interface StepBlock extends Partial<BaseBlock> {
   }[];
 }
 
-export interface NutritionBlock extends Partial<BaseBlock> {
+export interface NutritionBlock extends BaseBlock {
   type: 'nutrition';
   servingSize?: string;
   items: {
@@ -264,7 +256,7 @@ export interface NutritionBlock extends Partial<BaseBlock> {
 }
 
 // Coding blocks
-export interface CodeBlock extends Partial<BaseBlock> {
+export interface CodeBlock extends BaseBlock {
   type: 'code';
   language?: string;
   code: string;
@@ -272,13 +264,13 @@ export interface CodeBlock extends Partial<BaseBlock> {
   highlightLines?: number[];
 }
 
-export interface TerminalBlock extends Partial<BaseBlock> {
+export interface TerminalBlock extends BaseBlock {
   type: 'terminal';
   command: string;
   output?: string;
 }
 
-export interface FileTreeBlock extends Partial<BaseBlock> {
+export interface FileTreeBlock extends BaseBlock {
   type: 'file_tree';
   tree: FileTreeNode[];
 }
@@ -291,7 +283,7 @@ export interface FileTreeNode {
 }
 
 // Travel blocks
-export interface LocationBlock extends Partial<BaseBlock> {
+export interface LocationBlock extends BaseBlock {
   type: 'location';
   name: string;
   address?: string;
@@ -301,7 +293,7 @@ export interface LocationBlock extends Partial<BaseBlock> {
   mapUrl?: string;
 }
 
-export interface ItineraryBlock extends Partial<BaseBlock> {
+export interface ItineraryBlock extends BaseBlock {
   type: 'itinerary';
   days: {
     day: number;
@@ -316,7 +308,7 @@ export interface ItineraryBlock extends Partial<BaseBlock> {
   }[];
 }
 
-export interface CostBlock extends Partial<BaseBlock> {
+export interface CostBlock extends BaseBlock {
   type: 'cost';
   currency?: string;
   items: {
@@ -328,13 +320,13 @@ export interface CostBlock extends Partial<BaseBlock> {
 }
 
 // Review blocks
-export interface ProConBlock extends Partial<BaseBlock> {
+export interface ProConBlock extends BaseBlock {
   type: 'pro_con';
   pros: string[];
   cons: string[];
 }
 
-export interface RatingBlock extends Partial<BaseBlock> {
+export interface RatingBlock extends BaseBlock {
   type: 'rating';
   score: number;
   maxScore: number;
@@ -346,7 +338,7 @@ export interface RatingBlock extends Partial<BaseBlock> {
   }[];
 }
 
-export interface VerdictBlock extends Partial<BaseBlock> {
+export interface VerdictBlock extends BaseBlock {
   type: 'verdict';
   verdict: 'recommended' | 'not_recommended' | 'conditional' | 'neutral';
   summary: string;
@@ -355,7 +347,7 @@ export interface VerdictBlock extends Partial<BaseBlock> {
 }
 
 // Fitness blocks
-export interface ExerciseBlock extends Partial<BaseBlock> {
+export interface ExerciseBlock extends BaseBlock {
   type: 'exercise';
   exercises: {
     name: string;
@@ -369,7 +361,7 @@ export interface ExerciseBlock extends Partial<BaseBlock> {
   }[];
 }
 
-export interface WorkoutTimerBlock extends Partial<BaseBlock> {
+export interface WorkoutTimerBlock extends BaseBlock {
   type: 'workout_timer';
   intervals: {
     name: string;
@@ -380,7 +372,7 @@ export interface WorkoutTimerBlock extends Partial<BaseBlock> {
 }
 
 // Education blocks
-export interface QuizBlock extends Partial<BaseBlock> {
+export interface QuizBlock extends BaseBlock {
   type: 'quiz';
   questions: {
     question: string;
@@ -390,7 +382,7 @@ export interface QuizBlock extends Partial<BaseBlock> {
   }[];
 }
 
-export interface FormulaBlock extends Partial<BaseBlock> {
+export interface FormulaBlock extends BaseBlock {
   type: 'formula';
   latex: string;
   description?: string;
@@ -398,7 +390,7 @@ export interface FormulaBlock extends Partial<BaseBlock> {
 }
 
 // Podcast blocks
-export interface GuestBlock extends Partial<BaseBlock> {
+export interface GuestBlock extends BaseBlock {
   type: 'guest';
   guests: {
     name: string;
@@ -410,7 +402,7 @@ export interface GuestBlock extends Partial<BaseBlock> {
 }
 
 // Generic table block
-export interface TableBlock extends Partial<BaseBlock> {
+export interface TableBlock extends BaseBlock {
   type: 'table';
   caption?: string;
   columns: {
@@ -420,6 +412,53 @@ export interface TableBlock extends Partial<BaseBlock> {
   }[];
   rows: Record<string, string | number>[];
   highlightRows?: number[];
+}
+
+// Problem/Solution blocks
+export interface ProblemSolutionBlock extends BaseBlock {
+  type: 'problem_solution';
+  problem: string;
+  solution: string;
+  context?: string;
+}
+
+// Visual moment blocks
+// TODO: If more snake_case fields are needed from the Python backend,
+// introduce a generic wire->client key transform utility instead of ad-hoc exceptions.
+
+/**
+ * Individual frame within a multi-frame visual block (slideshow/gallery).
+ *
+ * NOTE: `s3_key` uses snake_case to match the Python backend wire format
+ * (JSON over SSE). This is a deliberate exception to the camelCase convention
+ * to avoid a transform layer at the API boundary. If more snake_case fields
+ * are needed in the future, consider a generic key-transform utility instead.
+ */
+export interface VisualFrame {
+  timestamp: number;
+  /** S3 object key — snake_case matches Python backend wire format. */
+  s3_key?: string;
+  imageUrl?: string;
+  caption?: string;
+}
+
+/**
+ * Visual moment block — diagrams, screenshots, demos, slideshows.
+ *
+ * See VisualFrame for the snake_case convention rationale on `s3_key`.
+ */
+export interface VisualBlock extends BaseBlock {
+  type: 'visual';
+  description?: string;
+  timestamp?: number;          // primary frame (backward compat)
+  label?: string;
+  /** S3 object key — snake_case matches Python backend wire format. */
+  s3_key?: string;
+  /** Ephemeral presigned URL — refreshed at response time from s3_key. */
+  imageUrl?: string;
+  variant?: 'diagram' | 'screenshot' | 'demo' | 'whiteboard' | 'slideshow' | 'gallery';
+  /** Multi-frame: slideshows, galleries, step-by-step sequences. */
+  frames?: VisualFrame[];
 }
 
 // ===== CONTENT BLOCK UNION (V2.1) =====
@@ -466,6 +505,9 @@ export type ContentBlock =
   | FormulaBlock
   // Podcast blocks (V2.1)
   | GuestBlock
+  // Quality blocks
+  | ProblemSolutionBlock
+  | VisualBlock
   // Generic blocks
   | TableBlock;
 
@@ -509,7 +551,7 @@ export interface VideoSummary {
   chapters: SummaryChapter[];
   concepts: Concept[];
   masterSummary?: string;
-  /** Reference to full transcript in S3 (e.g., "transcripts/{youtubeId}.json") */
+  /** Reference to full transcript in S3 (e.g., "videos/{youtubeId}/transcript.json") */
   rawTranscriptRef?: string | null;
   /** Generation metadata for tracking prompt versions and regeneration */
   generation?: GenerationMetadata;

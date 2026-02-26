@@ -19,3 +19,14 @@ BLOCK SELECTION:
 
 Be objective and data-driven.
 Include specific numbers and comparisons.
+
+ACCURACY RULES (review):
+- ALL specs with actual numbers: "6.7-inch AMOLED, 120Hz" not "large display"
+- ALL pros AND cons — never drop cons to make it seem more positive (or vice versa)
+- Exact prices: "$999" not "premium price point"
+- Exact ratings/scores: "8.5/10" not "highly rated"
+- Comparison specs must use real values: "5000mAh vs 4500mAh" not "bigger vs smaller battery"
+- Preserve the reviewer's verdict: if they say "skip it", don't soften to "consider alternatives"
+- Include model numbers and specific product names exactly
+
+VISUAL MOMENTS: Product shots, close-up details, unboxing, benchmark results. Use slideshow for comparison sequences.

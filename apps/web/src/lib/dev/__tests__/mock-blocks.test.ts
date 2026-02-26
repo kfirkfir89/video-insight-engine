@@ -432,8 +432,11 @@ describe('mock-blocks factories', () => {
   // Block count verification
   // ─────────────────────────────────────────────────────
   describe('Block type count', () => {
-    it('BLOCK_TYPE_COUNT matches expected 32 types', () => {
-      expect(BLOCK_TYPE_COUNT).toBe(32);
+    it('BLOCK_TYPE_COUNT matches sampleBlocks key count', () => {
+      // Floor assertion catches accidental removal of block types
+      expect(BLOCK_TYPE_COUNT).toBeGreaterThanOrEqual(34);
+      // Derivation check confirms no drift between export and source
+      expect(BLOCK_TYPE_COUNT).toBe(Object.keys(sampleBlocks).length);
     });
   });
 });
