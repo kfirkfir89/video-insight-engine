@@ -367,16 +367,11 @@
       "calt" 1;
   }
 
-  /* Smooth color transitions during theme switching only.
-     The .theme-transitioning class is added to <html> during
-     dark/light mode toggle and removed after the transition. */
-  .theme-transitioning *,
-  .theme-transitioning *::before,
-  .theme-transitioning *::after {
-    transition-property:
-      color, background-color, border-color, outline-color, fill, stroke;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 200ms;
+  /* Smooth theme switching via View Transitions API.
+     Single GPU-composited crossfade instead of per-element transitions. */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 200ms;
   }
 
   /* Ensure focus-visible rings on all interactive elements */
@@ -425,7 +420,7 @@
    consistent spacing, quiet confidence
    ═══════════════════════════════════════════════════
    Design Scales:
-   - Card padding:       p-5 (20px)
+   - Card padding:       px-4 py-3.5 (~16×14px)
    - Card inner gap:     space-y-3
    - List item gap:      space-y-1.5
    - Card border radius: rounded-xl (12px)
@@ -439,7 +434,7 @@
 @layer components {
   /* ── Card variant — clean surface with subtle elevation ── */
   .block-card {
-    @apply relative rounded-xl p-5 overflow-hidden;
+    @apply relative rounded-xl px-4 py-3.5 overflow-hidden;
     background: var(--card);
     border: 1px solid var(--border);
     box-shadow:
@@ -866,7 +861,7 @@
 
   /* ── Callout icon breathing animation ── */
   .animate-breathe {
-    animation: breathe 4s ease-in-out infinite;
+    animation: breathe 4s ease-in-out 2;
   }
 
   /* ── Quote decorative mark ── */
@@ -1086,11 +1081,88 @@
     inset: -4px;
     border-radius: 50%;
     background: oklch(from var(--primary) l c h / 0.15);
-    animation: pulse-ring 2.5s ease-out infinite;
+    animation: pulse-ring 2.5s ease-out 3;
     pointer-events: none;
   }
   .timeline-dot:not(:first-of-type)::after {
     display: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   FLOW GRID — Container Query Adaptive Columns
+   Grids that adapt to container width, not viewport.
+   Used by FlowRowRenderer for multi-column layouts.
+
+   Breakpoints (named for readability):
+   --flow-bp-2col: 400px — threshold for 2-column layouts
+   --flow-bp-2col-wide: 500px — wider 2-col (equal-2 grids)
+   --flow-bp-3col: 600px — threshold for 3-column layouts
+   --flow-bp-4col: 700px — threshold for 4-column layouts
+   ═══════════════════════════════════════════════════ */
+
+/* ── Design tokens for flow grid breakpoints ── */
+:root {
+  --flow-bp-2col: 400px;
+  --flow-bp-2col-wide: 500px;
+  --flow-bp-3col: 600px;
+  --flow-bp-4col: 700px;
+}
+
+/* Container definition — applied to chapters wrapper */
+.content-container {
+  container-type: inline-size;
+  container-name: content;
+}
+
+/* equal-2: 2 columns at 500px+ container, single column below */
+.flow-grid-equal-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+@container content (min-width: 500px) {
+  .flow-grid-equal-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* equal-3: 3 columns at 600px+, 2 at 400px+, single below */
+.flow-grid-equal-3 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+@container content (min-width: 400px) {
+  .flow-grid-equal-3 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@container content (min-width: 600px) {
+  .flow-grid-equal-3 {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+
+/* equal-4: 4 columns at 700px+, 3 at 600px+, 2 at 400px+, single below */
+.flow-grid-equal-4 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+@container content (min-width: 400px) {
+  .flow-grid-equal-4 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@container content (min-width: 600px) {
+  .flow-grid-equal-4 {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+@container content (min-width: 700px) {
+  .flow-grid-equal-4 {
+    grid-template-columns: 1fr 1fr 1fr 1fr;
   }
 }
 
@@ -1235,4 +1307,10 @@
 /* Sidebar items - contain paint for better scroll performance */
 [data-sidebar-item] {
   contain: layout style paint;
+}
+
+/* Off-screen article sections — skip rendering until scrolled into view */
+[data-slot="article-section"] {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
 }

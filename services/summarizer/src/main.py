@@ -17,13 +17,14 @@ from src.models.schemas import (
 from src.dependencies import get_video_repository, get_mongo_client
 from src.repositories.mongodb_repository import MongoDBVideoRepository
 from src.routes.stream import router as stream_router
+from src.services.chapter_pipeline import shutdown_background_validations
+from src.services.frame_extractor import check_dependencies as check_frame_deps
 
 # Configure structured logging (JSON in production, console in development)
 configure_structlog(json_format=settings.log_format == "json")
 logger = get_logger(__name__)
 
 _usage_callback = None
-
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
@@ -53,7 +54,6 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 app = FastAPI(title="vie-summarizer", lifespan=lifespan)
-
 # Add middleware
 add_request_context_middleware(app)
 
@@ -116,7 +116,7 @@ async def summarize(
     NOTE: No background processing is started here - the streaming route handles
     all the actual summarization work. This prevents duplicate processing.
     """
-    logger.info(f"Received summarize request: providers={request.providers}")
+    logger.info("Received summarize request: providers=%s", request.providers)
 
     # Store provider config in database for streaming route to use
     if request.providers:
@@ -145,7 +145,7 @@ async def extract_playlist(request: PlaylistExtractRequest):
     """
     from src.services.playlist import extract_playlist_data
 
-    logger.info(f"Extracting playlist: {request.playlist_id} (max={request.max_videos})")
+    logger.info("Extracting playlist: %s (max=%s)", request.playlist_id, request.max_videos)
 
     try:
         playlist = await extract_playlist_data(

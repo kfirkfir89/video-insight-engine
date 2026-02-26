@@ -22,6 +22,7 @@ pydantic-settings>=2.1.0
 # Utils
 python-dotenv>=1.0.0
 httpx>=0.26.0
+requests>=2.31.0
 tenacity>=8.2.0
 
 # S3 (for transcript storage)
@@ -30,6 +31,9 @@ botocore>=1.34.0
 
 # Logging
 structlog>=24.0.0
+
+# Image processing (frame deduplication)
+Pillow>=10.0.0
 
 # Whisper fallback (Phase 4 - for videos without captions)
 openai>=1.6.0

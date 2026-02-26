@@ -14,15 +14,16 @@ MODEL_MAP = {
         "fast": "openai/gpt-4o-mini",
     },
     "gemini": {
-        "default": "gemini/gemini-3-flash-preview",
-        "fast": "gemini/gemini-2.5-flash-lite",
+        "default": "gemini/gemini-2.5-flash",
+        "fast": "gemini/gemini-2.0-flash-lite",
     },
 }
 
 
 def get_model(provider: str = "anthropic", tier: str = "default") -> str:
     """Get model name for provider and tier."""
-    return MODEL_MAP.get(provider, MODEL_MAP["anthropic"]).get(tier, "default")
+    provider_models = MODEL_MAP.get(provider, MODEL_MAP["anthropic"])
+    return provider_models.get(tier, provider_models["default"])
 
 
 class Settings(BaseSettings):
@@ -86,12 +87,22 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "console"  # "console" or "json"
 
-    # S3/LocalStack Configuration (for transcript storage)
-    TRANSCRIPT_S3_BUCKET: str = "vie-transcripts"
+    # S3 — uses existing vie-transcripts bucket for all media (frames, transcripts, audio)
+    S3_BUCKET: str = "vie-transcripts"
+    S3_PRESIGNED_URL_EXPIRY: int = 3600  # Presigned URL validity in seconds (1 hour)
     AWS_REGION: str = "us-east-1"
-    AWS_ENDPOINT_URL: str | None = None  # Set for LocalStack (e.g., http://vie-localstack:4566)
+    AWS_ENDPOINT_URL: str | None = None  # Optional: custom endpoint for CI/CD testing (LocalStack)
     AWS_ACCESS_KEY_ID: str | None = None
     AWS_SECRET_ACCESS_KEY: str | None = None
+
+    # Frame extraction (visual blocks)
+    # Default False for local dev (yt-dlp/ffmpeg may not be installed).
+    # docker-compose.yml sets FRAME_EXTRACTION_ENABLED=true for container environments.
+    FRAME_EXTRACTION_ENABLED: bool = False
+    MAX_FRAMES_PER_VISUAL: int = 6     # Cap frames[] array length per visual block
+    MAX_FRAMES_PER_CHAPTER: int = 12   # Total frames across all visual blocks in one chapter
+    FRAME_MIN_SPACING_SECONDS: int = 20    # Min gap between frames in same block
+    FRAME_WITHIN_BLOCK_DEDUP_THRESHOLD: int = 12  # aHash hamming distance (relaxed for within-block)
 
     # Prompt versioning (for regeneration tracking)
     PROMPT_VERSION: str = "v1.0"
@@ -120,6 +131,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 
 settings = Settings()

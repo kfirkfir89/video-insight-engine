@@ -21,6 +21,7 @@ import {
   Mic,
   Hammer,
   Gamepad2,
+  Music,
   FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -63,6 +64,7 @@ const categoryIcons: Record<VideoCategory, React.ReactNode> = {
   podcast: <Mic className="h-4 w-4" />,
   diy: <Hammer className="h-4 w-4" />,
   gaming: <Gamepad2 className="h-4 w-4" />,
+  music: <Music className="h-4 w-4" />,
   standard: <FileText className="h-4 w-4" />,
 };
 
@@ -167,6 +169,11 @@ function Counter() {
     ]),
     createCalloutBlock('tip', 'Dying is part of the experience - don\'t give up!'),
   ]),
+  music: createMockChapter('Song Analysis', [
+    createParagraphBlock('This track blends electronic production with orchestral arrangements for a cinematic feel.'),
+    createBulletsBlock(['Layered synth pads build the atmosphere', 'Drum pattern shifts at the bridge', 'Key change lifts the final chorus']),
+    createCalloutBlock('tip', 'Listen with headphones to catch the subtle stereo panning effects.'),
+  ]),
 };
 
 // View component mapping
@@ -181,6 +188,7 @@ const viewComponents: Record<VideoCategory, React.ComponentType<{ chapter: Summa
   podcast: PodcastView,
   diy: DIYView,
   gaming: GamingView,
+  music: StandardView,
 };
 
 export function ViewShowcase() {

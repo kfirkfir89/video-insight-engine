@@ -1,7 +1,7 @@
 """Tests for description analyzer service."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 import json
 
 from src.services.description_analyzer import (
@@ -9,13 +9,12 @@ from src.services.description_analyzer import (
     DescriptionLink,
     Resource,
     RelatedVideo,
-    Timestamp,
     SocialLink,
-    _parse_json_response,
     _analyze_description_async,
     analyze_description,
     load_prompt,
 )
+from src.utils.json_parsing import parse_json_response as _parse_json_response
 
 
 class TestDescriptionAnalysisDataclass:
@@ -28,7 +27,6 @@ class TestDescriptionAnalysisDataclass:
         assert analysis.links == []
         assert analysis.resources == []
         assert analysis.related_videos == []
-        assert analysis.timestamps == []
         assert analysis.social_links == []
         assert analysis.has_content is False
 
@@ -46,20 +44,12 @@ class TestDescriptionAnalysisDataclass:
         )
         assert analysis.has_content is True
 
-    def test_has_content_with_timestamps(self):
-        """Test has_content returns True when timestamps present."""
-        analysis = DescriptionAnalysis(
-            timestamps=[Timestamp(time="0:00", label="Intro")]
-        )
-        assert analysis.has_content is True
-
     def test_to_dict(self):
         """Test conversion to dictionary."""
         analysis = DescriptionAnalysis(
             links=[DescriptionLink(url="https://github.com/test", type="github", label="Code")],
             resources=[Resource(name="Tutorial", url="https://example.com")],
             related_videos=[RelatedVideo(title="Part 2", url="https://youtube.com/watch?v=abc")],
-            timestamps=[Timestamp(time="0:00", label="Intro")],
             social_links=[SocialLink(platform="twitter", url="https://twitter.com/test")],
         )
 
@@ -68,7 +58,6 @@ class TestDescriptionAnalysisDataclass:
         assert result["links"] == [{"url": "https://github.com/test", "type": "github", "label": "Code"}]
         assert result["resources"] == [{"name": "Tutorial", "url": "https://example.com"}]
         assert result["relatedVideos"] == [{"title": "Part 2", "url": "https://youtube.com/watch?v=abc"}]
-        assert result["timestamps"] == [{"time": "0:00", "label": "Intro"}]
         assert result["socialLinks"] == [{"platform": "twitter", "url": "https://twitter.com/test"}]
 
 
@@ -146,7 +135,6 @@ class TestAnalyzeDescriptionAsync:
             "links": [{"url": "https://github.com/test/repo", "type": "github", "label": "Source code"}],
             "resources": [{"name": "Tutorial PDF", "url": "https://example.com/tutorial.pdf"}],
             "relatedVideos": [{"title": "Part 2", "url": "https://youtube.com/watch?v=xyz"}],
-            "timestamps": [{"time": "0:00", "label": "Intro"}, {"time": "5:30", "label": "Main content"}],
             "socialLinks": [{"platform": "twitter", "url": "https://twitter.com/creator"}],
         })
         mock_acompletion.return_value = mock_response
@@ -158,7 +146,6 @@ class TestAnalyzeDescriptionAsync:
         assert len(result.links) == 1
         assert result.links[0].url == "https://github.com/test/repo"
         assert result.links[0].type == "github"
-        assert len(result.timestamps) == 2
         assert len(result.social_links) == 1
 
     @patch("src.services.description_analyzer.load_prompt")

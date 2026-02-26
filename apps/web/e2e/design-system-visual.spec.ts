@@ -139,7 +139,7 @@ test.describe('Design System - Visual & Layout', () => {
     expect(isDarkAfterSecondToggle).toBe(isDarkInitially);
   });
 
-  test('light mode has cool undertone (hue ~250)', async ({ page }) => {
+  test('light mode uses oklch with cool hue (~285)', async ({ page }) => {
     // Ensure light mode
     const isDark = await page.evaluate(() =>
       document.documentElement.classList.contains('dark')
@@ -152,11 +152,11 @@ test.describe('Design System - Visual & Layout', () => {
     const bgColor = await page.evaluate(() =>
       getComputedStyle(document.documentElement).getPropertyValue('--background').trim()
     );
-    // Should contain hue around 250 (cool blue)
-    expect(bgColor).toContain('250');
+    // oklch format: oklch(98.5% 0.006 285) — hue 285 (cool blue)
+    expect(bgColor).toContain('285');
   });
 
-  test('dark mode has warm undertone (hue ~55)', async ({ page }) => {
+  test('dark mode uses oklch with warm hue (~280)', async ({ page }) => {
     // Ensure dark mode
     const isDark = await page.evaluate(() =>
       document.documentElement.classList.contains('dark')
@@ -169,8 +169,8 @@ test.describe('Design System - Visual & Layout', () => {
     const bgColor = await page.evaluate(() =>
       getComputedStyle(document.documentElement).getPropertyValue('--background').trim()
     );
-    // Should contain hue around 55 (warm amber)
-    expect(bgColor).toContain('55');
+    // oklch format: oklch(12% 0.03 280) — hue 280 (warm dark)
+    expect(bgColor).toContain('280');
   });
 
   // ─────────────────────────────────────────────────────
@@ -259,7 +259,8 @@ test.describe('Design System - Visual & Layout', () => {
     await page.waitForTimeout(300);
 
     // At full width, block cards should be in grid
-    const blockCards = page.locator('.rounded-lg.border.bg-card');
+    // Prefer data-slot or semantic selectors over fragile class substring matches
+    const blockCards = page.locator('#blocks [data-slot="card"], #blocks .rounded-xl');
     const cardCount = await blockCards.count();
     expect(cardCount).toBeGreaterThan(0);
 

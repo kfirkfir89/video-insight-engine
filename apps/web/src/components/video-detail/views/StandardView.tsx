@@ -2,11 +2,12 @@ import { memo, type ReactNode } from 'react';
 import { Clock } from 'lucide-react';
 import type { SummaryChapter } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
+import { FlowRowRenderer } from '../FlowRowRenderer';
 import { useGroupedBlocks, type BlockGroupRule } from '@/hooks/use-grouped-blocks';
 import { useBlockProps } from '@/hooks/use-block-props';
 import { useAutoFlowLayout } from '@/hooks/use-auto-flow-layout';
-import type { FlowRow } from '@/lib/auto-flow-layout';
-import { ViewLayout, LayoutRow, LayoutColumn, LayoutSection, renderSections } from './ViewLayout';
+import { useBlockMeasurements } from '@/hooks/use-block-measurements';
+import { ViewLayout, LayoutSection, renderSections } from './ViewLayout';
 
 interface StandardViewProps {
   chapter: SummaryChapter;
@@ -20,57 +21,11 @@ const STANDARD_RULES: readonly BlockGroupRule[] = [
   { name: 'timestamps', match: (b) => b.type === 'timestamp' },
 ];
 
-interface FlowRowRendererProps {
-  row: FlowRow;
-  onPlay?: (seconds: number) => void;
-  onStop?: () => void;
-  isVideoActive?: boolean;
-  activeStartSeconds?: number;
-}
-
-const FlowRowRenderer = memo(function FlowRowRenderer({ row, ...blockProps }: FlowRowRendererProps) {
-  if (row.type === 'full') {
-    return <ContentBlocks blocks={row.columns[0]} {...blockProps} />;
-  }
-
-  if (row.type === 'sidebar-main') {
-    return (
-      <LayoutRow>
-        <LayoutColumn width="sidebar">
-          <ContentBlocks blocks={row.columns[0]} {...blockProps} />
-        </LayoutColumn>
-        <LayoutColumn width="main">
-          <ContentBlocks blocks={row.columns[1]} {...blockProps} />
-        </LayoutColumn>
-      </LayoutRow>
-    );
-  }
-
-  // equal-2: two sidebar-compatible blocks side-by-side
-  if (row.type === 'equal-2') {
-    return (
-      <LayoutRow>
-        <LayoutColumn width="equal">
-          <ContentBlocks blocks={row.columns[0]} {...blockProps} />
-        </LayoutColumn>
-        <LayoutColumn width="equal">
-          <ContentBlocks blocks={row.columns[1]} {...blockProps} />
-        </LayoutColumn>
-      </LayoutRow>
-    );
-  }
-
-  // Fallback for any future row types — render first column full-width
-  if (import.meta.env.DEV) {
-    console.warn(`FlowRowRenderer: unhandled row type "${row.type}"`);
-  }
-  return <ContentBlocks blocks={row.columns[0]} {...blockProps} />;
-});
-
 /**
  * Standard/default view for general content.
- * Uses auto-flow layout engine to intelligently pair sidebar-compatible
- * blocks with full-width blocks. Timestamps extracted to bottom.
+ * Uses auto-flow layout engine with content-aware measurements to
+ * intelligently pair sidebar-compatible blocks with full-width blocks.
+ * Timestamps extracted to bottom.
  */
 export const StandardView = memo(function StandardView({
   chapter,
@@ -80,7 +35,8 @@ export const StandardView = memo(function StandardView({
   activeStartSeconds,
 }: StandardViewProps) {
   const groups = useGroupedBlocks(chapter.content, STANDARD_RULES);
-  const flowRows = useAutoFlowLayout(groups.other);
+  const measurements = useBlockMeasurements(groups.other);
+  const flowRows = useAutoFlowLayout(groups.other, measurements);
 
   const blockProps = useBlockProps(onPlay, onStop, isVideoActive, activeStartSeconds);
 
@@ -88,9 +44,9 @@ export const StandardView = memo(function StandardView({
 
   if (flowRows.length > 0) {
     sections.push({ key: 'content', node: (
-      <div className="space-y-6">
+      <div className="space-y-4">
         {flowRows.map((row, index) => (
-          <FlowRowRenderer key={`flow-${index}-${row.type}`} row={row} {...blockProps} />
+          <FlowRowRenderer key={row.columns[0]?.[0]?.blockId ?? `flow-${index}`} row={row} {...blockProps} />
         ))}
       </div>
     )});

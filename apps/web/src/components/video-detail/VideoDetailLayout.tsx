@@ -213,8 +213,6 @@ export function VideoDetailLayout({
               handlePlayFromChapter={handlePlayFromChapter}
               handleStopChapter={handleStopChapter}
               handleSeekToChapter={handleSeekToChapter}
-              activeId={activeId}
-              scrollToChapter={scrollToChapter}
               conceptMatchResult={conceptMatchResult}
               playerRef={playerRef}
               isChatOpen={isChatOpen}

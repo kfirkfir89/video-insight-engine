@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useCallback } from "react";
+import { useMemo, useEffect } from "react";
 import { useDroppable } from "@dnd-kit/core";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -38,28 +38,21 @@ export function SidebarSection({ type }: SidebarSectionProps) {
   const { data: foldersData, isLoading: foldersLoading } = useFolders(type);
   const { data: videosData, isLoading: videosLoading } = useAllVideos();
 
+  const folders = foldersData?.folders ?? [];
+  const allVideos = videosData?.videos ?? [];
+
   // Computed values with sorting and filtering
-  const { filteredFolders, filteredVideos, unassignedVideos } = useMemo(() => {
-    const rawFolders = foldersData?.folders || [];
-    const rawVideos = videosData?.videos || [];
-
-    const folderTree = buildFolderTree(rawFolders, sortOption);
-    const sorted = sortVideos(rawVideos, sortOption);
-    const { folders: filtered, videos: filteredVids } = filterBySearch(folderTree, sorted, searchQuery);
-    const unassigned = filteredVids.filter((v) => !v.folderId);
-
-    return {
-      filteredFolders: filtered,
-      filteredVideos: filteredVids,
-      unassignedVideos: unassigned,
-    };
-  }, [foldersData?.folders, videosData?.videos, sortOption, searchQuery]);
+  const folderTree = buildFolderTree(folders, sortOption);
+  const sorted = sortVideos(allVideos, sortOption);
+  const { folders: filteredFolders, videos: filteredVideos } = filterBySearch(folderTree, sorted, searchQuery);
+  const unassignedVideos = filteredVideos.filter((v) => !v.folderId);
 
   const isSearching = searchQuery.trim().length > 0;
 
-  // Compute flat item order for range selection (only for summarized section)
-  useEffect(() => {
-    if (type !== "summarized") return;
+  // Compute flat item order for range selection (only when in selection mode).
+  // useMemo retained: feeds into useEffect deps — referential stability is a correctness concern.
+  const itemOrder = useMemo(() => {
+    if (type !== "summarized" || !selectionMode) return [] as string[];
 
     const order: string[] = [];
 
@@ -84,14 +77,22 @@ export function SidebarSection({ type }: SidebarSectionProps) {
       order.push(`v_${video.id}`);
     }
 
-    setItemOrder(order);
-  }, [type, filteredFolders, filteredVideos, unassignedVideos, expandedFolderIds, setItemOrder]);
+    return order;
+  }, [type, selectionMode, filteredFolders, filteredVideos, unassignedVideos, expandedFolderIds]);
+
+  // Sync derived itemOrder to Zustand store for range-select consumers.
+  // useEffect is intentional: setItemOrder is an external store sink, not derived UI state.
+  // Tradeoff: one-render delay — store consumers see stale order until next commit.
+  // Acceptable because range-select only fires on user click (never same frame as filter change).
+  useEffect(() => {
+    setItemOrder(itemOrder);
+  }, [itemOrder, setItemOrder]);
 
   // Styling
   const isLoading = foldersLoading || videosLoading;
 
   // Handle clicking on empty background space - exits selection mode
-  const handleBackgroundClick = useCallback((e: React.MouseEvent) => {
+  const handleBackgroundClick = (e: React.MouseEvent) => {
     if (!selectionMode) return;
 
     const target = e.target as HTMLElement;
@@ -106,7 +107,7 @@ export function SidebarSection({ type }: SidebarSectionProps) {
     if (!isOnItem) {
       exitSelectionMode();
     }
-  }, [selectionMode, exitSelectionMode]);
+  };
 
   // Root drop target for moving items to root level
   // Disable when not visible so dnd-kit skips collision detection for hidden sections
@@ -144,7 +145,7 @@ export function SidebarSection({ type }: SidebarSectionProps) {
                     key={video.id}
                     video={video}
                     level={0}
-                    folders={foldersData?.folders || []}
+                    folders={folders}
                   />
                 ))}
               </>
@@ -159,13 +160,13 @@ export function SidebarSection({ type }: SidebarSectionProps) {
                 folders={filteredFolders}
                 type={type}
                 videos={filteredVideos}
-                allFolders={foldersData?.folders || []}
+                allFolders={folders}
               />
 
               {type === "summarized" && (
                 <UnassignedVideosList
                   videos={unassignedVideos}
-                  folders={foldersData?.folders || []}
+                  folders={folders}
                 />
               )}
             </>

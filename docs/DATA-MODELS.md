@@ -45,6 +45,8 @@ Dynamic content blocks that LLM returns for article-like summaries. Each block h
 | `timestamp` | Video navigation links | `blockId`, `time`, `seconds`, `label` |
 | `quote` | Speaker quotes, testimonials | `blockId`, `text`, `attribution?`, `timestamp?` |
 | `statistic` | Metrics, data points | `blockId`, `items[]` (value/label/context/trend) |
+| `visual` | Video frame screenshots | `blockId`, `description?`, `timestamp?`, `label?`, `s3_key?`, `imageUrl?`, `variant?` |
+| `problem_solution` | Problem/solution pairs | `blockId`, `problem`, `solution`, `context?` |
 
 ## TypeScript Interfaces
 
@@ -140,9 +142,36 @@ interface StatisticBlock extends BaseBlock {
   }[];
 }
 
+/** Individual frame within a multi-frame visual block (slideshow/gallery). */
+interface VisualFrame {
+  timestamp: number;
+  s3_key?: string;
+  imageUrl?: string;
+  caption?: string;
+}
+
+interface VisualBlock extends BaseBlock {
+  type: 'visual';
+  description?: string;
+  timestamp?: number;         // Seconds into video
+  label?: string;
+  s3_key?: string;            // S3 object key (permanent, for presigned URL generation)
+  imageUrl?: string;          // Ephemeral presigned URL (refreshed at response time)
+  variant?: 'diagram' | 'screenshot' | 'demo' | 'whiteboard' | 'slideshow' | 'gallery';
+  frames?: VisualFrame[];     // Multi-frame: slideshows, galleries, step-by-step sequences
+}
+
+interface ProblemSolutionBlock extends BaseBlock {
+  type: 'problem_solution';
+  problem: string;
+  solution: string;
+  context?: string;
+}
+
 // ===== UNION TYPE =====
 
 type ContentBlock =
+  // Core blocks
   | ParagraphBlock
   | BulletsBlock
   | NumberedBlock
@@ -154,7 +183,31 @@ type ContentBlock =
   | ComparisonBlock
   | TimestampBlock
   | QuoteBlock
-  | StatisticBlock;
+  | StatisticBlock
+  | VisualBlock
+  | ProblemSolutionBlock
+  // V2.1 category-specific blocks
+  | TranscriptBlock
+  | TimelineBlock
+  | ToolListBlock
+  | IngredientBlock
+  | StepBlock
+  | NutritionBlock
+  | CodeBlock
+  | TerminalBlock
+  | FileTreeBlock
+  | LocationBlock
+  | ItineraryBlock
+  | CostBlock
+  | ProConBlock
+  | RatingBlock
+  | VerdictBlock
+  | ExerciseBlock
+  | WorkoutTimerBlock
+  | QuizBlock
+  | FormulaBlock
+  | GuestBlock
+  | TableBlock;
 ```
 
 ## Variant Examples by Category
@@ -321,8 +374,8 @@ One entry per YouTube video. Shared across all users.
     cost: number                    // USD
   } | null,
 
-  // Transcript storage (S3)
-  rawTranscriptRef: string | null,  // S3 key: "transcripts/{youtubeId}.json"
+  // S3 media storage
+  rawTranscriptRef: string | null,  // S3 key: "videos/{youtubeId}/transcript.json"
 
   // Generation metadata (for regeneration)
   generation: {

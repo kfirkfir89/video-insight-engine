@@ -18,3 +18,14 @@ BLOCK SELECTION:
 
 Be informative about logistics.
 Include practical details (hours, prices, reservations).
+
+ACCURACY RULES (travel):
+- Location names must be exact: "Shibuya Crossing" not "a famous crossing in Tokyo"
+- ALL prices with currency: "¥1,500 ($10)" not "inexpensive"
+- Hours of operation when mentioned: "open 9am-6pm" not "daytime hours"
+- Transportation details: "JR Yamanote Line, ¥170" not "take the train"
+- Safety warnings must be preserved exactly as stated
+- Distances and travel times: "20 min walk" or "3 stops on the metro"
+- Reservation requirements when mentioned: "book 2 weeks ahead"
+
+VISUAL MOMENTS: Scenic views, landmark shots, hotel/restaurant interiors. Use gallery for location photo collections.

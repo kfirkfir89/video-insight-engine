@@ -12,6 +12,7 @@ Complete guide for vie-web frontend development: React, TypeScript, Tailwind v4,
 | --------------- | ------- | ----------------- |
 | Vite            | 7.x     | Build tool        |
 | React           | 19.x    | UI framework      |
+| React Compiler  | latest  | Auto-memoization  |
 | TypeScript      | 5.x     | Language          |
 | Tailwind CSS    | 4.x     | Styling           |
 | shadcn/ui       | latest  | Component library |
@@ -64,6 +65,7 @@ apps/web/
     │   │   ├── RightPanelTabs.tsx        # Tab-based right panel (chapters, minimap, chat)
     │   │   ├── VideoHero.tsx             # Hero card — metadata + TL;DR
     │   │   ├── video-detail-types.ts     # Shared TypeScript types
+    │   │   ├── FlowRowRenderer.tsx       # Shared auto-flow row renderer (5 row types)
     │   │   ├── SectionCard.tsx
     │   │   ├── ContentBlockRenderer.tsx  # Dynamic content blocks
     │   │   ├── blocks/                   # V2.1 Block Component Library
@@ -89,11 +91,15 @@ apps/web/
     │   │   │   ├── WorkoutTimerBlock.tsx
     │   │   │   ├── QuizBlock.tsx         # Education
     │   │   │   ├── FormulaBlock.tsx
-    │   │   │   └── GuestBlock.tsx        # Interview
+    │   │   │   ├── GuestBlock.tsx        # Interview
+    │   │   │   ├── ProblemSolutionBlock.tsx  # Quality
+    │   │   │   └── VisualBlock.tsx
     │   │   └── views/                    # Persona-specific views
+    │   │       ├── ViewLayout.tsx           # Layout primitives (row, column, section)
+    │   │       ├── SectionHeader.tsx
     │   │       ├── CodeView.tsx
     │   │       ├── RecipeView.tsx
-    │   │       └── StandardView.tsx
+    │   │       └── StandardView.tsx         # Uses auto-flow layout engine
     │   │
     │   ├── rag/                          # RAG Components
     │   │   ├── __tests__/                # Unit tests
@@ -144,7 +150,9 @@ apps/web/
     │   ├── use-websocket.ts          # Real-time updates
     │   ├── use-long-press.ts         # Long press gesture hook
     │   ├── use-syntax-highlight.ts  # Shiki async syntax highlighting
-    │   └── use-grouped-blocks.ts   # Block grouping for persona views
+    │   ├── use-grouped-blocks.ts   # Block grouping for persona views
+    │   ├── use-auto-flow-layout.ts # Memoized auto-flow layout computation
+    │   └── use-block-measurements.ts # Memoized content weight measurements
     │
     ├── pages/
     │   ├── LoginPage.tsx
@@ -161,8 +169,11 @@ apps/web/
         ├── utils.ts
         ├── api.ts
         ├── query-keys.ts
-        ├── block-labels.ts      # i18n-ready block labels
-        └── syntax-highlighter.ts # Shiki singleton (lazy-loaded)
+        ├── block-labels.ts        # i18n-ready block labels
+        ├── block-layout.ts        # Block sizing, spacing matrix, sidebar classification
+        ├── auto-flow-layout.ts    # Content-aware auto-flow layout engine
+        ├── content-weight.ts      # Runtime block content measurement system
+        └── syntax-highlighter.ts  # Shiki singleton (lazy-loaded)
 ```
 
 ---
@@ -194,7 +205,14 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react({
+      babel: {
+        plugins: [["babel-plugin-react-compiler"]],
+      },
+    }),
+    tailwindcss(),
+  ],
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
   },
@@ -422,6 +440,31 @@ toast.promise(submitVideo(url), {
 2. Always handle loading states
 3. Compose, don't configure
 4. Use semantic color variables
+
+---
+
+# Performance
+
+## React Compiler
+
+The app uses `babel-plugin-react-compiler` for automatic memoization. This eliminates the need for most manual `useMemo`, `useCallback`, and `memo()` calls.
+
+- Configured in `vite.config.ts` via `react({ babel: { plugins: [["babel-plugin-react-compiler"]] } })`
+- ESLint plugin `eslint-plugin-react-compiler` with `warn` level catches violations
+- Only add manual `memo()` when react-scan confirms the compiler missed something
+
+## Performance Patterns
+
+| Pattern | Where | Why |
+|---------|-------|-----|
+| `useMemo` for stable array refs | SidebarSection.tsx | `?? []` creates new ref each render, breaks child memo |
+| `useCallback` for DnD handlers | DndProvider.tsx | Event handlers recreated on re-render without it |
+| `createPortal` for DragOverlay | DndProvider.tsx | Avoids re-render cascade through sidebar tree |
+| `content-visibility: auto` | index.css (`[data-slot="article-section"]`) | Skips rendering off-screen chapter sections |
+| `fetchPriority="high"` | VideoHero.tsx (thumbnail) | LCP image must not use `loading="lazy"` |
+| Finite CSS animations | index.css (`breathe`, `pulse-ring`) | Infinite animations waste GPU cycles |
+| View Transitions API | theme-provider.tsx | Single GPU crossfade vs per-element transitions |
+| Specific CSS transitions | Sidebar components | `transition-[props]` instead of `transition-all` |
 
 ---
 
@@ -775,6 +818,68 @@ function SectionCard({ section, onExplain, onMemorize, onTimestampClick }) {
   );
 }
 ```
+
+---
+
+## Block Layout Engine
+
+Content-aware layout engine that measures block content at runtime and arranges blocks intelligently.
+
+### Architecture
+
+```
+measureBlock() (content-weight.ts)
+  → ContentWeight: micro | compact | standard | expanded
+    → computeAutoFlowLayout() (auto-flow-layout.ts)
+      → FlowRow[] (greedy left-to-right pairing)
+        → FlowRowRenderer (shared component)
+          → CSS container query grids (index.css)
+```
+
+### Content Weight System (`lib/content-weight.ts`)
+
+Blocks are measured at runtime based on their content (string length, item count):
+
+| Weight | Spans | Examples |
+|--------|-------|---------|
+| `micro` | 1 | Single stat, timestamp, short paragraph (<80 chars) |
+| `compact` | 2 | Callout, 1-2 item list, short code (<5 lines) |
+| `standard` | 4 | Normal paragraph, 3-5 item list, code block |
+| `expanded` | 4 (full) | Long paragraph (500+ chars), 6+ item list |
+
+### Auto-Flow Layout (`lib/auto-flow-layout.ts`)
+
+Greedy pairing algorithm that produces 5 row types:
+
+| Row Type | Grid | Rule |
+|----------|------|------|
+| `full` | 1fr | Expanded blocks, or standard without neighbors |
+| `sidebar-main` | 280px + 1fr | Compact + standard adjacent |
+| `equal-2` | 1fr 1fr | Two compact blocks |
+| `equal-3` | 1fr 1fr 1fr | Three consecutive compact blocks |
+| `equal-4` | 1fr 1fr 1fr 1fr | Four+ consecutive micro blocks |
+
+Works without measurements (type-based fallback) for backward compatibility.
+
+### Container Queries (`index.css`)
+
+Grid classes adapt to content area width (not viewport):
+
+- `.content-container` on chapters wrapper
+- `.flow-grid-equal-2`: 2 cols @ 500px+
+- `.flow-grid-equal-3`: 3 cols @ 600px+ (2 @ 400px+)
+- `.flow-grid-equal-4`: 4 cols @ 700px+ (3 @ 600px+, 2 @ 400px+)
+
+### Spacing Matrix (`lib/block-layout.ts`)
+
+Progressive spacing between block categories (prose, list, visual, dense):
+
+| prev \ curr | prose | list | visual | dense |
+|-------------|-------|------|--------|-------|
+| prose | mt-1.5 | mt-2 | mt-3 | mt-2 |
+| list | mt-2 | mt-2 | mt-3 | mt-2 |
+| visual | mt-3 | mt-3 | mt-2.5 | mt-2.5 |
+| dense | mt-2 | mt-2 | mt-2.5 | mt-1.5 |
 
 ---
 
