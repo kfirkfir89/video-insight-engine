@@ -35,6 +35,7 @@ Personal video knowledge management system.
 | **vie-web**        | React + Vite + TypeScript + AI SDK           | 5173  |
 | **vie-summarizer** | Python + FastAPI + LiteLLM (Multi-Provider)  | 8000  |
 | **vie-explainer**  | Python + Starlette + FastMCP + LiteLLM       | 8001  |
+| **vie-admin**      | Python + FastAPI + React + Recharts          | 8002  |
 | **vie-mongodb**    | MongoDB 7                                    | 27017 |
 
 ---
@@ -66,6 +67,7 @@ If task exists, read the `plan.md`, `context.md`, `tasks.md`.
 | vie-web        | [docs/FRONTEND.md](./docs/FRONTEND.md)                     |
 | vie-summarizer | [docs/SERVICE-SUMMARIZER.md](./docs/SERVICE-SUMMARIZER.md) |
 | vie-explainer  | [docs/SERVICE-EXPLAINER.md](./docs/SERVICE-EXPLAINER.md)   |
+| vie-admin      | [docs/SERVICE-ADMIN.md](./docs/SERVICE-ADMIN.md)           |
 
 ---
 

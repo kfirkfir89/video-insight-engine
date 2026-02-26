@@ -1,0 +1,19 @@
+# Web Framework
+fastapi>=0.115.0
+uvicorn>=0.27.0
+
+# Database (async)
+motor>=3.3.0
+
+# HTTP client (health checking)
+httpx>=0.26.0
+
+# Caching
+cachetools>=5.3.0
+
+# Validation & Configuration
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Logging
+structlog>=24.0.0
