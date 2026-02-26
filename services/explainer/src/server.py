@@ -16,7 +16,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from src.config import settings
-from src.dependencies import close_mongo_client, get_services, init_mongo_client
+from src.dependencies import close_mongo_client, get_database, get_services, init_mongo_client
 from src.exceptions import LLMError
 from src.logging_config import configure_structlog, get_logger
 
@@ -113,8 +113,6 @@ async def video_chat(
 async def health_endpoint(request: Request) -> JSONResponse:
     """Docker health check endpoint."""
     try:
-        from src.dependencies import get_database
-
         db = get_database()
         await db.command("ping")
         db_status = "connected"
@@ -139,16 +137,44 @@ async def health_endpoint(request: Request) -> JSONResponse:
 mcp_app = mcp.streamable_http_app()
 
 
+_usage_callback = None
+
+
 @asynccontextmanager
 async def lifespan(app: Starlette) -> AsyncGenerator[None, None]:
-    """Combined lifespan: MongoDB + MCP session manager."""
+    """Combined lifespan: MongoDB + MCP session manager + LLM tracking."""
+    global _usage_callback
     logger.info("Starting vie-explainer MCP server")
     init_mongo_client()
+
+    # Register LLM usage tracking callback (async mode for motor)
+    try:
+        import litellm
+        from llm_common import MongoDBUsageCallback
+
+        db = get_database()
+        _usage_callback = MongoDBUsageCallback(db, service="explainer", mode="async")
+        await _usage_callback.start_async()
+        litellm.callbacks = [_usage_callback]
+        logger.info("llm_usage_callback_registered", mode="async")
+    except ImportError:
+        logger.warning("llm_common not installed, usage tracking disabled")
+    except Exception as e:
+        logger.warning("llm_usage_callback_failed", error=str(e))
+
     # Initialize MCP session manager task group (required for tool calls).
     # NOTE: _session_manager is a private API — no public alternative in FastMCP yet.
     # Track as tech debt: replace when FastMCP exposes a public lifespan hook.
     async with mcp._session_manager.run():
         yield
+
+    # Shutdown callback buffer
+    if _usage_callback:
+        try:
+            await _usage_callback.shutdown_async()
+        except Exception as e:
+            logger.warning("callback_shutdown_failed", error=str(e))
+
     logger.info("Shutting down vie-explainer MCP server")
     await close_mongo_client()
 

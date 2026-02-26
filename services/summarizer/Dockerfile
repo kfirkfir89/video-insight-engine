@@ -7,12 +7,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
+# Install shared llm-common package
+COPY packages/llm-common/ /tmp/llm-common/
+RUN pip install --no-cache-dir /tmp/llm-common/ && rm -rf /tmp/llm-common/
+
 # Install Python dependencies
-COPY requirements.txt .
+COPY services/summarizer/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source
-COPY src/ ./src/
+COPY services/summarizer/src/ ./src/
 
 # Health endpoint
 EXPOSE 8000

@@ -1,3 +1,5 @@
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import FastAPI, Depends
@@ -20,7 +22,37 @@ from src.routes.stream import router as stream_router
 configure_structlog(json_format=settings.log_format == "json")
 logger = get_logger(__name__)
 
-app = FastAPI(title="vie-summarizer")
+_usage_callback = None
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+    """Application lifespan: register LLM usage tracking callback."""
+    global _usage_callback
+    try:
+        import litellm
+        from llm_common import MongoDBUsageCallback
+
+        client = get_mongo_client()
+        db = client.get_default_database()
+        _usage_callback = MongoDBUsageCallback(db, service="summarizer", mode="sync")
+        litellm.callbacks = [_usage_callback]
+        logger.info("llm_usage_callback_registered", mode="sync")
+    except ImportError:
+        logger.warning("llm_common not installed, usage tracking disabled")
+    except Exception as e:
+        logger.warning("llm_usage_callback_failed", error=str(e))
+
+    yield
+
+    if _usage_callback:
+        try:
+            _usage_callback.shutdown_sync()
+        except Exception as e:
+            logger.warning("callback_shutdown_failed", error=str(e))
+
+
+app = FastAPI(title="vie-summarizer", lifespan=lifespan)
 
 # Add middleware
 add_request_context_middleware(app)
