@@ -5,14 +5,18 @@ Professional code review with structured output, severity levels, and before/aft
 ## Usage
 
 ```
-/review                    # Review all uncommitted changes
+/review                    # Review all uncommitted changes (Critical + top 10 Warnings)
 /review api                # Review changes in api/ only
 /review video.service.ts   # Review specific file
+/review --all              # Show all severities including Info suggestions
+/review services/summarizer --all  # Full detail for a specific area
 ```
 
 ---
 
 ## Review Process
+
+**Important:** Run `/review` ONCE per review cycle. After fixing Critical and Warning issues, the code is ready. Do NOT re-run looking for more — diminishing returns will waste tokens. For deeper review of a specific area, scope it: `/review services/summarizer`
 
 1. **Identify changes** - `git diff` or specified files
 2. **Detect technologies** - Map files to skills (backend-node, backend-python, react-vite)
@@ -23,7 +27,9 @@ Professional code review with structured output, severity levels, and before/aft
 4. **Run compliance checks** - Verify against BOTH the checks below AND patterns/conventions from loaded skills
 5. **Analyze with labels** - Categorize each issue
 6. **Assign severity** - Critical, Warning, or Info
-7. **Generate report** - Structured output with before/after code
+7. **Filter by severity** - Default: show all Critical + top 10 Warnings. Use `--all` to include Info.
+8. **Large diff triage** - When reviewing >20 changed files, prioritize: (1) new files, (2) files with security-sensitive changes, (3) complex logic changes. Skim test files and config changes.
+9. **Generate report** - Structured output with before/after code
 
 ---
 
@@ -41,13 +47,17 @@ Professional code review with structured output, severity levels, and before/aft
 
 ---
 
-## Severity Levels
+## Severity Levels & Filtering
 
-| Severity        | Criteria                                           | Action                      |
-| --------------- | -------------------------------------------------- | --------------------------- |
-| 🔴 **Critical** | Security issues, crashes, data loss, blocking bugs | Must fix before merge       |
-| 🟡 **Warning**  | Performance issues, pattern violations, tech debt  | Should fix, creates debt    |
-| 🔵 **Info**     | Style improvements, optional suggestions           | Consider for next iteration |
+| Severity        | Criteria                                           | Action                      | Default Display        |
+| --------------- | -------------------------------------------------- | --------------------------- | ---------------------- |
+| 🔴 **Critical** | Security issues, crashes, data loss, blocking bugs | Must fix before merge       | **Always shown (all)** |
+| 🟡 **Warning**  | Performance issues, pattern violations, tech debt  | Should fix, creates debt    | **Top 10 by impact**   |
+| 🔵 **Info**     | Style improvements, optional suggestions           | Consider for next iteration | **Hidden by default**  |
+
+> **Default mode:** All Critical issues + top 10 Warnings (prioritized by impact).
+> Info-level suggestions are hidden to prevent infinite nitpick loops.
+> Use `/review --all` to see everything including Info suggestions.
 
 ---
 
@@ -56,7 +66,9 @@ Professional code review with structured output, severity levels, and before/aft
 > **Important:** These checks are the MINIMUM. Always cross-reference
 > with the loaded SKILL.md files for project-specific patterns,
 > naming conventions, architectural rules, and best practices.
-> Flag any deviation from skill patterns as `best practice` warnings.
+> Only flag skill pattern deviations that could cause bugs, security issues,
+> or significant maintenance problems. Do NOT flag style preferences or
+> minor convention differences.
 
 ### All Code
 
@@ -102,12 +114,15 @@ Professional code review with structured output, severity levels, and before/aft
 
 ## Output Format
 
-Generate the following markdown structure:
+Generate the following markdown structure. **Filtering rules:**
+- **Critical:** Always show ALL critical issues. No cap.
+- **Warnings:** Show top 10 warnings, prioritized by impact. If more exist, note count at bottom.
+- **Info:** Only show if `--all` flag is used. Otherwise omit the section entirely.
 
 ````markdown
 ## Code Review Report
 
-**Files:** {count} | **Effort:** ⭐⭐⭐ ({1-5}/5) | **Issues:** {n} critical, {n} warnings, {n} info
+**Files:** {count} | **Effort:** ⭐⭐⭐ ({1-5}/5) | **Issues:** {n} critical, {n} warnings{, {n} info if --all}
 
 ---
 
@@ -138,7 +153,7 @@ Generate the following markdown structure:
 
 ---
 
-### 🟡 Warnings
+### 🟡 Warnings (top 10 by impact)
 
 | Label           | File                               | Lines | Issue                                 |
 | --------------- | ---------------------------------- | ----- | ------------------------------------- |
@@ -164,7 +179,10 @@ Generate the following markdown structure:
 
 ---
 
-### 🔵 Suggestions
+### 🔵 Suggestions _(only shown with --all)_
+
+> **This section is ONLY included when `/review --all` is used.**
+> In default mode, skip this section entirely.
 
 | Label             | File                             | Suggestion                                    |
 | ----------------- | -------------------------------- | --------------------------------------------- |
@@ -183,6 +201,17 @@ Generate the following markdown structure:
 - [x] Proper dependency injection
 - [x] Type hints on all Python functions
 - [x] No bare except clauses
+
+---
+
+### Not Shown
+
+- {N} additional warnings (run `/review --all` to see)
+- {N} info-level suggestions (run `/review --all` to see)
+- Tip: Use `/review {path}` to review a specific area in detail
+
+> If all issues fit within the caps, replace this section with:
+> "All issues shown. No additional warnings or suggestions were found."
 
 ---
 
@@ -211,7 +240,7 @@ Generate the following markdown structure:
 ```markdown
 ## Code Review Report
 
-**Files:** 3 | **Effort:** ⭐⭐ (2/5) | **Issues:** 1 critical, 2 warnings, 1 info
+**Files:** 3 | **Effort:** ⭐⭐ (2/5) | **Issues:** 1 critical, 2 warnings
 
 ---
 
@@ -245,7 +274,7 @@ catch (error) {
 
 ---
 
-### 🟡 Warnings
+### 🟡 Warnings (top 10 by impact)
 
 | Label           | File                                    | Lines | Issue                                        |
 | --------------- | --------------------------------------- | ----- | -------------------------------------------- |
@@ -301,14 +330,6 @@ const filteredVideos = useMemo(
 
 ---
 
-### 🔵 Suggestions
-
-| Label             | File                        | Suggestion                                          |
-| ----------------- | --------------------------- | --------------------------------------------------- |
-| `maintainability` | `api/src/services/video.ts` | Consider extracting retry logic to a shared utility |
-
----
-
 ### ✅ Compliance Passed
 
 **Detected Skills:** backend-node, react-vite
@@ -321,9 +342,17 @@ const filteredVideos = useMemo(
 
 ---
 
+### Not Shown
+
+- 0 additional warnings
+- 1 info-level suggestion (run `/review --all` to see)
+- Tip: Use `/review {path}` to review a specific area in detail
+
+---
+
 ### Summary
 
-Overall code quality is good. One critical security issue needs immediate attention: API keys could be exposed through error logging. Two performance/best-practice warnings should be addressed to prevent tech debt. Consider the maintainability suggestion for future iterations.
+Overall code quality is good. One critical security issue needs immediate attention: API keys could be exposed through error logging. Two warnings should be addressed to prevent tech debt. Run `/review --all` if you want to see info-level suggestions.
 
 ```
 

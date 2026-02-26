@@ -223,7 +223,7 @@ function CollapsiblePanel({ open, children }: { open: boolean; children: React.R
   return (
     <div
       className={cn(
-        "grid transition-all duration-200 ease-out",
+        "grid transition-[grid-template-rows,opacity] duration-200 ease-out",
         open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
       )}
     >

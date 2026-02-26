@@ -86,7 +86,8 @@ export const VideoHero = memo(function VideoHero({
             src={thumbnailUrl}
             alt=""
             className="hidden sm:block w-48 max-w-[33%] self-stretch rounded-tl-xl object-cover shrink-0"
-            loading="lazy"
+            fetchPriority="high"
+            decoding="async"
           />
         )}
 

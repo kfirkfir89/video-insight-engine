@@ -209,7 +209,7 @@ export function AddVideoInput() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="group h-7 w-7 hover:bg-accent hover:scale-110 transition-all"
+                        className="group h-7 w-7 hover:bg-accent hover:scale-110 transition-[background-color,transform]"
                         type="button"
                         disabled={isLoading}
                       >

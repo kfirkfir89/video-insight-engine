@@ -62,7 +62,7 @@ export const VerdictBlock = memo(function VerdictBlock({ block }: VerdictBlockPr
       <div className={cn('rounded-lg p-4 space-y-3', config.bgClass)}>
         {/* Verdict badge */}
         <div className="flex items-center gap-2">
-          <Icon className={cn('h-5 w-5', config.iconClass)} aria-hidden="true" style={{ animation: 'breathe 3s ease-in-out infinite' }} />
+          <Icon className={cn('h-5 w-5', config.iconClass)} aria-hidden="true" style={{ animation: 'breathe 3s ease-in-out 2' }} />
           <span className={cn('text-sm font-medium', config.iconClass)}>{config.label}</span>
         </div>
 
