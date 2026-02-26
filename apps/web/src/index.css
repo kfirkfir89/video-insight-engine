@@ -367,16 +367,11 @@
       "calt" 1;
   }
 
-  /* Smooth color transitions during theme switching only.
-     The .theme-transitioning class is added to <html> during
-     dark/light mode toggle and removed after the transition. */
-  .theme-transitioning *,
-  .theme-transitioning *::before,
-  .theme-transitioning *::after {
-    transition-property:
-      color, background-color, border-color, outline-color, fill, stroke;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 200ms;
+  /* Smooth theme switching via View Transitions API.
+     Single GPU-composited crossfade instead of per-element transitions. */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 200ms;
   }
 
   /* Ensure focus-visible rings on all interactive elements */
@@ -866,7 +861,7 @@
 
   /* ── Callout icon breathing animation ── */
   .animate-breathe {
-    animation: breathe 4s ease-in-out infinite;
+    animation: breathe 4s ease-in-out 2;
   }
 
   /* ── Quote decorative mark ── */
@@ -1086,7 +1081,7 @@
     inset: -4px;
     border-radius: 50%;
     background: oklch(from var(--primary) l c h / 0.15);
-    animation: pulse-ring 2.5s ease-out infinite;
+    animation: pulse-ring 2.5s ease-out 3;
     pointer-events: none;
   }
   .timeline-dot:not(:first-of-type)::after {
@@ -1312,4 +1307,10 @@
 /* Sidebar items - contain paint for better scroll performance */
 [data-sidebar-item] {
   contain: layout style paint;
+}
+
+/* Off-screen article sections — skip rendering until scrolled into view */
+[data-slot="article-section"] {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
 }

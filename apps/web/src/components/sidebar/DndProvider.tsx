@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
 import { useState } from "react";
+import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   DndContext,
   DragOverlay,
@@ -12,13 +13,11 @@ import {
 import type {
   DragStartEvent,
   DragEndEvent,
-  DragOverEvent,
 } from "@dnd-kit/core";
 import { Film, Folder, Files } from "lucide-react";
 import { useMoveVideo, useBulkMoveVideos } from "@/hooks/use-videos";
 import { useMoveFolder, useBulkMoveFolders } from "@/hooks/use-folders";
 import { useUIStore } from "@/stores/ui-store";
-import { DndStateContext } from "./dnd-context";
 
 interface DndProviderProps {
   children: ReactNode;
@@ -52,7 +51,6 @@ function getStringArray(value: unknown): string[] {
 
 export function DndProvider({ children }: DndProviderProps) {
   const [activeItem, setActiveItem] = useState<DragData | null>(null);
-  const [overFolderId, setOverFolderId] = useState<string | null>(null);
   const moveVideo = useMoveVideo();
   const moveFolder = useMoveFolder();
   const bulkMoveVideos = useBulkMoveVideos();
@@ -75,23 +73,12 @@ export function DndProvider({ children }: DndProviderProps) {
     }
   };
 
-  const handleDragOver = (event: DragOverEvent) => {
-    const overId = event.over?.id as string | null;
-    setOverFolderId(overId);
-  };
-
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
-    const cleanup = () => {
-      setActiveItem(null);
-      setOverFolderId(null);
-    };
+    setActiveItem(null);
 
-    if (!over) {
-      cleanup();
-      return;
-    }
+    if (!over) return;
 
     const dragType = active.data.current?.type;
     const targetId = over.id as string;
@@ -101,7 +88,7 @@ export function DndProvider({ children }: DndProviderProps) {
     if (targetId.startsWith("root-")) {
       targetFolderId = null;
     } else if (targetId.startsWith("folder-")) {
-      targetFolderId = targetId.replace("folder-", "");
+      targetFolderId = targetId.slice("folder-".length);
     } else {
       // Fallback for unprefixed IDs
       targetFolderId = targetId;
@@ -125,31 +112,24 @@ export function DndProvider({ children }: DndProviderProps) {
       }
       exitSelectionMode();
     } else if (dragType === "video") {
-      // Extract actual video ID from data
-      const videoId = String(active.data.current?.id ?? "");
-      if (videoId) {
+      const videoId = active.data.current?.id;
+      if (typeof videoId === "string" && videoId) {
         moveVideo.mutate({ id: videoId, folderId: targetFolderId });
       }
     } else if (dragType === "folder") {
-      // Extract actual folder ID from data
-      const sourceFolderId = String(active.data.current?.id ?? "");
+      const sourceFolderId = active.data.current?.id;
+      if (typeof sourceFolderId === "string" && sourceFolderId) {
+        // Prevent dropping folder into itself
+        if (sourceFolderId === targetFolderId) return;
 
-      // Prevent dropping folder into itself
-      if (sourceFolderId === targetFolderId) {
-        cleanup();
-        return;
+        // Move folder to new parent
+        moveFolder.mutate({ id: sourceFolderId, parentId: targetFolderId });
       }
-
-      // Move folder to new parent
-      moveFolder.mutate({ id: sourceFolderId, parentId: targetFolderId });
     }
-
-    cleanup();
   };
 
   const handleDragCancel = () => {
     setActiveItem(null);
-    setOverFolderId(null);
   };
 
   return (
@@ -157,32 +137,32 @@ export function DndProvider({ children }: DndProviderProps) {
       sensors={sensors}
       collisionDetection={rectIntersection}
       onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <DndStateContext.Provider value={overFolderId}>
-        {children}
-      </DndStateContext.Provider>
+      {children}
 
-      <DragOverlay>
-        {activeItem ? (
-          <div className="flex items-center gap-2 px-2 py-1 bg-card border rounded-md shadow-lg">
-            {activeItem.type === "multi" ? (
-              <Files className="h-4 w-4 text-muted-foreground" />
-            ) : activeItem.type === "video" ? (
-              <Film className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <Folder className="h-4 w-4 text-muted-foreground" />
-            )}
-            <span className="text-sm truncate max-w-[200px]">
-              {activeItem.type === "multi"
-                ? `${(activeItem.selectedVideoIds?.length || 0) + (activeItem.selectedFolderIds?.length || 0)} items`
-                : activeItem.title}
-            </span>
-          </div>
-        ) : null}
-      </DragOverlay>
+      {createPortal(
+        <DragOverlay>
+          {activeItem ? (
+            <div className="flex items-center gap-2 px-2 py-1 bg-card border rounded-md shadow-lg">
+              {activeItem.type === "multi" ? (
+                <Files className="h-4 w-4 text-muted-foreground" />
+              ) : activeItem.type === "video" ? (
+                <Film className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <Folder className="h-4 w-4 text-muted-foreground" />
+              )}
+              <span className="text-sm truncate max-w-[200px]">
+                {activeItem.type === "multi"
+                  ? `${(activeItem.selectedVideoIds?.length || 0) + (activeItem.selectedFolderIds?.length || 0)} items`
+                  : activeItem.title}
+              </span>
+            </div>
+          ) : null}
+        </DragOverlay>,
+        document.body
+      )}
     </DndContext>
   );
 }
