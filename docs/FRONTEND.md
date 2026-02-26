@@ -12,6 +12,7 @@ Complete guide for vie-web frontend development: React, TypeScript, Tailwind v4,
 | --------------- | ------- | ----------------- |
 | Vite            | 7.x     | Build tool        |
 | React           | 19.x    | UI framework      |
+| React Compiler  | latest  | Auto-memoization  |
 | TypeScript      | 5.x     | Language          |
 | Tailwind CSS    | 4.x     | Styling           |
 | shadcn/ui       | latest  | Component library |
@@ -204,7 +205,14 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react({
+      babel: {
+        plugins: [["babel-plugin-react-compiler"]],
+      },
+    }),
+    tailwindcss(),
+  ],
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
   },
@@ -432,6 +440,31 @@ toast.promise(submitVideo(url), {
 2. Always handle loading states
 3. Compose, don't configure
 4. Use semantic color variables
+
+---
+
+# Performance
+
+## React Compiler
+
+The app uses `babel-plugin-react-compiler` for automatic memoization. This eliminates the need for most manual `useMemo`, `useCallback`, and `memo()` calls.
+
+- Configured in `vite.config.ts` via `react({ babel: { plugins: [["babel-plugin-react-compiler"]] } })`
+- ESLint plugin `eslint-plugin-react-compiler` with `warn` level catches violations
+- Only add manual `memo()` when react-scan confirms the compiler missed something
+
+## Performance Patterns
+
+| Pattern | Where | Why |
+|---------|-------|-----|
+| `useMemo` for stable array refs | SidebarSection.tsx | `?? []` creates new ref each render, breaks child memo |
+| `useCallback` for DnD handlers | DndProvider.tsx | Event handlers recreated on re-render without it |
+| `createPortal` for DragOverlay | DndProvider.tsx | Avoids re-render cascade through sidebar tree |
+| `content-visibility: auto` | index.css (`[data-slot="article-section"]`) | Skips rendering off-screen chapter sections |
+| `fetchPriority="high"` | VideoHero.tsx (thumbnail) | LCP image must not use `loading="lazy"` |
+| Finite CSS animations | index.css (`breathe`, `pulse-ring`) | Infinite animations waste GPU cycles |
+| View Transitions API | theme-provider.tsx | Single GPU crossfade vs per-element transitions |
+| Specific CSS transitions | Sidebar components | `transition-[props]` instead of `transition-all` |
 
 ---
 
