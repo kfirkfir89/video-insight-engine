@@ -86,35 +86,32 @@ test.describe("Right Panel — Layout Audit", () => {
       expect(panelWidth).toBeLessThan(370);
     });
 
-    test("panel is sticky and stays visible when scrolling main content", async ({
+    test("panel stays visible after scrolling main content (sticky)", async ({
       authenticatedPage: page,
     }) => {
       await page.goto(VIDEO_URL);
       await page.getByTestId("right-panel-tabs").waitFor({ state: "visible", timeout: 10000 });
 
-      // Get initial position
-      const initialTop = await page.getByTestId("right-panel-tabs").evaluate((el) => {
-        return el.getBoundingClientRect().top;
-      });
+      const panel = page.getByTestId("right-panel-tabs");
 
-      // Scroll just past the header (moderate scroll — not past the short mock content)
+      // Measure panel position before scroll
+      const initialTop = await panel.evaluate((el) => el.getBoundingClientRect().top);
+
+      // Scroll the main content area
       await page.evaluate(() => {
-        // Target the main content scroll container specifically
-        const wrapper = document.querySelector('[class*="flex-1"][class*="min-w-0"]');
-        const scrollable = wrapper?.querySelector('[class*="overflow-auto"]');
-        if (scrollable) scrollable.scrollTop = 300;
+        const scrollable = document.querySelector('[class*="overflow-auto"][class*="flex-1"]')
+          || document.querySelector('[data-slot="scroll-container"]');
+        if (scrollable) scrollable.scrollTop = 200;
       });
       await page.waitForTimeout(200);
 
-      const afterScrollTop = await page.getByTestId("right-panel-tabs").evaluate((el) => {
-        return el.getBoundingClientRect().top;
-      });
+      // Panel should still be visible and in viewport (sticky behavior)
+      await expect(panel).toBeVisible();
+      await expect(panel).toBeInViewport();
 
-      // After scrolling 300px, the panel should have moved less than 300px
-      // (sticky keeps it closer to the viewport top than it would be without sticky)
-      const movement = initialTop - afterScrollTop;
-      expect(movement).toBeGreaterThan(0); // Panel did move (header scrolled)
-      expect(movement).toBeLessThan(300); // But less than the full scroll distance (sticky engaged)
+      // Verify sticky: panel top should not have moved significantly
+      const afterScrollTop = await panel.evaluate((el) => el.getBoundingClientRect().top);
+      expect(Math.abs(initialTop - afterScrollTop)).toBeLessThan(50);
     });
   });
 

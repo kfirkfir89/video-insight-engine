@@ -19,7 +19,7 @@ interface ViewLayoutProps {
  */
 export function ViewLayout({ children, className }: ViewLayoutProps) {
   return (
-    <div className={cn('space-y-6', className)}>
+    <div className={cn('space-y-4', className)}>
       {children}
     </div>
   );
@@ -95,7 +95,7 @@ interface LayoutSectionProps {
  */
 export function LayoutSection({ children, icon, label, className }: LayoutSectionProps) {
   return (
-    <div className={cn('space-y-2', className)}>
+    <div className={cn('space-y-1.5', className)}>
       {icon && label && <SectionHeader icon={icon} label={label} />}
       {children}
     </div>

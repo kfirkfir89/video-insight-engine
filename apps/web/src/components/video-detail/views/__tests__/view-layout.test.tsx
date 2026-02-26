@@ -16,14 +16,14 @@ describe('ViewLayout', () => {
 
   // Class assertion: ViewLayout is a layout primitive with no semantic/accessible output
   // beyond its CSS structure. This test documents the vertical spacing contract.
-  it('should have space-y-6 class', () => {
+  it('should have space-y-4 class', () => {
     const { container } = render(
       <ViewLayout>
         <div>Content</div>
       </ViewLayout>
     );
 
-    expect(container.firstChild).toHaveClass('space-y-6');
+    expect(container.firstChild).toHaveClass('space-y-4');
   });
 
   // Class assertion: verifies that custom classNames are forwarded to the root element,

@@ -38,6 +38,8 @@ const BLOCK_SIZE_MAP: Record<ContentBlockType, BlockSize> = {
   tool_list: 'full',
   location: 'full',
   quiz: 'full',
+  problem_solution: 'full',
+  visual: 'full',
   // Promoted from half → full (text-heavy, interrupts reading side-by-side)
   callout: 'full',
   quote: 'full',
@@ -120,6 +122,8 @@ const SPACING_CATEGORY_MAP: Record<ContentBlockType, SpacingCategory> = {
   do_dont: 'list',
   definition: 'list',
   tool_list: 'list',
+  step: 'list',
+  ingredient: 'list',
 
   // Visual — large, distinct blocks that need breathing room
   code: 'visual',
@@ -130,20 +134,15 @@ const SPACING_CATEGORY_MAP: Record<ContentBlockType, SpacingCategory> = {
   table: 'visual',
   timeline: 'visual',
   itinerary: 'visual',
-  step: 'visual',
-  ingredient: 'visual',
   exercise: 'visual',
   workout_timer: 'visual',
   location: 'visual',
   quiz: 'visual',
   transcript: 'visual',
-  pro_con: 'visual',
-  cost: 'visual',
-  nutrition: 'visual',
-  guest: 'visual',
-  formula: 'visual',
+  problem_solution: 'visual',
+  visual: 'visual',
 
-  // Dense — compact informational blocks
+  // Dense — compact data blocks (tighter spacing between them)
   callout: 'dense',
   quote: 'dense',
   statistic: 'dense',
@@ -151,6 +150,11 @@ const SPACING_CATEGORY_MAP: Record<ContentBlockType, SpacingCategory> = {
   timestamp: 'dense',
   rating: 'dense',
   verdict: 'dense',
+  pro_con: 'dense',
+  cost: 'dense',
+  nutrition: 'dense',
+  guest: 'dense',
+  formula: 'dense',
 };
 
 /** Returns the spacing category for a block type. */
@@ -163,18 +167,19 @@ export function getSpacingCategory(type: ContentBlockType): SpacingCategory {
  * Determines gap between consecutive blocks based on
  * previous and current block categories.
  *
- * | prev\curr | prose | list | visual | dense |
- * |-----------|-------|------|--------|-------|
- * | prose     | mt-2  | mt-3 | mt-5   | mt-3  |
- * | list      | mt-3  | mt-3 | mt-5   | mt-3  |
- * | visual    | mt-5  | mt-5 | mt-4   | mt-4  |
- * | dense     | mt-3  | mt-3 | mt-4   | mt-2  |
+ * Tighter spacing (~40% reduction from original):
+ * | prev\curr | prose  | list   | visual | dense  |
+ * |-----------|--------|--------|--------|--------|
+ * | prose     | mt-1.5 | mt-2   | mt-3   | mt-2   |
+ * | list      | mt-2   | mt-2   | mt-3   | mt-2   |
+ * | visual    | mt-3   | mt-3   | mt-2.5 | mt-2.5 |
+ * | dense     | mt-2   | mt-2   | mt-2.5 | mt-1.5 |
  */
 const SPACING_MATRIX: Record<SpacingCategory, Record<SpacingCategory, string>> = {
-  prose:  { prose: 'mt-2', list: 'mt-3', visual: 'mt-5', dense: 'mt-3' },
-  list:   { prose: 'mt-3', list: 'mt-3', visual: 'mt-5', dense: 'mt-3' },
-  visual: { prose: 'mt-5', list: 'mt-5', visual: 'mt-4', dense: 'mt-4' },
-  dense:  { prose: 'mt-3', list: 'mt-3', visual: 'mt-4', dense: 'mt-2' },
+  prose:  { prose: 'mt-1.5', list: 'mt-2',   visual: 'mt-3',   dense: 'mt-2' },
+  list:   { prose: 'mt-2',   list: 'mt-2',   visual: 'mt-3',   dense: 'mt-2' },
+  visual: { prose: 'mt-3',   list: 'mt-3',   visual: 'mt-2.5', dense: 'mt-2.5' },
+  dense:  { prose: 'mt-2',   list: 'mt-2',   visual: 'mt-2.5', dense: 'mt-1.5' },
 };
 
 /**

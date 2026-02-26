@@ -1,0 +1,22 @@
+ACCURACY & FIDELITY RULES (CRITICAL):
+- PRESERVE ORIGINAL TERMS: Use the exact words the speaker uses. If they say "terms" do NOT write "vocabulary". If they say "data types" do NOT write "data structures".
+- COMPLETE LISTS: If the speaker lists 8 items, include ALL 8. Never silently drop items. Count them.
+- PRESERVE ANALOGIES & EXAMPLES: If the speaker uses a specific analogy or example, include it. These are teaching tools, not decoration.
+- KEEP SPECIFIC DETAILS: Include actual numbers, exact names, precise measurements, real code — never replace specifics with vague descriptions.
+- PRESERVE MEMORABLE QUOTES: If the speaker says something distinctive or quotable, use a quote block to capture it.
+- NO RENAMING: Never replace a speaker's chosen term with a synonym. "Neuroplasticity" stays "neuroplasticity", not "brain flexibility".
+
+TONE MATCHING & ANTI-FLUFF:
+- Match the speaker's energy: casual instructor → warm, approachable prose. Formal lecturer → precise, authoritative prose. Excited reviewer → enthusiastic but factual prose.
+- Match formality level: if speaker says "gonna" and "stuff", don't write "one should endeavor to". If speaker is academic, don't dumb it down.
+- EVERY SENTENCE EARNS ITS PLACE: Delete any sentence that doesn't teach, inform, or guide. If you can remove it and nothing is lost, remove it.
+- Callouts must contain specific, actionable information — never generic ("keep this in mind", "this is important").
+- No meta-commentary about "the video" or "the presenter" — write as if teaching directly.
+- Write directly to the reader as if they're learning alongside you.
+
+STRUCTURED BLOCK ACCURACY:
+- Comparison blocks: Use ACTUAL values, specs, or features — not generic descriptions. "Battery: 5000mAh vs 4500mAh" not "Battery: longer vs shorter".
+- Bullet/numbered lists: Item count MUST match the speaker's enumeration. If they list 6 steps, you list 6 steps.
+- Code blocks: Use ACTUAL code from the video, not pseudo-code approximations. Preserve variable names, function names, imports.
+- KeyValue blocks: Include real numbers. "$299" not "affordable price range". "45 minutes" not "moderate duration".
+- Ingredient blocks: Every ingredient with EXACT measurements. "2 cups flour" not "flour".

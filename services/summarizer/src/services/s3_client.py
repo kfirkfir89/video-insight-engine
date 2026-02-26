@@ -1,7 +1,8 @@
-"""S3 client service for transcript storage.
+"""S3 client service for media storage.
 
 Provides async S3 operations using aioboto3 for storing and retrieving
-raw transcripts. Supports both LocalStack (development) and real AWS S3.
+transcripts, frames, and other media. Uses AWS S3 for storing transcripts,
+frames, and other media.
 
 Note: aioboto3 is imported lazily to allow graceful degradation if not installed.
 """
@@ -12,9 +13,9 @@ from typing import Any
 
 from tenacity import (
     retry,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
 
 from src.config import settings
@@ -23,6 +24,17 @@ logger = logging.getLogger(__name__)
 
 # Track if aioboto3 is available
 _aioboto3_available: bool | None = None
+
+
+def _is_retryable_s3_error(exc: BaseException) -> bool:
+    """Retry on network errors and AWS client errors, not on programming errors."""
+    if isinstance(exc, (ConnectionError, TimeoutError, OSError)):
+        return True
+    try:
+        from botocore.exceptions import ClientError, BotoCoreError
+        return isinstance(exc, (ClientError, BotoCoreError))
+    except ImportError:
+        return False
 
 
 def _check_aioboto3() -> bool:
@@ -39,13 +51,14 @@ def _check_aioboto3() -> bool:
 
 
 class S3Client:
-    """Async S3 client for transcript storage operations."""
+    """Async S3 client for media storage operations."""
 
     def __init__(self):
         self._session = None
-        self._bucket = settings.TRANSCRIPT_S3_BUCKET
+        self._sync_client = None
+        self._bucket = settings.S3_BUCKET
 
-    def _ensure_session(self):
+    def _ensure_session(self) -> Any:
         """Lazily initialize the aioboto3 session."""
         if self._session is None:
             if not _check_aioboto3():
@@ -60,7 +73,7 @@ class S3Client:
             "region_name": settings.AWS_REGION,
         }
 
-        # Use LocalStack endpoint if configured
+        # Use custom endpoint (LocalStack) if configured
         if settings.AWS_ENDPOINT_URL:
             config["endpoint_url"] = settings.AWS_ENDPOINT_URL
 
@@ -78,11 +91,11 @@ class S3Client:
         async with session.client("s3", **self._get_client_config()) as s3:
             try:
                 await s3.head_bucket(Bucket=self._bucket)
-                logger.debug(f"S3 bucket exists: {self._bucket}")
+                logger.debug("S3 bucket exists: %s", self._bucket)
             except ClientError as e:
                 error_code = e.response.get("Error", {}).get("Code", "")
                 if error_code in ("404", "NoSuchBucket"):
-                    logger.info(f"Creating S3 bucket: {self._bucket}")
+                    logger.info("Creating S3 bucket: %s", self._bucket)
                     # us-east-1 doesn't need LocationConstraint, others do
                     create_config: dict[str, Any] = {"Bucket": self._bucket}
                     if settings.AWS_REGION and settings.AWS_REGION != "us-east-1":
@@ -96,9 +109,9 @@ class S3Client:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type((Exception,)),
+        retry=retry_if_exception(_is_retryable_s3_error),
         before_sleep=lambda retry_state: logger.warning(
-            f"S3 put_json retry {retry_state.attempt_number}/3: {retry_state.outcome.exception()}"
+            "S3 put_json retry %d/3: %s", retry_state.attempt_number, retry_state.outcome.exception()
         ),
         reraise=True,
     )
@@ -107,7 +120,7 @@ class S3Client:
         Upload JSON data to S3 with retry logic for transient errors.
 
         Args:
-            key: S3 object key (e.g., "transcripts/abc123.json")
+            key: S3 object key (e.g., "videos/abc123/transcript.json")
             data: Dictionary to serialize as JSON
 
         Raises:
@@ -122,14 +135,97 @@ class S3Client:
                 Body=body.encode("utf-8"),
                 ContentType="application/json",
             )
-            logger.debug(f"Uploaded to S3: {key} ({len(body)} bytes)")
+            logger.debug("Uploaded to S3: %s (%d bytes)", key, len(body))
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type((Exception,)),
+        retry=retry_if_exception(_is_retryable_s3_error),
         before_sleep=lambda retry_state: logger.warning(
-            f"S3 get_json retry {retry_state.attempt_number}/3: {retry_state.outcome.exception()}"
+            "S3 put_bytes retry %d/3: %s", retry_state.attempt_number, retry_state.outcome.exception()
+        ),
+        reraise=True,
+    )
+    async def put_bytes(
+        self, key: str, data: bytes, content_type: str = "application/octet-stream"
+    ) -> None:
+        """Upload binary data to S3 with retry logic.
+
+        Args:
+            key: S3 object key (e.g., "videos/abc123/frames/30.jpg")
+            data: Raw bytes to upload
+            content_type: MIME type (default: application/octet-stream)
+        """
+        session = self._ensure_session()
+        async with session.client("s3", **self._get_client_config()) as s3:
+            await s3.put_object(
+                Bucket=self._bucket,
+                Key=key,
+                Body=data,
+                ContentType=content_type,
+            )
+            logger.debug("Uploaded to S3: %s (%d bytes)", key, len(data))
+
+    def _ensure_sync_client(self) -> Any:
+        """Lazily initialize the sync boto3 client for presigned URLs."""
+        if self._sync_client is None:
+            try:
+                import boto3
+            except ImportError:
+                raise RuntimeError("boto3 not available - cannot generate presigned URLs")
+            config = self._get_client_config()
+            self._sync_client = boto3.client("s3", **config)
+        return self._sync_client
+
+    def generate_presigned_url(self, key: str, expires_in: int | None = None) -> str:
+        """Generate a presigned URL for downloading an S3 object.
+
+        This is a sync method — presigned URL generation is a local
+        cryptographic operation (HMAC-SHA256), no network call needed.
+
+        Args:
+            key: S3 object key
+            expires_in: URL validity in seconds (default: settings.S3_PRESIGNED_URL_EXPIRY)
+
+        Returns:
+            Presigned URL string
+        """
+        client = self._ensure_sync_client()
+        if expires_in is None:
+            expires_in = settings.S3_PRESIGNED_URL_EXPIRY
+        url = client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": self._bucket, "Key": key},
+            ExpiresIn=expires_in,
+        )
+        return url
+
+    def get_dev_url(self, key: str) -> str:
+        """Get a direct URL for custom endpoint access (no presigning).
+
+        Reserved for CI/CD testing with LocalStack. Returns a
+        direct URL using the host-accessible endpoint.
+
+        Args:
+            key: S3 object key
+
+        Returns:
+            Direct URL string
+        """
+        from urllib.parse import quote
+        encoded_key = quote(key, safe="/")
+        endpoint = settings.AWS_ENDPOINT_URL
+        if not endpoint:
+            logger.warning("get_dev_url called without AWS_ENDPOINT_URL set")
+            return f"/{self._bucket}/{encoded_key}"
+        return f"{endpoint}/{self._bucket}/{encoded_key}"
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception(_is_retryable_s3_error),
+        before_sleep=lambda retry_state: logger.warning(
+            "S3 get_json retry %d/3: %s", retry_state.attempt_number, retry_state.outcome.exception()
         ),
         reraise=True,
     )
@@ -157,7 +253,7 @@ class S3Client:
             except ClientError as e:
                 error_code = e.response.get("Error", {}).get("Code", "")
                 if error_code == "NoSuchKey":
-                    logger.debug(f"S3 object not found: {key}")
+                    logger.debug("S3 object not found: %s", key)
                     return None
                 raise
 
@@ -196,7 +292,7 @@ class S3Client:
         session = self._ensure_session()
         async with session.client("s3", **self._get_client_config()) as s3:
             await s3.delete_object(Bucket=self._bucket, Key=key)
-            logger.debug(f"Deleted from S3: {key}")
+            logger.debug("Deleted from S3: %s", key)
 
     async def health_check(self) -> dict[str, Any]:
         """

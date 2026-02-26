@@ -8,15 +8,19 @@ This module implements progressive video summarization with:
 Architecture follows Single Responsibility Principle:
 - Each phase has its own handler function
 - Main generator orchestrates phases and yields SSE events
+
+Helper functions (SSE formatting, data classes, result building, etc.)
+live in src.services.pipeline_helpers to keep this module focused on
+route handlers and streaming generators.
+
+Transcript fetching lives in src.services.transcript_fetcher.
+Concept extraction & master summary live in src.services.summary_generators.
 """
 
 import asyncio
-import json
-import time
-import uuid
 import logging
-from dataclasses import dataclass, field
-from typing import Annotated, AsyncGenerator, Any
+import uuid
+from typing import Annotated, Any, AsyncGenerator
 
 from pydantic import BaseModel
 
@@ -30,455 +34,59 @@ from src.config import settings
 from src.dependencies import get_video_repository, get_llm_service, create_llm_provider
 from src.models.schemas import ProcessingStatus, ErrorCode, ProviderConfig
 from src.repositories.mongodb_repository import MongoDBVideoRepository
-from src.services.llm import LLMService, seconds_to_timestamp, build_concept_dicts, merge_chapter_concepts
-from src.services.transcript import (
-    get_transcript,
-    clean_transcript,
+from src.services.llm import LLMService, ChapterSummaryRequest, ChapterContext, AccuracyHints, merge_chapter_concepts, title_needs_subtitle
+from src.services.accuracy import extract_chapter_facts
+from src.services.chapter_pipeline import (
+    ChapterTimeRange,
+    CrossChapterState,
+    gather_chapter_facts,
+    postprocess_chapter,
+    build_chapter_dict,
 )
+from src.services.transcript import clean_transcript
 from src.utils.transcript_slicer import slice_transcript_for_chapter
 from src.services.youtube import (
     extract_video_data,
     VideoData,
-    FastLLMProvider,
-    classify_category_with_llm,
-    get_llm_fallback_threshold,
-    _select_persona,
+    SubtitleSegment,
 )
 from src.services.description_analyzer import analyze_description, DescriptionAnalysis
 from src.services.sponsorblock import (
     get_sponsor_segments,
     filter_transcript_segments,
     sponsor_segments_to_dict,
-    SponsorSegment,
 )
 from src.exceptions import TranscriptError
+from src.services.stream_url import clear_stream_url_cache  # noqa: F401 — used in tests
 from src.services.transcript_store import transcript_store
-from src.services.s3_client import s3_client, S3Client
-from src.services.gemini_transcriber import transcribe_with_gemini
-from src.services.whisper_transcriber import transcribe_with_whisper
-from src.models.schemas import TranscriptSegment
+from src.services.s3_client import s3_client
+from src.services.transcript_fetcher import fetch_transcript
+from src.services.summary_generators import extract_concepts, generate_master_summary
+from src.services.pipeline_helpers import (
+    sse_event,
+    sse_token,
+    PipelineTimer,
+    TranscriptData,
+    ParallelResults,
+    PipelineContext,
+    ChapterProcessingContext,
+    normalize_segments,
+    validate_duration,
+    finalize_video_context,
+    extract_context,
+    has_empty_content as _has_empty_content,
+    collect_chapter_concepts as _collect_chapter_concepts,
+    build_result,
+    refresh_frame_urls as _refresh_frame_urls,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def _normalized_segments_to_pipeline(
-    segments: list[TranscriptSegment],
-) -> list[dict[str, Any]]:
-    """Convert NormalizedTranscript segments (startMs/endMs) to pipeline format (start/duration in seconds).
-
-    The pipeline (sponsor filtering, format_transcript_with_timestamps, etc.)
-    expects ``{"text": ..., "start": <seconds>, "duration": <seconds>}``.
-    """
-    return [
-        {
-            "text": s.text,
-            "start": s.startMs / 1000.0,
-            "duration": (s.endMs - s.startMs) / 1000.0,
-        }
-        for s in segments
-    ]
 router = APIRouter()
 
 # Configurable batch size for parallel chapter processing
 CHAPTER_BATCH_SIZE = settings.CHAPTER_BATCH_SIZE
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SSE Event Helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def sse_event(event: str, data: dict[str, Any]) -> str:
-    """Format data as SSE event."""
-    return f"data: {json.dumps({'event': event, **data})}\n\n"
-
-
-def sse_token(phase: str, token: str, **extra: Any) -> str:
-    """Format token as SSE event."""
-    return f"data: {json.dumps({'event': 'token', 'phase': phase, 'token': token, **extra})}\n\n"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Data Classes for Pipeline State
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-@dataclass
-class TranscriptData:
-    """Holds transcript data from any source.
-
-    Note: when ``source="metadata"``, ``segments`` is intentionally empty.
-    Metadata-only transcripts skip sponsor filtering and AI chapter detection;
-    only ``raw_text`` is used downstream for summarization.
-    """
-    segments: list[dict[str, Any]]
-    raw_text: str
-    transcript_type: str
-    source: str  # ytdlp, api, proxy, whisper, gemini, metadata
-
-
-@dataclass
-class ParallelResults:
-    """Results from parallel analysis phase."""
-    description_analysis: DescriptionAnalysis | None = None
-    synthesis: dict[str, Any] = field(default_factory=lambda: {"tldr": "", "keyTakeaways": []})
-    first_chapter: dict[str, Any] | None = None
-    concepts: list[dict[str, Any]] = field(default_factory=list)
-    failed_tasks: list[str] = field(default_factory=list)
-
-
-@dataclass
-class PipelineContext:
-    """Shared context for the summarization pipeline."""
-    video_summary_id: str
-    youtube_id: str
-    video_data: VideoData
-    transcript: TranscriptData
-    persona: str
-    sponsor_segments: list[SponsorSegment]
-    start_time: float
-    raw_transcript_ref: str | None = None  # S3 key for raw transcript
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Phase 1: Metadata & Transcript Fetching
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-async def fetch_transcript(
-    youtube_id: str,
-    video_data: VideoData,
-    duration: int,
-    is_music: bool = False,
-) -> AsyncGenerator[str | TranscriptData, None]:
-    """
-    Fetch transcript using fallback chain: S3 cache → yt-dlp → API → Gemini → Whisper.
-
-    Yields SSE events for phase changes, then yields TranscriptData as final item.
-
-    Args:
-        youtube_id: YouTube video ID
-        video_data: Extracted video data
-        duration: Video duration in seconds
-        is_music: If True, use music-specific transcription prompts
-    """
-    # Priority 0: S3 cached transcript (avoids all YouTube calls)
-    if S3Client.is_available():
-        try:
-            cached = await transcript_store.get(youtube_id)
-            if cached:
-                logger.info("Using S3 cached transcript: %d segments", len(cached.segments))
-                yield sse_event("phase", {"phase": "transcript_cached"})
-                # S3 stores normalized segments (startMs/endMs).
-                # Convert to start/duration (seconds) for pipeline compatibility
-                # (format_transcript_with_timestamps, sponsor filtering, etc.)
-                segments = []
-                for seg in cached.segments:
-                    start_ms = seg.get("startMs", 0)
-                    end_ms = seg.get("endMs", start_ms)
-                    segments.append({
-                        "text": seg.get("text", ""),
-                        "start": start_ms / 1000.0,
-                        "duration": (end_ms - start_ms) / 1000.0,
-                    })
-                raw_text = " ".join(seg["text"] for seg in segments)
-                yield TranscriptData(
-                    segments=segments,
-                    raw_text=raw_text,
-                    transcript_type=f"cached-{cached.source}",
-                    source="s3",
-                )
-                return
-        except Exception as e:
-            logger.warning("S3 transcript retrieval failed, continuing with fallback chain: %s", e)
-
-    # Priority 1: yt-dlp subtitles
-    if video_data.subtitles:
-        segments = [
-            {"text": seg.text, "start": seg.start, "duration": seg.duration}
-            for seg in video_data.subtitles
-        ]
-        logger.info("Using yt-dlp subtitles: %d segments", len(segments))
-        yield TranscriptData(
-            segments=segments,
-            raw_text=video_data.transcript_text,
-            transcript_type="yt-dlp",
-            source="ytdlp",
-        )
-        return
-
-    # Priority 3: youtube-transcript-api
-    logger.info("yt-dlp subtitles not available, falling back to youtube-transcript-api")
-    yield sse_event("phase", {"phase": "transcript"})
-
-    try:
-        segments, raw_text, transcript_type = await asyncio.wait_for(
-            get_transcript(youtube_id),
-            timeout=settings.TRANSCRIPT_FETCH_TIMEOUT,
-        )
-        source = "proxy" if settings.WEBSHARE_PROXY_USERNAME else "api"
-        yield TranscriptData(
-            segments=segments,
-            raw_text=raw_text,
-            transcript_type=transcript_type,
-            source=source,
-        )
-        return
-    except asyncio.TimeoutError:
-        logger.warning("get_transcript timed out after %ss for %s", settings.TRANSCRIPT_FETCH_TIMEOUT, youtube_id)
-        if not settings.WHISPER_ENABLED:
-            raise TranscriptError(
-                "Transcript fetch timed out and Whisper is disabled",
-                ErrorCode.NO_TRANSCRIPT,
-            )
-        if duration > settings.WHISPER_MAX_DURATION_MINUTES * 60:
-            logger.warning("Video too long for Whisper (%d min)", duration // 60)
-            raise TranscriptError(
-                "Transcript fetch timed out and video too long for Whisper",
-                ErrorCode.NO_TRANSCRIPT,
-            )
-        # Fall through to Whisper
-    except TranscriptError as e:
-        # Priority 4: Whisper fallback for NO_TRANSCRIPT errors
-        if e.code != ErrorCode.NO_TRANSCRIPT or not settings.WHISPER_ENABLED:
-            raise
-        if duration > settings.WHISPER_MAX_DURATION_MINUTES * 60:
-            logger.warning("Video too long for Whisper (%d min)", duration // 60)
-            raise
-
-    # Audio transcription fallback chain: Gemini (fast) → Whisper (reliable)
-    duration_min = duration // 60
-    if duration_min > 180:
-        logger.warning(
-            "Audio transcription requested for long video %s (%d min). "
-            "Estimated cost: ~$%.2f Whisper API.",
-            youtube_id, duration_min, duration_min * 0.006,
-        )
-    logger.info("No captions for %s, trying audio transcription", youtube_id)
-    yield sse_event("phase", {"phase": "audio_transcription"})
-
-    # Try Gemini first — faster and cheaper than Whisper
-    gemini_data = await _try_gemini_transcription(youtube_id, duration, is_music)
-    if gemini_data is not None:
-        yield gemini_data
-        return
-
-    # Whisper fallback
-    yield sse_event("phase", {"phase": "whisper_transcription"})
-    whisper_data, whisper_error = await _try_whisper_transcription(youtube_id, duration, is_music)
-    if whisper_data is not None:
-        yield whisper_data
-        return
-
-    # Metadata fallback — only for music videos when all transcript sources fail.
-    # Yields empty segments intentionally: sponsor filtering and AI chapter detection
-    # are skipped for metadata-only transcripts; only raw_text is used downstream.
-    if is_music:
-        logger.info("All transcript sources failed for music video %s, using metadata fallback", youtube_id)
-        yield sse_event("phase", {"phase": "metadata_fallback"})
-        metadata_text = _build_metadata_text(video_data)
-        yield TranscriptData(
-            segments=[],
-            raw_text=metadata_text,
-            transcript_type="metadata",
-            source="metadata",
-        )
-        return
-
-    # Not a music video — raise the last error from the fallback chain.
-    # whisper_error is None when Whisper is disabled and Gemini was the only audio path.
-    if whisper_error is not None:
-        raise whisper_error
-    raise TranscriptError("All transcript sources failed", ErrorCode.NO_TRANSCRIPT)
-
-
-async def _try_gemini_transcription(
-    youtube_id: str,
-    duration: int,
-    is_music: bool,
-) -> TranscriptData | None:
-    """Attempt Gemini audio transcription. Returns TranscriptData on success, None on failure."""
-    if not settings.GEMINI_API_KEY:
-        return None
-
-    gemini_timeout = min(max(120.0, duration * 0.02 + 60), 300.0)
-    logger.info(
-        "Trying Gemini transcription (timeout: %ds) for %ds video",
-        int(gemini_timeout), duration,
-    )
-    try:
-        gemini_result = await asyncio.wait_for(
-            transcribe_with_gemini(youtube_id, is_music=is_music),
-            timeout=gemini_timeout,
-        )
-        segments = _normalized_segments_to_pipeline(gemini_result.segments)
-        logger.info("Gemini transcription successful: %d segments", len(segments))
-        return TranscriptData(
-            segments=segments,
-            raw_text=gemini_result.text,
-            transcript_type="gemini",
-            source="gemini",
-        )
-    except (TranscriptError, asyncio.TimeoutError) as e:
-        logger.warning("Gemini transcription failed, falling back to Whisper: %s", e)
-    except Exception as e:
-        logger.error("Unexpected Gemini error: %s", e, exc_info=True)
-    return None
-
-
-async def _try_whisper_transcription(
-    youtube_id: str,
-    duration: int,
-    is_music: bool,
-) -> tuple[TranscriptData | None, TranscriptError | None]:
-    """Attempt Whisper transcription. Returns (data, None) on success or (None, error) on failure."""
-    logger.info("Trying Whisper fallback for %s", youtube_id)
-    # Timeout scales with duration: ~1 min download per 30 min video + transcription overhead
-    # Minimum 5 min, max 15 min. A 173-min video gets ~10 min.
-    whisper_timeout = min(max(300.0, duration * 0.055 + 120), 900.0)
-    logger.info("Whisper timeout set to %ds for %ds video", int(whisper_timeout), duration)
-
-    try:
-        whisper_result = await asyncio.wait_for(
-            transcribe_with_whisper(youtube_id, is_music=is_music),
-            timeout=whisper_timeout,
-        )
-    except asyncio.TimeoutError:
-        return None, TranscriptError(
-            f"Whisper transcription timed out after {int(whisper_timeout)}s",
-            ErrorCode.UNKNOWN_ERROR,
-        )
-    except TranscriptError as e:
-        return None, e
-    except Exception as e:
-        logger.error("Whisper transcription failed unexpectedly: %s", e, exc_info=True)
-        return None, TranscriptError(
-            f"Whisper transcription failed: {e}",
-            ErrorCode.UNKNOWN_ERROR,
-        )
-
-    segments = _normalized_segments_to_pipeline(whisper_result.segments)
-    logger.info("Whisper fallback successful: %d segments", len(segments))
-    return TranscriptData(
-        segments=segments,
-        raw_text=whisper_result.text,
-        transcript_type="whisper",
-        source="whisper",
-    ), None
-
-
-def _build_metadata_text(video_data: VideoData) -> str:
-    """Build a text representation from video metadata for fallback summarization.
-
-    Used when all transcript sources fail for music videos. Composes from
-    title, channel, description, tags, and chapter titles.
-    """
-    parts: list[str] = []
-    parts.append(f"Title: {video_data.title}")
-    if video_data.channel:
-        parts.append(f"Channel: {video_data.channel}")
-    if video_data.description:
-        # Truncate long descriptions to avoid LLM overload
-        desc = video_data.description[:2000]
-        parts.append(f"Description: {desc}")
-    if video_data.context and video_data.context.tags:
-        parts.append(f"Tags: {', '.join(video_data.context.tags[:20])}")
-    if video_data.has_chapters:
-        chapter_titles = [ch.title for ch in video_data.chapters]
-        parts.append(f"Chapters: {', '.join(chapter_titles)}")
-    return "\n\n".join(parts)
-
-
-def validate_duration(duration: int) -> None:
-    """Validate video duration against limits."""
-    if duration > settings.MAX_VIDEO_DURATION_MINUTES * 60:
-        raise TranscriptError(
-            f"Video too long ({duration // 60} min)",
-            ErrorCode.VIDEO_TOO_LONG
-        )
-    if duration < settings.MIN_VIDEO_DURATION_SECONDS:
-        raise TranscriptError(
-            f"Video too short ({duration} sec)",
-            ErrorCode.VIDEO_TOO_SHORT
-        )
-
-
-async def finalize_video_context(
-    video_data: VideoData,
-    llm_provider: FastLLMProvider,
-) -> VideoData:
-    """Finalize video context with LLM fallback if confidence is low.
-
-    If category detection confidence is below threshold, uses LLM
-    to classify the video category. Updates VideoContext in place.
-
-    Args:
-        video_data: VideoData with initial context
-        llm_provider: FastLLMProvider instance for LLM fallback
-
-    Returns:
-        VideoData with finalized context (category may be updated)
-    """
-    if not video_data.context:
-        return video_data
-
-    threshold = get_llm_fallback_threshold()
-    confidence = video_data.context.category_confidence
-
-    # Only call LLM if confidence is below threshold
-    if confidence < threshold:
-        logger.info(
-            f"Low category confidence ({confidence:.2f} < {threshold}), "
-            f"triggering LLM fallback for '{video_data.title}'"
-        )
-
-        new_category = await classify_category_with_llm(
-            title=video_data.title,
-            channel=video_data.channel,
-            tags=video_data.context.tags,
-            description=video_data.description,
-            llm_provider=llm_provider,
-        )
-
-        # Update context with LLM-detected category
-        video_data.context.category = new_category
-        video_data.context.persona = _select_persona(new_category)
-        video_data.context.category_confidence = 0.8  # LLM confidence is higher
-
-        logger.info(
-            f"LLM fallback: category={new_category}, persona={video_data.context.persona}"
-        )
-
-    return video_data
-
-
-def extract_context(video_data: VideoData) -> tuple[dict[str, Any] | None, str]:
-    """Extract video context and persona from video data.
-
-    Category and persona are now decoupled:
-    - category: detected directly via weighted scoring in youtube.py
-    - persona: selected based on category, used for LLM prompts
-
-    Returns:
-        Tuple of (context_dict for storage, persona for internal LLM use).
-        The context_dict contains category (user-facing), not persona (internal).
-    """
-    if not video_data.context:
-        return None, "standard"
-
-    # Use category directly from VideoContext (no more reverse mapping!)
-    category = video_data.context.category
-    persona = video_data.context.persona
-
-    # Store category and metadata
-    context_dict = {
-        "category": category,
-        "youtubeCategory": video_data.context.youtube_category or "Unknown",
-        "tags": video_data.context.tags,
-        "displayTags": video_data.context.display_tags,
-    }
-    logger.info(f"Video context: category={category}, persona={persona}, tags={len(video_data.context.display_tags)}")
-    return context_dict, persona
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -521,19 +129,40 @@ async def run_parallel_analysis(
 
     # Add first chapter task if chapters exist
     # First chapter also extracts concepts (no "already extracted" list yet)
+    # Also runs fact extraction in parallel for accuracy pipeline
+    # Minimum text length for fact extraction (avoids wasting LLM calls on tiny chapters)
+    _MIN_FACT_TEXT_LENGTH = 100
+
     if video_data.has_chapters and len(video_data.chapters) > 0:
         first_chapter_text = video_data.get_chapter_transcript(0)
         if first_chapter_text:
+            first_ch = video_data.chapters[0]
+            # Fact extraction runs in parallel — skip for very short chapters
+            if len(first_chapter_text) >= _MIN_FACT_TEXT_LENGTH:
+                tasks["first_facts"] = asyncio.create_task(
+                    extract_chapter_facts(
+                        llm_service.provider,
+                        first_chapter_text,
+                        first_ch.title,
+                        persona=persona,
+                    ),
+                    name="first_facts"
+                )
             tasks["first_chapter"] = asyncio.create_task(
-                llm_service.summarize_chapter(
-                    first_chapter_text,
-                    video_data.chapters[0].title,
-                    has_creator_title=True,
-                    persona=persona,
+                llm_service.summarize_chapter(ChapterSummaryRequest(
+                    chapter_text=first_chapter_text,
+                    context=ChapterContext(
+                        title=first_ch.title,
+                        has_creator_title=title_needs_subtitle(first_ch.title),
+                        persona=persona,
+                        persona_hint=persona,
+                        start_seconds=int(first_ch.start_time),
+                        end_seconds=int(first_ch.end_time),
+                    ),
                     extract_concepts=True,
                     total_chapters=total_chapters,
                     already_extracted_names=None,
-                ),
+                )),
                 name="first_chapter"
             )
 
@@ -547,7 +176,7 @@ async def run_parallel_analysis(
     for task_name, result in zip(task_names, results):
         if isinstance(result, BaseException):
             parallel_results.failed_tasks.append(task_name)
-            logger.error(f"Parallel task '{task_name}' failed: {result}")
+            logger.error("Parallel task '%s' failed: %s", task_name, result)
             continue
 
         if task_name == "description" and isinstance(result, DescriptionAnalysis):
@@ -562,8 +191,15 @@ async def run_parallel_analysis(
                 "keyTakeaways": result.get("keyTakeaways", []),
             })
 
+        elif task_name == "first_facts":
+            if isinstance(result, str):
+                parallel_results.first_facts = result
+
         elif task_name == "first_chapter" and isinstance(result, dict):
             parallel_results.first_chapter = result
+
+    # Note: first chapter validation is handled by postprocess_chapter() in
+    # process_creator_chapters/process_ai_chapters with the actual first_facts.
 
     if parallel_results.failed_tasks:
         yield sse_event("warning", {
@@ -578,86 +214,15 @@ async def run_parallel_analysis(
 # Phase 3: Section Processing
 # ─────────────────────────────────────────────────────────────────────────────
 
-
-def _has_empty_content(summary_data: dict[str, Any], idx: int, title: str) -> bool:
-    """Check if LLM output has empty content and log a warning."""
-    content = summary_data.get("content", [])
-    if not content:
-        logger.warning(
-            "Dropping chapter %d '%s' — empty content after LLM processing",
-            idx, title,
-        )
-        return True
-    return False
-
-
-def build_chapter_dict(
-    raw: dict[str, Any],
-    summary_data: dict[str, Any],
-    is_creator_chapter: bool,
-    transcript_slice: str | None = None,
-) -> dict[str, Any]:
-    """Build a chapter dictionary from raw data and summary.
-
-    Note: summary/bullets are no longer stored - they can be extracted
-    on-demand from content blocks using extract_summary_from_content()
-    and extract_bullets_from_content() from src.utils.content_extractor.
-    """
-    start = raw.get("startSeconds", raw.get("start_seconds", 0))
-    end = raw.get("endSeconds", raw.get("end_seconds", start))
-
-    chapter = {
-        "id": str(uuid.uuid4()),
-        "timestamp": seconds_to_timestamp(start),
-        "start_seconds": start,
-        "end_seconds": end,
-        "title": raw.get("title", ""),
-        "is_creator_chapter": is_creator_chapter,
-        "content": summary_data.get("content", []),
-    }
-
-    # Add per-chapter view when present
-    if summary_data.get("view"):
-        chapter["view"] = summary_data["view"]
-
-    # Add sliced transcript for RAG/display
-    if transcript_slice:
-        chapter["transcript"] = transcript_slice
-
-    if is_creator_chapter:
-        chapter["original_title"] = raw.get("title", "")
-        chapter["generated_title"] = summary_data.get("generatedTitle")
-
-    return chapter
-
-
-def _collect_chapter_concepts(
-    summary_data: dict[str, Any],
-    chapter_idx: int,
-    all_chapter_concepts: list[tuple[int, list[dict]]],
-    already_extracted_names: list[str],
-) -> None:
-    """Extract concepts from a chapter result and append to the running accumulators.
-
-    Mutates *all_chapter_concepts* and *already_extracted_names* in place.
-    """
-    raw_concepts = summary_data.get("concepts", [])
-    if not raw_concepts:
-        return
-    all_chapter_concepts.append((chapter_idx, raw_concepts))
-    already_extracted_names.extend(
-        c.get("name", "")
-        for c in raw_concepts
-        if isinstance(c, dict) and c.get("name")
-    )
+# Cross-chapter state, validation, and chapter building are in
+# src.services.chapter_pipeline (extracted for maintainability).
 
 
 async def process_creator_chapters(
-    llm_service: LLMService,
+    ctx: ChapterProcessingContext,
     video_data: VideoData,
-    persona: str,
     first_chapter_result: dict[str, Any] | None,
-    normalized_segments: list[dict[str, Any]],
+    first_facts: str = "",
 ) -> AsyncGenerator[str | dict[str, Any], None]:
     """
     Process creator-defined chapters with per-chapter concept extraction.
@@ -680,6 +245,8 @@ async def process_creator_chapters(
     all_chapter_concepts: list[tuple[int, list[dict]]] = []
     already_extracted_names: list[str] = []
 
+    state = CrossChapterState()
+
     # Build raw chapters from video chapters
     raw_chapters = [
         {
@@ -700,14 +267,32 @@ async def process_creator_chapters(
     # Add first chapter if already processed (drop if empty content)
     if first_chapter_result and first_chapter_result.get("content"):
         first_ch = video_chapters[0]
+
+        # Post-process: track cross-chapter state, fire validation, extract frames
+        first_chapter_result["content"] = await postprocess_chapter(
+            summary_data=first_chapter_result,
+            state=state,
+            provider=ctx.llm_service.provider,
+            facts=first_facts,
+            title=first_ch.title,
+            youtube_id=ctx.youtube_id,
+            idx=0,
+            time_range=ChapterTimeRange(
+                video_duration=video_data.duration,
+                chapter_start=int(first_ch.start_time),
+                chapter_end=int(first_ch.end_time),
+            ),
+        )
+
         transcript_slice = slice_transcript_for_chapter(
-            normalized_segments, int(first_ch.start_time), int(first_ch.end_time)
+            ctx.normalized_segments, int(first_ch.start_time), int(first_ch.end_time)
         )
         chapter = build_chapter_dict(
             {"title": first_ch.title, "startSeconds": int(first_ch.start_time), "endSeconds": int(first_ch.end_time)},
             first_chapter_result,
             is_creator_chapter=True,
             transcript_slice=transcript_slice,
+            youtube_id=ctx.youtube_id,
         )
         chapters_result.append(chapter)
         yield sse_event("chapter_ready", {"index": 0, "chapter": chapter})
@@ -726,21 +311,39 @@ async def process_creator_chapters(
         # Intra-batch duplicates are expected and handled by merge_chapter_concepts().
         batch_already_extracted = list(already_extracted_names)
 
+        # Extract facts for batch chapters in parallel
+        facts_by_idx = await gather_chapter_facts(
+            ctx.llm_service.provider,
+            [(idx, video_data.get_chapter_transcript(idx) or "", raw_chapters[idx]["title"])
+             for idx in batch_indices],
+            ctx.persona,
+        )
+
         for idx in batch_indices:
             raw = raw_chapters[idx]
             chapter_text = video_data.get_chapter_transcript(idx)
             if chapter_text:
                 task = asyncio.create_task(
-                    llm_service.summarize_chapter(
-                        chapter_text,
-                        raw["title"],
-                        has_creator_title=True,
-                        persona=persona,
+                    ctx.llm_service.summarize_chapter(ChapterSummaryRequest(
+                        chapter_text=chapter_text,
+                        context=ChapterContext(
+                            title=raw["title"],
+                            has_creator_title=title_needs_subtitle(raw["title"]),
+                            persona=ctx.persona,
+                            persona_hint=ctx.persona,
+                            start_seconds=raw["startSeconds"],
+                            end_seconds=raw["endSeconds"],
+                        ),
                         concept_names=batch_already_extracted or None,
                         extract_concepts=True,
                         total_chapters=total_chapters,
                         already_extracted_names=batch_already_extracted,
-                    )
+                        accuracy=AccuracyHints(
+                            facts=facts_by_idx.get(idx, ""),
+                            guest_names=state.guest_names,
+                            prev_chapter_block_types=state.prev_block_types,
+                        ),
+                    ))
                 )
                 batch_tasks.append((idx, raw, task))
 
@@ -753,29 +356,46 @@ async def process_creator_chapters(
 
                 if _has_empty_content(summary_data, idx, raw.get("title", "")):
                     continue
-                transcript_slice = slice_transcript_for_chapter(
-                    normalized_segments, raw["startSeconds"], raw["endSeconds"]
+
+                summary_data["content"] = await postprocess_chapter(
+                    summary_data=summary_data,
+                    state=state,
+                    provider=ctx.llm_service.provider,
+                    facts=facts_by_idx.get(idx, ""),
+                    title=raw.get("title", ""),
+                    youtube_id=ctx.youtube_id,
+                    idx=idx,
+                    time_range=ChapterTimeRange(
+                        video_duration=video_data.duration,
+                        chapter_start=raw["startSeconds"],
+                        chapter_end=raw["endSeconds"],
+                    ),
                 )
-                chapter = build_chapter_dict(raw, summary_data, is_creator_chapter=True, transcript_slice=transcript_slice)
+
+                transcript_slice = slice_transcript_for_chapter(
+                    ctx.normalized_segments, raw["startSeconds"], raw["endSeconds"]
+                )
+                chapter = build_chapter_dict(
+                    raw, summary_data, is_creator_chapter=True,
+                    transcript_slice=transcript_slice, youtube_id=ctx.youtube_id,
+                )
                 chapters_result.append(chapter)
                 yield sse_event("chapter_ready", {"index": idx, "chapter": chapter})
             except Exception as e:
-                logger.error(f"Chapter {idx} processing error: {e}")
+                logger.error("Chapter %d processing error: %s", idx, e)
 
     # Merge all chapter concepts with fuzzy dedup
     concepts = merge_chapter_concepts(all_chapter_concepts)
-    logger.info(f"Per-chapter concept extraction: {sum(len(c) for _, c in all_chapter_concepts)} raw → {len(concepts)} merged")
+    logger.info("Per-chapter concept extraction: %d raw → %d merged", sum(len(c) for _, c in all_chapter_concepts), len(concepts))
 
     yield {"chapters": chapters_result, "concepts": concepts}
 
 
 async def process_ai_chapters(
-    llm_service: LLMService,
+    ctx: ChapterProcessingContext,
     segments: list[dict[str, Any]],
     clean_text: str,
     duration: int,
-    persona: str,
-    normalized_segments: list[dict[str, Any]],
 ) -> AsyncGenerator[str | dict[str, Any], None]:
     """
     Detect and process chapters using AI (fallback when no creator chapters).
@@ -792,7 +412,7 @@ async def process_ai_chapters(
 
     # Detect chapters via streaming LLM
     raw_chapters: list[dict[str, Any]] = []
-    async for event_type, data in llm_service.stream_detect_chapters(clean_text, segments, duration):
+    async for event_type, data in ctx.llm_service.stream_detect_chapters(clean_text, segments, duration):
         if event_type == "token":
             yield sse_token("chapter_detect", str(data))
         else:
@@ -815,6 +435,8 @@ async def process_ai_chapters(
     all_chapter_concepts: list[tuple[int, list[dict]]] = []
     already_extracted_names: list[str] = []
 
+    state = CrossChapterState()
+
     for batch_start in range(0, len(raw_chapters), CHAPTER_BATCH_SIZE):
         batch = raw_chapters[batch_start:batch_start + CHAPTER_BATCH_SIZE]
         batch_tasks: list[tuple[int, dict[str, Any], int, int, asyncio.Task[Any]]] = []
@@ -822,23 +444,49 @@ async def process_ai_chapters(
         # Snapshot for this batch
         batch_already_extracted = list(already_extracted_names)
 
+        # Build chapter texts from segments for this batch
+        chapter_texts: dict[int, str] = {}
         for i, raw in enumerate(batch):
             idx = batch_start + i
             start = raw.get("startSeconds", 0)
             end = raw.get("endSeconds", 0) or (start + 300)
             chapter_segments = [s for s in segments if start <= s.get("start", 0) < end]
-            chapter_text = " ".join([s.get("text", "") for s in chapter_segments])
+            chapter_texts[idx] = " ".join([s.get("text", "") for s in chapter_segments])
+
+        # Extract facts for batch chapters in parallel
+        facts_by_idx = await gather_chapter_facts(
+            ctx.llm_service.provider,
+            [(batch_start + i, chapter_texts.get(batch_start + i, ""), raw.get("title", ""))
+             for i, raw in enumerate(batch)],
+            ctx.persona,
+        )
+
+        for i, raw in enumerate(batch):
+            idx = batch_start + i
+            start = raw.get("startSeconds", 0)
+            end = raw.get("endSeconds", 0) or (start + 300)
+            chapter_text = chapter_texts.get(idx, "")
 
             task = asyncio.create_task(
-                llm_service.summarize_chapter(
-                    chapter_text,
-                    raw.get("title", ""),
-                    persona=persona,
+                ctx.llm_service.summarize_chapter(ChapterSummaryRequest(
+                    chapter_text=chapter_text,
+                    context=ChapterContext(
+                        title=raw.get("title", ""),
+                        persona=ctx.persona,
+                        persona_hint=ctx.persona,
+                        start_seconds=start,
+                        end_seconds=end,
+                    ),
                     concept_names=batch_already_extracted or None,
                     extract_concepts=True,
                     total_chapters=total_chapters,
                     already_extracted_names=batch_already_extracted,
-                )
+                    accuracy=AccuracyHints(
+                        facts=facts_by_idx.get(idx, ""),
+                        guest_names=state.guest_names,
+                        prev_chapter_block_types=state.prev_block_types,
+                    ),
+                ))
             )
             batch_tasks.append((idx, raw, start, end, task))
 
@@ -851,196 +499,40 @@ async def process_ai_chapters(
 
                 if _has_empty_content(summary_data, idx, raw.get("title", "")):
                     continue
-                transcript_slice = slice_transcript_for_chapter(normalized_segments, start, end)
+
+                summary_data["content"] = await postprocess_chapter(
+                    summary_data=summary_data,
+                    state=state,
+                    provider=ctx.llm_service.provider,
+                    facts=facts_by_idx.get(idx, ""),
+                    title=raw.get("title", ""),
+                    youtube_id=ctx.youtube_id,
+                    idx=idx,
+                    time_range=ChapterTimeRange(
+                        video_duration=duration,
+                        chapter_start=start,
+                        chapter_end=end,
+                    ),
+                )
+
+                transcript_slice = slice_transcript_for_chapter(ctx.normalized_segments, start, end)
                 chapter = build_chapter_dict(
                     {"title": raw.get("title", ""), "startSeconds": start, "endSeconds": end},
                     summary_data,
                     is_creator_chapter=False,
                     transcript_slice=transcript_slice,
+                    youtube_id=ctx.youtube_id,
                 )
                 chapters_result.append(chapter)
                 yield sse_event("chapter_ready", {"index": idx, "chapter": chapter})
             except Exception as e:
-                logger.error(f"Chapter {idx} processing error: {e}")
+                logger.error("Chapter %d processing error: %s", idx, e)
 
     # Merge all chapter concepts with fuzzy dedup
     concepts = merge_chapter_concepts(all_chapter_concepts)
-    logger.info(f"Per-chapter concept extraction: {sum(len(c) for _, c in all_chapter_concepts)} raw → {len(concepts)} merged")
+    logger.info("Per-chapter concept extraction: %d raw → %d merged", sum(len(c) for _, c in all_chapter_concepts), len(concepts))
 
     yield {"chapters": chapters_result, "concepts": concepts}
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Phase 4: Concept Extraction
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-async def extract_concepts(
-    llm_service: LLMService,
-    timestamped_transcript: str,
-) -> AsyncGenerator[str | list[dict[str, Any]], None]:
-    """
-    Extract key concepts from transcript.
-
-    Yields SSE events, then yields concepts list.
-    """
-    yield sse_event("phase", {"phase": "concepts"})
-
-    raw_concepts: list[dict[str, Any]] = []
-    async for event_type, data in llm_service.stream_extract_concepts(timestamped_transcript):
-        if event_type == "token":
-            yield sse_token("concepts", str(data))
-        else:
-            raw_concepts = data if isinstance(data, list) else []
-
-    logger.debug(f"Extracted {len(raw_concepts)} concepts")
-
-    concepts = build_concept_dicts(raw_concepts)
-
-    yield sse_event("concepts_complete", {"concepts": concepts})
-    yield concepts
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Phase 5: Master Summary
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-async def generate_master_summary(
-    llm_service: LLMService,
-    video_data: VideoData,
-    duration: int,
-    persona: str,
-    synthesis: dict[str, Any],
-    chapters: list[dict[str, Any]],
-    concepts: list[dict[str, Any]],
-) -> AsyncGenerator[str | None, None]:
-    """
-    Generate master summary. Non-fatal on failure.
-
-    Yields SSE events, then yields the master summary or None.
-    """
-    yield sse_event("phase", {"phase": "master_summary"})
-
-    try:
-        master_summary = await llm_service.generate_master_summary(
-            title=video_data.title,
-            channel=video_data.channel or "",
-            duration=duration,
-            persona=persona,
-            tldr=synthesis.get("tldr", ""),
-            key_takeaways=synthesis.get("keyTakeaways", []),
-            chapters=chapters,
-            concepts=concepts,
-        )
-        yield sse_event("master_summary_complete", {"masterSummary": master_summary})
-        logger.debug(f"Master summary generated: {len(master_summary)} chars")
-        yield master_summary
-    except (litellm.exceptions.RateLimitError, litellm.exceptions.APIConnectionError, TimeoutError) as e:
-        logger.warning(f"Master summary skipped ({type(e).__name__}): {e}")
-        yield None
-    except (litellm.exceptions.AuthenticationError, litellm.exceptions.APIError) as e:
-        logger.error(f"Master summary failed ({type(e).__name__}): {e}")
-        yield None
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Result Building
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def normalize_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Convert segments to normalized format with milliseconds."""
-    normalized = []
-    for seg in segments:
-        if "startMs" in seg:
-            # Browser/Whisper format - already in milliseconds
-            start_ms = int(seg["startMs"])
-            end_ms = int(seg.get("endMs", start_ms))
-        else:
-            # yt-dlp/API format - convert from seconds
-            start_s = seg.get("start", 0)
-            duration_s = seg.get("duration", 0)
-            start_ms = int(start_s * 1000)
-            end_ms = int((start_s + duration_s) * 1000)
-
-        normalized.append({
-            "text": seg.get("text", ""),
-            "startMs": start_ms,
-            "endMs": end_ms,
-        })
-    return normalized
-
-
-def build_result(
-    ctx: PipelineContext,
-    synthesis: dict[str, Any],
-    chapters: list[dict[str, Any]],
-    concepts: list[dict[str, Any]],
-    master_summary: str | None,
-    description_analysis: DescriptionAnalysis | None,
-    context_dict: dict[str, Any] | None,
-    llm_model: str,
-) -> dict[str, Any]:
-    """Build the final result dictionary for storage."""
-    from datetime import datetime, timezone
-    processing_time = int((time.time() - ctx.start_time) * 1000)
-
-    result: dict[str, Any] = {
-        "title": ctx.video_data.title,
-        "channel": ctx.video_data.channel,
-        "duration": ctx.video_data.duration,
-        "thumbnail_url": ctx.video_data.thumbnail_url,
-        "transcript": ctx.transcript.raw_text,
-        "transcript_type": ctx.transcript.transcript_type,
-        "transcript_segments": normalize_segments(ctx.transcript.segments),
-        "transcript_source": ctx.transcript.source,
-        "summary": {
-            "tldr": synthesis.get("tldr", ""),
-            "key_takeaways": synthesis.get("keyTakeaways", []),
-            "chapters": chapters,
-            "concepts": concepts,
-            "master_summary": master_summary,
-        },
-        "processing_time_ms": processing_time,
-        "token_usage": {},
-    }
-
-    # Add S3 reference for raw transcript (for regeneration)
-    if ctx.raw_transcript_ref:
-        result["raw_transcript_ref"] = ctx.raw_transcript_ref
-
-    # Add generation metadata (for regeneration tracking)
-    result["generation"] = {
-        "model": llm_model,
-        "prompt_version": settings.PROMPT_VERSION,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-    # Add chapters if available
-    if ctx.video_data.has_chapters:
-        result["chapters"] = [
-            {
-                "startSeconds": int(ch.start_time),
-                "endSeconds": int(ch.end_time),
-                "title": ch.title,
-                "isCreatorChapter": True,
-            }
-            for ch in ctx.video_data.chapters
-        ]
-        result["chapter_source"] = "creator"
-
-    # Add optional data
-    if description_analysis and description_analysis.has_content:
-        result["description_analysis"] = description_analysis.to_dict()
-
-    if ctx.sponsor_segments:
-        result["sponsor_segments"] = sponsor_segments_to_dict(ctx.sponsor_segments)
-
-    if context_dict:
-        result["context"] = context_dict
-
-    return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1062,7 +554,8 @@ async def stream_summarization(
     3. SECTIONS: Remaining sections in batches (with concept anchoring)
     4. MASTER: Master summary generation
     """
-    start_time = time.time()
+    timer = PipelineTimer()
+    # Stream URL cache has TTL-based eviction (5 min); no need to clear per-request
 
     try:
         # ── Validate Entry ──
@@ -1077,6 +570,7 @@ async def stream_summarization(
             return
 
         repository.update_status(video_summary_id, ProcessingStatus.PROCESSING)
+        logger.info("[pipeline] START video_id=%s youtube_id=%s", video_summary_id, youtube_id)
 
         # ── Phase 1: Metadata ──
         yield sse_event("phase", {"phase": "metadata"})
@@ -1102,7 +596,7 @@ async def stream_summarization(
                 "totalDurationRemoved": sum(s.end_seconds - s.start_seconds for s in sponsor_segments),
             })
 
-        logger.info(f"Processing chapters: has_chapters={video_data.has_chapters}")
+        logger.debug("Processing chapters: has_chapters=%s", video_data.has_chapters)
 
         # Chapters
         if video_data.has_chapters:
@@ -1115,9 +609,17 @@ async def stream_summarization(
             })
 
         # Validate duration
-        logger.info(f"Validating duration: {video_data.duration} seconds ({video_data.duration // 60} min)")
+        logger.debug("Validating duration: %s seconds (%d min)", video_data.duration, video_data.duration // 60)
         validate_duration(video_data.duration)
-        logger.info("Duration validation passed")
+        logger.debug("Duration validation passed")
+        phase_elapsed = timer.elapsed()
+        category = (context_dict or {}).get("category", "unknown")
+        duration_min = video_data.duration // 60
+        duration_sec = video_data.duration % 60
+        logger.info(
+            "[pipeline] metadata: \"%s\" (%d:%02d, category=%s) [%.1fs]",
+            video_data.title, duration_min, duration_sec, category, phase_elapsed,
+        )
 
         # ── Fetch Transcript ──
         transcript_data: TranscriptData | None = None
@@ -1145,7 +647,7 @@ async def stream_summarization(
         if is_metadata_source:
             logger.debug("Metadata fallback — skipping S3 storage and sponsor filtering")
         elif transcript_data.source == "s3":
-            raw_transcript_ref = f"transcripts/{youtube_id}.json"
+            raw_transcript_ref = f"videos/{youtube_id}/transcript.json"
             logger.debug("Transcript loaded from S3, skipping re-store")
         else:
             try:
@@ -1155,9 +657,9 @@ async def stream_summarization(
                     source=transcript_data.source,  # type: ignore[arg-type]
                     language=None,  # TODO: detect language from yt-dlp
                 )
-                logger.debug(f"Stored transcript in S3: {raw_transcript_ref}")
+                logger.debug("Stored transcript in S3: %s", raw_transcript_ref)
             except Exception as e:
-                logger.warning(f"Failed to store transcript in S3: {e}")
+                logger.warning("Failed to store transcript in S3: %s", e)
 
         # Filter sponsor content (skip for metadata fallback — no segments)
         segments = transcript_data.segments
@@ -1168,9 +670,32 @@ async def stream_summarization(
             transcript_data.raw_text = " ".join(seg.get("text", "") for seg in segments)
             # Re-normalize after filtering
             normalized_segments = normalize_segments(segments)
-            logger.info(f"Filtered transcript: {original_count} -> {len(segments)} segments")
+            logger.debug("Filtered transcript: %d -> %d segments", original_count, len(segments))
+
+        # Backfill video_data.subtitles from transcript segments when yt-dlp
+        # subtitles were unavailable (e.g. S3 cache, Whisper, Gemini fallback).
+        # Without this, get_chapter_transcript() returns empty strings and
+        # all creator-defined chapters are silently skipped.
+        if not video_data.subtitles and transcript_data.segments:
+            video_data.subtitles = [
+                SubtitleSegment(
+                    text=seg.get("text", ""),
+                    start=seg.get("start", 0.0),
+                    duration=seg.get("duration", 0.0),
+                )
+                for seg in transcript_data.segments
+            ]
+            logger.info(
+                "Backfilled video_data.subtitles from %s: %d segments",
+                transcript_data.source, len(video_data.subtitles),
+            )
 
         clean_text = clean_transcript(transcript_data.raw_text)
+        transcript_elapsed = timer.elapsed()
+        logger.info(
+            "[pipeline] transcript: source=%s, segments=%d [%.1fs]",
+            transcript_data.source, len(transcript_data.segments), transcript_elapsed,
+        )
 
         # Build pipeline context
         ctx = PipelineContext(
@@ -1180,7 +705,7 @@ async def stream_summarization(
             transcript=transcript_data,
             persona=persona,
             sponsor_segments=sponsor_segments,
-            start_time=start_time,
+            timer=timer,
             raw_transcript_ref=raw_transcript_ref,
         )
 
@@ -1197,15 +722,31 @@ async def stream_summarization(
         synthesis = parallel_results.synthesis if parallel_results else {"tldr": "", "keyTakeaways": []}
         description_analysis = parallel_results.description_analysis if parallel_results else None
         first_chapter_result = parallel_results.first_chapter if parallel_results else None
+        parallel_elapsed = timer.elapsed()
+        tldr_status = "ok" if synthesis.get("tldr") else "empty"
+        desc_status = "ok" if description_analysis else "skip"
+        ch1_status = "ok" if first_chapter_result else "skip"
+        logger.info(
+            "[pipeline] parallel: tldr=%s, desc=%s, ch1=%s [%.1fs]",
+            tldr_status, desc_status, ch1_status, parallel_elapsed,
+        )
 
         # ── Phase 3: Chapters with per-chapter concept extraction ──
         chapters: list[dict[str, Any]] = []
         concepts: list[dict[str, Any]] = []
 
+        chapter_ctx = ChapterProcessingContext(
+            llm_service=llm_service,
+            persona=persona,
+            normalized_segments=normalized_segments,
+            youtube_id=youtube_id,
+        )
+
         if video_data.has_chapters:
+            first_facts = parallel_results.first_facts if parallel_results else ""
             async for item in process_creator_chapters(
-                llm_service, video_data, persona, first_chapter_result,
-                normalized_segments,
+                chapter_ctx, video_data, first_chapter_result,
+                first_facts=first_facts,
             ):
                 if isinstance(item, str):
                     yield item
@@ -1214,14 +755,20 @@ async def stream_summarization(
                     concepts = item.get("concepts", [])
         else:
             async for item in process_ai_chapters(
-                llm_service, segments, clean_text, video_data.duration, persona,
-                normalized_segments,
+                chapter_ctx, segments, clean_text, video_data.duration,
             ):
                 if isinstance(item, str):
                     yield item
                 elif isinstance(item, dict):
                     chapters = item.get("chapters", [])
                     concepts = item.get("concepts", [])
+
+        chapters_elapsed = timer.elapsed()
+        chapter_type = "creator" if video_data.has_chapters else "ai"
+        logger.info(
+            "[pipeline] chapters: %d/%d complete (%s) [%.1fs]",
+            len(chapters), len(chapters), chapter_type, chapters_elapsed,
+        )
 
         # Emit concepts after all chapters processed
         if concepts:
@@ -1237,6 +784,12 @@ async def stream_summarization(
             elif item is None or isinstance(item, str):
                 master_summary = item
 
+        master_elapsed = timer.elapsed()
+        logger.info(
+            "[pipeline] master_summary: %d chars [%.1fs]",
+            len(master_summary) if master_summary else 0, master_elapsed,
+        )
+
         # ── Save Results ──
         result = build_result(
             ctx, synthesis, chapters, concepts, master_summary,
@@ -1244,31 +797,38 @@ async def stream_summarization(
         )
         repository.save_result(video_summary_id, result)
 
-        processing_time = int((time.time() - start_time) * 1000)
+        processing_time = int(timer.elapsed() * 1000)
+        logger.info("[pipeline] DONE video_id=%s total=%.1fs", video_summary_id, processing_time / 1000)
         yield sse_event("done", {"videoSummaryId": video_summary_id, "processingTimeMs": processing_time})
         yield "data: [DONE]\n\n"
 
     except TranscriptError as e:
+        logger.info("[pipeline] FAILED video_id=%s error=TranscriptError total=%.1fs", video_summary_id, timer.elapsed())
         repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), e.code)
         yield sse_event("error", {"message": str(e), "code": e.code.value})
 
     except litellm.RateLimitError as e:
-        logger.warning(f"Rate limited for {video_summary_id}: {e}")
+        logger.info("[pipeline] FAILED video_id=%s error=RateLimitError total=%.1fs", video_summary_id, timer.elapsed())
+        logger.warning("Rate limited for %s: %s", video_summary_id, e)
         repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.RATE_LIMITED)
         yield sse_event("error", {"message": "AI service rate limited. Please try again in a moment.", "code": ErrorCode.RATE_LIMITED.value})
 
     except litellm.Timeout as e:
-        logger.warning(f"LLM timeout for {video_summary_id}: {e}")
+        logger.info("[pipeline] FAILED video_id=%s error=Timeout total=%.1fs", video_summary_id, timer.elapsed())
+        logger.warning("LLM timeout for %s: %s", video_summary_id, e)
         repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.LLM_ERROR)
         yield sse_event("error", {"message": "Request took too long. Please try again.", "code": ErrorCode.LLM_ERROR.value})
 
     except litellm.APIError as e:
-        logger.error(f"LLM API error for {video_summary_id}: {e}")
+        logger.info("[pipeline] FAILED video_id=%s error=APIError total=%.1fs", video_summary_id, timer.elapsed())
+        logger.error("LLM API error for %s: %s", video_summary_id, e)
         repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.LLM_ERROR)
         yield sse_event("error", {"message": "AI service error. Please try again.", "code": ErrorCode.LLM_ERROR.value})
 
     except Exception as e:
-        logger.error("Stream error for %s: %s", video_summary_id, e, exc_info=True)
+        error_ref = str(uuid.uuid4())[:8]
+        logger.info("[pipeline] FAILED video_id=%s error=%s ref=%s total=%.1fs", video_summary_id, type(e).__name__, error_ref, timer.elapsed())
+        logger.error("Stream error ref=%s for %s: %s", error_ref, video_summary_id, e, exc_info=True)
 
         # Map common exception types to error codes for better frontend UX
         error_code = ErrorCode.UNKNOWN_ERROR
@@ -1282,7 +842,7 @@ async def stream_summarization(
             error_code = ErrorCode.NO_TRANSCRIPT
 
         repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), error_code)
-        yield sse_event("error", {"message": str(e), "code": error_code.value})
+        yield sse_event("error", {"message": f"An unexpected error occurred (ref: {error_ref}). Please try again.", "code": error_code.value})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1318,7 +878,7 @@ async def stream_summary(
     # Check for provider config override (dev tools)
     provider_config = entry.get("providerConfig")
     if provider_config:
-        logger.info(f"Using custom provider config: {provider_config}")
+        logger.info("Using custom provider config: %s", provider_config)
         providers = ProviderConfig(
             default=provider_config.get("default", "anthropic"),
             fast=provider_config.get("fast"),
@@ -1369,7 +929,11 @@ async def _stream_cached_result(video_summary_id: str, entry: dict[str, Any]) ->
         "keyTakeaways": summary.get("key_takeaways", []),
     })
 
-    for i, chapter in enumerate(summary.get("chapters", [])):
+    # Refresh presigned URLs for cached visual blocks before emitting
+    summary_chapters = summary.get("chapters", [])
+    _refresh_frame_urls(summary_chapters)
+
+    for i, chapter in enumerate(summary_chapters):
         yield sse_event("chapter_ready", {"index": i, "chapter": chapter})
 
     yield sse_event("concepts_complete", {"concepts": summary.get("concepts", [])})
@@ -1443,7 +1007,7 @@ async def regenerate_summary(
         try:
             has_raw_transcript = await s3_client.exists(raw_transcript_ref)
         except Exception as e:
-            logger.warning(f"Failed to check S3 transcript: {e}")
+            logger.warning("Failed to check S3 transcript: %s", e)
 
     # If no raw transcript and not forcing, return error
     if not has_raw_transcript and not request.force:

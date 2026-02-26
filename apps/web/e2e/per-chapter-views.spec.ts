@@ -102,7 +102,7 @@ test.describe('Per-Chapter Views + Concept Tooltips', () => {
 
     await page.goto('/video/video-1');
     // Wait for the video detail page to load
-    await page.waitForSelector('[data-slot="article-chapter"]', { timeout: 10000 });
+    await page.waitForSelector('[data-slot="article-section"]', { timeout: 10000 });
   });
 
   // ─────────────────────────────────────────────────────
@@ -111,20 +111,20 @@ test.describe('Per-Chapter Views + Concept Tooltips', () => {
 
   test('renders chapters with per-chapter view data', async ({ authenticatedPage: page }) => {
     // All 3 chapters should render
-    const chapters = page.locator('[data-slot="article-chapter"]');
+    const chapters = page.locator('[data-slot="article-section"]');
     await expect(chapters).toHaveCount(3);
   });
 
   test('cooking chapter renders ingredient/step blocks', async ({ authenticatedPage: page }) => {
     // The cooking chapter should show ingredient and step blocks
-    const firstChapter = page.locator('[data-slot="article-chapter"]').first();
+    const firstChapter = page.locator('[data-slot="article-section"]').first();
     await expect(firstChapter.getByText('Making the Dish')).toBeVisible();
     // Ingredient block should be present
     await expect(firstChapter.getByText('flour')).toBeVisible();
   });
 
   test('review chapter renders pro_con block', async ({ authenticatedPage: page }) => {
-    const secondChapter = page.locator('[data-slot="article-chapter"]').nth(1);
+    const secondChapter = page.locator('[data-slot="article-section"]').nth(1);
     await expect(secondChapter.getByText('Product Review')).toBeVisible();
     // Pro/con content should be visible
     await expect(secondChapter.getByText('Great taste')).toBeVisible();
@@ -135,16 +135,20 @@ test.describe('Per-Chapter Views + Concept Tooltips', () => {
   // Concept Tooltips
   // ─────────────────────────────────────────────────────
 
-  test('concept names are highlighted with dotted underline in paragraph text', async ({ authenticatedPage: page }) => {
-    // Look for inline concept triggers (not sidebar concept buttons)
+  test('concept names are highlighted inline in paragraph text', async ({ authenticatedPage: page }) => {
+    // Look for inline concept triggers with Definition aria-label
     const conceptTrigger = page.getByRole('button', { name: 'Definition: Penca de Maguey' });
     await expect(conceptTrigger).toBeVisible();
 
-    // Should have dotted underline styling
-    const borderBottom = await conceptTrigger.evaluate((el) =>
-      getComputedStyle(el).borderBottomStyle
-    );
-    expect(borderBottom).toBe('dotted');
+    // Should have highlight styling (inset box-shadow for yellow underline effect)
+    const hasHighlight = await conceptTrigger.evaluate((el) => {
+      // Check for the inset shadow highlight on first-appearance concept
+      const span = el.querySelector('span');
+      if (!span) return false;
+      const shadow = getComputedStyle(span).boxShadow;
+      return shadow !== 'none' && shadow !== '';
+    });
+    expect(hasHighlight).toBe(true);
   });
 
   test('clicking concept shows definition popover', async ({ authenticatedPage: page }) => {
@@ -210,7 +214,7 @@ test.describe('Per-Chapter Views + Concept Tooltips', () => {
     await page.waitForTimeout(500);
 
     // All chapters should still be visible
-    const chapters = page.locator('[data-slot="article-chapter"]');
+    const chapters = page.locator('[data-slot="article-section"]');
     await expect(chapters).toHaveCount(3);
 
     // Inline concept trigger should still be visible
@@ -244,7 +248,7 @@ test.describe('Per-Chapter Views + Concept Tooltips', () => {
 
   test('chapters without view field render with global category', async ({ authenticatedPage: page }) => {
     // Third chapter has no view field — should fall back to global category (cooking)
-    const thirdChapter = page.locator('[data-slot="article-chapter"]').nth(2);
+    const thirdChapter = page.locator('[data-slot="article-section"]').nth(2);
     await expect(thirdChapter.getByText('Conclusion')).toBeVisible();
     // Content should render (paragraph text visible)
     await expect(thirdChapter.getByText('Final thoughts')).toBeVisible();
