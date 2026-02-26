@@ -58,6 +58,12 @@ services:
     depends_on:
       vie-mongodb:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   vie-summarizer:
     build:
@@ -91,17 +97,27 @@ services:
       INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
       WEBSHARE_PROXY_USERNAME: ${WEBSHARE_PROXY_USERNAME:-}
       WEBSHARE_PROXY_PASSWORD: ${WEBSHARE_PROXY_PASSWORD:-}
-      # AWS S3 configuration (for transcript storage)
-      TRANSCRIPT_S3_BUCKET: ${TRANSCRIPT_S3_BUCKET:-vie-transcripts}
+      # S3 Media Storage
+      S3_BUCKET: ${S3_BUCKET:-vie-transcripts}
+      S3_PRESIGNED_URL_EXPIRY: ${S3_PRESIGNED_URL_EXPIRY:-3600}
       AWS_REGION: ${AWS_REGION:-us-east-1}
-      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      # Custom S3 endpoint (LocalStack for offline development)
+      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
+      # Frame extraction (visual blocks)
+      FRAME_EXTRACTION_ENABLED: ${FRAME_EXTRACTION_ENABLED:-true}
     networks:
       - vie-network
     depends_on:
       vie-mongodb:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   vie-explainer:
     build:
@@ -119,7 +135,7 @@ services:
       PORT: 8001
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
       # Multi-provider LLM configuration
-      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+      LLM_PROVIDER: ${EXPLAINER_LLM_PROVIDER:-gemini}
       LLM_FAST_PROVIDER: ${LLM_FAST_PROVIDER:-}
       LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
       LLM_MODEL: ${LLM_MODEL:-}
@@ -132,11 +148,18 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
     networks:
       - vie-network
     depends_on:
       vie-mongodb:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   vie-admin:
     build:

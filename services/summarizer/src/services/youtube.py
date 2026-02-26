@@ -285,7 +285,7 @@ def _detect_category(
                         score += title_weight
                         break
                 except re.error:
-                    logger.warning(f"Invalid regex pattern in category rules: {pattern}")
+                    logger.warning("Invalid regex pattern in category rules: %s", pattern)
                     continue
 
         # 4. Channel pattern matching (weight: 0.15)
@@ -312,7 +312,23 @@ def _detect_category(
     return best_category, best_score
 
 
-def _select_persona(category: str) -> str:
+# Single source of truth: category → persona mapping.
+# Used by select_persona() and imported by llm.py for the inverse mapping.
+CATEGORY_TO_PERSONA: dict[str, str] = {
+    'cooking': 'recipe',
+    'coding': 'code',
+    'podcast': 'interview',
+    'reviews': 'review',
+    'fitness': 'fitness',
+    'travel': 'travel',
+    'education': 'education',
+    'gaming': 'standard',  # No gaming-specific persona yet
+    'diy': 'standard',     # No DIY-specific persona yet
+    'music': 'music',
+}
+
+
+def select_persona(category: str) -> str:
     """Select LLM persona based on detected category.
 
     The persona determines which prompt templates and examples are used
@@ -325,20 +341,7 @@ def _select_persona(category: str) -> str:
     Returns:
         Persona string for LLM prompts ('recipe', 'code', 'standard', etc.)
     """
-    # Map category to persona
-    category_to_persona = {
-        'cooking': 'recipe',
-        'coding': 'code',
-        'podcast': 'interview',
-        'reviews': 'review',
-        'fitness': 'fitness',
-        'travel': 'travel',
-        'education': 'education',
-        'gaming': 'standard',  # No gaming-specific persona yet
-        'diy': 'standard',     # No DIY-specific persona yet
-        'music': 'music',
-    }
-    return category_to_persona.get(category, 'standard')
+    return CATEGORY_TO_PERSONA.get(category, 'standard')
 
 
 async def classify_category_with_llm(
@@ -396,14 +399,14 @@ Respond with ONLY the category name, nothing else."""
 
         # Validate response
         if category in VALID_CATEGORIES:
-            logger.info(f"LLM classified category: {category}")
+            logger.info("LLM classified category: %s", category)
             return category
 
-        logger.warning(f"LLM returned invalid category '{category}', falling back to standard")
+        logger.warning("LLM returned invalid category '%s', falling back to standard", category)
         return "standard"
 
     except Exception as e:
-        logger.warning(f"LLM category classification failed: {e}, falling back to standard")
+        logger.warning("LLM category classification failed: %s, falling back to standard", e)
         return "standard"
 
 
@@ -423,12 +426,13 @@ def _determine_persona(
     tags: list[str],
     hashtags: list[str],
 ) -> str:
-    """DEPRECATED: Use _detect_category() + _select_persona() instead.
+    """DEPRECATED: Use _detect_category() + select_persona() instead.
 
     This function uses AND logic which fails when YouTube category
     doesn't match even if keywords are strong.
 
     Kept for backward compatibility with tests.
+    TODO: Remove this function and migrate tests to select_persona().
     """
     rules = _load_persona_rules()
 
@@ -541,15 +545,14 @@ def extract_video_context(
     )
 
     # Select persona based on detected category (NEW)
-    persona = _select_persona(category)
+    persona = select_persona(category)
 
     # Build display tags
     display_tags = _build_display_tags(tags, hashtags)
 
     logger.info(
-        f"Video context: category={category} (confidence={confidence:.2f}), "
-        f"persona={persona}, youtube_category={youtube_category}, "
-        f"tags_count={len(tags)}, hashtags_count={len(hashtags)}"
+        "Video context: category=%s (confidence=%.2f), persona=%s, youtube_category=%s, tags=%d, hashtags=%d",
+        category, confidence, persona, youtube_category, len(tags), len(hashtags),
     )
 
     return VideoContext(
@@ -696,6 +699,9 @@ def _fetch_subtitles_from_url(url: str) -> list[SubtitleSegment]:
         proxy_configs.append({'http': proxy_url, 'https': proxy_url})
 
     # Strategy: try direct, on 429 wait 2s and switch to proxy immediately
+    # NOTE: Uses synchronous requests.get + time.sleep because this function is
+    # always called from _extract_video_data_sync via asyncio.to_thread.
+    # Do NOT call this function directly from an async context.
     data = None
     try:
         response = requests.get(
@@ -704,13 +710,27 @@ def _fetch_subtitles_from_url(url: str) -> list[SubtitleSegment]:
         response.raise_for_status()
         data = response.json()
     except requests.exceptions.HTTPError as e:
-        if e.response is not None and e.response.status_code == 429 and len(proxy_configs) > 1:
-            logger.warning("Subtitle fetch 429 (direct), retrying via proxy in 2s")
-            time.sleep(2)
+        if e.response is not None and e.response.status_code == 429:
+            if len(proxy_configs) > 1:
+                # Proxy available — backoff then fall through to proxy section below
+                logger.warning("Subtitle fetch 429 (direct), switching to proxy")
+                time.sleep(2)
+            else:
+                # No proxy available — backoff and retry direct once
+                logger.warning("Subtitle fetch 429 (direct), retrying after 2s backoff")
+                time.sleep(2)
+                try:
+                    response = requests.get(
+                        url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=30,
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+                except Exception as retry_err:
+                    logger.warning("Subtitle fetch retry failed: %s", retry_err)
         else:
-            logger.warning(f"Subtitle fetch HTTP error (direct): {e}")
+            logger.warning("Subtitle fetch HTTP error (direct): %s", e)
     except Exception as e:
-        logger.warning(f"Subtitle fetch error (direct): {e}")
+        logger.warning("Subtitle fetch error (direct): %s", e)
 
     # Proxy attempt if direct failed
     if not data and len(proxy_configs) > 1:
@@ -723,9 +743,9 @@ def _fetch_subtitles_from_url(url: str) -> list[SubtitleSegment]:
             data = response.json()
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code if e.response is not None else "unknown"
-            logger.warning(f"Subtitle fetch HTTP {status} (proxy): {e}")
+            logger.warning("Subtitle fetch HTTP %s (proxy): %s", status, e)
         except Exception as e:
-            logger.warning(f"Subtitle fetch error (proxy): {e}")
+            logger.warning("Subtitle fetch error (proxy): %s", e)
 
     if not data:
         return segments
@@ -757,7 +777,7 @@ def _fetch_subtitles_from_url(url: str) -> list[SubtitleSegment]:
                 ))
 
     except Exception as e:
-        logger.warning(f"Failed to parse subtitles: {e}")
+        logger.warning("Failed to parse subtitles: %s", e)
 
     return segments
 
@@ -782,7 +802,7 @@ def _clean_subtitle_text(text: str) -> str:
     wait=tenacity.wait_exponential(multiplier=1, min=2, max=10),
     retry=tenacity.retry_if_exception_type((ConnectionError, TimeoutError, OSError)),
     before_sleep=lambda retry_state: logger.warning(
-        f"yt-dlp extraction retry {retry_state.attempt_number} after error: {retry_state.outcome.exception()}"
+        "yt-dlp extraction retry %d after error: %s", retry_state.attempt_number, retry_state.outcome.exception()
     ),
 )
 def _extract_with_retry(url: str, opts: dict[str, Any]) -> dict[str, Any] | None:
@@ -823,7 +843,7 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
             info = _extract_with_retry(url, opts)
             if info:
                 if use_proxy:
-                    logger.info(f"Video {video_id}: extracted via proxy")
+                    logger.info("Video %s: extracted via proxy", video_id)
                 break
         except Exception as e:
             last_error = e
@@ -832,7 +852,7 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
             if use_proxy or 'proxy' not in error_msg:
                 continue
             # Error might be proxy-related, will retry with proxy on next iteration
-            logger.debug(f"Direct connection failed, trying proxy: {e}")
+            logger.debug("Direct connection failed, trying proxy: %s", e)
 
     if not info:
         if last_error:
@@ -872,7 +892,7 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
 
     # Parse chapters
     chapters = _parse_chapters(info)
-    logger.info(f"Video {video_id}: found {len(chapters)} chapters")
+    logger.info("Video %s: found %d chapters", video_id, len(chapters))
 
     # Parse subtitles - try to get from json3 format
     subtitles: list[SubtitleSegment] = []
@@ -899,13 +919,13 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
         # Clean subtitle text
         for seg in subtitles:
             seg.text = _clean_subtitle_text(seg.text)
-        logger.info(f"Video {video_id}: extracted {len(subtitles)} subtitle segments")
+        logger.info("Video %s: extracted %d subtitle segments", video_id, len(subtitles))
     else:
-        logger.warning(f"Video {video_id}: no subtitles URL found")
+        logger.warning("Video %s: no subtitles URL found", video_id)
 
     # Phase 1: Extract video context (category, persona, tags)
     context = extract_video_context(info, description)
-    logger.info(f"Video {video_id}: persona={context.persona}, tags={len(context.display_tags)}")
+    logger.info("Video %s: persona=%s, tags=%d", video_id, context.persona, len(context.display_tags))
 
     return VideoData(
         video_id=video_id,

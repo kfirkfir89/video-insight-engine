@@ -102,6 +102,21 @@ export const BLOCK_LABELS = {
   copyQuote: 'Copy quote',
   copyValue: 'Copy value',
 
+  // Problem/Solution blocks
+  problemSolution: 'Problem & Solution',
+  problem: 'Problem',
+  solution: 'Solution',
+
+  // Visual blocks
+  visual: 'Visual',
+  diagram: 'Diagram',
+  screenshot: 'Screenshot',
+  demo: 'Demo',
+  whiteboard: 'Whiteboard',
+  slideshow: 'Slideshow',
+  gallery: 'Gallery',
+  viewVisual: 'View in video',
+
   // General
   showMore: 'Show more',
   showLess: 'Show less',

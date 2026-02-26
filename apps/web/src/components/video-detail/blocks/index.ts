@@ -54,5 +54,9 @@ export { FormulaBlock } from './FormulaBlock';
 // Podcast blocks (V2.1)
 export { GuestBlock } from './GuestBlock';
 
+// Quality blocks
+export { ProblemSolutionBlock } from './ProblemSolutionBlock';
+export { VisualBlock } from './VisualBlock';
+
 // Generic blocks
 export { TableBlock } from './TableBlock';

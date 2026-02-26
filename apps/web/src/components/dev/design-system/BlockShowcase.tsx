@@ -112,6 +112,14 @@ const blockGroups: BlockGroup[] = [
     ],
   },
   {
+    name: 'Quality Blocks',
+    description: '2 blocks for output accuracy',
+    blocks: [
+      { key: 'problem_solution', label: 'Problem/Solution', block: sampleBlocks.problem_solution },
+      { key: 'visual', label: 'Visual', block: sampleBlocks.visual },
+    ],
+  },
+  {
     name: 'Generic Blocks',
     description: '1 block for tabular data',
     blocks: [

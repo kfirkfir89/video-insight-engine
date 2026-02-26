@@ -36,8 +36,8 @@ class TranscriptStoreService:
         self._bucket_verified = False  # Cache bucket existence check
 
     def _get_key(self, youtube_id: str) -> str:
-        """Generate S3 key for a transcript."""
-        return f"transcripts/{youtube_id}.json"
+        """Generate S3 key for a transcript (new path)."""
+        return f"videos/{youtube_id}/transcript.json"
 
     async def store(
         self,
@@ -89,10 +89,10 @@ class TranscriptStoreService:
                 self._bucket_verified = True
 
             await self._s3.put_json(key, transcript.model_dump())
-            logger.debug(f"Stored transcript in S3: {key} ({len(segments)} segments)")
+            logger.debug("Stored transcript in S3: %s (%d segments)", key, len(segments))
             return key
         except Exception as e:
-            logger.warning(f"Failed to store transcript in S3: {e}")
+            logger.warning("Failed to store transcript in S3: %s", e)
             raise
 
     async def get(self, youtube_id: str) -> RawTranscript | None:
@@ -118,7 +118,7 @@ class TranscriptStoreService:
         Retrieve a transcript by S3 key reference.
 
         Args:
-            ref: S3 key (e.g., "transcripts/abc123.json")
+            ref: S3 key (e.g., "videos/abc123/transcript.json")
 
         Returns:
             RawTranscript if found, None otherwise
@@ -152,7 +152,7 @@ class TranscriptStoreService:
         """
         key = self._get_key(youtube_id)
         await self._s3.delete(key)
-        logger.info(f"Deleted transcript from S3: {key}")
+        logger.info("Deleted transcript from S3: %s", key)
 
 
 # Singleton instance

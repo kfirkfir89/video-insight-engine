@@ -8,15 +8,16 @@ This module extracts structured data from YouTube video descriptions:
 - Social links (creator's profiles)
 """
 
-import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from litellm import acompletion
 import litellm
 
 from src.config import settings
+from src.utils.json_parsing import parse_json_response
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ class DescriptionAnalysis:
     related_videos: list[RelatedVideo] = field(default_factory=list)
     social_links: list[SocialLink] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             "links": [{"url": l.url, "type": l.type, "label": l.label} for l in self.links],
@@ -82,23 +83,6 @@ class DescriptionAnalysis:
             self.links or self.resources or self.related_videos or
             self.social_links
         )
-
-
-def _parse_json_response(text: str) -> dict:
-    """Parse JSON from LLM response text.
-
-    Returns empty dict on failure, but logs detailed error for debugging.
-    """
-    try:
-        start = text.find("{")
-        end = text.rfind("}") + 1
-        if start < 0 or end <= start:
-            logger.warning(f"No JSON object found in response (length={len(text)})")
-            return {}
-        return json.loads(text[start:end])
-    except json.JSONDecodeError as e:
-        logger.warning(f"Failed to parse JSON response: {e}, text preview: {text[:200]}...")
-    return {}
 
 
 async def _analyze_description_async(
@@ -121,18 +105,21 @@ async def _analyze_description_async(
 
     try:
         prompt_template = load_prompt("description_analysis")
-        prompt = prompt_template.format(description=description)
+        # Use .replace() instead of .format() to avoid crashes from literal
+        # braces in LLM prompt templates (e.g., JSON examples with {{}})
+        prompt = prompt_template.replace("{description}", description)
 
         # Use the fast model for quick extraction
         model = fast_model or settings.llm_fast_model
         response = await acompletion(
             model=model,
             max_tokens=1500,
+            timeout=30.0,
             messages=[{"role": "user", "content": prompt}]
         )
 
         result_text = response.choices[0].message.content
-        data = _parse_json_response(result_text)
+        data = parse_json_response(result_text)
 
         # Parse into dataclasses
         analysis = DescriptionAnalysis(
@@ -159,18 +146,20 @@ async def _analyze_description_async(
         )
 
         logger.info(
-            f"Description analysis complete: {len(analysis.links)} links, "
-            f"{len(analysis.resources)} resources, {len(analysis.related_videos)} videos, "
-            f"{len(analysis.social_links)} social"
+            "Description analysis complete: %d links, %d resources, %d videos, %d social",
+            len(analysis.links),
+            len(analysis.resources),
+            len(analysis.related_videos),
+            len(analysis.social_links),
         )
 
         return analysis
 
     except litellm.exceptions.APIError as e:
-        logger.error(f"LLM API error during description analysis: {e}")
+        logger.error("LLM API error during description analysis: %s", e)
         return DescriptionAnalysis()
     except Exception as e:
-        logger.error(f"Error analyzing description: {e}")
+        logger.error("Error analyzing description: %s", e)
         return DescriptionAnalysis()
 
 

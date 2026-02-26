@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Sparkles, FolderOpen, Search, Library, Brain } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
@@ -9,7 +10,7 @@ import {
 import { useUIStore, useActiveSection } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
 
-export function LeftSidebarIconStrip() {
+export const LeftSidebarIconStrip = memo(function LeftSidebarIconStrip() {
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const activeSection = useActiveSection();
   const setActiveSection = useUIStore((s) => s.setActiveSection);
@@ -110,4 +111,5 @@ export function LeftSidebarIconStrip() {
       </div>
     </TooltipProvider>
   );
-}
+});
+

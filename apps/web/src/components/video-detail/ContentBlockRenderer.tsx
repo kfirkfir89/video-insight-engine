@@ -41,6 +41,9 @@ import {
   FormulaBlock,
   // Podcast blocks (V2.1)
   GuestBlock,
+  // Quality blocks
+  ProblemSolutionBlock,
+  VisualBlock,
   // Generic blocks
   TableBlock,
 } from './blocks';
@@ -237,6 +240,15 @@ export function ContentBlockRenderer({
     // ─────────────────────────────────────────────────────
     case 'guest':
       return <GuestBlock block={block} />;
+
+    // ─────────────────────────────────────────────────────
+    // Quality blocks
+    // ─────────────────────────────────────────────────────
+    case 'problem_solution':
+      return <ProblemSolutionBlock block={block} />;
+
+    case 'visual':
+      return <VisualBlock block={block} onSeek={onSeek} />;
 
     // ─────────────────────────────────────────────────────
     // Generic blocks
