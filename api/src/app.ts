@@ -50,8 +50,13 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   });
 
   // Dev: single-line request logging (replaces Fastify's verbose two-line default)
+  // Skips health check endpoints to reduce noise from Docker/admin polling
   if (isDev) {
     fastify.addHook('onResponse', (req, reply, done) => {
+      if (req.url === '/health' || req.url === '/healthz') {
+        done();
+        return;
+      }
       const ms = reply.elapsedTime.toFixed(0);
       fastify.log.info(`${req.method} ${req.url} ${reply.statusCode} (${ms}ms)`);
       done();

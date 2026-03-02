@@ -28,6 +28,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from llm_common.context import llm_video_id_var, llm_feature_var
 import litellm
 
 from src.config import settings
@@ -70,6 +71,7 @@ from src.services.pipeline_helpers import (
     ParallelResults,
     PipelineContext,
     ChapterProcessingContext,
+    PostprocessContext,
     normalize_segments,
     validate_duration,
     finalize_video_context,
@@ -218,6 +220,63 @@ async def run_parallel_analysis(
 # src.services.chapter_pipeline (extracted for maintainability).
 
 
+async def _postprocess_and_yield_chapters(
+    items: list[tuple[int, dict[str, Any], dict[str, Any]]],
+    pp_ctx: PostprocessContext,
+    chapters_result: list[dict[str, Any]],
+) -> AsyncGenerator[str, None]:
+    """Shared Phase B+C: postprocess chapters in parallel, then yield SSE events in order.
+
+    Args:
+        items: List of (idx, raw_chapter_dict, summary_data) from Phase A.
+        pp_ctx: Bundled postprocessing parameters.
+        chapters_result: Mutated in-place — completed chapters are appended.
+
+    Yields:
+        SSE event strings for each completed chapter.
+    """
+    # Phase B: Start all postprocessing in parallel (frame extraction is the slow part)
+    pp_tasks: list[tuple[int, dict[str, Any], dict[str, Any], asyncio.Task[Any]]] = []
+    for idx, raw, summary_data in items:
+        pp_task = asyncio.create_task(postprocess_chapter(
+            summary_data=summary_data,
+            state=pp_ctx.state,
+            provider=pp_ctx.provider,
+            facts=pp_ctx.facts_by_idx.get(idx, ""),
+            title=raw.get("title", ""),
+            youtube_id=pp_ctx.youtube_id,
+            idx=idx,
+            time_range=ChapterTimeRange(
+                video_duration=pp_ctx.video_duration,
+                chapter_start=raw["startSeconds"],
+                chapter_end=raw["endSeconds"],
+            ),
+        ))
+        pp_tasks.append((idx, raw, summary_data, pp_task))
+
+    # Phase C: Await postprocessing results in order and yield SSE events
+    for idx, raw, summary_data, pp_task in pp_tasks:
+        try:
+            summary_data["content"] = await pp_task
+        except Exception as e:
+            logger.error("Chapter %d postprocess error: %s", idx, e)
+            yield sse_event("chapter_error", {"index": idx, "error": str(e)})
+            # Fallback: summary_data["content"] retains the raw LLM content blocks
+            # (no frame enrichment) rather than silently dropping a chapter.
+
+        transcript_slice = slice_transcript_for_chapter(
+            pp_ctx.normalized_segments, raw["startSeconds"], raw["endSeconds"],
+        )
+        chapter = build_chapter_dict(
+            raw, summary_data,
+            is_creator_chapter=pp_ctx.is_creator,
+            transcript_slice=transcript_slice,
+            youtube_id=pp_ctx.youtube_id,
+        )
+        chapters_result.append(chapter)
+        yield sse_event("chapter_ready", {"index": idx, "chapter": chapter})
+
+
 async def process_creator_chapters(
     ctx: ChapterProcessingContext,
     video_data: VideoData,
@@ -347,42 +406,34 @@ async def process_creator_chapters(
                 )
                 batch_tasks.append((idx, raw, task))
 
+        # Phase A: Await all LLM results (already running in parallel)
+        batch_results: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
         for idx, raw, task in batch_tasks:
             try:
                 summary_data = await task
                 _collect_chapter_concepts(
                     summary_data, idx, all_chapter_concepts, already_extracted_names,
                 )
-
                 if _has_empty_content(summary_data, idx, raw.get("title", "")):
                     continue
-
-                summary_data["content"] = await postprocess_chapter(
-                    summary_data=summary_data,
-                    state=state,
-                    provider=ctx.llm_service.provider,
-                    facts=facts_by_idx.get(idx, ""),
-                    title=raw.get("title", ""),
-                    youtube_id=ctx.youtube_id,
-                    idx=idx,
-                    time_range=ChapterTimeRange(
-                        video_duration=video_data.duration,
-                        chapter_start=raw["startSeconds"],
-                        chapter_end=raw["endSeconds"],
-                    ),
-                )
-
-                transcript_slice = slice_transcript_for_chapter(
-                    ctx.normalized_segments, raw["startSeconds"], raw["endSeconds"]
-                )
-                chapter = build_chapter_dict(
-                    raw, summary_data, is_creator_chapter=True,
-                    transcript_slice=transcript_slice, youtube_id=ctx.youtube_id,
-                )
-                chapters_result.append(chapter)
-                yield sse_event("chapter_ready", {"index": idx, "chapter": chapter})
+                batch_results.append((idx, raw, summary_data))
             except Exception as e:
                 logger.error("Chapter %d processing error: %s", idx, e)
+
+        # Phase B+C: postprocess in parallel and yield SSE events
+        pp_ctx = PostprocessContext(
+            state=state,
+            provider=ctx.llm_service.provider,
+            facts_by_idx=facts_by_idx,
+            youtube_id=ctx.youtube_id,
+            video_duration=video_data.duration,
+            normalized_segments=ctx.normalized_segments,
+            is_creator=True,
+        )
+        async for event in _postprocess_and_yield_chapters(
+            batch_results, pp_ctx, chapters_result,
+        ):
+            yield event
 
     # Merge all chapter concepts with fuzzy dedup
     concepts = merge_chapter_concepts(all_chapter_concepts)
@@ -490,43 +541,36 @@ async def process_ai_chapters(
             )
             batch_tasks.append((idx, raw, start, end, task))
 
+        # Phase A: Await all LLM results (already running in parallel)
+        batch_results: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
         for idx, raw, start, end, task in batch_tasks:
             try:
                 summary_data = await task
                 _collect_chapter_concepts(
                     summary_data, idx, all_chapter_concepts, already_extracted_names,
                 )
-
                 if _has_empty_content(summary_data, idx, raw.get("title", "")):
                     continue
-
-                summary_data["content"] = await postprocess_chapter(
-                    summary_data=summary_data,
-                    state=state,
-                    provider=ctx.llm_service.provider,
-                    facts=facts_by_idx.get(idx, ""),
-                    title=raw.get("title", ""),
-                    youtube_id=ctx.youtube_id,
-                    idx=idx,
-                    time_range=ChapterTimeRange(
-                        video_duration=duration,
-                        chapter_start=start,
-                        chapter_end=end,
-                    ),
-                )
-
-                transcript_slice = slice_transcript_for_chapter(ctx.normalized_segments, start, end)
-                chapter = build_chapter_dict(
-                    {"title": raw.get("title", ""), "startSeconds": start, "endSeconds": end},
-                    summary_data,
-                    is_creator_chapter=False,
-                    transcript_slice=transcript_slice,
-                    youtube_id=ctx.youtube_id,
-                )
-                chapters_result.append(chapter)
-                yield sse_event("chapter_ready", {"index": idx, "chapter": chapter})
+                # Normalize raw dict with resolved start/end for the shared helper
+                normalized_raw = {"title": raw.get("title", ""), "startSeconds": start, "endSeconds": end}
+                batch_results.append((idx, normalized_raw, summary_data))
             except Exception as e:
                 logger.error("Chapter %d processing error: %s", idx, e)
+
+        # Phase B+C: postprocess in parallel and yield SSE events
+        pp_ctx = PostprocessContext(
+            state=state,
+            provider=ctx.llm_service.provider,
+            facts_by_idx=facts_by_idx,
+            youtube_id=ctx.youtube_id,
+            video_duration=duration,
+            normalized_segments=ctx.normalized_segments,
+            is_creator=False,
+        )
+        async for event in _postprocess_and_yield_chapters(
+            batch_results, pp_ctx, chapters_result,
+        ):
+            yield event
 
     # Merge all chapter concepts with fuzzy dedup
     concepts = merge_chapter_concepts(all_chapter_concepts)
@@ -569,10 +613,16 @@ async def stream_summarization(
             yield sse_event("error", {"message": "YouTube ID not found"})
             return
 
+        # Set video context for LLM usage tracking (feature updated per-phase below).
+        # Note: asyncio.create_task() copies ContextVars at task creation time, so
+        # postprocess tasks inherit the feature var value set before they're created.
+        llm_video_id_var.set(youtube_id)
+
         repository.update_status(video_summary_id, ProcessingStatus.PROCESSING)
         logger.info("[pipeline] START video_id=%s youtube_id=%s", video_summary_id, youtube_id)
 
         # ── Phase 1: Metadata ──
+        llm_feature_var.set("summarize:metadata")
         yield sse_event("phase", {"phase": "metadata"})
         video_data = await extract_video_data(youtube_id)
 
@@ -710,6 +760,7 @@ async def stream_summarization(
         )
 
         # ── Phase 2: Parallel Analysis (TLDR + first chapter with concepts) ──
+        llm_feature_var.set("summarize:analysis")
         parallel_results: ParallelResults | None = None
         async for item in run_parallel_analysis(
             llm_service, video_data, persona,
@@ -732,6 +783,7 @@ async def stream_summarization(
         )
 
         # ── Phase 3: Chapters with per-chapter concept extraction ──
+        llm_feature_var.set("summarize:chapter")
         chapters: list[dict[str, Any]] = []
         concepts: list[dict[str, Any]] = []
 
@@ -775,6 +827,7 @@ async def stream_summarization(
             yield sse_event("concepts_complete", {"concepts": concepts})
 
         # ── Phase 4: Master Summary ──
+        llm_feature_var.set("summarize:master")
         master_summary: str | None = None
         async for item in generate_master_summary(
             llm_service, video_data, video_data.duration, persona, synthesis, chapters, concepts

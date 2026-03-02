@@ -15,7 +15,7 @@ MODEL_MAP = {
     },
     "gemini": {
         "default": "gemini/gemini-2.5-flash",
-        "fast": "gemini/gemini-2.0-flash-lite",
+        "fast": "gemini/gemini-2.5-flash-lite",
     },
 }
 

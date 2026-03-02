@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from src.services.chapter_pipeline import CrossChapterState
     from src.services.llm import LLMService
 
 from src.config import settings
@@ -128,6 +129,23 @@ class ChapterProcessingContext:
     persona: str
     normalized_segments: list[dict[str, Any]]
     youtube_id: str | None = None
+
+
+@dataclass(frozen=True)
+class PostprocessContext:
+    """Bundled parameters for _postprocess_and_yield_chapters.
+
+    Groups the 7 keyword-only args into a single frozen dataclass
+    so callers and the function itself are easier to read.
+    """
+
+    state: CrossChapterState
+    provider: Any
+    facts_by_idx: dict[int, str]
+    youtube_id: str | None
+    video_duration: int
+    normalized_segments: list[dict[str, Any]]
+    is_creator: bool
 
 
 # ─────────────────────────────────────────────────────────────────────────────

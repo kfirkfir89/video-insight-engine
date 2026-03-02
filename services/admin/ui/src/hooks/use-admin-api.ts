@@ -21,8 +21,17 @@ export function useUsageByService(days = 30) {
   return useQuery({ queryKey: ['usage-by-service', days], queryFn: () => api.usage.byService(days) });
 }
 
-export function useUsageByVideo(days = 30) {
-  return useQuery({ queryKey: ['usage-by-video', days], queryFn: () => api.usage.byVideo(days) });
+export function useUsageByVideo(days = 30, limit = 50) {
+  return useQuery({ queryKey: ['usage-by-video', days, limit], queryFn: () => api.usage.byVideo(days, limit) });
+}
+
+export function useVideoDetail(videoId: string | undefined) {
+  return useQuery({
+    queryKey: ['video-detail', videoId],
+    queryFn: () => api.usage.forVideo(videoId!),
+    enabled: !!videoId,
+    staleTime: 60_000,
+  });
 }
 
 export function useUsageRecent(limit = 20) {

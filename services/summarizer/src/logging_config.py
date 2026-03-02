@@ -17,6 +17,9 @@ from structlog.types import Processor
 from src.config import settings
 
 
+from llm_common.middleware import HealthCheckFilter as _HealthCheckFilter
+
+
 def get_log_level() -> int:
     """Get log level from settings."""
     level = getattr(settings, "log_level", "INFO").upper()
@@ -69,6 +72,9 @@ def configure_structlog(json_format: bool = False) -> None:
         stream=sys.stdout,
         level=get_log_level(),
     )
+
+    # Suppress uvicorn access logs for health checks
+    logging.getLogger("uvicorn.access").addFilter(_HealthCheckFilter())
 
     # Suppress noisy loggers
     logging.getLogger("httpx").setLevel(logging.WARNING)

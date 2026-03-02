@@ -2,23 +2,49 @@
 
 :root {
   --color-primary: #6366f1;
+  --color-primary-soft: rgba(99, 102, 241, 0.08);
   --color-success: #22c55e;
+  --color-success-soft: rgba(34, 197, 94, 0.08);
   --color-warning: #f59e0b;
+  --color-warning-soft: rgba(245, 158, 11, 0.08);
   --color-danger: #ef4444;
+  --color-danger-soft: rgba(239, 68, 68, 0.08);
+  --color-accent: #8b5cf6;
+  --color-accent-soft: rgba(139, 92, 246, 0.08);
   --color-surface: #ffffff;
   --color-surface-dim: #f8fafc;
+  --color-surface-raised: #ffffff;
   --color-border: #e2e8f0;
+  --color-border-subtle: #f1f5f9;
   --color-text: #0f172a;
   --color-text-muted: #64748b;
+  --color-text-faint: #94a3b8;
+
+  /* Chart palette */
+  --chart-1: #6366f1;
+  --chart-2: #22c55e;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #8b5cf6;
+  --chart-6: #06b6d4;
+  --chart-7: #ec4899;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
+    --color-primary-soft: rgba(99, 102, 241, 0.12);
+    --color-success-soft: rgba(34, 197, 94, 0.12);
+    --color-warning-soft: rgba(245, 158, 11, 0.12);
+    --color-danger-soft: rgba(239, 68, 68, 0.12);
+    --color-accent-soft: rgba(139, 92, 246, 0.12);
     --color-surface: #0f172a;
     --color-surface-dim: #1e293b;
+    --color-surface-raised: #1e293b;
     --color-border: #334155;
+    --color-border-subtle: #1e293b;
     --color-text: #f1f5f9;
     --color-text-muted: #94a3b8;
+    --color-text-faint: #64748b;
   }
 }
 
