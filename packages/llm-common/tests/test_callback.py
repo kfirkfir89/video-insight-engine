@@ -122,3 +122,71 @@ class TestAsyncCallback:
             )
 
         mock_alerts_col.insert_one.assert_awaited_once()
+
+
+class TestCrossModeCallback:
+    """Regression tests: sync-mode callback receiving async LiteLLM dispatch.
+
+    When the summarizer uses mode="sync" but calls litellm.acompletion(),
+    LiteLLM dispatches to async_log_success_event. Records must still be
+    written via the SyncBuffer.
+    """
+
+    @pytest.mark.asyncio
+    async def test_sync_mode_async_success_records(self):
+        """async_log_success_event must buffer records when mode='sync'."""
+        mock_db = MagicMock()
+        cb = MongoDBUsageCallback(mock_db, service="summarizer", mode="sync")
+
+        token = llm_feature_var.set("summarize:chapter")
+        try:
+            await cb.async_log_success_event(
+                kwargs={"model": "anthropic/claude-sonnet-4-20250514", "messages": [{"content": "test"}]},
+                response_obj=MockResponse(),
+                start_time=datetime.now(UTC),
+                end_time=datetime.now(UTC),
+            )
+        finally:
+            llm_feature_var.reset(token)
+
+        # Record may have been flushed by the timer thread already.
+        # Either the buffer has the record or insert_many was called.
+        buffered = len(cb._buffer._buffer) > 0
+        flushed = mock_db["llm_usage"].insert_many.called
+        assert buffered or flushed, "Record must be buffered or flushed to MongoDB"
+
+    @pytest.mark.asyncio
+    async def test_sync_mode_async_failure_records(self):
+        """async_log_failure_event must buffer records when mode='sync'."""
+        mock_db = MagicMock()
+        cb = MongoDBUsageCallback(mock_db, service="summarizer", mode="sync")
+
+        await cb.async_log_failure_event(
+            kwargs={"model": "test/model", "exception": "timeout"},
+            response_obj=None,
+            start_time=datetime.now(UTC),
+            end_time=datetime.now(UTC),
+        )
+
+        buffered = len(cb._buffer._buffer) > 0
+        flushed = mock_db["llm_usage"].insert_many.called
+        assert buffered or flushed, "Failure record must be buffered or flushed"
+
+    @pytest.mark.asyncio
+    async def test_sync_mode_async_cost_alert(self):
+        """async_log_success_event with mode='sync' must trigger sync cost alert."""
+        mock_db = MagicMock()
+        cb = MongoDBUsageCallback(mock_db, service="summarizer", mode="sync", cost_threshold=0.01)
+
+        with patch("llm_common.callback.litellm") as mock_litellm:
+            mock_litellm.completion_cost.return_value = 0.50
+            mock_litellm.version = "1.80.0"
+
+            await cb.async_log_success_event(
+                kwargs={"model": "test/model", "messages": []},
+                response_obj=MockResponse(),
+                start_time=datetime.now(UTC),
+                end_time=datetime.now(UTC),
+            )
+
+        mock_db["llm_alerts"].insert_one.assert_called_once()

@@ -13,6 +13,7 @@ dependencies = [
     "pymongo>=4.6.0",
     "motor>=3.3.0",
     "structlog>=24.0.0",
+    "starlette>=0.27.0",
 ]
 
 [project.optional-dependencies]

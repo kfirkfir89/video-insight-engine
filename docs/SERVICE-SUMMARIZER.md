@@ -392,7 +392,7 @@ class LLMService:
 MODEL_MAP = {
     "anthropic": {"default": "anthropic/claude-sonnet-4-20250514", "fast": "anthropic/claude-3-5-haiku-20241022"},
     "openai": {"default": "openai/gpt-4o", "fast": "openai/gpt-4o-mini"},
-    "gemini": {"default": "gemini/gemini-2.5-flash", "fast": "gemini/gemini-2.0-flash-lite"},
+    "gemini": {"default": "gemini/gemini-2.5-flash", "fast": "gemini/gemini-2.5-flash-lite"},
 }
 ```
 

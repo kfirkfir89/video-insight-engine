@@ -1,20 +1,29 @@
 import { test, expect } from '@playwright/test';
+import { setupAdminApiMocks } from './fixtures';
 
 test.describe('Admin Panel Layout', () => {
   test.beforeEach(async ({ page }) => {
+    // Set up API mocks to prevent hanging on real API calls
+    await setupAdminApiMocks(page);
     // Set API key in localStorage before loading
+    await page.addInitScript(() => {
+      localStorage.setItem('admin_api_key', 'test-key');
+    });
     await page.goto('/');
-    await page.evaluate(() => localStorage.setItem('admin_api_key', 'test-key'));
-    await page.reload();
+    await page.waitForSelector('header nav', { timeout: 10_000 });
   });
 
-  test('login prompt renders when no API key', async ({ page }) => {
-    await page.evaluate(() => localStorage.removeItem('admin_api_key'));
-    await page.reload();
+  test('login prompt renders when no API key', async ({ browser }) => {
+    // Use a fresh context without the addInitScript that sets the API key
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await setupAdminApiMocks(page);
+    await page.goto('/');
     const form = page.locator('form');
     await expect(form).toBeVisible();
     const input = page.locator('input[type="password"]');
     await expect(input).toBeVisible();
+    await context.close();
   });
 
   test('nav header is visible and sticky', async ({ page }) => {
@@ -26,9 +35,10 @@ test.describe('Admin Panel Layout', () => {
 
   test('nav links exist for all pages', async ({ page }) => {
     const nav = page.locator('nav');
-    await expect(nav.locator('a')).toHaveCount(4);
+    await expect(nav.locator('a')).toHaveCount(5);
     const labels = await nav.locator('a').allTextContents();
     expect(labels).toContain('Dashboard');
+    expect(labels).toContain('Videos');
     expect(labels).toContain('Usage');
     expect(labels).toContain('Health');
     expect(labels).toContain('Alerts');
@@ -45,9 +55,12 @@ test.describe('Admin Panel Layout', () => {
 
 test.describe('Layout Hierarchy', () => {
   test.beforeEach(async ({ page }) => {
+    await setupAdminApiMocks(page);
+    await page.addInitScript(() => {
+      localStorage.setItem('admin_api_key', 'test-key');
+    });
     await page.goto('/');
-    await page.evaluate(() => localStorage.setItem('admin_api_key', 'test-key'));
-    await page.reload();
+    await page.waitForSelector('header nav', { timeout: 10_000 });
   });
 
   test('header is before main in DOM order', async ({ page }) => {
@@ -73,6 +86,15 @@ test.describe('Layout Hierarchy', () => {
       const elements = document.querySelectorAll('*');
       const overflowing: string[] = [];
       elements.forEach((el) => {
+        // Skip elements inside scrollable containers (overflow-x-auto, overflow-x-scroll)
+        let parent = el.parentElement;
+        let insideScroll = false;
+        while (parent) {
+          const ov = getComputedStyle(parent).overflowX;
+          if (ov === 'auto' || ov === 'scroll') { insideScroll = true; break; }
+          parent = parent.parentElement;
+        }
+        if (insideScroll) return;
         const rect = el.getBoundingClientRect();
         if (rect.right > vpWidth + 2) {
           overflowing.push(`${el.tagName}.${el.className} (right: ${rect.right}, vpWidth: ${vpWidth})`);
@@ -86,9 +108,12 @@ test.describe('Layout Hierarchy', () => {
 
 test.describe('Overflow Checks', () => {
   test.beforeEach(async ({ page }) => {
+    await setupAdminApiMocks(page);
+    await page.addInitScript(() => {
+      localStorage.setItem('admin_api_key', 'test-key');
+    });
     await page.goto('/');
-    await page.evaluate(() => localStorage.setItem('admin_api_key', 'test-key'));
-    await page.reload();
+    await page.waitForSelector('header nav', { timeout: 10_000 });
   });
 
   test('body has no horizontal scrollbar', async ({ page }) => {
@@ -99,10 +124,8 @@ test.describe('Overflow Checks', () => {
   });
 
   test('tables are wrapped in overflow containers', async ({ page }) => {
-    // Navigate to a page that might have tables
+    // Navigate to a page that might have tables (mocks already set up in beforeEach)
     await page.goto('/usage');
-    await page.evaluate(() => localStorage.setItem('admin_api_key', 'test-key'));
-    await page.reload();
 
     const tables = page.locator('table');
     const count = await tables.count();
@@ -116,9 +139,8 @@ test.describe('Overflow Checks', () => {
 
 test.describe('Responsivity', () => {
   test('login form is centered and fits on mobile', async ({ page }) => {
+    // No API key — show login form
     await page.goto('/');
-    await page.evaluate(() => localStorage.removeItem('admin_api_key'));
-    await page.reload();
 
     const form = page.locator('form');
     await expect(form).toBeVisible();
@@ -138,13 +160,16 @@ test.describe('Responsivity', () => {
   });
 
   test('nav items are accessible at all viewports', async ({ page }) => {
+    await setupAdminApiMocks(page);
+    await page.addInitScript(() => {
+      localStorage.setItem('admin_api_key', 'test-key');
+    });
     await page.goto('/');
-    await page.evaluate(() => localStorage.setItem('admin_api_key', 'test-key'));
-    await page.reload();
+    await page.waitForSelector('header nav', { timeout: 10_000 });
 
     const navLinks = page.locator('nav a');
     const count = await navLinks.count();
-    expect(count).toBe(4);
+    expect(count).toBe(5);
     // All nav links should be visible (not hidden behind overflow)
     for (let i = 0; i < count; i++) {
       await expect(navLinks.nth(i)).toBeVisible();
@@ -152,9 +177,12 @@ test.describe('Responsivity', () => {
   });
 
   test('content does not overflow on small screens', async ({ page }) => {
+    await setupAdminApiMocks(page);
+    await page.addInitScript(() => {
+      localStorage.setItem('admin_api_key', 'test-key');
+    });
     await page.goto('/');
-    await page.evaluate(() => localStorage.setItem('admin_api_key', 'test-key'));
-    await page.reload();
+    await page.waitForSelector('header nav', { timeout: 10_000 });
 
     const hasOverflow = await page.evaluate(() => {
       return document.documentElement.scrollWidth > document.documentElement.clientWidth;
@@ -163,9 +191,12 @@ test.describe('Responsivity', () => {
   });
 
   test('page navigation works', async ({ page }) => {
+    await setupAdminApiMocks(page);
+    await page.addInitScript(() => {
+      localStorage.setItem('admin_api_key', 'test-key');
+    });
     await page.goto('/');
-    await page.evaluate(() => localStorage.setItem('admin_api_key', 'test-key'));
-    await page.reload();
+    await page.waitForSelector('header nav', { timeout: 10_000 });
 
     // Click each nav link and verify URL changes
     await page.click('nav a:has-text("Usage")');

@@ -412,7 +412,8 @@ async def _extract_and_upload_frames(
                     logger.debug("Frame at %ds is mostly black, skipping", result.ts)
                     continue
             except Exception as e:
-            logger.debug("Brightness check failed at %ds: %s", result.ts, e)
+                logger.warning("Brightness check failed at %ds, skipping frame: %s", result.ts, e)
+                continue
 
         # Compute hash once for both within-block and global dedup
         frame_hash = _compute_frame_hash(result.frame_bytes)
