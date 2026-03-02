@@ -97,6 +97,56 @@ logger = logging.getLogger(__name__)
 StreamEventType = Literal["token", "complete"]
 StreamEvent = tuple[StreamEventType, str | dict | list]
 
+# Appended to prompts on JSON-parse retry to nudge the LLM toward valid output
+_JSON_RETRY_SUFFIX = "\n\nIMPORTANT: You MUST respond with valid JSON only. No markdown, no explanation."
+
+
+def _build_time_based_chapters(duration: int) -> list[dict]:
+    """Build time-based chapter segments (~5 min each) as a fallback.
+
+    Used when the LLM fails to detect logical chapters from transcript.
+    Produces generic "Part N" chapters so each segment gets focused
+    content-block generation instead of one huge blob.
+    """
+    segment_duration = 300  # 5 minutes
+    chapters: list[dict] = []
+    for start in range(0, duration, segment_duration):
+        end = min(start + segment_duration, duration)
+        idx = len(chapters) + 1
+        chapters.append({
+            "title": f"Part {idx}",
+            "startSeconds": start,
+            "endSeconds": end,
+        })
+    return chapters
+
+
+def _chapters_fallback(duration: int | None) -> list[dict]:
+    """Return time-based chapters or single Full Video as last-resort fallback."""
+    effective_duration = duration or 0
+    if effective_duration > 0:
+        return _build_time_based_chapters(effective_duration)
+    return [{"title": "Full Video", "startSeconds": 0, "endSeconds": 0}]
+
+
+def _extract_chapters_from_result(result: Any) -> list[dict] | None:
+    """Extract chapters list from a parsed LLM result, or None if not valid."""
+    if isinstance(result, dict) and result.get("chapters"):
+        return result["chapters"]
+    return None
+
+
+def _log_chapter_detection_failure(attempt: int, result: Any, streaming: bool = False) -> None:
+    """Log a chapter detection failure with context."""
+    prefix = "Streaming chapter" if streaming else "Chapter"
+    logger.warning(
+        "%s detection attempt %d failed: result_type=%s, has_chapters_key=%s, raw_preview=%.300s",
+        prefix, attempt,
+        type(result).__name__,
+        "chapters" in result if isinstance(result, dict) else "N/A",
+        str(result)[:300],
+    )
+
 
 class LLMService:
     """Service for LLM-based video processing.
@@ -182,18 +232,27 @@ class LLMService:
             duration_formatted=duration_formatted,
         )
 
+        # First attempt
         text = await self._call_llm(prompt)
         result = _parse_json_response(text)
+        chapters = _extract_chapters_from_result(result)
+        if chapters:
+            return chapters
 
-        if result.get("chapters"):
-            return result["chapters"]
+        # Retry once with explicit JSON instruction
+        _log_chapter_detection_failure(1, result)
+        text = await self._call_llm(
+            prompt + _JSON_RETRY_SUFFIX,
+        )
+        result = _parse_json_response(text)
+        chapters = _extract_chapters_from_result(result)
+        if chapters:
+            logger.info("Chapter detection succeeded on retry")
+            return chapters
 
-        # Fallback: single chapter
-        return [{
-            "title": "Full Video",
-            "startSeconds": 0,
-            "endSeconds": duration or 0
-        }]
+        # Fallback: time-based segments
+        _log_chapter_detection_failure(2, result)
+        return _chapters_fallback(duration)
 
     async def summarize_chapter(self, req: ChapterSummaryRequest) -> dict:
         """Generate dynamic content blocks for a chapter.
@@ -229,8 +288,9 @@ class LLMService:
                 break
 
             logger.warning(
-                "Empty content from LLM for chapter '%s' (%d chars input), retrying...",
-                req.context.title, len(req.chapter_text),
+                "Empty content from LLM for chapter '%s' (%d chars input), retrying... "
+                "Raw response preview: %.300s",
+                req.context.title, len(req.chapter_text), text,
             )
 
         if not content and req.chapter_text.strip():
@@ -438,18 +498,27 @@ class LLMService:
             else:
                 result = data
 
-        # Process the result (type guard for dict access)
-        if isinstance(result, dict) and result.get("chapters"):
-            chapters = result["chapters"]
-        else:
-            # Fallback: single chapter
-            chapters = [{
-                "title": "Full Video",
-                "startSeconds": 0,
-                "endSeconds": duration or 0
-            }]
+        # Process the result
+        chapters = _extract_chapters_from_result(result)
+        if chapters:
+            yield ("complete", chapters)
+            return
 
-        yield ("complete", chapters)
+        # Retry once with non-streaming call and explicit JSON instruction
+        _log_chapter_detection_failure(1, result, streaming=True)
+        text = await self._call_llm(
+            prompt + _JSON_RETRY_SUFFIX,
+        )
+        result = _parse_json_response(text)
+        chapters = _extract_chapters_from_result(result)
+        if chapters:
+            logger.info("Streaming chapter detection succeeded on non-streaming retry")
+            yield ("complete", chapters)
+            return
+
+        # Fallback: time-based segments
+        _log_chapter_detection_failure(2, result, streaming=True)
+        yield ("complete", _chapters_fallback(duration))
 
     async def stream_summarize_chapter(
         self,
@@ -631,8 +700,22 @@ class LLMService:
             chapters=chapters_text,
         )
 
-        text = await self._call_llm(prompt, max_tokens=500)
+        # max_tokens=1000 (up from 500) to accommodate keyTakeaways alongside TLDR
+        text = await self._call_llm(prompt, max_tokens=1000)
         result = _parse_json_response(text, {"tldr": "", "keyTakeaways": []})
+
+        # Retry once if TL;DR is empty (LLM may return non-JSON or empty response)
+        if not result.get("tldr"):
+            logger.warning(
+                "Empty TLDR from LLM, retrying... Raw response preview: %.300s", text,
+            )
+            text = await self._call_llm(
+                prompt + _JSON_RETRY_SUFFIX,
+                max_tokens=1000,
+            )
+            result = _parse_json_response(text, {"tldr": "", "keyTakeaways": []})
+            if not result.get("tldr"):
+                logger.error("TLDR still empty after retry. Raw response preview: %.300s", text)
 
         return {
             "tldr": result.get("tldr", ""),

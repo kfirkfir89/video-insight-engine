@@ -366,8 +366,8 @@ def build_concept_prompt_parts(
             '"timestamp": "M:SS", "aliases": ["optional short form"]}\n'
             '  ]'
         )
-        return section, field, 3000
-    return "", "", 2500
+        return section, field, 4096
+    return "", "", 4000
 
 
 def build_concept_dicts(raw_concepts: list[dict]) -> list[dict[str, Any]]:

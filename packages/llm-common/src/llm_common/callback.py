@@ -14,6 +14,7 @@ Usage:
     litellm.callbacks = [callback]
 """
 
+import asyncio
 import hashlib
 from datetime import UTC, datetime
 
@@ -200,14 +201,23 @@ class MongoDBUsageCallback(CustomLogger):
         except Exception as e:
             logger.error("callback_failure_failed", error=str(e))
 
-    # ── Async callbacks (used by explainer) ──
+    # ── Async callbacks (called by LiteLLM for acompletion()) ──
 
     async def async_log_success_event(self, kwargs, response_obj, start_time, end_time):
         try:
             record = self._build_record(kwargs, response_obj, start_time, end_time)
             if self._mode == "async":
                 await self._buffer.add(record)
-            await self._check_cost_alert_async(record)
+                await self._check_cost_alert_async(record)
+            else:
+                # Sync buffer add is thread-safe (uses threading.Lock internally).
+                self._buffer.add(record)
+                # Cost alert uses pymongo sync client — safe to run in thread pool
+                # because pymongo MongoClient is thread-safe.
+                try:
+                    await asyncio.to_thread(self._check_cost_alert_sync, record)
+                except Exception as e:
+                    logger.error("cost_alert_failed", error=str(e), mode="sync-via-async")
         except Exception as e:
             logger.error("callback_success_failed", error=str(e))
 
@@ -218,5 +228,7 @@ class MongoDBUsageCallback(CustomLogger):
             record["error_message"] = str(kwargs.get("exception", "unknown"))
             if self._mode == "async":
                 await self._buffer.add(record)
+            else:
+                self._buffer.add(record)
         except Exception as e:
             logger.error("callback_failure_failed", error=str(e))

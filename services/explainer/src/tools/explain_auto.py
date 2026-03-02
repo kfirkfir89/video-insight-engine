@@ -1,5 +1,6 @@
 """explain_auto tool: Generate cached documentation for video sections or concepts."""
 
+from llm_common.context import llm_video_id_var, llm_feature_var
 from src.config import settings
 from src.exceptions import ResourceNotFoundError, ValidationError
 from src.repositories.base import ExpansionRepositoryProtocol, VideoSummaryRepositoryProtocol
@@ -47,6 +48,10 @@ async def explain_auto(
     video_summary = await video_summary_repo.find_by_id(video_summary_id)
     if not video_summary:
         raise ResourceNotFoundError("Video summary not found", resource_type="video_summary")
+
+    # Set video ID context for LLM usage tracking
+    llm_video_id_var.set(video_summary.youtubeId)
+    llm_feature_var.set(f"explain:{target_type}")
 
     # 4. Find target and build context
     if target_type == "section":
