@@ -28,6 +28,9 @@ async function mongodb(fastify: FastifyInstance) {
         { key: { youtubeId: 1, isLatest: 1 } },
         { key: { youtubeId: 1, version: -1 } },
         { key: { status: 1 } },
+        { key: { outputType: 1 } },
+        { key: { shareSlug: 1 }, unique: true, sparse: true },
+        { key: { expiresAt: 1 }, expireAfterSeconds: 0 },
       ]);
 
       // userVideos indexes
@@ -55,6 +58,17 @@ async function mongodb(fastify: FastifyInstance) {
       // users indexes
       await db.collection('users').createIndexes([
         { key: { email: 1 }, unique: true },
+        { key: { tier: 1 } },
+      ]);
+
+      // shareLikes indexes
+      await db.collection('shareLikes').createIndexes([
+        { key: { shareSlug: 1, ipHash: 1 }, unique: true },
+      ]);
+
+      // llm_usage indexes (auto-cleanup old records)
+      await db.collection('llm_usage').createIndexes([
+        { key: { createdAt: 1 }, expireAfterSeconds: 90 * 24 * 60 * 60 }, // 90-day TTL
       ]);
 
       // userChats indexes

@@ -1,14 +1,21 @@
 import { useUsageStats } from '../hooks/use-admin-api';
-import { DollarIcon, ZapIcon, ClockIcon, CheckCircleIcon } from './icons';
+import { DollarIcon, ZapIcon, ClockIcon, CheckCircleIcon, CoinsIcon } from './icons';
 
 const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 const fmtUsd = (n: number) => `$${n.toFixed(4)}`;
+
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
+}
 
 const CARD_CONFIG = [
   { key: 'cost', icon: DollarIcon, color: 'var(--color-primary)', soft: 'var(--color-primary-soft)' },
   { key: 'calls', icon: ZapIcon, color: 'var(--color-success)', soft: 'var(--color-success-soft)' },
   { key: 'duration', icon: ClockIcon, color: 'var(--color-warning)', soft: 'var(--color-warning-soft)' },
   { key: 'success', icon: CheckCircleIcon, color: 'var(--color-success)', soft: 'var(--color-success-soft)' },
+  { key: 'tokens', icon: CoinsIcon, color: 'var(--color-primary)', soft: 'var(--color-primary-soft)' },
 ];
 
 export function StatsCards({ days = 30 }: { days?: number }) {
@@ -16,8 +23,8 @@ export function StatsCards({ days = 30 }: { days?: number }) {
 
   if (isLoading || !data) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="stats-cards">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4" data-testid="stats-cards">
+        {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="h-24 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)] animate-pulse" />
         ))}
       </div>
@@ -29,10 +36,11 @@ export function StatsCards({ days = 30 }: { days?: number }) {
     { label: 'Total Calls', value: fmt(data.total_calls ?? 0), ...CARD_CONFIG[1] },
     { label: 'Avg Duration', value: `${fmt(data.avg_duration_ms ?? 0)}ms`, ...CARD_CONFIG[2] },
     { label: 'Success Rate', value: data.total_calls ? `${((data.success_count / data.total_calls) * 100).toFixed(1)}%` : 'N/A', ...CARD_CONFIG[3] },
+    { label: 'Total Tokens', value: fmtTokens(data.total_tokens ?? 0), ...CARD_CONFIG[4] },
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="stats-cards">
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-4" data-testid="stats-cards">
       {cards.map((c) => {
         const Icon = c.icon;
         return (

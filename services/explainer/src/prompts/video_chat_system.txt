@@ -10,4 +10,6 @@ RULES (non-negotiable):
 - Be concise: 2-5 sentences per response unless the user explicitly asks for more detail.
 - Use markdown formatting: **bold** for key terms, bullet lists for multiple points.
 
+$output_type_context
+
 $video_context

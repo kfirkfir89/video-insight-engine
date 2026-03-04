@@ -7,6 +7,7 @@ from src.exceptions import ResourceNotFoundError
 from src.repositories.base import VideoSummaryRepositoryProtocol
 from src.schemas import VideoSummary
 from src.services.llm import LLMService, load_prompt
+from src.utils.output_type import get_output_type_label, get_output_type_hint
 
 
 def _build_video_context(video_summary: VideoSummary) -> str:
@@ -72,10 +73,17 @@ async def video_chat(
     # Build context from video content
     video_context = _build_video_context(video_summary)
 
+    # Build output type context for system prompt
+    output_type = video_summary.output_type
+    output_type_label = get_output_type_label(output_type)
+    output_type_hint = get_output_type_hint(output_type)
+    output_type_context = f"This is a {output_type_label} video. {output_type_hint}."
+
     # Load system prompt and inject video context (safe_substitute prevents format string injection)
     system_prompt = Template(load_prompt("video_chat_system")).safe_substitute(
         video_title=video_summary.title,
         video_context=video_context,
+        output_type_context=output_type_context,
     )
 
     # Build messages for LLM (validate roles, truncate content)

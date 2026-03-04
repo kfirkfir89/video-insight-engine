@@ -1,5 +1,7 @@
+import { Component, type ReactNode } from 'react';
 import type { ContentBlock } from '@vie/types';
 import { ConceptHighlighter } from './ConceptHighlighter';
+import { InlineEditor } from './InlineEditor';
 import {
   // Existing blocks
   KeyValueRenderer,
@@ -48,6 +50,29 @@ import {
   TableBlock,
 } from './blocks';
 
+/** Error boundary that catches crashes in individual block renderers */
+class BlockErrorBoundary extends Component<
+  { type: string; children: ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="text-xs text-muted-foreground/50 py-1">
+          Failed to render {this.props.type} block
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 /** Fallback type for unrecognized block types */
 interface UnknownBlock {
   type: string;
@@ -65,6 +90,10 @@ interface ContentBlockRendererProps {
   isVideoActive?: boolean;
   /** The timestamp (seconds) currently playing */
   activeStartSeconds?: number;
+  /** Enable inline editing for text blocks */
+  editable?: boolean;
+  /** Called when an editable block is saved */
+  onBlockEdit?: (updatedBlock: ContentBlock) => void;
 }
 
 /**
@@ -81,17 +110,49 @@ export function ContentBlockRenderer({
   onStop,
   isVideoActive,
   activeStartSeconds,
+  editable,
+  onBlockEdit,
 }: ContentBlockRendererProps) {
   // Defensive check for null/undefined or malformed block
   if (!block || typeof block !== 'object' || !('type' in block)) {
     return null;
   }
 
+  const rendered = renderBlock({ block, onSeek, onPlay, onStop, isVideoActive, activeStartSeconds, editable, onBlockEdit });
+  if (!rendered) return null;
+
+  return (
+    <BlockErrorBoundary type={block.type}>
+      {rendered}
+    </BlockErrorBoundary>
+  );
+}
+
+function renderBlock({
+  block,
+  onSeek,
+  onPlay,
+  onStop,
+  isVideoActive,
+  activeStartSeconds,
+  editable,
+  onBlockEdit,
+}: ContentBlockRendererProps): React.ReactNode {
   switch (block.type) {
     // ─────────────────────────────────────────────────────
     // Existing blocks
     // ─────────────────────────────────────────────────────
     case 'paragraph':
+      if (editable && onBlockEdit) {
+        return (
+          <div className="block-paragraph max-w-prose">
+            <InlineEditor
+              value={block.text}
+              onSave={(newText) => onBlockEdit({ ...block, text: newText })}
+            />
+          </div>
+        );
+      }
       return (
         <div className="block-paragraph max-w-prose">
           <p className="text-foreground/90 text-[15px] leading-[1.75]">

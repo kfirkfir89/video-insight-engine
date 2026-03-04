@@ -264,9 +264,7 @@ describe('stream routes', () => {
         expect(response.body).toContain('complete');
       });
 
-      it('should persist metadata to database when received', async () => {
-        const db = app.mongo.db;
-
+      it('should persist metadata via repository when received', async () => {
         const metadataEvent = 'data: {"event":"metadata","title":"Test Video","channel":"Test Channel","thumbnailUrl":"https://example.com/thumb.jpg","duration":300}\n\n';
 
         const mockReader = {
@@ -296,16 +294,16 @@ describe('stream routes', () => {
           },
         });
 
-        // Verify metadata was persisted to database by querying it
-        const updatedRecord = await db.collection('videoSummaryCache').findOne({
-          _id: new ObjectId(validVideoSummaryId),
-        });
-
-        expect(updatedRecord).toBeDefined();
-        expect(updatedRecord?.title).toBe('Test Video');
-        expect(updatedRecord?.channel).toBe('Test Channel');
-        expect(updatedRecord?.thumbnailUrl).toBe('https://example.com/thumb.jpg');
-        expect(updatedRecord?.duration).toBe(300);
+        // Verify metadata was persisted via videoRepository.updateCacheEntry
+        expect(mockContainer.videoRepository.updateCacheEntry).toHaveBeenCalledWith(
+          validVideoSummaryId,
+          {
+            title: 'Test Video',
+            channel: 'Test Channel',
+            thumbnailUrl: 'https://example.com/thumb.jpg',
+            duration: 300,
+          }
+        );
       });
     });
 

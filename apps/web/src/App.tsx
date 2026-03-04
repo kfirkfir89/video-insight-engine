@@ -21,19 +21,38 @@ const LoginPage = lazy(() =>
 const RegisterPage = lazy(() =>
   import("@/pages/RegisterPage").then((m) => ({ default: m.RegisterPage }))
 );
+const LandingPage = lazy(() =>
+  import("@/pages/LandingPage").then((m) => ({ default: m.LandingPage }))
+);
+const BoardPage = lazy(() =>
+  import("@/pages/BoardPage").then((m) => ({ default: m.BoardPage }))
+);
+const SharePage = lazy(() =>
+  import("@/pages/SharePage").then((m) => ({ default: m.SharePage }))
+);
 const DashboardPage = lazy(() =>
   import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage }))
 );
 const VideoDetailPage = lazy(() =>
-  import("@/pages/VideoDetailPage").then((m) => ({ default: m.VideoDetailPage }))
+  import("@/pages/VideoDetailPage").then((m) => ({
+    default: m.VideoDetailPage,
+  }))
 );
 
 // Dev-only pages - completely tree-shaken in production
 const DesignSystemPage = import.meta.env.DEV
-  ? lazy(() => import("@/pages/dev/DesignSystemPage").then((m) => ({ default: m.DesignSystemPage })))
+  ? lazy(() =>
+      import("@/pages/dev/DesignSystemPage").then((m) => ({
+        default: m.DesignSystemPage,
+      }))
+    )
   : null;
 const VideoExamplesPage = import.meta.env.DEV
-  ? lazy(() => import("@/pages/dev/VideoExamplesPage").then((m) => ({ default: m.VideoExamplesPage })))
+  ? lazy(() =>
+      import("@/pages/dev/VideoExamplesPage").then((m) => ({
+        default: m.VideoExamplesPage,
+      }))
+    )
   : null;
 
 // Loading fallback for lazy-loaded routes with ARIA live region
@@ -44,7 +63,10 @@ function RouteLoadingFallback() {
       role="status"
       aria-live="polite"
     >
-      <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+      <Loader2
+        className="h-8 w-8 animate-spin text-primary"
+        aria-hidden="true"
+      />
       <span className="sr-only">Loading page...</span>
     </div>
   );
@@ -56,10 +78,14 @@ function ChunkLoadError() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-4 text-center">
-      <AlertTriangle className="h-12 w-12 text-destructive" aria-hidden="true" />
+      <AlertTriangle
+        className="h-12 w-12 text-destructive"
+        aria-hidden="true"
+      />
       <h1 className="text-xl font-semibold">Failed to load page</h1>
       <p className="text-muted-foreground max-w-md">
-        There was a problem loading this page. This might be due to a network issue or a new version being deployed.
+        There was a problem loading this page. This might be due to a network
+        issue or a new version being deployed.
       </p>
       <Button onClick={handleReload} className="mt-2">
         Reload Page
@@ -101,7 +127,6 @@ function AppRoutes() {
   // Show toast when session expires and user is redirected to login
   useEffect(() => {
     if (logoutReason) {
-      // Dynamically import toast to avoid bundling in initial load
       toastModule().then(({ toast }) => {
         toast.error(logoutReason);
       });
@@ -113,10 +138,23 @@ function AppRoutes() {
     <ErrorBoundary fallback={<ChunkLoadError />}>
       <Suspense fallback={<RouteLoadingFallback />}>
         <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/s/:slug" element={<SharePage />} />
+
+          {/* Protected routes */}
           <Route
-            path="/"
+            path="/board"
+            element={
+              <ProtectedRoute>
+                <BoardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard"
             element={
               <ProtectedRoute>
                 <DashboardPage />
@@ -131,13 +169,22 @@ function AppRoutes() {
               </ProtectedRoute>
             }
           />
+
           {/* Dev-only routes - completely tree-shaken in production */}
           {import.meta.env.DEV && DesignSystemPage && (
-            <Route path="/dev/design-system" element={<DesignSystemPage />} />
+            <Route
+              path="/dev/design-system"
+              element={<DesignSystemPage />}
+            />
           )}
           {import.meta.env.DEV && VideoExamplesPage && (
-            <Route path="/dev/video-examples" element={<VideoExamplesPage />} />
+            <Route
+              path="/dev/video-examples"
+              element={<VideoExamplesPage />}
+            />
           )}
+
+          {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

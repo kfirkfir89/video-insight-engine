@@ -10,7 +10,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   logoutReason: string | null;
-
+  anonymousOutputCount: number;
   // Actions
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
@@ -19,6 +19,9 @@ interface AuthState {
   clearLogoutReason: () => void;
   checkAuth: () => Promise<void>;
   setToken: (token: string | null) => void;
+  incrementAnonymousCount: () => void;
+  resetAnonymousCount: () => void;
+  shouldShowAuthPrompt: () => boolean;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -29,11 +32,11 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: true,
       logoutReason: null,
-
+      anonymousOutputCount: 0,
       login: async (email, password) => {
         const { user, accessToken } = await authApi.login(email, password);
         setAccessToken(accessToken);
-        set({ user, accessToken, isAuthenticated: true });
+        set({ user, accessToken, isAuthenticated: true, anonymousOutputCount: 0 });
       },
 
       register: async (email, password, name) => {
@@ -43,7 +46,7 @@ export const useAuthStore = create<AuthState>()(
           name
         );
         setAccessToken(accessToken);
-        set({ user, accessToken, isAuthenticated: true });
+        set({ user, accessToken, isAuthenticated: true, anonymousOutputCount: 0 });
       },
 
       logout: () => {
@@ -92,12 +95,26 @@ export const useAuthStore = create<AuthState>()(
         setAccessToken(token);
         set({ accessToken: token });
       },
+
+      incrementAnonymousCount: () => {
+        set((state) => ({ anonymousOutputCount: state.anonymousOutputCount + 1 }));
+      },
+
+      resetAnonymousCount: () => {
+        set({ anonymousOutputCount: 0 });
+      },
+
+      shouldShowAuthPrompt: () => {
+        return get().anonymousOutputCount >= 3;
+      },
+
     }),
     {
       name: "vie-auth",
       partialize: (state) => ({
         accessToken: state.accessToken,
         user: state.user,
+        anonymousOutputCount: state.anonymousOutputCount,
       }),
     }
   )

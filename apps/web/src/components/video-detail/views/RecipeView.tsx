@@ -1,10 +1,11 @@
-import { memo, useMemo, type ReactNode } from 'react';
-import { UtensilsCrossed, ListOrdered, Lightbulb, Clock } from 'lucide-react';
+import { memo, useMemo } from 'react';
+import { UtensilsCrossed, ListOrdered, Apple, Lightbulb, Clock } from 'lucide-react';
 import type { SummaryChapter } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 import { useGroupedBlocks, type BlockGroupRule } from '@/hooks/use-grouped-blocks';
 import { useBlockProps } from '@/hooks/use-block-props';
-import { ViewLayout, LayoutSection, sidebarMainOrFallback, renderSections } from './ViewLayout';
+import { TabbedView } from '../containers/TabbedView';
+import { ViewLayout, LayoutSection, renderSections } from './ViewLayout';
 
 interface RecipeViewProps {
   chapter: SummaryChapter;
@@ -25,7 +26,8 @@ const RECIPE_RULES: readonly BlockGroupRule[] = [
 
 /**
  * Specialized view for recipe/cooking content.
- * Layout: sidebar (ingredients/info) + main (steps), full-width tips/timestamps below.
+ * Uses TabbedView: Ingredients | Steps | Nutrition tabs.
+ * Tips and timestamps shown below the tabs.
  */
 export const RecipeView = memo(function RecipeView({
   chapter,
@@ -37,79 +39,83 @@ export const RecipeView = memo(function RecipeView({
   const groups = useGroupedBlocks(chapter.content, RECIPE_RULES);
 
   const ingredientBlocks = useMemo(
-    () => [...groups.recipeInfo, ...groups.ingredients, ...groups.nutrition],
-    [groups.recipeInfo, groups.ingredients, groups.nutrition],
+    () => [...groups.recipeInfo, ...groups.ingredients],
+    [groups.recipeInfo, groups.ingredients],
   );
 
   const blockProps = useBlockProps(onPlay, onStop, isVideoActive, activeStartSeconds);
 
-  const sections: { key: string; node: ReactNode }[] = [];
+  // Build tabbed sections
+  const tabs = useMemo(() => {
+    const result = [];
 
-  const hasSidebar = ingredientBlocks.length > 0;
-  const hasSteps = groups.steps.length > 0;
-  const hasOther = groups.other.length > 0;
+    if (ingredientBlocks.length > 0) {
+      result.push({
+        id: 'ingredients',
+        label: 'Ingredients',
+        icon: <UtensilsCrossed className="h-3.5 w-3.5" />,
+        content: <ContentBlocks blocks={ingredientBlocks} {...blockProps} />,
+      });
+    }
 
-  const fallback: { key: string; node: ReactNode }[] = [];
-  if (hasSidebar) fallback.push({ key: 'ingredients', node: (
-    <LayoutSection icon={UtensilsCrossed} label="Ingredients">
-      <ContentBlocks blocks={ingredientBlocks} {...blockProps} />
-    </LayoutSection>
-  )});
-  if (hasOther) fallback.push({ key: 'other', node: (
-    <ContentBlocks blocks={groups.other} {...blockProps} />
-  )});
-  if (hasSteps) fallback.push({ key: 'steps', node: (
-    <LayoutSection icon={ListOrdered} label="Steps">
-      <ContentBlocks blocks={groups.steps} {...blockProps} />
-    </LayoutSection>
-  )});
+    if (groups.steps.length > 0) {
+      result.push({
+        id: 'steps',
+        label: 'Steps',
+        icon: <ListOrdered className="h-3.5 w-3.5" />,
+        content: <ContentBlocks blocks={groups.steps} {...blockProps} />,
+      });
+    }
 
-  sections.push(...sidebarMainOrFallback(
-    hasSidebar ? (
-      <LayoutSection icon={UtensilsCrossed} label="Ingredients">
-        <ContentBlocks blocks={ingredientBlocks} {...blockProps} />
-      </LayoutSection>
-    ) : null,
-    (hasSteps || hasOther) ? (
-      <>
-        {hasSteps && (
-          <LayoutSection icon={ListOrdered} label="Steps">
-            <ContentBlocks blocks={groups.steps} {...blockProps} />
-          </LayoutSection>
-        )}
-        {hasOther && (
-          <div className={hasSteps ? 'mt-6' : ''}>
-            <ContentBlocks blocks={groups.other} {...blockProps} />
+    if (groups.nutrition.length > 0) {
+      result.push({
+        id: 'nutrition',
+        label: 'Nutrition',
+        icon: <Apple className="h-3.5 w-3.5" />,
+        content: <ContentBlocks blocks={groups.nutrition} {...blockProps} />,
+      });
+    }
+
+    // If we have "other" blocks, add them as a general tab
+    if (groups.other.length > 0) {
+      result.push({
+        id: 'overview',
+        label: 'Overview',
+        content: <ContentBlocks blocks={groups.other} {...blockProps} />,
+      });
+    }
+
+    return result;
+  }, [ingredientBlocks, groups.steps, groups.nutrition, groups.other, blockProps]);
+
+  // Below-tabs sections
+  const belowSections = useMemo(() => {
+    const sections: { key: string; node: React.ReactNode }[] = [];
+    if (groups.tips.length > 0) {
+      sections.push({ key: 'tips', node: (
+        <LayoutSection icon={Lightbulb} label="Tips">
+          <ContentBlocks blocks={groups.tips} {...blockProps} />
+        </LayoutSection>
+      )});
+    }
+    if (groups.timestamps.length > 0) {
+      sections.push({ key: 'timestamps', node: (
+        <LayoutSection icon={Clock} label="Timestamps">
+          <div className="flex flex-wrap gap-2">
+            <ContentBlocks blocks={groups.timestamps} {...blockProps} />
           </div>
-        )}
-      </>
-    ) : null,
-    fallback,
-  ));
+        </LayoutSection>
+      )});
+    }
+    return sections;
+  }, [groups.tips, groups.timestamps, blockProps]);
 
-  if (groups.tips.length > 0) {
-    sections.push({ key: 'tips', node: (
-      <LayoutSection icon={Lightbulb} label="Tips">
-        <ContentBlocks blocks={groups.tips} {...blockProps} />
-      </LayoutSection>
-    )});
-  }
-
-  if (groups.timestamps.length > 0) {
-    sections.push({ key: 'timestamps', node: (
-      <LayoutSection icon={Clock} label="Timestamps">
-        <div className="flex flex-wrap gap-2">
-          <ContentBlocks blocks={groups.timestamps} {...blockProps} />
-        </div>
-      </LayoutSection>
-    )});
-  }
-
-  if (sections.length === 0) return null;
+  if (tabs.length === 0 && belowSections.length === 0) return null;
 
   return (
     <ViewLayout>
-      {renderSections(sections)}
+      {tabs.length > 0 && <TabbedView tabs={tabs} />}
+      {renderSections(belowSections)}
     </ViewLayout>
   );
 });

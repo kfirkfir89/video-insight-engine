@@ -3,8 +3,11 @@ import { AlertsBanner } from '../components/AlertsBanner';
 import { CostChart } from '../components/CostChart';
 import { FeatureBreakdown } from '../components/FeatureBreakdown';
 import { ModelBreakdown } from '../components/ModelBreakdown';
+import { OutputTypeChart } from '../components/OutputTypeChart';
 import { ServiceHealth } from '../components/ServiceHealth';
+import { SharesTable } from '../components/SharesTable';
 import { StatsCards } from '../components/StatsCards';
+import { TierDistribution } from '../components/TierDistribution';
 import { useUsageByVideo } from '../hooks/use-admin-api';
 import type { VideoSummaryItem } from '../lib/api';
 import { formatCost, formatNumber, formatDuration, timeAgo } from '../lib/format';
@@ -124,6 +127,14 @@ export function DashboardPage() {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <FeatureBreakdown />
+        <OutputTypeChart />
+      </div>
+
+      {/* Share + Tier analytics */}
+      <SectionDivider label="Community" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SharesTable />
+        <TierDistribution />
       </div>
 
       {/* Service health — compact at bottom */}

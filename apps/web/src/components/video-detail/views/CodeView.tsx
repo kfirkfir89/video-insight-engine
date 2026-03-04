@@ -1,9 +1,10 @@
-import { memo, type ReactNode } from 'react';
+import { memo, useMemo, type ReactNode } from 'react';
 import { Code2, GitCompare, Clock, BarChart3 } from 'lucide-react';
 import type { SummaryChapter, ContentBlockType } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 import { useGroupedBlocks, type BlockGroupRule } from '@/hooks/use-grouped-blocks';
 import { useBlockProps } from '@/hooks/use-block-props';
+import { StepThroughView } from '../containers/StepThroughView';
 import { ViewLayout, LayoutSection, sidebarMainOrFallback, renderSections } from './ViewLayout';
 
 interface CodeViewProps {
@@ -25,11 +26,8 @@ const CODE_RULES: readonly BlockGroupRule[] = [
 
 /**
  * Specialized view for code/programming content.
- * Emphasizes:
- * - Code examples and terminal commands
- * - Statistics in sidebar when available
- * - Comparisons (dos/donts, before/after)
- * - Technical concepts
+ * Uses StepThroughView for code blocks (step-by-step navigation).
+ * Stats in sidebar, comparisons/timestamps below.
  */
 export const CodeView = memo(function CodeView({
   chapter,
@@ -42,47 +40,79 @@ export const CodeView = memo(function CodeView({
 
   const blockProps = useBlockProps(onPlay, onStop, isVideoActive, activeStartSeconds);
 
+  // Build step-through items from code blocks
+  const codeSteps = useMemo(() => {
+    return groups.code.map((block, i) => ({
+      id: `code-${i}`,
+      content: <ContentBlocks blocks={[block]} {...blockProps} />,
+    }));
+  }, [groups.code, blockProps]);
+
   const sections: { key: string; node: ReactNode }[] = [];
 
   const hasStats = groups.stats.length > 0;
   const hasOther = groups.other.length > 0;
-  const hasCode = groups.code.length > 0;
+  const hasCode = codeSteps.length > 0;
 
-  const fallback: { key: string; node: ReactNode }[] = [];
-  if (hasStats) fallback.push({ key: 'stats', node: (
-    <LayoutSection icon={BarChart3} label="Stats">
-      <ContentBlocks blocks={groups.stats} {...blockProps} />
-    </LayoutSection>
-  )});
-  if (hasOther) fallback.push({ key: 'other', node: (
-    <ContentBlocks blocks={groups.other} {...blockProps} />
-  )});
-  if (hasCode) fallback.push({ key: 'code', node: (
-    <LayoutSection icon={Code2} label="Code Examples">
-      <ContentBlocks blocks={groups.code} {...blockProps} />
-    </LayoutSection>
-  )});
+  // If we have multiple code blocks, use StepThroughView
+  if (hasCode && codeSteps.length > 1) {
+    sections.push({ key: 'code-steps', node: (
+      <LayoutSection icon={Code2} label="Code Walkthrough">
+        <StepThroughView steps={codeSteps} />
+      </LayoutSection>
+    )});
 
-  sections.push(...sidebarMainOrFallback(
-    hasStats ? (
+    // Stats and other content below
+    if (hasStats || hasOther) {
+      const fallback: { key: string; node: ReactNode }[] = [];
+      if (hasStats) fallback.push({ key: 'stats', node: (
+        <LayoutSection icon={BarChart3} label="Stats">
+          <ContentBlocks blocks={groups.stats} {...blockProps} />
+        </LayoutSection>
+      )});
+      if (hasOther) fallback.push({ key: 'other', node: (
+        <ContentBlocks blocks={groups.other} {...blockProps} />
+      )});
+      sections.push(...fallback);
+    }
+  } else {
+    // Single code block or no code: use traditional layout
+    const fallback: { key: string; node: ReactNode }[] = [];
+    if (hasStats) fallback.push({ key: 'stats', node: (
       <LayoutSection icon={BarChart3} label="Stats">
         <ContentBlocks blocks={groups.stats} {...blockProps} />
       </LayoutSection>
-    ) : null,
-    (hasOther || hasCode) ? (
-      <>
-        {hasOther && <ContentBlocks blocks={groups.other} {...blockProps} />}
-        {hasCode && (
-          <div className={hasOther ? 'mt-6' : ''}>
-            <LayoutSection icon={Code2} label="Code Examples">
-              <ContentBlocks blocks={groups.code} {...blockProps} />
-            </LayoutSection>
-          </div>
-        )}
-      </>
-    ) : null,
-    fallback,
-  ));
+    )});
+    if (hasOther) fallback.push({ key: 'other', node: (
+      <ContentBlocks blocks={groups.other} {...blockProps} />
+    )});
+    if (hasCode) fallback.push({ key: 'code', node: (
+      <LayoutSection icon={Code2} label="Code Examples">
+        <ContentBlocks blocks={groups.code} {...blockProps} />
+      </LayoutSection>
+    )});
+
+    sections.push(...sidebarMainOrFallback(
+      hasStats ? (
+        <LayoutSection icon={BarChart3} label="Stats">
+          <ContentBlocks blocks={groups.stats} {...blockProps} />
+        </LayoutSection>
+      ) : null,
+      (hasOther || hasCode) ? (
+        <>
+          {hasOther && <ContentBlocks blocks={groups.other} {...blockProps} />}
+          {hasCode && (
+            <div className={hasOther ? 'mt-6' : ''}>
+              <LayoutSection icon={Code2} label="Code Examples">
+                <ContentBlocks blocks={groups.code} {...blockProps} />
+              </LayoutSection>
+            </div>
+          )}
+        </>
+      ) : null,
+      fallback,
+    ));
+  }
 
   if (groups.comparisons.length > 0) {
     sections.push({ key: 'comparisons', node: (

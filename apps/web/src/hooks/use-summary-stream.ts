@@ -8,17 +8,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { refreshToken, getAccessToken } from "@/api/client";
-import {
-  validateChapter,
-  validateConcepts,
-  validateDescriptionAnalysis,
-  validateMetadataEvent,
-  validateChaptersEvent,
-  validateSynthesisComplete,
-  validateDoneEvent,
-  validateErrorEvent,
-  validatePhaseEvent,
-} from "@/lib/sse-validators";
+import { getUserFriendlyError } from "@/lib/stream-error-messages";
+import { loadStreamCache, saveStreamCache, clearStreamCache } from "@/lib/stream-cache";
+import { processEvent } from "@/lib/stream-event-processor";
 
 // Issue #12: Import shared types from @vie/types, re-export for consumers
 import type {
@@ -31,6 +23,7 @@ import type {
   SocialLink,
   DescriptionAnalysis,
   VideoContext,
+  OutputType,
 } from "@vie/types";
 
 // Re-export types for consumers
@@ -47,79 +40,6 @@ export type {
 };
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
-
-// ─────────────────────────────────────────────────────
-// Error Message Mapping for Better UX
-// ─────────────────────────────────────────────────────
-
-/**
- * Maps error codes and raw error messages to user-friendly text.
- * Provides context-specific messages that help users understand what went wrong.
- */
-function getUserFriendlyError(message: string, code?: string): string {
-  // Error code mappings (from backend ErrorCode enum)
-  const codeMessages: Record<string, string> = {
-    NO_TRANSCRIPT: "This video doesn't have captions available. Videos need captions or subtitles to be summarized.",
-    VIDEO_TOO_LONG: "This video is too long to summarize. Maximum duration is 4 hours.",
-    VIDEO_TOO_SHORT: "This video is too short to summarize. Minimum duration is 30 seconds.",
-    VIDEO_UNAVAILABLE: "This video is unavailable. It may be private, deleted, or region-restricted.",
-    VIDEO_RESTRICTED: "This video has restrictions that prevent it from being processed.",
-    LIVE_STREAM: "Live streams cannot be summarized. Please wait until the stream ends.",
-    LLM_ERROR: "Our AI service encountered an issue. Please try again in a few moments.",
-    RATE_LIMITED: "Too many requests. Please wait a moment and try again.",
-    UNKNOWN_ERROR: "Something went wrong while processing this video. Please try again.",
-  };
-
-  // Check if we have a specific code message
-  if (code && codeMessages[code]) {
-    return codeMessages[code];
-  }
-
-  // Pattern matching for common raw error messages
-  const patterns: Array<[RegExp, string]> = [
-    [/timeout|timed out/i, "The request took too long. This video might be too complex. Please try again."],
-    [/rate limit|429/i, "Too many requests. Please wait a moment and try again."],
-    [/connection|network|fetch/i, "Connection issue. Please check your internet and try again."],
-    [/transcript.*not available|no captions/i, "This video doesn't have captions available."],
-    [/video.*unavailable|private video/i, "This video is unavailable or private."],
-    [/authentication|unauthorized|401/i, "Session expired. Please refresh the page."],
-    [/server error|500|502|503/i, "Our servers are having issues. Please try again later."],
-  ];
-
-  for (const [pattern, friendlyMessage] of patterns) {
-    if (pattern.test(message)) {
-      return friendlyMessage;
-    }
-  }
-
-  // If message is already user-friendly (starts with capital, proper sentence), keep it
-  if (/^[A-Z].*[.!]$/.test(message) && message.length < 150) {
-    return message;
-  }
-
-  // Default fallback
-  return "Something went wrong while processing this video. Please try again.";
-}
-
-// LocalStorage cache key for partial streaming state
-const STREAM_CACHE_KEY = (id: string) => `vie-stream-cache-${id}`;
-
-interface StreamCache {
-  chapters: SummaryChapter[];
-  concepts: Concept[];
-  tldr: string;
-  keyTakeaways: string[];
-  metadata: {
-    title?: string;
-    channel?: string;
-    thumbnailUrl?: string;
-    duration?: number;
-  } | null;
-  timestamp: number;
-}
-
-// Cache expiry time - 1 hour (covers most video processing scenarios)
-const CACHE_EXPIRY_MS = 60 * 60 * 1000;
 
 export type StreamPhase =
   | "idle"
@@ -177,6 +97,12 @@ export interface VideoMetadata {
   context?: VideoContext;
 }
 
+export interface DetectionResult {
+  detectedType: OutputType;
+  confidence: number;
+  alternatives: Array<{ type: string; confidence: number }>;
+}
+
 export interface StreamState {
   phase: StreamPhase;
   metadata: VideoMetadata | null;
@@ -198,6 +124,10 @@ export interface StreamState {
   chapterStatuses: Record<number, "pending" | "processing" | "completed">;
   // Warning state for partial failures (e.g., some analyses failed)
   warnings: string[];
+  // Detection result for output type override
+  detectionResult: DetectionResult | null;
+  // Celebration trigger — increment to fire a new confetti burst
+  confettiCount: number;
 }
 
 interface UseSummaryStreamOptions {
@@ -227,6 +157,8 @@ const initialState: StreamState = {
   descriptionAnalysis: null,
   chapterStatuses: {},
   warnings: [],
+  detectionResult: null,
+  confettiCount: 0,
 };
 
 // Batch interval for token updates (ms) - balance between responsiveness and performance
@@ -234,71 +166,6 @@ const TOKEN_BATCH_INTERVAL = 50;
 
 // Save interval for localStorage cache (ms) - don't save on every update
 const CACHE_SAVE_INTERVAL = 2000;
-
-/**
- * Load cached streaming state from localStorage.
- * Returns null if no cache exists or cache is expired.
- */
-function loadStreamCache(videoSummaryId: string): Partial<StreamState> | null {
-  try {
-    const cached = localStorage.getItem(STREAM_CACHE_KEY(videoSummaryId));
-    if (!cached) return null;
-
-    const data: StreamCache = JSON.parse(cached);
-
-    // Check if cache is expired
-    if (Date.now() - data.timestamp > CACHE_EXPIRY_MS) {
-      localStorage.removeItem(STREAM_CACHE_KEY(videoSummaryId));
-      return null;
-    }
-
-    // Only restore if we have meaningful data
-    if (data.chapters.length === 0 && !data.tldr && data.concepts.length === 0 && !data.metadata) {
-      return null;
-    }
-
-    return {
-      chapters: data.chapters,
-      concepts: data.concepts,
-      tldr: data.tldr,
-      keyTakeaways: data.keyTakeaways,
-      metadata: data.metadata,
-      duration: data.metadata?.duration ?? null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Save streaming state to localStorage for resumption after refresh.
- */
-function saveStreamCache(videoSummaryId: string, state: StreamState): void {
-  try {
-    const cache: StreamCache = {
-      chapters: state.chapters,
-      concepts: state.concepts,
-      tldr: state.tldr,
-      keyTakeaways: state.keyTakeaways,
-      metadata: state.metadata,
-      timestamp: Date.now(),
-    };
-    localStorage.setItem(STREAM_CACHE_KEY(videoSummaryId), JSON.stringify(cache));
-  } catch {
-    // Ignore localStorage errors (quota exceeded, etc.)
-  }
-}
-
-/**
- * Clear cached streaming state when summarization completes.
- */
-function clearStreamCache(videoSummaryId: string): void {
-  try {
-    localStorage.removeItem(STREAM_CACHE_KEY(videoSummaryId));
-  } catch {
-    // Ignore errors
-  }
-}
 
 export function useSummaryStream({
   videoSummaryId,
@@ -580,224 +447,4 @@ export function useSummaryStream({
   }, [videoSummaryId, state.phase]);
 
   return { ...state, retry, stop };
-}
-
-function processEvent(
-  event: Record<string, unknown>,
-  setState: React.Dispatch<React.SetStateAction<StreamState>>,
-  streamingTextRef: React.RefObject<string>,
-  scheduleTokenUpdate: (phase: string, text: string, index: number) => void,
-  flushTokenUpdate: () => void
-): void {
-  const eventType = event.event as string;
-
-  switch (eventType) {
-    case "cached":
-      setState((prev) => ({ ...prev, isCached: true }));
-      break;
-
-    case "phase": {
-      // Issue #11: Runtime validation for phase events
-      const phase = validatePhaseEvent(event);
-      if (phase) {
-        streamingTextRef.current = "";
-        setState((prev) => ({ ...prev, phase }));
-      }
-      break;
-    }
-
-    case "metadata": {
-      // Issue #11: Runtime validation for SSE events
-      const metadata = validateMetadataEvent(event);
-      setState((prev) => ({
-        ...prev,
-        phase: "metadata",
-        metadata,
-        duration: metadata.duration ?? null,
-      }));
-      break;
-    }
-
-    case "chapters": {
-      // Issue #11: Runtime validation for SSE events
-      const { chapters: detected, isCreatorChapters } = validateChaptersEvent(event);
-      setState((prev) => ({
-        ...prev,
-        detectedChapters: detected,
-        isCreatorChapters,
-      }));
-      break;
-    }
-
-    case "description_analysis": {
-      // Issue #11: Runtime validation for SSE events
-      const analysis = validateDescriptionAnalysis(event);
-      if (analysis) {
-        setState((prev) => ({
-          ...prev,
-          descriptionAnalysis: analysis,
-        }));
-      }
-      break;
-    }
-
-    case "transcript_ready":
-      setState((prev) => ({
-        ...prev,
-        phase: "transcript",
-        duration: event.duration as number | null,
-      }));
-      break;
-
-    case "token": {
-      const phase = event.phase as string;
-      const token = event.token as string;
-      // Use mutable ref pattern for performance - streamingTextRef.current is a string
-      streamingTextRef.current += token;
-      const currentText = streamingTextRef.current;
-
-      // Batch token updates to reduce re-renders (50ms interval)
-      scheduleTokenUpdate(phase, currentText, event.index as number);
-      break;
-    }
-
-    case "sections_detected":
-    case "chapters_detected":
-      setState((prev) => ({ ...prev, phase: "chapter_summaries" }));
-      break;
-
-    case "chapter_start":
-      // Flush any pending token updates before starting new chapter
-      flushTokenUpdate();
-      streamingTextRef.current = "";
-      setState((prev) => ({
-        ...prev,
-        currentChapterIndex: event.index as number,
-        currentChapterText: "",
-      }));
-      break;
-
-    case "chapter_complete": {
-      // Flush pending token updates before completing chapter
-      flushTokenUpdate();
-      // Issue #11: Runtime validation for SSE events
-      const chapter = validateChapter(event.chapter);
-      if (!chapter) break;
-      streamingTextRef.current = "";
-      setState((prev) => ({
-        ...prev,
-        chapters: [...prev.chapters, chapter],
-        currentChapterText: "",
-        currentChapterIndex: -1,
-      }));
-      break;
-    }
-
-    case "chapter_ready": {
-      // Flush pending token updates before chapter is ready
-      flushTokenUpdate();
-      // Issue #11: Runtime validation for SSE events
-      const index = event.index as number;
-      const chapter = validateChapter(event.chapter);
-      if (!chapter) break;
-      streamingTextRef.current = "";
-      setState((prev) => {
-        // Insert chapter at the correct index position
-        const newChapters = [...prev.chapters];
-        // Find the right insertion point to keep chapters sorted by startSeconds
-        const insertAt = newChapters.findIndex(
-          (c) => c.startSeconds > chapter.startSeconds
-        );
-        if (insertAt === -1) {
-          newChapters.push(chapter);
-        } else {
-          newChapters.splice(insertAt, 0, chapter);
-        }
-
-        // Update chapter status
-        const newStatuses = { ...prev.chapterStatuses, [index]: "completed" as const };
-
-        return {
-          ...prev,
-          chapters: newChapters,
-          chapterStatuses: newStatuses,
-          currentChapterText: "",
-          currentChapterIndex: -1,
-        };
-      });
-      break;
-    }
-
-    case "concepts_complete": {
-      // Issue #11: Runtime validation for SSE events
-      const concepts = validateConcepts(event.concepts);
-      streamingTextRef.current = "";
-      setState((prev) => ({
-        ...prev,
-        concepts,
-      }));
-      break;
-    }
-
-    case "master_summary_complete": {
-      const masterSummary = (event.masterSummary as string) || null;
-      setState((prev) => ({
-        ...prev,
-        masterSummary,
-      }));
-      break;
-    }
-
-    case "synthesis_complete": {
-      // Flush pending token updates before synthesis completes
-      flushTokenUpdate();
-      // Issue #11: Runtime validation for SSE events
-      const { tldr, keyTakeaways } = validateSynthesisComplete(event);
-      setState((prev) => ({
-        ...prev,
-        tldr,
-        keyTakeaways,
-      }));
-      break;
-    }
-
-    case "done": {
-      // Issue #11: Runtime validation for SSE events
-      const processingTimeMs = validateDoneEvent(event);
-      setState((prev) => ({
-        ...prev,
-        phase: "done",
-        processingTimeMs,
-      }));
-      break;
-    }
-
-    case "error": {
-      // Issue #11: Runtime validation for SSE events
-      const { message, code } = validateErrorEvent(event);
-      const userFriendlyError = getUserFriendlyError(message, code);
-      setState((prev) => ({
-        ...prev,
-        phase: "error",
-        error: userFriendlyError,
-      }));
-      break;
-    }
-
-    case "warning": {
-      // Handle partial failures - some analyses may have failed but processing continues
-      const message = (event.message as string) || "Some operations completed with warnings";
-      const failedTasks = (event.failedTasks as string[]) || [];
-      const warningText = failedTasks.length > 0
-        ? `${message} (failed: ${failedTasks.join(", ")})`
-        : message;
-      setState((prev) => ({
-        ...prev,
-        warnings: [...prev.warnings, warningText],
-      }));
-      // Log for debugging but don't interrupt the stream
-      console.warn("[SSE Warning]", warningText);
-      break;
-    }
-  }
 }

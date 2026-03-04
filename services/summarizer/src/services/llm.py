@@ -458,6 +458,14 @@ class LLMService:
             full_response += token
             yield ("token", token)
 
+        if not full_response.strip():
+            logger.warning(
+                "Empty response after streaming LLM (0 content tokens). "
+                "Possible causes: rate limit, content filter, or truncation. "
+                "Prompt preview: %.200s",
+                prompt[:200],
+            )
+
         # Parse the final response
         result = _parse_json_response(full_response)
         yield ("complete", result)

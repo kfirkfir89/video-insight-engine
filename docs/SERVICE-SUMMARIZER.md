@@ -40,7 +40,8 @@ services/summarizer/
     ├── middleware.py             # Request ID middleware
     │
     ├── routes/
-    │   └── stream.py             # SSE streaming endpoint
+    │   ├── stream.py             # SSE streaming endpoint
+    │   └── override.py           # Detection override endpoint
     │
     ├── services/
     │   ├── transcript.py         # YouTube transcript fetching
@@ -49,6 +50,9 @@ services/summarizer/
     │   ├── llm.py                # LLM service (prompts + orchestration)
     │   ├── llm_provider.py       # LiteLLM abstraction layer
     │   ├── usage_tracker.py      # LLM usage tracking
+    │   ├── output_type.py        # Category → OutputType mapping
+    │   ├── cross_chapter_consolidation.py # Cross-chapter data merging
+    │   ├── prompt_builders.py    # Prompt template construction
     │   ├── playlist.py           # Playlist extraction (yt-dlp)
     │   ├── sponsorblock.py       # Sponsor segment detection
     │   ├── gemini_transcriber.py  # Gemini Flash transcription (fast, cheap)
@@ -398,6 +402,51 @@ MODEL_MAP = {
 
 ---
 
+## Output Type System
+
+The summarizer determines an `outputType` from the detected video category. This controls prompt framing (e.g., "create a recipe" vs "summarize") and enables cross-chapter consolidation.
+
+### Category → OutputType Mapping
+
+| Category | OutputType | Label |
+|----------|-----------|-------|
+| cooking | recipe | Recipe |
+| coding | tutorial | Tutorial |
+| fitness | workout | Workout Plan |
+| education | study_guide | Study Guide |
+| travel | travel_plan | Travel Plan |
+| reviews | review | Review |
+| podcast | podcast_notes | Podcast Notes |
+| diy | diy_guide | DIY Guide |
+| gaming | game_guide | Game Guide |
+| music | music_guide | Music Guide |
+| (default) | summary | Summary |
+
+### Cross-Chapter Consolidation
+
+For certain output types, scattered data across chapters is merged into coherent outputs:
+
+| OutputType | Consolidation |
+|-----------|---------------|
+| recipe | Merge ingredients + cooking steps (with dedup) |
+| tutorial | Merge code/terminal/file_tree blocks in order |
+| workout | Merge exercise + workout_timer blocks |
+| travel_plan | Merge itinerary/location/cost blocks |
+| (others) | No consolidation (chapter structure preserved) |
+
+### SSE Events (Pipeline V2)
+
+| Event | Phase | Data |
+|-------|-------|------|
+| `detection_result` | 1 (after metadata) | `{category, outputType, confidence}` |
+| `metadata` | 1 | Now includes `outputType` field |
+
+### Detection Override
+
+Users can override the detected category during processing via `POST /override/{video_summary_id}`. This changes the persona and outputType for remaining chapters. Already-processed chapters keep their original output.
+
+---
+
 ## Output Schema
 
 ```python
@@ -716,6 +765,31 @@ Trigger regeneration of an existing video summary.
 **Error Codes:**
 - `400`: Invalid video summary ID format
 - `404`: Video summary not found
+
+### POST /override/{video_summary_id}
+
+Override detected category during active pipeline processing. Affects remaining chapters only.
+
+**Request:**
+```json
+{
+  "category": "fitness"
+}
+```
+
+**Response (200):**
+```json
+{
+  "category": "fitness",
+  "outputType": "workout",
+  "outputTypeLabel": "Workout Plan",
+  "persona": "fitness"
+}
+```
+
+**Error Codes:**
+- `422`: Invalid category (returns list of valid categories)
+- `503`: Override capacity reached
 
 ### GET /health
 

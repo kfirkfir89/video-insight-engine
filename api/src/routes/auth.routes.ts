@@ -45,6 +45,8 @@ export async function authRoutes(fastify: FastifyInstance) {
   const { authService } = fastify.container;
 
   // POST /api/auth/register
+  // TODO: v1.5 — Accept optional referralSlug in registration body, store on user record
+  // Frontend: if user came from /s/:slug, include slug in registration request
   fastify.post<{
     Body: z.infer<typeof registerSchema>;
   }>('/register', {

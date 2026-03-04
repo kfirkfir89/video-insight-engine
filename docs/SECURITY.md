@@ -153,6 +153,14 @@ fastify.post("/logout", async (req, reply) => {
 | `POST /videos`        | 10    | 24 hours | User  |
 | `GET /explain/*`      | 60    | 1 hour   | User  |
 | `POST /explain/chat`  | 100   | 1 hour   | User  |
+| `POST /share/:id`     | 20    | 1 hour   | User  |
+| `GET /share/:slug`    | 100   | 1 min    | User  |
+| `POST /share/:slug/like` | 10 | 1 min   | IP    |
+| `GET /s/:slug`        | 60    | 1 min    | IP    |
+| `GET /s/:slug/og-image.png` | 30 | 1 min | IP    |
+| `POST /payments/webhook` | none | -     | Signature verified |
+| `GET /payments/checkout` | 10  | 1 hour  | User  |
+| `GET /payments/tier`  | 60    | 1 min    | User  |
 | `* (default)`         | 100   | 1 min    | User  |
 
 ### Implementation
@@ -298,7 +306,23 @@ networks:
   vie-internal: # Internal only (workers)
 ```
 
-### Service-to-Service Auth (Future)
+### Webhook Authentication (v1.4)
+
+Paddle webhooks are verified using HMAC signature:
+
+```typescript
+// api/src/services/payment.service.ts
+verifyWebhook(rawBody: string, signature: string): boolean {
+  // Paddle-Signature header contains ts= and h1= components
+  // Verify using HMAC-SHA256 with PADDLE_WEBHOOK_SECRET
+}
+```
+
+- **Production:** Signature verification is mandatory
+- **Development:** Skipped when `PADDLE_WEBHOOK_SECRET` is empty
+- **Idempotent:** Webhook events are processed idempotently (safe to replay)
+
+### Service-to-Service Auth
 
 For production, add API keys between services:
 
@@ -336,11 +360,14 @@ await fastify.register(helmet, {
 
 ### Required Secrets
 
-| Secret               | Where Used            | How to Generate           |
-| -------------------- | --------------------- | ------------------------- |
-| `JWT_SECRET`         | vie-api               | `openssl rand -base64 32` |
-| `JWT_REFRESH_SECRET` | vie-api               | `openssl rand -base64 32` |
-| `ANTHROPIC_API_KEY`  | summarizer, explainer | Anthropic Console         |
+| Secret                 | Where Used            | How to Generate           |
+| ---------------------- | --------------------- | ------------------------- |
+| `JWT_SECRET`           | vie-api               | `openssl rand -base64 32` |
+| `JWT_REFRESH_SECRET`   | vie-api               | `openssl rand -base64 32` |
+| `ANTHROPIC_API_KEY`    | summarizer, explainer | Anthropic Console         |
+| `PADDLE_WEBHOOK_SECRET`| vie-api               | Paddle Dashboard          |
+| `PADDLE_API_KEY`       | vie-api (future)      | Paddle Dashboard          |
+| `INTERNAL_SECRET`      | service-to-service    | `openssl rand -base64 32` |
 
 ### Production Setup
 

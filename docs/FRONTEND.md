@@ -50,13 +50,16 @@ apps/web/
     │   ├── folders.ts
     │   ├── videos.ts
     │   ├── memorize.ts
-    │   └── explain.ts
+    │   ├── explain.ts
+    │   └── share.ts              # Share link API client
     │
     ├── components/
     │   ├── ui/                   # shadcn components
     │   │
     │   ├── layout/
-    │   │   └── Layout.tsx              # Sidebar + main content (no header)
+    │   │   ├── Layout.tsx              # Sidebar + main content (no header)
+    │   │   ├── MobileBottomNav.tsx     # Fixed bottom nav (md:hidden)
+    │   │   └── MobileFAB.tsx           # Floating action button (md:hidden)
     │   │
     │   ├── video-detail/
     │   │   ├── VideoDetailLayout.tsx     # Orchestrator (responsive)
@@ -67,7 +70,15 @@ apps/web/
     │   │   ├── video-detail-types.ts     # Shared TypeScript types
     │   │   ├── FlowRowRenderer.tsx       # Shared auto-flow row renderer (5 row types)
     │   │   ├── SectionCard.tsx
-    │   │   ├── ContentBlockRenderer.tsx  # Dynamic content blocks
+    │   │   ├── ContentBlockRenderer.tsx  # Dynamic content blocks (editable prop)
+    │   │   ├── DetectionOverride.tsx    # Output type override dropdown
+    │   │   ├── InlineEditor.tsx         # contentEditable wrapper
+    │   │   ├── containers/              # Interactive view containers
+    │   │   │   ├── TabbedView.tsx       # Glass pill tabs, ARIA compliant
+    │   │   │   ├── SwipeableView.tsx    # Touch gesture nav
+    │   │   │   ├── StepThroughView.tsx  # Step-by-step navigator
+    │   │   │   ├── ProgressView.tsx     # Completion tracking (localStorage)
+    │   │   │   └── TimerView.tsx        # Countdown timer
     │   │   ├── blocks/                   # V2.1 Block Component Library
     │   │   │   ├── __tests__/            # Unit tests (18 files)
     │   │   │   ├── index.ts              # Barrel export
@@ -97,8 +108,10 @@ apps/web/
     │   │   └── views/                    # Persona-specific views
     │   │       ├── ViewLayout.tsx           # Layout primitives (row, column, section)
     │   │       ├── SectionHeader.tsx
-    │   │       ├── CodeView.tsx
-    │   │       ├── RecipeView.tsx
+    │   │       ├── CodeView.tsx             # Uses StepThroughView container
+    │   │       ├── RecipeView.tsx           # Uses TabbedView container
+    │   │       ├── EducationView.tsx        # Uses ProgressView container
+    │   │       ├── FitnessView.tsx          # Uses TimerView container
     │   │       └── StandardView.tsx         # Uses auto-flow layout engine
     │   │
     │   ├── rag/                          # RAG Components
@@ -134,6 +147,10 @@ apps/web/
     │   ├── playlists/
     │   │   └── PlaylistPreview.tsx
     │   │
+    │   ├── board/
+    │   │   ├── BoardCard.tsx           # Output card with gradient + emoji
+    │   │   └── BoardGrid.tsx           # CSS columns masonry layout
+    │   │
     │   └── memorize/
     │       ├── MemorizedGrid.tsx
     │       ├── MemorizedCard.tsx
@@ -145,8 +162,10 @@ apps/web/
     │   ├── useVideos.ts
     │   ├── use-playlists.ts
     │   ├── useMemorized.ts
-    │   ├── use-summary-stream.ts     # SSE streaming for video detail
+    │   ├── use-summary-stream.ts     # SSE streaming + detection_result + confetti
     │   ├── use-processing-manager.ts # Auto-resume & sidebar sync
+    │   ├── use-share.ts             # Share link creation + clipboard
+    │   ├── use-output-state.ts      # Mutable block state + undo/redo
     │   ├── use-websocket.ts          # Real-time updates
     │   ├── use-long-press.ts         # Long press gesture hook
     │   ├── use-syntax-highlight.ts  # Shiki async syntax highlighting
@@ -156,12 +175,15 @@ apps/web/
     │
     ├── pages/
     │   ├── LoginPage.tsx
+    │   ├── LandingPage.tsx          # Public homepage with URL input
+    │   ├── BoardPage.tsx            # Pinterest-style masonry grid
+    │   ├── SharePage.tsx            # Public share view (/s/:slug)
     │   ├── DashboardPage.tsx
     │   ├── VideoPage.tsx
     │   └── MemorizedPage.tsx
     │
     ├── stores/
-    │   ├── auth-store.ts
+    │   ├── auth-store.ts        # Auth + anonymous generation tracking
     │   ├── processing-store.ts  # Video processing state
     │   └── ui-store.ts
     │
@@ -169,6 +191,7 @@ apps/web/
         ├── utils.ts
         ├── api.ts
         ├── query-keys.ts
+        ├── output-type-config.ts  # OutputType → emoji, gradient, label, accent
         ├── block-labels.ts        # i18n-ready block labels
         ├── block-layout.ts        # Block sizing, spacing matrix, sidebar classification
         ├── auto-flow-layout.ts    # Content-aware auto-flow layout engine
@@ -180,13 +203,50 @@ apps/web/
 
 ## Routes
 
-| Path             | Page          | Description             |
-| ---------------- | ------------- | ----------------------- |
-| `/login`         | LoginPage     | Sign in                 |
-| `/register`      | RegisterPage  | Sign up                 |
-| `/`              | DashboardPage | Two-tab interface       |
-| `/video/:id`     | VideoPage     | Video detail + sections |
-| `/memorized/:id` | MemorizedPage | Item detail + chat      |
+| Path             | Page          | Auth       | Description                         |
+| ---------------- | ------------- | ---------- | ----------------------------------- |
+| `/`              | LandingPage   | Public     | URL input, live examples            |
+| `/login`         | LoginPage     | Public     | Sign in                             |
+| `/register`      | RegisterPage  | Public     | Sign up                             |
+| `/board`         | BoardPage     | Protected  | Pinterest masonry grid (home)       |
+| `/video/:id`     | VideoPage     | Protected  | Video detail + sections             |
+| `/memorized/:id` | MemorizedPage | Protected  | Item detail + chat                  |
+| `/s/:slug`       | SharePage     | Public     | Public read-only shared output      |
+| `/dashboard`     | DashboardPage | Protected  | Two-tab interface (legacy)          |
+
+---
+
+## Theme System
+
+### Architecture
+
+Theme uses `data-theme` attribute on `<html>` with three modes:
+
+| Mode     | Behavior                                      |
+| -------- | --------------------------------------------- |
+| `dark`   | Forces dark theme (`data-theme="dark"`)       |
+| `light`  | Forces light theme (`data-theme="light"`)     |
+| `system` | No attribute set — CSS `prefers-color-scheme` controls |
+
+### Key Files
+
+- **`theme-context.ts`** — `Theme = "dark" | "light" | "system"`, context + provider types
+- **`theme-provider.tsx`** — Sets `document.documentElement.dataset.theme`, listens to `matchMedia` for system mode, uses View Transitions API for smooth crossfade
+- **`index.html`** — FOUC prevention script reads `localStorage('vie-theme')` and sets `data-theme` before React loads
+
+### Color Palette (OKLCH)
+
+- **Primary**: VIE palette (replaces violet-indigo)
+- **Accents**: 8 tokens — `--vie-coral`, `--vie-plum`, `--vie-sky`, `--vie-mint`, `--vie-honey`, `--vie-rose`, `--vie-forest`, `--vie-peach`
+- **Per-output gradients**: Each output type has a unique gradient token
+- **Light mode**: Cool blue-gray (hue ~250), low chroma
+- **Dark mode**: Warm amber-brown (hue ~55), low chroma
+
+### Fonts
+
+- **Body**: Inter (variable, Google Fonts)
+- **Code**: JetBrains Mono (subset, Google Fonts)
+- Loaded via `<link>` in `index.html` with `font-display: swap`
 
 ---
 
@@ -226,7 +286,7 @@ export default defineConfig({
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme inline {
   /* Colors (OKLCH for better gradients) */

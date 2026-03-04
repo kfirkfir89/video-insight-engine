@@ -4,6 +4,7 @@ CHAPTER: {title}
 CONTENT:
 {content}
 
+{output_type_framing}
 {extra_instruction}
 {concept_extraction_section}
 {concepts_anchor}
@@ -12,14 +13,10 @@ PERSONA CONTEXT:
 
 YOUR MISSION: Transform this chapter into content that reads like part of a well-crafted article. Choose the format that BEST serves this specific content - don't default to the same format every time. Use the persona context above to guide your block type and variant choices.
 
-Return JSON only (no other text):
+Return JSON only (no other text). The "content" array should contain 2-7 content blocks based on chapter length. Mix and match block types based on what the content needs. Use variants appropriate to the persona when applicable.
 {{
   "view": "cooking|coding|reviews|travel|fitness|education|podcast|diy|gaming|standard",
-  "content": [
-    // Array of content blocks - use 2-7 blocks based on chapter length
-    // Mix and match types based on what the content needs
-    // Use variants appropriate to the persona when applicable
-  ]{concepts_field}{generated_title_field}
+  "content": []{concepts_field}{generated_title_field}
 }}
 
 AVAILABLE CONTENT BLOCK TYPES:

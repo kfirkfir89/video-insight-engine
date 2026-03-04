@@ -132,6 +132,22 @@ class MongoDBVideoRepository:
         if "context" in result and result["context"]:
             update_data["context"] = result["context"]
 
+        # Add output type at top level for querying/filtering
+        if "output_type" in result:
+            update_data["outputType"] = result["output_type"]
+
+        # Add total tokens (sum of prompt + completion) for usage tracking
+        token_usage = result.get("token_usage", {})
+        total_tokens = token_usage.get("total_tokens", 0) or (
+            token_usage.get("prompt_tokens", 0) + token_usage.get("completion_tokens", 0)
+        )
+        if total_tokens:
+            update_data["totalTokens"] = total_tokens
+
+        # Add consolidated cross-chapter data if present
+        if "consolidated" in result and result["consolidated"]:
+            update_data["consolidated"] = result["consolidated"]
+
         # Add S3 reference for raw transcript (Phase 3 - transcript storage)
         if "raw_transcript_ref" in result:
             update_data["rawTranscriptRef"] = result["raw_transcript_ref"]

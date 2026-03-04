@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { highlightCode } from '@/lib/syntax-highlighter';
 import { useTheme } from '@/hooks/use-theme';
+import { resolveTheme } from '@/components/theme-context';
 
 interface UseSyntaxHighlightResult {
   html: string | null;
@@ -29,7 +30,9 @@ export function useSyntaxHighlight(
     let cancelled = false;
     setIsLoading(true);
 
-    highlightCode(code, language, theme)
+    const resolvedTheme = resolveTheme(theme);
+
+    highlightCode(code, language, resolvedTheme)
       .then((result) => {
         if (!cancelled) {
           setHtml(result || null);

@@ -1,11 +1,21 @@
+// TODO: v1.5 Phase 2 — Add react-swipeable for touch gestures on mobile (desktop-first MVP)
 import { memo } from "react";
-import { ExternalLink, StopCircle, Radio, CheckCircle, Clock, BookOpen, Lightbulb, Loader2 } from "lucide-react";
+import { ExternalLink, StopCircle, Radio, CheckCircle, Clock, BookOpen, Lightbulb, Loader2, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { formatDuration, timeAgo } from "@/lib/string-utils";
 import { VideoTags } from "./VideoTags";
-import type { VideoResponse, VideoSummary } from "@vie/types";
+import { DetectionOverride } from "./DetectionOverride";
+import type { VideoResponse, VideoSummary, OutputType } from "@vie/types";
+import type { DetectionResult } from "@/hooks/use-summary-stream";
+
+export interface VideoHeroShareProps {
+  detectionResult?: DetectionResult | null;
+  onOverrideOutputType?: (type: OutputType) => void;
+  onShare?: () => void;
+  isSharing?: boolean;
+}
 
 interface VideoHeroProps {
   video: VideoResponse;
@@ -17,6 +27,8 @@ interface VideoHeroProps {
   actions?: React.ReactNode;
   className?: string;
   streamingPhaseLabel?: string;
+  /** Detection override + share controls */
+  share?: VideoHeroShareProps;
 }
 
 /** Shared toolbar for stop/primary/actions — avoids duplicating JSX. */
@@ -59,7 +71,9 @@ export const VideoHero = memo(function VideoHero({
   actions,
   className,
   streamingPhaseLabel,
+  share,
 }: VideoHeroProps) {
+  const { detectionResult, onOverrideOutputType, onShare, isSharing } = share ?? {};
   const youtubeUrl = video.youtubeId
     ? `https://youtube.com/watch?v=${video.youtubeId}`
     : null;
@@ -84,7 +98,7 @@ export const VideoHero = memo(function VideoHero({
         {thumbnailUrl && (
           <img
             src={thumbnailUrl}
-            alt=""
+            alt={video.title}
             className="hidden sm:block w-48 max-w-[33%] self-stretch rounded-tl-xl object-cover shrink-0"
             fetchPriority="high"
             decoding="async"
@@ -156,6 +170,33 @@ export const VideoHero = memo(function VideoHero({
           {/* Tags */}
           {video.context?.displayTags && video.context.displayTags.length > 0 && (
             <VideoTags tags={video.context.displayTags} className="mt-1.5" />
+          )}
+
+          {/* Detection override + share */}
+          {(detectionResult || onShare) && (
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {detectionResult && onOverrideOutputType && (
+                <DetectionOverride
+                  detectedType={detectionResult.detectedType}
+                  confidence={detectionResult.confidence}
+                  alternatives={detectionResult.alternatives}
+                  onOverride={onOverrideOutputType}
+                />
+              )}
+              {onShare && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1 h-7 py-0 px-2 text-xs"
+                  onClick={onShare}
+                  disabled={isSharing}
+                  aria-label="Share this summary"
+                >
+                  <Share2 className="h-3 w-3" />
+                  {isSharing ? "Sharing..." : "Share"}
+                </Button>
+              )}
+            </div>
           )}
 
           {/* Inline streaming phase indicator */}

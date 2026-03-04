@@ -6,6 +6,7 @@ import { VideoRepository } from './repositories/video.repository.js';
 import { FolderRepository } from './repositories/folder.repository.js';
 import { MemorizeRepository } from './repositories/memorize.repository.js';
 import { UserRepository } from './repositories/user.repository.js';
+import { ShareRepository } from './repositories/share.repository.js';
 
 // Services
 import { AuthService } from './services/auth.service.js';
@@ -15,6 +16,10 @@ import { MemorizeService } from './services/memorize.service.js';
 import { PlaylistService } from './services/playlist.service.js';
 import { SummarizerClient } from './services/summarizer-client.js';
 import { ExplainerClient } from './services/explainer-client.js';
+import { ShareService } from './services/share.service.js';
+import { OgImageService } from './services/og-image.service.js';
+import { PaymentService } from './services/payment.service.js';
+import { CostMonitorService } from './services/cost-monitor.service.js';
 
 export interface Container {
   // Repositories
@@ -22,6 +27,7 @@ export interface Container {
   folderRepository: FolderRepository;
   memorizeRepository: MemorizeRepository;
   userRepository: UserRepository;
+  shareRepository: ShareRepository;
 
   // Services
   authService: AuthService;
@@ -31,6 +37,10 @@ export interface Container {
   playlistService: PlaylistService;
   summarizerClient: SummarizerClient;
   explainerClient: ExplainerClient;
+  shareService: ShareService;
+  ogImageService: OgImageService;
+  paymentService: PaymentService;
+  costMonitorService: CostMonitorService;
 }
 
 export function createContainer(db: Db, logger: FastifyBaseLogger): Container {
@@ -39,6 +49,7 @@ export function createContainer(db: Db, logger: FastifyBaseLogger): Container {
   const folderRepository = new FolderRepository(db);
   const memorizeRepository = new MemorizeRepository(db);
   const userRepository = new UserRepository(db);
+  const shareRepository = new ShareRepository(db);
 
   // Create external clients
   const summarizerClient = new SummarizerClient(logger);
@@ -50,6 +61,10 @@ export function createContainer(db: Db, logger: FastifyBaseLogger): Container {
   const folderService = new FolderService(folderRepository, logger);
   const memorizeService = new MemorizeService(memorizeRepository, videoRepository, logger);
   const playlistService = new PlaylistService(videoService, folderService, summarizerClient, logger);
+  const shareService = new ShareService(shareRepository, videoRepository, logger);
+  const ogImageService = new OgImageService(logger);
+  const paymentService = new PaymentService(userRepository, videoRepository, logger);
+  const costMonitorService = new CostMonitorService(db, logger);
 
   return {
     // Repositories
@@ -57,6 +72,7 @@ export function createContainer(db: Db, logger: FastifyBaseLogger): Container {
     folderRepository,
     memorizeRepository,
     userRepository,
+    shareRepository,
 
     // Services
     authService,
@@ -66,6 +82,10 @@ export function createContainer(db: Db, logger: FastifyBaseLogger): Container {
     playlistService,
     summarizerClient,
     explainerClient,
+    shareService,
+    ogImageService,
+    paymentService,
+    costMonitorService,
   };
 }
 

@@ -56,6 +56,57 @@ export type SourceType =
 export type TargetType = 'section' | 'concept';
 
 // ─────────────────────────────────────────────────────
+// User Types (V1.5)
+// ─────────────────────────────────────────────────────
+
+/** User theme preference for persistence across devices */
+export type ThemePreference = 'system' | 'light' | 'dark';
+
+/**
+ * User record stored in MongoDB `users` collection.
+ * Optional fields (?) are safe for pre-v1.4 documents — mark required after backfill confirmed.
+ * @migration Mark `tier` required after backfill-v1.4.ts confirmed on production.
+ */
+export interface User {
+  _id: string;
+  email: string;
+  name: string;
+  /** Unique public handle. Sparse unique index — null until user sets one. */
+  username?: string | null;
+  /** Display name for public profiles. Falls back to `name` if absent. */
+  displayName?: string | null;
+  /** @migration Mark required after backfill-v1.4.ts confirmed */
+  tier?: UserTier;
+  /** Persisted theme preference. Synced from frontend via PATCH /users/me/preferences. */
+  themePreference?: ThemePreference;
+  /** Share slug that referred this user during signup */
+  referralSlug?: string | null;
+  /** Paddle customer ID for payment integration */
+  paddleCustomerId?: string | null;
+  /** Paddle subscription ID for active subscription tracking */
+  paddleSubscriptionId?: string | null;
+  createdAt: string;  // ISO date
+  updatedAt: string;  // ISO date
+}
+
+// ─────────────────────────────────────────────────────
+// Like Collection Type (V1.5)
+// ─────────────────────────────────────────────────────
+
+/**
+ * Like record stored in MongoDB `likes` collection.
+ * Compound unique index: `{ outputId, ipHash }` — prevents duplicate likes.
+ */
+export interface Like {
+  _id: string;
+  outputId: string;
+  userId?: string | null;
+  /** SHA-256 hash of IP for dedup without storing raw IPs */
+  ipHash: string;
+  createdAt: string;  // ISO date
+}
+
+// ─────────────────────────────────────────────────────
 // Video Context Types
 // ─────────────────────────────────────────────────────
 
@@ -83,6 +134,99 @@ export interface VideoContext {
   tags: string[];
   displayTags: string[];
   categoryConfidence?: number; // Detection confidence (0.0-1.0), used internally
+}
+
+// ─────────────────────────────────────────────────────
+// Output Type (V1.4 — Category-to-Output Mapping)
+// ─────────────────────────────────────────────────────
+
+/** Output type determines the rendering template for a video summary */
+export type OutputType =
+  | 'recipe'
+  | 'tutorial'
+  | 'workout'
+  | 'study_guide'
+  | 'travel_plan'
+  | 'review'
+  | 'podcast_notes'
+  | 'diy_guide'
+  | 'game_guide'
+  | 'music_guide'
+  | 'summary';
+
+/**
+ * SINGLE SOURCE OF TRUTH for category → output type mapping.
+ * All services import or mirror this mapping:
+ *   - Python (summarizer): services/summarizer/src/services/output_type.py
+ *   - Python (explainer):  services/explainer/src/utils/output_type.py
+ * When updating this map, update both Python mirrors.
+ */
+export const CATEGORY_TO_OUTPUT_TYPE: Record<VideoCategory, OutputType> = {
+  cooking: 'recipe',
+  coding: 'tutorial',
+  fitness: 'workout',
+  education: 'study_guide',
+  travel: 'travel_plan',
+  reviews: 'review',
+  podcast: 'podcast_notes',
+  diy: 'diy_guide',
+  gaming: 'game_guide',
+  music: 'music_guide',
+  standard: 'summary',
+} as const;
+
+/** Pre-computed set of valid output types for validation */
+export const VALID_OUTPUT_TYPES: ReadonlySet<string> = new Set(Object.values(CATEGORY_TO_OUTPUT_TYPE));
+
+// ─────────────────────────────────────────────────────
+// User Tier & Limits (V1.4 — Monetization)
+// ─────────────────────────────────────────────────────
+
+/** User subscription tier */
+export type UserTier = 'free' | 'pro' | 'team';
+
+/** Rate limits and feature flags per tier */
+export interface TierLimits {
+  videosPerDay: number;    // -1 = unlimited
+  chatPerOutput: number;   // -1 = unlimited
+  shareEnabled: boolean;
+  exportEnabled: boolean;
+}
+
+/** Tier configuration. -1 means unlimited. */
+export const TIER_LIMITS: Record<UserTier, TierLimits> = {
+  free: { videosPerDay: 3, chatPerOutput: 5, shareEnabled: true, exportEnabled: false },
+  pro: { videosPerDay: -1, chatPerOutput: -1, shareEnabled: true, exportEnabled: true },
+  team: { videosPerDay: -1, chatPerOutput: -1, shareEnabled: true, exportEnabled: true },
+} as const;
+
+// ─────────────────────────────────────────────────────
+// Share Types (V1.4 — Public Sharing)
+// ─────────────────────────────────────────────────────
+
+/** Sharing metadata attached to a VideoSummary */
+export interface ShareInfo {
+  shareSlug: string;
+  sharedAt: string;        // ISO date
+  viewsCount: number;
+  likesCount: number;
+}
+
+/** Public-facing video summary for shared/embed pages (no auth required) */
+export interface PublicVideoSummary {
+  id: string;
+  youtubeId: string;
+  title: string;
+  channel: string | null;
+  thumbnailUrl: string | null;
+  duration: number | null;
+  outputType: OutputType;
+  context: VideoContext | null;
+  summary: VideoSummary;
+  shareSlug: string;
+  viewsCount: number;
+  likesCount: number;
+  sharedAt: string;        // ISO date
 }
 
 // ─────────────────────────────────────────────────────
@@ -555,6 +699,8 @@ export interface VideoSummary {
   rawTranscriptRef?: string | null;
   /** Generation metadata for tracking prompt versions and regeneration */
   generation?: GenerationMetadata;
+  /** Output type derived from video category (V1.4) */
+  outputType?: OutputType;
 }
 
 // ─────────────────────────────────────────────────────
@@ -725,11 +871,7 @@ export interface PlaylistImportResult {
 export interface AuthResponse {
   accessToken: string;
   expiresIn: number;
-  user: {
-    id: string;
-    email: string;
-    name: string;
-  };
+  user: Pick<User, 'email' | 'name'> & { id: string };
 }
 
 export interface VideoResponse {
@@ -752,6 +894,12 @@ export interface VideoResponse {
   context?: VideoContext;
   // Playlist context (if video was added via playlist import)
   playlistInfo?: PlaylistInfo;
+  // Output type derived from video category (V1.4)
+  outputType?: OutputType;
+  // Sharing metadata (V1.4)
+  shareInfo?: ShareInfo;
+  /** TTL expiration date (ISO). Present on free-tier outputs after Pro downgrade. */
+  expiresAt?: string;
 }
 
 export interface FolderResponse {
@@ -832,6 +980,15 @@ export interface SSEMetadataEvent {
   thumbnailUrl: string | null;
   duration: number;
   context?: VideoContext;
+  outputType?: OutputType;
+}
+
+/** SSE event emitted when category detection completes (V1.4) */
+export interface SSEDetectionEvent {
+  event: 'detection_result';
+  category: VideoCategory;
+  outputType: OutputType;
+  confidence: number;
 }
 
 export interface SSEChaptersEvent {
@@ -906,7 +1063,8 @@ export type SSEStreamEvent =
   | SSEDoneEvent
   | SSEPhaseEvent
   | SSETokenEvent
-  | SSEErrorEvent;
+  | SSEErrorEvent
+  | SSEDetectionEvent;
 
 // ─────────────────────────────────────────────────────
 // Error Types
@@ -938,6 +1096,15 @@ export const ErrorCodes = {
   PLAYLIST_EXTRACTION_FAILED: 'PLAYLIST_EXTRACTION_FAILED',
   PLAYLIST_TOO_LARGE: 'PLAYLIST_TOO_LARGE',
   URL_MODE_MISMATCH: 'URL_MODE_MISMATCH',
+
+  // Share (V1.4)
+  SHARE_NOT_FOUND: 'SHARE_NOT_FOUND',
+  SHARE_ALREADY_EXISTS: 'SHARE_ALREADY_EXISTS',
+
+  // Tier & Payment (V1.4)
+  TIER_LIMIT_EXCEEDED: 'TIER_LIMIT_EXCEEDED',
+  PAYMENT_FAILED: 'PAYMENT_FAILED',
+  PAYMENT_REQUIRED: 'PAYMENT_REQUIRED',
 
   // General
   NOT_FOUND: 'NOT_FOUND',

@@ -36,6 +36,7 @@ from src.services.concept_processing import (
     build_concept_dicts,
     extract_concept_short_form,
 )
+from src.services.output_type import get_output_type_label
 
 logger = logging.getLogger(__name__)
 
@@ -262,6 +263,7 @@ class ChapterContext(BaseModel):
     title: str = ""
     has_creator_title: bool = False
     persona: str = "standard"
+    output_type: str = "summary"
     # Persona name used as fallback hint for view resolution.
     # Accepts persona names (e.g., 'code', 'recipe'), NOT category names ('coding', 'cooking').
     # Maps through PERSONA_CATEGORY_MAP internally in block_postprocessing.resolve_view().
@@ -298,6 +300,42 @@ class ChapterSummaryRequest(BaseModel):
     accuracy: AccuracyHints = Field(default_factory=AccuracyHints)
 
 
+# Short critical reminder per output type — persona prompts carry the full instructions
+_OUTPUT_TYPE_REMINDERS: dict[str, str] = {
+    "recipe": "A missing ingredient or step makes the recipe unusable.",
+    "tutorial": "Every step must be reproducible without watching the video.",
+    "workout": "Include ALL exercises with sets, reps, and rest periods.",
+    "study_guide": "Maintain the teaching progression from simple to complex.",
+    "travel_plan": "Include ALL locations, costs, and transport details.",
+    "review": "Include ALL pros, cons, and the reviewer's verdict.",
+    "podcast_notes": "Attribute ALL statements to the correct speaker.",
+    "diy_guide": "Include ALL materials, tools, and safety warnings.",
+    "game_guide": "Be specific about game mechanics and strategies.",
+    "music_guide": "Include ALL credits and production details.",
+}
+
+
+def build_output_type_framing(output_type: str) -> str:
+    """Build output type framing text for prompt injection.
+
+    Provides a short structural reinforcement of the output type.
+    Detailed instructions live in the persona prompt files — this
+    framing only adds the OUTPUT TYPE label and one critical reminder.
+
+    Args:
+        output_type: Output type string (e.g. "recipe", "tutorial").
+
+    Returns:
+        Framing text to inject into the prompt, or empty string for "summary".
+    """
+    if not output_type or output_type == "summary":
+        return ""
+
+    label = get_output_type_label(output_type)
+    reminder = _OUTPUT_TYPE_REMINDERS.get(output_type, "Create comprehensive, actionable content.")
+    return f"OUTPUT TYPE: {label}\n{reminder}"
+
+
 def build_chapter_prompt(req: ChapterSummaryRequest) -> tuple[str, int]:
     """Build the chapter summary prompt and max_tokens from a ChapterSummaryRequest.
 
@@ -311,6 +349,7 @@ def build_chapter_prompt(req: ChapterSummaryRequest) -> tuple[str, int]:
     fact_sheet = build_fact_sheet(req.accuracy.facts)
     guest_attribution = build_guest_attribution(req.accuracy.guest_names)
     diversity_instruction = build_diversity_instruction(req.accuracy.prev_chapter_block_types)
+    output_type_framing = build_output_type_framing(req.context.output_type)
 
     concepts_anchor = build_concepts_anchor(req.concept_names)
     concept_extraction_section, concepts_field, max_tokens = build_concept_prompt_parts(
@@ -336,6 +375,7 @@ def build_chapter_prompt(req: ChapterSummaryRequest) -> tuple[str, int]:
         fact_sheet=fact_sheet,
         guest_attribution=guest_attribution,
         diversity_instruction=diversity_instruction,
+        output_type_framing=output_type_framing,
     )
     return prompt, max_tokens
 

@@ -17,6 +17,7 @@ from src.models.schemas import (
 from src.dependencies import get_video_repository, get_mongo_client
 from src.repositories.mongodb_repository import MongoDBVideoRepository
 from src.routes.stream import router as stream_router
+from src.routes.override import router as override_router
 from src.services.chapter_pipeline import shutdown_background_validations
 from src.services.frame_extractor import check_dependencies as check_frame_deps
 
@@ -59,6 +60,7 @@ add_request_context_middleware(app)
 
 # Register routers
 app.include_router(stream_router)
+app.include_router(override_router)
 
 
 @app.get("/health")

@@ -61,3 +61,19 @@ export function useAlertsRecent(limit = 20) {
 export function useAlertConfig() {
   return useQuery({ queryKey: ['alert-config'], queryFn: () => api.alerts.config() });
 }
+
+export function useUsageByOutputType(days = 30) {
+  return useQuery({ queryKey: ['usage-by-output-type', days], queryFn: () => api.usage.byOutputType(days) });
+}
+
+export function useSharesTop(days = 30, limit = 10) {
+  return useQuery({ queryKey: ['shares-top', days, limit], queryFn: () => api.shares.top(days, limit) });
+}
+
+export function useSharesStats(days = 30) {
+  return useQuery({ queryKey: ['shares-stats', days], queryFn: () => api.shares.stats(days) });
+}
+
+export function useTierDistribution() {
+  return useQuery({ queryKey: ['tier-distribution'], queryFn: () => api.tiers.distribution() });
+}

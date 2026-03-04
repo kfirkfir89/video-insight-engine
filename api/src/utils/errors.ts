@@ -176,6 +176,67 @@ export class UrlModeMismatchError extends AppError {
   }
 }
 
+// Share-specific errors
+export class ShareNotFoundError extends AppError {
+  constructor() {
+    super('SHARE_NOT_FOUND', 404, 'Shared summary not found');
+    this.name = 'ShareNotFoundError';
+  }
+}
+
+export class AlreadySharedError extends AppError {
+  constructor(slug: string) {
+    super('ALREADY_SHARED', 409, `Video is already shared at /s/${slug}`);
+    this.name = 'AlreadySharedError';
+  }
+}
+
+export class ShareNotAllowedError extends AppError {
+  constructor() {
+    super('SHARE_NOT_ALLOWED', 403, 'Sharing is not available on your current tier');
+    this.name = 'ShareNotAllowedError';
+  }
+}
+
+// Override-specific errors
+export class InvalidCategoryError extends AppError {
+  constructor(category: string) {
+    super('INVALID_CATEGORY', 400, `Invalid category: ${category}`);
+    this.name = 'InvalidCategoryError';
+  }
+}
+
+// Payment-specific errors
+export class PaymentError extends AppError {
+  constructor(message = 'Payment processing failed') {
+    super('PAYMENT_ERROR', 500, message);
+    this.name = 'PaymentError';
+  }
+}
+
+export class InvalidWebhookError extends AppError {
+  constructor(message = 'Invalid webhook signature') {
+    super('INVALID_WEBHOOK', 400, message);
+    this.name = 'InvalidWebhookError';
+  }
+}
+
+// Tier-specific errors
+export class TierLimitExceededError extends AppError {
+  constructor(resource: string, limit: number) {
+    super('TIER_LIMIT_EXCEEDED', 403, `${resource} limit reached (${limit}). Upgrade your plan for more.`);
+    this.name = 'TierLimitExceededError';
+  }
+}
+
+// Cost-specific errors
+export class CostLimitExceededError extends AppError {
+  constructor() {
+    super('COST_LIMIT_EXCEEDED', 503, 'Daily LLM cost limit exceeded. Service temporarily unavailable.');
+    this.name = 'CostLimitExceededError';
+  }
+}
+
 // External service errors
 export class ServiceTimeoutError extends AppError {
   constructor(service: string) {

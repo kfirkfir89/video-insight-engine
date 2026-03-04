@@ -316,6 +316,54 @@ db.userChats.createIndex({ userId: 1, memorizedItemId: 1 })
 
 ---
 
+## Production Architecture
+
+### Deployment Topology
+
+| Component       | Host     | Purpose                                |
+| --------------- | -------- | -------------------------------------- |
+| vie-web (SPA)   | Vercel   | Static React app, edge CDN             |
+| vie-api         | Railway  | Node.js backend, all API routes        |
+| vie-summarizer  | Railway  | Python summarizer service              |
+| vie-explainer   | Railway  | Python MCP server                      |
+| vie-admin       | Railway  | Admin panel (Python + React)           |
+| vie-mongodb     | Railway  | MongoDB 7 database                     |
+
+### SSR for Shared Pages
+
+Shared video summaries are accessible at `/s/:slug`. Vercel rewrites these requests
+to the Railway-hosted API for server-side rendering of Open Graph metadata:
+
+```
+Browser ──► Vercel Edge ──► /s/:slug rewrite ──► Railway API (vie-api)
+                                                    │
+                                                    ▼
+                                              GET /api/share/:slug/ssr
+                                              Returns full HTML with OG tags
+```
+
+- Vercel serves the SPA for all other routes (client-side routing)
+- `/s/*` routes are rewritten to `https://api.vie.app/api/share/:slug/ssr`
+- Edge cache: 60s TTL (`s-maxage=60`), 300s stale-while-revalidate
+- This enables rich link previews on social platforms (Twitter, Discord, Slack)
+
+### CI/CD
+
+- **GitHub Actions** runs tests on push to `main` / `dev-*` branches and on PRs to `main`
+- Four parallel jobs: api, web, summarizer, explainer
+- All jobs must pass before merge (fail-fast)
+- See `.github/workflows/ci.yml` for configuration
+
+### Vercel Configuration
+
+- Config file: `vercel.json` at project root
+- Build: `cd apps/web && pnpm build`
+- Output: `apps/web/dist`
+- Framework: Vite
+- Rewrites and cache headers configured for `/s/*` share routes
+
+---
+
 ## Implementation History
 
 This section documents the MVP implementation phases that were followed to build the system.

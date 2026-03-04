@@ -480,9 +480,10 @@ class TestHelperFunctions:
             ),
         )
 
-        context_dict, persona = extract_context(video_data)
+        context_dict, persona, output_type = extract_context(video_data)
 
         assert persona == "code"
+        assert output_type == "tutorial"
         assert context_dict["youtubeCategory"] == "Science & Technology"
         assert context_dict["category"] == "coding"
 
@@ -501,9 +502,10 @@ class TestHelperFunctions:
             context=None,
         )
 
-        context_dict, persona = extract_context(video_data)
+        context_dict, persona, output_type = extract_context(video_data)
 
         assert persona == "standard"
+        assert output_type == "summary"
         assert context_dict is None
 
 

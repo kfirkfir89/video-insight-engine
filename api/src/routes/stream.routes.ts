@@ -122,17 +122,13 @@ export async function streamRoutes(fastify: FastifyInstance) {
               const event = JSON.parse(data);
               // Persist metadata to DB when received so title is available after refresh
               if (event.event === 'metadata' && event.title) {
-                await db.collection('videoSummaryCache').updateOne(
-                  { _id: new ObjectId(videoSummaryId) },
-                  {
-                    $set: {
-                      title: event.title,
-                      channel: event.channel,
-                      thumbnailUrl: event.thumbnailUrl,
-                      duration: event.duration,
-                    },
-                  }
-                );
+                const { videoRepository } = fastify.container;
+                await videoRepository.updateCacheEntry(videoSummaryId, {
+                  title: event.title,
+                  channel: event.channel,
+                  thumbnailUrl: event.thumbnailUrl,
+                  duration: event.duration,
+                });
 
                 // Broadcast metadata to frontend via WebSocket for sidebar sync
                 fastify.broadcast(req.user.userId, {
@@ -145,6 +141,17 @@ export async function streamRoutes(fastify: FastifyInstance) {
                     duration: event.duration,
                   },
                 });
+              }
+
+              // Persist detection result (category + outputType) when received
+              if (event.event === 'detection_result' && event.outputType) {
+                const { videoService } = fastify.container;
+                await videoService.persistDetectionResult(
+                  videoSummaryId,
+                  event.outputType,
+                  event.category,
+                  event.confidence
+                );
               }
             } catch (err) {
               // Log parse errors in development for debugging

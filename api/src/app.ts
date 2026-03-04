@@ -11,6 +11,7 @@ import { jwtPlugin } from './plugins/jwt.js';
 import { corsPlugin } from './plugins/cors.js';
 import { rateLimitPlugin } from './plugins/rate-limit.js';
 import { websocketPlugin } from './plugins/websocket.js';
+import { tierPlugin } from './plugins/tier.js';
 
 // Routes
 import { authRoutes } from './routes/auth.routes.js';
@@ -21,6 +22,12 @@ import { memorizeRoutes } from './routes/memorize.routes.js';
 import { explainRoutes } from './routes/explain.routes.js';
 import { internalRoutes } from './routes/internal.routes.js';
 import { streamRoutes } from './routes/stream.routes.js';
+import { shareRoutes } from './routes/share.routes.js';
+import { ssrRoutes } from './routes/ssr.routes.js';
+import { overrideRoutes } from './routes/override.routes.js';
+import { paymentRoutes } from './routes/payment.routes.js';
+import { preferencesRoutes } from './routes/preferences.routes.js';
+import { blocksRoutes } from './routes/blocks.routes.js';
 
 export interface BuildAppOptions {
   logger?: FastifyServerOptions['logger'];
@@ -29,6 +36,10 @@ export interface BuildAppOptions {
 }
 
 export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstance> {
+  // TODO: v1.5 — Initialize PostHog analytics when POSTHOG_API_KEY is set
+  // npm install posthog-node, then: new PostHog(config.POSTHOG_API_KEY)
+  // Track: output_created, output_shared, output_viewed, paywall_shown, paywall_converted
+
   const isDev = config.NODE_ENV === 'development';
 
   const fastify = Fastify({
@@ -78,6 +89,9 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   }
   fastify.decorate('container', container);
 
+  // Tier middleware (after JWT, uses container)
+  await fastify.register(tierPlugin);
+
   // Global error handler
   fastify.setErrorHandler((error, request, reply) => {
     // Zod validation errors
@@ -123,10 +137,18 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   await fastify.register(foldersRoutes, { prefix: '/api/folders' });
   await fastify.register(videosRoutes, { prefix: '/api/videos' });
   await fastify.register(streamRoutes, { prefix: '/api/videos' });  // Streaming SSE route
+  await fastify.register(overrideRoutes, { prefix: '/api/videos' }); // Override category
   await fastify.register(playlistsRoutes, { prefix: '/api/playlists' });
   await fastify.register(memorizeRoutes, { prefix: '/api/memorize' });
   await fastify.register(explainRoutes, { prefix: '/api/explain' });
+  await fastify.register(shareRoutes, { prefix: '/api/share' });
+  await fastify.register(paymentRoutes, { prefix: '/api/payments' });
+  await fastify.register(preferencesRoutes, { prefix: '/api/users/me/preferences' });
+  await fastify.register(blocksRoutes, { prefix: '/api/videos' });  // Block editing
   await fastify.register(internalRoutes, { prefix: '/internal' });
+
+  // SSR routes (top-level, no /api prefix — for social media crawlers)
+  await fastify.register(ssrRoutes);
 
   // Health check
   fastify.get('/health', async () => ({
