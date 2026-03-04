@@ -107,6 +107,38 @@ export interface VideoDetailResponse {
   }>;
 }
 
+// --- New Analytics Types ---
+
+export interface OutputTypeUsage {
+  output_type: string;
+  cost_usd: number;
+  calls: number;
+  tokens: number;
+}
+
+export interface ShareItem {
+  title: string;
+  youtubeId: string;
+  shareSlug: string;
+  viewsCount: number;
+  likesCount: number;
+  sharedAt: string | null;
+  outputType: string;
+}
+
+export interface ShareStats {
+  total_shared: number;
+  total_views: number;
+  total_likes: number;
+  avg_views: number;
+}
+
+export interface TierItem {
+  tier: string;
+  count: number;
+  percentage: number;
+}
+
 // Usage endpoints
 export const api = {
   usage: {
@@ -120,6 +152,14 @@ export const api = {
     anomalies: (threshold = 0.5, days = 7) => apiFetch<Array<Record<string, unknown>>>(`/usage/anomalies${qs({ threshold_usd: threshold, days })}`),
     recent: (limit = 20, beforeId?: string) => apiFetch<Array<Record<string, unknown>>>(`/usage/recent${qs({ limit, before_id: beforeId })}`),
     duplicates: (days = 7) => apiFetch<Array<Record<string, unknown>>>(`/usage/duplicates${qs({ days })}`),
+    byOutputType: (days = 30) => apiFetch<OutputTypeUsage[]>(`/usage/by-output-type${qs({ days })}`),
+  },
+  shares: {
+    top: (days = 30, limit = 10) => apiFetch<ShareItem[]>(`/shares/top${qs({ days, limit })}`),
+    stats: (days = 30) => apiFetch<ShareStats>(`/shares/stats${qs({ days })}`),
+  },
+  tiers: {
+    distribution: () => apiFetch<TierItem[]>('/tiers/distribution'),
   },
   health: {
     services: () => apiFetch<Record<string, { status: string; response_ms?: number }>>('/health/services'),

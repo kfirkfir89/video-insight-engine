@@ -1,0 +1,80 @@
+/* ═══════════════════════════════════════════════════
+   FLOW GRID — Container Query Adaptive Columns
+   Grids that adapt to container width, not viewport.
+   Used by FlowRowRenderer for multi-column layouts.
+
+   NOTE: Container queries cannot use CSS variables as
+   breakpoint values. Actual values are hardcoded below.
+   Keep in sync:
+     2col       = 400px
+     2col-wide  = 500px
+     3col       = 600px
+     4col       = 700px
+   ═══════════════════════════════════════════════════ */
+
+/* Container definition — applied to chapters wrapper */
+.content-container {
+  container-type: inline-size;
+  container-name: content;
+}
+
+/* equal-2: 2 columns at 500px+ container, single column below */
+.flow-grid-equal-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+@container content (min-width: 500px) {
+  .flow-grid-equal-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* equal-3: 3 columns at 600px+, 2 at 400px+, single below */
+.flow-grid-equal-3 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+@container content (min-width: 400px) {
+  .flow-grid-equal-3 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@container content (min-width: 600px) {
+  .flow-grid-equal-3 {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+
+/* equal-4: 4 columns at 700px+, 3 at 600px+, 2 at 400px+, single below */
+.flow-grid-equal-4 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+@container content (min-width: 400px) {
+  .flow-grid-equal-4 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@container content (min-width: 600px) {
+  .flow-grid-equal-4 {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+@container content (min-width: 700px) {
+  .flow-grid-equal-4 {
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   SECTION & UTILITY STYLES
+   ═══════════════════════════════════════════════════ */
+
+/* Block entrance animation — gentle fade-slide */
+.block-entrance {
+  opacity: 0;
+  animation: var(--animate-fade-slide-up);
+}

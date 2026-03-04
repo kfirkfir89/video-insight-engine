@@ -1,0 +1,126 @@
+/* ═══════════════════════════════════════════════════
+   CATEGORY ACCENT COLORS
+   Per-content-type theming. Each .category-* class sets:
+     --category-accent     → main color (hex)
+     --category-accent-soft → translucent background (rgba)
+     --category-surface    → very light tinted surface
+   Dark mode overrides reduce soft/surface opacity.
+   ═══════════════════════════════════════════════════ */
+
+/* Focus states - required for keyboard navigation */
+:root {
+  --focus-ring: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+}
+
+/* Respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.category-cooking {
+  --category-accent: oklch(68% 0.20 30);
+  --category-accent-soft: oklch(68% 0.20 30 / 0.08);
+  --category-surface: oklch(97% 0.01 60);
+}
+
+.category-coding {
+  --category-accent: oklch(80% 0.12 200);
+  --category-accent-soft: oklch(80% 0.12 200 / 0.08);
+  --category-surface: oklch(97% 0.01 200);
+}
+
+.category-travel {
+  --category-accent: oklch(72% 0.14 165);
+  --category-accent-soft: oklch(72% 0.14 165 / 0.08);
+  --category-surface: oklch(97% 0.01 165);
+}
+
+.category-reviews {
+  --category-accent: oklch(80% 0.16 85);
+  --category-accent-soft: oklch(80% 0.16 85 / 0.08);
+  --category-surface: oklch(97% 0.01 85);
+}
+
+.category-fitness {
+  --category-accent: oklch(63% 0.22 25);
+  --category-accent-soft: oklch(63% 0.22 25 / 0.08);
+  --category-surface: oklch(97% 0.01 25);
+}
+
+.category-education {
+  --category-accent: oklch(55% 0.20 290);
+  --category-accent-soft: oklch(55% 0.20 290 / 0.08);
+  --category-surface: oklch(97% 0.01 290);
+}
+
+.category-podcast {
+  --category-accent: oklch(65% 0.20 340);
+  --category-accent-soft: oklch(65% 0.20 340 / 0.08);
+  --category-surface: oklch(97% 0.01 340);
+}
+
+.category-gaming {
+  --category-accent: oklch(55% 0.20 270);
+  --category-accent-soft: oklch(55% 0.20 270 / 0.08);
+  --category-surface: oklch(97% 0.01 270);
+}
+
+.category-diy {
+  --category-accent: oklch(68% 0.16 70);
+  --category-accent-soft: oklch(68% 0.16 70 / 0.08);
+  --category-surface: oklch(97% 0.01 70);
+}
+
+.category-standard {
+  --category-accent: oklch(58% 0.01 250);
+  --category-accent-soft: oklch(58% 0.01 250 / 0.06);
+  --category-surface: oklch(97% 0.005 250);
+}
+
+/* Dark mode category overrides */
+:is([data-theme="dark"]) .category-cooking {
+  --category-accent-soft: oklch(68% 0.20 30 / 0.06);
+  --category-surface: oklch(68% 0.20 30 / 0.04);
+}
+:is([data-theme="dark"]) .category-coding {
+  --category-accent-soft: oklch(80% 0.12 200 / 0.06);
+  --category-surface: oklch(80% 0.12 200 / 0.04);
+}
+:is([data-theme="dark"]) .category-travel {
+  --category-accent-soft: oklch(72% 0.14 165 / 0.06);
+  --category-surface: oklch(72% 0.14 165 / 0.04);
+}
+:is([data-theme="dark"]) .category-reviews {
+  --category-accent-soft: oklch(80% 0.16 85 / 0.06);
+  --category-surface: oklch(80% 0.16 85 / 0.04);
+}
+:is([data-theme="dark"]) .category-fitness {
+  --category-accent-soft: oklch(63% 0.22 25 / 0.06);
+  --category-surface: oklch(63% 0.22 25 / 0.04);
+}
+:is([data-theme="dark"]) .category-education {
+  --category-accent-soft: oklch(55% 0.20 290 / 0.06);
+  --category-surface: oklch(55% 0.20 290 / 0.04);
+}
+:is([data-theme="dark"]) .category-podcast {
+  --category-accent-soft: oklch(65% 0.20 340 / 0.06);
+  --category-surface: oklch(65% 0.20 340 / 0.04);
+}
+:is([data-theme="dark"]) .category-gaming {
+  --category-accent-soft: oklch(55% 0.20 270 / 0.06);
+  --category-surface: oklch(55% 0.20 270 / 0.04);
+}
+:is([data-theme="dark"]) .category-diy {
+  --category-accent-soft: oklch(68% 0.16 70 / 0.06);
+  --category-surface: oklch(68% 0.16 70 / 0.04);
+}
+:is([data-theme="dark"]) .category-standard {
+  --category-accent-soft: oklch(58% 0.01 250 / 0.05);
+  --category-surface: oklch(58% 0.01 250 / 0.04);
+}

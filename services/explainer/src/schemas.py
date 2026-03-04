@@ -70,6 +70,7 @@ class VideoSummary(BaseModel):
     id: str
     youtubeId: str
     title: str
+    output_type: str = "summary"
     sections: list[VideoSummarySection] = Field(default_factory=list)
     concepts: list[VideoSummaryConcept] = Field(default_factory=list)
 

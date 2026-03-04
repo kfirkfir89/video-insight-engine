@@ -4,11 +4,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from src.services.override_state import _overrides
 from src.services.pipeline_helpers import (
     ChapterProcessingContext,
     PipelineTimer,
     PostprocessContext,
     TranscriptData,
+    apply_override,
 )
 
 
@@ -87,3 +89,70 @@ class TestTranscriptData:
         )
         assert td.raw_text == "hello world"
         assert td.source == "ytdlp"
+
+
+class TestApplyOverride:
+    """Test apply_override() composition function."""
+
+    @pytest.fixture(autouse=True)
+    def clean_overrides(self):
+        _overrides.clear()
+        yield
+        _overrides.clear()
+
+    def test_returns_ctx_defaults_when_no_override(self):
+        ctx = ChapterProcessingContext(
+            llm_service=MagicMock(),
+            persona="code",
+            normalized_segments=[],
+            output_type="tutorial",
+            video_summary_id="vid-1",
+        )
+        persona, output_type = apply_override(ctx)
+        assert persona == "code"
+        assert output_type == "tutorial"
+
+    def test_returns_ctx_defaults_when_no_video_summary_id(self):
+        ctx = ChapterProcessingContext(
+            llm_service=MagicMock(),
+            persona="recipe",
+            normalized_segments=[],
+            output_type="recipe",
+        )
+        persona, output_type = apply_override(ctx)
+        assert persona == "recipe"
+        assert output_type == "recipe"
+
+    def test_returns_override_when_present(self):
+        _overrides["vid-1"] = {
+            "category": "fitness",
+            "persona": "fitness",
+            "output_type": "workout",
+        }
+        ctx = ChapterProcessingContext(
+            llm_service=MagicMock(),
+            persona="code",
+            normalized_segments=[],
+            output_type="tutorial",
+            video_summary_id="vid-1",
+        )
+        persona, output_type = apply_override(ctx)
+        assert persona == "fitness"
+        assert output_type == "workout"
+
+    def test_ignores_override_for_different_id(self):
+        _overrides["vid-other"] = {
+            "category": "fitness",
+            "persona": "fitness",
+            "output_type": "workout",
+        }
+        ctx = ChapterProcessingContext(
+            llm_service=MagicMock(),
+            persona="code",
+            normalized_segments=[],
+            output_type="tutorial",
+            video_summary_id="vid-1",
+        )
+        persona, output_type = apply_override(ctx)
+        assert persona == "code"
+        assert output_type == "tutorial"

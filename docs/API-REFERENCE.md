@@ -719,6 +719,184 @@ List chats for memorized item.
 
 ---
 
+## Share
+
+### POST /share/:videoSummaryId
+
+Generate a share link for a video summary. Auth required.
+
+**Rate Limit:** 20 per hour
+
+**Response (201):**
+
+```json
+{
+  "shareSlug": "aBcDeFgHiJ",
+  "shareUrl": "/s/aBcDeFgHiJ"
+}
+```
+
+---
+
+### GET /share/:slug
+
+Get public summary by share slug. No auth required.
+
+**Rate Limit:** 100 per minute
+
+**Response (200):**
+
+```json
+{
+  "id": "507f1f77bcf86cd799439020",
+  "youtubeId": "dQw4w9WgXcQ",
+  "title": "React Hooks Tutorial",
+  "channel": "Fireship",
+  "thumbnailUrl": "https://img.youtube.com/...",
+  "duration": 1200,
+  "outputType": "tutorial",
+  "context": { "category": "coding", "tags": ["react"] },
+  "summary": { "tldr": "...", "chapters": [...] },
+  "shareSlug": "aBcDeFgHiJ",
+  "viewsCount": 42,
+  "likesCount": 7,
+  "sharedAt": "2026-03-01T10:00:00Z"
+}
+```
+
+---
+
+### POST /share/:slug/like
+
+Like a shared summary. No auth, IP rate limited.
+
+**Rate Limit:** 10 per minute per IP
+
+**Response (200):**
+
+```json
+{
+  "likesCount": 8
+}
+```
+
+---
+
+## Override
+
+### PATCH /videos/:id/override-category
+
+Override the detected category for a video. Auth required.
+
+**Request:**
+
+```json
+{
+  "category": "cooking"
+}
+```
+
+**Response (200):**
+
+```json
+{
+  "videoSummaryId": "507f1f77bcf86cd799439020",
+  "category": "cooking",
+  "outputType": "recipe",
+  "previousCategory": "standard"
+}
+```
+
+**Valid categories:** `cooking`, `coding`, `fitness`, `travel`, `education`, `podcast`, `reviews`, `gaming`, `diy`, `music`, `standard`
+
+---
+
+## Payments
+
+### POST /payments/webhook
+
+Paddle webhook handler. Verifies signature in production.
+
+**Headers:** `Paddle-Signature` or `X-Paddle-Signature`
+
+**Response (200):**
+
+```json
+{
+  "received": true
+}
+```
+
+**Handled events:**
+- `subscription.created` — set tier to 'pro' or 'team'
+- `subscription.updated` — update tier
+- `subscription.cancelled` — schedule downgrade
+- `subscription.past_due` — grace period
+
+---
+
+### GET /payments/checkout
+
+Generate Paddle checkout URL. Auth required.
+
+**Rate Limit:** 10 per hour
+
+**Query:** `?tier=pro|team`
+
+**Response (200):**
+
+```json
+{
+  "checkoutUrl": "https://checkout.paddle.com/..."
+}
+```
+
+---
+
+### GET /payments/tier
+
+Get current user tier and limits. Auth required.
+
+**Rate Limit:** 60 per minute
+
+**Response (200):**
+
+```json
+{
+  "tier": "free",
+  "limits": {
+    "videosPerDay": 3,
+    "chatPerOutput": 5,
+    "shareEnabled": true,
+    "exportEnabled": false
+  }
+}
+```
+
+---
+
+## SSR (Server-Side Rendered)
+
+### GET /s/:slug
+
+Server-side rendered share page with OG meta tags for social previews. No `/api` prefix.
+
+**Rate Limit:** 60 per minute
+
+**Response:** `text/html` with OG tags, Twitter Cards, JSON-LD, and redirect to frontend app.
+
+---
+
+### GET /s/:slug/og-image.png
+
+Dynamic OG image for social preview cards.
+
+**Rate Limit:** 30 per minute
+
+**Response:** `image/png` with 24h cache header.
+
+---
+
 ## Error Responses
 
 All errors follow this format:
@@ -733,11 +911,13 @@ All errors follow this format:
 
 Common error codes:
 
-- `400` - Bad Request (validation)
+- `400` - Bad Request (validation), `INVALID_CATEGORY`, `INVALID_WEBHOOK`
 - `401` - Unauthorized
-- `404` - Not Found
-- `409` - Conflict (duplicate)
-- `500` - Internal Server Error
+- `403` - Forbidden: `TIER_LIMIT_EXCEEDED`, `SHARE_NOT_ALLOWED`
+- `404` - Not Found: `SHARE_NOT_FOUND`
+- `409` - Conflict: `ALREADY_SHARED`
+- `500` - Internal Server Error, `PAYMENT_ERROR`
+- `503` - Service Unavailable: `COST_LIMIT_EXCEEDED`
 
 ---
 
@@ -1160,7 +1340,8 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
 | Event | Phase | Description |
 |-------|-------|-------------|
 | `phase` | All | Indicates which processing phase started |
-| `metadata` | 1 | Video metadata (title, channel, duration, context with category) |
+| `metadata` | 1 | Video metadata (title, channel, duration, context with category, outputType) |
+| `detection_result` | 1 | Category detection result with outputType and confidence |
 | `chapters` | 1 | Creator chapters if available |
 | `sponsor_segments` | 1 | SponsorBlock segments |
 | `transcript_ready` | 1 | Transcript extraction complete |
@@ -1268,12 +1449,26 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
   "channel": "Fireship",
   "duration": 627,
   "thumbnailUrl": "https://i.ytimg.com/vi/xxx/maxresdefault.jpg",
+  "outputType": "tutorial",
   "context": {
     "category": "coding",
     "youtubeCategory": "Science & Technology",
     "tags": ["react", "javascript", "hooks", "programming"],
     "displayTags": ["#React", "#JavaScript", "#Hooks"]
   }
+}
+```
+
+### detection_result
+
+Emitted after metadata, before chapter processing. Reports the detected category and output type.
+
+```json
+{
+  "event": "detection_result",
+  "category": "coding",
+  "outputType": "tutorial",
+  "confidence": 0.92
 }
 ```
 

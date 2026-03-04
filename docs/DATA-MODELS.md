@@ -264,7 +264,25 @@ Category is detected independently using **weighted scoring** (not derived from 
 
 ### Valid Categories
 
-`cooking`, `coding`, `fitness`, `travel`, `education`, `podcast`, `reviews`, `gaming`, `diy`, `standard`
+`cooking`, `coding`, `fitness`, `travel`, `education`, `podcast`, `reviews`, `gaming`, `diy`, `music`, `standard`
+
+### Category to OutputType Mapping (v1.4)
+
+OutputType is what the system produces — derived from category:
+
+| Category | OutputType | Label |
+|----------|-----------|-------|
+| `cooking` | `recipe` | Recipe |
+| `coding` | `tutorial` | Tutorial |
+| `fitness` | `workout` | Workout |
+| `education` | `study_guide` | Study Guide |
+| `travel` | `travel_plan` | Travel Plan |
+| `reviews` | `review` | Review |
+| `podcast` | `podcast_notes` | Podcast Notes |
+| `diy` | `diy_guide` | DIY Guide |
+| `gaming` | `game_guide` | Game Guide |
+| `music` | `music_guide` | Music Guide |
+| `standard` | `summary` | Summary |
 
 ### Category to Persona Mapping
 
@@ -362,6 +380,30 @@ One entry per YouTube video. Shared across all users.
     }]
   } | null,
 
+  // Output type (v1.4)
+  outputType: "recipe" | "tutorial" | "workout" | "study_guide" | "travel_plan" |
+              "review" | "podcast_notes" | "diy_guide" | "game_guide" |
+              "music_guide" | "summary",    // Default: "summary"
+
+  // Share metadata (v1.4)
+  shareSlug: string | null,         // nanoid 10-char URL-safe slug (unique when set)
+  sharedAt: Date | null,            // When shared
+  viewsCount: number,               // Default: 0
+  likesCount: number,               // Default: 0
+  likedIps: string[],               // Hashed IPs for dedup
+
+  // Expiration (v1.4) — TTL index fires on non-null Date
+  expiresAt: Date | null,           // null = never expires (pro/team), Date = will be removed
+
+  // Consolidated data (v1.4) — cross-chapter merged blocks
+  consolidated: {
+    ingredients?: ContentBlock[],   // Recipe: all ingredients merged
+    steps?: ContentBlock[],         // Recipe: all steps merged
+    code?: ContentBlock[],          // Tutorial: all code blocks
+    exercises?: ContentBlock[],     // Workout: all exercises
+    // ... per output-type
+  } | null,
+
   // Cache metadata
   version: number,
   processedAt: Date | null,
@@ -373,6 +415,7 @@ One entry per YouTube video. Shared across all users.
     output: number,
     cost: number                    // USD
   } | null,
+  totalTokens: number,              // Sum of input + output tokens (v1.4)
 
   // S3 media storage
   rawTranscriptRef: string | null,  // S3 key: "videos/{youtubeId}/transcript.json"
@@ -393,6 +436,9 @@ One entry per YouTube video. Shared across all users.
 ```javascript
 { youtubeId: 1 }    // unique
 { status: 1 }
+{ outputType: 1 }                   // v1.4 — filter by output type
+{ shareSlug: 1 }                    // v1.4 — unique sparse (only indexed when non-null)
+{ expiresAt: 1 }                    // v1.4 — TTL index (expireAfterSeconds: 0)
 ```
 
 ---
@@ -455,23 +501,26 @@ One entry per chapter/concept expansion. Shared across all users.
   email: string,                  // unique
   passwordHash: string,           // bcrypt
   name: string,
-  
+
+  // Tier (v1.4) — free, pro, team
+  tier: "free" | "pro" | "team",  // Default: "free"
+
   // Activity tracking
   lastLoginAt: Date | null,
-  
+
   // Preferences
   preferences: {
     defaultSummarizedFolder: ObjectId | null,
     defaultMemorizedFolder: ObjectId | null,
     theme: "light" | "dark" | "system"
   },
-  
+
   // Usage limits (for rate limiting)
   usage: {
     videosThisMonth: number,
     videosResetAt: Date           // First of month
   },
-  
+
   createdAt: Date,
   updatedAt: Date
 }
@@ -480,6 +529,7 @@ One entry per chapter/concept expansion. Shared across all users.
 **Indexes:**
 ```javascript
 { email: 1 }  // unique
+{ tier: 1 }   // v1.4 — filter/aggregate by tier
 ```
 
 ---

@@ -14,6 +14,8 @@ from src.auth import ApiKeyMiddleware
 from src.dependencies import close_mongo_client, get_database, init_mongo_client
 from src.routes.alerts import router as alerts_router
 from src.routes.health import router as health_router
+from src.routes.shares import router as shares_router
+from src.routes.tiers import router as tiers_router
 from src.routes.usage import router as usage_router
 from src.services.aggregator import aggregate_daily
 from src.services.health_checker import health_poller_loop
@@ -83,6 +85,8 @@ app.add_middleware(ApiKeyMiddleware)
 app.include_router(usage_router)
 app.include_router(health_router)
 app.include_router(alerts_router)
+app.include_router(shares_router)
+app.include_router(tiers_router)
 
 
 @app.get("/health")

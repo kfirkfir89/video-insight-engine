@@ -25,6 +25,15 @@ const envSchema = z.object({
   PLAYLIST_IMPORT_RATE_LIMIT: z.string().default('5').transform(Number),
   // Video creation daily limit (0 = unlimited for admins/dev)
   VIDEO_DAILY_LIMIT: z.string().default('100').transform(Number),
+  // Payment (Paddle)
+  PADDLE_WEBHOOK_SECRET: z.string().default(''),
+  PADDLE_PRO_PRICE_ID: z.string().default(''),
+  PADDLE_TEAM_PRICE_ID: z.string().default(''),
+  // Cost monitoring
+  COST_DAILY_LIMIT: z.string().default('50').transform(Number),
+  COST_ALERT_SLACK_WEBHOOK: z.string().optional(),
+  // Analytics (PostHog)
+  POSTHOG_API_KEY: z.string().optional(),
 });
 
 const parsedConfig = envSchema.parse(process.env);

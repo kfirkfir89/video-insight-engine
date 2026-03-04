@@ -67,7 +67,7 @@ export async function videosRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Body: z.infer<typeof createVideoSchema>;
   }>('/', {
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticate, fastify.resolveTier],
     config: {
       rateLimit: videoDailyLimit > 0 ? {
         max: videoDailyLimit,
@@ -84,9 +84,12 @@ export async function videosRoutes(fastify: FastifyInstance) {
     const result = await videoService.createVideo(
       req.user.userId,
       input.url,
-      input.folderId,
-      input.bypassCache,
-      input.providers
+      {
+        folderId: input.folderId,
+        bypassCache: input.bypassCache,
+        providers: input.providers,
+        tier: req.tier.name,
+      }
     );
     return reply.code(201).send(result);
   });

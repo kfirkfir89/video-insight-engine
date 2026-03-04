@@ -1,12 +1,36 @@
 import { FastifyBaseLogger } from 'fastify';
-import { ObjectId } from 'mongodb';
-import { VideoRepository, VideoSummaryCacheDocument, UserVideoDocument } from '../repositories/video.repository.js';
+import { VideoRepository, VideoSummaryCacheDocument } from '../repositories/video.repository.js';
 import { SummarizerClient, type ProviderConfig } from './summarizer-client.js';
 import { extractYoutubeId } from '../utils/youtube.js';
-import { InvalidYouTubeUrlError, VideoNotFoundError, VersionCreationError } from '../utils/errors.js';
+import { InvalidYouTubeUrlError, VideoNotFoundError, VersionCreationError, InvalidCategoryError } from '../utils/errors.js';
+import { CATEGORY_TO_OUTPUT_TYPE, VALID_OUTPUT_TYPES } from '@vie/types';
+import type { UserTier, VideoCategory } from '@vie/types';
+
+export interface CreateVideoOptions {
+  folderId?: string;
+  bypassCache?: boolean;
+  providers?: ProviderConfig;
+  tier: UserTier;
+}
 
 // Maximum versions to keep per video (prevents unbounded storage growth)
 const MAX_VERSIONS_PER_VIDEO = 5;
+
+// Expiration TTLs by tier
+const EXPIRATION_DAYS: Record<UserTier, number | null> = {
+  free: 30,    // 30 days
+  pro: null,   // Never expires
+  team: null,  // Never expires
+};
+
+/** Calculate expiresAt date based on user tier. null = never. */
+function calculateExpiresAt(tier: UserTier): Date | null {
+  const days = EXPIRATION_DAYS[tier];
+  if (days === null) return null;
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date;
+}
 
 export class VideoService {
   constructor(
@@ -15,7 +39,8 @@ export class VideoService {
     private readonly logger: FastifyBaseLogger
   ) {}
 
-  async createVideo(userId: string, url: string, folderId?: string, bypassCache = false, providers?: ProviderConfig) {
+  async createVideo(userId: string, url: string, options: CreateVideoOptions) {
+    const { folderId, bypassCache = false, providers, tier } = options;
     const youtubeId = extractYoutubeId(url);
     if (!youtubeId) {
       throw new InvalidYouTubeUrlError();
@@ -49,6 +74,7 @@ export class VideoService {
         // Only proceed if we determined a version to create
         if (newVersion && newVersion > 0) {
           // 2. Create new version entry
+          const expiresAt = calculateExpiresAt(tier);
           const cacheEntry = await this.videoRepository.createCacheEntry({
             youtubeId,
             url,
@@ -56,6 +82,7 @@ export class VideoService {
             version: newVersion,
             isLatest: true,
             retryCount: 0,
+            ...(expiresAt && { expiresAt }),
           });
 
           // 3. Delete user's old video entry so they get the new version
@@ -216,6 +243,7 @@ export class VideoService {
     }
 
     // Cache MISS - create entry and trigger summarization via HTTP
+    const expiresAtForNew = calculateExpiresAt(tier);
     const cacheEntry = await this.videoRepository.createCacheEntry({
       youtubeId,
       url,
@@ -223,6 +251,7 @@ export class VideoService {
       version: 1,
       isLatest: true,
       retryCount: 0,
+      ...(expiresAtForNew && { expiresAt: expiresAtForNew }),
     });
 
     // Trigger summarization via HTTP (fire and forget)
@@ -321,6 +350,48 @@ export class VideoService {
     }
 
     return { success: true };
+  }
+
+  /** Override the detected category for a video */
+  async overrideCategory(userId: string, videoId: string, category: string) {
+    const video = await this.videoRepository.findUserVideo(userId, videoId);
+    if (!video) throw new VideoNotFoundError();
+
+    const outputType = CATEGORY_TO_OUTPUT_TYPE[category as VideoCategory];
+    if (!outputType) throw new InvalidCategoryError(category);
+
+    const videoSummaryId = video.videoSummaryId.toString();
+    const cache = await this.videoRepository.findCacheById(videoSummaryId);
+    if (!cache) throw new VideoNotFoundError();
+
+    const existingContext = (cache.context || {}) as Record<string, unknown>;
+    await this.videoRepository.updateCacheEntry(videoSummaryId, {
+      context: {
+        ...existingContext,
+        originalCategory: existingContext.category || 'standard',
+        category,
+      },
+      outputType,
+    });
+
+    return {
+      videoSummaryId,
+      category,
+      outputType,
+      previousCategory: existingContext.category || 'standard',
+    };
+  }
+
+  /** Persist detection result from summarizer SSE stream */
+  async persistDetectionResult(videoSummaryId: string, outputType: string, category?: string, confidence?: number): Promise<void> {
+    if (!VALID_OUTPUT_TYPES.has(outputType)) return;
+    await this.videoRepository.updateCacheEntry(videoSummaryId, {
+      outputType,
+      context: {
+        category: category || 'standard',
+        categoryConfidence: confidence,
+      },
+    });
   }
 
   // Check if user owns a video with this youtubeId

@@ -6,6 +6,7 @@ from src.exceptions import ResourceNotFoundError, ValidationError
 from src.repositories.base import ExpansionRepositoryProtocol, VideoSummaryRepositoryProtocol
 from src.services.llm import LLMService
 from src.utils.content_extractor import extract_summary_from_content, extract_bullets_from_content
+from src.utils.output_type import get_output_type_label, get_output_type_hint
 
 
 async def explain_auto(
@@ -53,6 +54,11 @@ async def explain_auto(
     llm_video_id_var.set(video_summary.youtubeId)
     llm_feature_var.set(f"explain:{target_type}")
 
+    # Resolve output type label and framing hint
+    output_type = video_summary.output_type
+    output_type_label = get_output_type_label(output_type)
+    output_type_hint = get_output_type_hint(output_type)
+
     # 4. Find target and build context
     if target_type == "section":
         target = next((s for s in video_summary.sections if s.id == target_id), None)
@@ -71,6 +77,8 @@ async def explain_auto(
             "title": target.title,
             "summary": summary,
             "bullets": bullets,
+            "output_type_label": output_type_label,
+            "output_type_hint": output_type_hint,
         }
         template = "explain_section"
 
@@ -84,6 +92,8 @@ async def explain_auto(
             "youtube_id": video_summary.youtubeId,
             "name": target.name,
             "definition": target.definition or "No definition provided",
+            "output_type_label": output_type_label,
+            "output_type_hint": output_type_hint,
         }
         template = "explain_concept"
 

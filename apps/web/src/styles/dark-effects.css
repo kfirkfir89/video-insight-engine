@@ -1,0 +1,131 @@
+/* ═══════════════════════════════════════════════════
+   DARK MODE PREMIUM ENHANCEMENTS
+   Glow, bloom, and luminance for dark theme
+   ═══════════════════════════════════════════════════ */
+
+/* Card hover bloom in dark mode */
+:is([data-theme="dark"]) .block-card:hover {
+  box-shadow:
+    0 2px 4px oklch(0% 0 0 / 0.2),
+    0 6px 16px oklch(0% 0 0 / 0.18),
+    0 0 1px oklch(from var(--primary) l c h / 0.12);
+}
+
+/* Timeline line glow */
+:is([data-theme="dark"]) .timeline-line {
+  filter: drop-shadow(0 0 4px oklch(from var(--primary) l c h / 0.25));
+}
+
+/* Definition gradient border glow */
+:is([data-theme="dark"]) .definition-item::before {
+  filter: drop-shadow(0 0 3px oklch(from var(--primary) l c h / 0.2));
+}
+
+/* Quote decorative mark glow — keep color: transparent for gradient text */
+:is([data-theme="dark"]) .quote-decorative-mark {
+  filter: drop-shadow(0 0 12px oklch(from var(--info) l c h / 0.15));
+}
+
+/* Numbered ghost bloom */
+:is([data-theme="dark"]) .numbered-ghost {
+  filter: drop-shadow(0 0 8px oklch(from var(--primary) l c h / 0.08));
+}
+
+/* Step connector glow */
+:is([data-theme="dark"]) .step-connector::after {
+  filter: drop-shadow(0 0 3px oklch(from var(--primary) l c h / 0.15));
+}
+
+/* Callout inner luminance */
+:is([data-theme="dark"]) .callout-gradient-tip,
+:is([data-theme="dark"]) .callout-gradient-note,
+:is([data-theme="dark"]) .callout-gradient-warning,
+:is([data-theme="dark"]) .callout-gradient-security {
+  box-shadow: inset 0 0 20px oklch(from var(--border) l c h / 0.05);
+}
+
+/* Text gradient glow in dark mode */
+:is([data-theme="dark"]) .text-gradient-primary {
+  filter: drop-shadow(0 0 8px oklch(from var(--primary) l c h / 0.25));
+}
+:is([data-theme="dark"]) .text-gradient-warm {
+  filter: drop-shadow(0 0 8px oklch(75% 0.18 40 / 0.3));
+}
+
+/* Pro-Con split bar glow */
+:is([data-theme="dark"]) .pro-con-bar {
+  filter: drop-shadow(0 0 6px oklch(from var(--success) l c h / 0.2));
+}
+
+/* Exercise difficulty badge glow */
+:is([data-theme="dark"]) .badge-glow-success {
+  filter: drop-shadow(0 0 4px oklch(from var(--success) l c h / 0.3));
+}
+:is([data-theme="dark"]) .badge-glow-warning {
+  filter: drop-shadow(0 0 4px oklch(from var(--warning) l c h / 0.3));
+}
+:is([data-theme="dark"]) .badge-glow-destructive {
+  filter: drop-shadow(0 0 4px oklch(from var(--destructive) l c h / 0.3));
+}
+
+/* Ingredient amount badge glow */
+:is([data-theme="dark"]) .amount-badge-glow {
+  filter: drop-shadow(0 0 4px oklch(from var(--primary) l c h / 0.15));
+}
+
+/* Timer digit glow */
+:is([data-theme="dark"]) .timer-glow {
+  filter: drop-shadow(0 0 12px oklch(from var(--primary) l c h / 0.3));
+}
+
+/* Itinerary day number glow */
+:is([data-theme="dark"]) .day-number-glow {
+  filter: drop-shadow(0 0 6px oklch(from var(--primary) l c h / 0.25));
+}
+
+/* Guest avatar ring glow */
+:is([data-theme="dark"]) .avatar-glow {
+  filter: drop-shadow(0 0 6px oklch(from var(--primary) l c h / 0.15));
+}
+
+/* ═══════════════════════════════════════════════════
+   ACCESSIBILITY — High Contrast & Forced Colors
+   ═══════════════════════════════════════════════════ */
+@media (forced-colors: active) {
+  .text-gradient-primary,
+  .text-gradient-warm {
+    color: CanvasText;
+    background: none;
+    -webkit-background-clip: unset;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   PERFORMANCE OPTIMIZATIONS
+   ═══════════════════════════════════════════════════ */
+
+.glass-surface {
+  contain: paint;
+}
+
+/* Cards: contain paint for better scroll performance */
+.block-card {
+  contain: paint;
+}
+
+/* Article sections in video detail - isolate layout + skip off-screen rendering */
+[data-slot="article-section"] {
+  contain: layout style;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
+}
+
+/* Sticky chapter nav - isolate from main content reflows */
+[data-slot="sticky-chapter-nav"] {
+  contain: layout style;
+}
+
+/* Sidebar items - contain paint for better scroll performance */
+[data-sidebar-item] {
+  contain: layout style paint;
+}

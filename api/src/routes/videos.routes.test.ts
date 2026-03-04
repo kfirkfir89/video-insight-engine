@@ -137,9 +137,12 @@ describe('videos routes', () => {
       expect(mockContainer.videoService.createVideo).toHaveBeenCalledWith(
         'test-user-id',
         'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-        undefined,
-        false,
-        undefined
+        {
+          folderId: undefined,
+          bypassCache: false,
+          providers: undefined,
+          tier: 'free',
+        }
       );
       expect(response.json()).toEqual(mockResult);
     });
@@ -168,9 +171,12 @@ describe('videos routes', () => {
       expect(mockContainer.videoService.createVideo).toHaveBeenCalledWith(
         'test-user-id',
         'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-        '507f1f77bcf86cd799439011',
-        false,
-        undefined
+        {
+          folderId: '507f1f77bcf86cd799439011',
+          bypassCache: false,
+          providers: undefined,
+          tier: 'free',
+        }
       );
     });
 

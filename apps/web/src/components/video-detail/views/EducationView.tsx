@@ -1,13 +1,15 @@
-import { memo, type ReactNode } from 'react';
+import { memo, useMemo } from 'react';
 import { BookOpen, Calculator, Hash, HelpCircle, Clock } from 'lucide-react';
 import type { SummaryChapter } from '@vie/types';
 import { ContentBlocks } from '../ContentBlocks';
 import { useGroupedBlocks, type BlockGroupRule } from '@/hooks/use-grouped-blocks';
 import { useBlockProps } from '@/hooks/use-block-props';
+import { ProgressView } from '../containers/ProgressView';
 import { ViewLayout, LayoutSection, sidebarMainOrFallback, renderSections } from './ViewLayout';
 
 interface EducationViewProps {
   chapter: SummaryChapter;
+  chapterId?: string;
   onPlay?: (seconds: number) => void;
   onStop?: () => void;
   isVideoActive?: boolean;
@@ -25,10 +27,12 @@ const EDUCATION_RULES: readonly BlockGroupRule[] = [
 
 /**
  * Specialized view for educational content.
- * Layout: sidebar (formulas/keyvalues) + main (definitions), quizzes/tips full-width below.
+ * Uses ProgressView for definitions (trackable completion).
+ * Layout: definitions with progress tracking, sidebar (formulas/keyvalues), quizzes/tips below.
  */
 export const EducationView = memo(function EducationView({
   chapter,
+  chapterId,
   onPlay,
   onStop,
   isVideoActive,
@@ -38,19 +42,34 @@ export const EducationView = memo(function EducationView({
 
   const blockProps = useBlockProps(onPlay, onStop, isVideoActive, activeStartSeconds);
 
-  const sections: { key: string; node: ReactNode }[] = [];
+  // Build progress items from definitions (trackable)
+  const progressItems = useMemo(() => {
+    return groups.definitions.map((block, i) => ({
+      id: `def-${i}`,
+      label: 'term' in block && typeof block.term === 'string' ? block.term : `Concept ${i + 1}`,
+      content: <ContentBlocks blocks={[block]} {...blockProps} />,
+    }));
+  }, [groups.definitions, blockProps]);
 
-  // Top row: sidebar (formulas + keyvalues) + main (definitions)
+  const sections: { key: string; node: React.ReactNode }[] = [];
+
+  // Definitions wrapped in ProgressView (trackable completion)
+  if (progressItems.length > 0) {
+    sections.push({ key: 'definitions', node: (
+      <LayoutSection icon={BookOpen} label="Concepts to Learn">
+        <ProgressView
+          items={progressItems}
+          storageKey={chapterId ? `edu-${chapterId}` : undefined}
+        />
+      </LayoutSection>
+    )});
+  }
+
+  // Other content + formulas/keyvalues in sidebar layout
   const hasSidebar = groups.formulas.length > 0 || groups.keyvalues.length > 0;
-  const hasDefinitions = groups.definitions.length > 0;
   const hasOther = groups.other.length > 0;
 
-  const fallback: { key: string; node: ReactNode }[] = [];
-  if (hasDefinitions) fallback.push({ key: 'definitions', node: (
-    <LayoutSection icon={BookOpen} label="Definitions">
-      <ContentBlocks blocks={groups.definitions} {...blockProps} />
-    </LayoutSection>
-  )});
+  const fallback: { key: string; node: React.ReactNode }[] = [];
   if (hasOther) fallback.push({ key: 'other', node: (
     <ContentBlocks blocks={groups.other} {...blockProps} />
   )});
@@ -82,19 +101,8 @@ export const EducationView = memo(function EducationView({
         )}
       </>
     ) : null,
-    (hasDefinitions || hasOther) ? (
-      <>
-        {hasDefinitions && (
-          <LayoutSection icon={BookOpen} label="Definitions">
-            <ContentBlocks blocks={groups.definitions} {...blockProps} />
-          </LayoutSection>
-        )}
-        {hasOther && (
-          <div className={hasDefinitions ? 'mt-6' : ''}>
-            <ContentBlocks blocks={groups.other} {...blockProps} />
-          </div>
-        )}
-      </>
+    hasOther ? (
+      <ContentBlocks blocks={groups.other} {...blockProps} />
     ) : null,
     fallback,
   ));

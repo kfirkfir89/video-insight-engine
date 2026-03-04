@@ -17,6 +17,15 @@ export interface UserDocument {
   lastLoginAt?: Date;
   createdAt: Date;
   updatedAt: Date;
+  // Profile fields (V1.5)
+  username?: string;
+  displayName?: string;
+  referralSlug?: string;
+  // Payment/tier fields (V1.4)
+  tier?: string;
+  paddleCustomerId?: string;
+  paddleSubscriptionId?: string;
+  tierUpdatedAt?: Date;
 }
 
 export interface CreateUserData {
@@ -38,6 +47,10 @@ export class UserRepository {
 
   async findByEmail(email: string): Promise<UserDocument | null> {
     return this.collection.findOne({ email });
+  }
+
+  async findByUsername(username: string): Promise<UserDocument | null> {
+    return this.collection.findOne({ username });
   }
 
   async create(data: CreateUserData): Promise<UserDocument> {
@@ -74,6 +87,27 @@ export class UserRepository {
     await this.collection.updateOne(
       { _id: new ObjectId(userId) },
       { $set: { ...updates, updatedAt: new Date() } }
+    );
+  }
+
+  async findByPaddleCustomerId(customerId: string): Promise<UserDocument | null> {
+    return this.collection.findOne({ paddleCustomerId: customerId });
+  }
+
+  async getTier(userId: string): Promise<string | undefined> {
+    const user = await this.collection.findOne(
+      { _id: new ObjectId(userId) },
+      { projection: { tier: 1 } }
+    );
+    return user?.tier;
+  }
+
+  /** Atomic update that returns the previous document state (for tier transitions) */
+  async updateAndReturnPrevious(userId: string, updates: Partial<Omit<UserDocument, '_id'>>): Promise<UserDocument | null> {
+    return this.collection.findOneAndUpdate(
+      { _id: new ObjectId(userId) },
+      { $set: { ...updates, updatedAt: new Date() } },
+      { returnDocument: 'before' }
     );
   }
 }

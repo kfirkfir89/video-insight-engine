@@ -3,6 +3,20 @@
  * Mirrors api/src/utils/youtube.ts for consistency.
  */
 
+/** Quick check: is this URL from a YouTube domain? */
+export function isYouTubeUrl(input: string): boolean {
+  try {
+    const u = new URL(input);
+    return (
+      u.hostname === "youtube.com" || u.hostname.endsWith(".youtube.com") ||
+      u.hostname === "youtu.be" ||
+      u.hostname === "youtube-nocookie.com" || u.hostname.endsWith(".youtube-nocookie.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function extractVideoId(url: string): string | null {
   // Unified pattern for all YouTube URL formats:
   // - youtu.be/ID (short links)

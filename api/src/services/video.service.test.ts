@@ -96,7 +96,7 @@ describe('VideoService', () => {
         status: 'pending',
       });
 
-      const result = await videoService.createVideo(userId, url);
+      const result = await videoService.createVideo(userId, url, { tier: 'free' });
 
       expect(result.video).toHaveProperty('videoSummaryId');
       expect(result.video.videoSummaryId).toBe(videoSummaryId);
@@ -124,7 +124,7 @@ describe('VideoService', () => {
         status: 'completed',
       });
 
-      const result = await videoService.createVideo(userId, url);
+      const result = await videoService.createVideo(userId, url, { tier: 'free' });
 
       expect(result.video).toHaveProperty('videoSummaryId');
       expect(result.video.videoSummaryId).toBe(videoSummaryId);
@@ -150,7 +150,7 @@ describe('VideoService', () => {
         status: 'processing',
       });
 
-      const result = await videoService.createVideo(userId, url);
+      const result = await videoService.createVideo(userId, url, { tier: 'free' });
 
       expect(result.video).toHaveProperty('videoSummaryId');
       expect(result.video.videoSummaryId).toBe(videoSummaryId);
@@ -177,7 +177,7 @@ describe('VideoService', () => {
         status: 'pending',
       });
 
-      const result = await videoService.createVideo(userId, url);
+      const result = await videoService.createVideo(userId, url, { tier: 'free' });
 
       expect(result.video).toHaveProperty('videoSummaryId');
       expect(result.video.videoSummaryId).toBe(videoSummaryId);

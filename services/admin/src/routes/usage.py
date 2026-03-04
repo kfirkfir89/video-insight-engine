@@ -1,7 +1,7 @@
 """Usage analytics endpoints for LLM cost monitoring."""
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -9,6 +9,7 @@ from cachetools import TTLCache
 from fastapi import APIRouter, HTTPException, Path, Query
 
 from src.dependencies import get_database
+from src.routes._helpers import cutoff as _cutoff
 
 
 def _serialize_value(v: object) -> object:
@@ -39,14 +40,6 @@ router = APIRouter(prefix="/usage", tags=["usage"])
 _cache = TTLCache(maxsize=64, ttl=30)
 
 MAX_DAYS = 90
-
-
-def _clamp_days(days: int) -> int:
-    return min(max(days, 1), MAX_DAYS)
-
-
-def _cutoff(days: int) -> datetime:
-    return datetime.now(UTC) - timedelta(days=_clamp_days(days))
 
 
 @router.get("/stats")
@@ -96,6 +89,56 @@ async def usage_stats(
         "failure_count": 0,
     }
     data.pop("_id", None)
+    # Add computed total_tokens field
+    data["total_tokens"] = (data.get("total_tokens_in") or 0) + (data.get("total_tokens_out") or 0)
+    _cache[cache_key] = data
+    return data
+
+
+@router.get("/by-output-type")
+async def usage_by_output_type(days: int = Query(30, ge=1, le=MAX_DAYS)) -> list[dict[str, object]]:
+    """LLM cost/calls aggregated by video outputType."""
+    cache_key = f"by-output-type:{days}"
+    if cache_key in _cache:
+        return _cache[cache_key]
+
+    db = get_database()
+    # Group by video_id first to reduce lookups from N usage docs to M unique videos
+    pipeline = [
+        {"$match": {"timestamp": {"$gte": _cutoff(days)}, "video_id": {"$ne": None}}},
+        {
+            "$group": {
+                "_id": "$video_id",
+                "cost_usd": {"$sum": "$cost_usd"},
+                "calls": {"$sum": 1},
+                "tokens": {"$sum": {"$add": [{"$ifNull": ["$tokens_in", 0]}, {"$ifNull": ["$tokens_out", 0]}]}},
+            }
+        },
+        {
+            "$lookup": {
+                "from": "videoSummaryCache",
+                "localField": "_id",
+                "foreignField": "youtubeId",
+                "as": "_video",
+                "pipeline": [{"$project": {"outputType": 1}}],
+            }
+        },
+        {"$unwind": {"path": "$_video", "preserveNullAndEmptyArrays": True}},
+        {
+            "$group": {
+                "_id": {"$ifNull": ["$_video.outputType", "summary"]},
+                "cost_usd": {"$sum": "$cost_usd"},
+                "calls": {"$sum": "$calls"},
+                "tokens": {"$sum": "$tokens"},
+            }
+        },
+        {"$sort": {"cost_usd": -1}},
+    ]
+    results = await db.llm_usage.aggregate(pipeline).to_list(50)
+    data = [
+        {"output_type": r["_id"], **{k: v for k, v in r.items() if k != "_id"}}
+        for r in results
+    ]
     _cache[cache_key] = data
     return data
 

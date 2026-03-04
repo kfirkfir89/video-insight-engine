@@ -1,14 +1,15 @@
 import { FastifyInstance } from 'fastify';
-import { Db } from 'mongodb';
 import { vi } from 'vitest';
 import { buildApp } from '../app.js';
-import { getTestDb, mockLogger } from './setup.js';
 
 // Mock container services for route testing
 export interface MockContainer {
   videoRepository: {
     userHasAccessToSummary: ReturnType<typeof vi.fn>;
     userOwnsVideo: ReturnType<typeof vi.fn>;
+    findUserVideo: ReturnType<typeof vi.fn>;
+    findCacheById: ReturnType<typeof vi.fn>;
+    updateCacheEntry: ReturnType<typeof vi.fn>;
   };
   memorizeRepository: {
     findById: ReturnType<typeof vi.fn>;
@@ -21,6 +22,8 @@ export interface MockContainer {
     moveToFolder: ReturnType<typeof vi.fn>;
     userOwnsVideo: ReturnType<typeof vi.fn>;
     getVersions: ReturnType<typeof vi.fn>;
+    overrideCategory: ReturnType<typeof vi.fn>;
+    persistDetectionResult: ReturnType<typeof vi.fn>;
   };
   folderService: {
     list: ReturnType<typeof vi.fn>;
@@ -54,6 +57,34 @@ export interface MockContainer {
   summarizerClient: {
     triggerSummarization: ReturnType<typeof vi.fn>;
   };
+  shareService: {
+    createShare: ReturnType<typeof vi.fn>;
+    getPublicSummary: ReturnType<typeof vi.fn>;
+    likeShare: ReturnType<typeof vi.fn>;
+  };
+  ogImageService: {
+    getOgImage: ReturnType<typeof vi.fn>;
+  };
+  paymentService: {
+    verifyWebhook: ReturnType<typeof vi.fn>;
+    handleWebhookEvent: ReturnType<typeof vi.fn>;
+    generateCheckoutUrl: ReturnType<typeof vi.fn>;
+    getUserTier: ReturnType<typeof vi.fn>;
+  };
+  costMonitorService: {
+    isDailyLimitExceeded: ReturnType<typeof vi.fn>;
+    getDailySpend: ReturnType<typeof vi.fn>;
+    getRecommendedModel: ReturnType<typeof vi.fn>;
+    recordUsage: ReturnType<typeof vi.fn>;
+  };
+  shareRepository: {
+    findBySlug: ReturnType<typeof vi.fn>;
+    markAsShared: ReturnType<typeof vi.fn>;
+    incrementViews: ReturnType<typeof vi.fn>;
+    hasLiked: ReturnType<typeof vi.fn>;
+    addLike: ReturnType<typeof vi.fn>;
+    getShareInfo: ReturnType<typeof vi.fn>;
+  };
 }
 
 export function createMockContainer(): MockContainer {
@@ -61,6 +92,9 @@ export function createMockContainer(): MockContainer {
     videoRepository: {
       userHasAccessToSummary: vi.fn().mockResolvedValue(true),
       userOwnsVideo: vi.fn().mockResolvedValue(true),
+      findUserVideo: vi.fn(),
+      findCacheById: vi.fn(),
+      updateCacheEntry: vi.fn(),
     },
     memorizeRepository: {
       findById: vi.fn().mockResolvedValue({ id: 'item123', userId: 'test-user-id' }),
@@ -73,6 +107,8 @@ export function createMockContainer(): MockContainer {
       moveToFolder: vi.fn(),
       userOwnsVideo: vi.fn(),
       getVersions: vi.fn(),
+      overrideCategory: vi.fn(),
+      persistDetectionResult: vi.fn(),
     },
     folderService: {
       list: vi.fn(),
@@ -105,6 +141,34 @@ export function createMockContainer(): MockContainer {
     },
     summarizerClient: {
       triggerSummarization: vi.fn(),
+    },
+    shareService: {
+      createShare: vi.fn(),
+      getPublicSummary: vi.fn(),
+      likeShare: vi.fn(),
+    },
+    ogImageService: {
+      getOgImage: vi.fn(),
+    },
+    paymentService: {
+      verifyWebhook: vi.fn().mockReturnValue(true),
+      handleWebhookEvent: vi.fn(),
+      generateCheckoutUrl: vi.fn(),
+      getUserTier: vi.fn().mockResolvedValue({ tier: 'free', limits: { videosPerDay: 3, chatPerOutput: 5, shareEnabled: true, exportEnabled: false } }),
+    },
+    costMonitorService: {
+      isDailyLimitExceeded: vi.fn().mockResolvedValue(false),
+      getDailySpend: vi.fn().mockResolvedValue({ total: 0, limit: 50, percentage: 0 }),
+      getRecommendedModel: vi.fn().mockResolvedValue('sonnet'),
+      recordUsage: vi.fn(),
+    },
+    shareRepository: {
+      findBySlug: vi.fn(),
+      markAsShared: vi.fn(),
+      incrementViews: vi.fn(),
+      hasLiked: vi.fn().mockResolvedValue(false),
+      addLike: vi.fn().mockResolvedValue(1),
+      getShareInfo: vi.fn(),
     },
   };
 }

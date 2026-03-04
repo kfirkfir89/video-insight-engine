@@ -37,8 +37,28 @@ from src.services.youtube import (
     get_llm_fallback_threshold,
     select_persona,
 )
+from src.services.override_state import check_override
+from src.services.output_type import determine_output_type
+from src.services.cross_chapter_consolidation import consolidate_chapters
 
 logger = logging.getLogger(__name__)
+
+
+def apply_override(ctx: ChapterProcessingContext) -> tuple[str, str]:
+    """Return (persona, output_type), applying active override if present.
+
+    Checks in-memory override state for the given pipeline and returns
+    the overridden persona/output_type, or falls back to ctx defaults.
+    """
+    if ctx.video_summary_id:
+        override = check_override(ctx.video_summary_id)
+        if override:
+            logger.info(
+                "Override active: persona=%s, output_type=%s",
+                override["persona"], override["output_type"],
+            )
+            return override["persona"], override["output_type"]
+    return ctx.persona, ctx.output_type
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -118,6 +138,7 @@ class PipelineContext:
     persona: str
     sponsor_segments: list[SponsorSegment]
     timer: PipelineTimer
+    output_type: str = "summary"
     raw_transcript_ref: str | None = None  # S3 key for raw transcript
 
 
@@ -129,6 +150,8 @@ class ChapterProcessingContext:
     persona: str
     normalized_segments: list[dict[str, Any]]
     youtube_id: str | None = None
+    output_type: str = "summary"
+    video_summary_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -268,36 +291,39 @@ async def finalize_video_context(
     return video_data
 
 
-def extract_context(video_data: VideoData) -> tuple[dict[str, Any] | None, str]:
-    """Extract video context and persona from video data.
+def extract_context(video_data: VideoData) -> tuple[dict[str, Any] | None, str, str]:
+    """Extract video context, persona, and output type from video data.
 
-    Category and persona are now decoupled:
+    Category, persona, and output type are separate concerns:
     - category: detected directly via weighted scoring in youtube.py
     - persona: selected based on category, used for LLM prompts
+    - outputType: what we produce ("recipe", "tutorial") — for UI and prompt framing
 
     Returns:
-        Tuple of (context_dict for storage, persona for internal LLM use).
+        Tuple of (context_dict for storage, persona for internal LLM use, output_type).
         The context_dict contains category (user-facing), not persona (internal).
     """
     if not video_data.context:
-        return None, "standard"
+        return None, "standard", "summary"
 
     # Use category directly from VideoContext (no more reverse mapping!)
     category = video_data.context.category
     persona = video_data.context.persona
+    output_type = determine_output_type(category)
 
-    # Store category and metadata
+    # Store category, output type, and metadata
     context_dict = {
         "category": category,
+        "outputType": output_type,
         "youtubeCategory": video_data.context.youtube_category or "Unknown",
         "tags": video_data.context.tags,
         "displayTags": video_data.context.display_tags,
     }
     logger.info(
-        "Video context: category=%s, persona=%s, tags=%d",
-        category, persona, len(video_data.context.display_tags),
+        "Video context: category=%s, persona=%s, outputType=%s, tags=%d",
+        category, persona, output_type, len(video_data.context.display_tags),
     )
-    return context_dict, persona
+    return context_dict, persona, output_type
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -436,6 +462,15 @@ def build_result(
 
     if context_dict:
         result["context"] = context_dict
+
+    # Include output type for DB storage and downstream consumers
+    if ctx.output_type:
+        result["output_type"] = ctx.output_type
+
+    # Cross-chapter consolidation for applicable output types
+    consolidated = consolidate_chapters(chapters, ctx.output_type)
+    if consolidated:
+        result["consolidated"] = consolidated
 
     return result
 

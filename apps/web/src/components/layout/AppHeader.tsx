@@ -47,20 +47,25 @@ export function AppHeader() {
   return (
     <>
       <header className="h-(--app-header-height) shrink-0 border-b bg-card flex items-center px-3 gap-3">
-        {/* Left: sidebar toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          onClick={toggleSidebar}
-          aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-        >
-          {sidebarOpen ? (
-            <PanelLeftClose className="h-4 w-4" />
-          ) : (
-            <PanelLeft className="h-4 w-4" />
+        {/* Left: sidebar toggle + branding */}
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            onClick={toggleSidebar}
+            aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+          >
+            {sidebarOpen ? (
+              <PanelLeftClose className="h-4 w-4" />
+            ) : (
+              <PanelLeft className="h-4 w-4" />
+            )}
+          </Button>
+          {!sidebarOpen && (
+            <span className="text-sm font-bold text-gradient-primary hidden sm:inline">VIE</span>
           )}
-        </Button>
+        </div>
 
         {/* Center: URL input */}
         <div className="flex-1 flex justify-center min-w-0">

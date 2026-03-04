@@ -14,6 +14,7 @@ export interface VideoSummaryCacheDocument {
   chapterSource?: string;
   descriptionAnalysis?: unknown;
   context?: unknown;
+  outputType?: string;
   version: number;
   isLatest: boolean;
   retryCount: number;
@@ -23,6 +24,13 @@ export interface VideoSummaryCacheDocument {
   processingTimeMs?: number;
   createdAt: Date;
   updatedAt: Date;
+  // Share fields (V1.4)
+  shareSlug?: string;
+  sharedAt?: Date;
+  viewsCount?: number;
+  likesCount?: number;
+  // Expiration (V1.4)
+  expiresAt?: Date | null;
 }
 
 export interface UserVideoDocument {
@@ -54,6 +62,7 @@ export interface CreateVideoSummaryData {
   version: number;
   isLatest: boolean;
   retryCount: number;
+  expiresAt?: Date;
 }
 
 export interface CreateUserVideoData {
@@ -295,6 +304,57 @@ export class VideoRepository {
     );
   }
 
+  /** Clear expiresAt for all videos owned by a user (tier upgrade to pro/team) */
+  async clearExpirationForUser(userId: string): Promise<number> {
+    // Find all videoSummaryIds for user, then clear expiresAt on cache entries
+    const userVideos = await this.userVideosCollection
+      .find({ userId: new ObjectId(userId) })
+      .project({ videoSummaryId: 1 })
+      .toArray();
+
+    if (userVideos.length === 0) return 0;
+
+    const summaryIds = userVideos.map(v => v.videoSummaryId);
+    const result = await this.cacheCollection.updateMany(
+      { _id: { $in: summaryIds } },
+      { $unset: { expiresAt: '' }, $set: { updatedAt: new Date() } }
+    );
+    return result.modifiedCount;
+  }
+
+  /** Set expiresAt for non-shared, post-downgrade videos owned by a user (tier downgrade to free).
+   *
+   * Grandfathering: only outputs created AFTER `afterDate` get a TTL.
+   * Pre-downgrade outputs keep no expiration — the user earned them while on a paid plan.
+   * Shared outputs never expire — growth driver (SEO, viral loops).
+   */
+  async setExpirationForUser(userId: string, expiresAt: Date, afterDate?: Date): Promise<number> {
+    const userVideos = await this.userVideosCollection
+      .find({ userId: new ObjectId(userId) })
+      .project({ videoSummaryId: 1 })
+      .toArray();
+
+    if (userVideos.length === 0) return 0;
+
+    const summaryIds = userVideos.map(v => v.videoSummaryId);
+    const filter: Record<string, unknown> = {
+      _id: { $in: summaryIds },
+      // Shared outputs never expire — growth driver (SEO, viral loops)
+      shareSlug: { $exists: false },
+    };
+
+    // Grandfather existing outputs: only expire those created after the downgrade date
+    if (afterDate) {
+      filter.createdAt = { $gte: afterDate };
+    }
+
+    const result = await this.cacheCollection.updateMany(
+      filter,
+      { $set: { expiresAt, updatedAt: new Date() } }
+    );
+    return result.modifiedCount;
+  }
+
   async getPlaylistVideos(userId: string, playlistId: string): Promise<UserVideoDocument[]> {
     return this.userVideosCollection
       .find({
@@ -303,5 +363,26 @@ export class VideoRepository {
       })
       .sort({ 'playlistInfo.position': 1 })
       .toArray();
+  }
+
+  /** Update a single block's data within a video summary's chapters by blockId */
+  async updateBlock(videoSummaryId: string, blockId: string, data: Record<string, unknown>): Promise<boolean> {
+    // Build the $set for each field in data, targeting the matched block
+    const setFields: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data)) {
+      setFields[`summary.chapters.$[chapter].content.$[block].${key}`] = value;
+    }
+
+    const result = await this.cacheCollection.updateOne(
+      { _id: new ObjectId(videoSummaryId) },
+      { $set: setFields },
+      {
+        arrayFilters: [
+          { 'chapter.content': { $exists: true } },
+          { 'block.blockId': blockId },
+        ],
+      },
+    );
+    return result.modifiedCount > 0;
   }
 }

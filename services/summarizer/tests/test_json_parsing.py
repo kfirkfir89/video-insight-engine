@@ -1,6 +1,10 @@
 """Tests for JSON parsing utilities."""
 
-from src.utils.json_parsing import parse_json_response, parse_json_array_response
+from src.utils.json_parsing import (
+    parse_json_response,
+    parse_json_array_response,
+    _strip_json_comments,
+)
 
 
 class TestParseJsonResponse:
@@ -59,3 +63,71 @@ class TestParseJsonArrayResponse:
         text = '[{"text": "use [brackets] carefully"}]'
         result = parse_json_array_response(text)
         assert result == [{"text": "use [brackets] carefully"}]
+
+
+class TestStripJsonComments:
+    """Tests for _strip_json_comments."""
+
+    def test_strips_line_comment(self):
+        text = '{"key": "value" // this is a comment\n}'
+        result = _strip_json_comments(text)
+        assert result == '{"key": "value" \n}'
+
+    def test_preserves_url_in_string(self):
+        text = '{"url": "https://example.com/path"}'
+        result = _strip_json_comments(text)
+        assert result == text
+
+    def test_strips_multiple_comments(self):
+        text = '{\n  "a": 1, // first\n  "b": 2  // second\n}'
+        result = _strip_json_comments(text)
+        assert '"a": 1,' in result
+        assert '"b": 2' in result
+        assert "first" not in result
+        assert "second" not in result
+
+    def test_strips_comment_only_lines(self):
+        text = '{\n  // this is a full-line comment\n  "key": "val"\n}'
+        result = _strip_json_comments(text)
+        assert "full-line comment" not in result
+        assert '"key": "val"' in result
+
+    def test_no_comments_unchanged(self):
+        text = '{"key": "value", "num": 42}'
+        assert _strip_json_comments(text) == text
+
+    def test_comment_at_end_of_text(self):
+        text = '{"key": "value"} // trailing'
+        result = _strip_json_comments(text)
+        assert result == '{"key": "value"} '
+
+    def test_double_slash_inside_string_preserved(self):
+        text = '{"path": "C:\\\\Users\\\\test", "note": "use // carefully"}'
+        result = _strip_json_comments(text)
+        assert result == text
+
+
+class TestParseJsonWithComments:
+    """Integration tests: parse_json_response with // comments."""
+
+    def test_parses_json_with_line_comments(self):
+        text = """{
+  "content": [
+    // Array of content blocks
+    {"type": "paragraph", "text": "Hello"}
+    // Mix block types
+  ]
+}"""
+        result = parse_json_response(text)
+        assert result["content"] == [{"type": "paragraph", "text": "Hello"}]
+
+    def test_parses_array_with_comments(self):
+        text = """[
+  // first item
+  {"name": "foo"},
+  // second item
+  {"name": "bar"}
+]"""
+        result = parse_json_array_response(text)
+        assert len(result) == 2
+        assert result[0]["name"] == "foo"

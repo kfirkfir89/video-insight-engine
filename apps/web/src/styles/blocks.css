@@ -1,0 +1,730 @@
+/* ═══════════════════════════════════════════════════
+   BLOCK LAYOUT — Enterprise Calm
+   Clean card surfaces, subtle elevation,
+   consistent spacing, quiet confidence
+   ═══════════════════════════════════════════════════
+   Design Scales:
+   - Card padding:       px-4 py-3.5 (~16×14px)
+   - Card inner gap:     space-y-3
+   - List item gap:      space-y-1.5
+   - Card border radius: rounded-xl (12px)
+   - Header text:        text-xs font-semibold uppercase tracking-widest
+   - Body text:          text-sm leading-relaxed
+   - Metadata text:      text-xs text-muted-foreground
+   - Header icon:        h-4 w-4 shrink-0
+   - Inline icon:        h-3.5 w-3.5 shrink-0
+   ═══════════════════════════════════════════════════ */
+
+@layer components {
+  /* ── Card variant — clean surface with subtle elevation ── */
+  .block-card {
+    @apply relative rounded-xl px-4 py-3.5 overflow-hidden;
+    background: var(--card);
+    border: 1px solid var(--border);
+    box-shadow:
+      0 1px 2px oklch(0% 0 0 / 0.03),
+      0 1px 3px oklch(0% 0 0 / 0.04);
+    transition: box-shadow 0.2s ease;
+  }
+
+  .block-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 15%;
+    right: 15%;
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      oklch(from var(--border) l c h / 0.3) 30%,
+      oklch(from var(--border) l c h / 0.3) 70%,
+      transparent
+    );
+  }
+
+  .block-card:hover {
+    box-shadow:
+      0 2px 4px oklch(0% 0 0 / 0.04),
+      0 4px 12px oklch(0% 0 0 / 0.06);
+  }
+
+  :is([data-theme="dark"]) .block-card {
+    border-color: oklch(from var(--border) l c h / 0.7);
+    box-shadow:
+      0 1px 2px oklch(0% 0 0 / 0.2),
+      0 2px 8px oklch(0% 0 0 / 0.15);
+  }
+
+  :is([data-theme="dark"]) .block-card:hover {
+    box-shadow:
+      0 2px 4px oklch(0% 0 0 / 0.2),
+      0 6px 16px oklch(0% 0 0 / 0.18);
+  }
+
+  /* ── Card header — clean separator ── */
+  .block-card-header {
+    @apply mb-3 flex items-center gap-2 pb-2;
+    border-bottom: 1px solid oklch(from var(--border) l c h / 0.20);
+  }
+
+  .block-card-header-icon {
+    color: var(--muted-foreground);
+  }
+
+  .block-card-header-label {
+    @apply flex-1 text-xs font-medium uppercase tracking-wider;
+    color: oklch(from var(--muted-foreground) l c h / 0.5);
+  }
+
+  /* ── Minimal label — lightweight disabled-style label for transparent blocks ── */
+  .block-label-minimal {
+    @apply flex items-center gap-1.5 text-[10px] text-muted-foreground/30 mb-2;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+  }
+  .block-label-minimal svg {
+    @apply h-3 w-3 shrink-0;
+  }
+
+  /* ── Accent variant — top fade-edge gradient line ── */
+  .block-accent {
+    @apply relative rounded-lg py-3 pl-4 pr-3;
+    background: oklch(from var(--muted) l c h / 0.4);
+  }
+
+  .block-accent::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    border-radius: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--accent-line-color, var(--primary)) 30%,
+      var(--accent-line-color, var(--primary)) 70%,
+      transparent
+    );
+  }
+
+  :is([data-theme="dark"]) .block-accent {
+    background: oklch(from var(--muted) l c h / 0.35);
+  }
+
+  :is([data-theme="dark"]) .block-accent::before {
+    opacity: 0.85;
+  }
+
+  /* ── Code/terminal — dark IDE surface ── */
+  .block-code-container {
+    @apply overflow-hidden rounded-xl;
+    background: linear-gradient(
+      180deg,
+      oklch(14% 0.006 250),
+      oklch(11% 0.005 250)
+    );
+    border: 1px solid oklch(100% 0 0 / 0.06);
+    box-shadow:
+      0 1px 3px oklch(0% 0 0 / 0.1),
+      0 4px 12px oklch(0% 0 0 / 0.15),
+      inset 0 1px 0 oklch(100% 0 0 / 0.04);
+    color: oklch(90% 0.005 250);
+
+    /* Semantic code-surface tokens for block components */
+    --code-text: oklch(90% 0.005 250);
+    --code-muted: oklch(65% 0.01 250);
+    --code-dim: oklch(45% 0.01 250);
+  }
+
+  /* Code header bar */
+  .block-code-header {
+    @apply flex items-center gap-2.5 px-4 py-3;
+    background: oklch(100% 0 0 / 0.03);
+    border-bottom: 1px solid oklch(100% 0 0 / 0.06);
+  }
+
+  /* ── Paragraph variant — prominent reading text ── */
+  .block-paragraph {
+    @apply relative;
+  }
+
+  /* ── Inline variant — no border/bg, compact, subtle hierarchy indent ── */
+  .block-inline {
+    @apply space-y-1.5 pl-1;
+  }
+
+  /* ═══════════════════════════════════════════════════
+     VISUAL POLISH UTILITIES
+     Premium flourishes: gradients, dividers, decorative elements
+     ═══════════════════════════════════════════════════ */
+
+  /* ── Chapter divider — stronger gradient separator between chapters ── */
+  .chapter-divider {
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      oklch(from var(--border) l c h / 0.5) 15%,
+      oklch(from var(--border) l c h / 0.5) 85%,
+      transparent
+    );
+  }
+
+  /* ── Fade dividers — gradient horizontal/vertical separators ── */
+  .fade-divider {
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      oklch(from var(--border) l c h / 0.3) 20%,
+      oklch(from var(--border) l c h / 0.3) 80%,
+      transparent
+    );
+  }
+
+  .fade-divider-vertical {
+    width: 1px;
+    align-self: stretch;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      oklch(from var(--border) l c h / 0.3) 20%,
+      oklch(from var(--border) l c h / 0.3) 80%,
+      transparent
+    );
+  }
+
+  :is([data-theme="dark"]) .fade-divider {
+    background: linear-gradient(
+      to right,
+      transparent,
+      oklch(from var(--border) l c h / 0.4) 20%,
+      oklch(from var(--border) l c h / 0.4) 80%,
+      transparent
+    );
+  }
+
+  :is([data-theme="dark"]) .fade-divider-vertical {
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      oklch(from var(--border) l c h / 0.4) 20%,
+      oklch(from var(--border) l c h / 0.4) 80%,
+      transparent
+    );
+  }
+
+  /* ── Timeline gradient line ── */
+  .timeline-line {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(
+      to bottom,
+      oklch(from var(--primary) l c h / 0.4) 0%,
+      oklch(from var(--primary) l c h / 0.08) 100%
+    );
+    z-index: 0;
+  }
+
+  /* ── Callout gradient backgrounds ── */
+  .callout-gradient-tip {
+    background: linear-gradient(
+      135deg,
+      oklch(from var(--warning-soft) l c h / 0.35) 0%,
+      oklch(from var(--warning-soft) l c h / 0.08) 100%
+    );
+  }
+  .callout-gradient-warning {
+    background: linear-gradient(
+      135deg,
+      oklch(from var(--destructive) l c h / 0.06) 0%,
+      oklch(from var(--destructive) l c h / 0.015) 100%
+    );
+  }
+  .callout-gradient-note {
+    background: linear-gradient(
+      135deg,
+      oklch(from var(--info-soft) l c h / 0.35) 0%,
+      oklch(from var(--info-soft) l c h / 0.08) 100%
+    );
+  }
+  .callout-gradient-security {
+    background: linear-gradient(
+      135deg,
+      oklch(from var(--destructive) l c h / 0.06) 0%,
+      oklch(from var(--destructive) l c h / 0.015) 100%
+    );
+  }
+
+  /* ── Definition item — gradient left border + bottom fade ── */
+  .definition-item {
+    position: relative;
+    padding-left: 1.25rem;
+  }
+  .definition-item::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    border-radius: 2px;
+    background: linear-gradient(
+      to bottom,
+      oklch(from var(--primary) l c h / 0.6),
+      oklch(from var(--primary) l c h / 0.1)
+    );
+  }
+
+  /* ── Numbered block ghost number ── */
+  .numbered-ghost {
+    position: absolute;
+    top: -0.25rem;
+    left: -0.25rem;
+    font-size: 2.5rem;
+    font-weight: 800;
+    line-height: 1;
+    color: oklch(from var(--primary) l c h / 0.06);
+    pointer-events: none;
+    user-select: none;
+  }
+
+  :is([data-theme="dark"]) .numbered-ghost {
+    color: oklch(from var(--primary) l c h / 0.1);
+  }
+
+  /* ── Step arrow connectors ── */
+  .step-connector {
+    position: relative;
+    padding-bottom: 1.5rem;
+  }
+  .step-connector::after {
+    content: "";
+    position: absolute;
+    left: 13px;
+    top: 2rem;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(
+      to bottom,
+      oklch(from var(--primary) l c h / 0.3),
+      oklch(from var(--primary) l c h / 0.05)
+    );
+  }
+  .step-connector:last-child {
+    padding-bottom: 0;
+  }
+  .step-connector:last-child::after {
+    display: none;
+  }
+
+  /* ── Location topographic map pattern ── */
+  .location-map-bg {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 30%;
+    opacity: 0.12;
+    background-image:
+      radial-gradient(
+        ellipse 50px 35px at 70% 20%,
+        transparent 55%,
+        oklch(from var(--primary) l c h / 0.5) 56%,
+        transparent 57%
+      ),
+      radial-gradient(
+        ellipse 80px 60px at 60% 30%,
+        transparent 55%,
+        oklch(from var(--primary) l c h / 0.4) 56%,
+        transparent 57%
+      ),
+      radial-gradient(
+        ellipse 120px 90px at 50% 50%,
+        transparent 55%,
+        oklch(from var(--primary) l c h / 0.3) 56%,
+        transparent 57%
+      ),
+      radial-gradient(
+        ellipse 160px 120px at 40% 70%,
+        transparent 55%,
+        oklch(from var(--primary) l c h / 0.2) 56%,
+        transparent 57%
+      ),
+      radial-gradient(
+        ellipse 200px 150px at 55% 55%,
+        transparent 55%,
+        oklch(from var(--primary) l c h / 0.15) 56%,
+        transparent 57%
+      ),
+      radial-gradient(
+        circle 2px at 58% 42%,
+        oklch(from var(--primary) l c h / 0.3) 0%,
+        transparent 100%
+      ),
+      linear-gradient(
+        oklch(from var(--border) l c h / 0.22) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        90deg,
+        oklch(from var(--border) l c h / 0.22) 1px,
+        transparent 1px
+      );
+    background-size:
+      100% 100%,
+      100% 100%,
+      100% 100%,
+      100% 100%,
+      100% 100%,
+      100% 100%,
+      24px 24px,
+      24px 24px;
+    mask-image: linear-gradient(to left, black 60%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to left, black 60%, transparent 100%);
+    pointer-events: none;
+  }
+
+  :is([data-theme="dark"]) .location-map-bg {
+    opacity: 0.18;
+    filter: drop-shadow(0 0 8px oklch(from var(--primary) l c h / 0.08));
+  }
+
+  .location-compass::after {
+    content: "◇";
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    font-size: 16px;
+    color: oklch(from var(--primary) l c h / 0.15);
+    pointer-events: none;
+  }
+
+  :is([data-theme="dark"]) .location-compass::after {
+    color: oklch(from var(--primary) l c h / 0.25);
+    filter: drop-shadow(0 0 4px oklch(from var(--primary) l c h / 0.15));
+  }
+
+  /* ── Pro-Con split bar ── */
+  .pro-con-bar {
+    display: flex;
+    border-radius: 6px;
+    overflow: hidden;
+    height: 6px;
+  }
+
+  /* ── Code header traffic light dots (macOS window chrome) ── */
+  .code-traffic-light {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  .code-traffic-light-close {
+    background: oklch(63% 0.24 27 / 0.8);
+  }
+  .code-traffic-light-minimize {
+    background: oklch(82% 0.17 85 / 0.8);
+  }
+  .code-traffic-light-maximize {
+    background: oklch(65% 0.18 145 / 0.8);
+  }
+
+  /* ── Code surface glow utilities ── */
+  .code-copied-glow {
+    filter: drop-shadow(0 0 6px oklch(from var(--success) l c h / 0.5));
+  }
+  .code-prompt-glow {
+    filter: drop-shadow(0 0 6px oklch(from var(--success) l c h / 0.4));
+  }
+
+  /* ── Callout icon breathing animation ── */
+  .animate-breathe {
+    animation: breathe 4s ease-in-out 2;
+  }
+
+  /* ── Quote decorative mark ── */
+  .quote-decorative-mark {
+    position: absolute;
+    top: -0.25rem;
+    left: -0.25rem;
+    font-size: 4rem;
+    font-family: Georgia, "Times New Roman", serif;
+    line-height: 1;
+    background: linear-gradient(
+      180deg,
+      oklch(from var(--info) l c h / 0.12),
+      oklch(from var(--info) l c h / 0.03)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  :is([data-theme="dark"]) .quote-decorative-mark {
+    background: linear-gradient(
+      180deg,
+      oklch(from var(--info) l c h / 0.18),
+      oklch(from var(--info) l c h / 0.04)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* ═══════════════════════════════════════════════════
+     PREMIUM VISUAL EFFECTS
+     Depth, motion, glow, dark mode bloom
+     ═══════════════════════════════════════════════════ */
+
+  /* ── Stagger animation system (CSS-only) ── */
+  .stagger-children > * {
+    opacity: 0;
+    animation: fade-slide-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .stagger-children > *:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .stagger-children > *:nth-child(2) {
+    animation-delay: 50ms;
+  }
+  .stagger-children > *:nth-child(3) {
+    animation-delay: 100ms;
+  }
+  .stagger-children > *:nth-child(4) {
+    animation-delay: 150ms;
+  }
+  .stagger-children > *:nth-child(5) {
+    animation-delay: 200ms;
+  }
+  .stagger-children > *:nth-child(6) {
+    animation-delay: 250ms;
+  }
+  .stagger-children > *:nth-child(7) {
+    animation-delay: 300ms;
+  }
+  .stagger-children > *:nth-child(8) {
+    animation-delay: 350ms;
+  }
+  .stagger-children > *:nth-child(9) {
+    animation-delay: 400ms;
+  }
+  .stagger-children > *:nth-child(10) {
+    animation-delay: 450ms;
+  }
+  .stagger-children > *:nth-child(11) {
+    animation-delay: 500ms;
+  }
+  .stagger-children > *:nth-child(12) {
+    animation-delay: 550ms;
+  }
+  .stagger-children > *:nth-child(13) {
+    animation-delay: 600ms;
+  }
+  .stagger-children > *:nth-child(14) {
+    animation-delay: 650ms;
+  }
+  .stagger-children > *:nth-child(15) {
+    animation-delay: 700ms;
+  }
+  .stagger-children > *:nth-child(n + 16) {
+    animation-delay: 750ms;
+  }
+
+  /* ── Text gradients ── */
+  .text-gradient-primary {
+    background: linear-gradient(
+      135deg,
+      var(--primary),
+      oklch(from var(--primary) calc(l + 0.12) calc(c - 0.04) calc(h + 25))
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .text-gradient-warm {
+    background: linear-gradient(135deg, oklch(75% 0.18 40), oklch(82% 0.16 70));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* ── Glow utilities ── */
+  .glow-success {
+    box-shadow: 0 0 var(--glow-spread)
+      oklch(from var(--success) l c h / var(--glow-strength));
+  }
+  /* ── Glass surface (legacy — kept for backward compatibility) ── */
+  .glass-surface {
+    backdrop-filter: blur(12px);
+    background: oklch(from var(--card) l c h / 0.6);
+    border: 1px solid oklch(from var(--border) l c h / 0.3);
+    box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.05);
+  }
+  :is([data-theme="dark"]) .glass-surface {
+    background: oklch(from var(--card) l c h / 0.3);
+    border-color: oklch(100% 0 0 / 0.06);
+    box-shadow:
+      inset 0 1px 0 oklch(100% 0 0 / 0.03),
+      0 0 var(--glow-spread) oklch(from var(--primary) l c h / 0.04);
+  }
+
+  /* ── Glass v2 — solid base, elevated uses real blur ──
+     NOTE: contain: paint clips positioned overflow (dropdowns/tooltips).
+     Use glass-elevated or a portal for elements that must escape. */
+  .glass {
+    background: var(--card);
+    border: 1px solid var(--vie-glass-border);
+    box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.06);
+    contain: paint;
+  }
+  :is([data-theme="dark"]) .glass {
+    box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.04);
+  }
+  .glass-elevated {
+    backdrop-filter: blur(20px);
+    background: var(--vie-glass);
+    border: 1px solid var(--vie-glass-border);
+    box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.06);
+    contain: paint;
+  }
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass-elevated {
+      background: var(--card);
+    }
+  }
+  :is([data-theme="dark"]) .glass-elevated {
+    box-shadow:
+      inset 0 1px 0 oklch(100% 0 0 / 0.04),
+      0 0 var(--glow-spread) oklch(from var(--primary) l c h / 0.05);
+  }
+  .glass-active {
+    backdrop-filter: blur(20px);
+    background: oklch(from var(--card) l c h / 0.75);
+    border: 1px solid oklch(from var(--border) l c h / 0.5);
+    box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.08);
+    contain: paint;
+  }
+  .glass-highlight {
+    backdrop-filter: blur(20px);
+    background: oklch(from var(--primary) l c h / 0.08);
+    border: 1px solid oklch(from var(--primary) l c h / 0.2);
+    box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.06);
+    contain: paint;
+  }
+
+  /* Mobile: reduce glass blur for performance */
+  @media (max-width: 768px) {
+    .glass-elevated,
+    .glass-active,
+    .glass-highlight {
+      backdrop-filter: blur(8px);
+    }
+  }
+
+  /* ── Progress bar gradient ── */
+  .progress-bar-gradient {
+    background: linear-gradient(
+      90deg,
+      oklch(from var(--warning) calc(l - 0.05) c h),
+      var(--warning)
+    );
+    transform-origin: left;
+  }
+  .progress-bar-animated {
+    animation: progress-fill 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* ── Hover utilities ── */
+  .hover-lift {
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px oklch(0% 0 0 / 0.08);
+  }
+  .hover-scale {
+    transition: transform 0.15s ease;
+  }
+  .hover-scale:hover {
+    transform: scale(1.02);
+  }
+  .hover-scale:active {
+    transform: scale(0.98);
+  }
+
+  /* ── Timeline animated line ── */
+  .timeline-line-animated {
+    transform-origin: top;
+    animation: var(--animate-line-grow);
+  }
+
+  /* ── Table with fade dividers — inner lines only, no outer border ── */
+  .table-fade-dividers {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  /* Horizontal fade between rows */
+  .table-fade-dividers tbody tr + tr td {
+    border-image: linear-gradient(
+        to right,
+        transparent,
+        oklch(from var(--border) l c h / 0.3) 15%,
+        oklch(from var(--border) l c h / 0.3) 85%,
+        transparent
+      )
+      1 / 1px;
+  }
+
+  /* Vertical fade between columns */
+  .table-fade-dividers th + th,
+  .table-fade-dividers td + td {
+    border-image: linear-gradient(
+        to bottom,
+        transparent,
+        oklch(from var(--border) l c h / 0.3) 15%,
+        oklch(from var(--border) l c h / 0.3) 85%,
+        transparent
+      )
+      1 / 1px;
+  }
+
+  /* Header bottom separator - slightly stronger */
+  .table-fade-dividers thead th {
+    border-image: linear-gradient(
+        to right,
+        transparent,
+        oklch(from var(--border) l c h / 0.4) 10%,
+        oklch(from var(--border) l c h / 0.4) 90%,
+        transparent
+      )
+      1 / 1px;
+  }
+
+  /* ── Timeline dot pulse (first dot only) ── */
+  .timeline-dot {
+    position: relative;
+  }
+  .timeline-dot::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: oklch(from var(--primary) l c h / 0.15);
+    animation: pulse-ring 2.5s ease-out 3;
+    pointer-events: none;
+  }
+  .timeline-dot:not(:first-of-type)::after {
+    display: none;
+  }
+}

@@ -2,27 +2,30 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%237c3aed'/><path d='M10 8l12 8-12 8z' fill='white'/></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Video Insight Engine</title>
+    <meta name="description" content="Transform YouTube videos into structured knowledge — summaries, explanations, and personal collections." />
+    <meta property="og:title" content="Video Insight Engine" />
+    <meta property="og:description" content="Transform YouTube videos into structured knowledge." />
+    <meta property="og:type" content="website" />
+    <!-- Google Fonts: Inter (body) + JetBrains Mono (code) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <!-- Critical CSS - minimal styles for loading overlay only -->
     <style>
       *,::before,::after{box-sizing:border-box;border-style:solid}
       html,body{margin:0;padding:0;width:100%;height:100%}
-      body{font-family:system-ui,-apple-system,sans-serif;line-height:1.5}
+      body{font-family:'Inter',system-ui,-apple-system,sans-serif;line-height:1.5}
       #root{width:100%;min-height:100vh}
       /* Loading overlay only - Tailwind handles all other colors */
       .loading-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background-color:#fafafa;z-index:9999}
       .loading-spinner{width:2rem;height:2rem;border:3px solid #e5e5e5;border-top-color:#dc2626;border-radius:50%;animation:spin 1s linear infinite}
       @keyframes spin{to{transform:rotate(360deg)}}
-      .dark .loading-overlay{background-color:#1a1a1a}
-      .dark .loading-spinner{border-color:#404040;border-top-color:#ef4444}
+      [data-theme="dark"] .loading-overlay{background-color:#1a1a1a}
+      [data-theme="dark"] .loading-spinner{border-color:#404040;border-top-color:#ef4444}
     </style>
-    <!--
-      Preconnect to API server - NOTE: These are development-only hints.
-      In production, set up preconnect in your reverse proxy or CDN config.
-      Using environment-specific URLs via build-time replacement is also an option.
-    -->
     <!-- Preconnect to YouTube domains for faster video loading -->
     <link rel="preconnect" href="https://www.youtube.com" crossorigin />
     <link rel="preconnect" href="https://i.ytimg.com" crossorigin />
@@ -30,14 +33,21 @@
   </head>
   <body>
     <!-- Instant theme application to prevent flash -->
+    <!-- SYNC: theme logic must match src/components/theme-provider.tsx resolveTheme() -->
     <script>
       (function() {
         var theme = localStorage.getItem('vie-theme');
-        // Default to dark if no theme stored or invalid value
         if (theme === 'light') {
-          document.documentElement.classList.add('light');
+          document.documentElement.dataset.theme = 'light';
+        } else if (theme === 'system' || !theme) {
+          // System mode or no preference: check OS preference
+          if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.dataset.theme = 'dark';
+          } else {
+            document.documentElement.dataset.theme = 'light';
+          }
         } else {
-          document.documentElement.classList.add('dark');
+          document.documentElement.dataset.theme = 'dark';
         }
       })();
     </script>

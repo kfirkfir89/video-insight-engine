@@ -184,9 +184,7 @@ export class PlaylistService {
         const result = await this.videoService.createVideo(
           userId,
           videoUrl,
-          folder.id,
-          false,
-          providers
+          { folderId: folder.id, bypassCache: false, providers, tier: 'free' }
         );
 
         results.push({

@@ -116,6 +116,38 @@ test.describe('Dashboard Page', () => {
 
   test('section dividers render', async ({ adminPage }) => {
     await expect(adminPage.getByText('Analytics')).toBeVisible();
+    await expect(adminPage.getByText('Community')).toBeVisible();
     await expect(adminPage.getByText('Services')).toBeVisible();
+  });
+
+  test('total tokens card renders in stats cards', async ({ adminPage }) => {
+    const cards = adminPage.locator('[data-testid="stats-cards"]');
+    await expect(cards.getByText('Total Tokens')).toBeVisible();
+  });
+
+  test('output type chart renders with data', async ({ adminPage }) => {
+    const chart = adminPage.locator('[data-testid="output-type-chart"]');
+    await expect(chart).toBeVisible();
+    await expect(chart.getByText('Cost by Output Type')).toBeVisible();
+  });
+
+  test('shares table renders with data', async ({ adminPage }) => {
+    const table = adminPage.locator('[data-testid="shares-table"]');
+    await expect(table).toBeVisible();
+    await expect(table.getByText('Top Shared Outputs')).toBeVisible();
+    // Table headers
+    await expect(table.getByText('Title')).toBeVisible();
+    await expect(table.getByText('Type')).toBeVisible();
+    await expect(table.getByText('Views')).toBeVisible();
+    await expect(table.getByText('Likes')).toBeVisible();
+    // Mock data content
+    await expect(table.getByText('How to Make Sourdough Bread')).toBeVisible();
+    await expect(table.getByText('React Hooks Deep Dive')).toBeVisible();
+  });
+
+  test('tier distribution chart renders', async ({ adminPage }) => {
+    const chart = adminPage.locator('[data-testid="tier-distribution"]');
+    await expect(chart).toBeVisible();
+    await expect(chart.getByText('User Tiers')).toBeVisible();
   });
 });

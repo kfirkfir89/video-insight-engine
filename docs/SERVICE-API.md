@@ -42,7 +42,8 @@ api/
     │
     ├── repositories/
     │   ├── video.repository.ts   # Video data access
-    │   └── memorize.repository.ts # Memorize data access
+    │   ├── memorize.repository.ts # Memorize data access
+    │   └── share.repository.ts   # Share data access (v1.4)
     │
     ├── routes/
     │   ├── auth.routes.ts
@@ -50,19 +51,45 @@ api/
     │   ├── videos.routes.ts
     │   ├── playlists.routes.ts
     │   ├── memorize.routes.ts
-    │   └── explain.routes.ts
+    │   ├── explain.routes.ts
+    │   ├── stream.routes.ts      # SSE proxy to summarizer
+    │   ├── share.routes.ts       # Share creation + public access (v1.4)
+    │   ├── ssr.routes.ts         # /s/:slug server-rendered share pages (v1.4)
+    │   ├── override.routes.ts    # Category override (v1.4)
+    │   └── payment.routes.ts     # Paddle webhooks + checkout (v1.4)
+    │
+    ├── schemas/
+    │   ├── video.schema.ts       # Video validation schemas
+    │   ├── share.schema.ts       # Share validation schemas (v1.4)
+    │   └── payment.schema.ts     # Payment validation schemas (v1.4)
     │
     ├── services/
     │   ├── auth.service.ts
     │   ├── folder.service.ts
-    │   ├── video.service.ts
+    │   ├── video.service.ts      # + expiration logic (v1.4)
     │   ├── playlist.service.ts
     │   ├── memorize.service.ts
     │   ├── summarizer-client.ts  # HTTP client for summarizer
-    │   └── explainer-client.ts   # HTTP client for explainer
+    │   ├── explainer-client.ts   # HTTP client for explainer
+    │   ├── share.service.ts      # Share creation, public access (v1.4)
+    │   ├── og-image.service.ts   # OG image generation (v1.4)
+    │   ├── payment.service.ts    # Paddle webhook + checkout (v1.4)
+    │   └── cost-monitor.service.ts # Daily LLM spend monitoring (v1.4)
+    │
+    ├── plugins/
+    │   ├── mongodb.ts            # Database connection + indexes
+    │   ├── jwt.ts                # Authentication
+    │   ├── cors.ts               # CORS configuration
+    │   ├── websocket.ts          # Real-time updates
+    │   ├── mcp.ts                # MCP client to explainer
+    │   ├── rate-limit.ts         # Rate limiting (+ tier-aware, v1.4)
+    │   └── tier.ts               # Tier decoration per request (v1.4)
+    │
+    ├── templates/
+    │   └── share-page.ts         # HTML template for /s/:slug (v1.4)
     │
     ├── utils/
-    │   ├── errors.ts             # Custom error classes
+    │   ├── errors.ts             # Custom error classes (+ 8 new, v1.4)
     │   └── cors.ts               # CORS utilities
     │
     └── test/
@@ -83,6 +110,7 @@ All services and repositories are created in a central container and injected in
 export interface Container {
   videoRepository: VideoRepository;
   memorizeRepository: MemorizeRepository;
+  shareRepository: ShareRepository;      // v1.4
   videoService: VideoService;
   folderService: FolderService;
   authService: AuthService;
@@ -90,6 +118,10 @@ export interface Container {
   playlistService: PlaylistService;
   explainerClient: ExplainerClient;
   summarizerClient: SummarizerClient;
+  shareService: ShareService;            // v1.4
+  ogImageService: OgImageService;        // v1.4
+  paymentService: PaymentService;        // v1.4
+  costMonitorService: CostMonitorService; // v1.4
 }
 
 export function createContainer(db: Db): Container {
@@ -354,8 +386,20 @@ MONGODB_URI=mongodb://vie-mongodb:27017/video-insight-engine
 SUMMARIZER_URL=http://vie-summarizer:8000
 EXPLAINER_URL=http://vie-explainer:8001
 JWT_SECRET=your-secret-here
-JWT_EXPIRES_IN=7d
-ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+JWT_REFRESH_SECRET=your-refresh-secret-here
+JWT_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+FRONTEND_URL=http://localhost:5173
+CORS_ADDITIONAL_ORIGINS=
+INTERNAL_SECRET=dev-internal-secret-change-me
+
+# Payment (Paddle) — v1.4
+PADDLE_WEBHOOK_SECRET=
+PADDLE_PRO_PRICE_ID=
+PADDLE_TEAM_PRICE_ID=
+
+# Cost monitoring — v1.4
+COST_DAILY_LIMIT=50
 ```
 
 ---

@@ -63,7 +63,9 @@ from src.services.transcript_store import transcript_store
 from src.services.s3_client import s3_client
 from src.services.transcript_fetcher import fetch_transcript
 from src.services.summary_generators import extract_concepts, generate_master_summary
+from src.services.override_state import clear_override, mark_generation_started, is_generation_started, clear_generation_started
 from src.services.pipeline_helpers import (
+    apply_override,
     sse_event,
     sse_token,
     PipelineTimer,
@@ -100,6 +102,7 @@ async def run_parallel_analysis(
     llm_service: LLMService,
     video_data: VideoData,
     persona: str,
+    output_type: str = "summary",
 ) -> AsyncGenerator[str | ParallelResults, None]:
     """
     Run parallel tasks: description analysis, TLDR, and first section.
@@ -157,6 +160,7 @@ async def run_parallel_analysis(
                         title=first_ch.title,
                         has_creator_title=title_needs_subtitle(first_ch.title),
                         persona=persona,
+                        output_type=output_type,
                         persona_hint=persona,
                         start_seconds=int(first_ch.start_time),
                         end_seconds=int(first_ch.end_time),
@@ -354,6 +358,9 @@ async def process_creator_chapters(
             youtube_id=ctx.youtube_id,
         )
         chapters_result.append(chapter)
+        # Mark generation started on first chapter_ready — overrides rejected after this point
+        if ctx.video_summary_id:
+            mark_generation_started(ctx.video_summary_id)
         yield sse_event("chapter_ready", {"index": 0, "chapter": chapter})
     elif first_chapter_result:
         logger.warning("Dropping chapter 0 '%s' — empty content", video_chapters[0].title)
@@ -366,6 +373,8 @@ async def process_creator_chapters(
         batch_indices = remaining_indices[batch_start:batch_start + CHAPTER_BATCH_SIZE]
         batch_tasks: list[tuple[int, dict[str, Any], asyncio.Task[Any]]] = []
 
+        effective_persona, effective_output_type = apply_override(ctx)
+
         # Snapshot: all tasks in a batch see the same already-extracted list.
         # Intra-batch duplicates are expected and handled by merge_chapter_concepts().
         batch_already_extracted = list(already_extracted_names)
@@ -375,7 +384,7 @@ async def process_creator_chapters(
             ctx.llm_service.provider,
             [(idx, video_data.get_chapter_transcript(idx) or "", raw_chapters[idx]["title"])
              for idx in batch_indices],
-            ctx.persona,
+            effective_persona,
         )
 
         for idx in batch_indices:
@@ -388,8 +397,9 @@ async def process_creator_chapters(
                         context=ChapterContext(
                             title=raw["title"],
                             has_creator_title=title_needs_subtitle(raw["title"]),
-                            persona=ctx.persona,
-                            persona_hint=ctx.persona,
+                            persona=effective_persona,
+                            output_type=effective_output_type,
+                            persona_hint=effective_persona,
                             start_seconds=raw["startSeconds"],
                             end_seconds=raw["endSeconds"],
                         ),
@@ -433,6 +443,10 @@ async def process_creator_chapters(
         async for event in _postprocess_and_yield_chapters(
             batch_results, pp_ctx, chapters_result,
         ):
+            # Mark generation started on first chapter_ready from batch processing
+            # (covers the case where first creator chapter was dropped/empty)
+            if ctx.video_summary_id and not is_generation_started(ctx.video_summary_id):
+                mark_generation_started(ctx.video_summary_id)
             yield event
 
     # Merge all chapter concepts with fuzzy dedup
@@ -492,6 +506,8 @@ async def process_ai_chapters(
         batch = raw_chapters[batch_start:batch_start + CHAPTER_BATCH_SIZE]
         batch_tasks: list[tuple[int, dict[str, Any], int, int, asyncio.Task[Any]]] = []
 
+        effective_persona, effective_output_type = apply_override(ctx)
+
         # Snapshot for this batch
         batch_already_extracted = list(already_extracted_names)
 
@@ -509,7 +525,7 @@ async def process_ai_chapters(
             ctx.llm_service.provider,
             [(batch_start + i, chapter_texts.get(batch_start + i, ""), raw.get("title", ""))
              for i, raw in enumerate(batch)],
-            ctx.persona,
+            effective_persona,
         )
 
         for i, raw in enumerate(batch):
@@ -523,8 +539,9 @@ async def process_ai_chapters(
                     chapter_text=chapter_text,
                     context=ChapterContext(
                         title=raw.get("title", ""),
-                        persona=ctx.persona,
-                        persona_hint=ctx.persona,
+                        persona=effective_persona,
+                        output_type=effective_output_type,
+                        persona_hint=effective_persona,
                         start_seconds=start,
                         end_seconds=end,
                     ),
@@ -570,6 +587,9 @@ async def process_ai_chapters(
         async for event in _postprocess_and_yield_chapters(
             batch_results, pp_ctx, chapters_result,
         ):
+            # Mark generation started on first chapter_ready — overrides rejected after this point
+            if ctx.video_summary_id and not is_generation_started(ctx.video_summary_id):
+                mark_generation_started(ctx.video_summary_id)
             yield event
 
     # Merge all chapter concepts with fuzzy dedup
@@ -628,7 +648,7 @@ async def stream_summarization(
 
         # Finalize context with LLM fallback if confidence is low
         video_data = await finalize_video_context(video_data, llm_service.provider)
-        context_dict, persona = extract_context(video_data)
+        context_dict, persona, output_type = extract_context(video_data)
 
         yield sse_event("metadata", {
             "title": video_data.title,
@@ -636,6 +656,14 @@ async def stream_summarization(
             "thumbnailUrl": video_data.thumbnail_url,
             "duration": video_data.duration,
             "context": context_dict,
+        })
+
+        # Emit detection result so frontend can show detected type and offer override
+        confidence = (video_data.context.category_confidence or 0.0) if video_data.context else 0.0
+        yield sse_event("detection_result", {
+            "category": (context_dict or {}).get("category", "standard"),
+            "outputType": output_type,
+            "confidence": confidence,
         })
 
         # Sponsor segments
@@ -756,6 +784,7 @@ async def stream_summarization(
             persona=persona,
             sponsor_segments=sponsor_segments,
             timer=timer,
+            output_type=output_type,
             raw_transcript_ref=raw_transcript_ref,
         )
 
@@ -763,7 +792,7 @@ async def stream_summarization(
         llm_feature_var.set("summarize:analysis")
         parallel_results: ParallelResults | None = None
         async for item in run_parallel_analysis(
-            llm_service, video_data, persona,
+            llm_service, video_data, persona, output_type,
         ):
             if isinstance(item, str):
                 yield item
@@ -792,6 +821,8 @@ async def stream_summarization(
             persona=persona,
             normalized_segments=normalized_segments,
             youtube_id=youtube_id,
+            output_type=output_type,
+            video_summary_id=video_summary_id,
         )
 
         if video_data.has_chapters:
@@ -896,6 +927,12 @@ async def stream_summarization(
 
         repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), error_code)
         yield sse_event("error", {"message": f"An unexpected error occurred (ref: {error_ref}). Please try again.", "code": error_code.value})
+
+    finally:
+        # Clean up override and generation-started state regardless of success/failure
+        if video_summary_id:
+            clear_override(video_summary_id)
+            clear_generation_started(video_summary_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

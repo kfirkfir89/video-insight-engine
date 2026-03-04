@@ -491,9 +491,12 @@ describe('PlaylistService', () => {
       expect(mockVideoService.createVideo).toHaveBeenCalledWith(
         userId,
         'https://www.youtube.com/watch?v=video1',
-        folder.id,
-        false,
-        providers
+        {
+          folderId: folder.id,
+          bypassCache: false,
+          providers,
+          tier: 'free',
+        }
       );
     });
 
