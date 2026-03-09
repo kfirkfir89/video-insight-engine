@@ -2,7 +2,6 @@ import { memo, useCallback, useRef, useState } from 'react';
 import { Eye, ImageOff, Images, Layout, Monitor, PenTool, Presentation } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
-import { ConceptHighlighter } from '../ConceptHighlighter';
 import { Lightbox } from '@/components/ui/Lightbox';
 import type { VisualBlock as VisualBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
@@ -71,7 +70,7 @@ function VisualSingle({ block, onSeek }: VisualBlockProps) {
         {/* Description as subtle text below */}
         {block.description && (
           <p className="text-sm text-muted-foreground" title={block.description}>
-            <ConceptHighlighter text={block.description} />
+            {block.description}
           </p>
         )}
 
@@ -212,7 +211,7 @@ function VisualGallery({ block, onSeek }: VisualBlockProps) {
         {/* Description */}
         {block.description && (
           <p className="text-sm text-muted-foreground">
-            <ConceptHighlighter text={block.description} />
+            {block.description}
           </p>
         )}
 

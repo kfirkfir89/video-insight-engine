@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════
-// Memorized Components (V2.1)
+// Memorized Components
 // ═══════════════════════════════════════════════════
 
 export { VideoSourceCard } from './VideoSourceCard';

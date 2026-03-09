@@ -3,7 +3,6 @@ import { User, Users, ExternalLink, Twitter, Github, Linkedin } from 'lucide-rea
 import { cn } from '@/lib/utils';
 import { sanitizeUrl } from '@/lib/url-utils';
 import { BlockWrapper } from './BlockWrapper';
-import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { GuestBlock as GuestBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
@@ -63,7 +62,7 @@ export const GuestBlock = memo(function GuestBlock({ block }: GuestBlockProps) {
                 </div>
 
                 {guest.bio && (
-                  <p className="text-xs text-muted-foreground/90 line-clamp-2"><ConceptHighlighter text={guest.bio} /></p>
+                  <p className="text-xs text-muted-foreground/90 line-clamp-2">{guest.bio}</p>
                 )}
 
                 {/* Social links */}

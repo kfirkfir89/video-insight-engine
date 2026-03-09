@@ -70,9 +70,11 @@ class VideoSummary(BaseModel):
     id: str
     youtubeId: str
     title: str
-    output_type: str = "summary"
+    output_type: str = "explanation"
     sections: list[VideoSummarySection] = Field(default_factory=list)
     concepts: list[VideoSummaryConcept] = Field(default_factory=list)
+    # Typed output from intent-driven pipeline
+    output_data: dict[str, Any] | None = None
 
 
 class MemorizedItemSource(BaseModel):

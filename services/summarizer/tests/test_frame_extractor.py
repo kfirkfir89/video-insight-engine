@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.services.frame_extractor import (
+from src.services.media.frame_extractor import (
     _MAX_TIMESTAMP_SECONDS,
     _MIN_FRAME_BYTES,
     _compute_frame_hash,
@@ -18,7 +18,7 @@ from src.services.frame_extractor import (
     extract_frame,
     extract_frames_for_blocks,
 )
-from src.services.stream_url import (
+from src.services.media.stream_url import (
     _STREAM_URL_CACHE_MAX,
     _STREAM_URL_TTL,
     _stream_url_cache,
@@ -63,7 +63,7 @@ class TestGetVideoStreamUrl:
         async def _create_subprocess(*args, **kwargs):
             return proc
 
-        with patch("src.services.stream_url.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
+        with patch("src.services.media.stream_url.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
             result = await get_video_stream_url("dQw4w9WgXcQ")
 
         assert result == "https://stream.example.com/video"
@@ -87,7 +87,7 @@ class TestGetVideoStreamUrl:
         async def _create_subprocess(*args, **kwargs):
             return proc
 
-        with patch("src.services.stream_url.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
+        with patch("src.services.media.stream_url.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
             result = await get_video_stream_url("abc12345678")
 
         assert result == "https://new.url/video"
@@ -109,7 +109,7 @@ class TestGetVideoStreamUrl:
         async def _create_subprocess(*args, **kwargs):
             return proc
 
-        with patch("src.services.stream_url.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
+        with patch("src.services.media.stream_url.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
             result = await get_video_stream_url("dQw4w9WgXcQ")
 
         assert result is None
@@ -121,9 +121,9 @@ class TestGetVideoStreamUrl:
         async def _create_subprocess(*args, **kwargs):
             return proc
 
-        with patch("src.services.stream_url.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
+        with patch("src.services.media.stream_url.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
             with patch(
-                "src.services.stream_url.asyncio.wait_for",
+                "src.services.media.stream_url.asyncio.wait_for",
                 side_effect=asyncio.TimeoutError,
             ):
                 result = await get_video_stream_url("dQw4w9WgXcQ")
@@ -145,7 +145,7 @@ class TestGetVideoStreamUrl:
         async def _create_subprocess(*args, **kwargs):
             return proc
 
-        with patch("src.services.stream_url.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
+        with patch("src.services.media.stream_url.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
             await get_video_stream_url("newvideo1234"[:11])
 
         # Oldest entry should have been evicted, not all
@@ -185,7 +185,7 @@ class TestExtractFrame:
                 f.write(fake_jpeg)
             return proc
 
-        with patch("src.services.frame_extractor.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
+        with patch("src.services.media.frame_extractor.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
             result = await extract_frame("https://url", 30)
 
         assert result == fake_jpeg
@@ -197,7 +197,7 @@ class TestExtractFrame:
         async def _create_subprocess(*args, **kwargs):
             return proc
 
-        with patch("src.services.frame_extractor.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
+        with patch("src.services.media.frame_extractor.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
             result = await extract_frame("https://url", 30)
 
         assert result is None
@@ -209,9 +209,9 @@ class TestExtractFrame:
         async def _create_subprocess(*args, **kwargs):
             return proc
 
-        with patch("src.services.frame_extractor.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
+        with patch("src.services.media.frame_extractor.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
             with patch(
-                "src.services.frame_extractor.asyncio.wait_for",
+                "src.services.media.frame_extractor.asyncio.wait_for",
                 side_effect=asyncio.TimeoutError,
             ):
                 result = await extract_frame("https://url", 30)
@@ -221,7 +221,7 @@ class TestExtractFrame:
     @pytest.mark.asyncio
     async def test_returns_none_on_unexpected_exception(self):
         with patch(
-            "src.services.frame_extractor.asyncio.create_subprocess_exec",
+            "src.services.media.frame_extractor.asyncio.create_subprocess_exec",
             side_effect=OSError("no ffmpeg"),
         ):
             result = await extract_frame("https://url", 30)
@@ -244,7 +244,7 @@ class TestExtractFrame:
                 f.write(fake_jpeg)
             return proc
 
-        with patch("src.services.frame_extractor.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
+        with patch("src.services.media.frame_extractor.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
             result = await extract_frame("https://url", 30)
 
         assert result == fake_jpeg
@@ -262,7 +262,7 @@ class TestExtractFrame:
             temp_files_created.append(output_path)
             return proc
 
-        with patch("src.services.frame_extractor.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
+        with patch("src.services.media.frame_extractor.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
             result = await extract_frame("https://url", 30)
 
         assert result is None
@@ -275,7 +275,7 @@ class TestUploadFrame:
 
     @pytest.mark.asyncio
     async def test_upload_success(self):
-        with patch("src.services.frame_extractor.s3_client") as mock_s3:
+        with patch("src.services.media.frame_extractor.s3_client") as mock_s3:
             mock_s3.put_bytes = AsyncMock()
             result = await _upload_frame("videos/abc/frames/30.jpg", b"jpeg-data")
 
@@ -286,7 +286,7 @@ class TestUploadFrame:
 
     @pytest.mark.asyncio
     async def test_upload_failure_returns_none(self):
-        with patch("src.services.frame_extractor.s3_client") as mock_s3:
+        with patch("src.services.media.frame_extractor.s3_client") as mock_s3:
             mock_s3.put_bytes = AsyncMock(side_effect=Exception("S3 error"))
             result = await _upload_frame("videos/abc/frames/30.jpg", b"jpeg-data")
 
@@ -296,10 +296,16 @@ class TestUploadFrame:
 class TestExtractFramesForBlocks:
     """Tests for extract_frames_for_blocks (full S3 pipeline)."""
 
+    @pytest.fixture(autouse=True)
+    def _mock_brightness(self):
+        """Mock is_mostly_black so fake-jpeg bytes don't fail PIL parsing."""
+        with patch("src.services.media.frame_extractor.is_mostly_black", return_value=False):
+            yield
+
     @pytest.mark.asyncio
     async def test_returns_unchanged_when_disabled(self):
         content = [{"type": "visual", "timestamp": 30}]
-        with patch("src.services.frame_extractor.settings") as mock_settings:
+        with patch("src.services.media.frame_extractor.settings") as mock_settings:
             mock_settings.FRAME_EXTRACTION_ENABLED = False
             result = await extract_frames_for_blocks("dQw4w9WgXcQ", content)
         assert result is content
@@ -307,7 +313,7 @@ class TestExtractFramesForBlocks:
     @pytest.mark.asyncio
     async def test_returns_unchanged_for_invalid_youtube_id(self):
         content = [{"type": "visual", "timestamp": 30}]
-        with patch("src.services.frame_extractor.settings") as mock_settings:
+        with patch("src.services.media.frame_extractor.settings") as mock_settings:
             mock_settings.FRAME_EXTRACTION_ENABLED = True
             mock_settings.MAX_FRAMES_PER_VISUAL = 6
             mock_settings.MAX_FRAMES_PER_CHAPTER = 12
@@ -320,7 +326,7 @@ class TestExtractFramesForBlocks:
             {"type": "paragraph", "text": "Hello"},
             {"type": "bullets", "items": ["a", "b"]},
         ]
-        with patch("src.services.frame_extractor.settings") as mock_settings:
+        with patch("src.services.media.frame_extractor.settings") as mock_settings:
             mock_settings.FRAME_EXTRACTION_ENABLED = True
             mock_settings.MAX_FRAMES_PER_VISUAL = 6
             mock_settings.MAX_FRAMES_PER_CHAPTER = 12
@@ -332,7 +338,7 @@ class TestExtractFramesForBlocks:
         content = [
             {"type": "visual", "timestamp": 30, "imageUrl": "https://existing.url/img.jpg"},
         ]
-        with patch("src.services.frame_extractor.settings") as mock_settings:
+        with patch("src.services.media.frame_extractor.settings") as mock_settings:
             mock_settings.FRAME_EXTRACTION_ENABLED = True
             mock_settings.MAX_FRAMES_PER_VISUAL = 6
             mock_settings.MAX_FRAMES_PER_CHAPTER = 12
@@ -346,7 +352,7 @@ class TestExtractFramesForBlocks:
             {"type": "visual", "description": "Some visual"},
         ]
 
-        with patch("src.services.frame_extractor.settings") as mock_settings:
+        with patch("src.services.media.frame_extractor.settings") as mock_settings:
             mock_settings.FRAME_EXTRACTION_ENABLED = True
             mock_settings.MAX_FRAMES_PER_VISUAL = 6
             mock_settings.MAX_FRAMES_PER_CHAPTER = 12
@@ -354,14 +360,14 @@ class TestExtractFramesForBlocks:
             mock_settings.MAX_FRAMES_PER_CHAPTER = 12
 
             with patch(
-                "src.services.frame_extractor.get_video_stream_url",
+                "src.services.media.frame_extractor.get_video_stream_url",
                 return_value="https://stream.url",
             ):
                 with patch(
-                    "src.services.frame_extractor.extract_frame",
+                    "src.services.media.frame_extractor.extract_frame",
                     return_value=b"fake-jpeg",
                 ) as mock_extract:
-                    with patch("src.services.frame_extractor.s3_client") as mock_s3:
+                    with patch("src.services.media.frame_extractor.s3_client") as mock_s3:
                         mock_s3.exists = AsyncMock(return_value=False)
                         mock_s3.put_bytes = AsyncMock()
                         result = await extract_frames_for_blocks("dQw4w9WgXcQ", content)
@@ -377,20 +383,20 @@ class TestExtractFramesForBlocks:
             {"type": "visual", "description": "A diagram"},
         ]
 
-        with patch("src.services.frame_extractor.settings") as mock_settings:
+        with patch("src.services.media.frame_extractor.settings") as mock_settings:
             mock_settings.FRAME_EXTRACTION_ENABLED = True
             mock_settings.MAX_FRAMES_PER_VISUAL = 6
             mock_settings.MAX_FRAMES_PER_CHAPTER = 12
 
             with patch(
-                "src.services.frame_extractor.get_video_stream_url",
+                "src.services.media.frame_extractor.get_video_stream_url",
                 return_value="https://stream.url",
             ):
                 with patch(
-                    "src.services.frame_extractor.extract_frame",
+                    "src.services.media.frame_extractor.extract_frame",
                     return_value=b"fake-jpeg",
                 ) as mock_extract:
-                    with patch("src.services.frame_extractor.s3_client") as mock_s3:
+                    with patch("src.services.media.frame_extractor.s3_client") as mock_s3:
                         mock_s3.exists = AsyncMock(return_value=False)
                         mock_s3.put_bytes = AsyncMock()
                         mock_s3.generate_presigned_url.return_value = "https://signed/url"
@@ -411,20 +417,20 @@ class TestExtractFramesForBlocks:
             {"type": "visual", "timestamp": 30, "description": "A diagram"},
         ]
 
-        with patch("src.services.frame_extractor.settings") as mock_settings:
+        with patch("src.services.media.frame_extractor.settings") as mock_settings:
             mock_settings.FRAME_EXTRACTION_ENABLED = True
             mock_settings.MAX_FRAMES_PER_VISUAL = 6
             mock_settings.MAX_FRAMES_PER_CHAPTER = 12
 
             with patch(
-                "src.services.frame_extractor.get_video_stream_url",
+                "src.services.media.frame_extractor.get_video_stream_url",
                 return_value="https://stream.url/video",
             ):
                 with patch(
-                    "src.services.frame_extractor.extract_frame",
+                    "src.services.media.frame_extractor.extract_frame",
                     return_value=b"fake-jpeg-data",
                 ):
-                    with patch("src.services.frame_extractor.s3_client") as mock_s3:
+                    with patch("src.services.media.frame_extractor.s3_client") as mock_s3:
                         mock_s3.exists = AsyncMock(return_value=False)
                         mock_s3.put_bytes = AsyncMock()
                         mock_s3.generate_presigned_url.return_value = "https://s3.amazonaws.com/signed/url"
@@ -441,13 +447,13 @@ class TestExtractFramesForBlocks:
             {"type": "visual", "timestamp": 30},
         ]
 
-        with patch("src.services.frame_extractor.settings") as mock_settings:
+        with patch("src.services.media.frame_extractor.settings") as mock_settings:
             mock_settings.FRAME_EXTRACTION_ENABLED = True
             mock_settings.MAX_FRAMES_PER_VISUAL = 6
             mock_settings.MAX_FRAMES_PER_CHAPTER = 12
 
             with patch(
-                "src.services.frame_extractor.get_video_stream_url",
+                "src.services.media.frame_extractor.get_video_stream_url",
                 return_value=None,
             ):
                 result = await extract_frames_for_blocks("dQw4w9WgXcQ", content)
@@ -468,20 +474,20 @@ class TestExtractFramesForBlocks:
                 return None  # Fail for timestamp 20
             return b"fake-jpeg"
 
-        with patch("src.services.frame_extractor.settings") as mock_settings:
+        with patch("src.services.media.frame_extractor.settings") as mock_settings:
             mock_settings.FRAME_EXTRACTION_ENABLED = True
             mock_settings.MAX_FRAMES_PER_VISUAL = 6
             mock_settings.MAX_FRAMES_PER_CHAPTER = 12
 
             with patch(
-                "src.services.frame_extractor.get_video_stream_url",
+                "src.services.media.frame_extractor.get_video_stream_url",
                 return_value="https://stream.url",
             ):
                 with patch(
-                    "src.services.frame_extractor.extract_frame",
+                    "src.services.media.frame_extractor.extract_frame",
                     side_effect=mock_extract,
                 ):
-                    with patch("src.services.frame_extractor.s3_client") as mock_s3:
+                    with patch("src.services.media.frame_extractor.s3_client") as mock_s3:
                         mock_s3.exists = AsyncMock(return_value=False)
                         mock_s3.put_bytes = AsyncMock()
                         mock_s3.generate_presigned_url.return_value = "https://signed/url"
@@ -505,20 +511,20 @@ class TestExtractFramesForBlocks:
             extract_called = True
             return b"should-not-be-called"
 
-        with patch("src.services.frame_extractor.settings") as mock_settings:
+        with patch("src.services.media.frame_extractor.settings") as mock_settings:
             mock_settings.FRAME_EXTRACTION_ENABLED = True
             mock_settings.MAX_FRAMES_PER_VISUAL = 6
             mock_settings.MAX_FRAMES_PER_CHAPTER = 12
 
             with patch(
-                "src.services.frame_extractor.get_video_stream_url",
+                "src.services.media.frame_extractor.get_video_stream_url",
                 return_value="https://stream.url",
             ):
                 with patch(
-                    "src.services.frame_extractor.extract_frame",
+                    "src.services.media.frame_extractor.extract_frame",
                     side_effect=mock_extract,
                 ):
-                    with patch("src.services.frame_extractor.s3_client") as mock_s3:
+                    with patch("src.services.media.frame_extractor.s3_client") as mock_s3:
                         mock_s3.exists = AsyncMock(return_value=True)  # Cache hit
                         mock_s3.put_bytes = AsyncMock()
                         mock_s3.generate_presigned_url.return_value = "https://signed/cached"
@@ -536,20 +542,20 @@ class TestExtractFramesForBlocks:
         ]
         original_block = dict(content[0])
 
-        with patch("src.services.frame_extractor.settings") as mock_settings:
+        with patch("src.services.media.frame_extractor.settings") as mock_settings:
             mock_settings.FRAME_EXTRACTION_ENABLED = True
             mock_settings.MAX_FRAMES_PER_VISUAL = 6
             mock_settings.MAX_FRAMES_PER_CHAPTER = 12
 
             with patch(
-                "src.services.frame_extractor.get_video_stream_url",
+                "src.services.media.frame_extractor.get_video_stream_url",
                 return_value="https://stream.url",
             ):
                 with patch(
-                    "src.services.frame_extractor.extract_frame",
+                    "src.services.media.frame_extractor.extract_frame",
                     return_value=b"fake-jpeg",
                 ):
-                    with patch("src.services.frame_extractor.s3_client") as mock_s3:
+                    with patch("src.services.media.frame_extractor.s3_client") as mock_s3:
                         mock_s3.exists = AsyncMock(return_value=False)
                         mock_s3.put_bytes = AsyncMock()
                         mock_s3.generate_presigned_url.return_value = "https://signed/url"
@@ -652,7 +658,7 @@ class TestExtractFrameMinSize:
                 f.write(tiny_data)
             return proc
 
-        with patch("src.services.frame_extractor.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
+        with patch("src.services.media.frame_extractor.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
             result = await extract_frame("https://url", 30)
 
         assert result is None
@@ -672,7 +678,7 @@ class TestExtractFrameMinSize:
                 f.write(normal_data)
             return proc
 
-        with patch("src.services.frame_extractor.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
+        with patch("src.services.media.frame_extractor.asyncio.create_subprocess_exec", side_effect=_create_subprocess):
             result = await extract_frame("https://url", 30)
 
         assert result == normal_data
@@ -767,6 +773,12 @@ class TestSpreadClusteredTimestamps:
 class TestGalleryCollapse:
     """Tests for gallery-to-single conversion in extract_frames_for_blocks."""
 
+    @pytest.fixture(autouse=True)
+    def _mock_brightness(self):
+        """Mock is_mostly_black so fake-jpeg bytes don't fail PIL parsing."""
+        with patch("src.services.media.frame_extractor.is_mostly_black", return_value=False):
+            yield
+
     @pytest.mark.asyncio
     async def test_gallery_with_one_surviving_frame_becomes_screenshot(self):
         """A slideshow where only 1 frame gets an imageUrl should collapse to screenshot."""
@@ -792,7 +804,7 @@ class TestGalleryCollapse:
                 return b"fake-jpeg-data-unique"
             return None  # frames 2,3 fail
 
-        with patch("src.services.frame_extractor.settings") as mock_settings:
+        with patch("src.services.media.frame_extractor.settings") as mock_settings:
             mock_settings.FRAME_EXTRACTION_ENABLED = True
             mock_settings.MAX_FRAMES_PER_VISUAL = 6
             mock_settings.MAX_FRAMES_PER_CHAPTER = 12
@@ -800,14 +812,14 @@ class TestGalleryCollapse:
             mock_settings.FRAME_WITHIN_BLOCK_DEDUP_THRESHOLD = 12
 
             with patch(
-                "src.services.frame_extractor.get_video_stream_url",
+                "src.services.media.frame_extractor.get_video_stream_url",
                 return_value="https://stream.url",
             ):
                 with patch(
-                    "src.services.frame_extractor.extract_frame",
+                    "src.services.media.frame_extractor.extract_frame",
                     side_effect=mock_extract,
                 ):
-                    with patch("src.services.frame_extractor.s3_client") as mock_s3:
+                    with patch("src.services.media.frame_extractor.s3_client") as mock_s3:
                         mock_s3.exists = AsyncMock(return_value=False)
                         mock_s3.put_bytes = AsyncMock()
                         mock_s3.generate_presigned_url.return_value = "https://signed/url"
@@ -836,7 +848,7 @@ class TestGalleryCollapse:
             },
         ]
 
-        with patch("src.services.frame_extractor.settings") as mock_settings:
+        with patch("src.services.media.frame_extractor.settings") as mock_settings:
             mock_settings.FRAME_EXTRACTION_ENABLED = True
             mock_settings.MAX_FRAMES_PER_VISUAL = 6
             mock_settings.MAX_FRAMES_PER_CHAPTER = 12
@@ -844,14 +856,14 @@ class TestGalleryCollapse:
             mock_settings.FRAME_WITHIN_BLOCK_DEDUP_THRESHOLD = 12
 
             with patch(
-                "src.services.frame_extractor.get_video_stream_url",
+                "src.services.media.frame_extractor.get_video_stream_url",
                 return_value="https://stream.url",
             ):
                 with patch(
-                    "src.services.frame_extractor.extract_frame",
+                    "src.services.media.frame_extractor.extract_frame",
                     return_value=None,  # all frames fail
                 ):
-                    with patch("src.services.frame_extractor.s3_client") as mock_s3:
+                    with patch("src.services.media.frame_extractor.s3_client") as mock_s3:
                         mock_s3.exists = AsyncMock(return_value=False)
                         mock_s3.put_bytes = AsyncMock()
                         result = await extract_frames_for_blocks(
@@ -883,7 +895,7 @@ class TestGalleryCollapse:
         async def mock_extract(url, ts):
             return frame_data.get(ts, None)
 
-        with patch("src.services.frame_extractor.settings") as mock_settings:
+        with patch("src.services.media.frame_extractor.settings") as mock_settings:
             mock_settings.FRAME_EXTRACTION_ENABLED = True
             mock_settings.MAX_FRAMES_PER_VISUAL = 6
             mock_settings.MAX_FRAMES_PER_CHAPTER = 12
@@ -891,19 +903,19 @@ class TestGalleryCollapse:
             mock_settings.FRAME_WITHIN_BLOCK_DEDUP_THRESHOLD = 12
 
             with patch(
-                "src.services.frame_extractor.get_video_stream_url",
+                "src.services.media.frame_extractor.get_video_stream_url",
                 return_value="https://stream.url",
             ):
                 with patch(
-                    "src.services.frame_extractor.extract_frame",
+                    "src.services.media.frame_extractor.extract_frame",
                     side_effect=mock_extract,
                 ):
-                    with patch("src.services.frame_extractor.s3_client") as mock_s3:
+                    with patch("src.services.media.frame_extractor.s3_client") as mock_s3:
                         mock_s3.exists = AsyncMock(return_value=False)
                         mock_s3.put_bytes = AsyncMock()
                         mock_s3.generate_presigned_url.return_value = "https://signed/url"
                         # Disable image dedup to let both frames pass through
-                        with patch("src.services.frame_extractor._compute_frame_hash", return_value=None):
+                        with patch("src.services.media.frame_extractor._compute_frame_hash", return_value=None):
                             result = await extract_frames_for_blocks(
                                 "dQw4w9WgXcQ", content,
                                 chapter_start=0, chapter_end=300,

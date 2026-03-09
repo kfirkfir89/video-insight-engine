@@ -12,6 +12,8 @@ if (!import.meta.env.DEV) {
 import { useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { OUTPUT_TYPE_CONFIG } from '@/lib/output-type-config';
+import type { OutputType } from '@vie/types';
 
 interface ColorToken {
   name: string;
@@ -81,6 +83,19 @@ const colorGroups: ColorGroup[] = [
       { name: 'status-processing', cssVar: '--status-processing', description: 'Processing state' },
       { name: 'status-success', cssVar: '--status-success', description: 'Success state' },
       { name: 'status-error', cssVar: '--status-error', description: 'Error state' },
+    ],
+  },
+  {
+    name: 'Brand',
+    tokens: [
+      { name: 'vie-coral', cssVar: '--vie-coral', description: 'Recipe, warm accents' },
+      { name: 'vie-plum', cssVar: '--vie-plum', description: 'Study, deep purple' },
+      { name: 'vie-sky', cssVar: '--vie-sky', description: 'Code, cool blue' },
+      { name: 'vie-mint', cssVar: '--vie-mint', description: 'Code/trip, fresh green' },
+      { name: 'vie-honey', cssVar: '--vie-honey', description: 'Verdict/project, warm gold' },
+      { name: 'vie-rose', cssVar: '--vie-rose', description: 'Workout/music, bold pink' },
+      { name: 'vie-forest', cssVar: '--vie-forest', description: 'Trip planner, deep green' },
+      { name: 'vie-peach', cssVar: '--vie-peach', description: 'Highlights, soft warm' },
     ],
   },
 ];
@@ -163,6 +178,34 @@ export function ColorPalette() {
           </div>
         </div>
       ))}
+
+      {/* Output Gradients */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          Output Gradients
+        </h3>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {(Object.entries(OUTPUT_TYPE_CONFIG) as [OutputType, typeof OUTPUT_TYPE_CONFIG[OutputType]][]).map(
+            ([type, config]) => (
+              <div
+                key={type}
+                className="flex items-center gap-3 rounded-lg border border-border/40 p-2"
+              >
+                <div
+                  className="h-8 w-24 shrink-0 rounded-md"
+                  style={{ background: config.gradient }}
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">
+                    {config.emoji} {config.label}
+                  </p>
+                  <p className="truncate text-xs font-mono text-muted-foreground">{type}</p>
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      </div>
     </div>
   );
 }

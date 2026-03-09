@@ -1,8 +1,0 @@
-{"type": "code", "language": "typescript", "code": "const app = express();\napp.use(cors());\napp.listen(3000);", "filename": "server.ts"}
-{"type": "terminal", "command": "npm install express cors", "output": "added 57 packages in 2.1s"}
-{"type": "file_tree", "tree": [{"name": "src", "type": "folder", "children": [{"name": "index.ts", "type": "file"}, {"name": "routes", "type": "folder", "children": [{"name": "api.ts", "type": "file"}]}]}]}
-{"type": "comparison", "variant": "dos_donts", "left": {"label": "Do", "items": ["Use const for constants", "Handle errors explicitly"]}, "right": {"label": "Don't", "items": ["Use var", "Swallow exceptions"]}}
-{"type": "callout", "style": "security", "text": "Never commit API keys to version control. Use environment variables."}
-{"type": "bullets", "variant": "checklist", "items": ["Set up environment variables", "Install dependencies", "Run tests", "Deploy to staging"]}
-{"type": "timestamp", "time": "5:23", "seconds": 323, "label": "Setting up the Express server"}
-{"type": "definition", "term": "Middleware", "meaning": "Functions that execute during the request-response cycle, with access to req, res, and next()"}

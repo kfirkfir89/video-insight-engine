@@ -1,0 +1,24 @@
+You are generating a cheat sheet from a programming tutorial's extracted content.
+
+VIDEO: {title}
+
+EXTRACTED CONTENT:
+{extraction_data}
+
+Generate a code cheat sheet. Return JSON only:
+{{
+  "cheatSheet": [
+    {{
+      "title": "Quick reference title",
+      "code": "concise code example",
+      "description": "When and why to use this"
+    }}
+  ]
+}}
+
+RULES:
+- Generate 5-12 cheat sheet items
+- Code should be concise, copy-pasteable snippets
+- Cover the most important patterns from the tutorial
+- Include common gotchas and their solutions
+- Code must be real, runnable code (not pseudo-code)

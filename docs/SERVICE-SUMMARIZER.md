@@ -44,39 +44,71 @@ services/summarizer/
     │   └── override.py           # Detection override endpoint
     │
     ├── services/
-    │   ├── transcript.py         # YouTube transcript fetching
-    │   ├── youtube.py            # Video metadata (yt-dlp)
-    │   ├── description_analyzer.py # Description analysis
-    │   ├── llm.py                # LLM service (prompts + orchestration)
-    │   ├── llm_provider.py       # LiteLLM abstraction layer
+    │   ├── llm.py                # LLMService (thin wrapper around provider)
+    │   ├── llm_provider.py       # LiteLLM multi-provider abstraction
     │   ├── usage_tracker.py      # LLM usage tracking
-    │   ├── output_type.py        # Category → OutputType mapping
-    │   ├── cross_chapter_consolidation.py # Cross-chapter data merging
-    │   ├── prompt_builders.py    # Prompt template construction
-    │   ├── playlist.py           # Playlist extraction (yt-dlp)
-    │   ├── sponsorblock.py       # Sponsor segment detection
-    │   ├── gemini_transcriber.py  # Gemini Flash transcription (fast, cheap)
-    │   ├── whisper_transcriber.py # Whisper fallback (reliable, slow)
-    │   ├── s3_client.py          # Async S3 client (put_json, put_bytes, presigned URLs)
-    │   ├── transcript_store.py   # Transcript storage service
-    │   ├── frame_extractor.py    # Video frame extraction + S3 upload pipeline
-    │   ├── chapter_pipeline.py   # Chapter post-processing orchestrator
-    │   ├── accuracy.py           # Chapter fact extraction
-    │   └── block_postprocessing.py  # Block post-processing
+    │   ├── output_type.py        # Category → OutputType mapping (override compat)
+    │   ├── override_state.py     # In-memory override state
+    │   ├── status_callback.py    # Status callback
+    │   │
+    │   ├── pipeline/             # 4-stage summarization pipeline
+    │   │   ├── intent_detector.py    # Intent detection (output type)
+    │   │   ├── extractor.py          # Adaptive extraction (1-3 LLM calls)
+    │   │   ├── enrichment.py         # Quiz/flashcards/cheat sheet
+    │   │   ├── synthesis.py          # TLDR, takeaways, master summary
+    │   │   └── pipeline_helpers.py   # SSE events, timer, data classes
+    │   │
+    │   ├── transcription/        # Transcript fetching & storage
+    │   │   ├── transcript.py         # Transcript cleaning & formatting
+    │   │   ├── transcript_fetcher.py # Multi-source fallback chain
+    │   │   ├── transcript_store.py   # S3 transcript persistence
+    │   │   ├── gemini_transcriber.py # Gemini Flash transcription
+    │   │   └── whisper_transcriber.py # Whisper fallback
+    │   │
+    │   ├── media/                # Frame extraction & S3 storage
+    │   │   ├── frame_extractor.py    # Video frame extraction + S3 upload
+    │   │   ├── image_dedup.py        # Perceptual hashing for dedup
+    │   │   ├── s3_client.py          # Async S3 client
+    │   │   ├── stream_url.py         # Stream URL resolution
+    │   │   └── download_utils.py     # Download helpers
+    │   │
+    │   └── video/                # YouTube & metadata
+    │       ├── youtube.py            # Video metadata (yt-dlp)
+    │       ├── sponsorblock.py       # Sponsor segment detection
+    │       ├── description_analyzer.py # Description analysis
+    │       └── playlist.py           # Playlist extraction (yt-dlp)
     │
     ├── repositories/
     │   ├── base.py               # Repository protocols
     │   └── mongodb_repository.py # MongoDB implementation
     │
     ├── prompts/
-    │   ├── chapter_detect.txt
-    │   ├── chapter_summary.txt
-    │   ├── concept_extract.txt
-    │   ├── master_summary.txt
-    │   └── global_synthesis.txt
+    │   ├── intent_detect.txt     # Intent detection prompt
+    │   ├── extract_smart.txt     # Explanation extraction
+    │   ├── extract_recipe.txt    # Recipe extraction
+    │   ├── extract_code.txt      # Code walkthrough extraction
+    │   ├── extract_study.txt     # Study kit extraction
+    │   ├── extract_trip.txt      # Trip planner extraction
+    │   ├── extract_workout.txt   # Workout extraction
+    │   ├── extract_verdict.txt   # Verdict/review extraction
+    │   ├── extract_highlights.txt # Highlights/podcast extraction
+    │   ├── extract_music.txt     # Music guide extraction
+    │   ├── extract_project.txt   # Project/DIY guide extraction
+    │   ├── enrich_study.txt      # Study enrichment (quiz, flashcards)
+    │   ├── enrich_code.txt       # Code enrichment (cheat sheet)
+    │   ├── synthesis.txt         # Synthesis prompt
+    │   └── accuracy_rules.txt    # Shared accuracy rules
+    │
+    ├── utils/
+    │   ├── json_parsing.py       # Robust JSON recovery
+    │   ├── content_extractor.py  # Summary/bullet extraction
+    │   ├── transcript_slicer.py  # Time-range transcript slicing
+    │   ├── accuracy_rules.py     # Per-output-type completeness rules
+    │   └── constants.py          # Constants
     │
     └── models/
-        └── schemas.py            # Pydantic models
+        ├── schemas.py            # Pydantic models
+        └── output_types.py       # 10 typed output Pydantic models
 ```
 
 ---
@@ -116,279 +148,100 @@ LOG_FORMAT=console              # console or json
 
 ---
 
-## Processing Pipeline
+## Processing Pipeline (Intent-Driven)
+
+The pipeline uses 4-7 LLM calls (vs 18-25 in the legacy chapter pipeline):
 
 ```
- 1. RECEIVE HTTP REQUEST
-    └─▶ POST /summarize
-    └─▶ { videoSummaryId, youtubeId, url, userId }
+ 1. CONNECT via SSE
+    └─▶ GET /summarize/stream/{videoSummaryId}
+    └─▶ If cached: stream structured result immediately
+    └─▶ If pending: start processing pipeline
 
- 2. RETURN 202 ACCEPTED
-    └─▶ Background task queued
-    └─▶ Return immediately to caller
+ 2. FETCH METADATA (yt-dlp)
+    └─▶ Title, channel, thumbnail, duration, chapters
+    └─▶ Category pre-detection from metadata
+    └─▶ SSE: metadata event
 
- 3. UPDATE STATUS (background)
-    └─▶ Set videoSummaryCache.status = "processing"
-
- 4. FETCH METADATA
-    └─▶ YouTube oEmbed API
-    └─▶ Get: title, channel, thumbnail
-
- 5. FETCH TRANSCRIPT (Multi-Source Fallback Chain)
+ 3. FETCH TRANSCRIPT (Multi-Source Fallback Chain)
     └─▶ 0. S3 cached transcript (avoids all YouTube calls)
     └─▶ 1. yt-dlp subtitles (embedded in video metadata)
     └─▶ 2. youtube-transcript-api (with rate limit retry)
     └─▶ 3. Gemini Flash (audio transcription, ~30-90s, ~$0.04/26min)
     └─▶ 4. OpenAI Whisper (audio fallback, ~5-15min, ~$0.16/26min)
-    └─▶ Handle: manual > auto-generated
-    └─▶ Output: NormalizedTranscript (segments with ms timestamps)
+    └─▶ SSE: transcript_ready event
 
- 5b. STORE RAW TRANSCRIPT (optional)
-    └─▶ Store to S3 (AWS) as JSON
-    └─▶ Key: "videos/{youtubeId}/transcript.json"
-    └─▶ Legacy fallback: "transcripts/{youtubeId}.json"
-    └─▶ Graceful degradation if S3 unavailable
+ 4. INTENT DETECTION (1 LLM call)
+    └─▶ Determine output type from metadata + transcript preview
+    └─▶ 10 types: explanation, recipe, code_walkthrough, study_kit,
+        trip_planner, workout, verdict, highlights, music_guide, project_guide
+    └─▶ Fallback: category-based mapping if confidence < 0.6
+    └─▶ Standard section IDs enforced (must match frontend tabs)
+    └─▶ SSE: intent_detected event
 
- 6. CLEAN TRANSCRIPT
-    └─▶ Remove [Music], [Applause], etc.
-    └─▶ Merge fragmented sentences
-    └─▶ Normalize spacing
+ 5. ADAPTIVE EXTRACTION (1-3 LLM calls)
+    └─▶ <4K words: single extraction call
+    └─▶ 4-20K words: single + overflow retry if validation fails
+    └─▶ >3h videos AND >20K words: segmented extraction (token-based splitting)
+    └─▶ Pydantic validation on all output
+    └─▶ SSE: extraction_progress events, then extraction_complete
 
- 7. DETECT CHAPTERS (LLM)
-    └─▶ Use creator chapters if available, else AI-detect 3-8 logical chapters
-    └─▶ Output: boundaries + titles
+ 6. ENRICHMENT (0-1 LLM calls, conditional)
+    └─▶ study_kit: quiz + flashcards
+    └─▶ code_walkthrough: cheat sheet
+    └─▶ Other types: skipped (no LLM call)
+    └─▶ Non-critical: failure returns None gracefully
+    └─▶ SSE: enrichment_complete event (if applicable)
 
- 8. SUMMARIZE CHAPTERS (LLM)
-    └─▶ One call per chapter
-    └─▶ Slice transcript for chapter time range
-    └─▶ Generate: content blocks with blockId (single source of truth)
-    └─▶ Store transcript slice in chapter
+ 7. SYNTHESIS (1 LLM call)
+    └─▶ Generate TLDR, key takeaways, master summary, SEO description
+    └─▶ SSE: synthesis_complete event
 
- 9. EXTRACT CONCEPTS (LLM)
-    └─▶ Identify key terms
-    └─▶ Extract definitions
-    └─▶ Map to timestamps
-
-10. SYNTHESIZE (LLM)
-    └─▶ Generate TLDR
-    └─▶ Identify key takeaways
-
-11. SAVE TO CACHE
-    └─▶ Update videoSummaryCache
-    └─▶ Include rawTranscriptRef (S3 key)
-    └─▶ Include generation metadata (model, promptVersion, timestamp)
+ 8. SAVE TO CACHE
+    └─▶ Store structured result via save_structured_result()
+    └─▶ Fields: intent, output (type + data), enrichment, synthesis
     └─▶ Set status = "completed"
+    └─▶ SSE: done event + [DONE] signal
 ```
 
 ---
 
 ## Key Implementations
 
-### FastAPI Application
+### LLM Service (Thin Wrapper)
 
 ```python
-# src/main.py
-
-from fastapi import FastAPI, BackgroundTasks, HTTPException
-from pydantic import BaseModel
-from .config import settings
-from .services.summarizer import process_video
-from .services.mongodb import db, update_status
-import logging
-
-app = FastAPI(title="Video Summarizer Service")
-logger = logging.getLogger(__name__)
-
-class SummarizeRequest(BaseModel):
-    videoSummaryId: str
-    youtubeId: str
-    url: str
-    userId: str | None = None
-
-class SummarizeResponse(BaseModel):
-    status: str
-    videoSummaryId: str
-
-@app.get("/health")
-async def health():
-    return {"status": "healthy", "service": "summarizer"}
-
-@app.post("/summarize", response_model=SummarizeResponse, status_code=202)
-async def summarize(request: SummarizeRequest, background_tasks: BackgroundTasks):
-    """
-    Trigger video summarization.
-    Returns immediately, processing happens in background.
-    """
-    background_tasks.add_task(
-        run_summarization,
-        request.videoSummaryId,
-        request.youtubeId,
-        request.url,
-        request.userId
-    )
-
-    return SummarizeResponse(
-        status="accepted",
-        videoSummaryId=request.videoSummaryId
-    )
-
-async def run_summarization(
-    video_summary_id: str,
-    youtube_id: str,
-    url: str,
-    user_id: str | None
-):
-    """Background task to process video."""
-    try:
-        # Update status to processing
-        update_status(video_summary_id, 'processing')
-
-        logger.info(f"Processing video {youtube_id} (id: {video_summary_id})")
-
-        # Process video (all LLM calls)
-        result = process_video(
-            video_summary_id=video_summary_id,
-            youtube_id=youtube_id,
-            url=url
-        )
-
-        # Save result to cache
-        db.videoSummaryCache.update_one(
-            {'_id': ObjectId(video_summary_id)},
-            {'$set': {
-                'title': result['title'],
-                'channel': result['channel'],
-                'duration': result['duration'],
-                'thumbnailUrl': result['thumbnailUrl'],
-                'transcript': result['transcript'],
-                'summary': result['summary'],
-                'status': 'completed',
-                'processedAt': datetime.utcnow(),
-                'updatedAt': datetime.utcnow()
-            }}
-        )
-
-        logger.info(f"Completed video {youtube_id}")
-
-    except Exception as e:
-        logger.error(f"Failed to process video {youtube_id}: {str(e)}")
-        update_status(video_summary_id, 'failed', str(e))
-```
-
-### Transcript Fetching
-
-```python
-# src/services/transcript.py
-
-from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api._errors import (
-    TranscriptsDisabled,
-    NoTranscriptFound,
-    VideoUnavailable
-)
-
-class TranscriptError(Exception):
-    pass
-
-def get_transcript(video_id: str) -> tuple[list[dict], str]:
-    """
-    Fetch transcript from YouTube.
-    Returns (segments, full_text)
-    """
-    try:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-
-        # Prefer manual captions
-        try:
-            transcript = transcript_list.find_manually_created_transcript(['en'])
-        except:
-            try:
-                transcript = transcript_list.find_generated_transcript(['en'])
-            except:
-                # Try any available language
-                transcript = transcript_list.find_transcript(['en', 'en-US'])
-
-        segments = transcript.fetch()
-        full_text = ' '.join([s['text'] for s in segments])
-
-        return segments, full_text
-
-    except TranscriptsDisabled:
-        raise TranscriptError("Captions are disabled for this video")
-    except NoTranscriptFound:
-        raise TranscriptError("No English transcript available")
-    except VideoUnavailable:
-        raise TranscriptError("Video is unavailable or private")
-    except Exception as e:
-        raise TranscriptError(f"Failed to fetch transcript: {str(e)}")
-```
-
-### LLM Summarization (LiteLLM Multi-Provider)
-
-```python
-# src/services/llm_provider.py
-from litellm import acompletion
-from src.config import settings
-
-class LLMProvider:
-    """Multi-provider LLM abstraction using LiteLLM."""
-
-    def __init__(self, model: str | None = None, fallback_models: list[str] | None = None):
-        self._model = model or settings.llm_model
-        self._fallback_models = fallback_models or settings.llm_fallback_models
-
-    async def complete(self, prompt: str, max_tokens: int = 2000) -> str:
-        """Generate completion from prompt."""
-        kwargs = {
-            "model": self._model,  # e.g., "anthropic/claude-sonnet-4-20250514"
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
-        }
-        if self._fallback_models:
-            kwargs["fallbacks"] = self._fallback_models
-
-        response = await acompletion(**kwargs)
-        return response.choices[0].message.content or ""
-
-    async def stream(self, prompt: str, max_tokens: int = 2000):
-        """Stream completion tokens."""
-        kwargs = {
-            "model": self._model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
-            "stream": True,
-        }
-        response = await acompletion(**kwargs)
-        async for chunk in response:
-            if chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
-
-
 # src/services/llm.py
 class LLMService:
-    """LLM service for video summarization."""
+    """Thin wrapper around LLMProvider. Pipeline modules call _call_llm()."""
 
     def __init__(self, provider: LLMProvider):
         self._provider = provider
 
-    async def detect_chapters(self, transcript: str, segments: list) -> list[dict]:
-        """Detect logical chapters using configured LLM provider."""
-        prompt = load_prompt("chapter_detect").format(transcript=transcript[:15000])
-        response = await self._provider.complete(prompt, max_tokens=2000)
-        return parse_json_response(response)['chapters']
+    async def _call_llm(self, prompt: str, max_tokens: int = 2000) -> str:
+        async with asyncio.timeout(settings.LLM_TIMEOUT_SECONDS):
+            return await self._provider.complete(prompt, max_tokens=max_tokens)
+```
 
-    async def summarize_chapter(self, chapter_text: str, title: str, persona: str) -> dict:
-        """Generate content blocks for a chapter.
+### Pipeline Modules
 
-        Note: summary/bullets are extracted on-demand from content blocks
-        via content_extractor.py when needed for LLM prompts.
-        """
-        prompt = load_prompt("chapter_summary").format(
-            title=title, chapter_text=chapter_text, persona=persona
-        )
-        response = await self._provider.complete(prompt, max_tokens=1000)
-        # Content blocks are injected with blockId (UUID) for stable referencing
-        return parse_json_response(response)
+```python
+# All pipeline modules follow the same pattern:
+# - Accept llm_service, repository, and domain-specific args
+# - Call llm_service._call_llm() for LLM interactions
+# - Return typed results (Pydantic models or dicts)
+
+# src/services/pipeline/intent_detector.py
+async def detect_intent(llm_service, transcript_preview, video_data, ...) -> IntentResult
+
+# src/services/pipeline/extractor.py
+async def extract(llm_service, transcript, intent, ...) -> AsyncGenerator[dict, None]
+
+# src/services/pipeline/enrichment.py
+async def enrich(llm_service, output_type, extraction_data, ...) -> EnrichmentData | None
+
+# src/services/pipeline/synthesis.py
+async def synthesize(llm_service, extraction_text, video_title, ...) -> SynthesisResult
 ```
 
 **Model mapping (config.py):**
@@ -404,95 +257,82 @@ MODEL_MAP = {
 
 ## Output Type System
 
-The summarizer determines an `outputType` from the detected video category. This controls prompt framing (e.g., "create a recipe" vs "summarize") and enables cross-chapter consolidation.
+The pipeline uses intent detection (LLM) to determine the output type from video metadata + transcript preview. Each type has a dedicated extraction prompt and Pydantic model.
 
-### Category → OutputType Mapping
+### 10 Output Types
 
-| Category | OutputType | Label |
-|----------|-----------|-------|
-| cooking | recipe | Recipe |
-| coding | tutorial | Tutorial |
-| fitness | workout | Workout Plan |
-| education | study_guide | Study Guide |
-| travel | travel_plan | Travel Plan |
-| reviews | review | Review |
-| podcast | podcast_notes | Podcast Notes |
-| diy | diy_guide | DIY Guide |
-| gaming | game_guide | Game Guide |
-| music | music_guide | Music Guide |
-| (default) | summary | Summary |
+| OutputType | Category Fallback | Pydantic Model | Enrichment |
+|------------|-------------------|----------------|------------|
+| explanation | (default) | ExplanationOutput | - |
+| recipe | cooking | RecipeOutput | - |
+| code_walkthrough | coding, programming | CodeWalkthroughOutput | cheat sheet |
+| study_kit | education | StudyKitOutput | quiz, flashcards |
+| trip_planner | travel | TripPlannerOutput | - |
+| workout | fitness | WorkoutOutput | - |
+| verdict | reviews | VerdictOutput | - |
+| highlights | podcast, interview | HighlightsOutput | - |
+| music_guide | music | MusicGuideOutput | - |
+| project_guide | diy, craft | ProjectGuideOutput | - |
 
-### Cross-Chapter Consolidation
+### SSE Event Protocol
 
-For certain output types, scattered data across chapters is merged into coherent outputs:
+| Event | Data |
+|-------|------|
+| `cached` | `{videoSummaryId}` (only for cached results) |
+| `metadata` | `{title, channel, thumbnailUrl, duration}` |
+| `transcript_ready` | `{duration}` |
+| `sponsor_segments` | `{count, filteredDuration}` (SponsorBlock integration) |
+| `intent_detected` | `{outputType, confidence, userGoal, sections}` |
+| `description_analysis` | `{links, resources, socialLinks}` (concurrent with intent) |
+| `extraction_progress` | `{section, percent}` (multiple events) |
+| `extraction_complete` | `{outputType, data}` |
+| `enrichment_complete` | `{quiz?, flashcards?, cheatSheet?}` (conditional) |
+| `synthesis_complete` | `{tldr, keyTakeaways, masterSummary, seoDescription}` |
+| `done` | `{videoSummaryId, cached?}` |
+| `[DONE]` | Terminal signal |
 
-| OutputType | Consolidation |
-|-----------|---------------|
-| recipe | Merge ingredients + cooking steps (with dedup) |
-| tutorial | Merge code/terminal/file_tree blocks in order |
-| workout | Merge exercise + workout_timer blocks |
-| travel_plan | Merge itinerary/location/cost blocks |
-| (others) | No consolidation (chapter structure preserved) |
+### Key Design Decisions
 
-### SSE Events (Pipeline V2)
-
-| Event | Phase | Data |
-|-------|-------|------|
-| `detection_result` | 1 (after metadata) | `{category, outputType, confidence}` |
-| `metadata` | 1 | Now includes `outputType` field |
-
-### Detection Override
-
-Users can override the detected category during processing via `POST /override/{video_summary_id}`. This changes the persona and outputType for remaining chapters. Already-processed chapters keep their original output.
+| Decision | Choice | Why |
+|----------|--------|-----|
+| Standard section IDs | Always use `_TYPE_SECTIONS` dict | LLM returns creative IDs that don't match frontend tabs |
+| Adaptive extraction | 1-3 calls by word count | Prevents token overflow on long videos |
+| Null coercion validators | `@field_validator(mode="before")` | LLMs sometimes return null for required fields |
+| Category fallback | Map video category to output type | Safety net when intent confidence < 0.6 |
 
 ---
 
 ## Output Schema
 
+The pipeline stores structured results with `intent`, `output`, `enrichment`, and `synthesis` fields:
+
 ```python
-# src/models/schemas.py
-
-from pydantic import BaseModel
-from typing import Literal
-
-# Transcript system types
-TranscriptSource = Literal["ytdlp", "api", "proxy", "whisper", "gemini", "metadata"]
-
-class TranscriptSegment(BaseModel):
-    text: str
-    startMs: int  # Milliseconds
-    endMs: int
-
-class NormalizedTranscript(BaseModel):
-    text: str
-    segments: list[TranscriptSegment]
-    source: TranscriptSource
-
-class Chapter(BaseModel):
-    id: str                      # UUID
-    timestamp: str               # "03:45"
-    startSeconds: int
-    endSeconds: int
-    title: str
-    originalTitle: str | None    # Creator's chapter title
-    generatedTitle: str | None   # AI-generated title
-    isCreatorChapter: bool       # True if from YouTube chapters
-    content: list[dict]          # ContentBlocks with blockId
-    summary: str
-    bullets: list[str]
-
-class Concept(BaseModel):
-    id: str
-    name: str
-    definition: str | None
-    timestamp: str | None
-
-class VideoSummary(BaseModel):
-    tldr: str
-    keyTakeaways: list[str]
-    chapters: list[Chapter]
-    concepts: list[Concept]
+# MongoDB document structure (after pipeline completes):
+{
+    "intent": {
+        "output_type": "explanation",  # one of 10 types
+        "confidence": 0.95,
+        "sections": ["overview", "key_points", "concepts", "takeaways"]
+    },
+    "output": {
+        "type": "explanation",
+        "data": { ... }  # Typed per output model (ExplanationOutput, RecipeOutput, etc.)
+    },
+    "enrichment": {
+        "quiz": [...],        # study_kit only
+        "flashcards": [...],  # study_kit only
+        "cheatSheet": "..."   # code_walkthrough only
+    },
+    "synthesis": {
+        "tldr": "...",
+        "keyTakeaways": ["..."],
+        "masterSummary": "...",
+        "seoDescription": "..."
+    }
+}
 ```
+
+See `src/models/output_types.py` for all 10 Pydantic output models.
 
 ---
 

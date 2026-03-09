@@ -36,6 +36,7 @@ describe('VideoService', () => {
     getVersions: ReturnType<typeof vi.fn>;
     deleteOldVersions: ReturnType<typeof vi.fn>;
     userOwnsVideo: ReturnType<typeof vi.fn>;
+    updateCacheEntry: ReturnType<typeof vi.fn>;
   };
   let mockSummarizerClient: {
     triggerSummarization: ReturnType<typeof vi.fn>;
@@ -59,6 +60,7 @@ describe('VideoService', () => {
       getVersions: vi.fn(),
       deleteOldVersions: vi.fn(),
       userOwnsVideo: vi.fn(),
+      updateCacheEntry: vi.fn(),
     };
     mockSummarizerClient = {
       triggerSummarization: vi.fn(),
@@ -72,6 +74,66 @@ describe('VideoService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  describe('getVideo', () => {
+    it('should return output when summary has intent data', async () => {
+      const userId = 'user123';
+      const videoId = 'vid123';
+      const videoSummaryId = 'summary123';
+
+      mockVideoRepository.findUserVideo.mockResolvedValue({
+        _id: { toString: () => videoId },
+        videoSummaryId: { toString: () => videoSummaryId },
+        youtubeId: 'abc123',
+        status: 'completed',
+      });
+
+      // Summary with intent data but NO pipelineVersion field
+      mockVideoRepository.findCacheById.mockResolvedValue({
+        _id: { toString: () => videoSummaryId },
+        youtubeId: 'abc123',
+        status: 'completed',
+        title: 'Test Video',
+        outputType: 'explanation',
+        intent: { outputType: 'explanation', sections: [] },
+        output: { type: 'explanation', data: {} },
+        synthesis: { tldr: 'Test', keyTakeaways: [], masterSummary: '', seoDescription: '' },
+      });
+
+      const result = await videoService.getVideo(userId, videoId);
+
+      expect(result.output).not.toBeNull();
+      expect(result.output?.outputType).toBe('explanation');
+      expect(result.output?.intent).toEqual({ outputType: 'explanation', sections: [] });
+      expect(result.output).not.toHaveProperty('pipelineVersion');
+    });
+
+    it('should return null output when summary has no intent data', async () => {
+      const userId = 'user123';
+      const videoId = 'vid123';
+      const videoSummaryId = 'summary123';
+
+      mockVideoRepository.findUserVideo.mockResolvedValue({
+        _id: { toString: () => videoId },
+        videoSummaryId: { toString: () => videoSummaryId },
+        youtubeId: 'abc123',
+        status: 'completed',
+      });
+
+      // V1-style summary with no intent
+      mockVideoRepository.findCacheById.mockResolvedValue({
+        _id: { toString: () => videoSummaryId },
+        youtubeId: 'abc123',
+        status: 'completed',
+        title: 'Test Video',
+        summary: { tldr: 'old', chapters: [], concepts: [] },
+      });
+
+      const result = await videoService.getVideo(userId, videoId);
+
+      expect(result.output).toBeNull();
+    });
   });
 
   describe('createVideo', () => {

@@ -334,11 +334,6 @@ def sample_normalized_segments():
 # ============================================================
 
 
-@pytest.fixture
-def sample_llm_sections_response():
-    """Sample LLM response for section detection."""
-    return '{"sections": [{"title": "Introduction", "startSeconds": 0, "endSeconds": 30}, {"title": "Testing Basics", "startSeconds": 30, "endSeconds": 60}]}'
-
 
 @pytest.fixture
 def sample_llm_summary_response():

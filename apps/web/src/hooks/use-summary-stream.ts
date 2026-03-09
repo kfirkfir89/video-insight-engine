@@ -1,8 +1,8 @@
 /**
  * Streaming hook for video summarization.
  *
- * Uses Server-Sent Events (SSE) for real-time character-by-character streaming
- * of video summary generation.
+ * Uses Server-Sent Events (SSE) for real-time streaming
+ * of video summary generation via the pipeline output system.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -12,32 +12,13 @@ import { getUserFriendlyError } from "@/lib/stream-error-messages";
 import { loadStreamCache, saveStreamCache, clearStreamCache } from "@/lib/stream-cache";
 import { processEvent } from "@/lib/stream-event-processor";
 
-// Issue #12: Import shared types from @vie/types, re-export for consumers
 import type {
-  SummaryChapter,
-  Concept,
-  Chapter,
-  DescriptionLink,
-  Resource,
-  RelatedVideo,
-  SocialLink,
-  DescriptionAnalysis,
   VideoContext,
-  OutputType,
+  IntentResult,
+  OutputData,
+  EnrichmentData,
+  SynthesisResult,
 } from "@vie/types";
-
-// Re-export types for consumers
-export type {
-  SummaryChapter,
-  Concept,
-  Chapter,
-  DescriptionLink,
-  Resource,
-  RelatedVideo,
-  SocialLink,
-  DescriptionAnalysis,
-  VideoContext,
-};
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 
@@ -45,48 +26,29 @@ export type StreamPhase =
   | "idle"
   | "connecting"
   | "metadata"
-  | "transcript"
-  | "parallel_analysis"
-  | "chapter_detect"
-  | "chapter_summaries"
-  | "concepts"
-  | "master_summary"
+  // Pipeline output phases
+  | "intent_detection"
+  | "extraction"
+  | "enrichment"
   | "synthesis"
   | "done"
   | "cancelled"
   | "error";
 
-/** Human-readable labels for each streaming phase. Co-located with StreamPhase for single source of truth. */
+/** Human-readable labels for each streaming phase. */
 export const STREAM_PHASE_LABELS: Record<StreamPhase, string> = {
   idle: "Preparing...",
   connecting: "Connecting to AI...",
   metadata: "Fetching video info...",
-  transcript: "Processing transcript...",
-  parallel_analysis: "Analyzing content...",
-  chapter_detect: "Analyzing video structure...",
-  chapter_summaries: "Summarizing chapters...",
-  concepts: "Extracting key concepts...",
-  master_summary: "Creating quick read...",
+  // Pipeline output phases
+  intent_detection: "Detecting content type...",
+  extraction: "Extracting structured data...",
+  enrichment: "Generating study aids...",
   synthesis: "Generating summary...",
   done: "Complete!",
   cancelled: "Summarization cancelled",
   error: "Error occurred",
 };
-
-/**
- * Returns a human-readable label for the current streaming phase.
- * Handles the chapter_summaries special case with chapter index/total context.
- */
-export function getStreamingPhaseLabel(
-  phase: StreamPhase,
-  currentChapterIndex: number,
-  totalChapters: number,
-): string {
-  if (phase === "chapter_summaries" && currentChapterIndex >= 0) {
-    return `Summarizing chapter ${currentChapterIndex + 1}${totalChapters > 0 ? ` of ${totalChapters}` : ""}...`;
-  }
-  return STREAM_PHASE_LABELS[phase];
-}
 
 // Local types not in shared package
 export interface VideoMetadata {
@@ -97,37 +59,23 @@ export interface VideoMetadata {
   context?: VideoContext;
 }
 
-export interface DetectionResult {
-  detectedType: OutputType;
-  confidence: number;
-  alternatives: Array<{ type: string; confidence: number }>;
-}
-
 export interface StreamState {
   phase: StreamPhase;
   metadata: VideoMetadata | null;
   duration: number | null;
-  chapters: SummaryChapter[];
-  currentChapterIndex: number;
-  currentChapterText: string;
-  concepts: Concept[];
-  tldr: string;
-  keyTakeaways: string[];
-  masterSummary: string | null;
   error: string | null;
   isCached: boolean;
   processingTimeMs: number | null;
-  // Progressive summarization fields
-  detectedChapters: Chapter[];
-  isCreatorChapters: boolean;
-  descriptionAnalysis: DescriptionAnalysis | null;
-  chapterStatuses: Record<number, "pending" | "processing" | "completed">;
-  // Warning state for partial failures (e.g., some analyses failed)
+  // Warning state for partial failures
   warnings: string[];
-  // Detection result for output type override
-  detectionResult: DetectionResult | null;
   // Celebration trigger — increment to fire a new confetti burst
   confettiCount: number;
+  // Pipeline output state
+  intent: IntentResult | null;
+  extractionProgress: { section: string; percent: number } | null;
+  output: OutputData | null;
+  enrichment: EnrichmentData | null;
+  synthesis: SynthesisResult | null;
 }
 
 interface UseSummaryStreamOptions {
@@ -141,28 +89,18 @@ const initialState: StreamState = {
   phase: "idle",
   metadata: null,
   duration: null,
-  chapters: [],
-  currentChapterIndex: -1,
-  currentChapterText: "",
-  concepts: [],
-  tldr: "",
-  keyTakeaways: [],
-  masterSummary: null,
   error: null,
   isCached: false,
   processingTimeMs: null,
-  // Progressive summarization fields
-  detectedChapters: [],
-  isCreatorChapters: false,
-  descriptionAnalysis: null,
-  chapterStatuses: {},
   warnings: [],
-  detectionResult: null,
   confettiCount: 0,
+  // Pipeline output state
+  intent: null,
+  extractionProgress: null,
+  output: null,
+  enrichment: null,
+  synthesis: null,
 };
-
-// Batch interval for token updates (ms) - balance between responsiveness and performance
-const TOKEN_BATCH_INTERVAL = 50;
 
 // Save interval for localStorage cache (ms) - don't save on every update
 const CACHE_SAVE_INTERVAL = 2000;
@@ -178,8 +116,6 @@ export function useSummaryStream({
   const accessToken = useAuthStore((s) => s.accessToken);
   const retryCountRef = useRef(0);
   const tokenRefreshAttemptedRef = useRef(false);
-  // Track current streaming text outside React state for performance
-  const streamingTextRef = useRef("");
   // Track if we've restored from cache to avoid double-restoration
   const cacheRestoredRef = useRef(false);
   // Track last cache save time to throttle saves
@@ -195,51 +131,6 @@ export function useSummaryStream({
   const accessTokenRef = useRef(accessToken);
   accessTokenRef.current = accessToken;
 
-  // Track mounted state to prevent state updates after unmount
-  const isMountedRef = useRef(true);
-
-  // Batching refs for token updates - reduces re-renders from 100+ to ~20
-  const pendingTokenUpdateRef = useRef<{
-    phase: string;
-    text: string;
-    index: number;
-  } | null>(null);
-  const batchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Flush pending token updates to state
-  const flushTokenUpdate = useCallback(() => {
-    // Prevent state updates after unmount
-    if (!isMountedRef.current) return;
-
-    const pending = pendingTokenUpdateRef.current;
-    if (!pending) return;
-
-    pendingTokenUpdateRef.current = null;
-    if (batchTimeoutRef.current) {
-      clearTimeout(batchTimeoutRef.current);
-      batchTimeoutRef.current = null;
-    }
-
-    if (pending.phase === "chapter_summary") {
-      setState((prev) => ({
-        ...prev,
-        currentChapterText: pending.text,
-        currentChapterIndex: pending.index,
-      }));
-    } else if (pending.phase === "synthesis") {
-      setState((prev) => ({ ...prev, tldr: pending.text }));
-    }
-  }, []);
-
-  // Schedule batched token update
-  const scheduleTokenUpdate = useCallback((phase: string, text: string, index: number) => {
-    pendingTokenUpdateRef.current = { phase, text, index };
-
-    // Only schedule if not already scheduled
-    if (!batchTimeoutRef.current) {
-      batchTimeoutRef.current = setTimeout(flushTokenUpdate, TOKEN_BATCH_INTERVAL);
-    }
-  }, [flushTokenUpdate]);
 
   const connect = useCallback(async (tokenOverride?: string) => {
     // Prevent duplicate connections
@@ -252,7 +143,6 @@ export function useSummaryStream({
     }
 
     setState({ ...initialState, phase: "connecting" });
-    streamingTextRef.current = "";
     abortControllerRef.current = new AbortController();
 
     try {
@@ -274,6 +164,7 @@ export function useSummaryStream({
         if (refreshed) {
           const newToken = getAccessToken();
           if (newToken) {
+            isConnectingRef.current = false;
             return connect(newToken);
           }
         }
@@ -314,7 +205,7 @@ export function useSummaryStream({
 
           try {
             const event = JSON.parse(data);
-            processEvent(event, setState, streamingTextRef, scheduleTokenUpdate, flushTokenUpdate);
+            processEvent(event, setState);
           } catch {
             // Ignore parse errors for incomplete chunks
           }
@@ -343,11 +234,8 @@ export function useSummaryStream({
         error: userFriendlyError,
       }));
       onErrorRef.current?.(userFriendlyError);
-
-      // Note: Removed automatic retry to prevent infinite loops.
-      // User can manually retry using the retry() function.
     }
-  }, [videoSummaryId, accessToken, scheduleTokenUpdate, flushTokenUpdate]);
+  }, [videoSummaryId, accessToken]);
 
   const retry = useCallback(() => {
     retryCountRef.current = 0;
@@ -370,9 +258,6 @@ export function useSummaryStream({
   const lastConnectedIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // Reset mounted state on effect run (handles dependency changes)
-    isMountedRef.current = true;
-
     // Only connect if:
     // 1. Streaming is enabled
     // 2. We have a valid videoSummaryId and accessToken
@@ -402,20 +287,11 @@ export function useSummaryStream({
       cacheRestoredRef.current = false;
     }
 
-    // Cleanup: abort any in-flight request and clear batch timeout when dependencies change or unmount
+    // Cleanup: abort any in-flight request when dependencies change or unmount
     return () => {
-      isMountedRef.current = false;
       abortControllerRef.current?.abort();
-      pendingTokenUpdateRef.current = null;
-      if (batchTimeoutRef.current) {
-        clearTimeout(batchTimeoutRef.current);
-        batchTimeoutRef.current = null;
-      }
     };
     // Issue #10: Intentionally limited deps to prevent infinite loops
-    // - connect() uses refs for latest values (accessTokenRef.current)
-    // - Including connect would cause reconnection loops on every token change
-    // - lastConnectedIdRef prevents duplicate connections for same videoSummaryId
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, videoSummaryId, accessToken]);
 
@@ -425,7 +301,7 @@ export function useSummaryStream({
     if (!videoSummaryId || !enabled) return;
 
     // Only save if we have meaningful data to cache
-    const hasData = state.chapters.length > 0 || state.concepts.length > 0 || state.tldr || state.metadata;
+    const hasData = state.synthesis || state.intent || state.output || state.metadata;
     if (!hasData) return;
 
     // Don't save if stream completed or errored (will be cleared anyway)

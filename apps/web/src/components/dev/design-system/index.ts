@@ -12,7 +12,4 @@ if (!import.meta.env.DEV) {
 export { ColorPalette } from './ColorPalette';
 export { Typography } from './Typography';
 export { SpacingScale } from './SpacingScale';
-export { StatusIndicators } from './StatusIndicators';
-export { CategoryAccents } from './CategoryAccents';
 export { BlockShowcase } from './BlockShowcase';
-export { ViewShowcase } from './ViewShowcase';

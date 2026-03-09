@@ -141,26 +141,45 @@ export class MemorizeService {
     let endSeconds: number | undefined;
 
     if (input.sourceType === 'video_section' && input.sectionIds) {
-      const sections = videoSummary.summary.sections.filter((s) =>
+      // Try V1 summary.chapters first
+      const v1Sections = videoSummary.summary?.sections?.filter((s) =>
         input.sectionIds!.includes(s.id)
-      );
+      ) ?? [];
 
-      if (sections.length === 0) {
+      if (v1Sections.length > 0) {
+        // V1: Store content blocks from chapters
+        content.sections = v1Sections.map((s) => ({
+          id: s.id,
+          timestamp: s.timestamp,
+          title: s.title,
+          content: s.content,
+        }));
+        startSeconds = input.startSeconds ?? v1Sections[0].startSeconds;
+        endSeconds = input.endSeconds ?? v1Sections[v1Sections.length - 1].endSeconds;
+      } else if (videoSummary.output?.data) {
+        // Intent-driven pipeline: sectionIds are keys in output.data
+        const outputSections = input.sectionIds!.filter(
+          (id) => id in (videoSummary.output!.data as Record<string, unknown>)
+        );
+        if (outputSections.length === 0) {
+          throw new Error('No matching sections found');
+        }
+        content.sections = outputSections.map((sectionId) => {
+          const intentSection = videoSummary.intent?.sections?.find((s) => s.id === sectionId);
+          return {
+            id: sectionId,
+            timestamp: '00:00',
+            title: intentSection?.label ?? sectionId.replace(/_/g, ' '),
+            content: [{ type: 'typed_output', data: (videoSummary.output!.data as Record<string, unknown>)[sectionId] }] as unknown as import('@vie/types').ContentBlock[],
+          };
+        });
+        startSeconds = input.startSeconds;
+        endSeconds = input.endSeconds;
+      } else {
         throw new Error('No matching sections found');
       }
-
-      // Store content blocks only - summary/bullets can be extracted on-demand
-      content.sections = sections.map((s) => ({
-        id: s.id,
-        timestamp: s.timestamp,
-        title: s.title,
-        content: s.content,
-      }));
-
-      startSeconds = input.startSeconds ?? sections[0].startSeconds;
-      endSeconds = input.endSeconds ?? sections[sections.length - 1].endSeconds;
     } else if (input.sourceType === 'video_concept' && input.conceptId) {
-      const concept = videoSummary.summary.concepts.find(
+      const concept = videoSummary.summary?.concepts?.find(
         (c) => c.id === input.conceptId
       );
 

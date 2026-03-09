@@ -576,7 +576,7 @@
       0 0 var(--glow-spread) oklch(from var(--primary) l c h / 0.04);
   }
 
-  /* ── Glass v2 — solid base, elevated uses real blur ──
+  /* ── Glass — solid base, elevated uses real blur ──
      NOTE: contain: paint clips positioned overflow (dropdowns/tooltips).
      Use glass-elevated or a portal for elements that must escape. */
   .glass {

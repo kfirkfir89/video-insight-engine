@@ -86,10 +86,10 @@ apps/web/
     │   │   │   ├── NumberedBlock.tsx
     │   │   │   ├── ExampleBlock.tsx
     │   │   │   ├── CalloutBlock.tsx
-    │   │   │   ├── IngredientBlock.tsx   # Recipe
-    │   │   │   ├── StepBlock.tsx
+    │   │   │   ├── ChecklistBlock.tsx    # Unified: tool_list + ingredient
+    │   │   │   ├── StepBlock.tsx         # Unified: step + numbered (simple mode)
     │   │   │   ├── NutritionBlock.tsx
-    │   │   │   ├── CodeBlock.tsx         # Technical
+    │   │   │   ├── CodeBlock.tsx         # Technical (plain monochrome)
     │   │   │   ├── TerminalBlock.tsx
     │   │   │   ├── FileTreeBlock.tsx
     │   │   │   ├── ProConBlock.tsx       # Review
@@ -98,10 +98,8 @@ apps/web/
     │   │   │   ├── LocationBlock.tsx     # Travel
     │   │   │   ├── ItineraryBlock.tsx
     │   │   │   ├── CostBlock.tsx
-    │   │   │   ├── ExerciseBlock.tsx     # Fitness
-    │   │   │   ├── WorkoutTimerBlock.tsx
+    │   │   │   ├── FitnessBlock.tsx      # Unified: exercise + workout_timer
     │   │   │   ├── QuizBlock.tsx         # Education
-    │   │   │   ├── FormulaBlock.tsx
     │   │   │   ├── GuestBlock.tsx        # Interview
     │   │   │   ├── ProblemSolutionBlock.tsx  # Quality
     │   │   │   └── VisualBlock.tsx
@@ -167,11 +165,7 @@ apps/web/
     │   ├── use-share.ts             # Share link creation + clipboard
     │   ├── use-output-state.ts      # Mutable block state + undo/redo
     │   ├── use-websocket.ts          # Real-time updates
-    │   ├── use-long-press.ts         # Long press gesture hook
-    │   ├── use-syntax-highlight.ts  # Shiki async syntax highlighting
-    │   ├── use-grouped-blocks.ts   # Block grouping for persona views
-    │   ├── use-auto-flow-layout.ts # Memoized auto-flow layout computation
-    │   └── use-block-measurements.ts # Memoized content weight measurements
+    │   └── use-long-press.ts         # Long press gesture hook
     │
     ├── pages/
     │   ├── LoginPage.tsx
@@ -194,9 +188,7 @@ apps/web/
         ├── output-type-config.ts  # OutputType → emoji, gradient, label, accent
         ├── block-labels.ts        # i18n-ready block labels
         ├── block-layout.ts        # Block sizing, spacing matrix, sidebar classification
-        ├── auto-flow-layout.ts    # Content-aware auto-flow layout engine
-        ├── content-weight.ts      # Runtime block content measurement system
-        └── syntax-highlighter.ts  # Shiki singleton (lazy-loaded)
+        └── block-layout.ts        # Block sizing, spacing matrix
 ```
 
 ---
@@ -953,54 +945,52 @@ The Content Block Library V2.1 introduces 18 specialized block components organi
 src/components/video-detail/blocks/
 ├── __tests__/           # Unit tests for all blocks
 ├── index.ts             # Barrel export
-├── BulletsBlock.tsx     # Basic blocks (Phase 1)
-├── NumberedBlock.tsx
-├── ExampleBlock.tsx
+├── ListBlock.tsx        # Bullet lists (unordered only)
+├── ExampleBlock.tsx     # Code examples (single dark design)
 ├── CalloutBlock.tsx
-├── IngredientBlock.tsx  # Recipe blocks (Phase 2)
-├── StepBlock.tsx
+├── ChecklistBlock.tsx   # Unified: tool_list + ingredient (checkbox + serving scaler)
+├── StepBlock.tsx        # Unified: step + numbered (simple mode for numbered)
 ├── NutritionBlock.tsx
-├── CodeBlock.tsx        # Technical blocks (Phase 3)
+├── CodeBlock.tsx        # Plain monochrome code display
 ├── TerminalBlock.tsx
 ├── FileTreeBlock.tsx
-├── ProConBlock.tsx      # Review blocks (Phase 4)
+├── ProConBlock.tsx      # Review blocks
 ├── RatingBlock.tsx
 ├── VerdictBlock.tsx
-├── LocationBlock.tsx    # Travel blocks (Phase 5)
+├── LocationBlock.tsx    # Travel blocks
 ├── ItineraryBlock.tsx
 ├── CostBlock.tsx
-├── ExerciseBlock.tsx    # Fitness blocks (Phase 6)
-├── WorkoutTimerBlock.tsx
-├── QuizBlock.tsx        # Education blocks (Phase 6)
-├── FormulaBlock.tsx
-└── GuestBlock.tsx       # Interview blocks (Phase 7)
+├── FitnessBlock.tsx     # Unified: exercise + workout_timer
+├── QuizBlock.tsx        # Education blocks
+└── GuestBlock.tsx       # Interview blocks
 ```
 
 ## Block Types Reference
 
 | Block Type | Component | Persona | Key Features |
 |------------|-----------|---------|--------------|
-| `ingredient` | IngredientBlock | Recipe | Serving scaler, checkbox items |
+| `ingredient` | ChecklistBlock | Recipe | Serving scaler, checkbox items |
+| `tool_list` | ChecklistBlock | Various | Checkbox items, notes |
 | `step` | StepBlock | Recipe | Progress tracking, timing, video sync |
+| `numbered` | StepBlock (simple) | Various | Non-interactive numbered list |
 | `nutrition` | NutritionBlock | Recipe | Table layout, nutrient display |
-| `code` | CodeBlock | Code | Syntax highlighting, copy, line numbers |
+| `code` | CodeBlock | Code | Plain monochrome, copy, line numbers |
 | `terminal` | TerminalBlock | Code | Command display, copy functionality |
 | `file_tree` | FileTreeBlock | Code | Expandable folders, keyboard nav |
-| `pro_con` | ProConBlock | Review | Split layout, weighted items |
+| `pro_con` | ComparisonRenderer | Review | Split layout (via ContentBlockRenderer adaptation) |
 | `rating` | RatingBlock | Review | Stars/progress bar, breakdown |
 | `verdict` | VerdictBlock | Review | Verdict types, best-for lists |
 | `location` | LocationBlock | Travel | Map links, coordinates |
 | `itinerary` | ItineraryBlock | Travel | Day/activity timeline |
 | `cost` | CostBlock | Travel | Currency formatting, totals |
-| `exercise` | ExerciseBlock | Fitness | Sets/reps, difficulty badges, demo links |
-| `workout_timer` | WorkoutTimerBlock | Fitness | Interactive timer, interval tracking |
+| `exercise` | FitnessBlock | Fitness | Sets/reps, difficulty badges, demo links |
+| `workout_timer` | FitnessBlock | Fitness | Interactive timer, interval tracking |
 | `quiz` | QuizBlock | Education | Interactive Q&A, explanations |
-| `formula` | FormulaBlock | Education | LaTeX rendering, inline mode |
 | `guest` | GuestBlock | Interview | Social links, avatar, bio |
 
 ## Block Visual Design Language
 
-All 32 block components implement a unified "Enterprise Calm" design language. This section documents the visual patterns, premium CSS utilities, and rules for maintaining consistency.
+All 27 block components implement a unified "Enterprise Calm" design language. This section documents the visual patterns, premium CSS utilities, and rules for maintaining consistency.
 
 ### Premium Utility Matrix
 
@@ -1008,28 +998,28 @@ Which blocks use which premium CSS utilities:
 
 | Utility | Blocks Using It |
 |---------|----------------|
-| `stagger-children` | BulletsBlock, NumberedBlock, IngredientBlock, StepBlock, ExerciseBlock, ItineraryBlock, CostBlock, ToolListBlock, DosDontsBlock, TimelineBlock, TranscriptBlock |
-| `hover-lift` | IngredientBlock (items), ExerciseBlock (items), ItineraryBlock (activities), CostBlock (items), LocationBlock (card), GuestBlock (social links) |
-| `hover-scale` | QuizBlock (options), WorkoutTimerBlock (controls) |
-| `glass-surface` | IngredientBlock (scaler), WorkoutTimerBlock (controls), NutritionBlock (header), CostBlock (total) |
-| `text-gradient-primary` | NumberedBlock (numbers), RatingBlock (large scores), FormulaBlock (display), StepBlock (numbers) |
+| `stagger-children` | ListBlock, ChecklistBlock, StepBlock, FitnessBlock, ItineraryBlock, CostBlock, TimelineBlock, TranscriptBlock |
+| `hover-lift` | ChecklistBlock (items), FitnessBlock (items), ItineraryBlock (activities), CostBlock (items), LocationBlock (card), GuestBlock (social links) |
+| `hover-scale` | QuizBlock (options), FitnessBlock (timer controls) |
+| `glass-surface` | ChecklistBlock (scaler), FitnessBlock (timer controls), NutritionBlock (header), CostBlock (total) |
+| `text-gradient-primary` | RatingBlock (large scores), StepBlock (numbers) |
 | `text-gradient-warm` | RatingBlock (star scores), NutritionBlock (daily values) |
-| `fade-divider` | IngredientBlock, ExerciseBlock, CostBlock, ItineraryBlock, NutritionBlock, ToolListBlock, TranscriptBlock, NumberedBlock, RatingBlock |
-| `block-card` | Interactive blocks via `BlockWrapper variant="card"` (IngredientBlock, StepBlock, QuizBlock, WorkoutTimerBlock, FileTreeBlock, TranscriptBlock, CostBlock, DefinitionBlock) |
+| `fade-divider` | ChecklistBlock, FitnessBlock, CostBlock, ItineraryBlock, NutritionBlock, TranscriptBlock, RatingBlock, ListBlock |
+| `block-card` | Interactive blocks via `BlockWrapper variant="card"` (ChecklistBlock, StepBlock, QuizBlock, FitnessBlock, FileTreeBlock, TranscriptBlock, CostBlock, DefinitionBlock) |
 | `block-accent` | CalloutBlock (top fade-edge gradient line via `::before`, no left border) |
 | `block-code-container` | CodeBlock, TerminalBlock |
-| `block-label-minimal` | Transparent blocks with small muted label (RatingBlock, VerdictBlock, LocationBlock, NutritionBlock, GuestBlock, ItineraryBlock, ExerciseBlock) |
+| `block-label-minimal` | Transparent blocks with small muted label (RatingBlock, VerdictBlock, LocationBlock, NutritionBlock, GuestBlock, ItineraryBlock, FitnessBlock) |
 | `table-fade-dividers` | TableBlock — gradient fade-edge dividers on inner lines only |
 
 ### Dark Mode Glow Usage
 
 | Glow Class | Block | Element |
 |------------|-------|---------|
-| `badge-glow-success` | ExerciseBlock | Beginner difficulty badge |
-| `badge-glow-warning` | ExerciseBlock | Intermediate difficulty badge |
-| `badge-glow-destructive` | ExerciseBlock | Advanced difficulty badge |
-| `amount-badge-glow` | IngredientBlock | Amount/unit badge |
-| `timer-glow` | WorkoutTimerBlock | Timer digit display |
+| `badge-glow-success` | FitnessBlock | Beginner difficulty badge |
+| `badge-glow-warning` | FitnessBlock | Intermediate difficulty badge |
+| `badge-glow-destructive` | FitnessBlock | Advanced difficulty badge |
+| `amount-badge-glow` | ChecklistBlock | Amount/unit badge |
+| `timer-glow` | FitnessBlock | Timer digit display |
 | `day-number-glow` | ItineraryBlock | Day number circle |
 | `avatar-glow` | GuestBlock | Avatar ring |
 
@@ -1086,18 +1076,18 @@ export function MyNewBlock({ block }: { block: MyBlockType }) {
 
 ## Recipe Blocks (Phase 2)
 
-### IngredientBlock
+### ChecklistBlock (ingredient + tool_list)
 
-Displays ingredients with interactive serving scaler.
+Unified component for ingredient lists and tool lists. Dispatches by `block.type`.
 
 ```tsx
-<IngredientBlock
+<ChecklistBlock
   block={{
     type: 'ingredient',
     blockId: 'block-1',
-    ingredients: [
+    items: [
       { name: 'flour', amount: '2', unit: 'cups' },
-      { name: 'sugar', amount: '1', unit: 'cup', optional: true },
+      { name: 'sugar', amount: '1', unit: 'cup', notes: 'optional' },
     ],
     servings: 4,
   }}
@@ -1105,10 +1095,10 @@ Displays ingredients with interactive serving scaler.
 ```
 
 **Features:**
-- Serving size scaler (+/- buttons)
-- Checkbox for each ingredient
-- Optional ingredient badges
-- Proportional amount scaling
+- Shared `useCheckedSet` hook for checkbox toggle logic
+- Serving size scaler for ingredients (+/- buttons, proportional scaling)
+- Checkbox for each item
+- Tool list variant shows notes per item
 
 ### StepBlock
 
@@ -1156,7 +1146,7 @@ Displays nutritional information in table format.
 
 ### CodeBlock
 
-Syntax-highlighted code with copy functionality. Uses **Shiki** (WASM-based, VS Code-quality) for per-language syntax coloring with `github-dark`/`github-light` themes. Shiki is lazy-loaded in a separate vendor chunk (`vendor-shiki`).
+Plain monochrome code display with copy functionality.
 
 ```tsx
 <CodeBlock
@@ -1172,13 +1162,11 @@ Syntax-highlighted code with copy functionality. Uses **Shiki** (WASM-based, VS 
 ```
 
 **Features:**
-- Shiki syntax highlighting (JS, TS, Python, Bash, JSON, HTML, CSS + on-demand)
-- Language badge
+- Plain monochrome rendering (no syntax highlighting dependency)
+- Language badge or filename header
 - Copy to clipboard with feedback
-- Line numbers
+- Line numbers (multi-line only)
 - Line highlighting
-- Filename header
-- Graceful fallback to plain text while Shiki loads
 
 ### TerminalBlock
 
@@ -1355,14 +1343,15 @@ Cost breakdown with currency formatting.
 />
 ```
 
-## Fitness Blocks (Phase 6)
+## Fitness Blocks
 
-### ExerciseBlock
+### FitnessBlock (exercise + workout_timer)
 
-Exercise display with sets/reps and demo links.
+Unified component for exercises and workout timers. Dispatches by `block.type`.
 
 ```tsx
-<ExerciseBlock
+// Exercise mode
+<FitnessBlock
   block={{
     type: 'exercise',
     blockId: 'block-1',
@@ -1373,22 +1362,9 @@ Exercise display with sets/reps and demo links.
   }}
   onPlay={(seconds) => seekToTime(seconds)}
 />
-```
 
-**Features:**
-- Sets/reps display
-- Duration for timed exercises
-- Difficulty badges (beginner/intermediate/advanced)
-- "Watch demo" button for timestamped exercises
-- Rest period display
-- Exercise notes
-
-### WorkoutTimerBlock
-
-Interactive workout interval timer.
-
-```tsx
-<WorkoutTimerBlock
+// Timer mode
+<FitnessBlock
   block={{
     type: 'workout_timer',
     blockId: 'block-1',
@@ -1401,14 +1377,10 @@ Interactive workout interval timer.
 />
 ```
 
-**Features:**
-- Start/Pause/Reset controls
-- Visual countdown
-- Interval progress indicators
-- Round counter
-- Completion state
+**Exercise features:** Sets/reps, difficulty badges, demo links, rest periods
+**Timer features:** Start/Pause/Reset, visual countdown, interval progress, round counter, completion state
 
-## Education Blocks (Phase 6)
+## Education Blocks
 
 ### QuizBlock
 
@@ -1437,22 +1409,6 @@ Interactive quiz with answer reveal.
 - Show/hide answer buttons
 - Explanation display
 - Disabled state after selection
-
-### FormulaBlock
-
-LaTeX formula display.
-
-```tsx
-<FormulaBlock
-  block={{
-    type: 'formula',
-    blockId: 'block-1',
-    latex: 'E = mc^2',
-    inline: false,
-    description: "Einstein's mass-energy equivalence",
-  }}
-/>
-```
 
 ## Interview Blocks (Phase 7)
 

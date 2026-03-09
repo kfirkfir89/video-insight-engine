@@ -45,10 +45,10 @@ import {
   createExerciseBlock,
   createWorkoutTimerBlock,
   createQuizBlock,
-  createFormulaBlock,
   createGuestBlock,
   sampleBlocks,
   BLOCK_TYPE_COUNT,
+  showcaseEntries,
 } from '../mock-blocks';
 
 describe('mock-blocks factories', () => {
@@ -333,13 +333,6 @@ describe('mock-blocks factories', () => {
       expect(block.questions).toEqual(questions);
     });
 
-    it('createFormulaBlock creates valid formula', () => {
-      const block = createFormulaBlock('E=mc^2', 'Einstein', false);
-      expect(block.type).toBe('formula');
-      expect(block.latex).toBe('E=mc^2');
-      expect(block.description).toBe('Einstein');
-      expect(block.inline).toBe(false);
-    });
   });
 
   // ─────────────────────────────────────────────────────
@@ -411,7 +404,6 @@ describe('mock-blocks factories', () => {
         'exercise',
         'workout_timer',
         'quiz',
-        'formula',
         'guest',
       ];
 
@@ -437,6 +429,57 @@ describe('mock-blocks factories', () => {
       expect(BLOCK_TYPE_COUNT).toBeGreaterThanOrEqual(34);
       // Derivation check confirms no drift between export and source
       expect(BLOCK_TYPE_COUNT).toBe(Object.keys(sampleBlocks).length);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────
+  // Showcase Entries
+  // ─────────────────────────────────────────────────────
+  describe('showcaseEntries', () => {
+    it('has expected number of unique components', () => {
+      expect(showcaseEntries.length).toBe(25);
+    });
+
+    it('every entry has at least one variant', () => {
+      for (const entry of showcaseEntries) {
+        expect(entry.variants.length).toBeGreaterThanOrEqual(1);
+      }
+    });
+
+    it('every variant has a valid blockId and type', () => {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      for (const entry of showcaseEntries) {
+        for (const variant of entry.variants) {
+          expect(variant.block).toBeDefined();
+          expect((variant.block as { blockId: string }).blockId).toMatch(uuidRegex);
+          expect((variant.block as { type: string }).type).toBeDefined();
+        }
+      }
+    });
+
+    it('has unique labels', () => {
+      const labels = showcaseEntries.map((e) => e.label);
+      expect(new Set(labels).size).toBe(labels.length);
+    });
+
+    it('multi-variant entries include merged blocks', () => {
+      const fitness = showcaseEntries.find((e) => e.label === 'FitnessBlock');
+      expect(fitness?.variants.length).toBe(2);
+
+      const checklist = showcaseEntries.find((e) => e.label === 'ChecklistBlock');
+      expect(checklist?.variants.length).toBe(2);
+
+      const comparison = showcaseEntries.find((e) => e.label === 'Comparison');
+      expect(comparison?.variants.length).toBe(4);
+
+      const step = showcaseEntries.find((e) => e.label === 'StepBlock');
+      expect(step?.variants.length).toBe(2);
+
+      const codeBlock = showcaseEntries.find((e) => e.label === 'CodeBlock');
+      expect(codeBlock?.variants.length).toBe(3);
+
+      const callout = showcaseEntries.find((e) => e.label === 'Callout');
+      expect(callout?.variants.length).toBe(5);
     });
   });
 });

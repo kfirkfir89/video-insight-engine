@@ -2,9 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies (ffmpeg for Whisper audio extraction)
+# Install system dependencies (ffmpeg for Whisper, nodejs for yt-dlp JS challenges)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Install shared llm-common package

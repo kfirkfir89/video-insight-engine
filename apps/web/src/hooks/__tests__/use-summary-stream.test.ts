@@ -195,99 +195,34 @@ describe("useSummaryStream", () => {
       expect(result.current.duration).toBe(600);
     });
 
-    it("should parse chapter events", async () => {
-      const events = [
-        { event: "phase", data: { event: "phase", phase: "chapter_summaries" } },
-        { event: "chapter_start", data: { event: "chapter_start", index: 0 } },
-        {
-          event: "chapter_ready",
-          data: {
-            event: "chapter_ready",
-            chapter: {
-              id: "s1",
-              timestamp: "0:00",
-              title: "Introduction",
-              startSeconds: 0,
-              endSeconds: 60,
-              content: [
-                { blockId: "b1", type: "paragraph", text: "Summary text" },
-                { blockId: "b2", type: "bullets", items: ["Key point 1", "Key point 2"] },
-              ],
-            },
-          },
-        },
-        { event: "done", data: { event: "done", processingTimeMs: 2000 } },
-      ];
-
-      server.use(
-        http.get(`${API_URL}/videos/:id/stream`, () => createSSEResponse(events))
-      );
-
-      const { result } = renderHook(() =>
-        useSummaryStream({
-          videoSummaryId: "video-1",
-          enabled: true,
-        })
-      );
-
-      await waitFor(() => {
-        expect(result.current.chapters).toHaveLength(1);
-      });
-
-      expect(result.current.chapters[0].title).toBe("Introduction");
-      expect(result.current.chapters[0].content).toHaveLength(2);
-      expect(result.current.chapters[0].content?.[0]).toEqual({
-        blockId: "b1",
-        type: "paragraph",
-        text: "Summary text",
-      });
-    });
-
-    it("should parse concepts event", async () => {
+    it("should parse pipeline intent and extraction events", async () => {
       const events = [
         {
-          event: "concepts_complete",
+          event: "intent_detected",
           data: {
-            event: "concepts_complete",
-            concepts: [
-              {
-                id: "c1",
-                name: "Test Concept",
-                definition: "A concept for testing",
-                timestamp: "2:30",
-              },
-            ],
+            event: "intent_detected",
+            outputType: "recipe",
+            confidence: 0.95,
+            userGoal: "Learn to cook",
+            sections: [],
           },
         },
-        { event: "done", data: { event: "done", processingTimeMs: 1000 } },
-      ];
-
-      server.use(
-        http.get(`${API_URL}/videos/:id/stream`, () => createSSEResponse(events))
-      );
-
-      const { result } = renderHook(() =>
-        useSummaryStream({
-          videoSummaryId: "video-1",
-          enabled: true,
-        })
-      );
-
-      await waitFor(() => {
-        expect(result.current.concepts).toHaveLength(1);
-      });
-
-      expect(result.current.concepts[0].name).toBe("Test Concept");
-    });
-
-    it("should parse synthesis complete event", async () => {
-      const events = [
+        {
+          event: "extraction_complete",
+          data: {
+            event: "extraction_complete",
+            outputType: "recipe",
+            data: { meta: {}, ingredients: [], steps: [], tips: [], substitutions: [], nutrition: [], equipment: [] },
+          },
+        },
         {
           event: "synthesis_complete",
           data: {
             event: "synthesis_complete",
-            tldr: "This is the TL;DR",
-            keyTakeaways: ["Point 1", "Point 2"],
+            tldr: "A cooking tutorial",
+            keyTakeaways: ["Use fresh ingredients"],
+            masterSummary: "Full summary",
+            seoDescription: "SEO text",
           },
         },
         { event: "done", data: { event: "done", processingTimeMs: 3000 } },
@@ -305,10 +240,12 @@ describe("useSummaryStream", () => {
       );
 
       await waitFor(() => {
-        expect(result.current.tldr).toBe("This is the TL;DR");
+        expect(result.current.phase).toBe("done");
       });
 
-      expect(result.current.keyTakeaways).toEqual(["Point 1", "Point 2"]);
+      expect(result.current.intent?.outputType).toBe("recipe");
+      expect(result.current.output?.type).toBe("recipe");
+      expect(result.current.synthesis?.tldr).toBe("A cooking tutorial");
     });
 
     it("should handle error events", async () => {
@@ -346,9 +283,6 @@ describe("useSummaryStream", () => {
       const phases: StreamPhase[] = [];
       const events = [
         { event: "phase", data: { event: "phase", phase: "metadata" } },
-        { event: "phase", data: { event: "phase", phase: "transcript" } },
-        { event: "phase", data: { event: "phase", phase: "chapter_summaries" } },
-        { event: "phase", data: { event: "phase", phase: "synthesis" } },
         { event: "done", data: { event: "done", processingTimeMs: 5000 } },
       ];
 

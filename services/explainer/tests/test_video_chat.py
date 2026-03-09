@@ -181,8 +181,8 @@ class TestVideoChat:
         sample_video_summary_id,
         sample_video_summary,
     ):
-        """Test default output_type='summary' when field not set."""
-        # sample_video_summary has output_type="summary" (default)
+        """Test default output_type='explanation' when field not set."""
+        # sample_video_summary has output_type="explanation" (default)
         mock_video_summary_repo.find_by_id.return_value = sample_video_summary
 
         await video_chat(
@@ -195,4 +195,4 @@ class TestVideoChat:
 
         call_args = mock_llm_service.chat_completion.call_args
         system_prompt = call_args[0][0]
-        assert "Summary" in system_prompt
+        assert "Explanation" in system_prompt

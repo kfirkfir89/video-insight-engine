@@ -10,12 +10,53 @@ from src.services.llm import LLMService, load_prompt
 from src.utils.output_type import get_output_type_label, get_output_type_hint
 
 
+def _serialize_output_data(data: dict, max_items: int = 8) -> list[str]:
+    """Serialize typed output data into readable text lines for LLM context."""
+    lines: list[str] = []
+    for key, value in data.items():
+        # Skip internal/meta fields
+        if key.startswith("_"):
+            continue
+        section_label = key.replace("_", " ").title()
+        if isinstance(value, str):
+            lines.append(f"\n### {section_label}")
+            lines.append(value[:500])
+        elif isinstance(value, list):
+            lines.append(f"\n### {section_label}")
+            for item in value[:max_items]:
+                if isinstance(item, dict):
+                    # Extract the most meaningful text from dict items
+                    text = item.get("text") or item.get("title") or item.get("name") or item.get("label") or ""
+                    desc = item.get("description") or item.get("detail") or item.get("definition") or ""
+                    if text:
+                        entry = f"- **{text}**" if desc else f"- {text}"
+                        if desc:
+                            entry += f": {str(desc)[:200]}"
+                        lines.append(entry)
+                elif isinstance(item, str):
+                    lines.append(f"- {item[:200]}")
+        elif isinstance(value, dict):
+            lines.append(f"\n### {section_label}")
+            for sub_key, sub_val in list(value.items())[:max_items]:
+                if isinstance(sub_val, str):
+                    lines.append(f"- **{sub_key}**: {sub_val[:200]}")
+    return lines
+
+
 def _build_video_context(video_summary: VideoSummary) -> str:
-    """Build a context string from video summary for the LLM."""
+    """Build a context string from video summary for the LLM.
+
+    Prefers typed output data from the intent-driven pipeline.
+    Falls back to V1 chapter-based sections for backward compat.
+    """
     parts = [f"# Video: {video_summary.title}"]
 
-    # Add chapter summaries
-    if video_summary.sections:
+    # Prefer typed output data from intent-driven pipeline
+    if video_summary.output_data and isinstance(video_summary.output_data, dict):
+        parts.append(f"\n## Content ({video_summary.output_type.replace('_', ' ').title()})")
+        parts.extend(_serialize_output_data(video_summary.output_data))
+    elif video_summary.sections:
+        # Fallback: V1 chapter-based content
         parts.append("\n## Chapters")
         for section in video_summary.sections:
             parts.append(f"\n### {section.title} ({section.timestamp})")

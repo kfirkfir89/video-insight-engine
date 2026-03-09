@@ -61,20 +61,50 @@ async def explain_auto(
 
     # 4. Find target and build context
     if target_type == "section":
+        # Try V1 sections first, then typed output data sections
         target = next((s for s in video_summary.sections if s.id == target_id), None)
-        if not target:
-            raise ResourceNotFoundError("Section not found", resource_type="section")
 
-        # Extract summary and bullets from content blocks
-        content = target.content or []
-        summary = extract_summary_from_content(content)
-        bullets = extract_bullets_from_content(content)
+        if target:
+            # V1: section with content blocks
+            content = target.content or []
+            summary = extract_summary_from_content(content)
+            bullets = extract_bullets_from_content(content)
+            section_title = target.title
+            section_timestamp = target.timestamp
+        elif video_summary.output_data and isinstance(video_summary.output_data, dict):
+            # Intent-driven pipeline: section ID maps to a key in output_data
+            section_data = video_summary.output_data.get(target_id)
+            if section_data is None:
+                raise ResourceNotFoundError("Section not found", resource_type="section")
+            # Build summary/bullets from typed output section
+            section_title = target_id.replace("_", " ").title()
+            section_timestamp = "00:00"
+            if isinstance(section_data, str):
+                summary = section_data[:500]
+                bullets = []
+            elif isinstance(section_data, list):
+                summary = ""
+                bullets = []
+                for item in section_data[:10]:
+                    if isinstance(item, dict):
+                        text = item.get("text") or item.get("title") or item.get("name") or str(item)
+                        bullets.append(str(text)[:200])
+                    elif isinstance(item, str):
+                        bullets.append(item[:200])
+            elif isinstance(section_data, dict):
+                summary = section_data.get("description", "") or section_data.get("text", "")
+                bullets = []
+            else:
+                summary = str(section_data)[:500]
+                bullets = []
+        else:
+            raise ResourceNotFoundError("Section not found", resource_type="section")
 
         context = {
             "video_title": video_summary.title,
             "youtube_id": video_summary.youtubeId,
-            "timestamp": target.timestamp,
-            "title": target.title,
+            "timestamp": section_timestamp,
+            "title": section_title,
             "summary": summary,
             "bullets": bullets,
             "output_type_label": output_type_label,

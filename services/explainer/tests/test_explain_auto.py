@@ -266,7 +266,7 @@ class TestExplainAutoOutputType:
             id=sample_video_summary_id,
             youtubeId="abc123",
             title="Biology Study Guide",
-            output_type="study_guide",
+            output_type="study_kit",
             sections=[],
             concepts=[VideoSummaryConcept(
                 id="con-1",
@@ -289,9 +289,9 @@ class TestExplainAutoOutputType:
 
         call_args = mock_llm_service.generate_expansion.call_args
         context = call_args[0][1]
-        assert context["output_type_label"] == "Study Guide"
+        assert context["output_type_label"] == "Study Kit"
         hint = context["output_type_hint"].lower()
-        assert "academic" in hint or "theories" in hint, f"Expected academic/theories keywords in hint: {hint}"
+        assert "academic" in hint or "theories" in hint or "concepts" in hint, f"Expected academic/theories/concepts keywords in hint: {hint}"
 
     async def test_default_output_type_when_absent(
         self,
@@ -301,7 +301,7 @@ class TestExplainAutoOutputType:
         sample_video_summary_id,
         sample_video_summary,
     ):
-        """Test default output_type='summary' when field uses default."""
+        """Test default output_type='explanation' when field uses default."""
         mock_expansion_repo.find_by_target.return_value = None
         mock_video_summary_repo.find_by_id.return_value = sample_video_summary
         mock_llm_service.generate_expansion.return_value = "# Content"
@@ -317,4 +317,4 @@ class TestExplainAutoOutputType:
 
         call_args = mock_llm_service.generate_expansion.call_args
         context = call_args[0][1]
-        assert context["output_type_label"] == "Summary"
+        assert context["output_type_label"] == "Explanation"

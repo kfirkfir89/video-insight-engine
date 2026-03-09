@@ -1,62 +1,58 @@
 // ═══════════════════════════════════════════════════
-// Content Block Exports (V2.1)
+// Content Block Exports
 // ═══════════════════════════════════════════════════
 
 // Accessibility wrapper
 export { BlockWrapper } from './BlockWrapper';
 
-// Existing blocks
+// Lists
+export { ListBlock } from './ListBlock';
+
+// Data display
 export { KeyValueRenderer } from './KeyValueRenderer';
 export { ComparisonRenderer } from './ComparisonRenderer';
 export { TimestampRenderer } from './TimestampRenderer';
 export { QuoteRenderer } from './QuoteRenderer';
 export { StatisticRenderer } from './StatisticRenderer';
-export { BulletsBlock } from './BulletsBlock';
-export { NumberedBlock } from './NumberedBlock';
-export { ExampleBlock } from './ExampleBlock';
 export { CalloutBlock } from './CalloutBlock';
-
-// New universal blocks (V2.1)
-export { TranscriptBlock } from './TranscriptBlock';
-export { DosDontsBlock } from './DosDontsBlock';
-export { TimelineBlock } from './TimelineBlock';
 export { DefinitionBlock } from './DefinitionBlock';
-export { ToolListBlock } from './ToolListBlock';
 
-// Cooking blocks (V2.1)
-export { IngredientBlock } from './IngredientBlock';
+// Media & timeline
+export { TranscriptBlock } from './TranscriptBlock';
+export { TimelineBlock } from './TimelineBlock';
+
+// Cooking
 export { StepBlock } from './StepBlock';
 export { NutritionBlock } from './NutritionBlock';
 
-// Coding blocks (V2.1)
+// Code (CodeBlock handles code, example, terminal)
 export { CodeBlock } from './CodeBlock';
-export { TerminalBlock } from './TerminalBlock';
 export { FileTreeBlock } from './FileTreeBlock';
 
-// Travel blocks (V2.1)
+// Travel
 export { LocationBlock } from './LocationBlock';
 export { ItineraryBlock } from './ItineraryBlock';
 export { CostBlock } from './CostBlock';
 
-// Review blocks (V2.1)
-export { ProConBlock } from './ProConBlock';
+// Reviews
 export { RatingBlock } from './RatingBlock';
 export { VerdictBlock } from './VerdictBlock';
 
-// Fitness blocks (V2.1)
-export { ExerciseBlock } from './ExerciseBlock';
-export { WorkoutTimerBlock } from './WorkoutTimerBlock';
+// Fitness (unified)
+export { FitnessBlock } from './FitnessBlock';
 
-// Education blocks (V2.1)
+// Checklist (unified)
+export { ChecklistBlock } from './ChecklistBlock';
+
+// Education
 export { QuizBlock } from './QuizBlock';
-export { FormulaBlock } from './FormulaBlock';
 
-// Podcast blocks (V2.1)
+// Podcast
 export { GuestBlock } from './GuestBlock';
 
-// Quality blocks
+// Quality
 export { ProblemSolutionBlock } from './ProblemSolutionBlock';
 export { VisualBlock } from './VisualBlock';
 
-// Generic blocks
+// Generic
 export { TableBlock } from './TableBlock';

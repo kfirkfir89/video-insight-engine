@@ -1,117 +1,90 @@
 import { memo, useState, useCallback } from 'react';
-import { Copy, Check, FileCode } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { BlockWrapper } from './BlockWrapper';
-import { useSyntaxHighlight } from '@/hooks/use-syntax-highlight';
-import type { CodeBlock as CodeBlockType } from '@vie/types';
+import type { CodeBlock as CodeBlockType, TerminalBlock as TerminalBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
-interface CodeBlockProps {
-  block: CodeBlockType;
+type CodeBlockProps =
+  | { block: CodeBlockType }
+  | { block: TerminalBlockType }
+  | { title?: string; code: string; explanation?: string };
+
+function getCodeContent(props: CodeBlockProps): { text: string; explanation?: string } {
+  if ('code' in props && typeof props.code === 'string') {
+    return { text: props.code, explanation: props.explanation };
+  }
+  const block = (props as { block: CodeBlockType | TerminalBlockType }).block;
+  if (block.type === 'terminal') {
+    const parts = [block.command];
+    if (block.output) parts.push(block.output);
+    return { text: parts.join('\n') };
+  }
+  return { text: block.code };
+}
+
+function getCopyText(props: CodeBlockProps): string {
+  if ('code' in props && typeof props.code === 'string') return props.code;
+  const block = (props as { block: CodeBlockType | TerminalBlockType }).block;
+  if (block.type === 'terminal') return block.command;
+  return block.code;
 }
 
 /**
- * Renders syntax-highlighted code with copy functionality.
- * Uses Shiki for per-language syntax coloring with async loading and plain-text fallback.
+ * Unified code display block.
+ * Handles code, example, and terminal types.
+ * Minimal: dark surface, monospace text, copy button. No header chrome.
  */
-export const CodeBlock = memo(function CodeBlock({ block }: CodeBlockProps) {
+export const CodeBlock = memo(function CodeBlock(props: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
-  const { html: shikiHtml } = useSyntaxHighlight(block.code, block.language);
+
+  const copyText = getCopyText(props);
+  const { text, explanation } = getCodeContent(props);
 
   const handleCopy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(block.code);
+      await navigator.clipboard.writeText(copyText);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard API may fail in non-HTTPS or restricted contexts
     }
-  }, [block.code]);
+  }, [copyText]);
 
-  if (!block.code) return null;
-
-  const lines = block.code.split('\n');
-  const showLineNumbers = lines.length > 1;
-
-  const headerLabel = block.filename
-    ? block.filename
-    : block.language
-      ? block.language.toUpperCase()
-      : 'Code';
-
-  const copyButton = (
-    <Button
-      variant="ghost"
-      size="bare"
-      onClick={handleCopy}
-      className={cn(
-        'text-xs px-2 py-1 transition-all duration-150 hover:bg-white/10',
-        copied ? 'text-success code-copied-glow scale-110' : 'text-[var(--code-muted)]'
-      )}
-      aria-label={copied ? BLOCK_LABELS.copied : BLOCK_LABELS.copyCode}
-    >
-      {copied ? (
-        <>
-          <Check className="h-3 w-3" aria-hidden="true" />
-          <span>{BLOCK_LABELS.copied}</span>
-        </>
-      ) : (
-        <>
-          <Copy className="h-3 w-3" aria-hidden="true" />
-          <span>{BLOCK_LABELS.copyCode}</span>
-        </>
-      )}
-    </Button>
-  );
+  if (!text) return null;
 
   return (
-    <BlockWrapper
-      blockId={block.blockId}
-      label="Code snippet"
-      variant="code"
-      headerIcon={<FileCode className="h-4 w-4" />}
-      headerLabel={headerLabel}
-      headerAction={copyButton}
-    >
-      {/* Code content — Shiki HTML when available, plain-text fallback while loading */}
-      <div className="overflow-x-auto">
-        {shikiHtml ? (
-          // Safe: Shiki only generates <span> tags with inline styles — no scripts or user HTML
-          <div
-            className="p-4 text-sm [&>pre]:!bg-transparent [&>pre]:!m-0 [&>pre]:!p-0 [&_code]:font-mono"
-            dangerouslySetInnerHTML={{ __html: shikiHtml }}
-          />
-        ) : (
-          <pre className="p-4 text-sm">
-            <code className="font-mono">
-              {showLineNumbers ? (
-                <table className="border-collapse">
-                  <tbody>
-                    {lines.map((line, index) => {
-                      const lineNum = index + 1;
-                      const isHighlighted = block.highlightLines?.includes(lineNum);
-                      return (
-                        <tr
-                          key={index}
-                          className={cn(isHighlighted && 'bg-primary/10 shadow-[inset_3px_0_0_var(--primary)]')}
-                        >
-                          <td className="pr-4 text-right text-[var(--code-dim)] select-none tabular-nums">
-                            {lineNum}
-                          </td>
-                          <td className="whitespace-pre">{line || ' '}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              ) : (
-                <span className="whitespace-pre-wrap">{block.code}</span>
-              )}
-            </code>
-          </pre>
-        )}
+    <div>
+      <div className="relative overflow-hidden rounded-lg bg-[oklch(12%_0_0)] text-[oklch(90%_0_0)]">
+        {/* Copy button */}
+        <button
+          onClick={handleCopy}
+          className={cn(
+            'absolute top-2 right-2 z-10 flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors',
+            copied
+              ? 'text-success'
+              : 'text-[oklch(50%_0_0)] hover:text-[oklch(75%_0_0)]'
+          )}
+          aria-label={copied ? BLOCK_LABELS.copied : BLOCK_LABELS.copyCode}
+        >
+          {copied ? (
+            <Check className="h-3 w-3" aria-hidden="true" />
+          ) : (
+            <Copy className="h-3 w-3" aria-hidden="true" />
+          )}
+        </button>
+
+        {/* Code content */}
+        <pre className="overflow-x-auto p-4 pr-16 text-sm leading-relaxed">
+          <code className="font-mono whitespace-pre-wrap">{text}</code>
+        </pre>
       </div>
-    </BlockWrapper>
+
+      {/* Explanation (example blocks) */}
+      {explanation && (
+        <p className="mt-2 text-sm text-muted-foreground">
+          {explanation}
+        </p>
+      )}
+    </div>
   );
 });

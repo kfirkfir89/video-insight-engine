@@ -1,57 +1,10 @@
 """Tests for LLMService with LiteLLM multi-provider support."""
 
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock
 
-from src.services.llm import (
-    LLMService,
-    load_prompt,
-    load_persona,
-    load_examples,
-    seconds_to_timestamp,
-    VALID_PERSONAS,
-)
-from src.services.youtube import _load_persona_rules
-
-
-class TestSecondsToTimestamp:
-    """Tests for seconds_to_timestamp helper."""
-
-    def test_zero_seconds(self):
-        assert seconds_to_timestamp(0) == "00:00"
-
-    def test_under_minute(self):
-        assert seconds_to_timestamp(45) == "00:45"
-
-    def test_one_minute(self):
-        assert seconds_to_timestamp(60) == "01:00"
-
-    def test_multiple_minutes(self):
-        assert seconds_to_timestamp(125) == "02:05"
-
-    def test_over_hour(self):
-        assert seconds_to_timestamp(3661) == "61:01"
-
-
-class TestLoadPrompt:
-    """Tests for load_prompt helper."""
-
-    def test_load_section_detect_prompt(self):
-        prompt = load_prompt("section_detect")
-        assert "sections" in prompt.lower()
-
-    def test_load_section_summary_prompt(self):
-        prompt = load_prompt("section_summary")
-        # Prompt transforms section content into article format
-        assert "section" in prompt.lower()
-
-    def test_load_concept_extract_prompt(self):
-        prompt = load_prompt("concept_extract")
-        assert "concept" in prompt.lower()
-
-    def test_load_global_synthesis_prompt(self):
-        prompt = load_prompt("global_synthesis")
-        assert "tldr" in prompt.lower() or "summary" in prompt.lower()
+from src.services.llm import LLMService
+from src.services.video.youtube import _load_persona_rules
 
 
 class TestLLMService:
@@ -62,211 +15,49 @@ class TestLLMService:
         service = LLMService(mock_llm_provider)
         assert service._provider is mock_llm_provider
 
-    @pytest.mark.asyncio
-    async def test_detect_sections_success(
-        self,
-        mock_llm_provider,
-        sample_transcript,
-        sample_segments,
-        sample_llm_sections_response,
-    ):
-        """Test successful section detection."""
-        mock_llm_provider.complete = AsyncMock(return_value=sample_llm_sections_response)
-
+    def test_provider_property(self, mock_llm_provider):
+        """Test provider property returns the underlying provider."""
         service = LLMService(mock_llm_provider)
-        sections = await service.detect_sections(sample_transcript, sample_segments)
+        assert service.provider is mock_llm_provider
 
-        assert len(sections) == 2
-        assert sections[0]["title"] == "Introduction"
-        assert sections[1]["title"] == "Testing Basics"
-        mock_llm_provider.complete.assert_called_once()
+    def test_fast_model_property(self, mock_llm_provider):
+        """Test fast_model property returns provider's fast model."""
+        mock_llm_provider.fast_model = "claude-3-haiku"
+        service = LLMService(mock_llm_provider)
+        assert service.fast_model == "claude-3-haiku"
 
     @pytest.mark.asyncio
-    async def test_detect_sections_fallback(
-        self,
-        mock_llm_provider,
-        sample_transcript,
-        sample_segments,
-    ):
-        """Test fallback when JSON parsing fails."""
-        mock_llm_provider.complete = AsyncMock(return_value="No JSON here")
-
+    async def test_call_llm_success(self, mock_llm_provider):
+        """Test successful LLM call."""
+        mock_llm_provider.complete = AsyncMock(return_value="Hello world")
         service = LLMService(mock_llm_provider)
-        sections = await service.detect_sections(sample_transcript, sample_segments)
-
-        # Should return fallback single section
-        assert len(sections) == 1
-        assert sections[0]["title"] == "Full Video"
+        result = await service.call_llm("test prompt")
+        assert result == "Hello world"
+        mock_llm_provider.complete.assert_called_once_with("test prompt", max_tokens=2000)
 
     @pytest.mark.asyncio
-    async def test_summarize_section_success(
-        self,
-        mock_llm_provider,
-        sample_llm_summary_response,
-    ):
-        """Test successful section summarization with content blocks."""
-        mock_llm_provider.complete = AsyncMock(return_value=sample_llm_summary_response)
-
+    async def test_call_llm_custom_max_tokens(self, mock_llm_provider):
+        """Test LLM call with custom max_tokens."""
+        mock_llm_provider.complete = AsyncMock(return_value="response")
         service = LLMService(mock_llm_provider)
-        result = await service.summarize_section("Some section text", "Test Section")
-
-        assert "content" in result
-        assert isinstance(result["content"], list)
-        assert "summary" in result  # Legacy field
-        assert "bullets" in result  # Legacy field
+        await service.call_llm("prompt", max_tokens=4096)
+        mock_llm_provider.complete.assert_called_once_with("prompt", max_tokens=4096)
 
     @pytest.mark.asyncio
-    async def test_extract_concepts_success(
-        self,
-        mock_llm_provider,
-        sample_transcript,
-        sample_llm_concepts_response,
-    ):
-        """Test successful concept extraction."""
-        mock_llm_provider.complete = AsyncMock(return_value=sample_llm_concepts_response)
+    async def test_stream_llm_yields_tokens(self, mock_llm_provider):
+        """Test streaming LLM response yields tokens."""
+        async def mock_stream(*args, **kwargs):
+            for token in ["Hello", " ", "world"]:
+                yield token
 
+        mock_llm_provider.stream = mock_stream
         service = LLMService(mock_llm_provider)
-        concepts = await service.extract_concepts(sample_transcript)
 
-        assert len(concepts) == 2
-        assert concepts[0]["name"] == "Unit Testing"
+        tokens = []
+        async for token in service.stream_llm("test prompt"):
+            tokens.append(token)
 
-    @pytest.mark.asyncio
-    async def test_synthesize_summary_success(
-        self,
-        mock_llm_provider,
-        sample_llm_synthesis_response,
-    ):
-        """Test successful summary synthesis."""
-        mock_llm_provider.complete = AsyncMock(return_value=sample_llm_synthesis_response)
-
-        service = LLMService(mock_llm_provider)
-        sections = [{"title": "Section 1", "content": [{"type": "paragraph", "text": "Test"}]}]
-        concepts = [{"name": "Concept 1"}]
-
-        result = await service.synthesize_summary(sections, concepts)
-
-        assert "tldr" in result
-        assert "keyTakeaways" in result
-        assert len(result["keyTakeaways"]) == 2
-
-    @pytest.mark.asyncio
-    async def test_process_video_calls_all_steps(
-        self,
-        mock_llm_provider,
-        sample_transcript,
-        sample_segments,
-    ):
-        """Test that process_video calls all LLM steps."""
-        call_count = [0]
-
-        async def mock_complete(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                return '{"sections": [{"title": "Test", "startSeconds": 0, "endSeconds": 10}]}'
-            elif call_count[0] == 2:
-                return '{"content": [{"type": "paragraph", "text": "Test summary"}]}'
-            elif call_count[0] == 3:
-                return '{"concepts": [{"name": "Test Concept"}]}'
-            else:
-                return '{"tldr": "Test TLDR", "keyTakeaways": ["Take 1"]}'
-
-        mock_llm_provider.complete = mock_complete
-
-        service = LLMService(mock_llm_provider)
-        result = await service.process_video(sample_transcript, sample_segments)
-
-        assert "tldr" in result
-        assert "key_takeaways" in result
-        assert "sections" in result
-        assert "concepts" in result
-        assert len(result["sections"]) > 0
-
-
-class TestLoadPersona:
-    """Tests for load_persona helper."""
-
-    def test_load_valid_persona_code(self):
-        """Test loading a valid 'code' persona returns content."""
-        result = load_persona("code")
-        assert isinstance(result, str)
-        assert len(result) > 0
-        assert "code" in result.lower() or "developer" in result.lower()
-
-    def test_load_valid_persona_recipe(self):
-        """Test loading a valid 'recipe' persona returns content."""
-        result = load_persona("recipe")
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    def test_load_valid_persona_standard(self):
-        """Test loading a valid 'standard' persona returns content."""
-        result = load_persona("standard")
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    def test_load_invalid_persona_falls_back_to_standard(self):
-        """Test that invalid persona names fall back to 'standard'."""
-        load_persona.cache_clear()
-
-        result_traversal = load_persona("../../../etc/passwd")
-        standard = load_persona("standard")
-        assert result_traversal == standard
-
-        load_persona.cache_clear()
-        result_invalid = load_persona("nonexistent_persona")
-        assert result_invalid == standard
-
-    def test_all_valid_personas_exist(self):
-        """Test that all personas in VALID_PERSONAS can be loaded."""
-        load_persona.cache_clear()
-        for persona in VALID_PERSONAS:
-            result = load_persona(persona)
-            assert isinstance(result, str)
-            assert len(result) > 0, f"Persona '{persona}' returned empty content"
-
-
-class TestLoadExamples:
-    """Tests for load_examples helper."""
-
-    def test_load_valid_examples_code(self):
-        """Test loading valid 'code' examples returns content."""
-        result = load_examples("code")
-        assert isinstance(result, str)
-        assert len(result) > 0
-        assert "{" in result or "[" in result
-
-    def test_load_valid_examples_recipe(self):
-        """Test loading valid 'recipe' examples returns content."""
-        result = load_examples("recipe")
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    def test_load_valid_examples_standard(self):
-        """Test loading valid 'standard' examples returns content."""
-        result = load_examples("standard")
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    def test_load_invalid_examples_falls_back_to_standard(self):
-        """Test that invalid example names fall back to 'standard'."""
-        load_examples.cache_clear()
-
-        result_traversal = load_examples("../../../etc/passwd")
-        standard = load_examples("standard")
-        assert result_traversal == standard
-
-        load_examples.cache_clear()
-        result_invalid = load_examples("nonexistent_examples")
-        assert result_invalid == standard
-
-    def test_all_valid_examples_exist(self):
-        """Test that all examples in VALID_PERSONAS can be loaded."""
-        load_examples.cache_clear()
-        for persona in VALID_PERSONAS:
-            result = load_examples(persona)
-            assert isinstance(result, str)
-            assert len(result) > 0, f"Examples for '{persona}' returned empty content"
+        assert tokens == ["Hello", " ", "world"]
 
 
 class TestLoadPersonaRules:
@@ -298,7 +89,7 @@ class TestLoadPersonaRules:
         for persona_name, config in rules["personas"].items():
             assert "keywords" in config, f"'{persona_name}' missing 'keywords'"
             assert "categories" in config, f"'{persona_name}' missing 'categories'"
-            assert isinstance(config["keywords"], list), f"'{persona_name}' keywords should be list"
-            assert isinstance(config["categories"], list), f"'{persona_name}' categories should be list"
-            assert len(config["keywords"]) > 0, f"'{persona_name}' should have at least one keyword"
-            assert len(config["categories"]) > 0, f"'{persona_name}' should have at least one category"
+            assert isinstance(config["keywords"], list)
+            assert isinstance(config["categories"], list)
+            assert len(config["keywords"]) > 0
+            assert len(config["categories"]) > 0

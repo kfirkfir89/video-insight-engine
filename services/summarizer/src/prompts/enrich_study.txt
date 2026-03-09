@@ -1,0 +1,33 @@
+You are generating quiz questions and flashcards from educational video content.
+
+VIDEO: {title}
+
+EXTRACTED CONTENT:
+{extraction_data}
+
+Generate study enrichment materials. Return JSON only:
+{{
+  "quiz": [
+    {{
+      "question": "What is the main purpose of X?",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctIndex": 0,
+      "explanation": "A is correct because..."
+    }}
+  ],
+  "flashcards": [
+    {{
+      "front": "What is X?",
+      "back": "X is defined as..."
+    }}
+  ]
+}}
+
+RULES:
+- Generate 5-10 quiz questions covering key concepts
+- Each question must have exactly 4 options
+- correctIndex is 0-based
+- Explanations should teach, not just state the answer
+- Generate 8-15 flashcards covering vocabulary and concepts
+- Flashcard fronts should be questions, backs should be concise answers
+- All content must be factually correct based on the video

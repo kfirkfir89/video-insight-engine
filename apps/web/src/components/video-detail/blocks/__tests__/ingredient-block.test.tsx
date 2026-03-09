@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { IngredientBlock } from '../IngredientBlock';
+import { ChecklistBlock } from '../ChecklistBlock';
 import type { IngredientBlock as IngredientBlockType } from '@vie/types';
 
-const createMockBlock = (overrides: Partial<IngredientBlockType> = {}): IngredientBlockType => ({
+const createMockBlock = (overrides: Partial<ChecklistBlockType> = {}): IngredientBlockType => ({
   type: 'ingredient',
   blockId: 'block-1',
   items: [
@@ -18,7 +18,7 @@ const createMockBlock = (overrides: Partial<IngredientBlockType> = {}): Ingredie
 describe('IngredientBlock', () => {
   describe('rendering', () => {
     it('should render ingredient list', () => {
-      render(<IngredientBlock block={createMockBlock()} />);
+      render(<ChecklistBlock block={createMockBlock()} />);
 
       expect(screen.getByText('Flour')).toBeInTheDocument();
       expect(screen.getByText('Sugar')).toBeInTheDocument();
@@ -26,7 +26,7 @@ describe('IngredientBlock', () => {
     });
 
     it('should render amounts and units', () => {
-      render(<IngredientBlock block={createMockBlock()} />);
+      render(<ChecklistBlock block={createMockBlock()} />);
 
       expect(screen.getByText('2')).toBeInTheDocument();
       expect(screen.getByText('cups')).toBeInTheDocument();
@@ -35,25 +35,25 @@ describe('IngredientBlock', () => {
     });
 
     it('should render notes when present', () => {
-      render(<IngredientBlock block={createMockBlock()} />);
+      render(<ChecklistBlock block={createMockBlock()} />);
 
       expect(screen.getByText('(optional)')).toBeInTheDocument();
     });
 
     it('should return null for empty items', () => {
-      const { container } = render(<IngredientBlock block={createMockBlock({ items: [] })} />);
+      const { container } = render(<ChecklistBlock block={createMockBlock({ items: [] })} />);
       expect(container.firstChild).toBeNull();
     });
 
     it('should have accessible list role', () => {
-      render(<IngredientBlock block={createMockBlock()} />);
+      render(<ChecklistBlock block={createMockBlock()} />);
       expect(screen.getByRole('list')).toBeInTheDocument();
     });
   });
 
   describe('checkbox functionality', () => {
     it('should toggle ingredient checked state', () => {
-      render(<IngredientBlock block={createMockBlock()} />);
+      render(<ChecklistBlock block={createMockBlock()} />);
 
       const checkButton = screen.getByRole('button', { name: /check flour/i });
       fireEvent.click(checkButton);
@@ -62,7 +62,7 @@ describe('IngredientBlock', () => {
     });
 
     it('should apply strikethrough style when checked', () => {
-      render(<IngredientBlock block={createMockBlock()} />);
+      render(<ChecklistBlock block={createMockBlock()} />);
 
       const checkButton = screen.getByRole('button', { name: /check flour/i });
       fireEvent.click(checkButton);
@@ -72,7 +72,7 @@ describe('IngredientBlock', () => {
     });
 
     it('should uncheck previously checked item', () => {
-      render(<IngredientBlock block={createMockBlock()} />);
+      render(<ChecklistBlock block={createMockBlock()} />);
 
       const checkButton = screen.getByRole('button', { name: /check flour/i });
       fireEvent.click(checkButton); // Check
@@ -84,13 +84,13 @@ describe('IngredientBlock', () => {
 
   describe('serving scaler', () => {
     it('should display current servings', () => {
-      render(<IngredientBlock block={createMockBlock({ servings: 4 })} />);
+      render(<ChecklistBlock block={createMockBlock({ servings: 4 })} />);
 
       expect(screen.getByText('4')).toBeInTheDocument();
     });
 
     it('should increase servings when plus button clicked', () => {
-      render(<IngredientBlock block={createMockBlock({ servings: 4 })} />);
+      render(<ChecklistBlock block={createMockBlock({ servings: 4 })} />);
 
       const increaseButton = screen.getByRole('button', { name: /increase servings/i });
       fireEvent.click(increaseButton);
@@ -99,7 +99,7 @@ describe('IngredientBlock', () => {
     });
 
     it('should decrease servings when minus button clicked', () => {
-      render(<IngredientBlock block={createMockBlock({ servings: 4 })} />);
+      render(<ChecklistBlock block={createMockBlock({ servings: 4 })} />);
 
       const decreaseButton = screen.getByRole('button', { name: /decrease servings/i });
       fireEvent.click(decreaseButton);
@@ -108,7 +108,7 @@ describe('IngredientBlock', () => {
     });
 
     it('should disable decrease button at minimum', () => {
-      render(<IngredientBlock block={createMockBlock({ servings: 4 })} />);
+      render(<ChecklistBlock block={createMockBlock({ servings: 4 })} />);
 
       const decreaseButton = screen.getByRole('button', { name: /decrease servings/i });
       fireEvent.click(decreaseButton); // 0.5x
@@ -117,7 +117,7 @@ describe('IngredientBlock', () => {
     });
 
     it('should scale numeric amounts', () => {
-      render(<IngredientBlock block={createMockBlock({ servings: 4 })} />);
+      render(<ChecklistBlock block={createMockBlock({ servings: 4 })} />);
 
       const increaseButton = screen.getByRole('button', { name: /increase servings/i });
       fireEvent.click(increaseButton); // 1.5x
@@ -126,7 +126,7 @@ describe('IngredientBlock', () => {
     });
 
     it('should scale fractional amounts', () => {
-      render(<IngredientBlock block={createMockBlock({ servings: 4 })} />);
+      render(<ChecklistBlock block={createMockBlock({ servings: 4 })} />);
 
       const increaseButton = screen.getByRole('button', { name: /increase servings/i });
       fireEvent.click(increaseButton); // 1.5x
@@ -138,7 +138,7 @@ describe('IngredientBlock', () => {
   describe('pre-checked items', () => {
     it('should show item as checked if checked in data', () => {
       render(
-        <IngredientBlock
+        <ChecklistBlock
           block={createMockBlock({
             items: [{ name: 'Flour', amount: '2', unit: 'cups', checked: true }],
           })}
@@ -151,7 +151,7 @@ describe('IngredientBlock', () => {
 
   describe('accessibility', () => {
     it('should have accessible labels on buttons', () => {
-      render(<IngredientBlock block={createMockBlock()} />);
+      render(<ChecklistBlock block={createMockBlock()} />);
 
       expect(screen.getByRole('button', { name: /increase servings/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /decrease servings/i })).toBeInTheDocument();
@@ -159,7 +159,7 @@ describe('IngredientBlock', () => {
     });
 
     it('should have aria-hidden on icons', () => {
-      const { container } = render(<IngredientBlock block={createMockBlock()} />);
+      const { container } = render(<ChecklistBlock block={createMockBlock()} />);
       const icons = container.querySelectorAll('svg[aria-hidden="true"]');
       expect(icons.length).toBeGreaterThan(0);
     });

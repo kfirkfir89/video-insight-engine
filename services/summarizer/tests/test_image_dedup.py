@@ -5,7 +5,7 @@ from io import BytesIO
 import pytest
 from PIL import Image
 
-from src.services.image_dedup import compute_ahash, is_duplicate, is_mostly_black
+from src.services.media.image_dedup import compute_ahash, is_duplicate, is_mostly_black
 
 
 def _make_jpeg(color: tuple[int, int, int], size: tuple[int, int] = (64, 64)) -> bytes:

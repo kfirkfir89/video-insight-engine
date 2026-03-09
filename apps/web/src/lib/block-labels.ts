@@ -76,7 +76,6 @@ export const BLOCK_LABELS = {
   correct: 'Correct',
   incorrect: 'Incorrect',
   explanation: 'Explanation',
-  formula: 'Formula',
 
   // Podcast blocks
   guests: 'Guests',

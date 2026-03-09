@@ -8,7 +8,7 @@ interface BoardCardProps {
 }
 
 export const BoardCard = memo(function BoardCard({ video }: BoardCardProps) {
-  const outputType = video.outputType ?? "summary";
+  const outputType = video.outputType ?? "explanation";
   const config = getOutputTypeConfig(outputType);
 
   const thumbnailUrl =

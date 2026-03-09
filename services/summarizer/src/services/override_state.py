@@ -18,10 +18,6 @@ logger = logging.getLogger(__name__)
 _MAX_OVERRIDES = 500
 _overrides: dict[str, dict[str, str]] = {}
 
-# Tracks whether generation has started (first chapter_ready emitted) for a pipeline.
-# Once generation starts, overrides are rejected — the client must cancel and restart.
-_generation_started: dict[str, bool] = {}
-
 
 def set_override(video_summary_id: str, data: dict[str, str]) -> None:
     """Store an override for an active pipeline.
@@ -62,28 +58,3 @@ def clear_override(video_summary_id: str) -> None:
     removed = _overrides.pop(video_summary_id, None)
     if removed:
         logger.info("Override cleared: video_summary_id=%s", video_summary_id)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Generation-started tracking
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def mark_generation_started(video_summary_id: str) -> None:
-    """Mark that generation has started (first chapter_ready emitted).
-
-    Once marked, overrides are rejected for this pipeline — the client
-    must cancel and restart to change the detected category.
-    """
-    _generation_started[video_summary_id] = True
-    logger.info("Generation started: video_summary_id=%s", video_summary_id)
-
-
-def is_generation_started(video_summary_id: str) -> bool:
-    """Check if generation has already started for the given pipeline."""
-    return _generation_started.get(video_summary_id, False)
-
-
-def clear_generation_started(video_summary_id: str) -> None:
-    """Clean up generation-started state after pipeline completes."""
-    _generation_started.pop(video_summary_id, None)

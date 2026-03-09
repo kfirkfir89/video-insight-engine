@@ -1,47 +1,39 @@
 import { Component, type ReactNode } from 'react';
 import type { ContentBlock } from '@vie/types';
-import { ConceptHighlighter } from './ConceptHighlighter';
 import { InlineEditor } from './InlineEditor';
 import {
-  // Existing blocks
+  // Lists
+  ListBlock,
+  // Data display
   KeyValueRenderer,
   ComparisonRenderer,
   TimestampRenderer,
   QuoteRenderer,
   StatisticRenderer,
-  BulletsBlock,
-  NumberedBlock,
-  ExampleBlock,
   CalloutBlock,
-  // New universal blocks (V2.1)
+  // Universal blocks
   TranscriptBlock,
-  DosDontsBlock,
   TimelineBlock,
   DefinitionBlock,
-  ToolListBlock,
-  // Cooking blocks (V2.1)
-  IngredientBlock,
+  // Cooking blocks
   StepBlock,
   NutritionBlock,
-  // Coding blocks (V2.1)
+  // Coding blocks (CodeBlock handles code, example, terminal)
   CodeBlock,
-  TerminalBlock,
   FileTreeBlock,
-  // Travel blocks (V2.1)
+  // Travel blocks
   LocationBlock,
   ItineraryBlock,
   CostBlock,
-  // Review blocks (V2.1)
-  ProConBlock,
+  // Review blocks
   RatingBlock,
   VerdictBlock,
-  // Fitness blocks (V2.1)
-  ExerciseBlock,
-  WorkoutTimerBlock,
-  // Education blocks (V2.1)
+  // Unified blocks
+  FitnessBlock,
+  ChecklistBlock,
+  // Education blocks
   QuizBlock,
-  FormulaBlock,
-  // Podcast blocks (V2.1)
+  // Podcast blocks
   GuestBlock,
   // Quality blocks
   ProblemSolutionBlock,
@@ -101,7 +93,7 @@ interface ContentBlockRendererProps {
  * Pure presentational component - receives props, renders UI.
  * Delegates to specialized block components for each type.
  *
- * V2.1: Now supports 31 block types across all categories.
+ * Supports 27 block types across all categories.
  */
 export function ContentBlockRenderer({
   block,
@@ -140,7 +132,7 @@ function renderBlock({
 }: ContentBlockRendererProps): React.ReactNode {
   switch (block.type) {
     // ─────────────────────────────────────────────────────
-    // Existing blocks
+    // Text & Lists
     // ─────────────────────────────────────────────────────
     case 'paragraph':
       if (editable && onBlockEdit) {
@@ -156,31 +148,38 @@ function renderBlock({
       return (
         <div className="block-paragraph max-w-prose">
           <p className="text-foreground/90 text-[15px] leading-[1.75]">
-            <ConceptHighlighter text={block.text} />
+            {block.text}
           </p>
         </div>
       );
 
     case 'bullets':
       if (!Array.isArray(block.items)) return null;
-      return <BulletsBlock items={block.items} variant={block.variant} />;
+      return <ListBlock items={block.items} variant={block.variant} />;
 
     case 'numbered':
       if (!Array.isArray(block.items)) return null;
-      return <NumberedBlock items={block.items} variant={block.variant} />;
-
-    case 'do_dont':
-      return <DosDontsBlock block={block} />;
-
-    case 'example':
       return (
-        <ExampleBlock
-          title={block.title}
-          code={block.code}
-          explanation={block.explanation}
-          variant={block.variant}
+        <StepBlock
+          block={{
+            blockId: block.blockId,
+            type: 'step',
+            steps: block.items.map((item, i) => ({ number: i + 1, instruction: item })),
+          }}
+          simple
         />
       );
+
+    case 'do_dont':
+      return <ComparisonRenderer block={{
+        type: 'comparison',
+        variant: 'dos_donts',
+        left: { label: 'Do', items: block.do || [] },
+        right: { label: "Don't", items: block.dont || [] },
+      } as ContentBlock & { type: 'comparison' }} />;
+
+    case 'example':
+      return <CodeBlock code={block.code} explanation={block.explanation} />;
 
     case 'callout':
       return <CalloutBlock style={block.style} variant={block.variant} text={block.text} />;
@@ -212,7 +211,7 @@ function renderBlock({
       return <StatisticRenderer block={block} />;
 
     // ─────────────────────────────────────────────────────
-    // New universal blocks (V2.1)
+    // Universal blocks
     // ─────────────────────────────────────────────────────
     case 'transcript':
       return (
@@ -227,15 +226,18 @@ function renderBlock({
     case 'timeline':
       return <TimelineBlock block={block} />;
 
+    // ─────────────────────────────────────────────────────
+    // Checklist blocks (unified)
+    // ─────────────────────────────────────────────────────
     case 'tool_list':
-      return <ToolListBlock block={block} />;
+      return <ChecklistBlock block={block} />;
 
-    // ─────────────────────────────────────────────────────
-    // Cooking blocks (V2.1)
-    // ─────────────────────────────────────────────────────
     case 'ingredient':
-      return <IngredientBlock block={block} />;
+      return <ChecklistBlock block={block} />;
 
+    // ─────────────────────────────────────────────────────
+    // Cooking blocks
+    // ─────────────────────────────────────────────────────
     case 'step':
       return <StepBlock block={block} />;
 
@@ -243,19 +245,19 @@ function renderBlock({
       return <NutritionBlock block={block} />;
 
     // ─────────────────────────────────────────────────────
-    // Coding blocks (V2.1)
+    // Coding blocks
     // ─────────────────────────────────────────────────────
     case 'code':
       return <CodeBlock block={block} />;
 
     case 'terminal':
-      return <TerminalBlock block={block} />;
+      return <CodeBlock block={block} />;
 
     case 'file_tree':
       return <FileTreeBlock block={block} />;
 
     // ─────────────────────────────────────────────────────
-    // Travel blocks (V2.1)
+    // Travel blocks
     // ─────────────────────────────────────────────────────
     case 'location':
       return <LocationBlock block={block} />;
@@ -267,10 +269,15 @@ function renderBlock({
       return <CostBlock block={block} />;
 
     // ─────────────────────────────────────────────────────
-    // Review blocks (V2.1)
+    // Review blocks
     // ─────────────────────────────────────────────────────
     case 'pro_con':
-      return <ProConBlock block={block} />;
+      return <ComparisonRenderer block={{
+        type: 'comparison',
+        variant: 'pros_cons',
+        left: { label: 'Pros', items: block.pros || [] },
+        right: { label: 'Cons', items: block.cons || [] },
+      } as ContentBlock & { type: 'comparison' }} />;
 
     case 'rating':
       return <RatingBlock block={block} />;
@@ -279,25 +286,22 @@ function renderBlock({
       return <VerdictBlock block={block} />;
 
     // ─────────────────────────────────────────────────────
-    // Fitness blocks (V2.1)
+    // Fitness blocks (unified)
     // ─────────────────────────────────────────────────────
     case 'exercise':
-      return <ExerciseBlock block={block} onPlay={onPlay} />;
+      return <FitnessBlock block={block} onPlay={onPlay} />;
 
     case 'workout_timer':
-      return <WorkoutTimerBlock block={block} />;
+      return <FitnessBlock block={block} />;
 
     // ─────────────────────────────────────────────────────
-    // Education blocks (V2.1)
+    // Education blocks
     // ─────────────────────────────────────────────────────
     case 'quiz':
       return <QuizBlock block={block} />;
 
-    case 'formula':
-      return <FormulaBlock block={block} />;
-
     // ─────────────────────────────────────────────────────
-    // Podcast blocks (V2.1)
+    // Podcast blocks
     // ─────────────────────────────────────────────────────
     case 'guest':
       return <GuestBlock block={block} />;
@@ -321,16 +325,14 @@ function renderBlock({
       // Handle unknown block types gracefully
       const unknownBlock = block as UnknownBlock;
 
-      // Log warning in development for debugging
       if (import.meta.env.DEV) {
         console.warn(`Unknown content block type: ${unknownBlock.type}`, block);
       }
 
-      // Attempt graceful fallback for text-like blocks
       if ('text' in unknownBlock && typeof unknownBlock.text === 'string') {
         return (
           <div className="block-paragraph max-w-prose">
-            <p className="text-foreground/90 text-[15px] leading-[1.75]"><ConceptHighlighter text={unknownBlock.text} /></p>
+            <p className="text-foreground/90 text-[15px] leading-[1.75]">{unknownBlock.text}</p>
           </div>
         );
       }

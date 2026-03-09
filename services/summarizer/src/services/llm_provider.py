@@ -150,16 +150,22 @@ class LLMProvider:
             }
 
             response = await acompletion(**kwargs)
-            return response.choices[0].message.content or ""
+            choice = response.choices[0]
+            if choice.finish_reason == "length":
+                logger.warning(
+                    "LLM response truncated (finish_reason=length), model=%s, max_tokens=%d",
+                    self._fast_model, max_tokens,
+                )
+            return choice.message.content or ""
 
         except RateLimitError as e:
-            logger.warning(f"Rate limited by {self._extract_provider(self._fast_model)}: {e}")
+            logger.warning("Rate limited by %s: %s", self._extract_provider(self._fast_model), e)
             raise
         except Timeout as e:
-            logger.warning(f"Fast model timeout after {timeout}s: {e}")
+            logger.warning("Fast model timeout after %ss: %s", timeout, e)
             raise
         except APIError as e:
-            logger.error(f"Fast model API error: {e}")
+            logger.error("Fast model API error: %s", e)
             raise
 
     async def complete_with_messages(
@@ -198,22 +204,28 @@ class LLMProvider:
                 kwargs["metadata"] = metadata
 
             response = await acompletion(**kwargs)
-            return response.choices[0].message.content or ""
+            choice = response.choices[0]
+            if choice.finish_reason == "length":
+                logger.warning(
+                    "LLM response truncated (finish_reason=length), model=%s, max_tokens=%d",
+                    self._model, max_tokens,
+                )
+            return choice.message.content or ""
 
         except RateLimitError as e:
-            logger.warning(f"Rate limited by {self._extract_provider(self._model)}: {e}")
+            logger.warning("Rate limited by %s: %s", self._extract_provider(self._model), e)
             raise
         except AuthenticationError as e:
-            logger.error(f"Auth error for {self._extract_provider(self._model)}: {e}")
+            logger.error("Auth error for %s: %s", self._extract_provider(self._model), e)
             raise
         except Timeout as e:
-            logger.warning(f"Timeout after {self._timeout}s: {e}")
+            logger.warning("Timeout after %ss: %s", self._timeout, e)
             raise
         except ServiceUnavailableError as e:
-            logger.warning(f"Service unavailable: {e}")
+            logger.warning("Service unavailable: %s", e)
             raise
         except APIError as e:
-            logger.error(f"API error: {e}")
+            logger.error("API error: %s", e)
             raise
 
     async def complete_with_tracking(
@@ -256,6 +268,12 @@ class LLMProvider:
 
         response = await acompletion(**kwargs)
 
+        if response.choices[0].finish_reason == "length":
+            logger.warning(
+                "LLM response truncated (finish_reason=length), model=%s, max_tokens=%d",
+                self._model, max_tokens,
+            )
+
         end_time = datetime.now(UTC)
         duration_ms = int((end_time - start_time).total_seconds() * 1000)
 
@@ -264,7 +282,7 @@ class LLMProvider:
         try:
             cost = completion_cost(completion_response=response)
         except Exception as e:
-            logger.warning(f"Could not calculate cost: {e}")
+            logger.warning("Could not calculate cost: %s", e)
 
         return CompletionResult(
             content=response.choices[0].message.content or "",
@@ -345,16 +363,16 @@ class LLMProvider:
                     yield content
 
         except RateLimitError as e:
-            logger.warning(f"Rate limited during stream: {e}")
+            logger.warning("Rate limited during stream: %s", e)
             raise
         except AuthenticationError as e:
-            logger.error(f"Auth error during stream: {e}")
+            logger.error("Auth error during stream: %s", e)
             raise
         except Timeout as e:
-            logger.warning(f"Stream timeout: {e}")
+            logger.warning("Stream timeout: %s", e)
             raise
         except APIError as e:
-            logger.error(f"API error during stream: {e}")
+            logger.error("API error during stream: %s", e)
             raise
 
 

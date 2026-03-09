@@ -1,71 +1,17 @@
 """Tests for pipeline helper dataclasses and utilities."""
 
-from unittest.mock import MagicMock
-
-import pytest
-
-from src.services.override_state import _overrides
-from src.services.pipeline_helpers import (
-    ChapterProcessingContext,
+from src.services.pipeline.pipeline_helpers import (
     PipelineTimer,
-    PostprocessContext,
     TranscriptData,
-    apply_override,
+    sse_event,
+    sse_token,
+    normalize_segments,
+    validate_duration,
 )
 
-
-class TestChapterProcessingContext:
-    """ChapterProcessingContext is a frozen dataclass."""
-
-    def test_frozen(self):
-        ctx = ChapterProcessingContext(
-            llm_service=MagicMock(),
-            persona="general",
-            normalized_segments=[],
-        )
-        assert ctx.persona == "general"
-        assert ctx.youtube_id is None
-
-    def test_with_youtube_id(self):
-        ctx = ChapterProcessingContext(
-            llm_service=MagicMock(),
-            persona="expert",
-            normalized_segments=[{"text": "hello"}],
-            youtube_id="abc123",
-        )
-        assert ctx.youtube_id == "abc123"
-
-
-class TestPostprocessContext:
-    """PostprocessContext bundles args for _postprocess_and_yield_chapters."""
-
-    def test_creation(self):
-        ctx = PostprocessContext(
-            state=MagicMock(),
-            provider=MagicMock(),
-            facts_by_idx={0: "fact1"},
-            youtube_id="vid1",
-            video_duration=600,
-            normalized_segments=[],
-            is_creator=True,
-        )
-        assert ctx.youtube_id == "vid1"
-        assert ctx.video_duration == 600
-        assert ctx.is_creator is True
-        assert ctx.facts_by_idx == {0: "fact1"}
-
-    def test_frozen(self):
-        ctx = PostprocessContext(
-            state=MagicMock(),
-            provider=MagicMock(),
-            facts_by_idx={},
-            youtube_id=None,
-            video_duration=120,
-            normalized_segments=[],
-            is_creator=False,
-        )
-        with pytest.raises(AttributeError):
-            ctx.video_duration = 999  # type: ignore[misc]
+import json
+import pytest
+from src.exceptions import TranscriptError
 
 
 class TestPipelineTimer:
@@ -91,68 +37,48 @@ class TestTranscriptData:
         assert td.source == "ytdlp"
 
 
-class TestApplyOverride:
-    """Test apply_override() composition function."""
+class TestSseEvent:
+    def test_basic_event(self):
+        result = sse_event("metadata", {"title": "Test"})
+        assert result.startswith("data: ")
+        assert result.endswith("\n\n")
+        data = json.loads(result[6:].strip())
+        assert data["event"] == "metadata"
+        assert data["title"] == "Test"
 
-    @pytest.fixture(autouse=True)
-    def clean_overrides(self):
-        _overrides.clear()
-        yield
-        _overrides.clear()
 
-    def test_returns_ctx_defaults_when_no_override(self):
-        ctx = ChapterProcessingContext(
-            llm_service=MagicMock(),
-            persona="code",
-            normalized_segments=[],
-            output_type="tutorial",
-            video_summary_id="vid-1",
-        )
-        persona, output_type = apply_override(ctx)
-        assert persona == "code"
-        assert output_type == "tutorial"
+class TestSseToken:
+    def test_basic_token(self):
+        result = sse_token("chapter_detect", "hello")
+        data = json.loads(result[6:].strip())
+        assert data["event"] == "token"
+        assert data["phase"] == "chapter_detect"
+        assert data["token"] == "hello"
 
-    def test_returns_ctx_defaults_when_no_video_summary_id(self):
-        ctx = ChapterProcessingContext(
-            llm_service=MagicMock(),
-            persona="recipe",
-            normalized_segments=[],
-            output_type="recipe",
-        )
-        persona, output_type = apply_override(ctx)
-        assert persona == "recipe"
-        assert output_type == "recipe"
 
-    def test_returns_override_when_present(self):
-        _overrides["vid-1"] = {
-            "category": "fitness",
-            "persona": "fitness",
-            "output_type": "workout",
-        }
-        ctx = ChapterProcessingContext(
-            llm_service=MagicMock(),
-            persona="code",
-            normalized_segments=[],
-            output_type="tutorial",
-            video_summary_id="vid-1",
-        )
-        persona, output_type = apply_override(ctx)
-        assert persona == "fitness"
-        assert output_type == "workout"
+class TestNormalizeSegments:
+    def test_seconds_format(self):
+        segments = [{"text": "hello", "start": 1.5, "duration": 2.0}]
+        result = normalize_segments(segments)
+        assert result[0]["startMs"] == 1500
+        assert result[0]["endMs"] == 3500
+        assert result[0]["text"] == "hello"
 
-    def test_ignores_override_for_different_id(self):
-        _overrides["vid-other"] = {
-            "category": "fitness",
-            "persona": "fitness",
-            "output_type": "workout",
-        }
-        ctx = ChapterProcessingContext(
-            llm_service=MagicMock(),
-            persona="code",
-            normalized_segments=[],
-            output_type="tutorial",
-            video_summary_id="vid-1",
-        )
-        persona, output_type = apply_override(ctx)
-        assert persona == "code"
-        assert output_type == "tutorial"
+    def test_ms_format(self):
+        segments = [{"text": "world", "startMs": 1000, "endMs": 2000}]
+        result = normalize_segments(segments)
+        assert result[0]["startMs"] == 1000
+        assert result[0]["endMs"] == 2000
+
+
+class TestValidateDuration:
+    def test_valid_duration(self):
+        validate_duration(600)  # 10 minutes, should not raise
+
+    def test_too_long(self):
+        with pytest.raises(TranscriptError):
+            validate_duration(999999)
+
+    def test_too_short(self):
+        with pytest.raises(TranscriptError):
+            validate_duration(1)

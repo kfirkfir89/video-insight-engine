@@ -1,4 +1,0 @@
-{"type": "quote", "variant": "speaker", "text": "The key to success is consistency", "attribution": "Guest Name", "timestamp": 185}
-{"type": "timestamp", "time": "3:05", "seconds": 185, "label": "Discussing success principles"}
-{"type": "bullets", "items": ["Topic 1 covered", "Topic 2 discussed"]}
-{"type": "statistic", "items": [{"value": "10x", "label": "Growth achieved", "trend": "up"}]}

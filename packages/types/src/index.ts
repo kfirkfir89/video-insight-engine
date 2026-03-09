@@ -2,6 +2,11 @@
 // VIDEO INSIGHT ENGINE - Shared Types
 // ═══════════════════════════════════════════════════
 
+// Import OutputType for local use + explicitly re-export
+// (export * skips names with explicit exports, so no conflict)
+import type { OutputType } from './output-types.js';
+export type { OutputType };
+
 // ─────────────────────────────────────────────────────
 // Status Types
 // ─────────────────────────────────────────────────────
@@ -136,47 +141,7 @@ export interface VideoContext {
   categoryConfidence?: number; // Detection confidence (0.0-1.0), used internally
 }
 
-// ─────────────────────────────────────────────────────
-// Output Type (V1.4 — Category-to-Output Mapping)
-// ─────────────────────────────────────────────────────
-
-/** Output type determines the rendering template for a video summary */
-export type OutputType =
-  | 'recipe'
-  | 'tutorial'
-  | 'workout'
-  | 'study_guide'
-  | 'travel_plan'
-  | 'review'
-  | 'podcast_notes'
-  | 'diy_guide'
-  | 'game_guide'
-  | 'music_guide'
-  | 'summary';
-
-/**
- * SINGLE SOURCE OF TRUTH for category → output type mapping.
- * All services import or mirror this mapping:
- *   - Python (summarizer): services/summarizer/src/services/output_type.py
- *   - Python (explainer):  services/explainer/src/utils/output_type.py
- * When updating this map, update both Python mirrors.
- */
-export const CATEGORY_TO_OUTPUT_TYPE: Record<VideoCategory, OutputType> = {
-  cooking: 'recipe',
-  coding: 'tutorial',
-  fitness: 'workout',
-  education: 'study_guide',
-  travel: 'travel_plan',
-  reviews: 'review',
-  podcast: 'podcast_notes',
-  diy: 'diy_guide',
-  gaming: 'game_guide',
-  music: 'music_guide',
-  standard: 'summary',
-} as const;
-
-/** Pre-computed set of valid output types for validation */
-export const VALID_OUTPUT_TYPES: ReadonlySet<string> = new Set(Object.values(CATEGORY_TO_OUTPUT_TYPE));
+// OutputType is now defined in output-types.ts and re-exported below
 
 // ─────────────────────────────────────────────────────
 // User Tier & Limits (V1.4 — Monetization)
@@ -254,7 +219,7 @@ export interface ParagraphBlock extends BaseBlock {
 
 export interface BulletsBlock extends BaseBlock {
   type: 'bullets';
-  variant?: 'ingredients' | 'checklist' | string;
+  variant?: 'ingredients' | string;
   items: string[];
 }
 
@@ -526,13 +491,6 @@ export interface QuizBlock extends BaseBlock {
   }[];
 }
 
-export interface FormulaBlock extends BaseBlock {
-  type: 'formula';
-  latex: string;
-  description?: string;
-  inline?: boolean;
-}
-
 // Podcast blocks
 export interface GuestBlock extends BaseBlock {
   type: 'guest';
@@ -621,33 +579,32 @@ export type ContentBlock =
   | TimestampBlock
   | QuoteBlock
   | StatisticBlock
-  // New universal blocks (V2.1)
+  // New universal blocks
   | TranscriptBlock
   | TimelineBlock
   | ToolListBlock
-  // Cooking blocks (V2.1)
+  // Cooking blocks
   | IngredientBlock
   | StepBlock
   | NutritionBlock
-  // Coding blocks (V2.1)
+  // Coding blocks
   | CodeBlock
   | TerminalBlock
   | FileTreeBlock
-  // Travel blocks (V2.1)
+  // Travel blocks
   | LocationBlock
   | ItineraryBlock
   | CostBlock
-  // Review blocks (V2.1)
+  // Review blocks
   | ProConBlock
   | RatingBlock
   | VerdictBlock
-  // Fitness blocks (V2.1)
+  // Fitness blocks
   | ExerciseBlock
   | WorkoutTimerBlock
-  // Education blocks (V2.1)
+  // Education blocks
   | QuizBlock
-  | FormulaBlock
-  // Podcast blocks (V2.1)
+  // Podcast blocks
   | GuestBlock
   // Quality blocks
   | ProblemSolutionBlock
@@ -704,8 +661,7 @@ export interface VideoSummary {
 }
 
 // ─────────────────────────────────────────────────────
-// Memorized Item Types (V2.1)
-// ─────────────────────────────────────────────────────
+// Memorized Item Types// ─────────────────────────────────────────────────────
 export type MemorizedItemSourceType = 'video_chapters' | 'concept' | 'expansion';
 
 export interface MemorizedItemSource {
@@ -956,77 +912,7 @@ export interface ExpansionStatusEvent {
 
 export type WebSocketEvent = VideoStatusEvent | VideoMetadataEvent | ExpansionStatusEvent;
 
-// ─────────────────────────────────────────────────────
-// SSE Stream Event Types (Progressive Summarization)
-// ─────────────────────────────────────────────────────
-
-export type SummaryStreamPhase =
-  | 'metadata'
-  | 'transcript'
-  | 'transcript_cached'
-  | 'audio_transcription'
-  | 'whisper_transcription'
-  | 'metadata_fallback'
-  | 'parallel_analysis'
-  | 'chapter_detect'
-  | 'chapter_summaries'
-  | 'concepts'
-  | 'master_summary';
-
-export interface SSEMetadataEvent {
-  event: 'metadata';
-  title: string;
-  channel: string | null;
-  thumbnailUrl: string | null;
-  duration: number;
-  context?: VideoContext;
-  outputType?: OutputType;
-}
-
-/** SSE event emitted when category detection completes (V1.4) */
-export interface SSEDetectionEvent {
-  event: 'detection_result';
-  category: VideoCategory;
-  outputType: OutputType;
-  confidence: number;
-}
-
-export interface SSEChaptersEvent {
-  event: 'chapters';
-  chapters: StreamingChapter[];
-  isCreatorChapters: boolean;
-}
-
-export interface SSEDescriptionAnalysisEvent {
-  event: 'description_analysis';
-  links: DescriptionLink[];
-  resources: Resource[];
-  relatedVideos: RelatedVideo[];
-  socialLinks: SocialLink[];
-}
-
-export interface SSESynthesisCompleteEvent {
-  event: 'synthesis_complete';
-  tldr: string;
-  keyTakeaways: string[];
-}
-
-export interface SSEChapterReadyEvent {
-  event: 'chapter_ready';
-  index: number;
-  chapter: SummaryChapter;
-}
-
-
-export interface SSEConceptsCompleteEvent {
-  event: 'concepts_complete';
-  concepts: Concept[];
-}
-
-export interface SSEMasterSummaryCompleteEvent {
-  event: 'master_summary_complete';
-  masterSummary: string;
-}
+// SSE event types are now defined in output-types.ts and re-exported below
 
 export interface SSEDoneEvent {
   event: 'done';
@@ -1037,7 +923,7 @@ export interface SSEDoneEvent {
 
 export interface SSEPhaseEvent {
   event: 'phase';
-  phase: SummaryStreamPhase;
+  phase: string;
 }
 
 export interface SSETokenEvent {
@@ -1051,20 +937,6 @@ export interface SSEErrorEvent {
   message: string;
   code?: string;
 }
-
-export type SSEStreamEvent =
-  | SSEMetadataEvent
-  | SSEChaptersEvent
-  | SSEDescriptionAnalysisEvent
-  | SSESynthesisCompleteEvent
-  | SSEChapterReadyEvent
-  | SSEConceptsCompleteEvent
-  | SSEMasterSummaryCompleteEvent
-  | SSEDoneEvent
-  | SSEPhaseEvent
-  | SSETokenEvent
-  | SSEErrorEvent
-  | SSEDetectionEvent;
 
 // ─────────────────────────────────────────────────────
 // Error Types
@@ -1112,3 +984,9 @@ export const ErrorCodes = {
   RATE_LIMITED: 'RATE_LIMITED',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
+
+// ─────────────────────────────────────────────────────
+// Output Types (Re-export)
+// ─────────────────────────────────────────────────────
+
+export * from './output-types.js';

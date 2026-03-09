@@ -1,0 +1,94 @@
+You are an education specialist extracting a structured study kit from an educational YouTube video. Your goal is to create materials that help someone LEARN and RETAIN the content.
+
+VIDEO: {title} ({duration_minutes} minutes)
+
+SECTIONS TO POPULATE:
+{sections}
+
+ACCURACY RULES:
+{accuracy_rules}
+
+TRANSCRIPT:
+{transcript}
+
+Extract the study kit into the JSON structure below.
+
+FIELD GUIDANCE:
+
+"keyQuestion":
+- The central question this video answers
+- Frame it as a question a student would ask (e.g., "How does photosynthesis convert sunlight into energy?")
+
+"concepts" (MINIMUM 5):
+- EVERY major idea, term, or framework explained in the video
+- "name": The term exactly as the speaker uses it
+- "emoji": Domain-relevant emoji (🧬 biology, ⚛️ physics, 📊 stats, 💻 CS, etc.)
+- "definition": Clear, complete definition using the speaker's explanation
+  - Don't use textbook definitions — use HOW THE SPEAKER EXPLAINED IT
+- "example": A concrete example from the video (not a generic one)
+- "analogy": Include if the speaker provides one — analogies are powerful learning tools
+  - Set to null if no analogy was given
+- "connections": Other concepts from this list that relate to this one
+  - This builds a knowledge graph — concepts don't exist in isolation
+- Order concepts by teaching progression (how they were introduced in the video)
+
+"keyFacts":
+- Important facts with specific numbers, dates, names, or data points
+- Include statistics, research findings, historical dates, measurements
+- These are the "hard facts" a student would need to memorize
+- Format as complete, self-contained statements
+
+"timeline":
+- ONLY include if the video discusses chronological events (history, development over time)
+- "date": Year, decade, or specific date
+- "title": Brief event title
+- "description": 1-2 sentences about what happened and why it matters
+- Set to empty array [] if not applicable
+
+"summary":
+- 2-3 paragraph summary of the ENTIRE video content
+- First paragraph: What the video covers and why it matters
+- Second paragraph: The core argument or teaching
+- Third paragraph: Key conclusions and implications
+- Write for a student who needs to understand the big picture
+
+Return JSON only:
+{{
+  "keyQuestion": "How do neural networks learn to recognize patterns?",
+  "concepts": [
+    {{
+      "name": "Backpropagation",
+      "emoji": "🔄",
+      "definition": "The algorithm that teaches neural networks by sending error signals backwards through the network. As the speaker explains, 'it's like a teacher marking your test and telling each neuron exactly how much it contributed to the wrong answer.'",
+      "example": "When the network predicts a cat image is a dog, backpropagation calculates each weight's contribution to the error and adjusts them proportionally.",
+      "analogy": "Like tuning a guitar — you pluck the string (forward pass), hear it's off (loss calculation), then adjust the tuning peg by the right amount (weight update).",
+      "connections": ["Gradient Descent", "Loss Function"]
+    }},
+    {{
+      "name": "Gradient Descent",
+      "emoji": "⛰️",
+      "definition": "The optimization method that finds the best weights by taking small steps downhill on the error surface.",
+      "example": "With a learning rate of 0.01, each weight gets adjusted by 1% of its gradient — small enough to not overshoot, large enough to make progress.",
+      "analogy": "Like walking downhill in fog — you can't see the bottom, but you can feel which direction is down and take careful steps.",
+      "connections": ["Backpropagation", "Learning Rate"]
+    }}
+  ],
+  "keyFacts": [
+    "Backpropagation was popularized in 1986 by Rumelhart, Hinton, and Williams",
+    "Modern neural networks can have billions of parameters — GPT-3 has 175 billion",
+    "A learning rate that's too high causes the model to oscillate; too low means training takes forever"
+  ],
+  "timeline": [
+    {{"date": "1986", "title": "Backpropagation Paper", "description": "Rumelhart, Hinton, and Williams publish the seminal paper making backpropagation practical for multi-layer networks."}}
+  ],
+  "summary": "This video explains the fundamental mechanism behind how neural networks learn: backpropagation combined with gradient descent...\n\nThe core insight is that..."
+}}
+
+RULES:
+- Concepts MUST include ALL major ideas from the video — don't cherry-pick
+- Preserve the speaker's EXACT terminology and examples
+- Definitions should use the speaker's explanation, not generic textbook definitions
+- Connections between concepts are critical — they build understanding
+- MINIMUM: 5 concepts with definitions and examples
+- Key facts must include specific numbers, dates, or names — not vague statements
+- Summary should stand alone as a complete overview

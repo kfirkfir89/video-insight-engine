@@ -4,7 +4,6 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { formatDurationHuman } from '@/lib/string-utils';
 import { BlockWrapper } from './BlockWrapper';
-import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { StepBlock as StepBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
@@ -12,12 +11,15 @@ const STEP_COLORS = ['border-primary/40 text-primary', 'border-info/40 text-info
 
 interface StepBlockProps {
   block: StepBlockType;
+  /** Simple mode: non-interactive numbered circles, no duration/tips */
+  simple?: boolean;
 }
 
 /**
  * Renders numbered recipe/process steps with optional timer integration.
+ * Simple mode renders non-interactive numbered circles without duration/tips.
  */
-export const StepBlock = memo(function StepBlock({ block }: StepBlockProps) {
+export const StepBlock = memo(function StepBlock({ block, simple }: StepBlockProps) {
   const steps = block.steps ?? [];
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
 
@@ -34,6 +36,33 @@ export const StepBlock = memo(function StepBlock({ block }: StepBlockProps) {
       return next;
     });
   };
+
+  // Simple mode: non-interactive numbered items without duration/tips
+  if (simple) {
+    return (
+      <BlockWrapper blockId={block.blockId} variant="inline">
+        <ol className="space-y-0 stagger-children">
+          {steps.map((step, stepIndex) => (
+            <li key={step.number}>
+              {stepIndex > 0 && <div className="fade-divider my-1" aria-hidden="true" />}
+              <div className="relative pl-10 text-sm min-h-[2rem]">
+                <span className="numbered-ghost" aria-hidden="true">{step.number}</span>
+                <span
+                  className="absolute left-0 top-0.5 w-6 h-6 rounded-full border-2 border-primary/40 text-primary/90 flex items-center justify-center text-xs font-bold"
+                  aria-hidden="true"
+                >
+                  {step.number}
+                </span>
+                <span className="text-muted-foreground leading-relaxed">
+                  {step.instruction}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </BlockWrapper>
+    );
+  }
 
   return (
     <BlockWrapper
@@ -78,7 +107,7 @@ export const StepBlock = memo(function StepBlock({ block }: StepBlockProps) {
                 </Button>
 
                 <div className={cn('flex-1 space-y-1', isCompleted && 'line-through')}>
-                  <p className="text-sm text-muted-foreground"><ConceptHighlighter text={step.instruction} /></p>
+                  <p className="text-sm text-muted-foreground">{step.instruction}</p>
 
                   <div className="flex items-center gap-3 flex-wrap">
                     {step.duration && (
@@ -89,7 +118,7 @@ export const StepBlock = memo(function StepBlock({ block }: StepBlockProps) {
                     )}
                     {step.tips && (
                       <span className="text-xs text-muted-foreground/70 italic">
-                        Tip: <ConceptHighlighter text={step.tips} />
+                        Tip: {step.tips}
                       </span>
                     )}
                   </div>

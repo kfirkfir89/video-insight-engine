@@ -45,7 +45,6 @@ import {
   createExerciseBlock,
   createWorkoutTimerBlock,
   createQuizBlock,
-  createFormulaBlock,
   createGuestBlock,
   createToolListBlock,
   createDefinitionBlock,
@@ -454,12 +453,11 @@ export const mockVideos: Record<VideoCategory, MockVideoData> = {
       ]),
       createChapter(1, 'Understanding Qubits', [
         createDefinitionBlock('Qubit', 'A quantum bit that can exist in a superposition of states until measured.'),
-        createFormulaBlock('|\\psi\\rangle = \\alpha|0\\rangle + \\beta|1\\rangle', 'Qubit state representation where α and β are complex amplitudes'),
-        createCalloutBlock('note', 'The probability of measuring 0 is |α|² and measuring 1 is |β|².'),
+        createCalloutBlock('note', 'A qubit state |ψ⟩ = α|0⟩ + β|1⟩ where the probability of measuring 0 is |α|² and measuring 1 is |β|².'),
       ]),
       createChapter(2, 'Superposition', [
         createParagraphBlock('Superposition allows qubits to process multiple possibilities simultaneously.'),
-        createFormulaBlock('|\\alpha|^2 + |\\beta|^2 = 1', 'Normalization condition - probabilities must sum to 1'),
+        createCalloutBlock('note', 'Normalization condition: |α|² + |β|² = 1 — probabilities must sum to 1.'),
         createTableBlock(
           [
             { key: 'qubits', label: 'Qubits', align: 'center' },

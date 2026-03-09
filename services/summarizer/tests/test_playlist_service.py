@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from src.services.playlist import (
+from src.services.video.playlist import (
     PlaylistVideoInfo,
     PlaylistData,
     _build_playlist_opts,
@@ -93,7 +93,7 @@ class TestBuildPlaylistOpts:
         assert opts["skip_download"] is True
         assert "proxy" not in opts
 
-    @patch("src.services.playlist.settings")
+    @patch("src.services.video.playlist.settings")
     def test_opts_with_proxy(self, mock_settings):
         """Test options with proxy enabled."""
         mock_settings.WEBSHARE_PROXY_USERNAME = "user123"
@@ -106,7 +106,7 @@ class TestBuildPlaylistOpts:
         assert "pass456" in opts["proxy"]
         assert "p.webshare.io" in opts["proxy"]
 
-    @patch("src.services.playlist.settings")
+    @patch("src.services.video.playlist.settings")
     def test_opts_proxy_requested_but_no_credentials(self, mock_settings):
         """Test proxy requested but no credentials available."""
         mock_settings.WEBSHARE_PROXY_USERNAME = None
@@ -120,7 +120,7 @@ class TestBuildPlaylistOpts:
 class TestExtractPlaylistSync:
     """Tests for _extract_playlist_sync function."""
 
-    @patch("src.services.playlist.yt_dlp.YoutubeDL")
+    @patch("src.services.video.playlist.yt_dlp.YoutubeDL")
     def test_successful_extraction(self, mock_ydl_class):
         """Test successful playlist extraction."""
         mock_info = {
@@ -146,7 +146,7 @@ class TestExtractPlaylistSync:
         assert result.videos[0].video_id == "video1"
         assert result.videos[1].video_id == "video2"
 
-    @patch("src.services.playlist.yt_dlp.YoutubeDL")
+    @patch("src.services.video.playlist.yt_dlp.YoutubeDL")
     def test_playlist_not_found(self, mock_ydl_class):
         """Test error when playlist not found."""
         mock_ydl = MagicMock()
@@ -158,7 +158,7 @@ class TestExtractPlaylistSync:
 
         assert "not found" in str(exc_info.value)
 
-    @patch("src.services.playlist.yt_dlp.YoutubeDL")
+    @patch("src.services.video.playlist.yt_dlp.YoutubeDL")
     def test_skips_unavailable_videos(self, mock_ydl_class):
         """Test that unavailable videos (None entries) are skipped."""
         mock_info = {
@@ -182,7 +182,7 @@ class TestExtractPlaylistSync:
         assert result.videos[0].video_id == "video1"
         assert result.videos[1].video_id == "video3"
 
-    @patch("src.services.playlist.yt_dlp.YoutubeDL")
+    @patch("src.services.video.playlist.yt_dlp.YoutubeDL")
     def test_skips_entries_without_id(self, mock_ydl_class):
         """Test that entries without video_id are skipped."""
         mock_info = {
@@ -204,7 +204,7 @@ class TestExtractPlaylistSync:
 
         assert len(result.videos) == 2
 
-    @patch("src.services.playlist.yt_dlp.YoutubeDL")
+    @patch("src.services.video.playlist.yt_dlp.YoutubeDL")
     def test_max_videos_limit(self, mock_ydl_class):
         """Test that max_videos parameter limits results."""
         mock_info = {
@@ -225,7 +225,7 @@ class TestExtractPlaylistSync:
 
         assert len(result.videos) == 5
 
-    @patch("src.services.playlist.yt_dlp.YoutubeDL")
+    @patch("src.services.video.playlist.yt_dlp.YoutubeDL")
     def test_video_positions_are_sequential(self, mock_ydl_class):
         """Test that video positions are 0-indexed and sequential."""
         mock_info = {
@@ -248,7 +248,7 @@ class TestExtractPlaylistSync:
         assert result.videos[0].position == 0
         assert result.videos[1].position == 1  # Position continues after skip
 
-    @patch("src.services.playlist.yt_dlp.YoutubeDL")
+    @patch("src.services.video.playlist.yt_dlp.YoutubeDL")
     def test_thumbnail_fallback_to_first_video(self, mock_ydl_class):
         """Test thumbnail falls back to first video's thumbnail."""
         mock_info = {
@@ -269,7 +269,7 @@ class TestExtractPlaylistSync:
         assert result.thumbnail_url is not None
         assert "video1" in result.thumbnail_url
 
-    @patch("src.services.playlist.yt_dlp.YoutubeDL")
+    @patch("src.services.video.playlist.yt_dlp.YoutubeDL")
     def test_handles_missing_channel(self, mock_ydl_class):
         """Test handling of missing channel info."""
         mock_info = {
@@ -286,7 +286,7 @@ class TestExtractPlaylistSync:
 
         assert result.channel is None
 
-    @patch("src.services.playlist.yt_dlp.YoutubeDL")
+    @patch("src.services.video.playlist.yt_dlp.YoutubeDL")
     def test_download_error_with_proxy_fallback(self, mock_ydl_class):
         """Test fallback to proxy on download error."""
         from yt_dlp.utils import DownloadError
@@ -310,7 +310,7 @@ class TestExtractPlaylistSync:
         assert result.title == "Test Playlist"
         assert len(result.videos) == 1
 
-    @patch("src.services.playlist.yt_dlp.YoutubeDL")
+    @patch("src.services.video.playlist.yt_dlp.YoutubeDL")
     def test_both_attempts_fail(self, mock_ydl_class):
         """Test error when both direct and proxy attempts fail."""
         from yt_dlp.utils import DownloadError
@@ -326,7 +326,7 @@ class TestExtractPlaylistSync:
 class TestExtractPlaylistData:
     """Tests for extract_playlist_data async function."""
 
-    @patch("src.services.playlist._extract_playlist_sync")
+    @patch("src.services.video.playlist._extract_playlist_sync")
     async def test_calls_sync_in_thread(self, mock_sync):
         """Test that async wrapper calls sync function."""
         mock_sync.return_value = PlaylistData(
@@ -342,7 +342,7 @@ class TestExtractPlaylistData:
         mock_sync.assert_called_once_with("PLtest", 100)
         assert result.playlist_id == "PLtest"
 
-    @patch("src.services.playlist._extract_playlist_sync")
+    @patch("src.services.video.playlist._extract_playlist_sync")
     async def test_passes_max_videos_parameter(self, mock_sync):
         """Test that max_videos parameter is passed through."""
         mock_sync.return_value = PlaylistData(
@@ -357,7 +357,7 @@ class TestExtractPlaylistData:
 
         mock_sync.assert_called_once_with("PLtest", 50)
 
-    @patch("src.services.playlist._extract_playlist_sync")
+    @patch("src.services.video.playlist._extract_playlist_sync")
     async def test_propagates_errors(self, mock_sync):
         """Test that errors from sync function propagate."""
         mock_sync.side_effect = ValueError("Playlist not found")

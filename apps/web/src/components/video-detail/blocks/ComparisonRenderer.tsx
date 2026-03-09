@@ -2,7 +2,6 @@ import { memo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { BlockWrapper } from './BlockWrapper';
-import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { ComparisonBlock } from '@vie/types';
 import { Check, X, ThumbsUp, ThumbsDown, Sparkles, Columns2, Rows3, type LucideIcon } from 'lucide-react';
 
@@ -142,7 +141,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
           <div className="flex items-center justify-center gap-1.5">
             {LeftIcon && <LeftIcon className={cn('h-3.5 w-3.5', config.leftLabelClass)} aria-hidden="true" />}
             <span className={cn('text-xs font-bold uppercase tracking-wider', config.leftLabelClass)}>
-              <ConceptHighlighter text={config.leftLabel} />
+              {config.leftLabel}
             </span>
           </div>
         </div>
@@ -151,7 +150,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
             <div className="flex items-center justify-center gap-1.5">
               {RightIcon && <RightIcon className={cn('h-3.5 w-3.5', config.rightLabelClass)} aria-hidden="true" />}
               <span className={cn('text-xs font-bold uppercase tracking-wider', config.rightLabelClass)}>
-                <ConceptHighlighter text={config.rightLabel} />
+                {config.rightLabel}
               </span>
             </div>
           </div>
@@ -174,7 +173,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
                     {leftItem ? (
                       <div className="flex items-baseline gap-2.5 text-sm py-1">
                         <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.leftBulletClass)} />
-                        <span className="text-muted-foreground"><ConceptHighlighter text={leftItem} /></span>
+                        <span className="text-muted-foreground">{leftItem}</span>
                       </div>
                     ) : (
                       <div className="py-1 min-h-[1.75rem]" />
@@ -184,7 +183,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
                     {rightItem ? (
                       <div className="flex items-baseline gap-2.5 text-sm py-1">
                         <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.rightBulletClass)} />
-                        <span className="text-muted-foreground"><ConceptHighlighter text={rightItem} /></span>
+                        <span className="text-muted-foreground">{rightItem}</span>
                       </div>
                     ) : (
                       <div className="py-1 min-h-[1.75rem]" />
@@ -205,7 +204,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
                 <li key={index}>
                   <div className="flex items-baseline gap-2.5 text-sm py-1.5">
                     <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.leftBulletClass)} />
-                    <span className="text-muted-foreground"><ConceptHighlighter text={item} /></span>
+                    <span className="text-muted-foreground">{item}</span>
                   </div>
                   {index < leftItems.length - 1 && (
                     <div className="fade-divider" aria-hidden="true" />
@@ -220,7 +219,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
             <div className="flex items-center justify-center gap-1.5">
               {RightIcon && <RightIcon className={cn('h-3.5 w-3.5', config.rightLabelClass)} aria-hidden="true" />}
               <span className={cn('text-xs font-bold uppercase tracking-wider', config.rightLabelClass)}>
-                <ConceptHighlighter text={config.rightLabel} />
+                {config.rightLabel}
               </span>
             </div>
           </div>
@@ -232,7 +231,7 @@ export const ComparisonRenderer = memo(function ComparisonRenderer({ block }: Co
                 <li key={index}>
                   <div className="flex items-baseline gap-2.5 text-sm py-1.5">
                     <span className={cn('w-1 h-1 rounded-full shrink-0 translate-y-1.5', config.rightBulletClass)} />
-                    <span className="text-muted-foreground"><ConceptHighlighter text={item} /></span>
+                    <span className="text-muted-foreground">{item}</span>
                   </div>
                   {index < rightItems.length - 1 && (
                     <div className="fade-divider" aria-hidden="true" />

@@ -4,13 +4,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.services.s3_client import S3Client
+from src.services.media.s3_client import S3Client
 
 
 @pytest.fixture
 def s3_client_instance():
     """Create a fresh S3Client for each test."""
-    with patch("src.services.s3_client.settings") as mock_settings:
+    with patch("src.services.media.s3_client.settings") as mock_settings:
         mock_settings.S3_BUCKET = "vie-transcripts"
         mock_settings.AWS_REGION = "us-east-1"
         mock_settings.AWS_ENDPOINT_URL = "http://localhost:4566"
@@ -98,21 +98,21 @@ class TestGetDevUrl:
     """Tests for get_dev_url method."""
 
     def test_dev_url_with_endpoint(self, s3_client_instance):
-        with patch("src.services.s3_client.settings") as mock_settings:
+        with patch("src.services.media.s3_client.settings") as mock_settings:
             mock_settings.AWS_ENDPOINT_URL = "http://localhost:4566"
             url = s3_client_instance.get_dev_url("videos/abc/frames/30.jpg")
 
         assert url == "http://localhost:4566/vie-transcripts/videos/abc/frames/30.jpg"
 
     def test_dev_url_without_endpoint(self, s3_client_instance):
-        with patch("src.services.s3_client.settings") as mock_settings:
+        with patch("src.services.media.s3_client.settings") as mock_settings:
             mock_settings.AWS_ENDPOINT_URL = None
             url = s3_client_instance.get_dev_url("videos/abc/frames/30.jpg")
 
         assert url == "/vie-transcripts/videos/abc/frames/30.jpg"
 
     def test_dev_url_with_localhost_endpoint(self, s3_client_instance):
-        with patch("src.services.s3_client.settings") as mock_settings:
+        with patch("src.services.media.s3_client.settings") as mock_settings:
             mock_settings.AWS_ENDPOINT_URL = "http://localhost:4566"
             url = s3_client_instance.get_dev_url("key/path")
 

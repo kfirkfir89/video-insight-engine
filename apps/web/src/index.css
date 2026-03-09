@@ -131,6 +131,32 @@
 
   /* Spring easing */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── Output Type Gradients ── */
+  --gradient-smart-summary: linear-gradient(135deg, oklch(70% 0.15 250), oklch(65% 0.18 280));
+  --gradient-recipe: linear-gradient(135deg, oklch(70% 0.18 25), oklch(65% 0.15 40));
+  --gradient-code: linear-gradient(135deg, oklch(65% 0.15 165), oklch(60% 0.18 200));
+  --gradient-study: linear-gradient(135deg, oklch(68% 0.15 275), oklch(63% 0.18 310));
+  --gradient-trip: linear-gradient(135deg, oklch(70% 0.15 190), oklch(65% 0.12 160));
+  --gradient-workout: linear-gradient(135deg, oklch(65% 0.18 25), oklch(60% 0.15 350));
+  --gradient-verdict: linear-gradient(135deg, oklch(68% 0.15 50), oklch(63% 0.18 30));
+  --gradient-highlights: linear-gradient(135deg, oklch(70% 0.15 320), oklch(65% 0.12 290));
+  --gradient-music: linear-gradient(135deg, oklch(65% 0.15 300), oklch(60% 0.18 330));
+  --gradient-project: linear-gradient(135deg, oklch(68% 0.12 140), oklch(63% 0.15 120));
+
+  /* ── Glass Card Tokens ── */
+  --glass-bg: oklch(99% 0.003 285 / 0.7);
+  --glass-border: oklch(90% 0.01 285 / 0.3);
+  --glass-shadow: 0 8px 32px oklch(20% 0.02 285 / 0.08);
+  --glass-blur: 20px;
+
+  /* ── Typography Tokens ── */
+  --text-hero: 700 2rem/1.2 'Inter Variable', Inter, sans-serif;
+  --text-section: 600 1.25rem/1.4 'Inter Variable', Inter, sans-serif;
+  --text-card-title: 600 1rem/1.4 'Inter Variable', Inter, sans-serif;
+  --text-body: 400 0.9375rem/1.6 'Inter Variable', Inter, sans-serif;
+  --text-caption: 400 0.8125rem/1.5 'Inter Variable', Inter, sans-serif;
+  --text-micro: 500 0.6875rem/1.4 'Inter Variable', Inter, sans-serif;
 }
 
 [data-theme="dark"] {
@@ -146,6 +172,32 @@
   --vie-glass: oklch(from var(--card) l c h / 0.3);
   --vie-glass-border: oklch(100% 0 0 / 0.06);
   --vie-nav-bg: oklch(from var(--card) l c h / 0.9);
+
+  /* ── Output Type Gradients — same in dark ── */
+  --gradient-smart-summary: linear-gradient(135deg, oklch(70% 0.15 250), oklch(65% 0.18 280));
+  --gradient-recipe: linear-gradient(135deg, oklch(70% 0.18 25), oklch(65% 0.15 40));
+  --gradient-code: linear-gradient(135deg, oklch(65% 0.15 165), oklch(60% 0.18 200));
+  --gradient-study: linear-gradient(135deg, oklch(68% 0.15 275), oklch(63% 0.18 310));
+  --gradient-trip: linear-gradient(135deg, oklch(70% 0.15 190), oklch(65% 0.12 160));
+  --gradient-workout: linear-gradient(135deg, oklch(65% 0.18 25), oklch(60% 0.15 350));
+  --gradient-verdict: linear-gradient(135deg, oklch(68% 0.15 50), oklch(63% 0.18 30));
+  --gradient-highlights: linear-gradient(135deg, oklch(70% 0.15 320), oklch(65% 0.12 290));
+  --gradient-music: linear-gradient(135deg, oklch(65% 0.15 300), oklch(60% 0.18 330));
+  --gradient-project: linear-gradient(135deg, oklch(68% 0.12 140), oklch(63% 0.15 120));
+
+  /* ── Glass Card Tokens — dark overrides ── */
+  --glass-bg: oklch(16% 0.02 280 / 0.6);
+  --glass-border: oklch(30% 0.02 280 / 0.2);
+  --glass-shadow: 0 8px 32px oklch(0% 0 0 / 0.3);
+  --glass-blur: 20px;
+
+  /* ── Typography Tokens — same in dark ── */
+  --text-hero: 700 2rem/1.2 'Inter Variable', Inter, sans-serif;
+  --text-section: 600 1.25rem/1.4 'Inter Variable', Inter, sans-serif;
+  --text-card-title: 600 1rem/1.4 'Inter Variable', Inter, sans-serif;
+  --text-body: 400 0.9375rem/1.6 'Inter Variable', Inter, sans-serif;
+  --text-caption: 400 0.8125rem/1.5 'Inter Variable', Inter, sans-serif;
+  --text-micro: 500 0.6875rem/1.4 'Inter Variable', Inter, sans-serif;
 }
 
 @theme inline {
@@ -207,6 +259,9 @@
   --animate-fade-up: fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-heart-pop: heart-pop 0.4s var(--ease-spring) both;
   --animate-float: float 3s ease-in-out infinite;
+  --animate-fade-up-spring: fadeUp 0.4s var(--ease-spring) both;
+  --animate-pop-in: popIn 0.35s var(--ease-spring) both;
+  --animate-pulse-slow: pulse 2s ease-in-out infinite;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -276,5 +331,50 @@
   /* Safe area padding for mobile devices with notches */
   .safe-area-inset-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   OUTPUT ANIMATION KEYFRAMES
+   ═══════════════════════════════════════════════════ */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
   }
 }

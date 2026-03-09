@@ -1,7 +1,6 @@
 import { memo } from 'react';
 import { Route, Clock, MapPin } from 'lucide-react';
 import { BlockWrapper } from './BlockWrapper';
-import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { ItineraryBlock as ItineraryBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
@@ -55,7 +54,7 @@ export const ItineraryBlock = memo(function ItineraryBlock({ block }: ItineraryB
                           {activity.time}
                         </span>
                       )}
-                      <span className="font-medium"><ConceptHighlighter text={activity.activity} /></span>
+                      <span className="font-medium">{activity.activity}</span>
                       {activity.duration && (
                         <span className="text-xs text-muted-foreground/70">({activity.duration})</span>
                       )}
@@ -67,7 +66,7 @@ export const ItineraryBlock = memo(function ItineraryBlock({ block }: ItineraryB
                       </div>
                     )}
                     {activity.notes && (
-                      <p className="text-xs text-muted-foreground/70 italic"><ConceptHighlighter text={activity.notes} /></p>
+                      <p className="text-xs text-muted-foreground/70 italic">{activity.notes}</p>
                     )}
                   </div>
                 ))}

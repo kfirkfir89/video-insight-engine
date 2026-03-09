@@ -51,7 +51,6 @@ const BLOCK_SIZE_MAP: Record<ContentBlockType, BlockSize> = {
   cost: 'half',
   nutrition: 'half',
   guest: 'half',
-  formula: 'half',
   rating: 'half',
 
   // Compact — small data points, 2-3 across
@@ -154,7 +153,6 @@ const SPACING_CATEGORY_MAP: Record<ContentBlockType, SpacingCategory> = {
   cost: 'dense',
   nutrition: 'dense',
   guest: 'dense',
-  formula: 'dense',
 };
 
 /** Returns the spacing category for a block type. */
@@ -251,6 +249,5 @@ export const SIDEBAR_COMPATIBLE_TYPES: Set<ContentBlockType> = new Set([
   'tool_list',
   'guest',
   'timestamp',
-  'formula',
 ]);
 

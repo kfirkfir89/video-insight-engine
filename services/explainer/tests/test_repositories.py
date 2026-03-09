@@ -44,7 +44,7 @@ class TestMongoVideoSummaryRepository:
             "youtubeId": "abc123",
             "title": "Test Video",
             "summary": {
-                "sections": [
+                "chapters": [
                     {
                         "id": "section-1",
                         "title": "Introduction",

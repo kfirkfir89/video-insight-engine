@@ -6,11 +6,11 @@ from src.utils.output_type import (
     get_output_type_label,
 )
 
-# Must match summarizer's OutputType values
+# Must match the canonical OutputType values
 EXPECTED_OUTPUT_TYPES = [
-    "summary", "recipe", "tutorial", "workout", "study_guide",
-    "travel_plan", "review", "podcast_notes", "diy_guide",
-    "game_guide", "music_guide",
+    "explanation", "recipe", "code_walkthrough", "study_kit",
+    "trip_planner", "workout", "verdict", "highlights",
+    "music_guide", "project_guide",
 ]
 
 
@@ -18,7 +18,7 @@ class TestOutputTypeLabels:
     """Tests for OUTPUT_TYPE_LABELS completeness and structure."""
 
     def test_all_expected_types_present(self):
-        """All 11 output types should have entries."""
+        """All 10 output types should have entries."""
         for output_type in EXPECTED_OUTPUT_TYPES:
             assert output_type in OUTPUT_TYPE_LABELS, f"Missing output type: {output_type}"
 
@@ -42,23 +42,23 @@ class TestGetOutputTypeLabel:
 
     def test_known_type_returns_label(self):
         assert get_output_type_label("recipe") == "Recipe"
-        assert get_output_type_label("tutorial") == "Tutorial"
+        assert get_output_type_label("code_walkthrough") == "Code Walkthrough"
         assert get_output_type_label("workout") == "Workout Plan"
 
     def test_compound_types_return_label(self):
-        assert get_output_type_label("study_guide") == "Study Guide"
-        assert get_output_type_label("travel_plan") == "Travel Plan"
-        assert get_output_type_label("podcast_notes") == "Podcast Notes"
-        assert get_output_type_label("diy_guide") == "DIY Guide"
-        assert get_output_type_label("game_guide") == "Game Guide"
+        assert get_output_type_label("study_kit") == "Study Kit"
+        assert get_output_type_label("trip_planner") == "Trip Planner"
+        assert get_output_type_label("highlights") == "Highlights"
+        assert get_output_type_label("project_guide") == "Project Guide"
+        assert get_output_type_label("verdict") == "Verdict"
         assert get_output_type_label("music_guide") == "Music Guide"
 
-    def test_summary_default(self):
-        assert get_output_type_label("summary") == "Summary"
+    def test_explanation_default(self):
+        assert get_output_type_label("explanation") == "Explanation"
 
     def test_unknown_type_returns_default(self):
-        assert get_output_type_label("unknown_type") == "Summary"
-        assert get_output_type_label("") == "Summary"
+        assert get_output_type_label("unknown_type") == "Explanation"
+        assert get_output_type_label("") == "Explanation"
 
 
 class TestGetOutputTypeHint:
@@ -69,7 +69,7 @@ class TestGetOutputTypeHint:
         assert "cooking" in hint.lower() or "ingredient" in hint.lower()
 
     def test_unknown_type_returns_default_hint(self):
-        default_hint = get_output_type_hint("summary")
+        default_hint = get_output_type_hint("explanation")
         assert get_output_type_hint("nonexistent") == default_hint
 
     def test_hint_is_meaningful_sentence(self):
