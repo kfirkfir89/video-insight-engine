@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════
-// RAG Chat Components (V2.1)
+// RAG Chat Components
 // ═══════════════════════════════════════════════════
 
 export { RAGSourceCard } from './RAGSourceCard';

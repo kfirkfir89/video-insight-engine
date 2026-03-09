@@ -6,11 +6,11 @@ import {
   ShareNotFoundError,
   VideoNotFoundError,
 } from '../utils/errors.js';
-import type { VideoContext, OutputType, VideoSummary } from '@vie/types';
+import type { VideoContext, OutputType, VideoSummary, VideoOutput } from '@vie/types';
 
 const SLUG_LENGTH = 10;
 
-/** Public-facing video summary for shared pages (mirrors @vie/types PublicVideoSummary) */
+/** Public-facing video summary for shared pages */
 interface PublicSummaryResponse {
   id: string;
   youtubeId: string;
@@ -21,6 +21,8 @@ interface PublicSummaryResponse {
   outputType: OutputType;
   context: VideoContext | null;
   summary: VideoSummary;
+  /** Structured output from the intent-driven pipeline */
+  output: VideoOutput | null;
   shareSlug: string;
   viewsCount: number;
   likesCount: number;
@@ -95,6 +97,16 @@ export class ShareService {
       });
     }
 
+    // Build structured output if intent-driven pipeline was used
+    const docAny = doc as unknown as Record<string, unknown>;
+    const structuredOutput: VideoOutput | null = docAny.intent ? {
+      outputType: ((docAny.intent as Record<string, unknown>).outputType as OutputType) ?? (doc.outputType as OutputType),
+      intent: docAny.intent as VideoOutput['intent'],
+      output: (docAny.output as VideoOutput['output']) ?? null,
+      synthesis: (docAny.synthesis as VideoOutput['synthesis']) ?? null,
+      enrichment: (docAny.enrichment as VideoOutput['enrichment']) ?? null,
+    } as VideoOutput : null;
+
     return {
       id: doc._id.toString(),
       youtubeId: doc.youtubeId,
@@ -102,9 +114,10 @@ export class ShareService {
       channel: doc.channel || null,
       thumbnailUrl: doc.thumbnailUrl || null,
       duration: doc.duration || null,
-      outputType: (doc.outputType as OutputType) || 'summary',
+      outputType: (doc.outputType as OutputType) || 'explanation',
       context: (doc.context as VideoContext) || null,
       summary: doc.summary as VideoSummary,
+      output: structuredOutput,
       shareSlug: slug,
       viewsCount: doc.viewsCount ?? 0,
       likesCount: doc.likesCount ?? 0,

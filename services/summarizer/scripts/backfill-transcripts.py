@@ -53,8 +53,8 @@ async def run_migration(dry_run: bool = True, batch_size: int | None = None) -> 
     # Import inside function to avoid import errors outside container
     from pymongo import MongoClient
     from src.config import settings
-    from src.services.s3_client import s3_client, S3Client
-    from src.services.transcript_store import transcript_store
+    from src.services.media.s3_client import s3_client, S3Client
+    from src.services.transcription.transcript_store import transcript_store
 
     # Check if S3 is available
     if not S3Client.is_available():

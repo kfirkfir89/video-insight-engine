@@ -15,11 +15,9 @@ import { sseLogger } from "@/lib/sse-logger";
 import {
   validatePhaseEvent,
   validateMetadataEvent,
-  validateChapter,
   validateErrorEvent,
 } from "@/lib/sse-validators";
 import type { StreamPhase } from "@/hooks/use-summary-stream";
-import type { SummaryChapter } from "@/types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 
@@ -37,7 +35,6 @@ interface ManagerState {
     thumbnailUrl?: string;
     duration?: number;
   } | null;
-  chapters: SummaryChapter[];
   error?: string | null;
 }
 
@@ -80,7 +77,6 @@ export function useProcessingManager() {
       setStreamState(videoSummaryId, {
         phase: "connecting",
         metadata: null,
-        chaptersCount: 0,
         error: null,
       });
 
@@ -105,7 +101,6 @@ export function useProcessingManager() {
             setStreamState(videoSummaryId, {
               phase: "error",
               metadata: null,
-              chaptersCount: 0,
               error: `HTTP ${response.status}`,
             });
             return;
@@ -119,7 +114,6 @@ export function useProcessingManager() {
           let currentState: Partial<ManagerState> = {
             phase: "connecting" as StreamPhase,
             metadata: null,
-            chapters: [],
           };
 
           while (true) {
@@ -143,7 +137,6 @@ export function useProcessingManager() {
                 setStreamState(videoSummaryId, {
                   phase: currentState.phase as StreamPhase,
                   metadata: currentState.metadata || null,
-                  chaptersCount: currentState.chapters?.length || 0,
                   error: currentState.error || null,
                 });
 
@@ -167,7 +160,6 @@ export function useProcessingManager() {
           setStreamState(videoSummaryId, {
             phase: "error",
             metadata: null,
-            chaptersCount: 0,
             error: err instanceof Error ? err.message : "Stream failed",
           });
         }
@@ -269,12 +261,6 @@ function processEvent(
           duration: metadata.duration,
         },
       };
-    }
-
-    case "chapter_ready": {
-      const chapter = validateChapter(event.chapter);
-      if (!chapter) return state;
-      return { ...state, chapters: [...(state.chapters || []), chapter] };
     }
 
     case "done":

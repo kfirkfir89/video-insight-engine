@@ -1,8 +1,7 @@
 /**
  * Shared concept name variant generation for matching concepts in content.
  *
- * Used by both sidebar matching (timestamp-utils.ts) and inline
- * highlighting (ConceptHighlighter.tsx) to ensure consistent behavior.
+ * Used by sidebar matching (timestamp-utils.ts).
  */
 
 // Module-scope constants to avoid re-allocation per call

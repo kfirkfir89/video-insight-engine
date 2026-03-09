@@ -7,7 +7,7 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
-from src.services.youtube import (
+from src.services.video.youtube import (
     VALID_CATEGORIES,
     VideoData,
     VideoContext,
@@ -68,7 +68,7 @@ class TestExtractHashtags:
 class TestDeterminePersona:
     """Tests for persona detection based on category and tags."""
 
-    @patch("src.services.youtube._load_persona_rules")
+    @patch("src.services.video.youtube._load_persona_rules")
     def test_detects_code_persona(self, mock_rules):
         """Test detecting code persona from category and keywords."""
         mock_rules.return_value = {
@@ -88,7 +88,7 @@ class TestDeterminePersona:
         )
         assert result == "code"
 
-    @patch("src.services.youtube._load_persona_rules")
+    @patch("src.services.video.youtube._load_persona_rules")
     def test_detects_recipe_persona(self, mock_rules):
         """Test detecting recipe persona from category and keywords."""
         mock_rules.return_value = {
@@ -108,7 +108,7 @@ class TestDeterminePersona:
         )
         assert result == "recipe"
 
-    @patch("src.services.youtube._load_persona_rules")
+    @patch("src.services.video.youtube._load_persona_rules")
     def test_defaults_to_standard_persona(self, mock_rules):
         """Test defaulting to standard when no match."""
         mock_rules.return_value = {
@@ -128,7 +128,7 @@ class TestDeterminePersona:
         )
         assert result == "standard"
 
-    @patch("src.services.youtube._load_persona_rules")
+    @patch("src.services.video.youtube._load_persona_rules")
     def test_requires_both_category_and_keyword(self, mock_rules):
         """Test that persona requires both matching category and keyword."""
         mock_rules.return_value = {
@@ -287,8 +287,8 @@ class TestCleanSubtitleText:
 class TestExtractVideoContext:
     """Tests for extracting video context from yt-dlp info."""
 
-    @patch("src.services.youtube._load_category_rules")
-    @patch("src.services.youtube._load_persona_rules")
+    @patch("src.services.video.youtube._load_category_rules")
+    @patch("src.services.video.youtube._load_persona_rules")
     def test_extracts_context(self, mock_persona_rules, mock_category_rules):
         """Test extracting full video context."""
         mock_persona_rules.return_value = {
@@ -341,8 +341,8 @@ class TestExtractVideoContext:
         assert "Python" in context.tags
         assert len(context.display_tags) <= 6
 
-    @patch("src.services.youtube._load_category_rules")
-    @patch("src.services.youtube._load_persona_rules")
+    @patch("src.services.video.youtube._load_category_rules")
+    @patch("src.services.video.youtube._load_persona_rules")
     def test_handles_missing_category(self, mock_persona_rules, mock_category_rules):
         """Test handling videos without category."""
         mock_persona_rules.return_value = {
@@ -485,7 +485,7 @@ class TestExtractVideoDataAsync:
             "subtitles": {},
         }
 
-    @patch("src.services.youtube._extract_video_data_sync")
+    @patch("src.services.video.youtube._extract_video_data_sync")
     async def test_extracts_video_data(self, mock_extract):
         """Test async extraction wrapper."""
         mock_extract.return_value = VideoData(
@@ -505,36 +505,36 @@ class TestExtractVideoDataAsync:
         assert result.title == "Test Video"
         mock_extract.assert_called_once_with("test123")
 
-    @patch("src.services.youtube._extract_with_retry")
-    @patch("src.services.youtube._load_persona_rules")
+    @patch("src.services.video.youtube._extract_with_retry")
+    @patch("src.services.video.youtube._load_persona_rules")
     def test_raises_error_on_unavailable_video(self, mock_rules, mock_extract):
         """Test error handling for unavailable video."""
         mock_rules.return_value = {"personas": {}, "default_persona": "standard"}
         mock_extract.return_value = None
 
-        from src.services.youtube import _extract_video_data_sync
+        from src.services.video.youtube import _extract_video_data_sync
 
         with pytest.raises(TranscriptError) as exc_info:
             _extract_video_data_sync("invalid_id")
 
         assert exc_info.value.code == ErrorCode.VIDEO_UNAVAILABLE
 
-    @patch("src.services.youtube._extract_with_retry")
-    @patch("src.services.youtube._load_persona_rules")
+    @patch("src.services.video.youtube._extract_with_retry")
+    @patch("src.services.video.youtube._load_persona_rules")
     def test_raises_error_on_live_stream(self, mock_rules, mock_extract):
         """Test error handling for live streams."""
         mock_rules.return_value = {"personas": {}, "default_persona": "standard"}
         mock_extract.return_value = {"is_live": True}
 
-        from src.services.youtube import _extract_video_data_sync
+        from src.services.video.youtube import _extract_video_data_sync
 
         with pytest.raises(TranscriptError) as exc_info:
             _extract_video_data_sync("live_stream_id")
 
         assert exc_info.value.code == ErrorCode.LIVE_STREAM
 
-    @patch("src.services.youtube._extract_with_retry")
-    @patch("src.services.youtube._load_persona_rules")
+    @patch("src.services.video.youtube._extract_with_retry")
+    @patch("src.services.video.youtube._load_persona_rules")
     def test_handles_missing_metadata(self, mock_rules, mock_extract, sample_yt_dlp_info):
         """Test handling missing optional metadata."""
         mock_rules.return_value = {"personas": {}, "default_persona": "standard"}
@@ -544,7 +544,7 @@ class TestExtractVideoDataAsync:
         sample_yt_dlp_info["channel"] = "Fallback Channel"
         mock_extract.return_value = sample_yt_dlp_info
 
-        from src.services.youtube import _extract_video_data_sync
+        from src.services.video.youtube import _extract_video_data_sync
 
         result = _extract_video_data_sync("test123")
 
@@ -556,8 +556,8 @@ class TestExtractVideoDataAsync:
 class TestRateLimitHandling:
     """Tests for rate limit detection and retry behavior."""
 
-    @patch("src.services.youtube._extract_with_retry")
-    @patch("src.services.youtube._load_persona_rules")
+    @patch("src.services.video.youtube._extract_with_retry")
+    @patch("src.services.video.youtube._load_persona_rules")
     def test_retries_with_proxy_on_failure(self, mock_rules, mock_extract):
         """Test retry with proxy fallback."""
         mock_rules.return_value = {"personas": {}, "default_persona": "standard"}
@@ -581,7 +581,7 @@ class TestRateLimitHandling:
             sample_yt_dlp_info,
         ]
 
-        from src.services.youtube import _extract_video_data_sync
+        from src.services.video.youtube import _extract_video_data_sync
 
         result = _extract_video_data_sync("test123")
 
@@ -592,7 +592,7 @@ class TestRateLimitHandling:
 class TestDetectCategory:
     """Tests for weighted category detection."""
 
-    @patch("src.services.youtube._load_category_rules")
+    @patch("src.services.video.youtube._load_category_rules")
     def test_detects_cooking_from_keywords(self, mock_rules):
         """Test detecting cooking category from strong keywords."""
         mock_rules.return_value = {
@@ -634,7 +634,7 @@ class TestDetectCategory:
         assert category == "cooking"
         assert confidence > 0.4  # Above threshold
 
-    @patch("src.services.youtube._load_category_rules")
+    @patch("src.services.video.youtube._load_category_rules")
     def test_detects_coding_category(self, mock_rules):
         """Test detecting coding category."""
         mock_rules.return_value = {
@@ -675,7 +675,7 @@ class TestDetectCategory:
         assert category == "coding"
         assert confidence > 0.5
 
-    @patch("src.services.youtube._load_category_rules")
+    @patch("src.services.video.youtube._load_category_rules")
     def test_defaults_to_standard_with_low_confidence(self, mock_rules):
         """Test defaulting to standard when no strong match."""
         mock_rules.return_value = {
@@ -716,7 +716,7 @@ class TestDetectCategory:
         assert category == "standard"
         assert confidence < 0.4
 
-    @patch("src.services.youtube._load_category_rules")
+    @patch("src.services.video.youtube._load_category_rules")
     def test_channel_pattern_matching(self, mock_rules):
         """Test channel pattern contributes to score."""
         mock_rules.return_value = {
@@ -932,7 +932,7 @@ class TestMusicCategoryDetection:
         persona = select_persona("music")
         assert persona == "music"
 
-    @patch("src.services.youtube._load_category_rules")
+    @patch("src.services.video.youtube._load_category_rules")
     def test_detects_music_from_youtube_category(self, mock_rules):
         """Test detecting music from YouTube Music category."""
         mock_rules.return_value = _base_music_rules(
@@ -963,7 +963,7 @@ class TestMusicCategoryDetection:
         assert category == "music"
         assert confidence > 0.4
 
-    @patch("src.services.youtube._load_category_rules")
+    @patch("src.services.video.youtube._load_category_rules")
     def test_detects_music_from_title_pattern(self, mock_rules):
         """Test detecting music from title with 'ft.' pattern."""
         mock_rules.return_value = _base_music_rules(
@@ -993,7 +993,7 @@ class TestMusicCategoryDetection:
         assert category == "music"
         assert confidence > 0.3
 
-    @patch("src.services.youtube._load_category_rules")
+    @patch("src.services.video.youtube._load_category_rules")
     def test_music_review_not_detected_as_music(self, mock_rules):
         """Test that a music review video is NOT detected as music."""
         mock_rules.return_value = _base_music_rules(
@@ -1038,7 +1038,7 @@ class TestMusicCategoryDetection:
 class TestGetLLMFallbackThreshold:
     """Tests for LLM fallback threshold retrieval."""
 
-    @patch("src.services.youtube._load_category_rules")
+    @patch("src.services.video.youtube._load_category_rules")
     def test_returns_threshold_from_config(self, mock_rules):
         """Test returning threshold from configuration."""
         mock_rules.return_value = {
@@ -1050,7 +1050,7 @@ class TestGetLLMFallbackThreshold:
         threshold = get_llm_fallback_threshold()
         assert threshold == 0.35
 
-    @patch("src.services.youtube._load_category_rules")
+    @patch("src.services.video.youtube._load_category_rules")
     def test_returns_default_on_missing_config(self, mock_rules):
         """Test returning default threshold when config is missing."""
         mock_rules.return_value = {}

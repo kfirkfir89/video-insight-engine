@@ -44,6 +44,7 @@ class MongoVideoSummaryRepository:
         """Convert MongoDB document to VideoSummary domain object."""
         summary_data = doc.get("summary", {})
 
+        # Read sections from V1 summary.chapters (backward compat)
         sections = [
             VideoSummarySection(
                 id=s.get("id", ""),
@@ -63,12 +64,28 @@ class MongoVideoSummaryRepository:
             for c in summary_data.get("concepts", [])
         ]
 
+        # Read typed output from intent-driven pipeline
+        output_field = doc.get("output")
+        output_data = None
+        if isinstance(output_field, dict):
+            output_data = output_field.get("data")
+
+        # Resolve output type from intent or top-level field
+        intent = doc.get("intent")
+        output_type = "explanation"
+        if isinstance(intent, dict) and intent.get("outputType"):
+            output_type = intent["outputType"]
+        elif doc.get("outputType"):
+            output_type = doc["outputType"]
+
         return VideoSummary(
             id=str(doc["_id"]),
             youtubeId=doc.get("youtubeId", ""),
             title=doc.get("title", "Unknown"),
+            output_type=output_type,
             sections=sections,
             concepts=concepts,
+            output_data=output_data,
         )
 
 

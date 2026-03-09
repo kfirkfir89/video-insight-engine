@@ -45,7 +45,6 @@ import type {
   ExerciseBlock,
   WorkoutTimerBlock,
   QuizBlock,
-  FormulaBlock,
   GuestBlock,
   ProblemSolutionBlock,
   VisualBlock,
@@ -74,7 +73,7 @@ export function createParagraphBlock(text: string): ParagraphBlock {
 
 export function createBulletsBlock(
   items: string[],
-  variant?: 'ingredients' | 'checklist' | string
+  variant?: 'ingredients' | string
 ): BulletsBlock {
   return {
     blockId: uuid(),
@@ -468,20 +467,6 @@ export function createQuizBlock(
   };
 }
 
-export function createFormulaBlock(
-  latex: string,
-  description?: string,
-  inline?: boolean
-): FormulaBlock {
-  return {
-    blockId: uuid(),
-    type: 'formula',
-    latex,
-    description,
-    inline,
-  };
-}
-
 // ─────────────────────────────────────────────────────
 // Podcast Blocks (1)
 // ─────────────────────────────────────────────────────
@@ -781,12 +766,6 @@ export const sampleBlocks = {
       explanation: 'useEffect is designed for handling side effects like data fetching.',
     },
   ]),
-  formula: createFormulaBlock(
-    'E = mc^2',
-    "Einstein's mass-energy equivalence formula",
-    false
-  ),
-
   // Podcast blocks
   guest: createGuestBlock([
     {
@@ -834,3 +813,225 @@ export const sampleBlocks = {
 
 // Derived from sampleBlocks to stay in sync automatically
 export const BLOCK_TYPE_COUNT = Object.keys(sampleBlocks).length;
+
+// ─────────────────────────────────────────────────────
+// Showcase Entries — one per unique component, variants as tabs
+// ─────────────────────────────────────────────────────
+
+export interface ShowcaseEntry {
+  label: string;
+  type: string;
+  category: string;
+  variants: { name: string; block: ContentBlock }[];
+}
+
+// Import ContentBlock type for the interface
+import type { ContentBlock } from '@vie/types';
+
+export const showcaseEntries: ShowcaseEntry[] = [
+  // ── Text ──
+  {
+    label: 'Paragraph',
+    type: 'paragraph',
+    category: 'Text',
+    variants: [{ name: 'default', block: sampleBlocks.paragraph }],
+  },
+  {
+    label: 'ListBlock',
+    type: 'bullets',
+    category: 'Text',
+    variants: [
+      { name: 'default', block: sampleBlocks.bullets },
+      { name: 'ingredients', block: createBulletsBlock(['2 cups flour', '1 cup sugar', '3 eggs'], 'ingredients') },
+    ],
+  },
+  {
+    label: 'StepBlock',
+    type: 'step',
+    category: 'Text',
+    variants: [
+      { name: 'step (interactive)', block: sampleBlocks.step },
+      {
+        name: 'numbered (simple)',
+        block: sampleBlocks.numbered,
+      },
+    ],
+  },
+  {
+    label: 'Definition',
+    type: 'definition',
+    category: 'Text',
+    variants: [{ name: 'default', block: sampleBlocks.definition }],
+  },
+  // ── Data ──
+  {
+    label: 'KeyValue',
+    type: 'keyvalue',
+    category: 'Data',
+    variants: [
+      { name: 'info', block: sampleBlocks.keyvalue },
+      { name: 'specs', block: createKeyValueBlock([{ key: 'CPU', value: 'M2 Pro' }, { key: 'RAM', value: '16 GB' }, { key: 'Storage', value: '512 GB SSD' }], 'specs') },
+      { name: 'cost', block: createKeyValueBlock([{ key: 'Monthly', value: '$29' }, { key: 'Annual', value: '$290' }], 'cost') },
+      { name: 'stats', block: createKeyValueBlock([{ key: 'Users', value: '12,400' }, { key: 'Uptime', value: '99.9%' }], 'stats') },
+      { name: 'location', block: createKeyValueBlock([{ key: 'City', value: 'Tokyo' }, { key: 'Country', value: 'Japan' }], 'location') },
+    ],
+  },
+  {
+    label: 'Statistic',
+    type: 'statistic',
+    category: 'Data',
+    variants: [
+      { name: 'metric', block: createStatisticBlock([{ value: '2.4M', label: 'Active Users', trend: 'up' }], 'metric') },
+      { name: 'percentage', block: createStatisticBlock([{ value: '85%', label: 'Performance Gain', trend: 'up' }], 'percentage') },
+      { name: 'trend', block: sampleBlocks.statistic },
+    ],
+  },
+  {
+    label: 'Timestamp',
+    type: 'timestamp',
+    category: 'Data',
+    variants: [{ name: 'default', block: sampleBlocks.timestamp }],
+  },
+  {
+    label: 'Transcript',
+    type: 'transcript',
+    category: 'Data',
+    variants: [{ name: 'default', block: sampleBlocks.transcript }],
+  },
+  {
+    label: 'Timeline',
+    type: 'timeline',
+    category: 'Data',
+    variants: [{ name: 'default', block: sampleBlocks.timeline }],
+  },
+  {
+    label: 'Table',
+    type: 'table',
+    category: 'Data',
+    variants: [{ name: 'default', block: sampleBlocks.table }],
+  },
+  // ── Callouts ──
+  {
+    label: 'Callout',
+    type: 'callout',
+    category: 'Callouts',
+    variants: [
+      { name: 'tip', block: sampleBlocks.callout_tip },
+      { name: 'warning', block: sampleBlocks.callout_warning },
+      { name: 'note', block: sampleBlocks.callout_note },
+      { name: 'chef_tip', block: sampleBlocks.callout_chef_tip },
+      { name: 'security', block: sampleBlocks.callout_security },
+    ],
+  },
+  {
+    label: 'Quote',
+    type: 'quote',
+    category: 'Callouts',
+    variants: [
+      { name: 'speaker', block: sampleBlocks.quote },
+      { name: 'testimonial', block: createQuoteBlock('This product changed how we work. Absolutely love it.', 'Sarah Chen, CTO', undefined, 'testimonial') },
+      { name: 'highlight', block: createQuoteBlock('The key insight is that simplicity always wins.', undefined, 60, 'highlight') },
+    ],
+  },
+  // ── Comparisons ──
+  {
+    label: 'Comparison',
+    type: 'comparison',
+    category: 'Comparisons',
+    variants: [
+      { name: 'versus', block: sampleBlocks.comparison },
+      { name: 'before_after', block: createComparisonBlock({ label: 'Before', items: ['Manual deploys', 'No tests', 'Monolith'] }, { label: 'After', items: ['CI/CD pipeline', 'Full test suite', 'Microservices'] }, 'before_after') },
+      { name: 'do_dont', block: sampleBlocks.do_dont },
+      { name: 'pro_con', block: sampleBlocks.pro_con },
+    ],
+  },
+  // ── Code ──
+  {
+    label: 'CodeBlock',
+    type: 'code',
+    category: 'Code',
+    variants: [
+      { name: 'code', block: sampleBlocks.code },
+      { name: 'example', block: sampleBlocks.example },
+      { name: 'terminal', block: sampleBlocks.terminal },
+    ],
+  },
+  {
+    label: 'FileTreeBlock',
+    type: 'file_tree',
+    category: 'Code',
+    variants: [{ name: 'default', block: sampleBlocks.file_tree }],
+  },
+  // ── Cooking ──
+  {
+    label: 'ChecklistBlock',
+    type: 'ingredient',
+    category: 'Cooking',
+    variants: [
+      { name: 'ingredient (with scaler)', block: sampleBlocks.ingredient },
+      { name: 'tool_list', block: sampleBlocks.tool_list },
+    ],
+  },
+  {
+    label: 'NutritionBlock',
+    type: 'nutrition',
+    category: 'Cooking',
+    variants: [{ name: 'default', block: sampleBlocks.nutrition }],
+  },
+  // ── Travel ──
+  {
+    label: 'LocationBlock',
+    type: 'location',
+    category: 'Travel',
+    variants: [{ name: 'default', block: sampleBlocks.location }],
+  },
+  {
+    label: 'ItineraryBlock',
+    type: 'itinerary',
+    category: 'Travel',
+    variants: [{ name: 'default', block: sampleBlocks.itinerary }],
+  },
+  {
+    label: 'CostBlock',
+    type: 'cost',
+    category: 'Travel',
+    variants: [{ name: 'default', block: sampleBlocks.cost }],
+  },
+  // ── Reviews ──
+  {
+    label: 'RatingBlock',
+    type: 'rating',
+    category: 'Reviews',
+    variants: [{ name: 'default', block: sampleBlocks.rating }],
+  },
+  {
+    label: 'VerdictBlock',
+    type: 'verdict',
+    category: 'Reviews',
+    variants: [{ name: 'default', block: sampleBlocks.verdict }],
+  },
+  // ── Fitness ──
+  {
+    label: 'FitnessBlock',
+    type: 'exercise',
+    category: 'Fitness',
+    variants: [
+      { name: 'exercise', block: sampleBlocks.exercise },
+      { name: 'workout_timer', block: sampleBlocks.workout_timer },
+    ],
+  },
+  // ── Education ──
+  {
+    label: 'QuizBlock',
+    type: 'quiz',
+    category: 'Education',
+    variants: [{ name: 'default', block: sampleBlocks.quiz }],
+  },
+  // ── Interview ──
+  {
+    label: 'GuestBlock',
+    type: 'guest',
+    category: 'Interview',
+    variants: [{ name: 'default', block: sampleBlocks.guest }],
+  },
+];

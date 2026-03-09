@@ -1,7 +1,7 @@
-"""Tests for detection override endpoint and state management (Phase 4).
+"""Tests for detection override endpoint and state management.
 
 Tests override state set/get/clear, concurrent overrides,
-invalid category rejection, generation-started guard, and the REST endpoint.
+invalid category rejection, and the REST endpoint.
 """
 
 import pytest
@@ -14,24 +14,18 @@ from src.routes.override import (
 )
 from src.services.override_state import (
     _overrides,
-    _generation_started,
     check_override,
     clear_override,
     set_override,
-    mark_generation_started,
-    is_generation_started,
-    clear_generation_started,
 )
 
 
 @pytest.fixture(autouse=True)
 def clean_overrides():
-    """Ensure override and generation-started state is clean before and after each test."""
+    """Ensure override state is clean before and after each test."""
     _overrides.clear()
-    _generation_started.clear()
     yield
     _overrides.clear()
-    _generation_started.clear()
 
 
 class TestCheckOverride:
@@ -284,75 +278,6 @@ class TestSetOverride:
         assert len(_overrides) == _MAX_OVERRIDES
         assert check_override("v-0") is None
         assert check_override("new-video") is not None
-
-
-class TestGenerationStarted:
-    """Test generation-started tracking for override pre-generation guard."""
-
-    def test_not_started_by_default(self):
-        assert is_generation_started("video-123") is False
-
-    def test_mark_and_check(self):
-        mark_generation_started("video-123")
-        assert is_generation_started("video-123") is True
-
-    def test_different_ids_are_independent(self):
-        mark_generation_started("video-123")
-        assert is_generation_started("video-456") is False
-
-    def test_clear_generation_started(self):
-        mark_generation_started("video-123")
-        clear_generation_started("video-123")
-        assert is_generation_started("video-123") is False
-
-    def test_clear_nonexistent_is_safe(self):
-        clear_generation_started("nonexistent")
-
-    def test_mark_is_idempotent(self):
-        mark_generation_started("video-123")
-        mark_generation_started("video-123")
-        assert is_generation_started("video-123") is True
-
-
-class TestOverrideEndpointGenerationGuard:
-    """Test that override is rejected after generation has started (409 Conflict)."""
-
-    @pytest.mark.anyio
-    async def test_override_rejected_after_generation_started(self, test_app, valid_secret):
-        from httpx import AsyncClient, ASGITransport
-
-        mark_generation_started("video-gen-started")
-
-        async with AsyncClient(
-            transport=ASGITransport(app=test_app),
-            base_url="http://test",
-        ) as client:
-            response = await client.post(
-                "/override/video-gen-started",
-                json={"category": "cooking"},
-                headers={"X-Internal-Secret": valid_secret},
-            )
-
-        assert response.status_code == 409
-        assert "Cannot override after generation has started" in response.json()["detail"]
-
-    @pytest.mark.anyio
-    async def test_override_accepted_before_generation_started(self, test_app, valid_secret):
-        from httpx import AsyncClient, ASGITransport
-
-        # Generation not started — override should succeed
-        async with AsyncClient(
-            transport=ASGITransport(app=test_app),
-            base_url="http://test",
-        ) as client:
-            response = await client.post(
-                "/override/video-not-started",
-                json={"category": "cooking"},
-                headers={"X-Internal-Secret": valid_secret},
-            )
-
-        assert response.status_code == 200
-        assert response.json()["category"] == "cooking"
 
 
 class TestOverrideRequestModel:

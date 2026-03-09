@@ -238,22 +238,6 @@ test.describe("Video Detail - Content Display", () => {
     expect(firstLabel).toContain("0:00");
   });
 
-  test("displays concepts inline with sections", async ({ authenticatedPage: page }) => {
-    // Concepts are highlighted inline within paragraph text via ConceptHighlighter
-    const sections = page.locator('[data-slot="article-section"]');
-    const mainContentSection = sections.nth(1);
-
-    // The concept should be rendered as an inline button with Definition aria-label
-    const conceptButton = mainContentSection.locator('button[aria-label*="Definition: Main Concept"]');
-    await expect(conceptButton).toBeVisible();
-
-    // Click to open concept popover
-    await conceptButton.click();
-
-    // Popover should show the definition
-    const popover = page.locator('[data-radix-popper-content-wrapper]');
-    await expect(popover.getByText("Definition of the main concept")).toBeVisible({ timeout: 3000 });
-  });
 });
 
 test.describe("Video Detail - Accessibility", () => {
@@ -319,20 +303,6 @@ test.describe("Video Detail - Accessibility", () => {
     await expect(h3s).toHaveCount(3);
   });
 
-  test("concept button opens popover with definition", async ({
-    authenticatedPage: page,
-  }) => {
-    // Find a concept button by its Definition aria-label
-    const conceptButton = page.locator('button[aria-label*="Definition: Main Concept"]');
-    await expect(conceptButton).toBeVisible();
-
-    // Click to open popover
-    await conceptButton.click({ force: true });
-
-    // Popover should appear with definition text
-    const popover = page.locator('[data-radix-popper-content-wrapper]');
-    await expect(popover).toBeVisible({ timeout: 3000 });
-  });
 });
 
 test.describe("Video Detail - Edge Cases", () => {

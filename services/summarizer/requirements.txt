@@ -5,6 +5,7 @@ uvicorn>=0.27.0
 # YouTube
 youtube-transcript-api>=0.6.2
 yt-dlp>=2024.1.0
+yt-dlp-ejs>=0.1.0
 
 # LLM (multi-provider via LiteLLM)
 litellm>=1.80.0

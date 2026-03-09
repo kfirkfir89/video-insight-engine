@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import json
 
-from src.services.sponsorblock import (
+from src.services.video.sponsorblock import (
     SponsorSegment,
     get_sponsor_segments,
     filter_transcript_segments,
@@ -36,7 +36,7 @@ class TestSponsorSegment:
 class TestGetSponsorSegments:
     """Tests for get_sponsor_segments function."""
 
-    @patch("src.services.sponsorblock.httpx.AsyncClient")
+    @patch("src.services.video.sponsorblock.httpx.AsyncClient")
     async def test_no_segments_found(self, mock_client_class):
         """Test handling 404 when no segments found."""
         mock_response = MagicMock()
@@ -50,7 +50,7 @@ class TestGetSponsorSegments:
 
         assert result == []
 
-    @patch("src.services.sponsorblock.httpx.AsyncClient")
+    @patch("src.services.video.sponsorblock.httpx.AsyncClient")
     async def test_api_error(self, mock_client_class):
         """Test handling API errors."""
         mock_response = MagicMock()
@@ -64,7 +64,7 @@ class TestGetSponsorSegments:
 
         assert result == []
 
-    @patch("src.services.sponsorblock.httpx.AsyncClient")
+    @patch("src.services.video.sponsorblock.httpx.AsyncClient")
     async def test_successful_fetch(self, mock_client_class):
         """Test successful segment fetch."""
         mock_response = MagicMock()
@@ -95,7 +95,7 @@ class TestGetSponsorSegments:
         assert result[0].uuid == "uuid1"
         assert result[1].category == "selfpromo"
 
-    @patch("src.services.sponsorblock.httpx.AsyncClient")
+    @patch("src.services.video.sponsorblock.httpx.AsyncClient")
     async def test_timeout_returns_empty(self, mock_client_class):
         """Test that timeout returns empty list."""
         import httpx
@@ -108,7 +108,7 @@ class TestGetSponsorSegments:
 
         assert result == []
 
-    @patch("src.services.sponsorblock.httpx.AsyncClient")
+    @patch("src.services.video.sponsorblock.httpx.AsyncClient")
     async def test_general_exception_returns_empty(self, mock_client_class):
         """Test that general exceptions return empty list."""
         mock_client = AsyncMock()
@@ -119,7 +119,7 @@ class TestGetSponsorSegments:
 
         assert result == []
 
-    @patch("src.services.sponsorblock.httpx.AsyncClient")
+    @patch("src.services.video.sponsorblock.httpx.AsyncClient")
     async def test_invalid_json_returns_empty(self, mock_client_class):
         """Test handling invalid JSON response."""
         mock_response = MagicMock()
@@ -134,7 +134,7 @@ class TestGetSponsorSegments:
 
         assert result == []
 
-    @patch("src.services.sponsorblock.httpx.AsyncClient")
+    @patch("src.services.video.sponsorblock.httpx.AsyncClient")
     async def test_malformed_segment_data(self, mock_client_class):
         """Test handling malformed segment data."""
         mock_response = MagicMock()
@@ -166,7 +166,7 @@ class TestGetSponsorSegments:
         assert len(result) == 1
         assert result[0].start_seconds == 20.0
 
-    @patch("src.services.sponsorblock.httpx.AsyncClient")
+    @patch("src.services.video.sponsorblock.httpx.AsyncClient")
     async def test_uses_correct_categories(self, mock_client_class):
         """Test that API request includes correct categories."""
         mock_response = MagicMock()

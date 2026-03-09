@@ -4,13 +4,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.services.transcript_store import TranscriptStoreService
+from src.services.transcription.transcript_store import TranscriptStoreService
 
 
 @pytest.fixture
 def store():
     """Create a fresh TranscriptStoreService with mocked S3 client."""
-    with patch("src.services.transcript_store.s3_client") as mock_s3:
+    with patch("src.services.transcription.transcript_store.s3_client") as mock_s3:
         service = TranscriptStoreService()
         service._s3 = mock_s3
         yield service, mock_s3
@@ -64,7 +64,7 @@ class TestStore:
         mock_s3.ensure_bucket_exists = AsyncMock()
         mock_s3.put_json = AsyncMock()
 
-        with patch("src.services.transcript_store.S3Client.is_available", return_value=True):
+        with patch("src.services.transcription.transcript_store.S3Client.is_available", return_value=True):
             key = await service.store(
                 youtube_id="dQw4w9WgXcQ",
                 segments=[{"text": "hello", "startMs": 0, "endMs": 1000}],

@@ -4,6 +4,7 @@ from src.utils.json_parsing import (
     parse_json_response,
     parse_json_array_response,
     _strip_json_comments,
+    _repair_truncated_json,
 )
 
 
@@ -130,4 +131,84 @@ class TestParseJsonWithComments:
 ]"""
         result = parse_json_array_response(text)
         assert len(result) == 2
+        assert result[0]["name"] == "foo"
+
+
+class TestRepairTruncatedJson:
+    """Tests for _repair_truncated_json."""
+
+    def test_repairs_truncated_object(self):
+        text = '{"key": "value", "other": "tru'
+        result = _repair_truncated_json(text)
+        assert result is not None
+        import json
+        parsed = json.loads(result)
+        assert isinstance(parsed, dict)
+        assert parsed["key"] == "value"
+
+    def test_repairs_truncated_nested(self):
+        text = '{"a": {"b": 1}, "c": [1, 2'
+        result = _repair_truncated_json(text)
+        assert result is not None
+        import json
+        parsed = json.loads(result)
+        assert parsed["a"] == {"b": 1}
+
+    def test_repairs_truncated_with_markdown_fences(self):
+        text = '```json\n{"key": "val'
+        result = _repair_truncated_json(text)
+        assert result is not None
+        import json
+        parsed = json.loads(result)
+        assert isinstance(parsed, dict)
+
+    def test_repairs_truncated_array(self):
+        text = '[{"name": "foo"}, {"name": "ba'
+        result = _repair_truncated_json(text)
+        assert result is not None
+        import json
+        parsed = json.loads(result)
+        assert isinstance(parsed, list)
+        assert parsed[0]["name"] == "foo"
+
+    def test_no_repair_needed(self):
+        text = '{"key": "value"}'
+        result = _repair_truncated_json(text)
+        assert result is not None
+        import json
+        parsed = json.loads(result)
+        assert parsed == {"key": "value"}
+
+    def test_unrepairable_no_json(self):
+        result = _repair_truncated_json("no json here at all")
+        assert result is None
+
+    def test_empty_string(self):
+        result = _repair_truncated_json("")
+        assert result is None
+
+    def test_truncated_after_comma(self):
+        text = '{"a": 1, "b": 2, '
+        result = _repair_truncated_json(text)
+        assert result is not None
+        import json
+        parsed = json.loads(result)
+        assert parsed["a"] == 1
+        assert parsed["b"] == 2
+
+
+class TestParseJsonResponseTruncated:
+    """Integration: parse_json_response handles truncated JSON."""
+
+    def test_truncated_object_falls_back_to_repair(self):
+        text = '{"intent": "explanation", "confidence": 0.9, "reason": "this is a tru'
+        result = parse_json_response(text)
+        assert isinstance(result, dict)
+        assert result["intent"] == "explanation"
+
+    def test_truncated_array_falls_back_to_repair(self):
+        text = '[{"name": "foo"}, {"name": "ba'
+        result = parse_json_array_response(text)
+        assert isinstance(result, list)
+        assert len(result) >= 1
         assert result[0]["name"] == "foo"

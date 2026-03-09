@@ -31,6 +31,12 @@ export interface VideoSummaryCacheDocument {
   likesCount?: number;
   // Expiration (V1.4)
   expiresAt?: Date | null;
+  // Pipeline output fields
+  pipelineVersion?: string; // Legacy field in DB, no longer set
+  intent?: unknown;
+  output?: unknown;
+  enrichment?: unknown;
+  synthesis?: unknown;
 }
 
 export interface UserVideoDocument {
@@ -363,6 +369,36 @@ export class VideoRepository {
       })
       .sort({ 'playlistInfo.position': 1 })
       .toArray();
+  }
+
+  // ─── Pipeline output methods ───
+
+  async updateIntent(id: string, intent: unknown): Promise<void> {
+    await this.cacheCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { intent, updatedAt: new Date() } },
+    );
+  }
+
+  async updateOutput(id: string, output: unknown): Promise<void> {
+    await this.cacheCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { output, updatedAt: new Date() } },
+    );
+  }
+
+  async updateSynthesis(id: string, synthesis: unknown): Promise<void> {
+    await this.cacheCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { synthesis, updatedAt: new Date() } },
+    );
+  }
+
+  async updateEnrichment(id: string, enrichment: unknown): Promise<void> {
+    await this.cacheCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { enrichment, updatedAt: new Date() } },
+    );
   }
 
   /** Update a single block's data within a video summary's chapters by blockId */

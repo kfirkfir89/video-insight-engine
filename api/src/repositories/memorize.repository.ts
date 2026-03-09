@@ -72,6 +72,10 @@ export interface VideoSummaryCacheForMemorize {
       definition: string | null;
     }>;
   } | null;
+  /** Typed output from intent-driven pipeline */
+  output?: { type: string; data: Record<string, unknown> } | null;
+  /** Intent result with section metadata */
+  intent?: { outputType: string; sections?: Array<{ id: string; label: string }> } | null;
 }
 
 export interface SystemExpansionDocument {

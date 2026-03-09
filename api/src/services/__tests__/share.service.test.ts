@@ -159,7 +159,7 @@ describe('ShareService', () => {
         channel: 'Test Channel',
         thumbnailUrl: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
         duration: 212,
-        outputType: 'summary',
+        outputType: 'explanation',
         context: { persona: 'standard', language: 'en' },
         summary: { chapters: [] },
         viewsCount: 42,
@@ -178,9 +178,10 @@ describe('ShareService', () => {
         channel: 'Test Channel',
         thumbnailUrl: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
         duration: 212,
-        outputType: 'summary',
+        outputType: 'explanation',
         context: { persona: 'standard', language: 'en' },
         summary: { chapters: [] },
+        output: null,
         shareSlug: slug,
         viewsCount: 42,
         likesCount: 7,
@@ -211,7 +212,7 @@ describe('ShareService', () => {
       expect(result.channel).toBeNull();
       expect(result.thumbnailUrl).toBeNull();
       expect(result.duration).toBeNull();
-      expect(result.outputType).toBe('summary');
+      expect(result.outputType).toBe('explanation');
       expect(result.context).toBeNull();
       expect(result.viewsCount).toBe(0);
       expect(result.likesCount).toBe(0);

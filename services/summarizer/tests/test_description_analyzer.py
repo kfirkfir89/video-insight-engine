@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 import json
 
-from src.services.description_analyzer import (
+from src.services.video.description_analyzer import (
     DescriptionAnalysis,
     DescriptionLink,
     Resource,
@@ -123,8 +123,8 @@ class TestAnalyzeDescriptionAsync:
         result = await _analyze_description_async("          ")
         assert result.has_content is False
 
-    @patch("src.services.description_analyzer.load_prompt")
-    @patch("src.services.description_analyzer.acompletion")
+    @patch("src.services.video.description_analyzer.load_prompt")
+    @patch("src.services.video.description_analyzer.acompletion")
     async def test_successful_analysis(self, mock_acompletion, mock_load_prompt):
         """Test successful description analysis."""
         mock_load_prompt.return_value = "Analyze this description: {description}"
@@ -148,8 +148,8 @@ class TestAnalyzeDescriptionAsync:
         assert result.links[0].type == "github"
         assert len(result.social_links) == 1
 
-    @patch("src.services.description_analyzer.load_prompt")
-    @patch("src.services.description_analyzer.acompletion")
+    @patch("src.services.video.description_analyzer.load_prompt")
+    @patch("src.services.video.description_analyzer.acompletion")
     async def test_llm_api_error_returns_empty(self, mock_acompletion, mock_load_prompt):
         """Test that API errors return empty analysis."""
         import litellm
@@ -166,8 +166,8 @@ class TestAnalyzeDescriptionAsync:
 
         assert result.has_content is False
 
-    @patch("src.services.description_analyzer.load_prompt")
-    @patch("src.services.description_analyzer.acompletion")
+    @patch("src.services.video.description_analyzer.load_prompt")
+    @patch("src.services.video.description_analyzer.acompletion")
     async def test_general_exception_returns_empty(self, mock_acompletion, mock_load_prompt):
         """Test that general exceptions return empty analysis."""
         mock_load_prompt.return_value = "Analyze: {description}"
@@ -178,8 +178,8 @@ class TestAnalyzeDescriptionAsync:
 
         assert result.has_content is False
 
-    @patch("src.services.description_analyzer.load_prompt")
-    @patch("src.services.description_analyzer.acompletion")
+    @patch("src.services.video.description_analyzer.load_prompt")
+    @patch("src.services.video.description_analyzer.acompletion")
     async def test_truncates_long_description(self, mock_acompletion, mock_load_prompt):
         """Test that long descriptions are truncated."""
         mock_load_prompt.return_value = "Analyze: {description}"
@@ -200,8 +200,8 @@ class TestAnalyzeDescriptionAsync:
         prompt_content = messages[0]["content"]
         assert "..." in prompt_content or len(prompt_content) < 6000
 
-    @patch("src.services.description_analyzer.load_prompt")
-    @patch("src.services.description_analyzer.acompletion")
+    @patch("src.services.video.description_analyzer.load_prompt")
+    @patch("src.services.video.description_analyzer.acompletion")
     async def test_custom_fast_model(self, mock_acompletion, mock_load_prompt):
         """Test using custom fast model."""
         mock_load_prompt.return_value = "Analyze: {description}"
@@ -218,8 +218,8 @@ class TestAnalyzeDescriptionAsync:
         call_args = mock_acompletion.call_args
         assert call_args.kwargs.get("model") == custom_model
 
-    @patch("src.services.description_analyzer.load_prompt")
-    @patch("src.services.description_analyzer.acompletion")
+    @patch("src.services.video.description_analyzer.load_prompt")
+    @patch("src.services.video.description_analyzer.acompletion")
     async def test_filters_invalid_links(self, mock_acompletion, mock_load_prompt):
         """Test that links without URLs are filtered out."""
         mock_load_prompt.return_value = "Analyze: {description}"
@@ -245,7 +245,7 @@ class TestAnalyzeDescriptionAsync:
 class TestAnalyzeDescription:
     """Tests for the main analyze_description function."""
 
-    @patch("src.services.description_analyzer._analyze_description_async")
+    @patch("src.services.video.description_analyzer._analyze_description_async")
     async def test_calls_async_function(self, mock_async_analyze):
         """Test that analyze_description calls the async implementation."""
         mock_async_analyze.return_value = DescriptionAnalysis()
@@ -255,7 +255,7 @@ class TestAnalyzeDescription:
 
         mock_async_analyze.assert_called_once_with(description, None)
 
-    @patch("src.services.description_analyzer._analyze_description_async")
+    @patch("src.services.video.description_analyzer._analyze_description_async")
     async def test_passes_fast_model(self, mock_async_analyze):
         """Test that fast_model is passed through."""
         mock_async_analyze.return_value = DescriptionAnalysis()

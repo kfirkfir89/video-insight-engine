@@ -77,7 +77,7 @@ const fileTreeNodeSchema: z.ZodTypeAny = z.object({
 
 /**
  * Content block schemas for dynamic chapter content.
- * Matches ContentBlock union type in @vie/types (V2.1).
+ * Matches ContentBlock union type in @vie/types.
  */
 export const contentBlockSchema = z.discriminatedUnion('type', [
   // Base blocks
@@ -123,7 +123,7 @@ export const contentBlockSchema = z.discriminatedUnion('type', [
       trend: z.enum(['up', 'down', 'neutral']).optional(),
     })),
   }),
-  // Universal blocks (V2.1)
+  // Universal blocks
   z.object({
     ...baseBlockFields,
     type: z.literal('transcript'),
@@ -135,7 +135,7 @@ export const contentBlockSchema = z.discriminatedUnion('type', [
   }),
   z.object({ ...baseBlockFields, type: z.literal('timeline'), events: z.array(z.object({ date: z.string(), title: z.string(), description: z.string().optional() })) }),
   z.object({ ...baseBlockFields, type: z.literal('tool_list'), tools: z.array(z.object({ name: z.string(), notes: z.string().optional() })) }),
-  // Cooking blocks (V2.1)
+  // Cooking blocks
   z.object({
     ...baseBlockFields,
     type: z.literal('ingredient'),
@@ -168,11 +168,11 @@ export const contentBlockSchema = z.discriminatedUnion('type', [
       dailyValue: z.string().optional(),
     })),
   }),
-  // Coding blocks (V2.1)
+  // Coding blocks
   z.object({ ...baseBlockFields, type: z.literal('code'), language: z.string().optional(), code: z.string(), filename: z.string().optional() }),
   z.object({ ...baseBlockFields, type: z.literal('terminal'), command: z.string(), output: z.string().optional() }),
   z.object({ ...baseBlockFields, type: z.literal('file_tree'), tree: z.array(fileTreeNodeSchema) }),
-  // Travel blocks (V2.1)
+  // Travel blocks
   z.object({ ...baseBlockFields, type: z.literal('location'), name: z.string(), address: z.string().optional(), description: z.string().optional() }),
   z.object({
     ...baseBlockFields,
@@ -199,7 +199,7 @@ export const contentBlockSchema = z.discriminatedUnion('type', [
     })),
     total: z.number().optional(),
   }),
-  // Review blocks (V2.1)
+  // Review blocks
   z.object({
     ...baseBlockFields,
     type: z.literal('pro_con'),
@@ -226,7 +226,7 @@ export const contentBlockSchema = z.discriminatedUnion('type', [
     bestFor: z.array(z.string()).optional(),
     notFor: z.array(z.string()).optional(),
   }),
-  // Fitness blocks (V2.1)
+  // Fitness blocks
   z.object({
     ...baseBlockFields,
     type: z.literal('exercise'),
@@ -251,7 +251,7 @@ export const contentBlockSchema = z.discriminatedUnion('type', [
     })),
     rounds: z.number().optional(),
   }),
-  // Education blocks (V2.1)
+  // Education blocks
   z.object({
     ...baseBlockFields,
     type: z.literal('quiz'),
@@ -262,8 +262,8 @@ export const contentBlockSchema = z.discriminatedUnion('type', [
       explanation: z.string().optional(),
     })),
   }),
-  z.object({ ...baseBlockFields, type: z.literal('formula'), latex: z.string(), description: z.string().optional(), inline: z.boolean().optional() }),
-  // Podcast blocks (V2.1)
+
+  // Podcast blocks
   z.object({
     ...baseBlockFields,
     type: z.literal('guest'),

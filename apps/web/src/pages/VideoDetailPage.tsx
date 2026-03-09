@@ -1,14 +1,14 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useCallback, useMemo } from "react";
 import { useVideo, useRetryVideo } from "@/hooks/use-videos";
-import { useSummaryStream, getStreamingPhaseLabel, type StreamState } from "@/hooks/use-summary-stream";
+import { useSummaryStream } from "@/hooks/use-summary-stream";
 import { useProcessingStore } from "@/stores/processing-store";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { Loader2, ArrowLeft, RefreshCw, AlertCircle } from "lucide-react";
-import { VideoDetailLayout } from "@/components/video-detail";
-import type { VideoSummary, SummaryChapter, Concept } from "@vie/types";
+import { OutputRouter } from "@/components/video-detail/OutputRouter";
+import type { VideoOutput } from "@vie/types";
 
 export function VideoDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,7 +18,7 @@ export function VideoDetailPage() {
 
   // Extract data safely (may be undefined during loading/error)
   const video = data?.video;
-  const cachedSummary = data?.summary;
+  const cachedOutput = data?.output ?? null;
 
   // Determine if we should stream
   const isProcessing = video?.status === "pending" || video?.status === "processing";
@@ -56,15 +56,6 @@ export function VideoDetailPage() {
     onComplete: handleStreamComplete,
   });
 
-  // Memoize summary to avoid rebuilding on every render
-  // Must be called before early returns (Rules of Hooks)
-  const summary = useMemo(() => {
-    if (!cachedSummary && !isProcessing) return null;
-    if (isProcessing && streamState.phase !== "idle" && streamState.phase !== "connecting") {
-      return buildSummaryFromStream(streamState);
-    }
-    return cachedSummary ?? null;
-  }, [isProcessing, streamState, cachedSummary]);
 
   // Memoize merged video object to avoid creating new reference on every render
   // Must be called before early returns (Rules of Hooks)
@@ -81,6 +72,23 @@ export function VideoDetailPage() {
       context: streamState.metadata?.context || video.context,
     };
   }, [video, streamState.metadata, streamState.duration]);
+
+  // Build structured output from streaming state or cached API response
+  const output = useMemo((): VideoOutput | null => {
+    // Cached result from the API (completed video)
+    if (cachedOutput) return cachedOutput;
+    // Build from streaming state if we have intent
+    if (isProcessing && streamState.intent) {
+      return {
+        outputType: streamState.intent.outputType,
+        intent: streamState.intent,
+        output: streamState.output ?? { type: streamState.intent.outputType, data: {} as never },
+        synthesis: streamState.synthesis ?? { tldr: "", keyTakeaways: [], masterSummary: "", seoDescription: "" },
+        ...(streamState.enrichment ? { enrichment: streamState.enrichment } : {}),
+      };
+    }
+    return null;
+  }, [cachedOutput, isProcessing, streamState.intent, streamState.output, streamState.synthesis, streamState.enrichment]);
 
   // Loading state
   if (isLoading) {
@@ -144,10 +152,6 @@ export function VideoDetailPage() {
     streamState.phase !== "cancelled" &&
     streamState.phase !== "error";
 
-  // Compute streaming phase label for inline display in VideoHero
-  const streamingPhaseLabel = isStreaming
-    ? getStreamingPhaseLabel(streamState.phase, streamState.currentChapterIndex, streamState.chapters.length)
-    : undefined;
 
   // Issue #13: Error boundary fallback for rendering errors from malformed streaming state
   const errorFallback = (
@@ -167,50 +171,15 @@ export function VideoDetailPage() {
 
   return (
     <ErrorBoundary key={id} fallback={errorFallback}>
-      <VideoDetailLayout
-        video={mergedVideo}
-        summary={summary}
-        isStreaming={isStreaming}
-        streamingState={isProcessing ? streamState : undefined}
-        chapters={isProcessing ? streamState.chapters : video?.chapters}
-        isCreatorChapters={isProcessing ? streamState.isCreatorChapters : video?.chapterSource === "creator"}
-        descriptionAnalysis={isProcessing ? streamState.descriptionAnalysis : video?.descriptionAnalysis}
-        onStopSummarization={isStreaming ? streamState.stop : undefined}
-        streamingPhaseLabel={streamingPhaseLabel}
-      />
+      <Layout>
+        <OutputRouter
+          video={mergedVideo}
+          output={output}
+          isStreaming={isStreaming}
+          streamingState={isProcessing ? streamState : undefined}
+        />
+      </Layout>
     </ErrorBoundary>
   );
 }
 
-/**
- * Build a VideoSummary object from the current stream state.
- * This allows displaying partial data while streaming.
- */
-function buildSummaryFromStream(state: StreamState): VideoSummary | null {
-  // If we have no meaningful data yet, return null
-  if (!state.tldr && state.chapters.length === 0 && state.concepts.length === 0) {
-    return null;
-  }
-
-  return {
-    tldr: state.tldr || "",
-    keyTakeaways: state.keyTakeaways || [],
-    chapters: state.chapters.map((s): SummaryChapter => ({
-      id: s.id,
-      timestamp: s.timestamp,
-      startSeconds: s.startSeconds,
-      endSeconds: s.endSeconds,
-      title: s.title,
-      originalTitle: s.originalTitle,
-      generatedTitle: s.generatedTitle,
-      isCreatorChapter: s.isCreatorChapter,
-      content: s.content, // Dynamic content blocks - source of truth
-    })),
-    concepts: state.concepts.map((c): Concept => ({
-      id: c.id,
-      name: c.name,
-      definition: c.definition || "",
-      timestamp: c.timestamp ?? null,
-    })),
-  };
-}

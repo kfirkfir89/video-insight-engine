@@ -3,8 +3,8 @@ import { VideoRepository, VideoSummaryCacheDocument } from '../repositories/vide
 import { SummarizerClient, type ProviderConfig } from './summarizer-client.js';
 import { extractYoutubeId } from '../utils/youtube.js';
 import { InvalidYouTubeUrlError, VideoNotFoundError, VersionCreationError, InvalidCategoryError } from '../utils/errors.js';
-import { CATEGORY_TO_OUTPUT_TYPE, VALID_OUTPUT_TYPES } from '@vie/types';
-import type { UserTier, VideoCategory } from '@vie/types';
+import { isValidOutputType } from '@vie/types';
+import type { UserTier, OutputType } from '@vie/types';
 
 export interface CreateVideoOptions {
   folderId?: string;
@@ -331,6 +331,14 @@ export class VideoService {
         context: summary?.context || null,
       },
       summary: summary?.summary || null,
+      // Structured output (if intent-based pipeline was used)
+      output: (summary as any)?.intent ? {
+        outputType: (summary as any).intent.outputType ?? summary?.outputType,
+        intent: (summary as any).intent,
+        output: (summary as any).output ?? null,
+        synthesis: (summary as any).synthesis ?? null,
+        enrichment: (summary as any).enrichment ?? null,
+      } : null,
     };
   }
 
@@ -357,7 +365,21 @@ export class VideoService {
     const video = await this.videoRepository.findUserVideo(userId, videoId);
     if (!video) throw new VideoNotFoundError();
 
-    const outputType = CATEGORY_TO_OUTPUT_TYPE[category as VideoCategory];
+    const CATEGORY_TO_OUTPUT: Record<string, OutputType> = {
+      cooking: 'recipe',
+      coding: 'code_walkthrough',
+      travel: 'trip_planner',
+      reviews: 'verdict',
+      fitness: 'workout',
+      education: 'study_kit',
+      podcast: 'highlights',
+      diy: 'project_guide',
+      gaming: 'highlights',
+      music: 'music_guide',
+      standard: 'explanation',
+    };
+
+    const outputType = CATEGORY_TO_OUTPUT[category];
     if (!outputType) throw new InvalidCategoryError(category);
 
     const videoSummaryId = video.videoSummaryId.toString();
@@ -384,7 +406,7 @@ export class VideoService {
 
   /** Persist detection result from summarizer SSE stream */
   async persistDetectionResult(videoSummaryId: string, outputType: string, category?: string, confidence?: number): Promise<void> {
-    if (!VALID_OUTPUT_TYPES.has(outputType)) return;
+    if (!isValidOutputType(outputType)) return;
     await this.videoRepository.updateCacheEntry(videoSummaryId, {
       outputType,
       context: {

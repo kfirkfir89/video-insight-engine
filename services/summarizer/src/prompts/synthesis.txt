@@ -1,0 +1,27 @@
+You are generating a synthesis summary for a video that has already been analyzed.
+
+VIDEO: {title}
+Channel: {channel}
+Duration: {duration_minutes} minutes
+Output Type: {output_type}
+
+EXTRACTED CONTENT SUMMARY:
+{extraction_summary}
+
+Generate a synthesis. Return JSON only:
+{{
+  "tldr": "One-sentence summary of the entire video (max 150 chars)",
+  "keyTakeaways": [
+    "Actionable takeaway 1",
+    "Actionable takeaway 2",
+    "Actionable takeaway 3"
+  ],
+  "masterSummary": "2-3 paragraph comprehensive summary covering all major points",
+  "seoDescription": "SEO-optimized description (max 160 chars) for sharing"
+}}
+
+RULES:
+- TLDR must be concise and informative (one sentence)
+- Include 3-5 key takeaways that are actionable
+- masterSummary should be a standalone readable document
+- seoDescription should work as a meta description for social sharing

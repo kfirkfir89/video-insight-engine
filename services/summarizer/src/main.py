@@ -18,8 +18,7 @@ from src.dependencies import get_video_repository, get_mongo_client
 from src.repositories.mongodb_repository import MongoDBVideoRepository
 from src.routes.stream import router as stream_router
 from src.routes.override import router as override_router
-from src.services.chapter_pipeline import shutdown_background_validations
-from src.services.frame_extractor import check_dependencies as check_frame_deps
+from src.services.media.frame_extractor import check_dependencies as check_frame_deps
 
 # Configure structured logging (JSON in production, console in development)
 configure_structlog(json_format=settings.log_format == "json")
@@ -79,7 +78,7 @@ async def health():
     s3_status = "not_configured"
     if settings.AWS_ENDPOINT_URL or settings.AWS_ACCESS_KEY_ID:
         try:
-            from src.services.s3_client import s3_client
+            from src.services.media.s3_client import s3_client
             s3_health = await s3_client.health_check()
             s3_status = s3_health.get("status", "unknown")
         except Exception as e:
@@ -145,7 +144,7 @@ async def extract_playlist(request: PlaylistExtractRequest):
     Uses extract_flat mode for fast metadata-only extraction.
     Returns playlist info and list of videos with positions.
     """
-    from src.services.playlist import extract_playlist_data
+    from src.services.video.playlist import extract_playlist_data
 
     logger.info("Extracting playlist: %s (max=%s)", request.playlist_id, request.max_videos)
 

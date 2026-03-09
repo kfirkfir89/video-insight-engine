@@ -2,7 +2,6 @@ import { memo } from 'react';
 import { Lightbulb, AlertTriangle, Info, ShieldAlert, ChefHat } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
-import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { CalloutStyle } from '@vie/types';
 import type { ReactNode } from 'react';
 
@@ -81,7 +80,7 @@ export const CalloutBlock = memo(function CalloutBlock({ style, variant, text, b
     >
       <div className="flex items-start gap-1.5">
         <span className={cn('mt-0.5', ACCENT_TEXT_COLOR[config.accentColor])}>{config.icon}</span>
-        <p className="text-xs text-muted-foreground"><ConceptHighlighter text={text} /></p>
+        <p className="text-xs text-muted-foreground">{text}</p>
       </div>
     </BlockWrapper>
   );

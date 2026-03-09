@@ -4,7 +4,7 @@ import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
-from src.services.gemini_transcriber import (
+from src.services.transcription.gemini_transcriber import (
     _download_audio_raw_sync,
     _get_gemini_model,
     _get_mime_type,
@@ -18,7 +18,7 @@ from src.services.gemini_transcriber import (
     TRANSCRIPTION_PROMPT,
     MIME_TYPES,
 )
-from src.services.download_utils import MAX_DOWNLOAD_ATTEMPTS
+from src.services.media.download_utils import MAX_DOWNLOAD_ATTEMPTS
 from src.models.schemas import ErrorCode
 from src.exceptions import TranscriptError
 
@@ -26,14 +26,14 @@ from src.exceptions import TranscriptError
 class TestDownloadAudioRawSync:
     """Tests for _download_audio_raw_sync function."""
 
-    @patch("src.services.gemini_transcriber.uuid.uuid4")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.transcription.gemini_transcriber.uuid.uuid4")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_download_success_webm(self, mock_ydl_class, mock_uuid, tmp_path):
         """Test successful audio download keeps raw webm format."""
         video_id = "test123"
         mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
 
-        with patch("src.services.gemini_transcriber.TEMP_DIR", tmp_path):
+        with patch("src.services.transcription.gemini_transcriber.TEMP_DIR", tmp_path):
             # Simulate yt-dlp producing a .webm file
             webm_path = tmp_path / f"{video_id}_aabbccdd.webm"
             webm_path.write_bytes(b"fake webm audio" * 1000)
@@ -47,14 +47,14 @@ class TestDownloadAudioRawSync:
             assert result.suffix == ".webm"
             mock_ydl.download.assert_called_once()
 
-    @patch("src.services.gemini_transcriber.uuid.uuid4")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.transcription.gemini_transcriber.uuid.uuid4")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_download_success_m4a(self, mock_ydl_class, mock_uuid, tmp_path):
         """Test successful download with m4a format."""
         video_id = "test456"
         mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
 
-        with patch("src.services.gemini_transcriber.TEMP_DIR", tmp_path):
+        with patch("src.services.transcription.gemini_transcriber.TEMP_DIR", tmp_path):
             m4a_path = tmp_path / f"{video_id}_aabbccdd.m4a"
             m4a_path.write_bytes(b"fake m4a audio" * 1000)
 
@@ -66,14 +66,14 @@ class TestDownloadAudioRawSync:
             assert result == m4a_path
             assert result.suffix == ".m4a"
 
-    @patch("src.services.gemini_transcriber.uuid.uuid4")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.transcription.gemini_transcriber.uuid.uuid4")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_no_ffmpeg_postprocessor(self, mock_ydl_class, mock_uuid, tmp_path):
         """Test that yt-dlp is configured WITHOUT FFmpeg postprocessors."""
         video_id = "test789"
         mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
 
-        with patch("src.services.gemini_transcriber.TEMP_DIR", tmp_path):
+        with patch("src.services.transcription.gemini_transcriber.TEMP_DIR", tmp_path):
             webm_path = tmp_path / f"{video_id}_aabbccdd.webm"
             webm_path.write_bytes(b"fake audio" * 1000)
 
@@ -86,8 +86,8 @@ class TestDownloadAudioRawSync:
             assert "postprocessors" not in opts
             assert opts["format"] == "bestaudio"
 
-    @patch("src.services.download_utils.time.sleep")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.media.download_utils.time.sleep")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_download_failure_raises_transcript_error(self, mock_ydl_class, mock_sleep):
         """Test download failure raises TranscriptError with DOWNLOAD_ERROR."""
         mock_ydl = MagicMock()
@@ -100,13 +100,13 @@ class TestDownloadAudioRawSync:
         assert exc_info.value.code == ErrorCode.DOWNLOAD_ERROR
         assert "Failed to download audio" in str(exc_info.value)
 
-    @patch("src.services.gemini_transcriber.uuid.uuid4")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.transcription.gemini_transcriber.uuid.uuid4")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_download_file_not_found(self, mock_ydl_class, mock_uuid, tmp_path):
         """Test error when download completes but no file found."""
         mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
 
-        with patch("src.services.gemini_transcriber.TEMP_DIR", tmp_path):
+        with patch("src.services.transcription.gemini_transcriber.TEMP_DIR", tmp_path):
             mock_ydl = MagicMock()
             mock_ydl_class.return_value.__enter__.return_value = mock_ydl
 
@@ -116,13 +116,13 @@ class TestDownloadAudioRawSync:
             assert exc_info.value.code == ErrorCode.UNKNOWN_ERROR
             assert "file not found" in str(exc_info.value)
 
-    @patch("src.services.gemini_transcriber.uuid.uuid4")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.transcription.gemini_transcriber.uuid.uuid4")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_uuid_based_filenames(self, mock_ydl_class, mock_uuid, tmp_path):
         """Test that filenames include UUID to prevent race conditions."""
         mock_uuid.return_value = MagicMock(hex="deadbeef12345678")
 
-        with patch("src.services.gemini_transcriber.TEMP_DIR", tmp_path):
+        with patch("src.services.transcription.gemini_transcriber.TEMP_DIR", tmp_path):
             webm_path = tmp_path / "myvideo_deadbeef.webm"
             webm_path.write_bytes(b"audio" * 100)
 
@@ -133,13 +133,13 @@ class TestDownloadAudioRawSync:
 
             assert "deadbeef" in result.stem
 
-    @patch("src.services.gemini_transcriber.uuid.uuid4")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.transcription.gemini_transcriber.uuid.uuid4")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_resilience_settings(self, mock_ydl_class, mock_uuid, tmp_path):
         """Test that yt-dlp is configured with retry and timeout options."""
         mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
 
-        with patch("src.services.gemini_transcriber.TEMP_DIR", tmp_path):
+        with patch("src.services.transcription.gemini_transcriber.TEMP_DIR", tmp_path):
             webm_path = tmp_path / f"vid_aabbccdd.webm"
             webm_path.write_bytes(b"audio" * 100)
 
@@ -154,14 +154,14 @@ class TestDownloadAudioRawSync:
             assert opts["socket_timeout"] == 30
             assert opts["continuedl"] is False
 
-    @patch("src.services.gemini_transcriber.uuid.uuid4")
-    @patch("src.services.download_utils.time.sleep")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.transcription.gemini_transcriber.uuid.uuid4")
+    @patch("src.services.media.download_utils.time.sleep")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_retries_with_backoff(self, mock_ydl_class, mock_sleep, mock_uuid, tmp_path):
         """Test exponential backoff on retries."""
         mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
 
-        with patch("src.services.gemini_transcriber.TEMP_DIR", tmp_path):
+        with patch("src.services.transcription.gemini_transcriber.TEMP_DIR", tmp_path):
             webm_path = tmp_path / "vid_aabbccdd.webm"
             webm_path.write_bytes(b"audio" * 100)
 
@@ -181,8 +181,8 @@ class TestDownloadAudioRawSync:
             mock_sleep.assert_any_call(2)
             mock_sleep.assert_any_call(4)
 
-    @patch("src.services.download_utils.time.sleep")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.media.download_utils.time.sleep")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_exhausts_retries(self, mock_ydl_class, mock_sleep):
         """Test that after exhausting all retries the error is raised."""
         mock_ydl = MagicMock()
@@ -195,13 +195,13 @@ class TestDownloadAudioRawSync:
         assert mock_ydl.download.call_count == MAX_DOWNLOAD_ATTEMPTS
         assert mock_sleep.call_count == MAX_DOWNLOAD_ATTEMPTS - 1
 
-    @patch("src.services.gemini_transcriber.uuid.uuid4")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.transcription.gemini_transcriber.uuid.uuid4")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_part_files_filtered(self, mock_ydl_class, mock_uuid, tmp_path):
         """Test that .part files are not returned as the downloaded file."""
         mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
 
-        with patch("src.services.gemini_transcriber.TEMP_DIR", tmp_path):
+        with patch("src.services.transcription.gemini_transcriber.TEMP_DIR", tmp_path):
             # Both a real file and a .part file exist
             webm_path = tmp_path / "vid_aabbccdd.webm"
             webm_path.write_bytes(b"audio" * 100)
@@ -262,25 +262,25 @@ class TestMimeTypeDetection:
 class TestGetGeminiModel:
     """Tests for _get_gemini_model function."""
 
-    @patch("src.services.gemini_transcriber.settings")
+    @patch("src.services.transcription.gemini_transcriber.settings")
     def test_default_model_when_no_override(self, mock_settings):
         """Test that default Gemini model is used when LLM_FAST_MODEL is not set."""
         mock_settings.LLM_FAST_MODEL = None
         assert _get_gemini_model() == GEMINI_TRANSCRIPTION_MODEL
 
-    @patch("src.services.gemini_transcriber.settings")
+    @patch("src.services.transcription.gemini_transcriber.settings")
     def test_default_model_when_openai_configured(self, mock_settings):
         """Test that default Gemini model is used even when fast model is OpenAI."""
         mock_settings.LLM_FAST_MODEL = "openai/gpt-4o-mini"
         assert _get_gemini_model() == GEMINI_TRANSCRIPTION_MODEL
 
-    @patch("src.services.gemini_transcriber.settings")
+    @patch("src.services.transcription.gemini_transcriber.settings")
     def test_gemini_override_strips_prefix(self, mock_settings):
         """Test that explicit Gemini model override strips gemini/ prefix."""
         mock_settings.LLM_FAST_MODEL = "gemini/gemini-2.0-flash"
         assert _get_gemini_model() == "gemini-2.0-flash"
 
-    @patch("src.services.gemini_transcriber.settings")
+    @patch("src.services.transcription.gemini_transcriber.settings")
     def test_anthropic_model_uses_default(self, mock_settings):
         """Test that Anthropic model falls back to default Gemini model."""
         mock_settings.LLM_FAST_MODEL = "anthropic/claude-3-5-haiku-20241022"
@@ -421,12 +421,12 @@ def _make_mock_genai_client(response_text: str) -> MagicMock:
     return mock_client
 
 
-@patch("src.services.gemini_transcriber.settings.GEMINI_API_KEY", "test-key")
+@patch("src.services.transcription.gemini_transcriber.settings.GEMINI_API_KEY", "test-key")
 class TestTranscribeWithGemini:
     """Tests for transcribe_with_gemini async function."""
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_full_workflow_success(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -451,8 +451,8 @@ class TestTranscribeWithGemini:
         assert result.segments[0].endMs == 25000
         assert result.segments[1].text == "Welcome to the video"
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_cleanup_on_success(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -468,7 +468,7 @@ class TestTranscribeWithGemini:
 
         assert not audio_path.exists()
 
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_cleanup_on_download_error(self, mock_download):
         """Test cleanup when download fails (no audio file to clean)."""
         mock_download.side_effect = TranscriptError(
@@ -480,8 +480,8 @@ class TestTranscribeWithGemini:
 
         assert exc_info.value.code == ErrorCode.VIDEO_UNAVAILABLE
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_cleanup_on_upload_error(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -499,8 +499,8 @@ class TestTranscribeWithGemini:
 
         assert not audio_path.exists()
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_unparseable_response_raises(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -519,8 +519,8 @@ class TestTranscribeWithGemini:
         assert exc_info.value.code == ErrorCode.UNKNOWN_ERROR
         assert "unparseable" in str(exc_info.value).lower()
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_empty_segments_raises(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -536,8 +536,8 @@ class TestTranscribeWithGemini:
 
         assert exc_info.value.code == ErrorCode.NO_TRANSCRIPT
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_file_upload_called_with_audio_path(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -556,8 +556,8 @@ class TestTranscribeWithGemini:
         call_kwargs = mock_client.aio.files.upload.call_args
         assert call_kwargs.kwargs["file"] == audio_path
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_generate_content_uses_file_uri(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -574,8 +574,8 @@ class TestTranscribeWithGemini:
 
         mock_client.aio.models.generate_content.assert_called_once()
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_uploaded_file_deleted_after_transcription(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -592,8 +592,8 @@ class TestTranscribeWithGemini:
 
         mock_client.aio.files.delete.assert_called_once_with(name="files/test-file-123")
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_markdown_wrapped_response(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -615,7 +615,7 @@ class TestTranscribeWithGemini:
         assert len(result.segments) == 1
         assert result.segments[0].text == "Hello world"
 
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_download_error_propagates(self, mock_download):
         """Test that download errors propagate correctly."""
         mock_download.side_effect = TranscriptError(
@@ -628,7 +628,7 @@ class TestTranscribeWithGemini:
         assert exc_info.value.code == ErrorCode.VIDEO_UNAVAILABLE
 
 
-@patch("src.services.gemini_transcriber.settings.GEMINI_API_KEY", "test-key")
+@patch("src.services.transcription.gemini_transcriber.settings.GEMINI_API_KEY", "test-key")
 class TestGeminiTranscriptionMaxTokens:
     """Tests for the dedicated transcription token limit."""
 
@@ -642,8 +642,8 @@ class TestGeminiTranscriptionMaxTokens:
         assert GEMINI_TRANSCRIPTION_MAX_TOKENS != settings.LLM_MAX_TOKENS
         assert GEMINI_TRANSCRIPTION_MAX_TOKENS > settings.LLM_MAX_TOKENS
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_generate_content_uses_transcription_max_tokens(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -663,7 +663,7 @@ class TestGeminiTranscriptionMaxTokens:
         assert config.max_output_tokens == GEMINI_TRANSCRIPTION_MAX_TOKENS
 
 
-@patch("src.services.gemini_transcriber.settings.GEMINI_API_KEY", "test-key")
+@patch("src.services.transcription.gemini_transcriber.settings.GEMINI_API_KEY", "test-key")
 class TestTruncationRecovery:
     """Tests for _recover_truncated_json and truncated response handling."""
 
@@ -748,8 +748,8 @@ class TestTruncationRecovery:
 
         assert len(result) == 2
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_truncated_response_in_full_workflow(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -774,7 +774,7 @@ class TestTruncationRecovery:
         assert result.segments[1].text == "Welcome"
 
 
-@patch("src.services.gemini_transcriber.settings.GEMINI_API_KEY", "test-key")
+@patch("src.services.transcription.gemini_transcriber.settings.GEMINI_API_KEY", "test-key")
 class TestNdjsonParsing:
     """Tests for newline-delimited JSON response parsing."""
 
@@ -830,8 +830,8 @@ class TestNdjsonParsing:
         assert result[0]["text"] == "שלום לכולם"
         assert result[1]["text"] == "קשה! לא קשה."
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_ndjson_response_in_full_workflow(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -854,12 +854,12 @@ class TestNdjsonParsing:
         assert result.segments[1].text == "Welcome to the show"
 
 
-@patch("src.services.gemini_transcriber.settings.GEMINI_API_KEY", "test-key")
+@patch("src.services.transcription.gemini_transcriber.settings.GEMINI_API_KEY", "test-key")
 class TestGeminiEmptyResponseHandling:
     """Tests for Phase 1: Gemini crash fix — empty response handling."""
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_no_candidates_raises_transcript_error(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -886,8 +886,8 @@ class TestGeminiEmptyResponseHandling:
 
         assert exc_info.value.code == ErrorCode.NO_TRANSCRIPT
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_empty_text_raises_transcript_error(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -904,8 +904,8 @@ class TestGeminiEmptyResponseHandling:
         assert exc_info.value.code == ErrorCode.NO_TRANSCRIPT
         assert "empty" in str(exc_info.value).lower()
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_valid_text_passes_through(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -922,12 +922,12 @@ class TestGeminiEmptyResponseHandling:
         assert len(result.segments) == 1
 
 
-@patch("src.services.gemini_transcriber.settings.GEMINI_API_KEY", "test-key")
+@patch("src.services.transcription.gemini_transcriber.settings.GEMINI_API_KEY", "test-key")
 class TestMusicTranscriptionPromptSelection:
     """Tests for Phase 3: Music-aware transcription prompt selection."""
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_is_music_true_uses_music_prompt(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -948,8 +948,8 @@ class TestMusicTranscriptionPromptSelection:
         prompt_text = contents[0].parts[0].text
         assert prompt_text == MUSIC_TRANSCRIPTION_PROMPT
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_is_music_false_uses_standard_prompt(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -969,8 +969,8 @@ class TestMusicTranscriptionPromptSelection:
         prompt_text = contents[0].parts[0].text
         assert prompt_text == TRANSCRIPTION_PROMPT
 
-    @patch("src.services.gemini_transcriber.genai.Client")
-    @patch("src.services.gemini_transcriber._download_audio_raw_sync")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_default_is_not_music(
         self, mock_download, mock_client_class, tmp_path
     ):

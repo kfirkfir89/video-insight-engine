@@ -9,9 +9,9 @@ class TestRefreshFrameUrls:
     """Tests for _refresh_frame_urls sync helper."""
 
     def _get_refresh_fn(self):
-        """Import the function to test (avoids module-level import issues)."""
-        from src.routes.stream import _refresh_frame_urls
-        return _refresh_frame_urls
+        """Import the function to test."""
+        from src.services.pipeline.pipeline_helpers import refresh_frame_urls
+        return refresh_frame_urls
 
     def test_refresh_with_s3_key(self):
         chapters = [
@@ -23,7 +23,7 @@ class TestRefreshFrameUrls:
             },
         ]
 
-        with patch("src.services.pipeline_helpers.s3_client") as mock_s3:
+        with patch("src.services.pipeline.pipeline_helpers.s3_client") as mock_s3:
             mock_s3.generate_presigned_url.return_value = "https://new-presigned-url"
             refresh = self._get_refresh_fn()
             refresh(chapters)
@@ -40,7 +40,7 @@ class TestRefreshFrameUrls:
             },
         ]
 
-        with patch("src.services.pipeline_helpers.s3_client") as mock_s3:
+        with patch("src.services.pipeline.pipeline_helpers.s3_client") as mock_s3:
             refresh = self._get_refresh_fn()
             refresh(chapters)
 
@@ -51,14 +51,14 @@ class TestRefreshFrameUrls:
     def test_refresh_empty_chapters(self):
         chapters = []
 
-        with patch("src.services.pipeline_helpers.s3_client"):
+        with patch("src.services.pipeline.pipeline_helpers.s3_client"):
             refresh = self._get_refresh_fn()
             refresh(chapters)  # Should not raise
 
     def test_refresh_chapter_without_content(self):
         chapters = [{"title": "Chapter 1"}]
 
-        with patch("src.services.pipeline_helpers.s3_client"):
+        with patch("src.services.pipeline.pipeline_helpers.s3_client"):
             refresh = self._get_refresh_fn()
             refresh(chapters)  # Should not raise
 
@@ -71,7 +71,7 @@ class TestRefreshFrameUrls:
             },
         ]
 
-        with patch("src.services.pipeline_helpers.s3_client") as mock_s3:
+        with patch("src.services.pipeline.pipeline_helpers.s3_client") as mock_s3:
             mock_s3.generate_presigned_url.side_effect = Exception("boto3 error")
             refresh = self._get_refresh_fn()
             refresh(chapters)
@@ -105,7 +105,7 @@ class TestRefreshFrameUrls:
             call_count += 1
             return f"https://new-signed/{key}"
 
-        with patch("src.services.pipeline_helpers.s3_client") as mock_s3:
+        with patch("src.services.pipeline.pipeline_helpers.s3_client") as mock_s3:
             mock_s3.generate_presigned_url.side_effect = mock_presign
             refresh = self._get_refresh_fn()
             refresh(chapters)

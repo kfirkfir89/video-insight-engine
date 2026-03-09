@@ -153,6 +153,44 @@ export async function streamRoutes(fastify: FastifyInstance) {
                   event.confidence
                 );
               }
+
+              // ─── Pipeline event persistence ───
+              if (event.event === 'intent_detected') {
+                const { videoRepository } = fastify.container;
+                await videoRepository.updateIntent(videoSummaryId, {
+                  outputType: event.outputType,
+                  confidence: event.confidence,
+                  userGoal: event.userGoal,
+                  sections: event.sections,
+                });
+              }
+
+              if (event.event === 'extraction_complete') {
+                const { videoRepository } = fastify.container;
+                await videoRepository.updateOutput(videoSummaryId, {
+                  type: event.outputType,
+                  data: event.data,
+                });
+              }
+
+              if (event.event === 'enrichment_complete') {
+                const { videoRepository } = fastify.container;
+                await videoRepository.updateEnrichment(videoSummaryId, {
+                  quiz: event.quiz,
+                  flashcards: event.flashcards,
+                  cheatSheet: event.cheatSheet,
+                });
+              }
+
+              if (event.event === 'synthesis_complete' && event.masterSummary) {
+                const { videoRepository } = fastify.container;
+                await videoRepository.updateSynthesis(videoSummaryId, {
+                  tldr: event.tldr,
+                  keyTakeaways: event.keyTakeaways,
+                  masterSummary: event.masterSummary,
+                  seoDescription: event.seoDescription,
+                });
+              }
             } catch (err) {
               // Log parse errors in development for debugging
               if (process.env.NODE_ENV === 'development') {

@@ -1,9 +1,10 @@
-import { Component, useEffect, type ReactNode } from "react";
+import { Component, useEffect, useMemo, type ReactNode } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Sparkles, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useShareOutput } from "@/hooks/use-share";
-import { ContentBlockRenderer } from "@/components/video-detail/ContentBlockRenderer";
+import { OutputShell } from "@/components/video-detail/output/OutputShell";
+import type { VideoResponse, VideoOutput } from "@vie/types";
 
 /** Error boundary for shared content — a malformed block shouldn't crash the page. */
 class ShareContentBoundary extends Component<
@@ -36,17 +37,40 @@ class ShareContentBoundary extends Component<
 
 export function SharePage() {
   const { slug } = useParams<{ slug: string }>();
-  const { data: output, isLoading, error } = useShareOutput(slug ?? "");
+  const { data: shareData, isLoading, error } = useShareOutput(slug ?? "");
 
   // Set document title for social sharing / SEO
   useEffect(() => {
-    if (output?.title) {
-      document.title = `${output.title} | VIE`;
+    if (shareData?.title) {
+      document.title = `${shareData.title} | VIE`;
     }
     return () => {
       document.title = "Video Insight Engine";
     };
-  }, [output?.title]);
+  }, [shareData?.title]);
+
+  // Build minimal VideoResponse for OutputShell
+  const video = useMemo((): VideoResponse | null => {
+    if (!shareData) return null;
+    return {
+      id: shareData.id,
+      videoSummaryId: shareData.id,
+      youtubeId: shareData.youtubeId,
+      title: shareData.title,
+      channel: shareData.channel,
+      duration: shareData.duration,
+      thumbnailUrl: shareData.thumbnailUrl,
+      status: "completed",
+      folderId: null,
+      createdAt: new Date().toISOString(),
+      outputType: shareData.outputType,
+    };
+  }, [shareData]);
+
+  // Use the structured output directly from the API
+  const output = useMemo((): VideoOutput | null => {
+    return shareData?.output ?? null;
+  }, [shareData?.output]);
 
   if (isLoading) {
     return (
@@ -57,7 +81,7 @@ export function SharePage() {
     );
   }
 
-  if (error || !output) {
+  if (error || !shareData) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4">
         <h1 className="text-2xl font-bold">Content not found</h1>
@@ -89,31 +113,24 @@ export function SharePage() {
       </header>
 
       {/* Shared content */}
-      <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-8">
-        <div className="glass rounded-2xl p-6 space-y-4">
-          <h1 className="text-xl font-bold">{output.title}</h1>
-          {output.tldr && (
-            <p className="text-muted-foreground">{output.tldr}</p>
-          )}
-        </div>
-
-        {/* Content blocks */}
-        {output.blocks.length > 0 && (
-          <ShareContentBoundary>
-            <div className="mt-6 space-y-4">
-              {output.blocks.map((block, i) => (
-                <ContentBlockRenderer
-                  key={`block-${i}`}
-                  block={block}
-                />
-              ))}
+      <main className="flex-1">
+        <ShareContentBoundary>
+          {video && output ? (
+            <OutputShell video={video} output={output} />
+          ) : (
+            <div className="max-w-3xl mx-auto w-full px-4 py-8">
+              <div className="glass rounded-2xl p-6 space-y-4">
+                <h1 className="text-xl font-bold">{shareData.title}</h1>
+                {shareData.tldr && (
+                  <p className="text-muted-foreground">{shareData.tldr}</p>
+                )}
+              </div>
+              <div className="mt-8 text-center text-sm text-muted-foreground/60">
+                Shared via Video Insight Engine
+              </div>
             </div>
-          </ShareContentBoundary>
-        )}
-
-        <div className="mt-8 text-center text-sm text-muted-foreground/60">
-          Shared via Video Insight Engine
-        </div>
+          )}
+        </ShareContentBoundary>
       </main>
     </div>
   );

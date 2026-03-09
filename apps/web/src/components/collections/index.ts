@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════
-// Collections Components (V2.1)
+// Collections Components
 // ═══════════════════════════════════════════════════
 
 export { CollectionsPanel } from './CollectionsPanel';

@@ -4,7 +4,6 @@ import type { QuoteBlock } from '@vie/types';
 import { Star, Play, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BlockWrapper } from './BlockWrapper';
-import { ConceptHighlighter } from '../ConceptHighlighter';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
 interface QuoteRendererProps {
@@ -83,7 +82,7 @@ export const QuoteRenderer = memo(function QuoteRenderer({ block, onSeek }: Quot
 
         {/* Quote text */}
         <blockquote className={config.textClass}>
-          <p className="text-foreground leading-relaxed font-serif"><ConceptHighlighter text={block.text} /></p>
+          <p className="text-foreground leading-relaxed font-serif">{block.text}</p>
         </blockquote>
 
         {/* Attribution and timestamp */}

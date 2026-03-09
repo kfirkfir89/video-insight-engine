@@ -1,5 +1,6 @@
 import { request } from "./client";
 import type { Video, VideoSummary } from "@/types";
+import type { VideoOutput } from "@vie/types";
 
 export interface ListVideosParams {
   folderId?: string;
@@ -34,7 +35,7 @@ export const videosApi = {
 
   async get(
     id: string
-  ): Promise<{ video: Video; summary: VideoSummary | null }> {
+  ): Promise<{ video: Video; summary: VideoSummary | null; output?: VideoOutput | null }> {
     return request(`/videos/${id}`);
   },
 

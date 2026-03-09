@@ -3,7 +3,7 @@
  * Enables resumption after page refresh during summarization.
  */
 
-import type { SummaryChapter, Concept } from "@vie/types";
+import type { IntentResult, OutputData, SynthesisResult } from "@vie/types";
 import type { StreamState } from "@/hooks/use-summary-stream";
 
 const streamCacheKey = (id: string) => `vie-stream-cache-${id}`;
@@ -12,10 +12,9 @@ const streamCacheKey = (id: string) => `vie-stream-cache-${id}`;
 const CACHE_EXPIRY_MS = 60 * 60 * 1000;
 
 interface StreamCache {
-  chapters: SummaryChapter[];
-  concepts: Concept[];
-  tldr: string;
-  keyTakeaways: string[];
+  intent: IntentResult | null;
+  output: OutputData | null;
+  synthesis: SynthesisResult | null;
   metadata: {
     title?: string;
     channel?: string;
@@ -42,15 +41,14 @@ export function loadStreamCache(videoSummaryId: string): Partial<StreamState> | 
     }
 
     // Only restore if we have meaningful data
-    if (data.chapters.length === 0 && !data.tldr && data.concepts.length === 0 && !data.metadata) {
+    if (!data.intent && !data.output && !data.synthesis && !data.metadata) {
       return null;
     }
 
     return {
-      chapters: data.chapters,
-      concepts: data.concepts,
-      tldr: data.tldr,
-      keyTakeaways: data.keyTakeaways,
+      intent: data.intent,
+      output: data.output,
+      synthesis: data.synthesis,
       metadata: data.metadata,
       duration: data.metadata?.duration ?? null,
     };
@@ -66,10 +64,9 @@ export function loadStreamCache(videoSummaryId: string): Partial<StreamState> | 
 export function saveStreamCache(videoSummaryId: string, state: StreamState): void {
   try {
     const cache: StreamCache = {
-      chapters: state.chapters,
-      concepts: state.concepts,
-      tldr: state.tldr,
-      keyTakeaways: state.keyTakeaways,
+      intent: state.intent,
+      output: state.output,
+      synthesis: state.synthesis,
       metadata: state.metadata,
       timestamp: Date.now(),
     };

@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from src.services.whisper_transcriber import (
+from src.services.transcription.whisper_transcriber import (
     _download_audio_sync,
     _transcribe_sync,
     _split_audio_chunks,
@@ -12,7 +12,7 @@ from src.services.whisper_transcriber import (
     transcribe_with_whisper,
     CHUNK_TARGET_SIZE_MB,
 )
-from src.services.download_utils import classify_download_error, MAX_DOWNLOAD_ATTEMPTS
+from src.services.media.download_utils import classify_download_error, MAX_DOWNLOAD_ATTEMPTS
 from src.models.schemas import ErrorCode
 from src.exceptions import TranscriptError
 
@@ -20,14 +20,14 @@ from src.exceptions import TranscriptError
 class TestDownloadAudioSync:
     """Tests for _download_audio_sync function."""
 
-    @patch("src.services.whisper_transcriber.uuid.uuid4")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.transcription.whisper_transcriber.uuid.uuid4")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_download_audio_success(self, mock_ydl_class, mock_uuid, tmp_path):
         """Test successful audio download with unique filename."""
         video_id = "test123"
         mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
 
-        with patch("src.services.whisper_transcriber.TEMP_DIR", tmp_path):
+        with patch("src.services.transcription.whisper_transcriber.TEMP_DIR", tmp_path):
             mp3_path = tmp_path / f"{video_id}_aabbccdd.mp3"
             mp3_path.write_bytes(b"fake audio content" * 1000)  # ~18KB
 
@@ -39,8 +39,8 @@ class TestDownloadAudioSync:
             assert result == mp3_path
             mock_ydl.download.assert_called_once()
 
-    @patch("src.services.download_utils.time.sleep")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.media.download_utils.time.sleep")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_download_audio_failure(self, mock_ydl_class, mock_sleep):
         """Test download failure raises TranscriptError with DOWNLOAD_ERROR."""
         video_id = "test123"
@@ -55,14 +55,14 @@ class TestDownloadAudioSync:
         assert exc_info.value.code == ErrorCode.DOWNLOAD_ERROR
         assert "Failed to download audio" in str(exc_info.value)
 
-    @patch("src.services.whisper_transcriber.uuid.uuid4")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.transcription.whisper_transcriber.uuid.uuid4")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_download_audio_file_not_found(self, mock_ydl_class, mock_uuid, tmp_path):
         """Test error when download completes but file not found."""
         video_id = "test123"
         mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
 
-        with patch("src.services.whisper_transcriber.TEMP_DIR", tmp_path):
+        with patch("src.services.transcription.whisper_transcriber.TEMP_DIR", tmp_path):
             mock_ydl = MagicMock()
             mock_ydl_class.return_value.__enter__.return_value = mock_ydl
 
@@ -72,14 +72,14 @@ class TestDownloadAudioSync:
             assert exc_info.value.code == ErrorCode.UNKNOWN_ERROR
             assert "file not found" in str(exc_info.value)
 
-    @patch("src.services.whisper_transcriber.uuid.uuid4")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.transcription.whisper_transcriber.uuid.uuid4")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_download_audio_large_file_not_rejected(self, mock_ydl_class, mock_uuid, tmp_path):
         """Test that large audio files are no longer rejected at download."""
         video_id = "test123"
         mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
 
-        with patch("src.services.whisper_transcriber.TEMP_DIR", tmp_path):
+        with patch("src.services.transcription.whisper_transcriber.TEMP_DIR", tmp_path):
             mp3_path = tmp_path / f"{video_id}_aabbccdd.mp3"
             # 30MB file - would have been rejected before
             mp3_path.write_bytes(b"x" * 30 * 1024 * 1024)
@@ -95,7 +95,7 @@ class TestDownloadAudioSync:
 class TestTranscribeSync:
     """Tests for _transcribe_sync function."""
 
-    @patch("src.services.whisper_transcriber.settings")
+    @patch("src.services.transcription.whisper_transcriber.settings")
     def test_transcribe_no_api_key(self, mock_settings, tmp_path):
         """Test error when OpenAI API key not configured."""
         mock_settings.OPENAI_API_KEY = None
@@ -108,8 +108,8 @@ class TestTranscribeSync:
         assert exc_info.value.code == ErrorCode.UNKNOWN_ERROR
         assert "API key not configured" in str(exc_info.value)
 
-    @patch("src.services.whisper_transcriber.OpenAI")
-    @patch("src.services.whisper_transcriber.settings")
+    @patch("src.services.transcription.whisper_transcriber.OpenAI")
+    @patch("src.services.transcription.whisper_transcriber.settings")
     def test_transcribe_success(self, mock_settings, mock_openai_class, tmp_path):
         """Test successful transcription."""
         mock_settings.OPENAI_API_KEY = "test-key"
@@ -133,8 +133,8 @@ class TestTranscribeSync:
         assert len(result["segments"]) == 2
         mock_client.audio.transcriptions.create.assert_called_once()
 
-    @patch("src.services.whisper_transcriber.OpenAI")
-    @patch("src.services.whisper_transcriber.settings")
+    @patch("src.services.transcription.whisper_transcriber.OpenAI")
+    @patch("src.services.transcription.whisper_transcriber.settings")
     def test_transcribe_api_error(self, mock_settings, mock_openai_class, tmp_path):
         """Test transcription API error."""
         mock_settings.OPENAI_API_KEY = "test-key"
@@ -155,7 +155,7 @@ class TestTranscribeSync:
 class TestSplitAudioChunks:
     """Tests for _split_audio_chunks function."""
 
-    @patch("src.services.whisper_transcriber.AudioSegment")
+    @patch("src.services.transcription.whisper_transcriber.AudioSegment")
     def test_split_creates_correct_number_of_chunks(self, mock_audio_cls, tmp_path):
         """Test that splitting creates expected number of chunks."""
         audio_path = tmp_path / "video123.mp3"
@@ -175,7 +175,7 @@ class TestSplitAudioChunks:
         assert len(chunks) == 3
         assert chunks[0][1] == 0  # First chunk offset is 0
 
-    @patch("src.services.whisper_transcriber.AudioSegment")
+    @patch("src.services.transcription.whisper_transcriber.AudioSegment")
     def test_split_offsets_are_sequential(self, mock_audio_cls, tmp_path):
         """Test that chunk offsets increase correctly."""
         audio_path = tmp_path / "video123.mp3"
@@ -193,7 +193,7 @@ class TestSplitAudioChunks:
         for i in range(1, len(offsets)):
             assert offsets[i] > offsets[i - 1]
 
-    @patch("src.services.whisper_transcriber.AudioSegment")
+    @patch("src.services.transcription.whisper_transcriber.AudioSegment")
     def test_split_chunk_paths_named_correctly(self, mock_audio_cls, tmp_path):
         """Test that chunk files are named with correct pattern."""
         audio_path = tmp_path / "abc123.mp3"
@@ -210,7 +210,7 @@ class TestSplitAudioChunks:
             assert chunk_path.name == f"abc123_chunk_{i}.mp3"
             assert chunk_path.parent == tmp_path
 
-    @patch("src.services.whisper_transcriber.AudioSegment")
+    @patch("src.services.transcription.whisper_transcriber.AudioSegment")
     def test_split_zero_duration_raises(self, mock_audio_cls, tmp_path):
         """Test that zero-duration audio raises TranscriptError."""
         audio_path = tmp_path / "video123.mp3"
@@ -225,7 +225,7 @@ class TestSplitAudioChunks:
 
         assert "zero duration" in str(exc_info.value)
 
-    @patch("src.services.whisper_transcriber.AudioSegment")
+    @patch("src.services.transcription.whisper_transcriber.AudioSegment")
     def test_split_small_file_produces_one_chunk(self, mock_audio_cls, tmp_path):
         """Test that a file under chunk size produces exactly one chunk."""
         audio_path = tmp_path / "video123.mp3"
@@ -242,11 +242,11 @@ class TestSplitAudioChunks:
         assert chunks[0][1] == 0
 
 
-@patch("src.services.whisper_transcriber.OpenAI")
+@patch("src.services.transcription.whisper_transcriber.OpenAI")
 class TestTranscribeChunkedSync:
     """Tests for _transcribe_chunked_sync function."""
 
-    @patch("src.services.whisper_transcriber._transcribe_sync")
+    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
     def test_merges_text_from_all_chunks(self, mock_transcribe, mock_openai, tmp_path):
         """Test that text from all chunks is merged with space separation."""
         chunk_paths = [
@@ -263,7 +263,7 @@ class TestTranscribeChunkedSync:
 
         assert result["text"] == "Hello from chunk one. Hello from chunk two."
 
-    @patch("src.services.whisper_transcriber._transcribe_sync")
+    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
     def test_adjusts_segment_timestamps_by_offset(self, mock_transcribe, mock_openai, tmp_path):
         """Test that segment timestamps are adjusted by chunk offset."""
         chunk_paths = [
@@ -302,7 +302,7 @@ class TestTranscribeChunkedSync:
         assert result["segments"][3]["start"] == 304.0
         assert result["segments"][3]["end"] == 308.0
 
-    @patch("src.services.whisper_transcriber._transcribe_sync")
+    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
     def test_handles_chunks_without_segments(self, mock_transcribe, mock_openai, tmp_path):
         """Test merging when some chunks have no segments."""
         chunk_paths = [
@@ -320,7 +320,7 @@ class TestTranscribeChunkedSync:
         assert result["text"] == "First chunk. Second chunk."
         assert len(result["segments"]) == 1
 
-    @patch("src.services.whisper_transcriber._transcribe_sync")
+    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
     def test_single_chunk_works(self, mock_transcribe, mock_openai, tmp_path):
         """Test that a single chunk returns correct result."""
         chunk_paths = [(tmp_path / "chunk_0.mp3", 0)]
@@ -336,7 +336,7 @@ class TestTranscribeChunkedSync:
         assert len(result["segments"]) == 1
         assert result["segments"][0]["start"] == 0.0
 
-    @patch("src.services.whisper_transcriber._transcribe_sync")
+    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
     def test_passes_is_music_to_each_chunk(self, mock_transcribe, mock_openai, tmp_path):
         """Test that is_music flag is forwarded to _transcribe_sync for every chunk."""
         chunk_paths = [
@@ -401,8 +401,8 @@ class TestCreateEstimatedSegments:
 class TestTranscribeWithWhisper:
     """Tests for transcribe_with_whisper async function."""
 
-    @patch("src.services.whisper_transcriber._transcribe_sync")
-    @patch("src.services.whisper_transcriber._download_audio_sync")
+    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
+    @patch("src.services.transcription.whisper_transcriber._download_audio_sync")
     async def test_full_workflow_success(self, mock_download, mock_transcribe, tmp_path):
         """Test successful full transcription workflow (small file)."""
         video_id = "test123"
@@ -426,9 +426,9 @@ class TestTranscribeWithWhisper:
         assert result.segments[0].startMs == 0
         assert result.segments[0].endMs == 1000
 
-    @patch("src.services.whisper_transcriber._transcribe_chunked_sync")
-    @patch("src.services.whisper_transcriber._split_audio_chunks")
-    @patch("src.services.whisper_transcriber._download_audio_sync")
+    @patch("src.services.transcription.whisper_transcriber._transcribe_chunked_sync")
+    @patch("src.services.transcription.whisper_transcriber._split_audio_chunks")
+    @patch("src.services.transcription.whisper_transcriber._download_audio_sync")
     async def test_large_file_uses_chunked_path(
         self, mock_download, mock_split, mock_chunked, tmp_path
     ):
@@ -461,8 +461,8 @@ class TestTranscribeWithWhisper:
         mock_split.assert_called_once()
         mock_chunked.assert_called_once()
 
-    @patch("src.services.whisper_transcriber._transcribe_sync")
-    @patch("src.services.whisper_transcriber._download_audio_sync")
+    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
+    @patch("src.services.transcription.whisper_transcriber._download_audio_sync")
     async def test_workflow_uses_estimated_segments(
         self, mock_download, mock_transcribe, tmp_path
     ):
@@ -482,8 +482,8 @@ class TestTranscribeWithWhisper:
         assert result.source == "whisper"
         assert len(result.segments) > 0
 
-    @patch("src.services.whisper_transcriber._transcribe_sync")
-    @patch("src.services.whisper_transcriber._download_audio_sync")
+    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
+    @patch("src.services.transcription.whisper_transcriber._download_audio_sync")
     async def test_cleanup_on_success(self, mock_download, mock_transcribe, tmp_path):
         """Test that audio file is cleaned up after success."""
         video_id = "test123"
@@ -498,9 +498,9 @@ class TestTranscribeWithWhisper:
         # File should be deleted
         assert not audio_path.exists()
 
-    @patch("src.services.whisper_transcriber._transcribe_chunked_sync")
-    @patch("src.services.whisper_transcriber._split_audio_chunks")
-    @patch("src.services.whisper_transcriber._download_audio_sync")
+    @patch("src.services.transcription.whisper_transcriber._transcribe_chunked_sync")
+    @patch("src.services.transcription.whisper_transcriber._split_audio_chunks")
+    @patch("src.services.transcription.whisper_transcriber._download_audio_sync")
     async def test_cleanup_includes_chunk_files(
         self, mock_download, mock_split, mock_chunked, tmp_path
     ):
@@ -524,7 +524,7 @@ class TestTranscribeWithWhisper:
         assert not chunk_0.exists()
         assert not chunk_1.exists()
 
-    @patch("src.services.whisper_transcriber._download_audio_sync")
+    @patch("src.services.transcription.whisper_transcriber._download_audio_sync")
     async def test_cleanup_on_error(self, mock_download, tmp_path):
         """Test that audio file is cleaned up even on error."""
         video_id = "test123"
@@ -534,7 +534,7 @@ class TestTranscribeWithWhisper:
         mock_download.return_value = audio_path
 
         with patch(
-            "src.services.whisper_transcriber._transcribe_sync",
+            "src.services.transcription.whisper_transcriber._transcribe_sync",
             side_effect=TranscriptError("Error", ErrorCode.UNKNOWN_ERROR),
         ):
             with pytest.raises(TranscriptError):
@@ -543,7 +543,7 @@ class TestTranscribeWithWhisper:
         # File should still be deleted
         assert not audio_path.exists()
 
-    @patch("src.services.whisper_transcriber._download_audio_sync")
+    @patch("src.services.transcription.whisper_transcriber._download_audio_sync")
     async def test_download_error_propagates(self, mock_download):
         """Test that download errors propagate correctly."""
         mock_download.side_effect = TranscriptError(
@@ -596,15 +596,15 @@ class TestClassifyDownloadError:
 class TestDownloadRetryBehavior:
     """Tests for retry behavior in _download_audio_sync."""
 
-    @patch("src.services.whisper_transcriber.uuid.uuid4")
-    @patch("src.services.download_utils.time.sleep")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.transcription.whisper_transcriber.uuid.uuid4")
+    @patch("src.services.media.download_utils.time.sleep")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_retries_then_succeeds(self, mock_ydl_class, mock_sleep, mock_uuid, tmp_path):
         """Test that download retries on failure and succeeds on later attempt."""
         video_id = "test_retry"
         mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
 
-        with patch("src.services.whisper_transcriber.TEMP_DIR", tmp_path):
+        with patch("src.services.transcription.whisper_transcriber.TEMP_DIR", tmp_path):
             mp3_path = tmp_path / f"{video_id}_aabbccdd.mp3"
             mp3_path.write_bytes(b"fake audio content" * 1000)
 
@@ -626,8 +626,8 @@ class TestDownloadRetryBehavior:
             mock_sleep.assert_any_call(2)
             mock_sleep.assert_any_call(4)
 
-    @patch("src.services.download_utils.time.sleep")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.media.download_utils.time.sleep")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_exhausts_retries_then_raises(self, mock_ydl_class, mock_sleep):
         """Test that after exhausting all retries the error is raised."""
         video_id = "test_exhaust"
@@ -644,8 +644,8 @@ class TestDownloadRetryBehavior:
         # Backoff sleeps happen between attempts (not after last)
         assert mock_sleep.call_count == MAX_DOWNLOAD_ATTEMPTS - 1
 
-    @patch("src.services.download_utils.time.sleep")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.media.download_utils.time.sleep")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_unavailable_error_after_retries(self, mock_ydl_class, mock_sleep):
         """Test that VIDEO_UNAVAILABLE is classified correctly after retries."""
         video_id = "test_unavailable"
@@ -659,15 +659,15 @@ class TestDownloadRetryBehavior:
 
         assert exc_info.value.code == ErrorCode.VIDEO_UNAVAILABLE
 
-    @patch("src.services.whisper_transcriber.uuid.uuid4")
-    @patch("src.services.download_utils.time.sleep")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.transcription.whisper_transcriber.uuid.uuid4")
+    @patch("src.services.media.download_utils.time.sleep")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_no_sleep_on_first_attempt_success(self, mock_ydl_class, mock_sleep, mock_uuid, tmp_path):
         """Test that no backoff sleep happens when first attempt succeeds."""
         video_id = "test_first"
         mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
 
-        with patch("src.services.whisper_transcriber.TEMP_DIR", tmp_path):
+        with patch("src.services.transcription.whisper_transcriber.TEMP_DIR", tmp_path):
             mp3_path = tmp_path / f"{video_id}_aabbccdd.mp3"
             mp3_path.write_bytes(b"fake audio content" * 1000)
 
@@ -678,15 +678,15 @@ class TestDownloadRetryBehavior:
 
             mock_sleep.assert_not_called()
 
-    @patch("src.services.whisper_transcriber.uuid.uuid4")
-    @patch("src.services.download_utils.time.sleep")
-    @patch("src.services.download_utils.yt_dlp.YoutubeDL")
+    @patch("src.services.transcription.whisper_transcriber.uuid.uuid4")
+    @patch("src.services.media.download_utils.time.sleep")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
     def test_ydl_opts_include_resilience_settings(self, mock_ydl_class, mock_sleep, mock_uuid, tmp_path):
         """Test that yt-dlp is configured with retry and timeout options."""
         video_id = "test_opts"
         mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
 
-        with patch("src.services.whisper_transcriber.TEMP_DIR", tmp_path):
+        with patch("src.services.transcription.whisper_transcriber.TEMP_DIR", tmp_path):
             mp3_path = tmp_path / f"{video_id}_aabbccdd.mp3"
             mp3_path.write_bytes(b"fake audio content" * 1000)
 

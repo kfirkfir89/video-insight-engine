@@ -48,12 +48,10 @@ class MongoDBVideoRepository:
         )
 
     def save_result(self, video_summary_id: str, result: dict) -> None:
-        """Save processing result to cache.
+        """Save processing result to cache (legacy chapter-based pipeline).
 
-        New fields (progressive summarization):
-        - chapters: Creator-defined or AI-detected sections
-        - chapterSource: "creator" | "description" | "ai_detected"
-        - descriptionAnalysis: Links, resources, related videos, timestamps, social links
+        Deprecated: New pipeline uses save_structured_result() instead.
+        Kept for backward compatibility with any in-flight legacy requests.
         """
         update_data: dict[str, Any] = {
             "title": result["title"],
@@ -160,6 +158,18 @@ class MongoDBVideoRepository:
                 "generatedAt": result["generation"]["generated_at"],
             }
 
+        self._collection.update_one(
+            {"_id": ObjectId(video_summary_id)},
+            {"$set": update_data}
+        )
+
+    def save_structured_result(self, video_summary_id: str, result: dict) -> None:
+        """Save structured pipeline result (intent-driven pipeline).
+
+        Stores the result dict directly — the new pipeline builds the exact
+        MongoDB document shape in stream_summarization().
+        """
+        update_data = {**result, "updatedAt": _utc_now()}
         self._collection.update_one(
             {"_id": ObjectId(video_summary_id)},
             {"$set": update_data}

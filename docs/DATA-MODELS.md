@@ -205,7 +205,6 @@ type ContentBlock =
   | ExerciseBlock
   | WorkoutTimerBlock
   | QuizBlock
-  | FormulaBlock
   | GuestBlock
   | TableBlock;
 ```

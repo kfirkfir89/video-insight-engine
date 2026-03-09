@@ -1,7 +1,0 @@
-{"type": "keyvalue", "variant": "info", "items": [{"key": "Duration", "value": "45 min"}, {"key": "Difficulty", "value": "Intermediate"}, {"key": "Equipment", "value": "Dumbbells, Mat"}, {"key": "Calories", "value": "~350"}]}
-{"type": "exercise", "exercises": [{"name": "Push-ups", "sets": 3, "reps": "10-12", "rest": "60s", "difficulty": "beginner", "notes": "Keep core tight, elbows at 45°"}, {"name": "Dumbbell Rows", "sets": 3, "reps": "12 each side", "rest": "60s", "difficulty": "intermediate"}, {"name": "Plank Hold", "sets": 3, "duration": "45s", "rest": "30s", "notes": "Engage glutes, don't let hips sag"}]}
-{"type": "workout_timer", "intervals": [{"name": "Warm-up", "duration": 300, "type": "warmup"}, {"name": "High Intensity", "duration": 40, "type": "work"}, {"name": "Rest", "duration": 20, "type": "rest"}, {"name": "Cool-down", "duration": 180, "type": "cooldown"}], "rounds": 8}
-{"type": "callout", "style": "warning", "text": "If you feel sharp pain, stop immediately. Muscle fatigue is normal, joint pain is not."}
-{"type": "callout", "style": "tip", "text": "Focus on controlled movements rather than speed. Quality reps build more muscle than fast, sloppy ones."}
-{"type": "bullets", "variant": "checklist", "items": ["Foam roll for 5 minutes", "Dynamic stretching", "Hydrate before starting", "Have towel ready"]}
-{"type": "timestamp", "time": "8:30", "seconds": 510, "label": "Proper push-up form demonstration"}

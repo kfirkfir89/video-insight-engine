@@ -1,0 +1,97 @@
+You are a DIY expert extracting a structured project guide from a YouTube DIY, craft, or maker video. Your goal is to create instructions someone can follow to complete the project successfully and safely.
+
+VIDEO: {title} ({duration_minutes} minutes)
+
+SECTIONS TO POPULATE:
+{sections}
+
+ACCURACY RULES:
+{accuracy_rules}
+
+TRANSCRIPT:
+{transcript}
+
+Extract the project guide into the JSON structure below.
+
+FIELD GUIDANCE:
+
+"projectName" / "difficulty" / "estimatedTime" / "estimatedCost":
+- "projectName": Descriptive name for the project
+- "difficulty": beginner (basic tools, simple steps), intermediate (some skill required), advanced (specialized tools/techniques)
+- "estimatedTime": Total project time as mentioned (e.g., "2-3 hours", "1 weekend")
+- "estimatedCost": Total estimated material cost if mentioned, with currency
+
+"materials" (include ALL materials):
+- "name": Material name with specifications (e.g., "3/4-inch plywood" not just "plywood")
+- "quantity": Exact amount needed (e.g., "2 sheets 4'x8'", "500ml", "3 feet")
+- "cost": Price per unit if mentioned
+- "notes": Important details (e.g., "Baltic birch for smoother finish", "food-safe only")
+- Include everything: screws, glue, sandpaper, paint, stain — not just the main materials
+
+"tools" (MINIMUM 1):
+- "name": Tool name with specifics (e.g., "circular saw" not just "saw", "1/4-inch drill bit" not just "drill")
+- "required": true for must-have, false for nice-to-have
+- "alternative": Alternative tool if the maker mentions one (e.g., "hand saw" as alternative to "circular saw")
+- Include safety gear (safety glasses, gloves, dust mask) if used
+
+"steps" (include ALL steps in order):
+- "number": Sequential step number
+- "title": Brief descriptive title for the step
+- "instruction": Detailed instruction with measurements, techniques, and visual cues
+  - Include specifics: "drill a 1/4-inch pilot hole 2 inches from the edge"
+  - Not vague: "attach the pieces together"
+- "duration": Estimated time for this step (e.g., "30 minutes", "overnight for drying")
+- "tips": Pro tips for this step (e.g., "Clamp the pieces for 30 minutes for a stronger bond")
+- "safetyNote": Safety warning specific to this step (e.g., "Wear safety glasses — wood chips will fly")
+- "timestamp": Video timestamp in seconds
+
+"safetyWarnings" (MINIMUM 1):
+- ALL safety warnings mentioned in the video
+- Include general project-level warnings
+- These should be prominent — safety is non-negotiable
+- Examples: "Always wear safety glasses when cutting", "Work in a ventilated area when staining", "Keep fingers away from the blade"
+
+Return JSON only:
+{{
+  "projectName": "Floating Shelf with Hidden Storage",
+  "difficulty": "intermediate",
+  "estimatedTime": "3-4 hours",
+  "estimatedCost": "$45-60",
+  "materials": [
+    {{"name": "3/4-inch Baltic birch plywood", "quantity": "1 sheet 2'x4'", "cost": "$25", "notes": "Smoother grain for visible surfaces"}},
+    {{"name": "Wood glue", "quantity": "1 bottle", "cost": "$6", "notes": "Titebond III for waterproof bond"}},
+    {{"name": "#8 x 2-inch wood screws", "quantity": "12", "cost": "$3", "notes": null}},
+    {{"name": "220-grit sandpaper", "quantity": "3 sheets", "cost": "$2", "notes": "For final sanding before finish"}}
+  ],
+  "tools": [
+    {{"name": "Circular saw", "required": true, "alternative": "Table saw or hand saw with miter box"}},
+    {{"name": "Drill/driver", "required": true, "alternative": null}},
+    {{"name": "Safety glasses", "required": true, "alternative": null}},
+    {{"name": "Clamps (4 bar clamps)", "required": false, "alternative": "Heavy books or weights"}}
+  ],
+  "steps": [
+    {{
+      "number": 1,
+      "title": "Cut the Plywood to Size",
+      "instruction": "Cut the plywood into three pieces: two 24x8-inch pieces for top and bottom, and one 24x6-inch piece for the back. Use a straight edge guide clamped to the plywood for clean cuts.",
+      "duration": "20 minutes",
+      "tips": "Score the cut line with a utility knife first to prevent splintering on the visible side.",
+      "safetyNote": "Wear safety glasses and hearing protection when using the circular saw.",
+      "timestamp": 120
+    }}
+  ],
+  "safetyWarnings": [
+    "Always wear safety glasses when cutting or drilling wood",
+    "Use push sticks when working with a table saw — never put fingers near the blade",
+    "Work in a well-ventilated area when applying stain or polyurethane"
+  ]
+}}
+
+RULES:
+- Include ALL materials with exact quantities and specifications
+- Steps must be in correct chronological order with specific measurements
+- Safety warnings are CRITICAL — include ALL mentioned in the video
+- Tools should distinguish between required and optional
+- MINIMUM: All materials, 1 tool, all steps, 1 safety warning
+- Instructions should be specific enough to follow without watching the video
+- Include drying/curing times in step durations where applicable

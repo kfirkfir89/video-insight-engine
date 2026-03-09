@@ -1,7 +1,6 @@
 import { memo } from 'react';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { BlockWrapper } from './BlockWrapper';
-import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { ProblemSolutionBlock as ProblemSolutionBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
@@ -34,7 +33,7 @@ export const ProblemSolutionBlock = memo(function ProblemSolutionBlock({
               <span className="text-xs font-medium text-destructive">{BLOCK_LABELS.problem}</span>
             </div>
             <p className="text-sm text-muted-foreground pl-5">
-              <ConceptHighlighter text={block.problem} />
+              {block.problem}
             </p>
           </div>
         )}
@@ -52,7 +51,7 @@ export const ProblemSolutionBlock = memo(function ProblemSolutionBlock({
               <span className="text-xs font-medium text-success">{BLOCK_LABELS.solution}</span>
             </div>
             <p className="text-sm text-muted-foreground pl-5">
-              <ConceptHighlighter text={block.solution} />
+              {block.solution}
             </p>
           </div>
         )}
@@ -63,7 +62,7 @@ export const ProblemSolutionBlock = memo(function ProblemSolutionBlock({
             <div className="fade-divider" aria-hidden="true" />
             <div className="bg-muted/[0.03] px-4 py-3">
               <p className="text-xs text-muted-foreground/70">
-                <ConceptHighlighter text={block.context} />
+                {block.context}
               </p>
             </div>
           </>

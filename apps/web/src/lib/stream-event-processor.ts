@@ -3,13 +3,9 @@
  * Maps incoming events to StreamState updates.
  */
 
-import type { Dispatch, SetStateAction, RefObject } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import {
-  validateChapter,
-  validateConcepts,
-  validateDescriptionAnalysis,
   validateMetadataEvent,
-  validateChaptersEvent,
   validateSynthesisComplete,
   validateDoneEvent,
   validateErrorEvent,
@@ -17,14 +13,11 @@ import {
 } from "@/lib/sse-validators";
 import { getUserFriendlyError } from "@/lib/stream-error-messages";
 import type { StreamState } from "@/hooks/use-summary-stream";
-import type { OutputType } from "@vie/types";
+import type { OutputType, OutputSection, OutputData, EnrichmentData, QuizQuestion, Flashcard, CodeCheatSheetItem } from "@vie/types";
 
 export function processEvent(
   event: Record<string, unknown>,
   setState: Dispatch<SetStateAction<StreamState>>,
-  streamingTextRef: RefObject<string>,
-  scheduleTokenUpdate: (phase: string, text: string, index: number) => void,
-  flushTokenUpdate: () => void
 ): void {
   const eventType = event.event as string;
 
@@ -36,8 +29,8 @@ export function processEvent(
     case "phase": {
       const phase = validatePhaseEvent(event);
       if (phase) {
-        streamingTextRef.current = "";
-        setState((prev) => ({ ...prev, phase }));
+        // Cast validated phase to StreamState phase (sse-validators may return legacy phases)
+        setState((prev) => ({ ...prev, phase: phase as StreamState["phase"] }));
       }
       break;
     }
@@ -53,145 +46,66 @@ export function processEvent(
       break;
     }
 
-    case "chapters": {
-      const { chapters: detected, isCreatorChapters } = validateChaptersEvent(event);
+    // ─── Pipeline Output Events ───
+
+    case "intent_detected": {
+      const outputType = (typeof event.outputType === "string" ? event.outputType : "explanation") as OutputType;
+      const confidence = typeof event.confidence === "number" ? event.confidence : 0;
+      const userGoal = typeof event.userGoal === "string" ? event.userGoal : "";
+      const sections = Array.isArray(event.sections)
+        ? (event.sections as OutputSection[])
+        : [];
       setState((prev) => ({
         ...prev,
-        detectedChapters: detected,
-        isCreatorChapters,
+        phase: "extraction",
+        intent: { outputType, confidence, userGoal, sections },
       }));
       break;
     }
 
-    case "description_analysis": {
-      const analysis = validateDescriptionAnalysis(event);
-      if (analysis) {
-        setState((prev) => ({
-          ...prev,
-          descriptionAnalysis: analysis,
-        }));
-      }
-      break;
-    }
-
-    case "transcript_ready": {
-      const duration = typeof event.duration === "number" ? event.duration : null;
+    case "extraction_progress": {
+      const section = typeof event.section === "string" ? event.section : "";
+      const percent = typeof event.percent === "number" ? event.percent : 0;
       setState((prev) => ({
         ...prev,
-        phase: "transcript",
-        duration,
+        phase: "extraction",
+        extractionProgress: { section, percent },
       }));
       break;
     }
 
-    case "token": {
-      if (typeof event.phase !== "string" || typeof event.token !== "string") break;
-      const phase = event.phase;
-      const token = event.token;
-      const index = typeof event.index === "number" ? event.index : 0;
-      streamingTextRef.current += token;
-      const currentText = streamingTextRef.current;
-      scheduleTokenUpdate(phase, currentText, index);
-      break;
-    }
-
-    case "sections_detected":
-    case "chapters_detected":
-      setState((prev) => ({ ...prev, phase: "chapter_summaries" }));
-      break;
-
-    case "chapter_start": {
-      flushTokenUpdate();
-      streamingTextRef.current = "";
-      const chapterIndex = typeof event.index === "number" ? event.index : 0;
+    case "extraction_complete": {
+      const extractedType = (typeof event.outputType === "string" ? event.outputType : "explanation") as OutputType;
+      const data = event.data as OutputData["data"];
       setState((prev) => ({
         ...prev,
-        currentChapterIndex: chapterIndex,
-        currentChapterText: "",
+        output: {
+          type: extractedType,
+          data,
+        } as OutputData,
       }));
       break;
     }
 
-    case "chapter_complete": {
-      flushTokenUpdate();
-      const chapter = validateChapter(event.chapter);
-      if (!chapter) break;
-      streamingTextRef.current = "";
+    case "enrichment_complete": {
+      const enrichment: EnrichmentData = {};
+      if (Array.isArray(event.quiz)) enrichment.quiz = event.quiz as QuizQuestion[];
+      if (Array.isArray(event.flashcards)) enrichment.flashcards = event.flashcards as Flashcard[];
+      if (Array.isArray(event.cheatSheet)) enrichment.cheatSheet = event.cheatSheet as CodeCheatSheetItem[];
       setState((prev) => ({
         ...prev,
-        chapters: [...prev.chapters, chapter],
-        currentChapterText: "",
-        currentChapterIndex: -1,
+        enrichment,
       }));
-      break;
-    }
-
-    case "chapter_ready": {
-      flushTokenUpdate();
-      const index = typeof event.index === "number" ? event.index : 0;
-      const chapter = validateChapter(event.chapter);
-      if (!chapter) break;
-      streamingTextRef.current = "";
-      setState((prev) => {
-        const newChapters = [...prev.chapters];
-        const insertAt = newChapters.findIndex(
-          (c) => c.startSeconds > chapter.startSeconds
-        );
-        if (insertAt === -1) {
-          newChapters.push(chapter);
-        } else {
-          newChapters.splice(insertAt, 0, chapter);
-        }
-        const newStatuses = { ...prev.chapterStatuses, [index]: "completed" as const };
-        return {
-          ...prev,
-          chapters: newChapters,
-          chapterStatuses: newStatuses,
-          currentChapterText: "",
-          currentChapterIndex: -1,
-        };
-      });
-      break;
-    }
-
-    case "concepts_complete": {
-      const concepts = validateConcepts(event.concepts);
-      streamingTextRef.current = "";
-      setState((prev) => ({ ...prev, concepts }));
-      break;
-    }
-
-    case "master_summary_complete": {
-      const masterSummary =
-        typeof event.masterSummary === "string" ? event.masterSummary : null;
-      setState((prev) => ({ ...prev, masterSummary }));
       break;
     }
 
     case "synthesis_complete": {
-      flushTokenUpdate();
       const { tldr, keyTakeaways } = validateSynthesisComplete(event);
-      setState((prev) => ({ ...prev, tldr, keyTakeaways }));
-      break;
-    }
-
-    case "detection_result": {
-      const detectedType = (
-        typeof event.detected_type === "string"
-          ? event.detected_type
-          : "summary"
-      ) as OutputType;
-      const confidence =
-        typeof event.confidence === "number" ? event.confidence : 0;
-      const alternatives = Array.isArray(event.alternatives)
-        ? (event.alternatives as Array<Record<string, unknown>>).filter(
-            (a): a is { type: string; confidence: number } =>
-              typeof a.type === "string" && typeof a.confidence === "number"
-          )
-        : [];
+      const masterSummary = typeof event.masterSummary === "string" ? event.masterSummary : "";
+      const seoDescription = typeof event.seoDescription === "string" ? event.seoDescription : "";
       setState((prev) => ({
         ...prev,
-        detectionResult: { detectedType, confidence, alternatives },
+        synthesis: { tldr, keyTakeaways, masterSummary, seoDescription },
       }));
       break;
     }

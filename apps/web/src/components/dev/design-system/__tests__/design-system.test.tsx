@@ -2,7 +2,7 @@
  * Unit tests for Design System components
  */
 import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 
 // Mock import.meta.env.DEV
 vi.stubGlobal('import', {
@@ -16,8 +16,8 @@ vi.stubGlobal('import', {
 import { ColorPalette } from '../ColorPalette';
 import { Typography } from '../Typography';
 import { SpacingScale } from '../SpacingScale';
-import { StatusIndicators } from '../StatusIndicators';
-import { CategoryAccents } from '../CategoryAccents';
+import { BlockShowcase } from '../BlockShowcase';
+import { showcaseEntries } from '@/lib/dev/mock-blocks';
 
 // Mock getComputedStyle for color copying
 beforeAll(() => {
@@ -61,6 +61,33 @@ describe('Design System Components', () => {
 
       expect(screen.getByText('Page background')).toBeInTheDocument();
       expect(screen.getByText('Primary action color')).toBeInTheDocument();
+    });
+
+    it('renders brand color tokens', () => {
+      render(<ColorPalette />);
+
+      expect(screen.getByText('Brand')).toBeInTheDocument();
+      expect(screen.getByText('vie-coral')).toBeInTheDocument();
+      expect(screen.getByText('vie-plum')).toBeInTheDocument();
+      expect(screen.getByText('vie-sky')).toBeInTheDocument();
+      expect(screen.getByText('vie-mint')).toBeInTheDocument();
+      expect(screen.getByText('vie-honey')).toBeInTheDocument();
+      expect(screen.getByText('vie-rose')).toBeInTheDocument();
+      expect(screen.getByText('vie-forest')).toBeInTheDocument();
+      expect(screen.getByText('vie-peach')).toBeInTheDocument();
+    });
+
+    it('renders output gradients section with all 10 types', () => {
+      render(<ColorPalette />);
+
+      expect(screen.getByText('Output Gradients')).toBeInTheDocument();
+      const expectedTypes = [
+        'explanation', 'recipe', 'code_walkthrough', 'study_kit', 'trip_planner',
+        'workout', 'verdict', 'highlights', 'music_guide', 'project_guide',
+      ];
+      for (const type of expectedTypes) {
+        expect(screen.getByText(type)).toBeInTheDocument();
+      }
     });
   });
 
@@ -125,79 +152,95 @@ describe('Design System Components', () => {
     });
   });
 
-  describe('StatusIndicators', () => {
-    it('renders all status types', () => {
-      render(<StatusIndicators />);
+  describe('BlockShowcase', () => {
+    it('renders showcase entries count', () => {
+      render(<BlockShowcase />);
 
-      expect(screen.getByText('Status Indicators')).toBeInTheDocument();
-      // Use getAllByText since statuses appear multiple times (badge + icon section)
-      expect(screen.getAllByText('Pending').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Processing').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Completed').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Failed').length).toBeGreaterThan(0);
+      expect(screen.getByText(/unique components/)).toBeInTheDocument();
     });
 
-    it('shows status descriptions', () => {
-      render(<StatusIndicators />);
+    it('renders category filter pills', () => {
+      render(<BlockShowcase />);
 
-      expect(screen.getByText('Waiting to be processed')).toBeInTheDocument();
-      expect(screen.getByText('Currently being processed')).toBeInTheDocument();
-      expect(screen.getByText('Successfully completed')).toBeInTheDocument();
-      expect(screen.getByText('An error occurred')).toBeInTheDocument();
+      // Should have "All" pill and category pills (with counts)
+      expect(screen.getByText(/^All \(/)).toBeInTheDocument();
+      expect(screen.getByText(/^Text \(/)).toBeInTheDocument();
+      expect(screen.getByText(/^Code \(/)).toBeInTheDocument();
+      expect(screen.getByText(/^Data \(/)).toBeInTheDocument();
     });
 
-    it('shows usage examples', () => {
-      render(<StatusIndicators />);
+    it('renders all showcase entries as cards', () => {
+      render(<BlockShowcase />);
 
-      expect(screen.getByText('In Video Cards')).toBeInTheDocument();
-      expect(screen.getByText('Inline Status')).toBeInTheDocument();
-      expect(screen.getByText('Icon Only')).toBeInTheDocument();
-    });
-  });
-
-  describe('CategoryAccents', () => {
-    it('renders all 10 categories', () => {
-      render(<CategoryAccents />);
-
-      expect(screen.getByText('Category Accents')).toBeInTheDocument();
-      // Categories appear in both cards and badges section
-      expect(screen.getAllByText('Cooking').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Coding').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Travel').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Reviews').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Fitness').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Education').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Podcast').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('DIY').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Gaming').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Standard').length).toBeGreaterThan(0);
+      // Each entry should have its label visible (use getAllByText since some labels like
+      // "Comparison" may also appear as category badge text on other cards)
+      for (const entry of showcaseEntries) {
+        const matches = screen.getAllByText(entry.label);
+        expect(matches.length).toBeGreaterThanOrEqual(1);
+      }
     });
 
-    it('shows CSS variable names', () => {
-      render(<CategoryAccents />);
+    it('filters by category when pill is clicked', () => {
+      render(<BlockShowcase />);
 
-      // Each category card shows these
-      const accentLabels = screen.getAllByText('--category-accent');
-      expect(accentLabels.length).toBe(10);
+      // Click "Travel" category (unique enough to avoid conflicts)
+      const travelPill = screen.getByText(/^Travel \(/);
+      fireEvent.click(travelPill);
 
-      const softLabels = screen.getAllByText('--category-accent-soft');
-      expect(softLabels.length).toBe(10);
+      // Should only show Travel entries
+      const travelEntries = showcaseEntries.filter((e) => e.category === 'Travel');
+      const nonTravelEntries = showcaseEntries.filter((e) => e.category !== 'Travel');
 
-      const surfaceLabels = screen.getAllByText('--category-surface');
-      expect(surfaceLabels.length).toBe(10);
+      for (const entry of travelEntries) {
+        expect(screen.getByText(entry.label)).toBeInTheDocument();
+      }
+
+      // Non-travel entries should not be visible
+      for (const entry of nonTravelEntries) {
+        expect(screen.queryByText(entry.label)).not.toBeInTheDocument();
+      }
     });
 
-    it('shows usage instructions', () => {
-      render(<CategoryAccents />);
+    it('filters by search text', () => {
+      render(<BlockShowcase />);
 
-      expect(screen.getByText('Usage')).toBeInTheDocument();
-      expect(screen.getByText(/Apply the category class/i)).toBeInTheDocument();
+      const searchInput = screen.getByPlaceholderText('Filter blocks...');
+      fireEvent.change(searchInput, { target: { value: 'Fitness' } });
+
+      expect(screen.getByText('FitnessBlock')).toBeInTheDocument();
+      expect(screen.queryByText('Paragraph')).not.toBeInTheDocument();
     });
 
-    it('shows all categories as badges', () => {
-      render(<CategoryAccents />);
+    it('shows variant tabs for multi-variant entries', () => {
+      render(<BlockShowcase />);
 
-      expect(screen.getByText('All Categories (Badges)')).toBeInTheDocument();
+      // Callout has 5 variants: tip, warning, note, chef_tip, security
+      expect(screen.getByText('tip')).toBeInTheDocument();
+      expect(screen.getByText('warning')).toBeInTheDocument();
+      expect(screen.getByText('note')).toBeInTheDocument();
+    });
+
+    it('switches variant content when tab is clicked', () => {
+      render(<BlockShowcase />);
+
+      // FitnessBlock has exercise and workout_timer variants
+      const workoutTab = screen.getByText('workout_timer');
+      fireEvent.click(workoutTab);
+
+      // After clicking, the workout_timer content should be visible
+      // The JSON toggle should work for the current variant
+      expect(workoutTab).toBeInTheDocument();
+    });
+
+    it('toggles JSON view', () => {
+      render(<BlockShowcase />);
+
+      // Find any JSON toggle button and click it
+      const jsonButtons = screen.getAllByText('JSON');
+      fireEvent.click(jsonButtons[0]);
+
+      // Should show JSON content (blockId is a field in every block)
+      expect(screen.getByText(/"blockId"/)).toBeInTheDocument();
     });
   });
 });

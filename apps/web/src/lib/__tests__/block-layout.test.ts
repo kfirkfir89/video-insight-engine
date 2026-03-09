@@ -45,7 +45,6 @@ describe('getBlockSize', () => {
     expect(getBlockSize('cost')).toBe('half');
     expect(getBlockSize('nutrition')).toBe('half');
     expect(getBlockSize('guest')).toBe('half');
-    expect(getBlockSize('formula')).toBe('half');
     expect(getBlockSize('rating')).toBe('half');
   });
 
@@ -203,7 +202,6 @@ describe('getSpacingCategory', () => {
     expect(getSpacingCategory('cost')).toBe('dense');
     expect(getSpacingCategory('nutrition')).toBe('dense');
     expect(getSpacingCategory('guest')).toBe('dense');
-    expect(getSpacingCategory('formula')).toBe('dense');
   });
 });
 
@@ -307,7 +305,6 @@ describe('SIDEBAR_COMPATIBLE_TYPES', () => {
     expect(SIDEBAR_COMPATIBLE_TYPES.has('tool_list')).toBe(true);
     expect(SIDEBAR_COMPATIBLE_TYPES.has('guest')).toBe(true);
     expect(SIDEBAR_COMPATIBLE_TYPES.has('timestamp')).toBe(true);
-    expect(SIDEBAR_COMPATIBLE_TYPES.has('formula')).toBe(true);
   });
 
   it('should not include full-width block types', () => {

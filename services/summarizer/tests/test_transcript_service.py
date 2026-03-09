@@ -6,7 +6,7 @@ Tests transcript fetching, parsing, segmentation, and timestamp handling.
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
-from src.services.transcript import (
+from src.services.transcription.transcript import (
     get_transcript,
     get_normalized_transcript,
     clean_transcript,
@@ -246,7 +246,7 @@ class TestIsRateLimitError:
 class TestFetchTranscriptSync:
     """Tests for synchronous transcript fetching."""
 
-    @patch("src.services.transcript.YouTubeTranscriptApi")
+    @patch("src.services.transcription.transcript.YouTubeTranscriptApi")
     def test_fetches_manual_transcript(self, mock_api_class):
         """Test fetching manually created transcript."""
         # Setup mock
@@ -272,7 +272,7 @@ class TestFetchTranscriptSync:
         assert full_text == "Hello World"
         assert transcript_type == "manual"
 
-    @patch("src.services.transcript.YouTubeTranscriptApi")
+    @patch("src.services.transcription.transcript.YouTubeTranscriptApi")
     def test_falls_back_to_auto_generated(self, mock_api_class):
         """Test falling back to auto-generated transcript."""
         from youtube_transcript_api._errors import NoTranscriptFound
@@ -297,7 +297,7 @@ class TestFetchTranscriptSync:
         assert transcript_type == "auto-generated"
         assert full_text == "Auto text"
 
-    @patch("src.services.transcript.YouTubeTranscriptApi")
+    @patch("src.services.transcription.transcript.YouTubeTranscriptApi")
     def test_raises_error_on_disabled_captions(self, mock_api_class):
         """Test error when captions are disabled."""
         from youtube_transcript_api._errors import TranscriptsDisabled
@@ -311,7 +311,7 @@ class TestFetchTranscriptSync:
 
         assert exc_info.value.code == ErrorCode.NO_TRANSCRIPT
 
-    @patch("src.services.transcript.YouTubeTranscriptApi")
+    @patch("src.services.transcription.transcript.YouTubeTranscriptApi")
     def test_raises_error_on_unavailable_video(self, mock_api_class):
         """Test error when video is unavailable."""
         from youtube_transcript_api._errors import VideoUnavailable
@@ -325,7 +325,7 @@ class TestFetchTranscriptSync:
 
         assert exc_info.value.code == ErrorCode.VIDEO_UNAVAILABLE
 
-    @patch("src.services.transcript.YouTubeTranscriptApi")
+    @patch("src.services.transcription.transcript.YouTubeTranscriptApi")
     def test_raises_rate_limit_error(self, mock_api_class):
         """Test rate limit error handling."""
         mock_api = MagicMock()
@@ -341,7 +341,7 @@ class TestFetchTranscriptSync:
 class TestGetTranscriptAsync:
     """Tests for async transcript fetching."""
 
-    @patch("src.services.transcript._fetch_transcript_sync")
+    @patch("src.services.transcription.transcript._fetch_transcript_sync")
     async def test_fetches_transcript_async(self, mock_fetch):
         """Test async wrapper for transcript fetching."""
         mock_fetch.return_value = (
@@ -357,7 +357,7 @@ class TestGetTranscriptAsync:
         assert transcript_type == "manual"
         mock_fetch.assert_called_once_with("test123")
 
-    @patch("src.services.transcript._fetch_transcript_sync")
+    @patch("src.services.transcription.transcript._fetch_transcript_sync")
     async def test_propagates_errors(self, mock_fetch):
         """Test that errors are propagated from sync function."""
         mock_fetch.side_effect = TranscriptError("No transcript", ErrorCode.NO_TRANSCRIPT)
@@ -371,8 +371,8 @@ class TestGetTranscriptAsync:
 class TestGetNormalizedTranscript:
     """Tests for normalized transcript fetching."""
 
-    @patch("src.services.transcript.settings")
-    @patch("src.services.transcript.get_transcript")
+    @patch("src.services.transcription.transcript.settings")
+    @patch("src.services.transcription.transcript.get_transcript")
     async def test_returns_normalized_transcript(self, mock_get, mock_settings):
         """Test returning normalized transcript."""
         # Ensure no proxy is configured for default source test
@@ -393,8 +393,8 @@ class TestGetNormalizedTranscript:
         assert result.segments[0].startMs == 1500
         assert result.source == "api"  # Default source without proxy
 
-    @patch("src.services.transcript.settings")
-    @patch("src.services.transcript.get_transcript")
+    @patch("src.services.transcription.transcript.settings")
+    @patch("src.services.transcription.transcript.get_transcript")
     async def test_sets_proxy_source_when_configured(self, mock_get, mock_settings):
         """Test setting proxy source when proxy is configured."""
         mock_settings.WEBSHARE_PROXY_USERNAME = "user"
@@ -408,7 +408,7 @@ class TestGetNormalizedTranscript:
 
         assert result.source == "proxy"
 
-    @patch("src.services.transcript.get_transcript")
+    @patch("src.services.transcription.transcript.get_transcript")
     async def test_sets_ytdlp_source(self, mock_get):
         """Test setting yt-dlp source for yt-dlp transcripts."""
         mock_get.return_value = (

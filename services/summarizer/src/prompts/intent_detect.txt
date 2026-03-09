@@ -1,0 +1,45 @@
+You are analyzing a YouTube video to determine the best output format.
+
+VIDEO METADATA:
+Title: {title}
+Description: {description}
+Duration: {duration_minutes} minutes
+Category hint: {category_hint}
+
+TRANSCRIPT PREVIEW (first 2000 chars):
+{transcript_preview}
+
+Determine the most appropriate output type and define the tab sections for it.
+
+OUTPUT TYPES (pick ONE):
+- recipe: Cooking, baking, food preparation
+- code_walkthrough: Programming tutorials, coding, software
+- study_kit: Educational content, lectures, courses
+- trip_planner: Travel guides, destination reviews, itineraries
+- workout: Fitness routines, exercises, training
+- verdict: Product reviews, comparisons, buying guides
+- highlights: Podcasts, interviews, conversations, panel discussions
+- music_guide: Music analysis, production, theory, song breakdowns
+- project_guide: DIY, crafts, home improvement, building projects
+- explanation: General content that doesn't fit above categories
+
+Return JSON only:
+{{
+  "outputType": "one_of_the_types_above",
+  "confidence": 0.0-1.0,
+  "userGoal": "What the viewer wants to learn/do from this video",
+  "sections": [
+    {{
+      "id": "section_id",
+      "label": "Tab Label",
+      "emoji": "single_emoji",
+      "description": "What this tab contains"
+    }}
+  ]
+}}
+
+RULES:
+- sections array defines the TABS the user will see
+- Each output type should have 3-5 sections
+- confidence should reflect how well the video matches the type
+- If unsure, use explanation with confidence < 0.6

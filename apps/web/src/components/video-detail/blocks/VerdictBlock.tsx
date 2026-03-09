@@ -2,7 +2,6 @@ import { memo } from 'react';
 import { ThumbsUp, ThumbsDown, HelpCircle, Minus, Users, UserX, Award } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BlockWrapper } from './BlockWrapper';
-import { ConceptHighlighter } from '../ConceptHighlighter';
 import type { VerdictBlock as VerdictBlockType } from '@vie/types';
 import { BLOCK_LABELS } from '@/lib/block-labels';
 
@@ -67,7 +66,7 @@ export const VerdictBlock = memo(function VerdictBlock({ block }: VerdictBlockPr
         </div>
 
         {/* Summary */}
-        <p className="text-sm text-muted-foreground"><ConceptHighlighter text={summary} /></p>
+        <p className="text-sm text-muted-foreground">{summary}</p>
 
         {/* Best for / Not for */}
         {(bestFor?.length || notFor?.length) && (
@@ -111,7 +110,7 @@ export const VerdictBlock = memo(function VerdictBlock({ block }: VerdictBlockPr
                         {bestItem ? (
                           <span className="text-xs text-muted-foreground flex items-baseline gap-1.5">
                             <span className="w-1 h-1 rounded-full bg-success/70 shrink-0 translate-y-1" />
-                            <ConceptHighlighter text={bestItem} />
+                            {bestItem}
                           </span>
                         ) : (
                           <div className="min-h-[1.25rem]" />
@@ -130,7 +129,7 @@ export const VerdictBlock = memo(function VerdictBlock({ block }: VerdictBlockPr
                         {notItem ? (
                           <span className="text-xs text-muted-foreground flex items-baseline gap-1.5">
                             <span className="w-1 h-1 rounded-full bg-destructive/70 shrink-0 translate-y-1" />
-                            <ConceptHighlighter text={notItem} />
+                            {notItem}
                           </span>
                         ) : (
                           <div className="min-h-[1.25rem]" />

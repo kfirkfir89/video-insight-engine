@@ -8,17 +8,35 @@ interface OutputTypeConfig {
 }
 
 export const OUTPUT_TYPE_CONFIG: Record<OutputType, OutputTypeConfig> = {
+  explanation: {
+    emoji: "📝",
+    label: "Explanation",
+    accentColor: "var(--muted-foreground)",
+    gradient: "linear-gradient(135deg, var(--muted), var(--secondary))",
+  },
   recipe: {
     emoji: "🍳",
     label: "Recipe",
     accentColor: "var(--vie-coral)",
     gradient: "linear-gradient(135deg, var(--vie-coral), var(--vie-peach))",
   },
-  tutorial: {
+  code_walkthrough: {
     emoji: "💻",
-    label: "Tutorial",
+    label: "Code Walkthrough",
     accentColor: "var(--vie-sky)",
     gradient: "linear-gradient(135deg, var(--vie-sky), var(--vie-mint))",
+  },
+  study_kit: {
+    emoji: "📚",
+    label: "Study Kit",
+    accentColor: "var(--vie-plum)",
+    gradient: "linear-gradient(135deg, var(--vie-plum), var(--vie-sky))",
+  },
+  trip_planner: {
+    emoji: "✈️",
+    label: "Trip Planner",
+    accentColor: "var(--vie-forest)",
+    gradient: "linear-gradient(135deg, var(--vie-forest), var(--vie-mint))",
   },
   workout: {
     emoji: "💪",
@@ -26,41 +44,17 @@ export const OUTPUT_TYPE_CONFIG: Record<OutputType, OutputTypeConfig> = {
     accentColor: "var(--vie-rose)",
     gradient: "linear-gradient(135deg, var(--vie-rose), var(--vie-coral))",
   },
-  study_guide: {
-    emoji: "📚",
-    label: "Study Guide",
-    accentColor: "var(--vie-plum)",
-    gradient: "linear-gradient(135deg, var(--vie-plum), var(--vie-sky))",
-  },
-  travel_plan: {
-    emoji: "✈️",
-    label: "Travel Plan",
-    accentColor: "var(--vie-forest)",
-    gradient: "linear-gradient(135deg, var(--vie-forest), var(--vie-mint))",
-  },
-  review: {
+  verdict: {
     emoji: "⭐",
-    label: "Review",
+    label: "Verdict",
     accentColor: "var(--vie-honey)",
     gradient: "linear-gradient(135deg, var(--vie-honey), var(--vie-peach))",
   },
-  podcast_notes: {
+  highlights: {
     emoji: "🎙️",
-    label: "Podcast Notes",
+    label: "Highlights",
     accentColor: "var(--vie-peach)",
     gradient: "linear-gradient(135deg, var(--vie-peach), var(--vie-coral))",
-  },
-  diy_guide: {
-    emoji: "🔨",
-    label: "DIY Guide",
-    accentColor: "var(--vie-honey)",
-    gradient: "linear-gradient(135deg, var(--vie-honey), var(--vie-forest))",
-  },
-  game_guide: {
-    emoji: "🎮",
-    label: "Game Guide",
-    accentColor: "var(--vie-sky)",
-    gradient: "linear-gradient(135deg, var(--vie-sky), var(--vie-plum))",
   },
   music_guide: {
     emoji: "🎵",
@@ -68,14 +62,14 @@ export const OUTPUT_TYPE_CONFIG: Record<OutputType, OutputTypeConfig> = {
     accentColor: "var(--vie-rose)",
     gradient: "linear-gradient(135deg, var(--vie-rose), var(--vie-plum))",
   },
-  summary: {
-    emoji: "📝",
-    label: "Summary",
-    accentColor: "var(--muted-foreground)",
-    gradient: "linear-gradient(135deg, var(--muted), var(--secondary))",
+  project_guide: {
+    emoji: "🔨",
+    label: "Project Guide",
+    accentColor: "var(--vie-honey)",
+    gradient: "linear-gradient(135deg, var(--vie-honey), var(--vie-forest))",
   },
 } as const;
 
 export function getOutputTypeConfig(type: OutputType): OutputTypeConfig {
-  return OUTPUT_TYPE_CONFIG[type] ?? OUTPUT_TYPE_CONFIG.summary;
+  return OUTPUT_TYPE_CONFIG[type] ?? OUTPUT_TYPE_CONFIG.explanation;
 }

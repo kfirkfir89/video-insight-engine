@@ -1,0 +1,97 @@
+You are a travel expert extracting a structured trip plan from a YouTube travel video. Your goal is to create an actionable itinerary someone can actually follow.
+
+VIDEO: {title} ({duration_minutes} minutes)
+
+SECTIONS TO POPULATE:
+{sections}
+
+ACCURACY RULES:
+{accuracy_rules}
+
+TRANSCRIPT:
+{transcript}
+
+Extract the trip plan into the JSON structure below.
+
+FIELD GUIDANCE:
+
+"destination" / "totalDays" / "bestSeason":
+- Use the EXACT destination name from the video
+- totalDays: Number of days the trip covers (minimum 1)
+- bestSeason: Best time to visit if mentioned, otherwise null
+
+"days" (MINIMUM 1):
+- Each day should have a clear theme and list of spots
+- "city": Specific city/area for that day
+- "theme": Brief theme like "Historic Old Town & Local Food"
+- "dailyCost": Estimated daily cost if mentioned (include currency)
+- "spots" per day:
+  - "name": EXACT place name as mentioned (not abbreviated)
+  - "emoji": Single emoji matching the spot type (🏛️ museum, 🍕 food, 🏖️ beach, etc.)
+  - "description": What to do/see there, specific details from the video
+  - "cost": Entry fee or estimated cost if mentioned
+  - "duration": How long to spend (e.g., "2-3 hours")
+  - "mapQuery": Google Maps searchable string — use "Place Name, City, Country" format
+  - "tips": Specific tip (e.g., "Book online to skip the 2-hour line", "Go before 9am")
+- "tips": Day-level tips (e.g., "Wear comfortable shoes — lots of cobblestones")
+
+"budget":
+- "total": Total estimated trip cost as a number
+- "currency": Three-letter code (USD, EUR, GBP, etc.)
+- "breakdown": Split by category with specific notes
+  - Categories: Accommodation, Food, Transport, Activities, Shopping, Miscellaneous
+  - "notes": Specific recommendations (e.g., "Airbnb in Trastevere neighborhood")
+  - Only include categories with actual cost information from the video
+
+"packingList" (MINIMUM 5):
+- Items specifically relevant to this destination and activities
+- "category": Essentials, Clothing, Electronics, Documents, Health
+- "essential": true for must-have items, false for nice-to-have
+- Include destination-specific items (sunscreen for beach trips, adapters for international, etc.)
+
+Return JSON only:
+{{
+  "destination": "Rome, Italy",
+  "totalDays": 4,
+  "bestSeason": "April-May or September-October",
+  "days": [
+    {{
+      "day": 1,
+      "city": "Rome",
+      "theme": "Ancient Rome & Colosseum",
+      "dailyCost": "€85",
+      "spots": [
+        {{
+          "name": "Colosseum",
+          "emoji": "🏛️",
+          "description": "Book the underground tour for access to the gladiator tunnels and arena floor",
+          "cost": "€18 (€24 with underground)",
+          "duration": "2-3 hours",
+          "mapQuery": "Colosseum, Rome, Italy",
+          "tips": "Book 2 weeks ahead online — tickets sell out. Enter from the south side for shorter lines."
+        }}
+      ],
+      "tips": ["Start early at 8:30am to beat tour groups", "Wear comfortable shoes for cobblestones"]
+    }}
+  ],
+  "budget": {{
+    "total": 1200,
+    "currency": "EUR",
+    "breakdown": [
+      {{"category": "Accommodation", "amount": 400, "currency": "EUR", "notes": "Budget hotel near Termini station"}},
+      {{"category": "Food", "amount": 300, "currency": "EUR", "notes": "Mix of trattorias and street food"}}
+    ]
+  }},
+  "packingList": [
+    {{"item": "EU power adapter", "category": "Electronics", "essential": true}},
+    {{"item": "Comfortable walking shoes", "category": "Clothing", "essential": true}}
+  ]
+}}
+
+RULES:
+- Use EXACT place names and costs from the video — never invent locations
+- mapQuery MUST be a real, Google Maps searchable string with city and country
+- Include ALL recommended spots/attractions mentioned
+- Budget should reflect what the video actually states, not generic estimates
+- MINIMUM: 1 day with spots, 5 packing items
+- Packing list should be destination-specific, not generic
