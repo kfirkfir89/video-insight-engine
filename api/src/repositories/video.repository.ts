@@ -34,6 +34,7 @@ export interface VideoSummaryCacheDocument {
   // Pipeline output fields
   pipelineVersion?: string; // Legacy field in DB, no longer set
   intent?: unknown;
+  triage?: unknown;
   output?: unknown;
   enrichment?: unknown;
   synthesis?: unknown;
@@ -373,10 +374,10 @@ export class VideoRepository {
 
   // ─── Pipeline output methods ───
 
-  async updateIntent(id: string, intent: unknown): Promise<void> {
+  async updateTriage(id: string, triage: unknown): Promise<void> {
     await this.cacheCollection.updateOne(
       { _id: new ObjectId(id) },
-      { $set: { intent, updatedAt: new Date() } },
+      { $set: { triage, updatedAt: new Date() } },
     );
   }
 

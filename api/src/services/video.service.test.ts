@@ -77,7 +77,7 @@ describe('VideoService', () => {
   });
 
   describe('getVideo', () => {
-    it('should return output when summary has intent data', async () => {
+    it('should return output when summary has triage data', async () => {
       const userId = 'user123';
       const videoId = 'vid123';
       const videoSummaryId = 'summary123';
@@ -89,24 +89,23 @@ describe('VideoService', () => {
         status: 'completed',
       });
 
-      // Summary with intent data but NO pipelineVersion field
+      // Summary with triage-based pipeline data
       mockVideoRepository.findCacheById.mockResolvedValue({
         _id: { toString: () => videoSummaryId },
         youtubeId: 'abc123',
         status: 'completed',
         title: 'Test Video',
-        outputType: 'explanation',
-        intent: { outputType: 'explanation', sections: [] },
-        output: { type: 'explanation', data: {} },
+        triage: { contentTags: ['learning'], tabs: [{ id: 'key_points', label: 'Key Points' }] },
+        output: { learningData: { keyPoints: [] } },
         synthesis: { tldr: 'Test', keyTakeaways: [], masterSummary: '', seoDescription: '' },
       });
 
       const result = await videoService.getVideo(userId, videoId);
 
       expect(result.output).not.toBeNull();
-      expect(result.output?.outputType).toBe('explanation');
-      expect(result.output?.intent).toEqual({ outputType: 'explanation', sections: [] });
-      expect(result.output).not.toHaveProperty('pipelineVersion');
+      expect(result.output?.triage).toEqual({ contentTags: ['learning'], tabs: [{ id: 'key_points', label: 'Key Points' }] });
+      expect(result.output?.output).toEqual({ learningData: { keyPoints: [] } });
+      expect(result.output?.synthesis).toEqual({ tldr: 'Test', keyTakeaways: [], masterSummary: '', seoDescription: '' });
     });
 
     it('should return null output when summary has no intent data', async () => {

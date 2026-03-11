@@ -51,11 +51,14 @@ services/summarizer/
     │   ├── override_state.py     # In-memory override state
     │   ├── status_callback.py    # Status callback
     │   │
-    │   ├── pipeline/             # 4-stage summarization pipeline
-    │   │   ├── intent_detector.py    # Intent detection (output type)
+    │   ├── pipeline/             # Triage-based summarization pipeline
+    │   │   ├── manifest.py           # Manifest stage (structural transcript scan)
+    │   │   ├── triage.py             # Triage (content tags + tab layout)
+    │   │   ├── prompt_builder.py     # Schema-injection prompt builder
     │   │   ├── extractor.py          # Adaptive extraction (1-3 LLM calls)
-    │   │   ├── enrichment.py         # Quiz/flashcards/cheat sheet
+    │   │   ├── enrichment.py         # Quiz/flashcards (learning only)
     │   │   ├── synthesis.py          # TLDR, takeaways, master summary
+    │   │   ├── post_processor.py     # Tab cleanup, celebrations, count validation
     │   │   └── pipeline_helpers.py   # SSE events, timer, data classes
     │   │
     │   ├── transcription/        # Transcript fetching & storage
@@ -83,32 +86,34 @@ services/summarizer/
     │   └── mongodb_repository.py # MongoDB implementation
     │
     ├── prompts/
-    │   ├── intent_detect.txt     # Intent detection prompt
-    │   ├── extract_smart.txt     # Explanation extraction
-    │   ├── extract_recipe.txt    # Recipe extraction
-    │   ├── extract_code.txt      # Code walkthrough extraction
-    │   ├── extract_study.txt     # Study kit extraction
-    │   ├── extract_trip.txt      # Trip planner extraction
-    │   ├── extract_workout.txt   # Workout extraction
-    │   ├── extract_verdict.txt   # Verdict/review extraction
-    │   ├── extract_highlights.txt # Highlights/podcast extraction
-    │   ├── extract_music.txt     # Music guide extraction
-    │   ├── extract_project.txt   # Project/DIY guide extraction
+    │   ├── manifest.txt          # Manifest prompt (structural transcript scan)
+    │   ├── triage.txt            # Triage prompt (content tags + tab design)
+    │   ├── base_extraction.txt   # Schema-injection extraction template
+    │   ├── accuracy_rules.txt    # JSON extraction accuracy rules
     │   ├── enrich_study.txt      # Study enrichment (quiz, flashcards)
-    │   ├── enrich_code.txt       # Code enrichment (cheat sheet)
     │   ├── synthesis.txt         # Synthesis prompt
-    │   └── accuracy_rules.txt    # Shared accuracy rules
+    │   └── schemas/              # Domain schemas (injected into base_extraction)
+    │       ├── learning.txt
+    │       ├── tech.txt
+    │       ├── fitness.txt
+    │       ├── food.txt
+    │       ├── music.txt
+    │       ├── travel.txt
+    │       ├── review.txt
+    │       ├── project.txt
+    │       ├── narrative.txt     # Modifier
+    │       └── finance.txt       # Modifier
     │
     ├── utils/
     │   ├── json_parsing.py       # Robust JSON recovery
     │   ├── content_extractor.py  # Summary/bullet extraction
     │   ├── transcript_slicer.py  # Time-range transcript slicing
-    │   ├── accuracy_rules.py     # Per-output-type completeness rules
     │   └── constants.py          # Constants
     │
     └── models/
         ├── schemas.py            # Pydantic models
-        └── output_types.py       # 10 typed output Pydantic models
+        ├── domain_types.py       # Domain data models (Food, Travel, Music, etc.)
+        └── pipeline_types.py     # Pipeline models (ManifestResult, TriageResult, etc.)
 ```
 
 ---
@@ -148,9 +153,9 @@ LOG_FORMAT=console              # console or json
 
 ---
 
-## Processing Pipeline (Intent-Driven)
+## Processing Pipeline (Triage-Driven)
 
-The pipeline uses 4-7 LLM calls (vs 18-25 in the legacy chapter pipeline):
+The pipeline uses 4-7 LLM calls with a triage-first architecture:
 
 ```
  1. CONNECT via SSE
@@ -171,35 +176,43 @@ The pipeline uses 4-7 LLM calls (vs 18-25 in the legacy chapter pipeline):
     └─▶ 4. OpenAI Whisper (audio fallback, ~5-15min, ~$0.16/26min)
     └─▶ SSE: transcript_ready event
 
- 4. INTENT DETECTION (1 LLM call)
-    └─▶ Determine output type from metadata + transcript preview
-    └─▶ 10 types: explanation, recipe, code_walkthrough, study_kit,
-        trip_planner, workout, verdict, highlights, music_guide, project_guide
-    └─▶ Fallback: category-based mapping if confidence < 0.6
-    └─▶ Standard section IDs enforced (must match frontend tabs)
-    └─▶ SSE: intent_detected event
+ 4. MANIFEST + DESCRIPTION ANALYSIS (concurrent, 1 LLM call + metadata parse)
+    └─▶ Manifest: structural transcript scan → item counts, sections, flags
+    └─▶ 10-second asyncio.wait_for timeout, non-blocking (returns None on failure)
+    └─▶ Description analysis: extract links, resources, social links from metadata
+    └─▶ SSE: description_analysis event
 
- 5. ADAPTIVE EXTRACTION (1-3 LLM calls)
+ 5. TRIAGE (1 LLM call)
+    └─▶ Determine contentTags (1-2 primary + 0-2 modifiers) from manifest + metadata
+    └─▶ 8 primary tags: learning, tech, fitness, food, music, travel, review, project
+    └─▶ 2 modifier tags: narrative, finance
+    └─▶ Design tab layout (IDs, labels, emoji, dataSource)
+    └─▶ Fallback: category-based mapping if confidence < 0.6
+    └─▶ SSE: triage_complete event
+
+ 6. ADAPTIVE EXTRACTION (1-3 LLM calls)
+    └─▶ Schema-injected: base_extraction.txt + schemas/{tag}.txt per content tag
     └─▶ <4K words: single extraction call
     └─▶ 4-20K words: single + overflow retry if validation fails
     └─▶ >3h videos AND >20K words: segmented extraction (token-based splitting)
     └─▶ Pydantic validation on all output
+    └─▶ Post-extraction: count validation against manifest (advisory, logs warnings)
     └─▶ SSE: extraction_progress events, then extraction_complete
 
- 6. ENRICHMENT (0-1 LLM calls, conditional)
-    └─▶ study_kit: quiz + flashcards
-    └─▶ code_walkthrough: cheat sheet
-    └─▶ Other types: skipped (no LLM call)
+ 7. ENRICHMENT (0-1 LLM calls, conditional)
+    └─▶ learning: quiz + flashcards + scenarios
+    └─▶ Other tags: skipped (no LLM call)
     └─▶ Non-critical: failure returns None gracefully
     └─▶ SSE: enrichment_complete event (if applicable)
 
- 7. SYNTHESIS (1 LLM call)
+ 8. SYNTHESIS (1 LLM call)
     └─▶ Generate TLDR, key takeaways, master summary, SEO description
     └─▶ SSE: synthesis_complete event
 
- 8. SAVE TO CACHE
+ 9. POST-PROCESSING + SAVE
+    └─▶ Drop empty tabs, add celebrations, accent colors
     └─▶ Store structured result via save_structured_result()
-    └─▶ Fields: intent, output (type + data), enrichment, synthesis
+    └─▶ Fields: triage, output (domain-keyed), enrichment, synthesis
     └─▶ Set status = "completed"
     └─▶ SSE: done event + [DONE] signal
 ```
@@ -231,17 +244,24 @@ class LLMService:
 # - Call llm_service._call_llm() for LLM interactions
 # - Return typed results (Pydantic models or dicts)
 
-# src/services/pipeline/intent_detector.py
-async def detect_intent(llm_service, transcript_preview, video_data, ...) -> IntentResult
+# src/services/pipeline/manifest.py
+async def run_manifest(llm_service, transcript, video_data) -> ManifestResult | None
+def format_manifest_for_triage(manifest: ManifestResult) -> str
+
+# src/services/pipeline/triage.py
+async def run_triage(llm_service, video_data, manifest_text=None) -> TriageResult
 
 # src/services/pipeline/extractor.py
-async def extract(llm_service, transcript, intent, ...) -> AsyncGenerator[dict, None]
+async def extract(llm_service, transcript, triage, ...) -> AsyncGenerator[dict, None]
 
 # src/services/pipeline/enrichment.py
-async def enrich(llm_service, output_type, extraction_data, ...) -> EnrichmentData | None
+async def enrich(llm_service, content_tag, extraction_data, ...) -> EnrichmentData | None
 
 # src/services/pipeline/synthesis.py
 async def synthesize(llm_service, extraction_text, video_title, ...) -> SynthesisResult
+
+# src/services/pipeline/post_processor.py
+def validate_extraction_counts(manifest: ManifestResult, extraction: dict) -> list[str]
 ```
 
 **Model mapping (config.py):**
@@ -255,24 +275,24 @@ MODEL_MAP = {
 
 ---
 
-## Output Type System
+## Content Tag System
 
-The pipeline uses intent detection (LLM) to determine the output type from video metadata + transcript preview. Each type has a dedicated extraction prompt and Pydantic model.
+The pipeline uses triage (LLM) to determine content tags from manifest + metadata. Each tag has a domain schema injected into a shared extraction template.
 
-### 10 Output Types
+### 8 Primary Content Tags + 2 Modifiers
 
-| OutputType | Category Fallback | Pydantic Model | Enrichment |
-|------------|-------------------|----------------|------------|
-| explanation | (default) | ExplanationOutput | - |
-| recipe | cooking | RecipeOutput | - |
-| code_walkthrough | coding, programming | CodeWalkthroughOutput | cheat sheet |
-| study_kit | education | StudyKitOutput | quiz, flashcards |
-| trip_planner | travel | TripPlannerOutput | - |
-| workout | fitness | WorkoutOutput | - |
-| verdict | reviews | VerdictOutput | - |
-| highlights | podcast, interview | HighlightsOutput | - |
-| music_guide | music | MusicGuideOutput | - |
-| project_guide | diy, craft | ProjectGuideOutput | - |
+| ContentTag | Category Fallback | Domain Schema | Enrichment |
+|------------|-------------------|---------------|------------|
+| learning | education (default) | `schemas/learning.txt` | quiz, flashcards, scenarios |
+| tech | coding, programming | `schemas/tech.txt` | - |
+| fitness | fitness | `schemas/fitness.txt` | - |
+| food | cooking | `schemas/food.txt` | - |
+| music | music | `schemas/music.txt` | - |
+| travel | travel | `schemas/travel.txt` | - |
+| review | reviews | `schemas/review.txt` | - |
+| project | diy, craft | `schemas/project.txt` | - |
+| narrative | podcast, interview | `schemas/narrative.txt` | Modifier only |
+| finance | — | `schemas/finance.txt` | Modifier only |
 
 ### SSE Event Protocol
 
@@ -282,11 +302,11 @@ The pipeline uses intent detection (LLM) to determine the output type from video
 | `metadata` | `{title, channel, thumbnailUrl, duration}` |
 | `transcript_ready` | `{duration}` |
 | `sponsor_segments` | `{count, filteredDuration}` (SponsorBlock integration) |
-| `intent_detected` | `{outputType, confidence, userGoal, sections}` |
-| `description_analysis` | `{links, resources, socialLinks}` (concurrent with intent) |
+| `description_analysis` | `{links, resources, socialLinks}` (concurrent with manifest) |
+| `triage_complete` | `{contentTags, modifiers, primaryTag, tabs, confidence}` |
 | `extraction_progress` | `{section, percent}` (multiple events) |
-| `extraction_complete` | `{outputType, data}` |
-| `enrichment_complete` | `{quiz?, flashcards?, cheatSheet?}` (conditional) |
+| `extraction_complete` | `{domain-keyed data}` |
+| `enrichment_complete` | `{quiz?, flashcards?, scenarios?}` (conditional, learning only) |
 | `synthesis_complete` | `{tldr, keyTakeaways, masterSummary, seoDescription}` |
 | `done` | `{videoSummaryId, cached?}` |
 | `[DONE]` | Terminal signal |
@@ -295,33 +315,47 @@ The pipeline uses intent detection (LLM) to determine the output type from video
 
 | Decision | Choice | Why |
 |----------|--------|-----|
-| Standard section IDs | Always use `_TYPE_SECTIONS` dict | LLM returns creative IDs that don't match frontend tabs |
+| Triage-first | LLM picks tags + designs tabs | More flexible than fixed output types |
+| Schema injection | `base_extraction.txt` + `schemas/{tag}.txt` | One extraction prompt, domain schemas swapped in |
+| Manifest pre-scan | Structural transcript scan before triage | Gives triage item counts, sections, flags for better decisions |
+| Manifest non-blocking | 10s timeout, returns None on failure | Triage falls back to transcript_preview |
+| Count validation advisory | Logs warnings at 60% threshold | Never blocks pipeline, just flags missing items |
+| Legacy coercion | `field_validator(mode="before")` | Accepts old string format for travel tips and music analysis |
+| Finance modifier costs-only | `costs[]` + `savingTips[]`, no budget | Primary domain owns budget structure |
 | Adaptive extraction | 1-3 calls by word count | Prevents token overflow on long videos |
-| Null coercion validators | `@field_validator(mode="before")` | LLMs sometimes return null for required fields |
-| Category fallback | Map video category to output type | Safety net when intent confidence < 0.6 |
+| Category fallback | Map video category to content tag | Safety net when triage confidence < 0.6 |
 
 ---
 
 ## Output Schema
 
-The pipeline stores structured results with `intent`, `output`, `enrichment`, and `synthesis` fields:
+The pipeline stores structured results with `triage`, `output`, `enrichment`, and `synthesis` fields:
 
 ```python
 # MongoDB document structure (after pipeline completes):
 {
-    "intent": {
-        "output_type": "explanation",  # one of 10 types
-        "confidence": 0.95,
-        "sections": ["overview", "key_points", "concepts", "takeaways"]
+    "triage": {
+        "contentTags": ["learning"],       # 1-2 primary content tags
+        "modifiers": [],                    # 0-2 modifier tags (narrative, finance)
+        "primaryTag": "learning",           # First content tag
+        "tabs": [                           # LLM-designed tab layout
+            {"id": "key_points", "label": "Key Points", "emoji": "💡", "dataSource": "learning.keyPoints"},
+            {"id": "concepts", "label": "Core Concepts", "emoji": "🧠", "dataSource": "learning.concepts"}
+        ],
+        "confidence": 0.95
     },
     "output": {
-        "type": "explanation",
-        "data": { ... }  # Typed per output model (ExplanationOutput, RecipeOutput, etc.)
+        "learning": {                       # Domain-keyed extraction data
+            "keyPoints": [...],
+            "concepts": [...],
+            "takeaways": [...],
+            "timestamps": [...]
+        }
     },
     "enrichment": {
-        "quiz": [...],        # study_kit only
-        "flashcards": [...],  # study_kit only
-        "cheatSheet": "..."   # code_walkthrough only
+        "quizzes": [...],       # learning only
+        "flashcards": [...],    # learning only
+        "scenarios": [...]      # learning only
     },
     "synthesis": {
         "tldr": "...",
@@ -332,7 +366,7 @@ The pipeline stores structured results with `intent`, `output`, `enrichment`, an
 }
 ```
 
-See `src/models/output_types.py` for all 10 Pydantic output models.
+See `src/models/domain_types.py` for domain data models and `src/models/pipeline_types.py` for pipeline types.
 
 ---
 

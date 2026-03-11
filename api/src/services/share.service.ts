@@ -6,7 +6,7 @@ import {
   ShareNotFoundError,
   VideoNotFoundError,
 } from '../utils/errors.js';
-import type { VideoContext, OutputType, VideoSummary, VideoOutput } from '@vie/types';
+import type { VideoContext, VideoSummary, VideoOutput, OutputType } from '@vie/types';
 
 const SLUG_LENGTH = 10;
 
@@ -21,7 +21,7 @@ interface PublicSummaryResponse {
   outputType: OutputType;
   context: VideoContext | null;
   summary: VideoSummary;
-  /** Structured output from the intent-driven pipeline */
+  /** Structured output from the triage pipeline */
   output: VideoOutput | null;
   shareSlug: string;
   viewsCount: number;
@@ -97,15 +97,14 @@ export class ShareService {
       });
     }
 
-    // Build structured output if intent-driven pipeline was used
+    // Build structured output if triage pipeline was used
     const docAny = doc as unknown as Record<string, unknown>;
-    const structuredOutput: VideoOutput | null = docAny.intent ? {
-      outputType: ((docAny.intent as Record<string, unknown>).outputType as OutputType) ?? (doc.outputType as OutputType),
-      intent: docAny.intent as VideoOutput['intent'],
+    const structuredOutput: VideoOutput | null = docAny.triage ? {
+      triage: docAny.triage as VideoOutput['triage'],
       output: (docAny.output as VideoOutput['output']) ?? null,
       synthesis: (docAny.synthesis as VideoOutput['synthesis']) ?? null,
       enrichment: (docAny.enrichment as VideoOutput['enrichment']) ?? null,
-    } as VideoOutput : null;
+    } : null;
 
     return {
       id: doc._id.toString(),
@@ -114,7 +113,7 @@ export class ShareService {
       channel: doc.channel || null,
       thumbnailUrl: doc.thumbnailUrl || null,
       duration: doc.duration || null,
-      outputType: (doc.outputType as OutputType) || 'explanation',
+      outputType: (structuredOutput?.triage?.primaryTag ?? ((doc as unknown as Record<string, unknown>).outputType as string) ?? 'learning') as OutputType,
       context: (doc.context as VideoContext) || null,
       summary: doc.summary as VideoSummary,
       output: structuredOutput,

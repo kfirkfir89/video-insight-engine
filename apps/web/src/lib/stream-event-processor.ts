@@ -13,7 +13,7 @@ import {
 } from "@/lib/sse-validators";
 import { getUserFriendlyError } from "@/lib/stream-error-messages";
 import type { StreamState } from "@/hooks/use-summary-stream";
-import type { OutputType, OutputSection, OutputData, EnrichmentData, QuizQuestion, Flashcard, CodeCheatSheetItem } from "@vie/types";
+import type { ContentTag, TabDefinition, EnrichmentData, QuizQuestion, Flashcard, CodeCheatSheetItem, ScenarioItem, Modifier } from "@vie/types";
 
 export function processEvent(
   event: Record<string, unknown>,
@@ -29,7 +29,6 @@ export function processEvent(
     case "phase": {
       const phase = validatePhaseEvent(event);
       if (phase) {
-        // Cast validated phase to StreamState phase (sse-validators may return legacy phases)
         setState((prev) => ({ ...prev, phase: phase as StreamState["phase"] }));
       }
       break;
@@ -46,19 +45,28 @@ export function processEvent(
       break;
     }
 
-    // ─── Pipeline Output Events ───
+    // ─── Triage Pipeline Events ───
 
+    case "triage_complete":
     case "intent_detected": {
-      const outputType = (typeof event.outputType === "string" ? event.outputType : "explanation") as OutputType;
+      // Handle both new triage_complete and legacy intent_detected
+      const contentTags = Array.isArray(event.contentTags)
+        ? (event.contentTags as ContentTag[])
+        : [];
+      const modifiers = Array.isArray(event.modifiers)
+        ? (event.modifiers as Modifier[])
+        : [];
+      const primaryTag = (typeof event.primaryTag === "string" ? event.primaryTag : "learning") as ContentTag;
       const confidence = typeof event.confidence === "number" ? event.confidence : 0;
       const userGoal = typeof event.userGoal === "string" ? event.userGoal : "";
-      const sections = Array.isArray(event.sections)
-        ? (event.sections as OutputSection[])
+      const tabs = Array.isArray(event.tabs)
+        ? (event.tabs as TabDefinition[])
         : [];
+
       setState((prev) => ({
         ...prev,
         phase: "extraction",
-        intent: { outputType, confidence, userGoal, sections },
+        triage: { contentTags, modifiers, primaryTag, userGoal, tabs, confidence },
       }));
       break;
     }
@@ -75,14 +83,13 @@ export function processEvent(
     }
 
     case "extraction_complete": {
-      const extractedType = (typeof event.outputType === "string" ? event.outputType : "explanation") as OutputType;
-      const data = event.data as OutputData["data"];
+      // Domain-keyed data: { data: { learning: {...}, tech: {...} } }
+      const data = (typeof event.data === "object" && event.data !== null)
+        ? event.data as Record<string, unknown>
+        : {};
       setState((prev) => ({
         ...prev,
-        output: {
-          type: extractedType,
-          data,
-        } as OutputData,
+        domainData: { ...(prev.domainData ?? {}), ...data },
       }));
       break;
     }
@@ -92,6 +99,7 @@ export function processEvent(
       if (Array.isArray(event.quiz)) enrichment.quiz = event.quiz as QuizQuestion[];
       if (Array.isArray(event.flashcards)) enrichment.flashcards = event.flashcards as Flashcard[];
       if (Array.isArray(event.cheatSheet)) enrichment.cheatSheet = event.cheatSheet as CodeCheatSheetItem[];
+      if (Array.isArray(event.scenarios)) enrichment.scenarios = event.scenarios as ScenarioItem[];
       setState((prev) => ({
         ...prev,
         enrichment,

@@ -1,7 +1,7 @@
 """LLM service for video summarization.
 
 Uses LiteLLM via LLMProvider for multi-provider support (Anthropic, OpenAI, Gemini).
-Pipeline modules (intent_detector, extractor, enrichment, synthesis) use call_llm()
+Pipeline modules (triage, extractor, enrichment, synthesis) use call_llm()
 for all LLM interactions.
 """
 

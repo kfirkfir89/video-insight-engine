@@ -13,3 +13,6 @@ export { ColorPalette } from './ColorPalette';
 export { Typography } from './Typography';
 export { SpacingScale } from './SpacingScale';
 export { BlockShowcase } from './BlockShowcase';
+export { UIShowcase } from './UIShowcase';
+export { CardsShowcase } from './CardsShowcase';
+export { InteractiveBlockShowcase } from './InteractiveBlockShowcase';

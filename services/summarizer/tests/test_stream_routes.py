@@ -39,29 +39,36 @@ def sample_video_entry(valid_object_id):
 
 @pytest.fixture
 def completed_video_entry(valid_object_id):
-    """Sample completed video summary entry."""
+    """Sample completed video summary entry (triage pipeline format)."""
     return {
         "_id": valid_object_id,
         "youtubeId": "dQw4w9WgXcQ",
         "status": ProcessingStatus.COMPLETED.value,
         "title": "Test Video",
         "channel": "Test Channel",
-        "thumbnail_url": "https://example.com/thumb.jpg",
+        "thumbnailUrl": "https://example.com/thumb.jpg",
         "duration": 300,
-        "context": {"persona": "standard"},
-        "chapters": [
-            {"startSeconds": 0, "endSeconds": 60, "title": "Intro"},
-        ],
-        "summary": {
+        "triage": {
+            "contentTags": ["learning"],
+            "modifiers": [],
+            "primaryTag": "learning",
+            "userGoal": "Learn about the topic",
+            "tabs": [
+                {"id": "key_points", "label": "Key Points", "emoji": "📝", "description": "Main points"},
+            ],
+            "confidence": 0.9,
+        },
+        "output": {
+            "learning": {
+                "concepts": [{"name": "Test Concept", "definition": "A test"}],
+                "keyPoints": ["Point 1", "Point 2"],
+            },
+        },
+        "synthesis": {
             "tldr": "Test TLDR",
-            "key_takeaways": ["Point 1", "Point 2"],
-            "chapters": [
-                {"id": "1", "title": "Intro", "timestamp": "0:00", "content": [{"type": "paragraph", "text": "Intro text"}]},
-            ],
-            "concepts": [
-                {"id": "1", "name": "Test Concept"},
-            ],
-            "master_summary": "Master summary text",
+            "keyTakeaways": ["Point 1", "Point 2"],
+            "masterSummary": "Master summary text",
+            "seoDescription": "Test description",
         },
     }
 
@@ -72,7 +79,7 @@ def mock_repository():
     repo = MagicMock()
     repo.get_video_summary = MagicMock(return_value=None)
     repo.update_status = MagicMock()
-    repo.save_result = MagicMock()
+    repo.save_structured_result = MagicMock()
     return repo
 
 
@@ -187,6 +194,8 @@ class TestStreamCachedResult:
         event_types = [e.get("event") for e in events]
         assert "cached" in event_types
         assert "metadata" in event_types
+        assert "triage_complete" in event_types
+        assert "extraction_complete" in event_types
         assert "synthesis_complete" in event_types
         assert "done" in event_types
 
@@ -215,27 +224,27 @@ class TestStreamCachedResult:
         assert synthesis_event["tldr"] == "Test TLDR"
         assert "Point 1" in synthesis_event["keyTakeaways"]
 
-    async def test_cached_result_includes_chapters(self, client, mock_repository, completed_video_entry, valid_object_id):
-        """Test that cached result streams chapter events."""
+    async def test_cached_result_includes_triage(self, client, mock_repository, completed_video_entry, valid_object_id):
+        """Test that cached result includes triage event."""
         mock_repository.get_video_summary.return_value = completed_video_entry
 
         response = await client.get(f"/summarize/stream/{valid_object_id}")
         events = parse_sse_events(response.text)
 
-        chapter_events = [e for e in events if e.get("event") == "chapter_ready"]
-        assert len(chapter_events) >= 1
-        assert chapter_events[0]["chapter"]["title"] == "Intro"
+        triage_event = next((e for e in events if e.get("event") == "triage_complete"), None)
+        assert triage_event is not None
+        assert triage_event["primaryTag"] == "learning"
 
-    async def test_cached_result_includes_concepts(self, client, mock_repository, completed_video_entry, valid_object_id):
-        """Test that cached result includes concepts."""
+    async def test_cached_result_includes_extraction(self, client, mock_repository, completed_video_entry, valid_object_id):
+        """Test that cached result includes extraction event."""
         mock_repository.get_video_summary.return_value = completed_video_entry
 
         response = await client.get(f"/summarize/stream/{valid_object_id}")
         events = parse_sse_events(response.text)
 
-        concepts_event = next((e for e in events if e.get("event") == "concepts_complete"), None)
-        assert concepts_event is not None
-        assert len(concepts_event["concepts"]) >= 1
+        extraction_event = next((e for e in events if e.get("event") == "extraction_complete"), None)
+        assert extraction_event is not None
+        assert "learning" in extraction_event["data"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -245,7 +254,7 @@ class TestStreamCachedResult:
 
 @pytest.fixture
 def structured_video_entry(valid_object_id):
-    """Sample completed video entry with structured output (new pipeline format)."""
+    """Sample completed video entry with structured output (triage pipeline format)."""
     return {
         "_id": valid_object_id,
         "youtubeId": "VRoTOE3FqT0",
@@ -255,8 +264,7 @@ def structured_video_entry(valid_object_id):
         "thumbnailUrl": "https://example.com/thumb.jpg",
         "duration": 732,
         "output": {
-            "type": "verdict",
-            "data": {
+            "review": {
                 "product": "Google Pixel 7A",
                 "price": "$500",
                 "rating": {"score": 8.5, "maxScore": 10, "label": "Great"},
@@ -272,14 +280,16 @@ def structured_video_entry(valid_object_id):
                 },
             },
         },
-        "intent": {
-            "outputType": "verdict",
-            "confidence": 0.95,
+        "triage": {
+            "contentTags": ["review"],
+            "modifiers": [],
+            "primaryTag": "review",
             "userGoal": "Find best camera phone",
-            "sections": [
+            "tabs": [
                 {"id": "overview", "label": "Overview", "emoji": "⭐", "description": "Product overview"},
                 {"id": "pros_cons", "label": "Pros & Cons", "emoji": "⚖️", "description": "Pros and cons"},
             ],
+            "confidence": 0.95,
         },
         "enrichment": None,
         "synthesis": {
@@ -310,7 +320,7 @@ class TestStreamStructuredCachedResult:
         assert event_types == [
             "cached",
             "metadata",
-            "intent_detected",
+            "triage_complete",
             "extraction_complete",
             "synthesis_complete",
             "done",
@@ -331,19 +341,19 @@ class TestStreamStructuredCachedResult:
         assert metadata["channel"] == "Marques Brownlee"
         assert metadata["duration"] == 732
 
-    async def test_structured_cached_intent_detected(
+    async def test_structured_cached_triage_complete(
         self, client, mock_repository, structured_video_entry, valid_object_id
     ):
-        """Test structured cached result intent_detected event."""
+        """Test structured cached result triage_complete event."""
         mock_repository.get_video_summary.return_value = structured_video_entry
 
         response = await client.get(f"/summarize/stream/{valid_object_id}")
         events = parse_sse_events(response.text)
 
-        intent = next(e for e in events if e.get("event") == "intent_detected")
-        assert intent["outputType"] == "verdict"
-        assert intent["confidence"] == 0.95
-        assert len(intent["sections"]) == 4  # canonical verdict sections (overview, pros_cons, specs, verdict)
+        triage = next(e for e in events if e.get("event") == "triage_complete")
+        assert triage["primaryTag"] == "review"
+        assert triage["confidence"] == 0.95
+        assert len(triage["tabs"]) == 2
 
     async def test_structured_cached_extraction_complete(
         self, client, mock_repository, structured_video_entry, valid_object_id
@@ -355,9 +365,8 @@ class TestStreamStructuredCachedResult:
         events = parse_sse_events(response.text)
 
         extraction = next(e for e in events if e.get("event") == "extraction_complete")
-        assert extraction["outputType"] == "verdict"
-        assert extraction["data"]["product"] == "Google Pixel 7A"
-        assert extraction["data"]["rating"]["score"] == 8.5
+        assert extraction["data"]["review"]["product"] == "Google Pixel 7A"
+        assert extraction["data"]["review"]["rating"]["score"] == 8.5
 
     async def test_structured_cached_synthesis_complete(
         self, client, mock_repository, structured_video_entry, valid_object_id
@@ -688,7 +697,7 @@ class TestStreamStructuredCachedResultNewPipeline:
 
     @pytest.fixture
     def structured_video_entry(self, valid_object_id):
-        """Sample structured (new pipeline) video entry with output field."""
+        """Sample structured (triage pipeline) video entry with output field."""
         return {
             "_id": valid_object_id,
             "youtubeId": "dQw4w9WgXcQ",
@@ -697,20 +706,21 @@ class TestStreamStructuredCachedResultNewPipeline:
             "channel": "MKBHD",
             "thumbnailUrl": "https://example.com/thumb.jpg",
             "duration": 600,
-            "intent": {
-                "outputType": "verdict",
-                "confidence": 0.92,
+            "triage": {
+                "contentTags": ["review"],
+                "modifiers": [],
+                "primaryTag": "review",
                 "userGoal": "Evaluate camera quality",
-                "sections": [
+                "tabs": [
                     {"id": "overview", "label": "Overview", "emoji": "📋", "description": "Summary"},
                     {"id": "pros_cons", "label": "Pros & Cons", "emoji": "⚖️", "description": "Comparison"},
                     {"id": "ratings", "label": "Ratings", "emoji": "⭐", "description": "Scores"},
                     {"id": "verdict", "label": "Verdict", "emoji": "🏆", "description": "Final call"},
                 ],
+                "confidence": 0.92,
             },
             "output": {
-                "type": "verdict",
-                "data": {
+                "review": {
                     "product": "iPhone 15 Camera",
                     "pros": ["Great photo quality"],
                     "cons": ["Expensive"],
@@ -746,7 +756,7 @@ class TestStreamStructuredCachedResultNewPipeline:
         assert event_types == [
             "cached",
             "metadata",
-            "intent_detected",
+            "triage_complete",
             "extraction_complete",
             "synthesis_complete",
             "done",
@@ -768,19 +778,19 @@ class TestStreamStructuredCachedResultNewPipeline:
         assert metadata["duration"] == 600
         assert metadata["thumbnailUrl"] == "https://example.com/thumb.jpg"
 
-    async def test_structured_cached_intent_detected(
+    async def test_structured_cached_triage_complete(
         self, client, mock_repository, structured_video_entry, valid_object_id
     ):
-        """Test structured cached result intent_detected event."""
+        """Test structured cached result triage_complete event."""
         mock_repository.get_video_summary.return_value = structured_video_entry
 
         response = await client.get(f"/summarize/stream/{valid_object_id}")
         events = parse_sse_events(response.text)
 
-        intent = next(e for e in events if e.get("event") == "intent_detected")
-        assert intent["outputType"] == "verdict"
-        assert intent["confidence"] == 0.92
-        assert len(intent["sections"]) == 4
+        triage = next(e for e in events if e.get("event") == "triage_complete")
+        assert triage["primaryTag"] == "review"
+        assert triage["confidence"] == 0.92
+        assert len(triage["tabs"]) == 4
 
     async def test_structured_cached_extraction_complete(
         self, client, mock_repository, structured_video_entry, valid_object_id
@@ -792,9 +802,8 @@ class TestStreamStructuredCachedResultNewPipeline:
         events = parse_sse_events(response.text)
 
         extraction = next(e for e in events if e.get("event") == "extraction_complete")
-        assert extraction["outputType"] == "verdict"
-        assert extraction["data"]["product"] == "iPhone 15 Camera"
-        assert len(extraction["data"]["pros"]) == 1
+        assert extraction["data"]["review"]["product"] == "iPhone 15 Camera"
+        assert len(extraction["data"]["review"]["pros"]) == 1
 
     async def test_structured_cached_synthesis_complete(
         self, client, mock_repository, structured_video_entry, valid_object_id

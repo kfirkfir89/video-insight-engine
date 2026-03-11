@@ -116,6 +116,20 @@ export const BLOCK_LABELS = {
   gallery: 'Gallery',
   viewVisual: 'View in video',
 
+  // Flash cards
+  flashCards: 'Flash Cards',
+  of: 'of',
+  tapToFlip: 'Tap to flip',
+
+  // Scenarios
+  scenarios: 'Scenarios',
+  scenario: 'Scenario',
+  yourScore: 'Your Score',
+
+  // Spots / Travel actions
+  openInMaps: 'Open in Maps',
+  searchBooking: 'Search Booking',
+
   // General
   showMore: 'Show more',
   showLess: 'Show less',

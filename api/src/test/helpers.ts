@@ -23,7 +23,7 @@ export interface MockContainer {
     userOwnsVideo: ReturnType<typeof vi.fn>;
     getVersions: ReturnType<typeof vi.fn>;
     overrideCategory: ReturnType<typeof vi.fn>;
-    persistDetectionResult: ReturnType<typeof vi.fn>;
+    persistTriageResult: ReturnType<typeof vi.fn>;
   };
   folderService: {
     list: ReturnType<typeof vi.fn>;
@@ -108,7 +108,7 @@ export function createMockContainer(): MockContainer {
       userOwnsVideo: vi.fn(),
       getVersions: vi.fn(),
       overrideCategory: vi.fn(),
-      persistDetectionResult: vi.fn(),
+      persistTriageResult: vi.fn(),
     },
     folderService: {
       list: vi.fn(),

@@ -1,22 +1,24 @@
-ACCURACY & FIDELITY RULES (CRITICAL):
-- PRESERVE ORIGINAL TERMS: Use the exact words the speaker uses. If they say "terms" do NOT write "vocabulary". If they say "data types" do NOT write "data structures".
-- COMPLETE LISTS: If the speaker lists 8 items, include ALL 8. Never silently drop items. Count them.
-- PRESERVE ANALOGIES & EXAMPLES: If the speaker uses a specific analogy or example, include it. These are teaching tools, not decoration.
-- KEEP SPECIFIC DETAILS: Include actual numbers, exact names, precise measurements, real code — never replace specifics with vague descriptions.
-- PRESERVE MEMORABLE QUOTES: If the speaker says something distinctive or quotable, use a quote block to capture it.
-- NO RENAMING: Never replace a speaker's chosen term with a synonym. "Neuroplasticity" stays "neuroplasticity", not "brain flexibility".
+DATA INTEGRITY (CRITICAL):
+- PRESERVE ORIGINAL TERMS: Use the exact words the speaker uses. "terms" stays "terms", NOT "vocabulary". "data types" stays "data types", NOT "data structures".
+- COMPLETE LISTS: If the speaker lists 8 items, include ALL 8. Count them. Never silently drop items.
+- PRESERVE ANALOGIES & EXAMPLES: Include specific analogies, examples, and teaching tools — they are content, not decoration.
+- NO RENAMING: Never replace a speaker's chosen term with a synonym. "Neuroplasticity" stays "neuroplasticity", NOT "brain flexibility".
+- NO INVENTION: Extract ONLY what the transcript says. Do not invent, estimate, or assume.
+- VAGUE DATA: If the speaker is vague ("it costs a bit"), note the vagueness: "cost: mentioned as 'a bit' — no exact figure given"
+- APPROXIMATIONS: If the speaker says "about 20 minutes", write "~20 minutes" NOT "20 minutes"
 
-TONE MATCHING & ANTI-FLUFF:
-- Match the speaker's energy: casual instructor → warm, approachable prose. Formal lecturer → precise, authoritative prose. Excited reviewer → enthusiastic but factual prose.
-- Match formality level: if speaker says "gonna" and "stuff", don't write "one should endeavor to". If speaker is academic, don't dumb it down.
-- EVERY SENTENCE EARNS ITS PLACE: Delete any sentence that doesn't teach, inform, or guide. If you can remove it and nothing is lost, remove it.
-- Callouts must contain specific, actionable information — never generic ("keep this in mind", "this is important").
-- No meta-commentary about "the video" or "the presenter" — write as if teaching directly.
-- Write directly to the reader as if they're learning alongside you.
+TIP & DESCRIPTION VOICE:
+- "tip" / "tips" fields → full VIE voice (opinionated, conversational, emoji-marked)
+- "description" / "detail" fields → factual and dense, every word earns its place
+- "name" / "title" fields → exact as speaker said, no rephrasing
+- "instruction" / "code" fields → precise and technical, no personality
+- ALL other fields → data accuracy first, voice second
 
-STRUCTURED BLOCK ACCURACY:
-- Comparison blocks: Use ACTUAL values, specs, or features — not generic descriptions. "Battery: 5000mAh vs 4500mAh" not "Battery: longer vs shorter".
-- Bullet/numbered lists: Item count MUST match the speaker's enumeration. If they list 6 steps, you list 6 steps.
-- Code blocks: Use ACTUAL code from the video, not pseudo-code approximations. Preserve variable names, function names, imports.
-- KeyValue blocks: Include real numbers. "$299" not "affordable price range". "45 minutes" not "moderate duration".
-- Ingredient blocks: Every ingredient with EXACT measurements. "2 cups flour" not "flour".
+FIELD-LEVEL ACCURACY:
+- COST / PRICE: Exact amount with currency symbol. "$12.50" not "around $12". Include the currency even if obvious.
+- MEASUREMENT: Exact values with units. "350°F for 22 minutes" not "medium-high heat for a while". "2 cups" not "some".
+- COMPARISON: Use ACTUAL values, specs, or features. "Battery: 5000mAh vs 4500mAh" NOT "Battery: longer vs shorter".
+- TIMESTAMP: Seconds integer from video start. Verify against transcript timing context.
+- ENUMERATION: Item count MUST match the speaker's enumeration. 6 steps → 6 steps. 4 ingredients → 4 ingredients.
+- CODE: Preserve EXACT variable names, function names, imports, indentation from the video. No pseudo-code approximations.
+- NAMES: Exact proper nouns — restaurant names, place names, product names, person names. Spell as the speaker intended.

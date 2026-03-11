@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { FitnessBlock } from '../FitnessBlock';
+import { ExerciseCard } from '../ExerciseCard';
 import type { ExerciseBlock as ExerciseBlockType } from '@vie/types';
 
-const createMockBlock = (overrides: Partial<FitnessBlockType> = {}): ExerciseBlockType => ({
+const createMockBlock = (overrides: Partial<ExerciseBlockType> = {}): ExerciseBlockType => ({
   type: 'exercise',
   blockId: 'block-1',
   exercises: [
@@ -17,7 +17,7 @@ const createMockBlock = (overrides: Partial<FitnessBlockType> = {}): ExerciseBlo
 describe('ExerciseBlock', () => {
   describe('rendering', () => {
     it('should render all exercises', () => {
-      render(<FitnessBlock block={createMockBlock()} />);
+      render(<ExerciseCard block={createMockBlock()} />);
 
       expect(screen.getByText('Push-ups')).toBeInTheDocument();
       expect(screen.getByText('Squats')).toBeInTheDocument();
@@ -25,7 +25,7 @@ describe('ExerciseBlock', () => {
     });
 
     it('should render sets and reps', () => {
-      render(<FitnessBlock block={createMockBlock()} />);
+      render(<ExerciseCard block={createMockBlock()} />);
 
       expect(screen.getByText('3')).toBeInTheDocument();
       // Multiple exercises can have Sets/Reps labels
@@ -35,33 +35,33 @@ describe('ExerciseBlock', () => {
     });
 
     it('should render duration', () => {
-      render(<FitnessBlock block={createMockBlock()} />);
+      render(<ExerciseCard block={createMockBlock()} />);
 
       expect(screen.getByText('60s')).toBeInTheDocument();
     });
 
     it('should return null for empty exercises', () => {
-      const { container } = render(<FitnessBlock block={createMockBlock({ exercises: [] })} />);
+      const { container } = render(<ExerciseCard block={createMockBlock({ exercises: [] })} />);
       expect(container.firstChild).toBeNull();
     });
   });
 
   describe('difficulty badges', () => {
     it('should render beginner difficulty', () => {
-      render(<FitnessBlock block={createMockBlock()} />);
+      render(<ExerciseCard block={createMockBlock()} />);
 
       expect(screen.getByText('Beginner')).toBeInTheDocument();
     });
 
     it('should render intermediate difficulty', () => {
-      render(<FitnessBlock block={createMockBlock()} />);
+      render(<ExerciseCard block={createMockBlock()} />);
 
       expect(screen.getByText('Intermediate')).toBeInTheDocument();
     });
 
     it('should render advanced difficulty', () => {
       render(
-        <FitnessBlock
+        <ExerciseCard
           block={createMockBlock({
             exercises: [{ name: 'Muscle-up', difficulty: 'advanced' }],
           })}
@@ -73,7 +73,7 @@ describe('ExerciseBlock', () => {
 
     it('should not render difficulty when not specified', () => {
       render(
-        <FitnessBlock
+        <ExerciseCard
           block={createMockBlock({
             exercises: [{ name: 'Simple exercise' }],
           })}
@@ -89,7 +89,7 @@ describe('ExerciseBlock', () => {
   describe('rest periods', () => {
     it('should render rest period', () => {
       render(
-        <FitnessBlock
+        <ExerciseCard
           block={createMockBlock({
             exercises: [{ name: 'Burpees', rest: '30s' }],
           })}
@@ -103,7 +103,7 @@ describe('ExerciseBlock', () => {
   describe('notes', () => {
     it('should render exercise notes', () => {
       render(
-        <FitnessBlock
+        <ExerciseCard
           block={createMockBlock({
             exercises: [{ name: 'Push-ups', notes: 'Keep your core tight' }],
           })}
@@ -118,7 +118,7 @@ describe('ExerciseBlock', () => {
     it('should render "Watch demo" button when timestamp provided', () => {
       const onPlay = vi.fn();
       render(
-        <FitnessBlock
+        <ExerciseCard
           block={createMockBlock({
             exercises: [{ name: 'Deadlift', timestamp: 120 }],
           })}
@@ -132,7 +132,7 @@ describe('ExerciseBlock', () => {
     it('should call onPlay with timestamp when clicked', () => {
       const onPlay = vi.fn();
       render(
-        <FitnessBlock
+        <ExerciseCard
           block={createMockBlock({
             exercises: [{ name: 'Deadlift', timestamp: 120 }],
           })}
@@ -146,7 +146,7 @@ describe('ExerciseBlock', () => {
 
     it('should not render demo button when no onPlay provided', () => {
       render(
-        <FitnessBlock
+        <ExerciseCard
           block={createMockBlock({
             exercises: [{ name: 'Deadlift', timestamp: 120 }],
           })}
@@ -159,7 +159,7 @@ describe('ExerciseBlock', () => {
 
   describe('accessibility', () => {
     it('should have aria-hidden on icons', () => {
-      const { container } = render(<FitnessBlock block={createMockBlock()} />);
+      const { container } = render(<ExerciseCard block={createMockBlock()} />);
       const icons = container.querySelectorAll('svg[aria-hidden="true"]');
       expect(icons.length).toBeGreaterThan(0);
     });

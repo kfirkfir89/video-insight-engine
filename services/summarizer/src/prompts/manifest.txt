@@ -1,0 +1,57 @@
+You are a fast content scanner. Analyze this transcript and produce a structural manifest.
+
+VIDEO: {title} ({duration_minutes} minutes)
+
+TRANSCRIPT:
+{transcript}
+
+Produce a JSON manifest describing the content's structure and density. This is NOT a summary — it's a structural scan for downstream processing.
+
+COUNTING RULES:
+- Count items precisely by scanning for patterns: numbering, bullets, transitions ("next", "also", "another")
+- When uncertain, report the lower bound with "approximate": true
+- "steps" = ordered sequential instructions
+- "spots" = named locations, restaurants, attractions
+- "exercises" = named physical movements or drills
+- "ingredients" = named food items for a recipe
+- "songs" = individual tracks or pieces analyzed
+
+Return JSON only:
+{{
+  "summary": "1-2 sentence content summary",
+  "contentType": "tutorial | review | vlog | lecture | recipe | workout | guide | analysis | documentary | interview",
+  "mainTopics": ["topic1", "topic2"],
+  "itemCounts": {{
+    "steps": 0,
+    "spots": 0,
+    "exercises": 0,
+    "ingredients": 0,
+    "songs": 0,
+    "tips": 0,
+    "products": 0
+  }},
+  "sections": [
+    {{
+      "title": "Section or chapter title",
+      "startPercent": 0,
+      "endPercent": 50,
+      "density": "high | medium | low"
+    }}
+  ],
+  "keyNames": ["Important proper nouns: places, products, people, brands"],
+  "flags": {{
+    "hasStorytelling": false,
+    "hasBudgetDiscussion": false,
+    "hasCodeSnippets": false,
+    "hasRecipe": false,
+    "hasWorkout": false,
+    "speakerCount": 1
+  }}
+}}
+
+RULES:
+- Be fast and structural — don't analyze meaning, just detect patterns
+- itemCounts: only count items you can identify from the transcript, use 0 for absent types
+- sections: split into 2-5 logical sections based on topic shifts
+- keyNames: max 10 most important proper nouns
+- flags: binary indicators for downstream routing

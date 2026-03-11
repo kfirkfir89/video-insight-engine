@@ -1,0 +1,48 @@
+PROJECT DATA — ProjectData schema
+
+Extract a complete, actionable project guide.
+
+{
+  "projectName": "Exact project name or description",
+  "difficulty": "beginner | intermediate | advanced",
+  "estimatedTime": "Total time estimate (e.g., '4-6 hours')",
+  "estimatedCost": "Total cost estimate with currency or null",
+  "materials": [
+    {
+      "name": "Exact material name and specification",
+      "quantity": "Amount needed (e.g., '8 feet', '2 sheets')",
+      "cost": "Cost with currency or null",
+      "notes": "Grade, type, or where to buy"
+    }
+  ],
+  "tools": [
+    {
+      "name": "Exact tool name (e.g., '#2 Phillips screwdriver')",
+      "required": true,
+      "alternative": "Alternative tool or null"
+    }
+  ],
+  "steps": [
+    {
+      "number": 1,
+      "title": "Step title",
+      "instruction": "Detailed instruction with specific measurements and techniques",
+      "duration": "Time for this step or null",
+      "tips": "Pro tip for this step or null",
+      "safetyNote": "Safety warning for this step or null",
+      "timestamp": null
+    }
+  ],
+  "safetyWarnings": [
+    "Safety warnings that apply to the whole project"
+  ]
+}
+
+RULES:
+- Include ALL materials, tools, and safety warnings
+- Measurements must be exact: "2x4 lumber, 8 feet" not "some wood"
+- ALL steps in correct order with specific details
+- Tool specs when given: "#2 Phillips screwdriver" not "a screwdriver"
+- Safety warnings preserved verbatim
+- Time estimates for each step when mentioned
+- Cost estimates with currency when available

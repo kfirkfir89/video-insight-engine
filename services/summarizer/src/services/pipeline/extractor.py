@@ -9,9 +9,10 @@ from typing import TYPE_CHECKING, AsyncGenerator
 
 from pydantic import ValidationError
 
-from ...models.output_types import validate_output, output_type_to_prompt_name
-from ...utils.accuracy_rules import get_accuracy_rules
+from ...models.domain_types import validate_domain_output
 from ...utils.json_parsing import parse_json_response
+from .prompt_builder import build_extraction_template
+from .triage import TriageResult
 
 if TYPE_CHECKING:
     from ...services.llm import LLMService
@@ -41,10 +42,9 @@ def _load_prompt(path_str: str) -> str:
 
 async def extract(
     llm_service: LLMService,
-    output_type: str,
+    triage_result: TriageResult,
     transcript: str,
     video_data: dict,
-    intent,
 ) -> AsyncGenerator[dict, None]:
     """Adaptive extraction yielding progress events and final result.
 
@@ -56,23 +56,25 @@ async def extract(
     """
     word_count = len(transcript.split())
     duration_minutes = video_data.get("duration", 0) / 60
-    logger.info("Extraction: type=%s, words=%d, duration=%.0fmin", output_type, word_count, duration_minutes)
+    logger.info("Extraction: tags=%s, words=%d, duration=%.0fmin", triage_result.content_tags, word_count, duration_minutes)
 
-    prompt_file = PROMPTS_DIR / f"extract_{output_type_to_prompt_name(output_type)}.txt"
-    if not prompt_file.exists():
-        prompt_file = PROMPTS_DIR / "extract_smart.txt"
-        logger.warning("No prompt for %s, falling back to extract_smart.txt", output_type)
-
-    prompt_template = _load_prompt(str(prompt_file))
+    # Build prompt template via schema injection
     rules_path = PROMPTS_DIR / "accuracy_rules.txt"
-    generic_rules = _load_prompt(str(rules_path)) if rules_path.exists() else ""
-    type_specific_rules = get_accuracy_rules(output_type)
-    accuracy_rules = generic_rules
-    if type_specific_rules:
-        accuracy_rules += f"\n\nDOMAIN-SPECIFIC RULES ({output_type}):\n{type_specific_rules}"
+    accuracy_rules = _load_prompt(str(rules_path)) if rules_path.exists() else ""
+
+    title = video_data.get("title", "")
+    duration_min = round(video_data.get("duration", 0) / 60)
+
+    prompt_template = build_extraction_template(
+        triage_result.content_tags,
+        triage_result.modifiers,
+        accuracy_rules,
+        title,
+        duration_min,
+    )
 
     sections_desc = "\n".join(
-        f"- {s.id}: {s.label} — {s.description}" for s in intent.sections
+        f"- {tab['id']}: {tab['label']}" for tab in triage_result.tabs
     )
 
     # Strategy selection: segmented only for very long videos (>3h AND >20K words)
@@ -83,38 +85,36 @@ async def extract(
 
     if word_count < SINGLE_THRESHOLD:
         async for event in _single_extraction(
-            llm_service, output_type, prompt_template, accuracy_rules,
-            transcript, video_data, sections_desc,
+            llm_service, triage_result, prompt_template,
+            transcript, sections_desc,
         ):
             yield event
     elif not use_segmented:
         async for event in _overflow_extraction(
-            llm_service, output_type, prompt_template, accuracy_rules,
-            transcript, video_data, sections_desc,
+            llm_service, triage_result, prompt_template,
+            transcript, sections_desc,
         ):
             yield event
     else:
         chapters = video_data.get("chapters", [])
         async for event in _segmented_extraction(
-            llm_service, output_type, prompt_template, accuracy_rules,
-            transcript, video_data, sections_desc, word_count, chapters,
+            llm_service, triage_result, prompt_template,
+            transcript, sections_desc, word_count, chapters,
         ):
             yield event
 
 
-def _format_prompt(template: str, video_data: dict, transcript: str, rules: str, sections_desc: str) -> str:
-    """Format an extraction prompt with common fields.
+def _format_prompt(template: str, transcript: str, sections_desc: str) -> str:
+    """Format an extraction prompt with transcript and sections.
 
-    Uses .replace() instead of .format() to avoid format-string injection
-    from user-controlled content (titles, transcripts).
+    Title, accuracy_rules, duration_minutes, and domain_schemas are already
+    injected by build_extraction_template(). Only {transcript} and {sections}
+    remain as placeholders.
     """
     return (
         template
-        .replace("{title}", video_data.get("title", ""))
         .replace("{transcript}", transcript)
-        .replace("{accuracy_rules}", rules)
         .replace("{sections}", sections_desc)
-        .replace("{duration_minutes}", str(round(video_data.get("duration", 0) / 60)))
     )
 
 
@@ -127,28 +127,27 @@ def _parse_llm_json(raw: str) -> dict:
     return data
 
 
-async def _single_extraction(llm_service: LLMService, output_type: str, template: str, rules: str, transcript: str, video_data: dict, sections_desc: str):
+async def _single_extraction(llm_service, triage_result: TriageResult, template: str, transcript: str, sections_desc: str):
     """Single extraction call for short transcripts (<4K words)."""
     yield {"event": "extraction_progress", "section": "all", "percent": 10}
 
-    prompt = _format_prompt(template, video_data, transcript, rules, sections_desc)
+    prompt = _format_prompt(template, transcript, sections_desc)
 
     yield {"event": "extraction_progress", "section": "all", "percent": 30}
     raw = await llm_service.call_llm(prompt, max_tokens=16384)
     data = _parse_llm_json(raw)
 
     yield {"event": "extraction_progress", "section": "all", "percent": 80}
-    validated = validate_output(output_type, data)
+    validated = validate_domain_output(triage_result.content_tags, triage_result.modifiers, data)
 
     yield {"event": "extraction_progress", "section": "all", "percent": 100}
     yield {
         "event": "extraction_complete",
-        "outputType": output_type,
-        "data": validated.model_dump(by_alias=True),
+        "data": validated,
     }
 
 
-async def _overflow_extraction(llm_service: LLMService, output_type: str, template: str, rules: str, transcript: str, video_data: dict, sections_desc: str):
+async def _overflow_extraction(llm_service, triage_result: TriageResult, template: str, transcript: str, sections_desc: str):
     """Overflow extraction for medium transcripts (4-15K words).
 
     Makes one primary call with higher token limit.
@@ -156,7 +155,7 @@ async def _overflow_extraction(llm_service: LLMService, output_type: str, templa
     """
     yield {"event": "extraction_progress", "section": "primary", "percent": 10}
 
-    prompt = _format_prompt(template, video_data, transcript, rules, sections_desc)
+    prompt = _format_prompt(template, transcript, sections_desc)
 
     yield {"event": "extraction_progress", "section": "primary", "percent": 25}
     raw = await llm_service.call_llm(prompt, max_tokens=16384)
@@ -165,12 +164,11 @@ async def _overflow_extraction(llm_service: LLMService, output_type: str, templa
     yield {"event": "extraction_progress", "section": "primary", "percent": 70}
 
     try:
-        validated = validate_output(output_type, data)
+        validated = validate_domain_output(triage_result.content_tags, triage_result.modifiers, data)
         yield {"event": "extraction_progress", "section": "all", "percent": 100}
         yield {
             "event": "extraction_complete",
-            "outputType": output_type,
-            "data": validated.model_dump(by_alias=True),
+            "data": validated,
         }
     except (ValidationError, ValueError) as e:
         logger.warning("Overflow extraction validation failed: %s — retrying with error context", e)
@@ -197,7 +195,7 @@ async def _overflow_extraction(llm_service: LLMService, output_type: str, templa
                 merged[key] = value
 
         try:
-            validated = validate_output(output_type, merged)
+            validated = validate_domain_output(triage_result.content_tags, triage_result.modifiers, merged)
         except (ValidationError, ValueError) as retry_err:
             logger.error("Overflow retry validation also failed: %s — using raw merged data", retry_err)
             raise
@@ -205,12 +203,11 @@ async def _overflow_extraction(llm_service: LLMService, output_type: str, templa
         yield {"event": "extraction_progress", "section": "all", "percent": 100}
         yield {
             "event": "extraction_complete",
-            "outputType": output_type,
-            "data": validated.model_dump(by_alias=True),
+            "data": validated,
         }
 
 
-async def _segmented_extraction(llm_service: LLMService, output_type: str, template: str, rules: str, transcript: str, video_data: dict, sections_desc: str, word_count: int, chapters: list | None = None):
+async def _segmented_extraction(llm_service, triage_result: TriageResult, template: str, transcript: str, sections_desc: str, word_count: int, chapters: list | None = None):
     """Segmented extraction for very long transcripts (>3h AND >20K words).
 
     Splits transcript using chapter boundaries when available, otherwise
@@ -241,7 +238,7 @@ async def _segmented_extraction(llm_service: LLMService, output_type: str, templ
         pct_end = int(((idx + 1) / total_segments) * 80)
         yield {"event": "extraction_progress", "section": f"segment_{idx + 1}", "percent": pct_start}
 
-        prompt = _format_prompt(template, video_data, segment, rules, sections_desc)
+        prompt = _format_prompt(template, segment, sections_desc)
         raw = await llm_service.call_llm(prompt, max_tokens=16384)
         segment_data = _parse_llm_json(raw)
 
@@ -255,13 +252,12 @@ async def _segmented_extraction(llm_service: LLMService, output_type: str, templ
         yield {"event": "extraction_progress", "section": f"segment_{idx + 1}", "percent": pct_end}
 
     yield {"event": "extraction_progress", "section": "validation", "percent": 85}
-    validated = validate_output(output_type, all_data)
+    validated = validate_domain_output(triage_result.content_tags, triage_result.modifiers, all_data)
 
     yield {"event": "extraction_progress", "section": "all", "percent": 100}
     yield {
         "event": "extraction_complete",
-        "outputType": output_type,
-        "data": validated.model_dump(by_alias=True),
+        "data": validated,
     }
 
 
@@ -272,8 +268,6 @@ def _split_by_chapters(transcript: str, chapters: list) -> list[str]:
     roughly balanced across segments.
     """
     if len(chapters) <= 3:
-        # Few chapters — each chapter is its own segment
-        # Simple split by rough position in transcript
         words = transcript.split()
         total = len(words)
         segment_size = total // len(chapters)
@@ -295,18 +289,14 @@ def _split_by_chapters(transcript: str, chapters: list) -> list[str]:
 
     for seg_idx in range(target_segments):
         if seg_idx == target_segments - 1:
-            # Last segment gets remaining words
             segments.append(" ".join(words[current_start:]))
         else:
             end = min(current_start + target_size, total)
-            # Try to align to a sentence boundary near the target
-            # Look for period + space within ±200 words of target
             search_start = max(current_start, end - 200)
             search_end = min(total, end + 200)
             search_text = " ".join(words[search_start:search_end])
             period_pos = search_text.rfind(". ")
             if period_pos > 0:
-                # Count words up to the period
                 words_to_period = len(search_text[:period_pos + 1].split())
                 end = search_start + words_to_period
 

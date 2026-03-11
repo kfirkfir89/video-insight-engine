@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { Sparkles, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useShareOutput } from "@/hooks/use-share";
-import { OutputShell } from "@/components/video-detail/output/OutputShell";
+import { OutputRouter } from "@/components/video-detail/OutputRouter";
 import type { VideoResponse, VideoOutput } from "@vie/types";
 
 /** Error boundary for shared content — a malformed block shouldn't crash the page. */
@@ -116,7 +116,7 @@ export function SharePage() {
       <main className="flex-1">
         <ShareContentBoundary>
           {video && output ? (
-            <OutputShell video={video} output={output} />
+            <OutputRouter video={video} output={output} />
           ) : (
             <div className="max-w-3xl mx-auto w-full px-4 py-8">
               <div className="glass rounded-2xl p-6 space-y-4">

@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ...models.output_types import SynthesisResult
+from ...models.pipeline_types import SynthesisResult
 from ...utils.json_parsing import parse_json_response
 
 if TYPE_CHECKING:

@@ -1,14 +1,15 @@
-import type { OutputType } from '@vie/types';
+import type { ContentTag } from '@vie/types';
 
-export const OUTPUT_GRADIENT_VAR: Record<OutputType, string> = {
-  explanation: 'var(--gradient-smart-summary)',
-  recipe: 'var(--gradient-recipe)',
-  code_walkthrough: 'var(--gradient-code)',
-  study_kit: 'var(--gradient-study)',
-  trip_planner: 'var(--gradient-trip)',
-  workout: 'var(--gradient-workout)',
-  verdict: 'var(--gradient-verdict)',
-  highlights: 'var(--gradient-highlights)',
-  music_guide: 'var(--gradient-music)',
-  project_guide: 'var(--gradient-project)',
+export const CONTENT_TAG_GRADIENT: Record<ContentTag, string> = {
+  learning: 'linear-gradient(135deg, var(--vie-plum), var(--vie-sky))',
+  food: 'linear-gradient(135deg, var(--vie-coral), var(--vie-peach))',
+  tech: 'linear-gradient(135deg, var(--vie-sky), var(--vie-mint))',
+  travel: 'linear-gradient(135deg, var(--vie-forest), var(--vie-mint))',
+  fitness: 'linear-gradient(135deg, var(--vie-rose), var(--vie-coral))',
+  review: 'linear-gradient(135deg, var(--vie-honey), var(--vie-peach))',
+  music: 'linear-gradient(135deg, var(--vie-rose), var(--vie-plum))',
+  project: 'linear-gradient(135deg, var(--vie-honey), var(--vie-forest))',
 };
+
+// Backward-compatible alias
+export const OUTPUT_GRADIENT_VAR = CONTENT_TAG_GRADIENT;

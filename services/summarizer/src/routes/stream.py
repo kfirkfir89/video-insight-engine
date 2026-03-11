@@ -1,11 +1,11 @@
-"""SSE streaming endpoint for intent-driven video summarization.
+"""SSE streaming endpoint for triage-driven video summarization.
 
-Pipeline: Intent -> Extract -> Enrich -> Synthesize (4-7 LLM calls).
+Pipeline: Triage -> Extract -> Enrich -> Synthesize (4-7 LLM calls).
 
 Phases:
 1. INSTANT: Metadata from yt-dlp
 2. TRANSCRIPT: Fetch and clean transcript
-3. INTENT: Detect output type and sections
+3. TRIAGE: Determine content domains and tab layout
 4. EXTRACTION: Adaptive structured extraction (1-3 calls)
 5. ENRICHMENT: Quiz/flashcards/cheat sheet (conditional)
 6. SYNTHESIS: TLDR, takeaways, master summary
@@ -35,7 +35,9 @@ from src.services.video.youtube import extract_video_data
 from src.services.video.description_analyzer import analyze_description, DescriptionAnalysis
 from src.services.video.sponsorblock import get_sponsor_segments, filter_transcript_segments
 from src.exceptions import TranscriptError
-from src.services.pipeline.intent_detector import detect_intent, get_canonical_sections
+from src.services.pipeline.triage import run_triage
+from src.services.pipeline.manifest import run_manifest, format_manifest_for_triage
+from src.services.pipeline.post_processor import validate_extraction_counts
 from src.services.pipeline.extractor import extract
 from src.services.pipeline.synthesis import synthesize
 from src.services.pipeline.enrichment import enrich
@@ -48,7 +50,6 @@ from src.services.pipeline.pipeline_helpers import (
     validate_duration,
     truncate_json_safely,
     normalize_segments,
-    refresh_frame_urls as _refresh_frame_urls,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,7 @@ router = APIRouter()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Main Streaming Generator (Intent-Driven Pipeline)
+# Main Streaming Generator (Triage-Driven Pipeline)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -68,7 +69,7 @@ async def stream_summarization(
     repository: MongoDBVideoRepository,
     llm_service: LLMService,
 ) -> AsyncGenerator[str, None]:
-    """Intent-driven pipeline: Intent -> Extract -> Enrich -> Synthesize (4-7 LLM calls)."""
+    """Triage-driven pipeline: Triage -> Extract -> Enrich -> Synthesize (4-7 LLM calls)."""
     timer = PipelineTimer()
 
     try:
@@ -127,36 +128,56 @@ async def stream_summarization(
         except Exception as e:
             logger.warning("SponsorBlock failed (non-critical): %s", e)
 
-        # Phase 3: Intent Detection + Description Analysis (concurrent)
-        llm_feature_var.set("summarize:intent")
+        # Phase 3: Manifest + Description Analysis (concurrent, pre-triage)
+        llm_feature_var.set("summarize:manifest")
         override = check_override(video_summary_id)
         if override:
             category_hint = override.get("category")
         else:
             category_hint = video_data.context.category if video_data.context else None
 
-        intent_task = detect_intent(
-            llm_service,
+        manifest_task = run_manifest(
             title=video_data.title,
-            description=video_data.description or "",
             duration=video_data.duration or 0,
-            category_hint=category_hint,
-            transcript_preview=clean_text[:2000],
+            transcript=clean_text,
+            llm_service=llm_service,
         )
         desc_task = analyze_description(
             video_data.description or "",
             fast_model=llm_service.fast_model,
         )
 
-        intent, description_analysis = await asyncio.gather(intent_task, desc_task, return_exceptions=True)
-        if isinstance(intent, BaseException):
-            raise intent  # Intent is critical — re-raise
+        manifest_result, description_analysis = await asyncio.gather(
+            manifest_task, desc_task, return_exceptions=True,
+        )
 
-        yield sse_event("intent_detected", {
-            "outputType": intent.output_type,
-            "confidence": intent.confidence,
-            "userGoal": intent.user_goal,
-            "sections": [s.model_dump(by_alias=True) for s in intent.sections],
+        # Format manifest for triage (falls back to transcript_preview if manifest failed)
+        manifest_text = None
+        if isinstance(manifest_result, BaseException):
+            logger.warning("Manifest failed: %s — triage will use transcript preview", manifest_result)
+            manifest_result = None
+        if manifest_result is not None:
+            manifest_text = format_manifest_for_triage(manifest_result)
+
+        # Phase 3b: Triage (uses manifest or falls back to transcript_preview)
+        llm_feature_var.set("summarize:triage")
+        triage = await run_triage(
+            title=video_data.title,
+            description=video_data.description or "",
+            duration=video_data.duration or 0,
+            transcript_preview=clean_text[:2000],
+            category_hint=category_hint,
+            llm_service=llm_service,
+            manifest_text=manifest_text,
+        )
+
+        yield sse_event("triage_complete", {
+            "contentTags": triage.content_tags,
+            "modifiers": triage.modifiers,
+            "primaryTag": triage.primary_tag,
+            "userGoal": triage.user_goal,
+            "tabs": triage.tabs,
+            "confidence": triage.confidence,
         })
 
         if isinstance(description_analysis, DescriptionAnalysis) and description_analysis.has_content:
@@ -170,17 +191,23 @@ async def stream_summarization(
             "channel": video_data.channel,
             "duration": video_data.duration,
         }
-        async for evt in extract(llm_service, intent.output_type, clean_text, video_info, intent):
+        async for evt in extract(llm_service, triage, clean_text, video_info):
             event_name = evt["event"]
             yield sse_event(event_name, {k: v for k, v in evt.items() if k != "event"})
             if event_name == "extraction_complete":
                 extraction_data = evt.get("data")
 
+        # Phase 4b: Extraction count validation (advisory)
+        if extraction_data and manifest_result is not None:
+            count_warnings = validate_extraction_counts(manifest_result, extraction_data)
+            if count_warnings:
+                logger.info("Extraction count warnings: %s", count_warnings)
+
         # Phase 5: Enrichment (conditional)
         llm_feature_var.set("summarize:enrichment")
         enrichment_data = None
         if extraction_data:
-            enrichment_result = await enrich(llm_service, intent.output_type, extraction_data, video_data.title)
+            enrichment_result = await enrich(llm_service, triage.primary_tag, extraction_data, video_data.title)
             if enrichment_result:
                 enrichment_data = enrichment_result.model_dump(by_alias=True)
                 yield sse_event("enrichment_complete", enrichment_data)
@@ -193,7 +220,7 @@ async def stream_summarization(
             title=video_data.title,
             channel=video_data.channel,
             duration=video_data.duration,
-            output_type=intent.output_type,
+            output_type=triage.primary_tag,
             extraction_summary=extraction_summary,
         )
         yield sse_event("synthesis_complete", {
@@ -210,9 +237,15 @@ async def stream_summarization(
             "channel": video_data.channel,
             "thumbnailUrl": video_data.thumbnail_url,
             "duration": video_data.duration,
-            "outputType": intent.output_type,
-            "intent": intent.model_dump(by_alias=True),
-            "output": {"type": intent.output_type, "data": extraction_data},
+            "triage": {
+                "contentTags": triage.content_tags,
+                "modifiers": triage.modifiers,
+                "primaryTag": triage.primary_tag,
+                "userGoal": triage.user_goal,
+                "tabs": triage.tabs,
+                "confidence": triage.confidence,
+            },
+            "output": extraction_data,
             "enrichment": enrichment_data,
             "synthesis": synthesis_result.model_dump(by_alias=True),
             "summary": {
@@ -278,10 +311,10 @@ async def stream_summary(
     """
     Stream video summarization via Server-Sent Events.
 
-    Intent-driven pipeline delivers content in phases:
+    Triage-driven pipeline delivers content in phases:
     1. INSTANT (~1 sec): Metadata from yt-dlp
     2. TRANSCRIPT: Fetch and clean transcript
-    3. INTENT: Detect output type and sections
+    3. TRIAGE: Determine content domains and tab layout
     4. EXTRACTION: Adaptive structured extraction (1-3 calls)
     5. ENRICHMENT: Quiz/flashcards/cheat sheet (conditional)
     6. SYNTHESIS: TLDR, takeaways, master summary
@@ -310,67 +343,18 @@ async def stream_summary(
 
     # Return cached result if already completed
     if entry.get("status") == ProcessingStatus.COMPLETED.value:
-        # Detect format: new pipeline stores "output.type" field, legacy stores "summary.chapters"
-        output_field = entry.get("output")
-        is_structured = (
-            (isinstance(output_field, dict) and "type" in output_field)
-            or entry.get("pipelineVersion") == "2.0"
-        )
-        streamer = _stream_cached_structured if is_structured else _stream_cached_result
         return StreamingResponse(
-            streamer(video_summary_id, entry),
+            _stream_cached_structured(video_summary_id, entry),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
         )
 
-    # Always use the new pipeline for fresh summarizations
+    # Always use the triage pipeline for fresh summarizations
     return StreamingResponse(
         stream_summarization(video_summary_id, entry, repository, llm_service),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
     )
-
-
-async def _stream_cached_result(video_summary_id: str, entry: dict[str, Any]) -> AsyncGenerator[str, None]:
-    """Stream a legacy cached result as SSE events."""
-    yield sse_event("cached", {"videoSummaryId": video_summary_id})
-    yield sse_event("metadata", {
-        "title": entry.get("title"),
-        "channel": entry.get("channel"),
-        "thumbnailUrl": entry.get("thumbnail_url"),
-        "duration": entry.get("duration"),
-        "context": entry.get("context"),
-    })
-
-    if chapters := entry.get("chapters"):
-        yield sse_event("chapters", {
-            "chapters": chapters,
-            "isCreatorChapters": entry.get("chapter_source") == "creator",
-        })
-
-    if desc_analysis := entry.get("description_analysis"):
-        yield sse_event("description_analysis", desc_analysis)
-
-    summary = entry.get("summary", {})
-    yield sse_event("synthesis_complete", {
-        "tldr": summary.get("tldr", ""),
-        "keyTakeaways": summary.get("key_takeaways", []),
-    })
-
-    # Refresh presigned URLs for cached visual blocks before emitting
-    summary_chapters = summary.get("chapters", [])
-    _refresh_frame_urls(summary_chapters)
-
-    for i, chapter in enumerate(summary_chapters):
-        yield sse_event("chapter_ready", {"index": i, "chapter": chapter})
-
-    yield sse_event("concepts_complete", {"concepts": summary.get("concepts", [])})
-
-    if master_summary := summary.get("master_summary"):
-        yield sse_event("master_summary_complete", {"masterSummary": master_summary})
-
-    yield sse_event("done", {"videoSummaryId": video_summary_id, "cached": True})
-    yield "data: [DONE]\n\n"
 
 
 async def _stream_cached_structured(video_summary_id: str, entry: dict[str, Any]) -> AsyncGenerator[str, None]:
@@ -383,18 +367,12 @@ async def _stream_cached_structured(video_summary_id: str, entry: dict[str, Any]
         "duration": entry.get("duration"),
     })
 
-    if intent := entry.get("intent"):
-        # Re-apply canonical sections to fix stale tab IDs from older cached results
-        output_type = intent.get("outputType") or (entry.get("output", {}) or {}).get("type")
-        if output_type:
-            canonical = get_canonical_sections(output_type)
-            intent["sections"] = [s.model_dump(by_alias=True) for s in canonical]
-        yield sse_event("intent_detected", intent)
+    if triage := entry.get("triage"):
+        yield sse_event("triage_complete", triage)
 
     if output := entry.get("output"):
         yield sse_event("extraction_complete", {
-            "outputType": output.get("type"),
-            "data": output.get("data"),
+            "data": output,
         })
 
     if enrichment := entry.get("enrichment"):

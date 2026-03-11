@@ -77,18 +77,17 @@ export function VideoDetailPage() {
   const output = useMemo((): VideoOutput | null => {
     // Cached result from the API (completed video)
     if (cachedOutput) return cachedOutput;
-    // Build from streaming state if we have intent
-    if (isProcessing && streamState.intent) {
+    // Build from streaming state if we have triage
+    if (isProcessing && streamState.triage) {
       return {
-        outputType: streamState.intent.outputType,
-        intent: streamState.intent,
-        output: streamState.output ?? { type: streamState.intent.outputType, data: {} as never },
+        triage: streamState.triage,
+        output: streamState.domainData ?? {},
         synthesis: streamState.synthesis ?? { tldr: "", keyTakeaways: [], masterSummary: "", seoDescription: "" },
-        ...(streamState.enrichment ? { enrichment: streamState.enrichment } : {}),
+        enrichment: streamState.enrichment ?? null,
       };
     }
     return null;
-  }, [cachedOutput, isProcessing, streamState.intent, streamState.output, streamState.synthesis, streamState.enrichment]);
+  }, [cachedOutput, isProcessing, streamState.triage, streamState.domainData, streamState.synthesis, streamState.enrichment]);
 
   // Loading state
   if (isLoading) {

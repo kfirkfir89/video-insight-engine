@@ -21,8 +21,8 @@ class VideoRepository(Protocol):
         """Update processing status."""
         ...
 
-    def save_result(self, video_summary_id: str, result: dict) -> None:
-        """Save processing result to cache."""
+    def save_structured_result(self, video_summary_id: str, result: dict) -> None:
+        """Save structured pipeline result."""
         ...
 
     def increment_retry(self, video_summary_id: str) -> int:

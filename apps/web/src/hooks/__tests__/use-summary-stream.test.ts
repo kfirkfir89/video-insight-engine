@@ -195,24 +195,28 @@ describe("useSummaryStream", () => {
       expect(result.current.duration).toBe(600);
     });
 
-    it("should parse pipeline intent and extraction events", async () => {
+    it("should parse pipeline triage and extraction events", async () => {
       const events = [
         {
-          event: "intent_detected",
+          event: "triage_complete",
           data: {
-            event: "intent_detected",
-            outputType: "recipe",
+            event: "triage_complete",
+            contentTags: ["food"],
+            modifiers: [],
+            primaryTag: "food",
             confidence: 0.95,
             userGoal: "Learn to cook",
-            sections: [],
+            tabs: [
+              { id: "ingredients", label: "Ingredients", emoji: "🧅", dataSource: "food" },
+              { id: "steps", label: "Steps", emoji: "👨‍🍳", dataSource: "food" },
+            ],
           },
         },
         {
           event: "extraction_complete",
           data: {
             event: "extraction_complete",
-            outputType: "recipe",
-            data: { meta: {}, ingredients: [], steps: [], tips: [], substitutions: [], nutrition: [], equipment: [] },
+            data: { food: { meta: {}, ingredients: [], steps: [], tips: [], substitutions: [], nutrition: [], equipment: [] } },
           },
         },
         {
@@ -243,8 +247,8 @@ describe("useSummaryStream", () => {
         expect(result.current.phase).toBe("done");
       });
 
-      expect(result.current.intent?.outputType).toBe("recipe");
-      expect(result.current.output?.type).toBe("recipe");
+      expect(result.current.triage?.primaryTag).toBe("food");
+      expect(result.current.domainData).toBeDefined();
       expect(result.current.synthesis?.tldr).toBe("A cooking tutorial");
     });
 

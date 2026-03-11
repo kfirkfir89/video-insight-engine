@@ -40,9 +40,9 @@ const initialState: StreamState = {
   processingTimeMs: null,
   warnings: [],
   confettiCount: 0,
-  intent: null,
+  triage: null,
   extractionProgress: null,
-  output: null,
+  domainData: null,
   enrichment: null,
   synthesis: null,
 };
@@ -75,19 +75,21 @@ describe('stream-event-processor — Pipeline events', () => {
   });
 
   // ─────────────────────────────────────────────────────
-  // intent_detected
+  // triage_complete
   // ─────────────────────────────────────────────────────
 
-  describe('intent_detected', () => {
-    it('should update intent and set phase to "extraction"', () => {
+  describe('triage_complete', () => {
+    it('should update triage and set phase to "extraction"', () => {
       const event = {
-        event: 'intent_detected',
-        outputType: 'recipe',
+        event: 'triage_complete',
+        contentTags: ['food'],
+        modifiers: [],
+        primaryTag: 'food',
         confidence: 0.95,
         userGoal: 'Learn to cook pasta',
-        sections: [
-          { id: 'ingredients', label: 'Ingredients', emoji: '🧅', description: 'List of ingredients' },
-          { id: 'steps', label: 'Steps', emoji: '👨‍🍳', description: 'Cooking steps' },
+        tabs: [
+          { id: 'ingredients', label: 'Ingredients', emoji: '🧅', dataSource: 'food' },
+          { id: 'steps', label: 'Steps', emoji: '👨‍🍳', dataSource: 'food' },
         ],
       };
 
@@ -95,47 +97,58 @@ describe('stream-event-processor — Pipeline events', () => {
 
       const state = mockSetState.getState();
       expect(state.phase).toBe('extraction');
-      expect(state.intent).toEqual({
-        outputType: 'recipe',
+      expect(state.triage).toEqual({
+        contentTags: ['food'],
+        modifiers: [],
+        primaryTag: 'food',
         confidence: 0.95,
         userGoal: 'Learn to cook pasta',
-        sections: [
-          { id: 'ingredients', label: 'Ingredients', emoji: '🧅', description: 'List of ingredients' },
-          { id: 'steps', label: 'Steps', emoji: '👨‍🍳', description: 'Cooking steps' },
+        tabs: [
+          { id: 'ingredients', label: 'Ingredients', emoji: '🧅', dataSource: 'food' },
+          { id: 'steps', label: 'Steps', emoji: '👨‍🍳', dataSource: 'food' },
         ],
       });
     });
 
-    it('should default outputType to "explanation" when missing', () => {
+    it('should default primaryTag to "learning" when missing', () => {
       processEvent(
-        { event: 'intent_detected', confidence: 0.5 },
+        { event: 'triage_complete', confidence: 0.5, contentTags: [] },
         mockSetState.setState,
       );
-      expect(mockSetState.getState().intent?.outputType).toBe('explanation');
+      expect(mockSetState.getState().triage?.primaryTag).toBe('learning');
     });
 
     it('should default confidence to 0 when missing', () => {
       processEvent(
-        { event: 'intent_detected', outputType: 'study_kit' },
+        { event: 'triage_complete', contentTags: ['tech'], primaryTag: 'tech' },
         mockSetState.setState,
       );
-      expect(mockSetState.getState().intent?.confidence).toBe(0);
+      expect(mockSetState.getState().triage?.confidence).toBe(0);
     });
 
     it('should default userGoal to empty string when missing', () => {
       processEvent(
-        { event: 'intent_detected', outputType: 'code_walkthrough', confidence: 0.8 },
+        { event: 'triage_complete', contentTags: ['tech'], primaryTag: 'tech', confidence: 0.8 },
         mockSetState.setState,
       );
-      expect(mockSetState.getState().intent?.userGoal).toBe('');
+      expect(mockSetState.getState().triage?.userGoal).toBe('');
     });
 
-    it('should default sections to empty array when missing', () => {
+    it('should default tabs to empty array when missing', () => {
       processEvent(
-        { event: 'intent_detected', outputType: 'verdict', confidence: 0.9, userGoal: 'Review the product' },
+        { event: 'triage_complete', contentTags: ['review'], primaryTag: 'review', confidence: 0.9, userGoal: 'Review the product' },
         mockSetState.setState,
       );
-      expect(mockSetState.getState().intent?.sections).toEqual([]);
+      expect(mockSetState.getState().triage?.tabs).toEqual([]);
+    });
+
+    it('should handle legacy intent_detected event as triage_complete', () => {
+      processEvent(
+        { event: 'intent_detected', contentTags: ['learning'], primaryTag: 'learning', confidence: 0.8 },
+        mockSetState.setState,
+      );
+      expect(mockSetState.getState().triage?.primaryTag).toBe('learning');
+      expect(mockSetState.getState().phase).toBe('extraction');
     });
   });
 
@@ -190,8 +203,8 @@ describe('stream-event-processor — Pipeline events', () => {
   // ─────────────────────────────────────────────────────
 
   describe('extraction_complete', () => {
-    it('should update output with type and data', () => {
-      const mockData = {
+    it('should merge domain-keyed data into domainData', () => {
+      const learningData = {
         keyPoints: [{ emoji: '1', title: 'Point 1', detail: 'Detail 1' }],
         concepts: [],
         takeaways: ['Takeaway 1'],
@@ -199,23 +212,23 @@ describe('stream-event-processor — Pipeline events', () => {
       };
 
       processEvent(
-        { event: 'extraction_complete', outputType: 'explanation', data: mockData },
+        { event: 'extraction_complete', data: { learning: learningData } },
         mockSetState.setState,
       );
 
-      expect(mockSetState.getState().output).toEqual({ type: 'explanation', data: mockData });
+      expect(mockSetState.getState().domainData).toEqual({ learning: learningData });
     });
 
-    it('should default outputType to "explanation" when missing', () => {
+    it('should handle empty data gracefully', () => {
       processEvent(
-        { event: 'extraction_complete', data: { keyPoints: [], concepts: [], takeaways: [], timestamps: [] } },
+        { event: 'extraction_complete', data: {} },
         mockSetState.setState,
       );
-      expect(mockSetState.getState().output?.type).toBe('explanation');
+      expect(mockSetState.getState().domainData).toEqual({});
     });
 
-    it('should handle recipe output type', () => {
-      const recipeData = {
+    it('should merge multiple domain data entries', () => {
+      const foodData = {
         meta: { prepTime: 15, cookTime: 30, servings: 4 },
         ingredients: [{ name: 'Pasta', amount: '500', unit: 'g' }],
         steps: [{ number: 1, instruction: 'Boil water' }],
@@ -226,11 +239,27 @@ describe('stream-event-processor — Pipeline events', () => {
       };
 
       processEvent(
-        { event: 'extraction_complete', outputType: 'recipe', data: recipeData },
+        { event: 'extraction_complete', data: { food: foodData } },
         mockSetState.setState,
       );
 
-      expect(mockSetState.getState().output).toEqual({ type: 'recipe', data: recipeData });
+      expect(mockSetState.getState().domainData).toEqual({ food: foodData });
+    });
+
+    it('should merge with existing domainData from previous extraction events', () => {
+      // First extraction
+      processEvent(
+        { event: 'extraction_complete', data: { learning: { keyPoints: [] } } },
+        mockSetState.setState,
+      );
+      // Second extraction
+      processEvent(
+        { event: 'extraction_complete', data: { tech: { code: [] } } },
+        mockSetState.setState,
+      );
+
+      const domainData = mockSetState.getState().domainData;
+      expect(domainData).toEqual({ learning: { keyPoints: [] }, tech: { code: [] } });
     });
   });
 

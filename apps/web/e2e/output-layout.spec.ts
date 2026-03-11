@@ -9,21 +9,21 @@ import { test, expect } from "./fixtures";
 // ── Mock Data ──
 
 const mockOutput = {
-  outputType: "explanation",
-  intent: {
-    outputType: "explanation",
-    confidence: 0.95,
+  triage: {
+    contentTags: ["learning"],
+    modifiers: [],
+    primaryTag: "learning",
     userGoal: "Get a comprehensive overview of the video",
-    sections: [
-      { id: "key_points", label: "Key Points", emoji: "\u{1F4A1}", description: "Main ideas and insights" },
-      { id: "concepts", label: "Concepts", emoji: "\u{1F4DA}", description: "Key terms explained" },
-      { id: "takeaways", label: "Takeaways", emoji: "\u{1F3AF}", description: "Actionable conclusions" },
-      { id: "timestamps", label: "Timestamps", emoji: "\u23F1\uFE0F", description: "Jump to key moments" },
+    tabs: [
+      { id: "key_points", label: "Key Points", emoji: "\u{1F4A1}", dataSource: "learning.keyPoints" },
+      { id: "concepts", label: "Concepts", emoji: "\u{1F4DA}", dataSource: "learning.concepts" },
+      { id: "takeaways", label: "Takeaways", emoji: "\u{1F3AF}", dataSource: "learning.takeaways" },
+      { id: "timestamps", label: "Timestamps", emoji: "\u23F1\uFE0F", dataSource: "learning.timestamps" },
     ],
+    confidence: 0.95,
   },
   output: {
-    type: "explanation",
-    data: {
+    learning: {
       keyPoints: [
         { emoji: "\u{1F511}", title: "Main Insight", detail: "This is the primary takeaway from the video content that provides deep understanding.", timestamp: 45 },
         { emoji: "\u{1F4A1}", title: "Key Discovery", detail: "An important finding that changes how we think about the topic discussed in the video.", timestamp: 120 },
@@ -59,27 +59,26 @@ const mockOutput = {
 };
 
 const mockRecipeOutput = {
-  outputType: "recipe",
-  intent: {
-    outputType: "recipe",
-    confidence: 0.98,
+  triage: {
+    contentTags: ["food"],
+    modifiers: [],
+    primaryTag: "food",
     userGoal: "Get a complete recipe with ingredients and steps",
-    sections: [
-      { id: "overview", label: "Overview", emoji: "\u{1F4CB}", description: "Recipe summary" },
-      { id: "ingredients", label: "Ingredients", emoji: "\u{1F955}", description: "What you need" },
-      { id: "steps", label: "Steps", emoji: "\u{1F468}\u200D\u{1F373}", description: "How to cook" },
-      { id: "tips", label: "Tips", emoji: "\u{1F4A1}", description: "Pro advice" },
+    tabs: [
+      { id: "ingredients", label: "Ingredients", emoji: "\u{1F955}", dataSource: "food.ingredients" },
+      { id: "steps", label: "Steps", emoji: "\u{1F468}\u200D\u{1F373}", dataSource: "food.steps" },
+      { id: "tips", label: "Tips", emoji: "\u{1F4A1}", dataSource: "food.tips" },
     ],
+    confidence: 0.98,
   },
   output: {
-    type: "recipe",
-    data: {
+    food: {
       meta: { prepTime: 15, cookTime: 30, totalTime: 45, servings: 4, difficulty: "medium", cuisine: "Italian" },
       ingredients: [
-        { name: "Pasta", amount: "500", unit: "g", group: "Main" },
-        { name: "Olive Oil", amount: "2", unit: "tbsp", group: "Sauce" },
-        { name: "Garlic", amount: "3", unit: "cloves", group: "Sauce" },
-        { name: "Fresh Basil", amount: "1", unit: "bunch", notes: "For garnish" },
+        { name: "Pasta", amount: 500, displayAmount: "500", unit: "g", group: "Main" },
+        { name: "Olive Oil", amount: 2, displayAmount: "2", unit: "tbsp", group: "Sauce" },
+        { name: "Garlic", amount: 3, displayAmount: "3", unit: "cloves", group: "Sauce" },
+        { name: "Fresh Basil", amount: 1, displayAmount: "1", unit: "bunch", notes: "For garnish" },
       ],
       steps: [
         { number: 1, instruction: "Boil water and cook pasta according to package directions.", duration: 10, tips: "Salt the water generously" },
@@ -191,18 +190,15 @@ test.describe("Output Layout", () => {
       await expect(page.getByText("This is the primary takeaway")).toBeVisible();
     });
 
-    test("key points should expand on click", async ({ authenticatedPage: page }) => {
+    test("key points should render detail text", async ({ authenticatedPage: page }) => {
       await setupOutputMocks(page);
       await page.goto("/video/video-1");
       await waitForOutputShell(page);
 
-      // Click the first key point card to expand
-      const expandBtn = page.getByRole("button", { name: /Main Insight/i });
-      await expandBtn.click();
-      await page.waitForTimeout(200);
-
-      // Should show expanded state (aria-expanded=true)
-      await expect(expandBtn).toHaveAttribute("aria-expanded", "true");
+      // Key points render as GlassCards with emoji, title, and detail
+      await expect(page.getByText("Main Insight")).toBeVisible();
+      await expect(page.getByText("This is the primary takeaway")).toBeVisible();
+      await expect(page.getByText("Key Discovery")).toBeVisible();
     });
 
     test("should switch tabs when clicked", async ({ authenticatedPage: page }) => {
@@ -215,12 +211,11 @@ test.describe("Output Layout", () => {
       await conceptsTab.click();
       await page.waitForTimeout(300);
 
-      // Concept content should be visible
-      await expect(page.getByRole("heading", { name: "Core Concept" })).toBeVisible();
-      await expect(page.getByText("A fundamental idea")).toBeVisible();
+      // Concepts render as flashcards — first card should show the concept name
+      await expect(page.getByText("Core Concept")).toBeVisible();
     });
 
-    test("takeaways should have checkbox UX", async ({ authenticatedPage: page }) => {
+    test("takeaways should render as list", async ({ authenticatedPage: page }) => {
       await setupOutputMocks(page);
       await page.goto("/video/video-1");
       await waitForOutputShell(page);
@@ -230,15 +225,9 @@ test.describe("Output Layout", () => {
       await takeawaysTab.click();
       await page.waitForTimeout(300);
 
-      // Click first takeaway to check it
-      const firstTakeaway = page.getByRole("button", { name: /Start implementing/i });
-      await firstTakeaway.click();
-
-      // Should show pressed state
-      await expect(firstTakeaway).toHaveAttribute("aria-pressed", "true");
-
-      // Should show progress text
-      await expect(page.getByText("1 of 3 completed")).toBeVisible();
+      // Takeaways render as a string list
+      await expect(page.getByText("Start implementing the main strategy today")).toBeVisible();
+      await expect(page.getByText("Review your current approach")).toBeVisible();
     });
 
     test("should render key takeaways section", async ({ authenticatedPage: page }) => {
@@ -307,11 +296,15 @@ test.describe("Output Layout", () => {
       await setupOutputMocks(page);
       await page.setViewportSize({ width: 375, height: 812 });
       await page.goto("/video/video-1");
-      await waitForOutputShell(page);
 
-      // Content should still be visible
-      const title = page.getByText("Never Gonna Give You Up");
-      await expect(title.first()).toBeVisible();
+      // On mobile the sidebar covers the main panel; click the video to open it
+      const videoItem = page.getByText("Never Gonna Give You Up");
+      if (await videoItem.first().isVisible()) {
+        await videoItem.first().click();
+      }
+
+      // Wait for content (tablist may be below fold on mobile — check main container)
+      await page.waitForSelector(".max-w-4xl", { timeout: 10000 });
 
       // No horizontal overflow
       const hasOverflow = await page.evaluate(() => {
@@ -337,29 +330,23 @@ test.describe("Output Layout", () => {
       expect(hasOverflow).toBe(false);
     });
 
-    test("should adapt grid layout at different breakpoints", async ({ authenticatedPage: page }) => {
+    test("should adapt layout at different breakpoints", async ({ authenticatedPage: page }) => {
       await setupOutputMocks(page);
       await page.goto("/video/video-1");
       await waitForOutputShell(page);
 
-      // Click to Concepts tab to see grid
-      const conceptsTab = page.getByRole("tab", { name: /Concepts/i });
-      await conceptsTab.click();
-      await page.waitForTimeout(300);
+      // At desktop — content should be visible
+      await expect(page.getByText("Main Insight")).toBeVisible();
 
-      // At desktop (1280px default), concepts should show in 2-col grid
-      const conceptsGrid = page.locator(".grid.sm\\:grid-cols-2");
-      if (await conceptsGrid.count() > 0) {
-        await expect(conceptsGrid.first()).toBeVisible();
-      }
-
-      // At mobile (375px), should stack
+      // At mobile (375px) — page should render without horizontal overflow
+      // Note: sidebar overlay covers content at mobile, so we only check overflow
       await page.setViewportSize({ width: 375, height: 812 });
       await page.waitForTimeout(500);
 
-      // Grid should still be visible but single column
-      const concepts = page.getByRole("heading", { name: "Core Concept" });
-      await expect(concepts).toBeVisible();
+      const hasOverflow = await page.evaluate(() => {
+        return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+      });
+      expect(hasOverflow).toBe(false);
     });
   });
 
@@ -372,11 +359,12 @@ test.describe("Output Layout", () => {
       // Should render recipe TLDR
       await expect(page.getByText("A classic Italian pasta recipe")).toBeVisible();
 
-      // Should have recipe-specific tabs
+      // Should have recipe-specific tabs (ingredients first)
       const ingredientsTab = page.getByRole("tab", { name: /Ingredients/i });
-      if (await ingredientsTab.count() > 0) {
-        await expect(ingredientsTab).toBeVisible();
-      }
+      await expect(ingredientsTab).toBeVisible();
+
+      // Ingredients should be rendered as a checklist with normalized labels
+      await expect(page.getByText(/Pasta/)).toBeVisible();
     });
 
     test("recipe tabs should switch correctly", async ({ authenticatedPage: page }) => {
@@ -386,13 +374,11 @@ test.describe("Output Layout", () => {
 
       // Click Steps tab
       const stepsTab = page.getByRole("tab", { name: /Steps/i });
-      if (await stepsTab.count() > 0) {
-        await stepsTab.click();
-        await page.waitForTimeout(300);
+      await stepsTab.click();
+      await page.waitForTimeout(300);
 
-        // Steps content should be visible
-        await expect(page.getByText("Boil water and cook pasta")).toBeVisible();
-      }
+      // Steps content should be visible
+      await expect(page.getByText("Boil water and cook pasta")).toBeVisible();
     });
   });
 

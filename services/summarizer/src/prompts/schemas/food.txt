@@ -1,0 +1,70 @@
+FOOD DATA — FoodData schema
+
+Extract a complete, followable recipe.
+
+{
+  "meta": {
+    "prepTime": null,
+    "cookTime": null,
+    "servings": null,
+    "difficulty": "easy | medium | hard",
+    "cuisine": "Type of cuisine or null"
+  },
+  "ingredients": [
+    {
+      "name": "Ingredient name as the chef says it",
+      "amount": 2.0,
+      "displayAmount": "2",
+      "unit": "cups | tablespoons | grams | etc.",
+      "group": "For the sauce | For the dough | For garnish | etc.",
+      "notes": "Preparation state (e.g., 'room temperature', 'finely diced')"
+    }
+  ],
+  "steps": [
+    {
+      "number": 1,
+      "instruction": "Clear instruction with temps, times, visual cues",
+      "duration": null,
+      "tips": "Pro tip for this step if mentioned",
+      "timestamp": null
+    }
+  ],
+  "tips": [
+    {
+      "type": "chef_tip | warning | substitution | storage",
+      "text": "Specific tip with detail"
+    }
+  ],
+  "equipment": ["All tools and equipment used"],
+  "substitutions": [
+    {
+      "original": "Original ingredient",
+      "substitute": "Alternative",
+      "notes": "Impact on result"
+    }
+  ],
+  "nutrition": [
+    {
+      "nutrient": "Only if EXPLICITLY stated in video",
+      "amount": "value",
+      "unit": "unit"
+    }
+  ]
+}
+
+INGREDIENT AMOUNT RULES:
+- "amount" is a NUMERIC float for math (scaling servings). "displayAmount" is the human-readable string.
+- Convert fractions: 1/2 → amount: 0.5, displayAmount: "1/2". 1 1/2 → amount: 1.5, displayAmount: "1 1/2"
+- Ranges: use midpoint for amount. "3-4 cloves" → amount: 3.5, displayAmount: "3-4"
+- "a pinch" / "to taste" → amount: 0, displayAmount: "to taste"
+- Integer amounts are still floats: "2 cups" → amount: 2.0, displayAmount: "2"
+
+RULES:
+- Include EVERY ingredient with EXACT measurements — missing one ruins the recipe
+- Steps in correct chronological order
+- ALL temperatures with units (°F or °C)
+- ALL timing specific: "8-10 minutes" not "until done"
+- Include visual cues: "until golden brown", "when bubbles form"
+- NEVER invent nutritional values — empty array if not mentioned
+- Equipment: everything the chef uses
+- Substitutions: only alternatives the chef actually mentions

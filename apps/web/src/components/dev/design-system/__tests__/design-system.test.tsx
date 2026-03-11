@@ -77,16 +77,16 @@ describe('Design System Components', () => {
       expect(screen.getByText('vie-peach')).toBeInTheDocument();
     });
 
-    it('renders output gradients section with all 10 types', () => {
+    it('renders output gradients section with all 8 content tags', () => {
       render(<ColorPalette />);
 
       expect(screen.getByText('Output Gradients')).toBeInTheDocument();
-      const expectedTypes = [
-        'explanation', 'recipe', 'code_walkthrough', 'study_kit', 'trip_planner',
-        'workout', 'verdict', 'highlights', 'music_guide', 'project_guide',
+      const expectedTags = [
+        'learning', 'food', 'tech', 'travel',
+        'fitness', 'review', 'music', 'project',
       ];
-      for (const type of expectedTypes) {
-        expect(screen.getByText(type)).toBeInTheDocument();
+      for (const tag of expectedTags) {
+        expect(screen.getByText(tag)).toBeInTheDocument();
       }
     });
   });

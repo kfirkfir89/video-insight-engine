@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollContainer } from '@/components/ui/scroll-container';
-import { ContentBlocks } from '@/components/video-detail/ContentBlocks';
+import { ContentBlockRenderer } from '@/components/video-detail/ContentBlockRenderer';
 import { RAGSourceCard } from './RAGSourceCard';
 import type { ContentBlock } from '@vie/types';
 
@@ -89,11 +89,10 @@ const MessageBubble = memo(function MessageBubble({
 
         {/* Content Blocks (assistant only) */}
         {!isUser && message.blocks && message.blocks.length > 0 && (
-          <div className="mt-2">
-            <ContentBlocks
-              blocks={message.blocks}
-              onPlay={onSeek}
-            />
+          <div className="mt-2 space-y-2">
+            {message.blocks.map((block, i) => (
+              <ContentBlockRenderer key={block.blockId ?? i} block={block} onPlay={onSeek} />
+            ))}
           </div>
         )}
 

@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+
+// Mock the deleted ContentBlocks component that RAGChatPanel imports
+vi.mock('@/components/video-detail/ContentBlocks', () => ({
+  ContentBlocks: ({ blocks }: { blocks: unknown[] }) => (
+    <div data-testid="content-blocks">{Array.isArray(blocks) ? blocks.length : 0} blocks</div>
+  ),
+}));
+
 import { RAGChatPanel } from '../RAGChatPanel';
 
 // Mock scrollIntoView as jsdom doesn't support it

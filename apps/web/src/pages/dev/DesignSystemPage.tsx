@@ -12,7 +12,7 @@ if (!import.meta.env.DEV) {
 }
 
 import { useState } from 'react';
-import { Palette, Type, Ruler, LayoutGrid } from 'lucide-react';
+import { Palette, Type, Ruler, LayoutGrid, Component, Layers, MousePointerClick } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
 
@@ -20,14 +20,20 @@ import { ColorPalette } from '@/components/dev/design-system/ColorPalette';
 import { Typography } from '@/components/dev/design-system/Typography';
 import { SpacingScale } from '@/components/dev/design-system/SpacingScale';
 import { BlockShowcase } from '@/components/dev/design-system/BlockShowcase';
+import { UIShowcase } from '@/components/dev/design-system/UIShowcase';
+import { CardsShowcase } from '@/components/dev/design-system/CardsShowcase';
+import { InteractiveBlockShowcase } from '@/components/dev/design-system/InteractiveBlockShowcase';
 
-type Section = 'colors' | 'typography' | 'spacing' | 'blocks';
+type Section = 'colors' | 'typography' | 'spacing' | 'ui' | 'cards' | 'blocks' | 'interactive';
 
 const sections: { id: Section; label: string; icon: React.ReactNode }[] = [
-  { id: 'colors', label: 'Colors', icon: <Palette className="h-4 w-4" /> },
+  { id: 'colors', label: 'Colors & Tokens', icon: <Palette className="h-4 w-4" /> },
   { id: 'typography', label: 'Typography', icon: <Type className="h-4 w-4" /> },
   { id: 'spacing', label: 'Spacing', icon: <Ruler className="h-4 w-4" /> },
-  { id: 'blocks', label: 'Blocks', icon: <LayoutGrid className="h-4 w-4" /> },
+  { id: 'ui', label: 'UI Primitives', icon: <Component className="h-4 w-4" /> },
+  { id: 'blocks', label: 'Core Blocks', icon: <LayoutGrid className="h-4 w-4" /> },
+  { id: 'interactive', label: 'Interactive Blocks', icon: <MousePointerClick className="h-4 w-4" /> },
+  { id: 'cards', label: 'Output System', icon: <Layers className="h-4 w-4" /> },
 ];
 
 function SectionContent({ section }: { section: Section }) {
@@ -38,8 +44,14 @@ function SectionContent({ section }: { section: Section }) {
       return <Typography />;
     case 'spacing':
       return <SpacingScale />;
+    case 'ui':
+      return <UIShowcase />;
+    case 'cards':
+      return <CardsShowcase />;
     case 'blocks':
       return <BlockShowcase />;
+    case 'interactive':
+      return <InteractiveBlockShowcase />;
   }
 }
 

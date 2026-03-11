@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { FitnessBlock } from '../FitnessBlock';
+import { ExerciseCard } from '../ExerciseCard';
 import type { WorkoutTimerBlock as WorkoutTimerBlockType } from '@vie/types';
 
-const createMockBlock = (overrides: Partial<FitnessBlockType> = {}): WorkoutTimerBlockType => ({
+const createMockBlock = (overrides: Partial<WorkoutTimerBlockType> = {}): WorkoutTimerBlockType => ({
   type: 'workout_timer',
   blockId: 'block-1',
   intervals: [
@@ -26,26 +26,26 @@ describe('WorkoutTimerBlock', () => {
 
   describe('rendering', () => {
     it('should render timer display', () => {
-      render(<FitnessBlock block={createMockBlock()} />);
+      render(<ExerciseCard block={createMockBlock()} />);
 
       expect(screen.getByText('0:30')).toBeInTheDocument();
     });
 
     it('should render current interval name', () => {
-      render(<FitnessBlock block={createMockBlock()} />);
+      render(<ExerciseCard block={createMockBlock()} />);
 
       expect(screen.getByText(/high knees/i)).toBeInTheDocument();
     });
 
     it('should render round counter', () => {
-      render(<FitnessBlock block={createMockBlock()} />);
+      render(<ExerciseCard block={createMockBlock()} />);
 
       expect(screen.getByText(/rounds.*1\/2/i)).toBeInTheDocument();
     });
 
     it('should return null for empty intervals', () => {
       const { container } = render(
-        <FitnessBlock block={createMockBlock({ intervals: [] })} />
+        <ExerciseCard block={createMockBlock({ intervals: [] })} />
       );
       expect(container.firstChild).toBeNull();
     });
@@ -53,19 +53,19 @@ describe('WorkoutTimerBlock', () => {
 
   describe('timer controls', () => {
     it('should have Start button initially', () => {
-      render(<FitnessBlock block={createMockBlock()} />);
+      render(<ExerciseCard block={createMockBlock()} />);
 
       expect(screen.getByRole('button', { name: /start/i })).toBeInTheDocument();
     });
 
     it('should have Reset button', () => {
-      render(<FitnessBlock block={createMockBlock()} />);
+      render(<ExerciseCard block={createMockBlock()} />);
 
       expect(screen.getByRole('button', { name: /reset/i })).toBeInTheDocument();
     });
 
     it('should change to Pause when running', () => {
-      render(<FitnessBlock block={createMockBlock()} />);
+      render(<ExerciseCard block={createMockBlock()} />);
 
       fireEvent.click(screen.getByRole('button', { name: /start/i }));
 
@@ -73,7 +73,7 @@ describe('WorkoutTimerBlock', () => {
     });
 
     it('should show Resume after pause', () => {
-      render(<FitnessBlock block={createMockBlock()} />);
+      render(<ExerciseCard block={createMockBlock()} />);
 
       fireEvent.click(screen.getByRole('button', { name: /start/i }));
       fireEvent.click(screen.getByRole('button', { name: /pause/i }));
@@ -85,7 +85,7 @@ describe('WorkoutTimerBlock', () => {
 
   describe('timer countdown', () => {
     it('should countdown when started', () => {
-      render(<FitnessBlock block={createMockBlock()} />);
+      render(<ExerciseCard block={createMockBlock()} />);
 
       fireEvent.click(screen.getByRole('button', { name: /start/i }));
 
@@ -97,7 +97,7 @@ describe('WorkoutTimerBlock', () => {
     });
 
     it('should reset timer on Reset click', () => {
-      render(<FitnessBlock block={createMockBlock()} />);
+      render(<ExerciseCard block={createMockBlock()} />);
 
       fireEvent.click(screen.getByRole('button', { name: /start/i }));
       act(() => {
@@ -111,7 +111,7 @@ describe('WorkoutTimerBlock', () => {
 
   describe('interval transitions', () => {
     it('should move to next interval when time runs out', () => {
-      render(<FitnessBlock block={createMockBlock()} />);
+      render(<ExerciseCard block={createMockBlock()} />);
 
       fireEvent.click(screen.getByRole('button', { name: /start/i }));
 
@@ -127,7 +127,7 @@ describe('WorkoutTimerBlock', () => {
 
   describe('round tracking', () => {
     it('should not show round counter for single round', () => {
-      render(<FitnessBlock block={createMockBlock({ rounds: 1 })} />);
+      render(<ExerciseCard block={createMockBlock({ rounds: 1 })} />);
 
       expect(screen.queryByText(/rounds/i)).not.toBeInTheDocument();
     });
@@ -136,7 +136,7 @@ describe('WorkoutTimerBlock', () => {
   describe('completion', () => {
     it('should show Complete when workout finishes', () => {
       render(
-        <FitnessBlock
+        <ExerciseCard
           block={createMockBlock({
             intervals: [{ type: 'work', name: 'Test', duration: 2 }],
             rounds: 1,
@@ -155,7 +155,7 @@ describe('WorkoutTimerBlock', () => {
 
     it('should disable play button when complete', () => {
       render(
-        <FitnessBlock
+        <ExerciseCard
           block={createMockBlock({
             intervals: [{ type: 'work', name: 'Test', duration: 2 }],
             rounds: 1,
@@ -176,7 +176,7 @@ describe('WorkoutTimerBlock', () => {
 
   describe('interval preview', () => {
     it('should render progress indicators for intervals', () => {
-      const { container } = render(<FitnessBlock block={createMockBlock()} />);
+      const { container } = render(<ExerciseCard block={createMockBlock()} />);
 
       // Progress bars are flex-1 rounded-full divs (phase dots use w-2 instead)
       const progressBars = container.querySelectorAll('.flex-1.rounded-full');
@@ -186,20 +186,20 @@ describe('WorkoutTimerBlock', () => {
 
   describe('accessibility', () => {
     it('should have aria-hidden on icons', () => {
-      const { container } = render(<FitnessBlock block={createMockBlock()} />);
+      const { container } = render(<ExerciseCard block={createMockBlock()} />);
       const icons = container.querySelectorAll('svg[aria-hidden="true"]');
       expect(icons.length).toBeGreaterThan(0);
     });
 
     it('should have aria-live for timer announcements', () => {
-      const { container } = render(<FitnessBlock block={createMockBlock()} />);
+      const { container } = render(<ExerciseCard block={createMockBlock()} />);
       const liveRegion = container.querySelector('[aria-live="polite"]');
       expect(liveRegion).toBeInTheDocument();
     });
 
     it('should have role="alert" on completion', () => {
       render(
-        <FitnessBlock
+        <ExerciseCard
           block={createMockBlock({
             intervals: [{ type: 'work', name: 'Test', duration: 2 }],
             rounds: 1,

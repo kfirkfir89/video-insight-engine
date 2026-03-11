@@ -1,75 +1,59 @@
-import type { OutputType } from "@vie/types";
+import type { ContentTag } from "@vie/types";
 
-interface OutputTypeConfig {
+interface ContentTagConfig {
   emoji: string;
   label: string;
-  accentColor: string;
   gradient: string;
 }
 
-export const OUTPUT_TYPE_CONFIG: Record<OutputType, OutputTypeConfig> = {
-  explanation: {
-    emoji: "📝",
-    label: "Explanation",
-    accentColor: "var(--muted-foreground)",
-    gradient: "linear-gradient(135deg, var(--muted), var(--secondary))",
-  },
-  recipe: {
-    emoji: "🍳",
-    label: "Recipe",
-    accentColor: "var(--vie-coral)",
-    gradient: "linear-gradient(135deg, var(--vie-coral), var(--vie-peach))",
-  },
-  code_walkthrough: {
-    emoji: "💻",
-    label: "Code Walkthrough",
-    accentColor: "var(--vie-sky)",
-    gradient: "linear-gradient(135deg, var(--vie-sky), var(--vie-mint))",
-  },
-  study_kit: {
+export const CONTENT_TAG_CONFIG: Record<ContentTag, ContentTagConfig> = {
+  learning: {
     emoji: "📚",
-    label: "Study Kit",
-    accentColor: "var(--vie-plum)",
+    label: "Learning",
     gradient: "linear-gradient(135deg, var(--vie-plum), var(--vie-sky))",
   },
-  trip_planner: {
+  food: {
+    emoji: "🍳",
+    label: "Food",
+    gradient: "linear-gradient(135deg, var(--vie-coral), var(--vie-peach))",
+  },
+  tech: {
+    emoji: "💻",
+    label: "Tech",
+    gradient: "linear-gradient(135deg, var(--vie-sky), var(--vie-mint))",
+  },
+  travel: {
     emoji: "✈️",
-    label: "Trip Planner",
-    accentColor: "var(--vie-forest)",
+    label: "Travel",
     gradient: "linear-gradient(135deg, var(--vie-forest), var(--vie-mint))",
   },
-  workout: {
+  fitness: {
     emoji: "💪",
-    label: "Workout",
-    accentColor: "var(--vie-rose)",
+    label: "Fitness",
     gradient: "linear-gradient(135deg, var(--vie-rose), var(--vie-coral))",
   },
-  verdict: {
+  review: {
     emoji: "⭐",
-    label: "Verdict",
-    accentColor: "var(--vie-honey)",
+    label: "Review",
     gradient: "linear-gradient(135deg, var(--vie-honey), var(--vie-peach))",
   },
-  highlights: {
-    emoji: "🎙️",
-    label: "Highlights",
-    accentColor: "var(--vie-peach)",
-    gradient: "linear-gradient(135deg, var(--vie-peach), var(--vie-coral))",
-  },
-  music_guide: {
+  music: {
     emoji: "🎵",
-    label: "Music Guide",
-    accentColor: "var(--vie-rose)",
+    label: "Music",
     gradient: "linear-gradient(135deg, var(--vie-rose), var(--vie-plum))",
   },
-  project_guide: {
+  project: {
     emoji: "🔨",
-    label: "Project Guide",
-    accentColor: "var(--vie-honey)",
+    label: "Project",
     gradient: "linear-gradient(135deg, var(--vie-honey), var(--vie-forest))",
   },
 } as const;
 
-export function getOutputTypeConfig(type: OutputType): OutputTypeConfig {
-  return OUTPUT_TYPE_CONFIG[type] ?? OUTPUT_TYPE_CONFIG.explanation;
+export function getContentTagConfig(tag: ContentTag): ContentTagConfig {
+  return CONTENT_TAG_CONFIG[tag] ?? CONTENT_TAG_CONFIG.learning;
 }
+
+// Backward-compatible aliases
+export type OutputType = ContentTag;
+export const OUTPUT_TYPE_CONFIG = CONTENT_TAG_CONFIG;
+export const getOutputTypeConfig = getContentTagConfig;

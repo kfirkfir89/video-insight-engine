@@ -14,8 +14,7 @@ import { processEvent } from "@/lib/stream-event-processor";
 
 import type {
   VideoContext,
-  IntentResult,
-  OutputData,
+  TriageResult,
   EnrichmentData,
   SynthesisResult,
 } from "@vie/types";
@@ -27,7 +26,7 @@ export type StreamPhase =
   | "connecting"
   | "metadata"
   // Pipeline output phases
-  | "intent_detection"
+  | "triage"
   | "extraction"
   | "enrichment"
   | "synthesis"
@@ -41,7 +40,7 @@ export const STREAM_PHASE_LABELS: Record<StreamPhase, string> = {
   connecting: "Connecting to AI...",
   metadata: "Fetching video info...",
   // Pipeline output phases
-  intent_detection: "Detecting content type...",
+  triage: "Analyzing content type...",
   extraction: "Extracting structured data...",
   enrichment: "Generating study aids...",
   synthesis: "Generating summary...",
@@ -70,10 +69,10 @@ export interface StreamState {
   warnings: string[];
   // Celebration trigger — increment to fire a new confetti burst
   confettiCount: number;
-  // Pipeline output state
-  intent: IntentResult | null;
+  // Pipeline output state (triage pipeline)
+  triage: TriageResult | null;
   extractionProgress: { section: string; percent: number } | null;
-  output: OutputData | null;
+  domainData: Record<string, unknown> | null;
   enrichment: EnrichmentData | null;
   synthesis: SynthesisResult | null;
 }
@@ -94,10 +93,10 @@ const initialState: StreamState = {
   processingTimeMs: null,
   warnings: [],
   confettiCount: 0,
-  // Pipeline output state
-  intent: null,
+  // Pipeline output state (triage pipeline)
+  triage: null,
   extractionProgress: null,
-  output: null,
+  domainData: null,
   enrichment: null,
   synthesis: null,
 };
@@ -301,7 +300,7 @@ export function useSummaryStream({
     if (!videoSummaryId || !enabled) return;
 
     // Only save if we have meaningful data to cache
-    const hasData = state.synthesis || state.intent || state.output || state.metadata;
+    const hasData = state.synthesis || state.triage || state.domainData || state.metadata;
     if (!hasData) return;
 
     // Don't save if stream completed or errored (will be cleared anyway)

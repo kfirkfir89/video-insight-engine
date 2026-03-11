@@ -1,7 +1,7 @@
 import { memo, useMemo } from 'react';
 import { Bookmark, Clock, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ContentBlocks } from '@/components/video-detail/ContentBlocks';
+import { ContentBlockRenderer } from '@/components/video-detail/ContentBlockRenderer';
 import { VideoSourceCard } from './VideoSourceCard';
 import { UserNotesCard } from './UserNotesCard';
 import type { MemorizedItem } from '@vie/types';
@@ -90,11 +90,10 @@ export const MemorizedItemDetail = memo(function MemorizedItemDetail({
 
       {/* Content Blocks */}
       {blocks.length > 0 && (
-        <div className="pt-2">
-          <ContentBlocks
-            blocks={blocks}
-            onPlay={onPlay}
-          />
+        <div className="pt-2 space-y-2">
+          {blocks.map((block, i) => (
+            <ContentBlockRenderer key={block.blockId ?? i} block={block} onPlay={onPlay} />
+          ))}
         </div>
       )}
 

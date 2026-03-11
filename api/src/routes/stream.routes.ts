@@ -143,32 +143,22 @@ export async function streamRoutes(fastify: FastifyInstance) {
                 });
               }
 
-              // Persist detection result (category + outputType) when received
-              if (event.event === 'detection_result' && event.outputType) {
-                const { videoService } = fastify.container;
-                await videoService.persistDetectionResult(
-                  videoSummaryId,
-                  event.outputType,
-                  event.category,
-                  event.confidence
-                );
-              }
-
               // ─── Pipeline event persistence ───
-              if (event.event === 'intent_detected') {
+              if (event.event === 'triage_complete') {
                 const { videoRepository } = fastify.container;
-                await videoRepository.updateIntent(videoSummaryId, {
-                  outputType: event.outputType,
-                  confidence: event.confidence,
+                await videoRepository.updateTriage(videoSummaryId, {
+                  contentTags: event.contentTags,
+                  modifiers: event.modifiers,
+                  primaryTag: event.primaryTag,
                   userGoal: event.userGoal,
-                  sections: event.sections,
+                  tabs: event.tabs,
+                  confidence: event.confidence,
                 });
               }
 
               if (event.event === 'extraction_complete') {
                 const { videoRepository } = fastify.container;
                 await videoRepository.updateOutput(videoSummaryId, {
-                  type: event.outputType,
                   data: event.data,
                 });
               }
@@ -179,6 +169,7 @@ export async function streamRoutes(fastify: FastifyInstance) {
                   quiz: event.quiz,
                   flashcards: event.flashcards,
                   cheatSheet: event.cheatSheet,
+                  scenarios: event.scenarios,
                 });
               }
 

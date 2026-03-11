@@ -1,0 +1,31 @@
+NARRATIVE MODIFIER — NarrativeData schema
+
+Additional extraction for content with storytelling elements.
+Merge this INTO the main domain data.
+
+{
+  "keyMoments": [
+    {
+      "timestamp": null,
+      "description": "What happened at this moment",
+      "mood": "Emotional tone (e.g., 'triumphant', 'tense', 'humorous')",
+      "emoji": "matching emoji"
+    }
+  ],
+  "quotes": [
+    {
+      "text": "Exact verbatim quote",
+      "speaker": "Who said it",
+      "timestamp": null,
+      "context": "Brief context for the quote"
+    }
+  ],
+  "takeaways": [
+    "Narrative-driven takeaways or lessons from the story"
+  ]
+}
+
+RULES:
+- Quotes must be EXACT — don't paraphrase
+- Attribute quotes to the correct speaker
+- Only include moments that are narratively significant

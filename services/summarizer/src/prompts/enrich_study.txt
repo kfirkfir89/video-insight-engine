@@ -20,6 +20,18 @@ Generate study enrichment materials. Return JSON only:
       "front": "What is X?",
       "back": "X is defined as..."
     }}
+  ],
+  "scenarios": [
+    {{
+      "question": "You need to fetch data when a component mounts. Which approach is correct?",
+      "emoji": "🤔",
+      "options": [
+        {{"text": "useState with initial fetch", "correct": false, "explanation": "useState sets state but doesn't trigger side effects on mount"}},
+        {{"text": "useEffect with empty deps", "correct": true, "explanation": "useEffect with [] runs once on mount — the standard pattern for data fetching"}},
+        {{"text": "useRef to store the response", "correct": false, "explanation": "useRef doesn't trigger re-renders when updated"}},
+        {{"text": "useMemo with fetch call", "correct": false, "explanation": "useMemo is for expensive calculations, not side effects"}}
+      ]
+    }}
   ]
 }}
 
@@ -30,4 +42,8 @@ RULES:
 - Explanations should teach, not just state the answer
 - Generate 8-15 flashcards covering vocabulary and concepts
 - Flashcard fronts should be questions, backs should be concise answers
+- Generate 3-6 scenario questions that test applied understanding
+- Each scenario presents a real-world situation with 3-4 options
+- Exactly one option must have "correct": true
+- Scenario explanations should teach WHY that choice works in practice
 - All content must be factually correct based on the video

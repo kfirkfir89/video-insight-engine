@@ -4,7 +4,7 @@ import { SummarizerClient, type ProviderConfig } from './summarizer-client.js';
 import { extractYoutubeId } from '../utils/youtube.js';
 import { InvalidYouTubeUrlError, VideoNotFoundError, VersionCreationError, InvalidCategoryError } from '../utils/errors.js';
 import { isValidOutputType } from '@vie/types';
-import type { UserTier, OutputType } from '@vie/types';
+import type { UserTier } from '@vie/types';
 
 export interface CreateVideoOptions {
   folderId?: string;
@@ -331,13 +331,12 @@ export class VideoService {
         context: summary?.context || null,
       },
       summary: summary?.summary || null,
-      // Structured output (if intent-based pipeline was used)
-      output: (summary as any)?.intent ? {
-        outputType: (summary as any).intent.outputType ?? summary?.outputType,
-        intent: (summary as any).intent,
-        output: (summary as any).output ?? null,
-        synthesis: (summary as any).synthesis ?? null,
-        enrichment: (summary as any).enrichment ?? null,
+      // Structured output (triage-based pipeline)
+      output: summary?.triage ? {
+        triage: summary.triage,
+        output: summary.output ?? null,
+        synthesis: summary.synthesis ?? null,
+        enrichment: summary.enrichment ?? null,
       } : null,
     };
   }
@@ -365,22 +364,22 @@ export class VideoService {
     const video = await this.videoRepository.findUserVideo(userId, videoId);
     if (!video) throw new VideoNotFoundError();
 
-    const CATEGORY_TO_OUTPUT: Record<string, OutputType> = {
-      cooking: 'recipe',
-      coding: 'code_walkthrough',
-      travel: 'trip_planner',
-      reviews: 'verdict',
-      fitness: 'workout',
-      education: 'study_kit',
-      podcast: 'highlights',
-      diy: 'project_guide',
-      gaming: 'highlights',
-      music: 'music_guide',
-      standard: 'explanation',
+    const CATEGORY_TO_TAG: Record<string, string> = {
+      cooking: 'food',
+      coding: 'tech',
+      travel: 'travel',
+      reviews: 'review',
+      fitness: 'fitness',
+      education: 'learning',
+      podcast: 'learning',
+      diy: 'project',
+      gaming: 'tech',
+      music: 'music',
+      standard: 'learning',
     };
 
-    const outputType = CATEGORY_TO_OUTPUT[category];
-    if (!outputType) throw new InvalidCategoryError(category);
+    const contentTag = CATEGORY_TO_TAG[category];
+    if (!contentTag) throw new InvalidCategoryError(category);
 
     const videoSummaryId = video.videoSummaryId.toString();
     const cache = await this.videoRepository.findCacheById(videoSummaryId);
@@ -393,22 +392,20 @@ export class VideoService {
         originalCategory: existingContext.category || 'standard',
         category,
       },
-      outputType,
     });
 
     return {
       videoSummaryId,
       category,
-      outputType,
+      contentTag,
       previousCategory: existingContext.category || 'standard',
     };
   }
 
-  /** Persist detection result from summarizer SSE stream */
-  async persistDetectionResult(videoSummaryId: string, outputType: string, category?: string, confidence?: number): Promise<void> {
-    if (!isValidOutputType(outputType)) return;
+  /** Persist triage result from summarizer SSE stream */
+  async persistTriageResult(videoSummaryId: string, primaryTag: string, category?: string, confidence?: number): Promise<void> {
+    if (!isValidOutputType(primaryTag)) return;
     await this.videoRepository.updateCacheEntry(videoSummaryId, {
-      outputType,
       context: {
         category: category || 'standard',
         categoryConfidence: confidence,

@@ -1,0 +1,72 @@
+FITNESS DATA — FitnessData schema
+
+Extract a complete, followable workout plan.
+
+{
+  "meta": {
+    "type": "HIIT | strength | yoga | cardio | mobility | general",
+    "difficulty": "beginner | intermediate | advanced",
+    "duration": 0,
+    "muscleGroups": ["chest", "back", "legs", "etc."],
+    "equipment": ["dumbbells", "pull-up bar", "etc."],
+    "caloriesBurned": null
+  },
+  "warmup": [
+    {
+      "name": "Exact exercise name",
+      "emoji": "matching emoji",
+      "sets": null,
+      "reps": "10 or 30 seconds",
+      "duration": "time if applicable",
+      "rest": null,
+      "difficulty": null,
+      "formCues": ["Keep elbows at 45 degrees", "Squeeze at the top"],
+      "modifications": [
+        {
+          "label": "Beginner",
+          "description": "Modification description"
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "name": "Exact exercise name as the instructor says it",
+      "emoji": "matching emoji",
+      "sets": 3,
+      "reps": "8-12",
+      "duration": null,
+      "rest": "60 seconds",
+      "difficulty": "beginner | intermediate | advanced",
+      "formCues": ["Exact form cue from the instructor"],
+      "modifications": [],
+      "timestamp": null
+    }
+  ],
+  "cooldown": [],
+  "timer": {
+    "intervals": [
+      {
+        "name": "Work",
+        "duration": 30,
+        "type": "work | rest | warmup | cooldown"
+      }
+    ],
+    "rounds": 3
+  },
+  "tips": [
+    {
+      "type": "form | safety | progression",
+      "text": "Specific tip from the instructor"
+    }
+  ]
+}
+
+RULES:
+- Include ALL exercises with sets, reps, and rest periods
+- Exercise names must be exact: "Bulgarian Split Squats" not "single-leg squats"
+- Form cues preserved: "keep elbows at 45 degrees" not "keep arms bent"
+- Include ALL modifications mentioned (beginner/advanced alternatives)
+- Tempo when specified: "3 seconds down, 1 second up"
+- Weight recommendations when given: "start with 10-15 lbs"
+- Warmup and cooldown must be included if the instructor covers them

@@ -1,0 +1,46 @@
+MUSIC DATA — MusicData schema
+
+Extract structured music analysis content.
+
+{
+  "title": "Exact song/piece title",
+  "artist": "Artist or composer name",
+  "genre": ["Specific genres — 'melodic trap' not just 'hip-hop'"],
+  "credits": [
+    {
+      "role": "Producer | Songwriter | Featured Artist | etc.",
+      "name": "Person's name"
+    }
+  ],
+  "analysis": [
+    {
+      "aspect": "Production | Vocals | Influences | Lyrics | Instrumentation | Arrangement | Mixing | etc.",
+      "emoji": "single emoji matching the aspect",
+      "detail": "Specific observation about this aspect — use the speaker's terminology and examples"
+    }
+  ],
+  "structure": [
+    {
+      "name": "Intro | Verse 1 | Chorus | Bridge | Outro | etc.",
+      "timestamp": null,
+      "duration": null,
+      "description": "What happens in this section — instrumentation, mood, key changes"
+    }
+  ],
+  "lyrics": [
+    {
+      "timestamp": null,
+      "line": "Exact lyric line from the video — quote accurately or don't include"
+    }
+  ],
+  "themes": ["Thematic elements discussed"]
+}
+
+RULES:
+- Lyrics must be EXACT — quote accurately or omit
+- ALL credits: featured artists, producers, songwriters when mentioned
+- Genre must be specific: "melodic trap" not just "hip-hop"
+- Production details when discussed: "808 bass", "auto-tune", "live drums"
+- Album/EP name and release info when mentioned
+- Samples and interpolations when identified
+- Chart positions and streaming numbers when cited

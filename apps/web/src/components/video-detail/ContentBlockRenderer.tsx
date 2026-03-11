@@ -12,32 +12,19 @@ import {
   StatisticRenderer,
   CalloutBlock,
   // Universal blocks
-  TranscriptBlock,
   TimelineBlock,
   DefinitionBlock,
   // Cooking blocks
   StepBlock,
-  NutritionBlock,
   // Coding blocks (CodeBlock handles code, example, terminal)
   CodeBlock,
-  FileTreeBlock,
-  // Travel blocks
-  LocationBlock,
-  ItineraryBlock,
-  CostBlock,
   // Review blocks
-  RatingBlock,
   VerdictBlock,
   // Unified blocks
   FitnessBlock,
   ChecklistBlock,
   // Education blocks
   QuizBlock,
-  // Podcast blocks
-  GuestBlock,
-  // Quality blocks
-  ProblemSolutionBlock,
-  VisualBlock,
   // Generic blocks
   TableBlock,
 } from './blocks';
@@ -213,16 +200,6 @@ function renderBlock({
     // ─────────────────────────────────────────────────────
     // Universal blocks
     // ─────────────────────────────────────────────────────
-    case 'transcript':
-      return (
-        <TranscriptBlock
-          block={block}
-          onSeek={onSeek}
-          onPlay={onPlay}
-          activeSeconds={activeStartSeconds}
-        />
-      );
-
     case 'timeline':
       return <TimelineBlock block={block} />;
 
@@ -241,9 +218,6 @@ function renderBlock({
     case 'step':
       return <StepBlock block={block} />;
 
-    case 'nutrition':
-      return <NutritionBlock block={block} />;
-
     // ─────────────────────────────────────────────────────
     // Coding blocks
     // ─────────────────────────────────────────────────────
@@ -252,21 +226,6 @@ function renderBlock({
 
     case 'terminal':
       return <CodeBlock block={block} />;
-
-    case 'file_tree':
-      return <FileTreeBlock block={block} />;
-
-    // ─────────────────────────────────────────────────────
-    // Travel blocks
-    // ─────────────────────────────────────────────────────
-    case 'location':
-      return <LocationBlock block={block} />;
-
-    case 'itinerary':
-      return <ItineraryBlock block={block} />;
-
-    case 'cost':
-      return <CostBlock block={block} />;
 
     // ─────────────────────────────────────────────────────
     // Review blocks
@@ -278,9 +237,6 @@ function renderBlock({
         left: { label: 'Pros', items: block.pros || [] },
         right: { label: 'Cons', items: block.cons || [] },
       } as ContentBlock & { type: 'comparison' }} />;
-
-    case 'rating':
-      return <RatingBlock block={block} />;
 
     case 'verdict':
       return <VerdictBlock block={block} />;
@@ -299,21 +255,6 @@ function renderBlock({
     // ─────────────────────────────────────────────────────
     case 'quiz':
       return <QuizBlock block={block} />;
-
-    // ─────────────────────────────────────────────────────
-    // Podcast blocks
-    // ─────────────────────────────────────────────────────
-    case 'guest':
-      return <GuestBlock block={block} />;
-
-    // ─────────────────────────────────────────────────────
-    // Quality blocks
-    // ─────────────────────────────────────────────────────
-    case 'problem_solution':
-      return <ProblemSolutionBlock block={block} />;
-
-    case 'visual':
-      return <VisualBlock block={block} onSeek={onSeek} />;
 
     // ─────────────────────────────────────────────────────
     // Generic blocks

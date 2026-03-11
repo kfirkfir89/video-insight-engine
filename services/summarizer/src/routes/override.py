@@ -9,9 +9,9 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from src.config import settings
-from src.services.output_type import determine_output_type, get_output_type_label
+from src.services.pipeline.triage import CATEGORY_TO_TAG
 from src.services.override_state import set_override
-from src.services.video.youtube import VALID_CATEGORIES, select_persona
+from src.services.video.youtube import VALID_CATEGORIES
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +26,7 @@ class OverrideRequest(BaseModel):
 class OverrideResponse(BaseModel):
     """Response from category override."""
     category: str
-    outputType: str
-    outputTypeLabel: str
-    persona: str
+    contentTag: str
 
 
 @router.post("/override/{video_summary_id}", response_model=OverrideResponse)
@@ -39,8 +37,8 @@ async def override_category(
 ) -> OverrideResponse:
     """Override detected category for an active pipeline.
 
-    Must be called before intent detection runs — the override provides
-    a category hint that influences output type selection.
+    Must be called before triage runs — the override provides
+    a category hint that influences content tag selection.
 
     Requires X-Internal-Secret header matching INTERNAL_SECRET config.
     """
@@ -55,18 +53,13 @@ async def override_category(
             detail=f"Invalid category '{request.category}'. Valid: {sorted(VALID_CATEGORIES)}",
         )
 
-    persona = select_persona(category)
-    output_type = determine_output_type(category)
+    content_tag = CATEGORY_TO_TAG.get(category, "learning")
 
     set_override(video_summary_id, {
         "category": category,
-        "persona": persona,
-        "output_type": output_type,
     })
 
     return OverrideResponse(
         category=category,
-        outputType=output_type,
-        outputTypeLabel=get_output_type_label(output_type),
-        persona=persona,
+        contentTag=content_tag,
     )

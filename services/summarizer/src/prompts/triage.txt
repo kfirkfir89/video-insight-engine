@@ -1,0 +1,138 @@
+You are analyzing a YouTube video to determine its content domains and the best way to present it.
+
+VIDEO METADATA:
+Title: {title}
+Description: {description}
+Duration: {duration_minutes} minutes
+Category hint: {category_hint}
+
+CONTENT ANALYSIS:
+{manifest}
+
+Determine the content domains, modifiers, and tab layout for this video.
+
+CONTENT TAGS (pick 1-3):
+- travel: Travel guides, destination reviews, itineraries, city tours
+- food: Cooking, baking, recipes, food reviews, restaurant guides
+- tech: Programming tutorials, coding, software, dev tools
+- fitness: Workout routines, exercises, training plans, yoga
+- music: Music analysis, production, theory, song breakdowns, artist profiles
+- learning: Educational content, lectures, courses, explanations, science
+- review: Product reviews, comparisons, buying guides, unboxing
+- project: DIY, crafts, home improvement, building, woodworking
+
+MODIFIERS (pick 0-2, only when clearly present):
+- narrative: Content has strong storytelling — key moments, quotes, emotional arc
+- finance: Content discusses specific costs, budgets, pricing, saving strategies
+
+RULES FOR TAGGING:
+- "travel" when video shows/discusses specific destinations, itineraries, or travel tips
+- "food" when video demonstrates cooking, discusses recipes, or reviews restaurants
+- "tech" when video contains code, terminal commands, or software architecture
+- "fitness" when video demonstrates exercises or discusses workout routines
+- "music" when video analyzes songs, discusses music production, or covers music theory
+- "learning" is the DEFAULT — use it when content is educational but doesn't fit a specific domain
+- "review" when video evaluates products with pros/cons/verdict
+- "project" when video shows step-by-step creation of a physical item
+- Use "narrative" modifier when there are memorable quotes, key moments, or storytelling
+- Use "finance" modifier when specific costs, budgets, or financial advice is present
+
+TAB LAYOUT RULES:
+- First tab should reflect the user's primary goal
+- Max 6 tabs, typically 3-5
+- Each tab has: id (snake_case), label (human-readable), emoji (single), dataSource (which data field to render)
+- dataSource maps to a field in the extracted data (e.g., "learning.keyPoints", "travel.itinerary")
+- CRITICAL: Tab "id" MUST be one of the ALLOWED IDs for its domain (listed below). The frontend uses tab IDs to route to specific UI sections.
+
+ALLOWED TAB IDs PER DOMAIN (use ONLY these exact IDs):
+- learning: key_points, concepts, takeaways, timestamps, quizzes, flashcards, scenarios
+- tech: overview, setup, code, patterns, cheat_sheet
+- fitness: overview, exercises, timer, tips
+- food: overview, ingredients, steps, tips
+- music: overview, analysis, structure, lyrics, credits
+- travel: overview, itinerary, packing, budget
+- review: overview, verdict, pros_cons, specs
+- project: overview, materials, tools, steps, safety
+- narrative: key_moments, quotes, takeaways
+
+FIRST TAB SELECTION:
+- Avoid "overview" as first tab when a more specific tab exists
+- Food → start with "ingredients" or "steps" (the recipe itself)
+- Tech → start with "code" or "setup" (what the user came for)
+- Review → start with "verdict" (the answer to "should I buy it?")
+- Fitness → start with "exercises" (the workout)
+- Project → start with "steps" (the build guide)
+- Travel → start with "itinerary" (the trip plan)
+- "overview" is appropriate ONLY when no single tab captures the primary content
+
+TAB LABEL RULES:
+- Labels MUST be specific to this video's content, not generic
+  ✅ "📅 7 Days in Japan" → tells user what's inside
+  ❌ "📅 Itinerary" → generic
+  ✅ "⚖️ 8.5/10" → includes the score
+  ❌ "⚖️ Verdict" → what's the verdict?
+- Include key numbers when available: days, score, cost, count
+- Keep labels short (2-4 words)
+
+SECTION DETECTION:
+- Look for repeating structures: days (travel), chapters (learning), exercises (fitness), steps (recipes/projects)
+- sections.type: "day" | "chapter" | "exercise" | "step" | "song" | "round"
+- sections.items: detected instances from the transcript preview
+
+Return JSON only:
+{{
+  "contentTags": ["learning"],
+  "modifiers": [],
+  "primaryTag": "learning",
+  "userGoal": "What the viewer wants to learn or accomplish from this video",
+  "confidence": 0.85,
+  "tabs": [
+    {{"id": "key_points", "label": "💡 5 Rules of Negotiation", "emoji": "💡", "dataSource": "learning.keyPoints"}},
+    {{"id": "concepts", "label": "📚 Core Frameworks", "emoji": "📚", "dataSource": "learning.concepts"}},
+    {{"id": "takeaways", "label": "🎯 Action Items", "emoji": "🎯", "dataSource": "learning.takeaways"}},
+    {{"id": "timestamps", "label": "🕐 Chapters", "emoji": "🕐", "dataSource": "learning.timestamps"}}
+  ],
+  "sections": []
+}}
+
+EXAMPLE — Travel video with finance modifier:
+{{
+  "contentTags": ["travel"],
+  "modifiers": ["finance"],
+  "primaryTag": "travel",
+  "userGoal": "Plan a budget trip to Tokyo",
+  "confidence": 0.92,
+  "tabs": [
+    {{"id": "itinerary", "label": "📅 7 Days in Tokyo", "emoji": "📅", "dataSource": "travel.itinerary"}},
+    {{"id": "budget", "label": "💰 $2,400 Budget", "emoji": "💰", "dataSource": "travel.budget"}},
+    {{"id": "packing", "label": "🎒 Pack List", "emoji": "🎒", "dataSource": "travel.packingList"}}
+  ],
+  "sections": [
+    {{"type": "day", "items": [{{"label": "Day 1: Shibuya & Harajuku"}}, {{"label": "Day 2: Asakusa & Akihabara"}}]}}
+  ]
+}}
+
+EXAMPLE — Cooking + narrative:
+{{
+  "contentTags": ["food"],
+  "modifiers": ["narrative"],
+  "primaryTag": "food",
+  "userGoal": "Learn to make authentic carbonara",
+  "confidence": 0.95,
+  "tabs": [
+    {{"id": "ingredients", "label": "🛒 6 Ingredients", "emoji": "🛒", "dataSource": "food.ingredients"}},
+    {{"id": "steps", "label": "👨‍🍳 5 Steps", "emoji": "👨‍🍳", "dataSource": "food.steps"}},
+    {{"id": "tips", "label": "✨ Chef Tips", "emoji": "✨", "dataSource": "food.tips"}}
+  ],
+  "sections": [
+    {{"type": "step", "items": [{{"label": "Prep ingredients"}}, {{"label": "Cook guanciale"}}, {{"label": "Make egg mixture"}}]}}
+  ]
+}}
+
+RULES:
+- contentTags: 1-3 tags, most specific first
+- primaryTag: the dominant content domain (must be one of contentTags)
+- confidence: 0.0-1.0 reflecting how well the video matches the detected domains
+- If unsure, use ["learning"] with confidence < 0.6
+- tabs: max 6, first tab = primary user goal
+- sections: only if repeating structure is clearly present

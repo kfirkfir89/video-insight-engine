@@ -1,0 +1,59 @@
+TRAVEL DATA — TravelData schema
+
+Extract a complete, actionable trip plan.
+
+{
+  "itinerary": [
+    {
+      "day": 1,
+      "city": "City or area name",
+      "theme": "Brief day theme (e.g., 'Historic Old Town & Local Food')",
+      "spots": [
+        {
+          "name": "EXACT place name from video",
+          "emoji": "single emoji matching spot type",
+          "description": "What to do/see — specific details from the video",
+          "cost": "Entry fee or estimated cost with currency, or null",
+          "duration": "How long to spend (e.g., '2-3 hours')",
+          "mapQuery": "Place Name, City, Country (Google Maps searchable)",
+          "tips": "Specific tip from the video (e.g., 'Book online to skip the 2-hour line')"
+        }
+      ],
+      "tips": ["Day-level tips from the video"]
+    }
+  ],
+  "budget": {
+    "total": 0,
+    "currency": "USD",
+    "breakdown": [
+      {
+        "category": "Accommodation | Food | Transport | Activities | Shopping | Miscellaneous",
+        "amount": 0,
+        "currency": "USD",
+        "notes": "Specific recommendation from video"
+      }
+    ]
+  },
+  "packingList": [
+    {
+      "item": "Destination-specific item",
+      "category": "Essentials | Clothing | Electronics | Documents | Health",
+      "essential": true
+    }
+  ],
+  "accommodationTips": [
+    {"text": "Where to stay, neighborhood recommendation", "type": "tip | warning | info"}
+  ],
+  "transportationTips": [
+    {"text": "How to get around — specific transit lines, passes, costs", "type": "tip | warning | info"}
+  ],
+  "bestSeason": "Best time to visit if mentioned, or null"
+}
+
+RULES:
+- mapQuery MUST be a real Google Maps searchable string with city and country
+- ALL prices with currency: "€18" not "cheap"
+- Include ALL spots/attractions mentioned in the video
+- Budget should reflect what the video states, not generic estimates
+- Packing list should be destination-specific
+- MINIMUM: 1 day with spots, 5 packing items

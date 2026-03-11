@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ...models.output_types import EnrichmentData
+from ...models.pipeline_types import EnrichmentData
 from ...utils.json_parsing import parse_json_response
 from .pipeline_helpers import truncate_json_safely
 
@@ -15,25 +15,25 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
 
-# Only certain output types get enrichment
+# Only certain content tags get enrichment.
+# Tech extraction already produces cheatSheet — no separate enrichment needed.
 ENRICHMENT_MAP: dict[str, str] = {
-    "study_kit": "enrich_study.txt",
-    "code_walkthrough": "enrich_code.txt",
+    "learning": "enrich_study.txt",
 }
 
 
 async def enrich(
     llm_service: LLMService,
-    output_type: str,
+    primary_tag: str,
     extraction_data: dict,
     title: str,
 ) -> EnrichmentData | None:
-    """Generate enrichment content based on output type.
+    """Generate enrichment content based on primary content tag.
 
-    Returns None for output types that don't support enrichment.
+    Returns None for content tags that don't support enrichment.
     Returns None on failure (enrichment is non-critical).
     """
-    prompt_file_name = ENRICHMENT_MAP.get(output_type)
+    prompt_file_name = ENRICHMENT_MAP.get(primary_tag)
     if not prompt_file_name:
         return None
 
@@ -58,11 +58,11 @@ async def enrich(
         data = parse_json_response(raw)
 
         if not data:
-            logger.warning("Empty enrichment response for %s", output_type)
+            logger.warning("Empty enrichment response for %s", primary_tag)
             return None
 
         return EnrichmentData.model_validate(data)
 
     except Exception as e:
-        logger.error("Enrichment failed for %s: %s — skipping", output_type, e)
+        logger.error("Enrichment failed for %s: %s — skipping", primary_tag, e)
         return None

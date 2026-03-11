@@ -65,19 +65,6 @@ class FastLLMProvider(Protocol):
 # -----------------------------------------------------------------------------
 # Video Context Extraction
 # -----------------------------------------------------------------------------
-
-class PersonaConfig(TypedDict):
-    """Configuration for a single persona detection rule."""
-    keywords: list[str]
-    categories: list[str]
-
-
-class PersonaRules(TypedDict):
-    """Structure of persona_rules.json."""
-    personas: dict[str, PersonaConfig]
-    default_persona: str
-
-
 class CategoryKeywords(TypedDict):
     """Keywords config for category detection."""
     primary: list[str]
@@ -110,21 +97,6 @@ class CategoryRules(TypedDict):
     detection_config: DetectionConfig
     categories: dict[str, CategoryConfig]
     default_category: str
-
-
-@lru_cache(maxsize=1)
-def _load_persona_rules() -> PersonaRules:
-    """Load persona detection rules from JSON file.
-
-    Returns:
-        Dict with 'personas' containing keyword/category rules,
-        and 'default_persona' for fallback.
-
-    Note:
-        Results are cached to avoid repeated disk reads.
-    """
-    path = PROMPTS_DIR / "detection" / "persona_rules.json"
-    return json.loads(path.read_text())
 
 
 @lru_cache(maxsize=1)
@@ -183,7 +155,6 @@ class VideoContext:
     """
     youtube_category: str | None
     category: str  # "cooking", "coding", "travel", etc.
-    persona: str  # "code", "recipe", "standard", etc.
     tags: list[str]
     display_tags: list[str]
     category_confidence: float = 1.0
@@ -312,38 +283,6 @@ def _detect_category(
     return best_category, best_score
 
 
-# Single source of truth: category → persona mapping.
-# Used by select_persona() and imported by llm.py for the inverse mapping.
-CATEGORY_TO_PERSONA: dict[str, str] = {
-    'cooking': 'recipe',
-    'coding': 'code',
-    'podcast': 'interview',
-    'reviews': 'review',
-    'fitness': 'fitness',
-    'travel': 'travel',
-    'education': 'education',
-    'gaming': 'standard',  # No gaming-specific persona yet
-    'diy': 'standard',     # No DIY-specific persona yet
-    'music': 'music',
-}
-
-
-def select_persona(category: str) -> str:
-    """Select LLM persona based on detected category.
-
-    The persona determines which prompt templates and examples are used
-    for summarization. Category is the user-facing classification,
-    persona is the internal LLM configuration.
-
-    Args:
-        category: Detected video category ('cooking', 'coding', etc.)
-
-    Returns:
-        Persona string for LLM prompts ('recipe', 'code', 'standard', etc.)
-    """
-    return CATEGORY_TO_PERSONA.get(category, 'standard')
-
-
 async def classify_category_with_llm(
     title: str,
     channel: str,
@@ -419,41 +358,6 @@ def get_llm_fallback_threshold() -> float:
     """
     rules = _load_category_rules()
     return rules.get("detection_config", {}).get("llm_fallback_threshold", 0.4)
-
-
-def _determine_persona(
-    category: str | None,
-    tags: list[str],
-    hashtags: list[str],
-) -> str:
-    """DEPRECATED: Use _detect_category() + select_persona() instead.
-
-    This function uses AND logic which fails when YouTube category
-    doesn't match even if keywords are strong.
-
-    Kept for backward compatibility with tests.
-    TODO: Remove this function and migrate tests to select_persona().
-    """
-    rules = _load_persona_rules()
-
-    # Combine tags and hashtags for keyword matching
-    all_terms = set(t.lower() for t in tags) | set(hashtags)
-
-    # Check each persona defined in rules
-    for persona_name, config in rules.get("personas", {}).items():
-        keywords = set(config.get("keywords", []))
-        categories = set(config.get("categories", []))
-
-        # Must be in matching category AND have matching keywords
-        is_matching_category = category in categories if category else False
-        has_matching_keywords = bool(all_terms & keywords)
-
-        if is_matching_category and has_matching_keywords:
-            return persona_name
-
-    # Default to standard persona
-    return rules.get("default_persona", "standard")
-
 
 def _build_display_tags(
     tags: list[str],
@@ -544,21 +448,17 @@ def extract_video_context(
         title=title,
     )
 
-    # Select persona based on detected category (NEW)
-    persona = select_persona(category)
-
     # Build display tags
     display_tags = _build_display_tags(tags, hashtags)
 
     logger.info(
-        "Video context: category=%s (confidence=%.2f), persona=%s, youtube_category=%s, tags=%d, hashtags=%d",
-        category, confidence, persona, youtube_category, len(tags), len(hashtags),
+        "Video context: category=%s (confidence=%.2f), youtube_category=%s, tags=%d, hashtags=%d",
+        category, confidence, youtube_category, len(tags), len(hashtags),
     )
 
     return VideoContext(
         youtube_category=youtube_category,
         category=category,
-        persona=persona,
         tags=tags,
         display_tags=display_tags,
         category_confidence=confidence,
@@ -925,7 +825,7 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
 
     # Phase 1: Extract video context (category, persona, tags)
     context = extract_video_context(info, description)
-    logger.info("Video %s: persona=%s, tags=%d", video_id, context.persona, len(context.display_tags))
+    logger.info("Video %s: category=%s, tags=%d", video_id, context.category, len(context.display_tags))
 
     return VideoData(
         video_id=video_id,

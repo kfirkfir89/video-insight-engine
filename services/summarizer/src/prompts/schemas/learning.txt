@@ -1,0 +1,45 @@
+LEARNING DATA — LearningData schema
+
+Extract structured educational content.
+
+{
+  "keyPoints": [
+    {
+      "emoji": "single emoji matching the topic",
+      "title": "Clear, specific title (not 'Important Point' but 'Redis Caching Reduces DB Load by 90%')",
+      "detail": "2-3 sentences with SPECIFIC details — numbers, names, quotes, examples from the video",
+      "timestamp": null
+    }
+  ],
+  "concepts": [
+    {
+      "name": "Term as the speaker uses it",
+      "emoji": "relevant emoji",
+      "definition": "Speaker's explanation, not a textbook definition",
+      "example": "Example from the video or null",
+      "analogy": "Analogy from the video or null",
+      "connections": ["Related concepts mentioned"]
+    }
+  ],
+  "takeaways": [
+    "Actionable conclusion starting with a verb: Use..., Implement..., Avoid..."
+  ],
+  "timestamps": [
+    {
+      "time": "M:SS or H:MM:SS",
+      "seconds": 0,
+      "label": "Descriptive label for this moment"
+    }
+  ],
+  "keyQuestion": "Central question this video answers",
+  "summary": "2-3 sentence summary of the core teaching"
+}
+
+RULES:
+- MINIMUM: 5 keyPoints, 3 concepts, 3 takeaways, 5 timestamps
+- keyPoints must teach ONE specific thing each — no filler
+- Cover the full video chronologically — don't cluster all points from first 5 minutes
+- Concepts: only include what's actually explained in the video
+- Takeaways: be specific ("Use Redis for session storage to handle 10x more concurrent users")
+- Timestamps: cover introduction, topic changes, demos, conclusions
+- Preserve speaker's terminology and examples exactly

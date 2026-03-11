@@ -1,0 +1,48 @@
+REVIEW DATA — ReviewData schema
+
+Extract a structured product review or comparison.
+
+{
+  "product": "Full product name with model number",
+  "price": "Exact price with currency or null",
+  "rating": {
+    "score": 0.0,
+    "maxScore": 10.0,
+    "label": "Score label (e.g., 'Great', 'Average')"
+  },
+  "pros": [
+    "Specific pro with real details: '5000mAh battery lasts 2 full days'"
+  ],
+  "cons": [
+    "Specific con: 'No headphone jack — need USB-C adapter ($9)'"
+  ],
+  "specs": [
+    {
+      "key": "Display",
+      "value": "6.7-inch AMOLED, 120Hz"
+    }
+  ],
+  "comparisons": [
+    {
+      "feature": "Battery",
+      "thisProduct": "5000mAh, 2-day battery life",
+      "competitor": "4500mAh, 1.5-day battery life",
+      "competitorName": "Competitor Product Name"
+    }
+  ],
+  "verdict": {
+    "badge": "recommended | not_recommended | conditional | best_in_class",
+    "bestFor": ["Specific use cases this product excels at"],
+    "notFor": ["Specific use cases to avoid this product"],
+    "bottomLine": "One-sentence verdict"
+  }
+}
+
+RULES:
+- Include ALL pros AND cons — never drop cons to soften the review
+- ALL specs with actual numbers: "6.7-inch AMOLED, 120Hz" not "large display"
+- Exact prices: "$999" not "premium price point"
+- Exact ratings: "8.5/10" not "highly rated"
+- Comparisons use real values: "5000mAh vs 4500mAh" not "bigger battery"
+- Preserve the reviewer's verdict — if they say "skip it", don't soften
+- Include model numbers and product names exactly

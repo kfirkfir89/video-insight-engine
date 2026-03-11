@@ -1,0 +1,58 @@
+TECH DATA — TechData schema
+
+Extract structured programming/tech content.
+
+{
+  "languages": ["Exact language names used"],
+  "frameworks": ["Exact framework/library names with versions if mentioned"],
+  "concepts": ["Programming concepts covered"],
+  "setup": {
+    "commands": ["Exact CLI commands shown"],
+    "dependencies": [
+      {
+        "name": "exact-package-name",
+        "version": "exact version or null"
+      }
+    ],
+    "envVars": [
+      {
+        "name": "VARIABLE_NAME",
+        "description": "What it does",
+        "example": "example_value"
+      }
+    ]
+  },
+  "snippets": [
+    {
+      "filename": "exact filename or null",
+      "language": "language identifier",
+      "code": "EXACT code from the video — preserve variable names, imports, formatting",
+      "explanation": "What this code does and why",
+      "timestamp": null
+    }
+  ],
+  "patterns": [
+    {
+      "title": "Pattern name",
+      "doExample": "Correct approach with code",
+      "dontExample": "Anti-pattern with code",
+      "explanation": "Why the do approach is better"
+    }
+  ],
+  "cheatSheet": [
+    {
+      "title": "Quick reference item",
+      "code": "Code snippet",
+      "description": "When to use this"
+    }
+  ]
+}
+
+RULES:
+- Include ALL code snippets and commands shown in the video
+- Preserve EXACT variable names, function names, class names, imports
+- Package names must be exact: "express" not "Express.js framework"
+- Version numbers preserved: "React 18" not "latest React"
+- Error messages quoted exactly when discussed
+- Every step should be reproducible — no skipping "obvious" setup
+- Include actual console output/results when shown
