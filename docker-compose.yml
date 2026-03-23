@@ -25,6 +25,42 @@ services:
       retries: 5
       start_period: 10s
 
+  vie-qdrant:
+    image: qdrant/qdrant:latest
+    container_name: vie-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - vie_qdrant_data:/qdrant/storage
+    networks:
+      - vie-network
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/6333"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  vie-redis:
+    image: redis:7-alpine
+    container_name: vie-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - vie_redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - vie-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
   # ----------------------------------------
   # Application Services
   # ----------------------------------------
@@ -47,7 +83,7 @@ services:
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
       SUMMARIZER_URL: http://vie-summarizer:8000
       EXPLAINER_URL: http://vie-explainer:8001
-      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-change-in-production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
@@ -59,7 +95,7 @@ services:
       vie-mongodb:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -77,6 +113,7 @@ services:
     volumes:
       - ./services/summarizer/src:/app/src:ro
       - ./services/summarizer/scripts:/app/scripts:ro
+      - ./packages/shared/src/config/domains.json:/app/shared/domains.json:ro
     environment:
       PYTHONUNBUFFERED: 1
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
@@ -107,13 +144,22 @@ services:
       AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
       # Frame extraction (visual blocks)
       FRAME_EXTRACTION_ENABLED: ${FRAME_EXTRACTION_ENABLED:-true}
+      # Qdrant vector DB
+      QDRANT_HOST: vie-qdrant
+      QDRANT_PORT: 6333
+      # Redis response cache
+      REDIS_URL: redis://vie-redis:6379
+      # Advanced transcript cleaning
+      TRANSCRIPT_CLEANING_ENABLED: ${TRANSCRIPT_CLEANING_ENABLED:-true}
+      # Scene-based frame extraction (additive to timestamp extraction)
+      SCENE_EXTRACTION_ENABLED: ${SCENE_EXTRACTION_ENABLED:-true}
     networks:
       - vie-network
     depends_on:
       vie-mongodb:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -155,7 +201,7 @@ services:
       vie-mongodb:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -223,3 +269,7 @@ networks:
 volumes:
   vie_mongodb_data:
     name: vie_mongodb_data
+  vie_qdrant_data:
+    name: vie_qdrant_data
+  vie_redis_data:
+    name: vie_redis_data

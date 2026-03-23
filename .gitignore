@@ -2,6 +2,7 @@
 # Video Insight Engine
 # ================================================
 dev/research/*
+dev/completed/*
 # Environment
 .env
 .env.local

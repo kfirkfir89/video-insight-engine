@@ -55,6 +55,21 @@
 - Keep comments up to date
 - No obvious comments (e.g., `// increment i`)
 
+## Function Complexity
+
+- Maximum: 50 lines per function (excluding docstrings)
+- Maximum: 5 mutable local variables per function
+- No copy-pasted logic — extract shared helpers
+- If a function has more than 3 phases/stages, use a pipeline pattern
+- State shared across phases must be explicit (dataclass/dict), not loose locals
+
+## Pipeline / Workflow Code
+
+- Each stage must be an independent, testable function
+- Stage functions receive context in, return results out
+- No implicit dependencies between stages via mutable closure variables
+- Timeout/fallback logic belongs in the stage, not the orchestrator
+
 ## Enforcement Level
 
 **Required** - Follow unless explicitly overridden by user.

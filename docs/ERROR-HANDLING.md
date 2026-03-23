@@ -90,7 +90,7 @@ See [docs/SECURITY.md](./SECURITY.md#rate-limiting) for implementation.
 
 ## Video Processing Edge Cases
 
-### Detection Flow
+### Processing Flow
 
 ```
 URL submitted
@@ -102,7 +102,7 @@ URL submitted
          │
          ▼
 ┌─────────────────┐
-│ Check cache     │──── Exists ────► Return cached
+│ Check cache     │──── Exists ────► Return cached (Redis → MongoDB)
 └────────┬────────┘
          │ Miss
          ▼
@@ -127,7 +127,23 @@ URL submitted
          │
          ▼
    HTTP POST to summarizer
+         │
+         ▼
+┌─────────────────┐
+│ Classifier      │──── LLM classifies domain + format
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Plan stage      │──── LLM designs tab layout + content tags
+└────────┬────────┘
+         │
+         ▼
+   Extraction → Assembly → Synthesis → Enrichment
 ```
+
+> **Note:** Classification happens via an LLM classifier (`classifier.py`) and plan stage (`plan.py`),
+> not the legacy "persona detection" system which has been removed.
 
 ### Implementation
 

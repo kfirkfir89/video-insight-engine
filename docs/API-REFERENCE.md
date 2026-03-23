@@ -557,6 +557,8 @@ Send a message about a video. Ephemeral — no server-side persistence.
 
 ## Memorize
 
+> **Legacy endpoints** -- Backend routes exist but are not used by the current frontend. Will be deprecated.
+
 ### GET /memorize
 
 List memorized items.
@@ -754,8 +756,9 @@ Get public summary by share slug. No auth required.
   "channel": "Fireship",
   "thumbnailUrl": "https://img.youtube.com/...",
   "duration": 1200,
-  "outputType": "tutorial",
-  "context": { "category": "coding", "tags": ["react"] },
+  "contentTags": ["tech", "learning"],
+  "primaryTag": "tech",
+  "context": { "contentTags": ["tech", "learning"], "primaryTag": "tech", "tags": ["react"] },
   "summary": { "tldr": "...", "chapters": [...] },
   "shareSlug": "aBcDeFgHiJ",
   "viewsCount": 42,
@@ -786,7 +789,7 @@ Like a shared summary. No auth, IP rate limited.
 
 ### PATCH /videos/:id/override-category
 
-Override the detected category for a video. Auth required.
+Override the detected classification for a video. Triggers re-classification through the plan stage. Auth required.
 
 **Request:**
 
@@ -806,6 +809,8 @@ Override the detected category for a video. Auth required.
   "previousCategory": "standard"
 }
 ```
+
+> **Note:** This endpoint now triggers re-classification, not just a category override. The video will be reprocessed with the new domain hint.
 
 **Valid categories:** `cooking`, `coding`, `fitness`, `travel`, `education`, `podcast`, `reviews`, `gaming`, `diy`, `music`, `standard`
 
@@ -1331,25 +1336,37 @@ Progressive summarization via Server-Sent Events.
 
 The summarization pipeline uses SSE to stream results progressively, allowing the frontend to display content as it becomes available.
 
-**Endpoint:** `GET /api/summarize/stream/{videoSummaryId}`
+**Endpoint:** `GET /api/videos/:videoSummaryId/stream`
 
 ---
 
 ## Event Types
 
+### v2 Events (Current Pipeline)
+
 | Event | Phase | Description |
 |-------|-------|-------------|
 | `phase` | All | Indicates which processing phase started |
-| `metadata` | 1 | Video metadata (title, channel, duration, context with category, outputType) |
-| `detection_result` | 1 | Category detection result with outputType and confidence |
+| `metadata` | 1 | Video metadata (title, channel, duration, context) |
 | `chapters` | 1 | Creator chapters if available |
 | `sponsor_segments` | 1 | SponsorBlock segments |
 | `transcript_ready` | 1 | Transcript extraction complete |
 | `description_analysis` | 2 | Links, resources extracted from description |
-| `synthesis_complete` | 2 | TLDR and key takeaways |
-| `chapter_ready` | 2-3 | Individual chapter summary with content blocks |
-| `concepts_complete` | 4 | Key concepts extracted |
-| `done` | 5 | Processing complete |
+| `triage_complete` | 3 | Content tags, tab layout, confidence from plan stage |
+| `extraction_complete` | 4 | Domain extraction finished |
+| `meta` | 5 | VIEResponseMeta with videoId, contentTags, tldr, etc. |
+| `tab_ready` | 5 | Individual assembled tab with component and props |
+| `synthesis_complete` | 5 | TLDR and key takeaways |
+| `complete` | 6 | Processing complete with tab count and timing |
+| `done` | 6 | Final event, closes stream |
+
+### Legacy Events (v1 -- still emitted for backward compat)
+
+| Event | Phase | Description |
+|-------|-------|-------------|
+| `detection_result` | 1 | Legacy: Category detection result with outputType |
+| `chapter_ready` | 3 | Legacy: Individual chapter summary with content blocks |
+| `concepts_complete` | 4 | Legacy: Key concepts extracted |
 
 ---
 
@@ -1360,16 +1377,15 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
 │                    STREAMING PHASES (SSE Events)                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  PHASE 1: EXTRACTION (~1-30 seconds, depends on transcript source)         │
+│  PHASE 1: METADATA + TRANSCRIPT + FRAMES (parallel)                        │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  yt-dlp Extraction + Transcript Fallback Chain                      │   │
+│  │  yt-dlp Metadata → then Transcript + Frames in parallel             │   │
 │  │                                                                      │   │
 │  │  Output events:                                                      │   │
 │  │    - metadata (title, channel, thumbnail, duration)                 │   │
 │  │    - chapters (if creator chapters exist)                            │   │
 │  │    - sponsor_segments (SponsorBlock API)                             │   │
 │  │    - transcript_ready                                                │   │
-│  │    - VideoContext with CATEGORY (coding/cooking/music/etc)          │   │
 │  │                                                                      │   │
 │  │  Transcript source chain (first success wins):                      │   │
 │  │    1. S3 cache          → phase: transcript_cached (~instant)       │   │
@@ -1379,41 +1395,42 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
 │  │    5. Metadata fallback → phase: metadata_fallback (music only)    │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  PHASE 2: PARALLEL ANALYSIS (~2-5 seconds)                                 │
+│  PHASE 2: VISUAL CONTEXT INJECTION                                         │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  Three tasks run simultaneously using asyncio.gather():              │   │
-│  │                                                                      │   │
-│  │  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐     │   │
-│  │  │ Task A: Desc     │ │ Task B: TLDR     │ │ Task C: First    │     │   │
-│  │  │ Analysis         │ │ Generation       │ │ Section          │     │   │
-│  │  │ (Haiku ~1-2s)    │ │ (Sonnet ~2-3s)   │ │ (Sonnet ~3-5s)   │     │   │
-│  │  └──────────────────┘ └──────────────────┘ └──────────────────┘     │   │
-│  │                                                                      │   │
-│  │  Output events: description_analysis, synthesis_complete,            │   │
-│  │                 chapter_ready (index 0)                              │   │
+│  │  Inject [VISUAL at M:SS] annotations from frame analysis            │   │
+│  │  into transcript (if frame intelligence enabled)                    │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  PHASE 3: CHAPTER SUMMARIES (progressive, ~3-5s per batch)                 │
+│  PHASE 3: CLASSIFIER + PLAN (~2-5 seconds)                                 │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  Process remaining chapters in batches (CHAPTER_BATCH_SIZE = 3)     │   │
+│  │  Classifier (fast model) + Plan (Sonnet) determine domain,          │   │
+│  │  content tags, and tab layout                                       │   │
 │  │                                                                      │   │
-│  │  Batch 1: Chapters 2-4 (parallel) → chapter_ready events            │   │
-│  │  Batch 2: Chapters 5-7 (parallel) → chapter_ready events            │   │
-│  │  ...                                                                 │   │
-│  │                                                                      │   │
-│  │  Each chapter uses PERSONA internally for content block styling     │   │
+│  │  Output event: triage_complete                                      │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  PHASE 4: CONCEPTS (~3-5 seconds)                                          │
+│  PHASE 4: EXTRACTION (~5-30 seconds, chunked for long videos)              │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  Extract key concepts from timestamped transcript                   │   │
-│  │  Output event: concepts_complete                                     │   │
+│  │  Domain-specific extraction using schemas                           │   │
+│  │  Chunked extraction for >30min videos (chapter-aware batching)     │   │
+│  │                                                                      │   │
+│  │  Output event: extraction_complete                                  │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  PHASE 5: SAVE & DONE                                                      │
+│  PHASE 5: ENRICHMENT + SYNTHESIS + ASSEMBLY (parallel where possible)      │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  Enrichment (quiz/flashcards, fast model) runs if domain supports   │   │
+│  │  Synthesis (fast model) + Assembly (pure code) run in parallel      │   │
+│  │                                                                      │   │
+│  │  Output events: meta, tab_ready[] (one per tab),                    │   │
+│  │                 synthesis_complete                                   │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  PHASE 6: SAVE & DONE                                                      │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │  - Save complete result to MongoDB                                  │   │
-│  │  - Emit "done" event with processingTimeMs                          │   │
+│  │  - Emit "complete" event with tabCount + processingTimeMs           │   │
+│  │  - Emit "done" event (triggers confetti on frontend)                │   │
 │  │  - Emit "[DONE]" to close SSE stream                                │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
@@ -1427,7 +1444,7 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
 ### phase
 
 ```json
-{ "event": "phase", "phase": "metadata" | "transcript" | "transcript_cached" | "audio_transcription" | "whisper_transcription" | "metadata_fallback" | "parallel_analysis" | "chapter_detect" | "chapter_summaries" | "concepts" | "master_summary" }
+{ "event": "phase", "phase": "metadata" | "transcript" | "transcript_cached" | "audio_transcription" | "whisper_transcription" | "metadata_fallback" | "frames" | "visual_injection" | "classify" | "plan" | "extraction" | "enrichment" | "synthesis" | "assembly" }
 ```
 
 **Transcript sub-phases** (emitted within Phase 1 based on transcript source):
@@ -1449,7 +1466,6 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
   "channel": "Fireship",
   "duration": 627,
   "thumbnailUrl": "https://i.ytimg.com/vi/xxx/maxresdefault.jpg",
-  "outputType": "tutorial",
   "context": {
     "category": "coding",
     "youtubeCategory": "Science & Technology",
@@ -1459,16 +1475,73 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
 }
 ```
 
-### detection_result
+### triage_complete
 
-Emitted after metadata, before chapter processing. Reports the detected category and output type.
+Emitted after the plan stage determines content tags and tab layout.
 
 ```json
 {
-  "event": "detection_result",
-  "category": "coding",
-  "outputType": "tutorial",
-  "confidence": 0.92
+  "event": "triage_complete",
+  "contentTags": ["tech", "learning"],
+  "modifiers": [],
+  "primaryTag": "tech",
+  "tabs": [
+    { "id": "overview", "label": "Overview", "emoji": "📋", "dataSource": "tech.overview" },
+    { "id": "code", "label": "Code", "emoji": "💻", "dataSource": "tech.codeSnippets" }
+  ],
+  "confidence": 0.88
+}
+```
+
+### meta
+
+VIEResponseMeta with video identity and synthesis results.
+
+```json
+{
+  "event": "meta",
+  "videoId": "dQw4w9WgXcQ",
+  "videoTitle": "React Hooks Tutorial",
+  "creator": "Fireship",
+  "contentTags": ["tech", "learning"],
+  "modifiers": [],
+  "primaryTag": "tech",
+  "userGoal": "Learn React Hooks patterns and best practices",
+  "tldr": "Comprehensive guide to React Hooks covering useState, useEffect, and custom hooks...",
+  "keyTakeaways": ["useState manages component state", "useEffect handles side effects"],
+  "masterSummary": "This tutorial walks through...",
+  "seoDescription": "Learn React Hooks..."
+}
+```
+
+### tab_ready
+
+Individual assembled tab, emitted once per tab. Each tab is self-contained with component name and pre-resolved props.
+
+```json
+{
+  "event": "tab_ready",
+  "id": "overview",
+  "label": "Overview",
+  "emoji": "📋",
+  "component": "overview",
+  "props": {
+    "sections": [...],
+    "stats": [...]
+  },
+  "crossTabLinks": [
+    { "targetTab": "code", "label": "See code examples" }
+  ]
+}
+```
+
+### complete
+
+```json
+{
+  "event": "complete",
+  "tabCount": 5,
+  "processingTimeMs": 25432
 }
 ```
 
@@ -1526,46 +1599,6 @@ Emitted after metadata, before chapter processing. Reports the detected category
 }
 ```
 
-### chapter_ready
-
-```json
-{
-  "event": "chapter_ready",
-  "index": 0,
-  "chapter": {
-    "id": "uuid-1234",
-    "timestamp": "00:00",
-    "startSeconds": 0,
-    "endSeconds": 120,
-    "title": "Introduction",
-    "originalTitle": "Introduction",
-    "isCreatorChapter": true,
-    "content": [
-      { "blockId": "uuid-a1b2", "type": "paragraph", "text": "In this chapter..." },
-      { "blockId": "uuid-c3d4", "type": "bullets", "items": ["Point 1", "Point 2"] }
-    ],
-    "summary": "Legacy summary text",
-    "bullets": ["Legacy bullet 1", "Legacy bullet 2"]
-  }
-}
-```
-
-### concepts_complete
-
-```json
-{
-  "event": "concepts_complete",
-  "concepts": [
-    {
-      "id": "uuid-5678",
-      "name": "useState",
-      "definition": "A React hook for managing state in functional components",
-      "timestamp": "2:30"
-    }
-  ]
-}
-```
-
 ### done
 
 ```json
@@ -1581,7 +1614,7 @@ Emitted after metadata, before chapter processing. Reports the detected category
 ## Client Implementation
 
 ```typescript
-// apps/web/src/hooks/use-summary-stream.ts
+// apps/web/src/hooks/use-summary-stream.ts (simplified)
 
 export function useSummaryStream(videoSummaryId: string | null) {
   const [state, setState] = useState<StreamState>({ phase: 'idle' });
@@ -1590,7 +1623,7 @@ export function useSummaryStream(videoSummaryId: string | null) {
     if (!videoSummaryId) return;
 
     const eventSource = new EventSource(
-      `/api/summarize/stream/${videoSummaryId}`
+      `/api/videos/${videoSummaryId}/stream`
     );
 
     eventSource.onmessage = (event) => {
@@ -1606,23 +1639,27 @@ export function useSummaryStream(videoSummaryId: string | null) {
           setState(s => ({ ...s, metadata: data }));
           break;
 
-        case 'synthesis_complete':
-          setState(s => ({ ...s, tldr: data.tldr, keyTakeaways: data.keyTakeaways }));
+        case 'triage_complete':
+          setState(s => ({ ...s, triage: data }));
           break;
 
-        case 'chapter_ready':
+        case 'meta':
+          setState(s => ({ ...s, meta: data }));
+          break;
+
+        case 'tab_ready':
           setState(s => ({
             ...s,
-            chapters: [...(s.chapters || []), data.chapter]
+            tabs: [...(s.tabs || []), data]
           }));
           break;
 
-        case 'concepts_complete':
-          setState(s => ({ ...s, concepts: data.concepts }));
+        case 'complete':
+          setState(s => ({ ...s, phase: 'complete', tabCount: data.tabCount }));
           break;
 
         case 'done':
-          setState(s => ({ ...s, phase: 'complete', processingTimeMs: data.processingTimeMs }));
+          setState(s => ({ ...s, phase: 'done', processingTimeMs: data.processingTimeMs }));
           break;
       }
     };
@@ -1643,14 +1680,15 @@ export function useSummaryStream(videoSummaryId: string | null) {
 
 ## LLM Calls Summary
 
-For a typical 10-chapter video:
+For a typical video (v2 pipeline):
 
-| Phase | Model | Calls | Parallel? |
+| Stage | Model | Calls | Parallel? |
 |-------|-------|-------|-----------|
-| Phase 2 | Haiku | 1 (description) | Yes |
-| Phase 2 | Sonnet | 1 (TLDR) | Yes |
-| Phase 2 | Sonnet | 1 (first chapter) | Yes |
-| Phase 3 | Sonnet | 9 (remaining chapters) | Batched (3) |
-| Phase 4 | Sonnet | 1 (concepts) | No |
+| Classifier | Fast (Haiku) | 1 | Yes (with Plan) |
+| Plan | Sonnet | 1 | Yes (with Classifier) |
+| Extraction | Sonnet | 1-N (chunked for long videos) | Batched |
+| Enrichment | Fast (Haiku) | 1 (if domain supports it) | No |
+| Synthesis | Fast (Haiku) | 1 | Yes (with Assembly) |
+| Assembly | None (pure code) | 0 | Yes (with Synthesis) |
 
-**Total: ~13 LLM calls, ~20-30 seconds**
+**Total: ~4-6 LLM calls, ~15-40 seconds** (varies with video length and chunking)

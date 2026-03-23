@@ -1,5 +1,9 @@
 # Service: vie-explainer
 
+> **Note:** The Explainer service is being rebranded as "Assistant". The current implementation
+> provides two MCP tools (`explain_auto`, `video_chat`). Future direction: will evolve into a
+> user agent for app interactions.
+
 Python MCP server for AI-powered video explanation tools.
 
 **Type:** MCP Server (Streamable HTTP transport)

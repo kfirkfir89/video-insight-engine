@@ -189,6 +189,30 @@ class SummarizeRequest(BaseModel):
     userId: str | None = None
 ```
 
+### VIEResponse Contract (v2)
+
+The pipeline produces two output formats stored side-by-side for backward compatibility:
+
+| Field            | Format | Description                              |
+| ---------------- | ------ | ---------------------------------------- |
+| `triage`         | v1     | Content tags + tab layout (legacy)       |
+| `output`         | v1     | Extraction + synthesis + enrichment      |
+| `assembledMeta`  | v2     | VIEResponseMeta (domain, title, etc.)    |
+| `assembledTabs`  | v2     | TabEntry[] (component-addressed tabs)    |
+
+The frontend checks for `assembledTabs` first (v2 path). If absent, it falls back to building a VIEResponse from `triage` + `output` (v1 path).
+
+### Assembly Stage as Cross-Cutting Concern
+
+The assembly stage (`services/summarizer/src/services/pipeline/assembly.py`) produces `TabEntry[]` that must be understood by both:
+
+- **Python (summarizer)**: Produces and stores the assembled tabs
+- **TypeScript (web)**: Renders tabs via `COMPONENT_REGISTRY` in `ComposableOutput.tsx`
+
+Each `TabEntry` has: `{ id, label, emoji, component, props, crossTabLinks? }`
+
+The `component` field maps to a React renderer. Adding a new component requires updates in both the Python assembler registry and the TypeScript component registry.
+
 ### Type Sync Checklist
 
 When adding a new type:
@@ -196,6 +220,7 @@ When adding a new type:
 - [ ] Define in Python service schemas
 - [ ] Update API docs with examples
 - [ ] Verify JSON serialization matches
+- [ ] If TabEntry-related: update both assembly.py and ComposableOutput.tsx
 
 ---
 

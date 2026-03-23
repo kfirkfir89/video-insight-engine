@@ -356,6 +356,38 @@ await fastify.register(helmet, {
 
 ---
 
+## SSRF Protection
+
+### OG Image Service (`og-image.service.ts`)
+
+Thumbnail URLs from the database are user-influenced. Before fetching, the service validates the hostname against an allowlist:
+
+```typescript
+const allowedHosts = ['img.youtube.com', 'i.ytimg.com', 'i3.ytimg.com', 'i1.ytimg.com'];
+const parsed = new URL(imageUrl);
+if (!allowedHosts.includes(parsed.hostname)) {
+  this.logger.warn({ slug, imageUrl }, 'Rejected non-YouTube thumbnail URL');
+  return null;
+}
+```
+
+### XSS Protection in Share Templates (`share-page.ts`)
+
+All dynamic values in the share page template are escaped via `escapeHtml()`:
+- Titles, creator names, and TLDRs use `escapeHtml()` for HTML content
+- Thumbnail URLs use `escapeHtml()` in `<img src>` attributes
+- JSON-LD uses `JSON.stringify().replace(/</g, '\\u003c')` to prevent script breakout
+
+### MongoDB Field Allowlist (`mongodb_repository.py`)
+
+`save_structured_result()` uses a field allowlist (`_ALLOWED_RESULT_KEYS`) to prevent pipeline injection of arbitrary fields like `_id` or `userId` into MongoDB documents.
+
+### Internal Secret Validation (`config.py`)
+
+The summarizer logs a warning at startup if `INTERNAL_SECRET` is using the default value in non-dev environments. This prevents accidental deployment with a well-known default.
+
+---
+
 ## Secrets Management
 
 ### Required Secrets
