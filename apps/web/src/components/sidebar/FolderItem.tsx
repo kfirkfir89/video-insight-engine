@@ -120,10 +120,10 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
     }
 
     setSelectedFolder(folder.id);
-    setActiveSection(type);
+    setActiveSection("summarized");
 
-    if (location.pathname !== "/") {
-      navigate("/");
+    if (location.pathname !== "/board") {
+      navigate("/board");
       if (!isExpanded && hasChildren) {
         toggleFolderExpansion(folder.id);
       }

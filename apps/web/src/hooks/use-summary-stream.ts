@@ -14,11 +14,13 @@ import { processEvent } from "@/lib/stream-event-processor";
 
 import type {
   VideoContext,
-  IntentResult,
-  OutputData,
+  TriageResult,
   EnrichmentData,
   SynthesisResult,
+  VIEResponseMeta,
+  TabEntry,
 } from "@vie/types";
+import type { Dispatch, SetStateAction } from "react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 
@@ -27,7 +29,7 @@ export type StreamPhase =
   | "connecting"
   | "metadata"
   // Pipeline output phases
-  | "intent_detection"
+  | "triage"
   | "extraction"
   | "enrichment"
   | "synthesis"
@@ -41,7 +43,7 @@ export const STREAM_PHASE_LABELS: Record<StreamPhase, string> = {
   connecting: "Connecting to AI...",
   metadata: "Fetching video info...",
   // Pipeline output phases
-  intent_detection: "Detecting content type...",
+  triage: "Analyzing content type...",
   extraction: "Extracting structured data...",
   enrichment: "Generating study aids...",
   synthesis: "Generating summary...",
@@ -49,6 +51,15 @@ export const STREAM_PHASE_LABELS: Record<StreamPhase, string> = {
   cancelled: "Summarization cancelled",
   error: "Error occurred",
 };
+
+export interface FrameInfo {
+  index: number;
+  timestamp: number;
+  url: string;
+  s3Key?: string;
+  ocrText?: string;
+  textDensity?: number;
+}
 
 // Local types not in shared package
 export interface VideoMetadata {
@@ -70,12 +81,20 @@ export interface StreamState {
   warnings: string[];
   // Celebration trigger — increment to fire a new confetti burst
   confettiCount: number;
-  // Pipeline output state
-  intent: IntentResult | null;
+  // Pipeline output state (triage pipeline)
+  triage: TriageResult | null;
   extractionProgress: { section: string; percent: number } | null;
-  output: OutputData | null;
+  domainData: Record<string, unknown> | null;
   enrichment: EnrichmentData | null;
   synthesis: SynthesisResult | null;
+  // Assembled output (component-addressed tabs)
+  meta: VIEResponseMeta | null;
+  tabs: TabEntry[];
+  // Progressive rendering state
+  tabCount: number;
+  tabLabels: { id: string; label: string; emoji: string }[];
+  // Frame extraction data
+  frames: FrameInfo[];
 }
 
 interface UseSummaryStreamOptions {
@@ -94,16 +113,83 @@ const initialState: StreamState = {
   processingTimeMs: null,
   warnings: [],
   confettiCount: 0,
-  // Pipeline output state
-  intent: null,
+  // Pipeline output state (triage pipeline)
+  triage: null,
   extractionProgress: null,
-  output: null,
+  domainData: null,
   enrichment: null,
   synthesis: null,
+  // Assembled output
+  meta: null,
+  tabs: [],
+  // Progressive rendering state
+  tabCount: 0,
+  tabLabels: [],
+  // Frame extraction data
+  frames: [],
 };
 
 // Save interval for localStorage cache (ms) - don't save on every update
 const CACHE_SAVE_INTERVAL = 2000;
+
+// ─── Extracted helpers ───
+
+/** Attempt a single token refresh. Returns the new token or null. */
+async function attemptTokenRefresh(): Promise<string | null> {
+  const refreshed = await refreshToken();
+  if (refreshed) {
+    return getAccessToken();
+  }
+  return null;
+}
+
+/** Handle 401 responses — refresh token once, force logout on failure.
+ * Returns the new token if refresh succeeded, null if retry should not happen. */
+async function handleUnauthorized(
+  tokenRefreshAttemptedRef: { current: boolean },
+): Promise<string | null> {
+  if (tokenRefreshAttemptedRef.current) return null;
+  tokenRefreshAttemptedRef.current = true;
+  const newToken = await attemptTokenRefresh();
+  if (newToken) return newToken;
+  useAuthStore.getState().forceLogout("Session expired. Please log in again.");
+  return null;
+}
+
+/** Read SSE lines from a ReadableStream, calling processEvent for each. */
+async function readSSEStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  setState: Dispatch<SetStateAction<StreamState>>,
+): Promise<void> {
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const data = line.slice(6);
+      if (data === "[DONE]") continue;
+
+      try {
+        const event = JSON.parse(data);
+        processEvent(event, setState);
+      } catch (parseErr) {
+        if (import.meta.env.DEV) {
+          console.debug("[SSE] Failed to parse event data:", data.slice(0, 200), parseErr);
+        }
+      }
+    }
+  }
+}
+
+// ─── Hook ───
 
 export function useSummaryStream({
   videoSummaryId,
@@ -118,25 +204,34 @@ export function useSummaryStream({
   const tokenRefreshAttemptedRef = useRef(false);
   // Track if we've restored from cache to avoid double-restoration
   const cacheRestoredRef = useRef(false);
-  // Track last cache save time to throttle saves
-  const lastCacheSaveRef = useRef(0);
   // Track if we're currently connecting to prevent duplicate connections
   const isConnectingRef = useRef(false);
   // Store callbacks in refs to avoid dependency issues
+  // Updated in useEffect (not during render) for concurrent mode safety
   const onCompleteRef = useRef(onComplete);
   const onErrorRef = useRef(onError);
-  onCompleteRef.current = onComplete;
-  onErrorRef.current = onError;
-  // Store accessToken in ref to use in cleanup without triggering re-connection
+  // Store accessToken in ref to use in cleanup without triggering re-connection on refresh.
+  // Use boolean `hasToken` as a dep to trigger reconnection on login/logout transitions.
   const accessTokenRef = useRef(accessToken);
-  accessTokenRef.current = accessToken;
+  const hasToken = !!accessToken;
 
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+    onErrorRef.current = onError;
+    accessTokenRef.current = accessToken;
+  }, [onComplete, onError, accessToken]);
+
+  // Save state to localStorage periodically for resumption after refresh
+  // Uses ref + interval to avoid firing on every state change during streaming
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   const connect = useCallback(async (tokenOverride?: string) => {
     // Prevent duplicate connections
     if (isConnectingRef.current) return;
     isConnectingRef.current = true;
-    const currentToken = tokenOverride || accessToken;
+    // Use explicit override first, then current ref value (updated via useEffect)
+    const currentToken = tokenOverride || accessTokenRef.current;
     if (!videoSummaryId || !currentToken) {
       isConnectingRef.current = false;
       return;
@@ -158,18 +253,12 @@ export function useSummaryStream({
       );
 
       // Handle 401 - try token refresh once
-      if (response.status === 401 && !tokenRefreshAttemptedRef.current) {
-        tokenRefreshAttemptedRef.current = true;
-        const refreshed = await refreshToken();
-        if (refreshed) {
-          const newToken = getAccessToken();
-          if (newToken) {
-            isConnectingRef.current = false;
-            return connect(newToken);
-          }
+      if (response.status === 401) {
+        const newToken = await handleUnauthorized(tokenRefreshAttemptedRef);
+        if (newToken) {
+          isConnectingRef.current = false;
+          return connect(newToken);
         }
-        // Refresh failed - force logout and redirect to login
-        useAuthStore.getState().forceLogout("Session expired. Please log in again.");
         throw new Error("Session expired. Please log in again.");
       }
 
@@ -181,38 +270,14 @@ export function useSummaryStream({
       tokenRefreshAttemptedRef.current = false;
 
       const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-
       if (!reader) {
         throw new Error("No response body");
       }
 
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-
-          const data = line.slice(6);
-          if (data === "[DONE]") continue;
-
-          try {
-            const event = JSON.parse(data);
-            processEvent(event, setState);
-          } catch {
-            // Ignore parse errors for incomplete chunks
-          }
-        }
-      }
+      await readSSEStream(reader, setState);
 
       isConnectingRef.current = false;
+      // Read final state from the updater to guarantee we see all committed updates.
       setState((prev) => {
         if (prev.phase !== "error") {
           onCompleteRef.current?.(prev);
@@ -221,6 +286,7 @@ export function useSummaryStream({
       });
     } catch (err) {
       isConnectingRef.current = false;
+      tokenRefreshAttemptedRef.current = false;
       if (err instanceof Error && err.name === "AbortError") {
         return;
       }
@@ -235,7 +301,7 @@ export function useSummaryStream({
       }));
       onErrorRef.current?.(userFriendlyError);
     }
-  }, [videoSummaryId, accessToken]);
+  }, [videoSummaryId]);
 
   const retry = useCallback(() => {
     retryCountRef.current = 0;
@@ -262,7 +328,7 @@ export function useSummaryStream({
     // 1. Streaming is enabled
     // 2. We have a valid videoSummaryId and accessToken
     // 3. We haven't already started connecting for this videoSummaryId
-    if (enabled && videoSummaryId && accessToken && lastConnectedIdRef.current !== videoSummaryId) {
+    if (enabled && videoSummaryId && hasToken && lastConnectedIdRef.current !== videoSummaryId) {
       lastConnectedIdRef.current = videoSummaryId;
       retryCountRef.current = 0;
       tokenRefreshAttemptedRef.current = false;
@@ -277,7 +343,9 @@ export function useSummaryStream({
         }
       }
 
-      connect();
+      // Pass accessToken explicitly to avoid ref timing issues on initial mount.
+      // Guard against null — hasToken may be true from a stale closure while accessToken is refreshing.
+      if (accessToken) connect(accessToken);
     }
 
     // When streaming is disabled, reset tracking to allow reconnection
@@ -291,28 +359,24 @@ export function useSummaryStream({
     return () => {
       abortControllerRef.current?.abort();
     };
-    // Issue #10: Intentionally limited deps to prevent infinite loops
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, videoSummaryId, accessToken]);
+    // connect is memoized on [videoSummaryId] which is already a dep,
+    // so including it doesn't cause extra reconnections
+  }, [enabled, videoSummaryId, hasToken, connect]);
 
-  // Save state to localStorage periodically for resumption after refresh
-  // Throttled to CACHE_SAVE_INTERVAL to avoid excessive writes
   useEffect(() => {
     if (!videoSummaryId || !enabled) return;
 
-    // Only save if we have meaningful data to cache
-    const hasData = state.synthesis || state.intent || state.output || state.metadata;
-    if (!hasData) return;
+    const interval = setInterval(() => {
+      const s = stateRef.current;
+      // Don't save if stream completed or errored (will be cleared anyway)
+      if (s.phase === "done" || s.phase === "error" || s.phase === "cancelled") return;
+      // Only save if we have meaningful data to cache
+      const hasData = s.synthesis || s.triage || s.domainData || s.metadata || s.tabs.length > 0;
+      if (hasData) saveStreamCache(videoSummaryId, s);
+    }, CACHE_SAVE_INTERVAL);
 
-    // Don't save if stream completed or errored (will be cleared anyway)
-    if (state.phase === "done" || state.phase === "error" || state.phase === "cancelled") return;
-
-    const now = Date.now();
-    if (now - lastCacheSaveRef.current >= CACHE_SAVE_INTERVAL) {
-      lastCacheSaveRef.current = now;
-      saveStreamCache(videoSummaryId, state);
-    }
-  }, [videoSummaryId, enabled, state]);
+    return () => clearInterval(interval);
+  }, [videoSummaryId, enabled]);
 
   // Clear cache when stream completes (success, error, or cancelled)
   // This prevents stale cache entries from accumulating

@@ -3,7 +3,7 @@ import { http, HttpResponse } from "msw";
 import { server } from "../../test/mocks/server";
 import { videosApi } from "../videos";
 import { setAccessToken } from "../client";
-import { createMockVideo, createMockVideoSummary } from "../../test/mocks/handlers";
+import { createMockVideo } from "../../test/mocks/handlers";
 
 const API_URL = "http://localhost:3000/api";
 
@@ -108,46 +108,63 @@ describe("videosApi", () => {
   });
 
   describe("get", () => {
-    it("should fetch video by id with summary", async () => {
+    it("should fetch video by id with meta containing synthesis fields", async () => {
       server.use(
         http.get(`${API_URL}/videos/:id`, ({ params }) => {
           return HttpResponse.json({
-            video: createMockVideo({
-              id: params.id as string,
-              title: "Fetched Video",
-            }),
-            summary: createMockVideoSummary({
-              videoId: params.id as string,
-              overview: "Video overview",
-            }),
+            id: params.id as string,
+            videoSummaryId: "sum-1",
+            youtubeId: "abc123",
+            title: "Fetched Video",
+            creator: "Test Channel",
+            duration: 300,
+            thumbnailUrl: null,
+            status: "completed",
+            folderId: null,
+            meta: {
+              contentTags: ["learning"],
+              primaryTag: "learning",
+              tldr: "Video overview",
+              keyTakeaways: ["Takeaway 1"],
+              masterSummary: "",
+              seoDescription: "",
+            },
+            tabs: null,
           });
         })
       );
 
       const result = await videosApi.get("video-abc");
 
-      expect(result.video.id).toBe("video-abc");
-      expect(result.video.title).toBe("Fetched Video");
-      expect(result.summary?.overview).toBe("Video overview");
+      expect(result.id).toBe("video-abc");
+      expect(result.title).toBe("Fetched Video");
+      expect(result.meta?.tldr).toBe("Video overview");
+      expect(result.meta?.keyTakeaways).toEqual(["Takeaway 1"]);
     });
 
-    it("should return null summary when video has no summary", async () => {
+    it("should return null meta when video has no data", async () => {
       server.use(
         http.get(`${API_URL}/videos/:id`, ({ params }) => {
           return HttpResponse.json({
-            video: createMockVideo({
-              id: params.id as string,
-              processingStatus: "pending",
-            }),
-            summary: null,
+            id: params.id as string,
+            videoSummaryId: "sum-2",
+            youtubeId: "abc123",
+            title: "Pending Video",
+            creator: null,
+            duration: null,
+            thumbnailUrl: null,
+            status: "pending",
+            folderId: null,
+            meta: null,
+            tabs: null,
           });
         })
       );
 
       const result = await videosApi.get("video-pending");
 
-      expect(result.video.id).toBe("video-pending");
-      expect(result.summary).toBeNull();
+      expect(result.id).toBe("video-pending");
+      expect(result.meta).toBeNull();
     });
 
     it("should throw on not found", async () => {
@@ -365,6 +382,66 @@ describe("videosApi", () => {
       await expect(videosApi.delete("other-user-video")).rejects.toThrow(
         "Not authorized to delete this video"
       );
+    });
+  });
+
+  describe("get - keyTakeaways in meta", () => {
+    it("should include keyTakeaways in meta when present", async () => {
+      server.use(
+        http.get(`${API_URL}/videos/:id`, () => {
+          return HttpResponse.json({
+            id: "video-with-takeaways",
+            videoSummaryId: "sum-1",
+            youtubeId: "yt123",
+            title: "Test Video",
+            creator: "Test Channel",
+            duration: 600,
+            thumbnailUrl: null,
+            status: "completed",
+            folderId: null,
+            meta: {
+              contentTags: ["learning"],
+              primaryTag: "learning",
+              tldr: "Short summary",
+              keyTakeaways: ["Takeaway 1", "Takeaway 2"],
+              masterSummary: "Full summary",
+              seoDescription: "SEO desc",
+            },
+            tabs: null,
+          });
+        })
+      );
+
+      const result = await videosApi.get("video-with-takeaways");
+
+      expect(result.meta).toBeDefined();
+      expect(result.meta?.keyTakeaways).toEqual(["Takeaway 1", "Takeaway 2"]);
+      expect(result.meta?.tldr).toBe("Short summary");
+      expect(result.meta?.masterSummary).toBe("Full summary");
+    });
+
+    it("should handle null meta", async () => {
+      server.use(
+        http.get(`${API_URL}/videos/:id`, () => {
+          return HttpResponse.json({
+            id: "video-no-meta",
+            videoSummaryId: "sum-2",
+            youtubeId: "yt456",
+            title: "No Meta Video",
+            creator: null,
+            duration: null,
+            thumbnailUrl: null,
+            status: "completed",
+            folderId: null,
+            meta: null,
+            tabs: null,
+          });
+        })
+      );
+
+      const result = await videosApi.get("video-no-meta");
+
+      expect(result.meta).toBeNull();
     });
   });
 

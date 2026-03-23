@@ -2,7 +2,6 @@
 @import "tw-animate-css";
 @import "./styles/animations.css";
 @import "./styles/categories.css";
-@import "./styles/blocks.css";
 @import "./styles/flow-grid.css";
 @import "./styles/dark-effects.css";
 @plugin "@tailwindcss/typography";
@@ -37,6 +36,7 @@
   --input: oklch(89% 0.012 285);
   --ring: oklch(58% 0.24 292);
   --radius: 0.75rem;
+  --border-width: 1px;
 
   /* Premium effect tokens */
   --glow-strength: 0.15;
@@ -116,13 +116,13 @@
    ═══════════════════════════════════════════════════ */
 :root {
   --vie-coral: oklch(72% 0.18 25);
-  --vie-plum: oklch(52% 0.20 310);
+  --vie-plum: oklch(52% 0.2 310);
   --vie-sky: oklch(72% 0.14 230);
   --vie-mint: oklch(78% 0.14 165);
   --vie-honey: oklch(82% 0.15 80);
   --vie-rose: oklch(68% 0.16 350);
   --vie-forest: oklch(55% 0.12 145);
-  --vie-peach: oklch(82% 0.10 55);
+  --vie-peach: oklch(82% 0.1 55);
 
   /* Glass surface tokens */
   --vie-glass: oklch(from var(--card) l c h / 0.6);
@@ -133,16 +133,56 @@
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   /* ── Output Type Gradients ── */
-  --gradient-smart-summary: linear-gradient(135deg, oklch(70% 0.15 250), oklch(65% 0.18 280));
-  --gradient-recipe: linear-gradient(135deg, oklch(70% 0.18 25), oklch(65% 0.15 40));
-  --gradient-code: linear-gradient(135deg, oklch(65% 0.15 165), oklch(60% 0.18 200));
-  --gradient-study: linear-gradient(135deg, oklch(68% 0.15 275), oklch(63% 0.18 310));
-  --gradient-trip: linear-gradient(135deg, oklch(70% 0.15 190), oklch(65% 0.12 160));
-  --gradient-workout: linear-gradient(135deg, oklch(65% 0.18 25), oklch(60% 0.15 350));
-  --gradient-verdict: linear-gradient(135deg, oklch(68% 0.15 50), oklch(63% 0.18 30));
-  --gradient-highlights: linear-gradient(135deg, oklch(70% 0.15 320), oklch(65% 0.12 290));
-  --gradient-music: linear-gradient(135deg, oklch(65% 0.15 300), oklch(60% 0.18 330));
-  --gradient-project: linear-gradient(135deg, oklch(68% 0.12 140), oklch(63% 0.15 120));
+  --gradient-smart-summary: linear-gradient(
+    135deg,
+    oklch(70% 0.15 250),
+    oklch(65% 0.18 280)
+  );
+  --gradient-recipe: linear-gradient(
+    135deg,
+    oklch(70% 0.18 25),
+    oklch(65% 0.15 40)
+  );
+  --gradient-code: linear-gradient(
+    135deg,
+    oklch(65% 0.15 165),
+    oklch(60% 0.18 200)
+  );
+  --gradient-study: linear-gradient(
+    135deg,
+    oklch(68% 0.15 275),
+    oklch(63% 0.18 310)
+  );
+  --gradient-trip: linear-gradient(
+    135deg,
+    oklch(70% 0.15 190),
+    oklch(65% 0.12 160)
+  );
+  --gradient-workout: linear-gradient(
+    135deg,
+    oklch(65% 0.18 25),
+    oklch(60% 0.15 350)
+  );
+  --gradient-verdict: linear-gradient(
+    135deg,
+    oklch(68% 0.15 50),
+    oklch(63% 0.18 30)
+  );
+  --gradient-highlights: linear-gradient(
+    135deg,
+    oklch(70% 0.15 320),
+    oklch(65% 0.12 290)
+  );
+  --gradient-music: linear-gradient(
+    135deg,
+    oklch(65% 0.15 300),
+    oklch(60% 0.18 330)
+  );
+  --gradient-project: linear-gradient(
+    135deg,
+    oklch(68% 0.12 140),
+    oklch(63% 0.15 120)
+  );
 
   /* ── Glass Card Tokens ── */
   --glass-bg: oklch(99% 0.003 285 / 0.7);
@@ -151,12 +191,12 @@
   --glass-blur: 20px;
 
   /* ── Typography Tokens ── */
-  --text-hero: 700 2rem/1.2 'Inter Variable', Inter, sans-serif;
-  --text-section: 600 1.25rem/1.4 'Inter Variable', Inter, sans-serif;
-  --text-card-title: 600 1rem/1.4 'Inter Variable', Inter, sans-serif;
-  --text-body: 400 0.9375rem/1.6 'Inter Variable', Inter, sans-serif;
-  --text-caption: 400 0.8125rem/1.5 'Inter Variable', Inter, sans-serif;
-  --text-micro: 500 0.6875rem/1.4 'Inter Variable', Inter, sans-serif;
+  --text-hero: 700 2rem/1.2 "Inter Variable", Inter, sans-serif;
+  --text-section: 600 1.25rem/1.4 "Inter Variable", Inter, sans-serif;
+  --text-card-title: 600 1rem/1.4 "Inter Variable", Inter, sans-serif;
+  --text-body: 400 0.9375rem/1.6 "Inter Variable", Inter, sans-serif;
+  --text-caption: 400 0.8125rem/1.5 "Inter Variable", Inter, sans-serif;
+  --text-micro: 500 0.6875rem/1.4 "Inter Variable", Inter, sans-serif;
 }
 
 [data-theme="dark"] {
@@ -166,7 +206,7 @@
   --vie-mint: oklch(80% 0.12 165);
   --vie-honey: oklch(84% 0.13 80);
   --vie-rose: oklch(72% 0.14 350);
-  --vie-forest: oklch(62% 0.10 145);
+  --vie-forest: oklch(62% 0.1 145);
   --vie-peach: oklch(84% 0.08 55);
 
   --vie-glass: oklch(from var(--card) l c h / 0.3);
@@ -174,16 +214,56 @@
   --vie-nav-bg: oklch(from var(--card) l c h / 0.9);
 
   /* ── Output Type Gradients — same in dark ── */
-  --gradient-smart-summary: linear-gradient(135deg, oklch(70% 0.15 250), oklch(65% 0.18 280));
-  --gradient-recipe: linear-gradient(135deg, oklch(70% 0.18 25), oklch(65% 0.15 40));
-  --gradient-code: linear-gradient(135deg, oklch(65% 0.15 165), oklch(60% 0.18 200));
-  --gradient-study: linear-gradient(135deg, oklch(68% 0.15 275), oklch(63% 0.18 310));
-  --gradient-trip: linear-gradient(135deg, oklch(70% 0.15 190), oklch(65% 0.12 160));
-  --gradient-workout: linear-gradient(135deg, oklch(65% 0.18 25), oklch(60% 0.15 350));
-  --gradient-verdict: linear-gradient(135deg, oklch(68% 0.15 50), oklch(63% 0.18 30));
-  --gradient-highlights: linear-gradient(135deg, oklch(70% 0.15 320), oklch(65% 0.12 290));
-  --gradient-music: linear-gradient(135deg, oklch(65% 0.15 300), oklch(60% 0.18 330));
-  --gradient-project: linear-gradient(135deg, oklch(68% 0.12 140), oklch(63% 0.15 120));
+  --gradient-smart-summary: linear-gradient(
+    135deg,
+    oklch(70% 0.15 250),
+    oklch(65% 0.18 280)
+  );
+  --gradient-recipe: linear-gradient(
+    135deg,
+    oklch(70% 0.18 25),
+    oklch(65% 0.15 40)
+  );
+  --gradient-code: linear-gradient(
+    135deg,
+    oklch(65% 0.15 165),
+    oklch(60% 0.18 200)
+  );
+  --gradient-study: linear-gradient(
+    135deg,
+    oklch(68% 0.15 275),
+    oklch(63% 0.18 310)
+  );
+  --gradient-trip: linear-gradient(
+    135deg,
+    oklch(70% 0.15 190),
+    oklch(65% 0.12 160)
+  );
+  --gradient-workout: linear-gradient(
+    135deg,
+    oklch(65% 0.18 25),
+    oklch(60% 0.15 350)
+  );
+  --gradient-verdict: linear-gradient(
+    135deg,
+    oklch(68% 0.15 50),
+    oklch(63% 0.18 30)
+  );
+  --gradient-highlights: linear-gradient(
+    135deg,
+    oklch(70% 0.15 320),
+    oklch(65% 0.12 290)
+  );
+  --gradient-music: linear-gradient(
+    135deg,
+    oklch(65% 0.15 300),
+    oklch(60% 0.18 330)
+  );
+  --gradient-project: linear-gradient(
+    135deg,
+    oklch(68% 0.12 140),
+    oklch(63% 0.15 120)
+  );
 
   /* ── Glass Card Tokens — dark overrides ── */
   --glass-bg: oklch(16% 0.02 280 / 0.6);
@@ -192,12 +272,12 @@
   --glass-blur: 20px;
 
   /* ── Typography Tokens — same in dark ── */
-  --text-hero: 700 2rem/1.2 'Inter Variable', Inter, sans-serif;
-  --text-section: 600 1.25rem/1.4 'Inter Variable', Inter, sans-serif;
-  --text-card-title: 600 1rem/1.4 'Inter Variable', Inter, sans-serif;
-  --text-body: 400 0.9375rem/1.6 'Inter Variable', Inter, sans-serif;
-  --text-caption: 400 0.8125rem/1.5 'Inter Variable', Inter, sans-serif;
-  --text-micro: 500 0.6875rem/1.4 'Inter Variable', Inter, sans-serif;
+  --text-hero: 700 2rem/1.2 "Inter Variable", Inter, sans-serif;
+  --text-section: 600 1.25rem/1.4 "Inter Variable", Inter, sans-serif;
+  --text-card-title: 600 1rem/1.4 "Inter Variable", Inter, sans-serif;
+  --text-body: 400 0.9375rem/1.6 "Inter Variable", Inter, sans-serif;
+  --text-caption: 400 0.8125rem/1.5 "Inter Variable", Inter, sans-serif;
+  --text-micro: 500 0.6875rem/1.4 "Inter Variable", Inter, sans-serif;
 }
 
 @theme inline {
@@ -274,7 +354,11 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    font-family:
+      "Inter",
+      system-ui,
+      -apple-system,
+      sans-serif;
     font-feature-settings:
       "rlig" 1,
       "calt" 1;
@@ -283,8 +367,8 @@
   .code-font,
   code,
   pre {
-    font-family: "JetBrains Mono", ui-monospace, "Cascadia Code", "Fira Code",
-      monospace;
+    font-family:
+      "JetBrains Mono", ui-monospace, "Cascadia Code", "Fira Code", monospace;
   }
 
   /* Smooth theme switching via View Transitions API.
@@ -377,4 +461,58 @@
   50% {
     opacity: 0.6;
   }
+}
+
+@keyframes heroFlipForward {
+  0% {
+    transform: rotateX(0deg);
+  }
+  50% {
+    transform: rotateX(-90deg);
+  }
+  100% {
+    transform: rotateX(0deg);
+  }
+}
+
+@keyframes heroFlipBackward {
+  0% {
+    transform: rotateX(0deg);
+  }
+  50% {
+    transform: rotateX(90deg);
+  }
+  100% {
+    transform: rotateX(0deg);
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   BORDER WIDTH TOKEN OVERRIDES
+   Tailwind v4 doesn't map --border-width via @theme,
+   so we override outside @layer (beats utilities layer).
+   ═══════════════════════════════════════════════════ */
+.border {
+  border-width: var(--border-width);
+}
+.border-2 {
+  border-width: calc(var(--border-width) * 2);
+}
+.border-t {
+  border-top-width: var(--border-width);
+}
+.border-r {
+  border-right-width: var(--border-width);
+}
+.border-b {
+  border-bottom-width: var(--border-width);
+}
+.border-l {
+  border-left-width: var(--border-width);
+}
+.border-x {
+  border-inline-width: var(--border-width);
+}
+.border-y {
+  border-block-width: var(--border-width);
 }

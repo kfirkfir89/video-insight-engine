@@ -1,11 +1,15 @@
-import type { OutputSection, OutputType } from '@vie/types';
 import type { StreamState } from '../../../../hooks/use-summary-stream';
 import { GlassCard } from '../GlassCard';
 import { cn } from '../../../../lib/utils';
 
+interface SkeletonSection {
+  id: string;
+  emoji: string;
+  label: string;
+}
+
 interface OutputSkeletonProps {
-  outputType: OutputType;
-  sections: OutputSection[];
+  sections: SkeletonSection[];
   streamingState?: StreamState;
 }
 

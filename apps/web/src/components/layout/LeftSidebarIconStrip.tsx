@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Sparkles, FolderOpen, Search, Library, Brain } from "lucide-react";
+import { Sparkles, FolderOpen, Search, Library, MessageCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   Tooltip,
@@ -15,7 +15,7 @@ export const LeftSidebarIconStrip = memo(function LeftSidebarIconStrip() {
   const activeSection = useActiveSection();
   const setActiveSection = useUIStore((s) => s.setActiveSection);
 
-  const handleTabClick = (section: "summarized" | "memorized") => {
+  const handleTabClick = (section: "summarized" | "assistant") => {
     setActiveSection(section);
     toggleSidebar();
   };
@@ -23,11 +23,11 @@ export const LeftSidebarIconStrip = memo(function LeftSidebarIconStrip() {
   return (
     <TooltipProvider delayDuration={400}>
       <div className="h-full w-12 bg-card border-r flex flex-col items-center py-2 gap-1 shrink-0">
-        {/* Logo — links to home */}
+        {/* Logo — links to board */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Link
-              to="/"
+              to="/board"
               aria-label="Home"
               className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted transition-colors"
             >
@@ -40,12 +40,12 @@ export const LeftSidebarIconStrip = memo(function LeftSidebarIconStrip() {
         {/* Divider */}
         <div className="w-6 h-px bg-border/50 my-1" />
 
-        {/* Summaries tab */}
+        {/* Collection tab */}
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               onClick={() => handleTabClick("summarized")}
-              aria-label="Summaries"
+              aria-label="Collection"
               className={cn(
                 "h-9 w-9 flex items-center justify-center rounded-lg transition-colors",
                 activeSection === "summarized"
@@ -56,26 +56,26 @@ export const LeftSidebarIconStrip = memo(function LeftSidebarIconStrip() {
               <Library className="h-4 w-4" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">Summaries</TooltipContent>
+          <TooltipContent side="right" className="text-xs">Collection</TooltipContent>
         </Tooltip>
 
-        {/* Memorized tab */}
+        {/* Assistant tab */}
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              onClick={() => handleTabClick("memorized")}
-              aria-label="Memorized"
+              onClick={() => handleTabClick("assistant")}
+              aria-label="Assistant"
               className={cn(
                 "h-9 w-9 flex items-center justify-center rounded-lg transition-colors",
-                activeSection === "memorized"
+                activeSection === "assistant"
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
-              <Brain className="h-4 w-4" />
+              <MessageCircle className="h-4 w-4" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">Memorized</TooltipContent>
+          <TooltipContent side="right" className="text-xs">Assistant</TooltipContent>
         </Tooltip>
 
         {/* Divider */}

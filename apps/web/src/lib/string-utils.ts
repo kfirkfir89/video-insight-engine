@@ -42,3 +42,11 @@ export function timeAgo(dateStr: string): string {
   if (days < 7) return `${days}d ago`;
   return new Date(dateStr).toLocaleDateString();
 }
+
+/** Regex matching a leading emoji (Emoji_Presentation or Extended_Pictographic) + optional VS16 + whitespace. */
+const LEADING_EMOJI_RE = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]\uFE0F?\s*/u;
+
+/** Strip a leading emoji + whitespace from a label string. */
+export function stripLeadingEmoji(label: string): string {
+  return label.replace(LEADING_EMOJI_RE, '');
+}

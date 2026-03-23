@@ -69,34 +69,36 @@ export function BulkDeleteDialog({
             <AlertTriangle className="h-5 w-5 text-destructive" />
             Delete {totalCount} item{totalCount !== 1 ? "s" : ""}?
           </AlertDialogTitle>
-          <AlertDialogDescription className="space-y-3">
-            <p>
-              You are about to delete {itemDescription}. This action cannot be undone.
-            </p>
+          <AlertDialogDescription asChild>
+            <div className="text-muted-foreground text-sm space-y-3">
+              <p>
+                You are about to delete {itemDescription}. This action cannot be undone.
+              </p>
 
-            {/* Content handling option for folders */}
-            {hasFolders && (
-              <div className="flex items-start space-x-2 pt-2">
-                <Checkbox
-                  id="delete-content"
-                  checked={deleteContent}
-                  onCheckedChange={(checked) => setDeleteContent(checked === true)}
-                />
-                <div className="grid gap-1.5 leading-none">
-                  <Label
-                    htmlFor="delete-content"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    Delete all content inside folders
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    {deleteContent
-                      ? "Videos inside folders will be permanently deleted"
-                      : "Videos inside folders will be moved to root level"}
-                  </p>
+              {/* Content handling option for folders */}
+              {hasFolders && (
+                <div className="flex items-start space-x-2 pt-2">
+                  <Checkbox
+                    id="delete-content"
+                    checked={deleteContent}
+                    onCheckedChange={(checked) => setDeleteContent(checked === true)}
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <Label
+                      htmlFor="delete-content"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      Delete all content inside folders
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {deleteContent
+                        ? "Videos inside folders will be permanently deleted"
+                        : "Videos inside folders will be moved to root level"}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

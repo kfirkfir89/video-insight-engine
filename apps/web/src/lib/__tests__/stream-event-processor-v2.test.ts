@@ -40,11 +40,16 @@ const initialState: StreamState = {
   processingTimeMs: null,
   warnings: [],
   confettiCount: 0,
-  intent: null,
+  triage: null,
   extractionProgress: null,
-  output: null,
+  domainData: null,
   enrichment: null,
   synthesis: null,
+  meta: null,
+  tabs: [],
+  tabCount: 0,
+  tabLabels: [],
+  frames: [],
 };
 
 /**
@@ -75,19 +80,21 @@ describe('stream-event-processor — Pipeline events', () => {
   });
 
   // ─────────────────────────────────────────────────────
-  // intent_detected
+  // triage_complete
   // ─────────────────────────────────────────────────────
 
-  describe('intent_detected', () => {
-    it('should update intent and set phase to "extraction"', () => {
+  describe('triage_complete', () => {
+    it('should update triage and set phase to "extraction"', () => {
       const event = {
-        event: 'intent_detected',
-        outputType: 'recipe',
+        event: 'triage_complete',
+        contentTags: ['food'],
+        modifiers: [],
+        primaryTag: 'food',
         confidence: 0.95,
         userGoal: 'Learn to cook pasta',
-        sections: [
-          { id: 'ingredients', label: 'Ingredients', emoji: '🧅', description: 'List of ingredients' },
-          { id: 'steps', label: 'Steps', emoji: '👨‍🍳', description: 'Cooking steps' },
+        tabs: [
+          { id: 'ingredients', label: 'Ingredients', emoji: '🧅', dataSource: 'food' },
+          { id: 'steps', label: 'Steps', emoji: '👨‍🍳', dataSource: 'food' },
         ],
       };
 
@@ -95,47 +102,58 @@ describe('stream-event-processor — Pipeline events', () => {
 
       const state = mockSetState.getState();
       expect(state.phase).toBe('extraction');
-      expect(state.intent).toEqual({
-        outputType: 'recipe',
+      expect(state.triage).toEqual({
+        contentTags: ['food'],
+        modifiers: [],
+        primaryTag: 'food',
         confidence: 0.95,
         userGoal: 'Learn to cook pasta',
-        sections: [
-          { id: 'ingredients', label: 'Ingredients', emoji: '🧅', description: 'List of ingredients' },
-          { id: 'steps', label: 'Steps', emoji: '👨‍🍳', description: 'Cooking steps' },
+        tabs: [
+          { id: 'ingredients', label: 'Ingredients', emoji: '🧅', dataSource: 'food' },
+          { id: 'steps', label: 'Steps', emoji: '👨‍🍳', dataSource: 'food' },
         ],
       });
     });
 
-    it('should default outputType to "explanation" when missing', () => {
+    it('should default primaryTag to "learning" when missing', () => {
       processEvent(
-        { event: 'intent_detected', confidence: 0.5 },
+        { event: 'triage_complete', confidence: 0.5, contentTags: [] },
         mockSetState.setState,
       );
-      expect(mockSetState.getState().intent?.outputType).toBe('explanation');
+      expect(mockSetState.getState().triage?.primaryTag).toBe('learning');
     });
 
     it('should default confidence to 0 when missing', () => {
       processEvent(
-        { event: 'intent_detected', outputType: 'study_kit' },
+        { event: 'triage_complete', contentTags: ['tech'], primaryTag: 'tech' },
         mockSetState.setState,
       );
-      expect(mockSetState.getState().intent?.confidence).toBe(0);
+      expect(mockSetState.getState().triage?.confidence).toBe(0);
     });
 
     it('should default userGoal to empty string when missing', () => {
       processEvent(
-        { event: 'intent_detected', outputType: 'code_walkthrough', confidence: 0.8 },
+        { event: 'triage_complete', contentTags: ['tech'], primaryTag: 'tech', confidence: 0.8 },
         mockSetState.setState,
       );
-      expect(mockSetState.getState().intent?.userGoal).toBe('');
+      expect(mockSetState.getState().triage?.userGoal).toBe('');
     });
 
-    it('should default sections to empty array when missing', () => {
+    it('should default tabs to empty array when missing', () => {
       processEvent(
-        { event: 'intent_detected', outputType: 'verdict', confidence: 0.9, userGoal: 'Review the product' },
+        { event: 'triage_complete', contentTags: ['review'], primaryTag: 'review', confidence: 0.9, userGoal: 'Review the product' },
         mockSetState.setState,
       );
-      expect(mockSetState.getState().intent?.sections).toEqual([]);
+      expect(mockSetState.getState().triage?.tabs).toEqual([]);
+    });
+
+    it('should handle legacy intent_detected event as triage_complete', () => {
+      processEvent(
+        { event: 'intent_detected', contentTags: ['learning'], primaryTag: 'learning', confidence: 0.8 },
+        mockSetState.setState,
+      );
+      expect(mockSetState.getState().triage?.primaryTag).toBe('learning');
+      expect(mockSetState.getState().phase).toBe('extraction');
     });
   });
 
@@ -190,8 +208,8 @@ describe('stream-event-processor — Pipeline events', () => {
   // ─────────────────────────────────────────────────────
 
   describe('extraction_complete', () => {
-    it('should update output with type and data', () => {
-      const mockData = {
+    it('should merge domain-keyed data into domainData', () => {
+      const learningData = {
         keyPoints: [{ emoji: '1', title: 'Point 1', detail: 'Detail 1' }],
         concepts: [],
         takeaways: ['Takeaway 1'],
@@ -199,23 +217,23 @@ describe('stream-event-processor — Pipeline events', () => {
       };
 
       processEvent(
-        { event: 'extraction_complete', outputType: 'explanation', data: mockData },
+        { event: 'extraction_complete', data: { learning: learningData } },
         mockSetState.setState,
       );
 
-      expect(mockSetState.getState().output).toEqual({ type: 'explanation', data: mockData });
+      expect(mockSetState.getState().domainData).toEqual({ learning: learningData });
     });
 
-    it('should default outputType to "explanation" when missing', () => {
+    it('should handle empty data gracefully', () => {
       processEvent(
-        { event: 'extraction_complete', data: { keyPoints: [], concepts: [], takeaways: [], timestamps: [] } },
+        { event: 'extraction_complete', data: {} },
         mockSetState.setState,
       );
-      expect(mockSetState.getState().output?.type).toBe('explanation');
+      expect(mockSetState.getState().domainData).toEqual({});
     });
 
-    it('should handle recipe output type', () => {
-      const recipeData = {
+    it('should merge multiple domain data entries', () => {
+      const foodData = {
         meta: { prepTime: 15, cookTime: 30, servings: 4 },
         ingredients: [{ name: 'Pasta', amount: '500', unit: 'g' }],
         steps: [{ number: 1, instruction: 'Boil water' }],
@@ -226,11 +244,27 @@ describe('stream-event-processor — Pipeline events', () => {
       };
 
       processEvent(
-        { event: 'extraction_complete', outputType: 'recipe', data: recipeData },
+        { event: 'extraction_complete', data: { food: foodData } },
         mockSetState.setState,
       );
 
-      expect(mockSetState.getState().output).toEqual({ type: 'recipe', data: recipeData });
+      expect(mockSetState.getState().domainData).toEqual({ food: foodData });
+    });
+
+    it('should merge with existing domainData from previous extraction events', () => {
+      // First extraction
+      processEvent(
+        { event: 'extraction_complete', data: { learning: { keyPoints: [] } } },
+        mockSetState.setState,
+      );
+      // Second extraction
+      processEvent(
+        { event: 'extraction_complete', data: { tech: { code: [] } } },
+        mockSetState.setState,
+      );
+
+      const domainData = mockSetState.getState().domainData;
+      expect(domainData).toEqual({ learning: { keyPoints: [] }, tech: { code: [] } });
     });
   });
 
@@ -375,6 +409,69 @@ describe('stream-event-processor — Pipeline events', () => {
   });
 
   // ─────────────────────────────────────────────────────
+  // frames
+  // ─────────────────────────────────────────────────────
+
+  describe('frames', () => {
+    it('should parse and store frame data', () => {
+      processEvent(
+        {
+          event: 'frames',
+          frames: [
+            { index: 0, timestamp: 10.5, url: 'https://example.com/frame0.jpg', s3Key: 'frames/0.jpg', ocrText: 'Hello', textDensity: 0.3 },
+            { index: 1, timestamp: 25.0, url: 'https://example.com/frame1.jpg' },
+          ],
+        },
+        mockSetState.setState,
+      );
+
+      const state = mockSetState.getState();
+      expect(state.frames).toHaveLength(2);
+      expect(state.frames[0]).toEqual({
+        index: 0,
+        timestamp: 10.5,
+        url: 'https://example.com/frame0.jpg',
+        s3Key: 'frames/0.jpg',
+        ocrText: 'Hello',
+        textDensity: 0.3,
+      });
+      expect(state.frames[1]).toEqual({
+        index: 1,
+        timestamp: 25.0,
+        url: 'https://example.com/frame1.jpg',
+        s3Key: undefined,
+        ocrText: undefined,
+        textDensity: undefined,
+      });
+    });
+
+    it('should default to empty array when frames is not an array', () => {
+      processEvent(
+        { event: 'frames', frames: 'not-an-array' },
+        mockSetState.setState,
+      );
+
+      expect(mockSetState.getState().frames).toEqual([]);
+    });
+
+    it('should handle missing fields with safe defaults', () => {
+      processEvent(
+        { event: 'frames', frames: [{}] },
+        mockSetState.setState,
+      );
+
+      expect(mockSetState.getState().frames[0]).toEqual({
+        index: 0,
+        timestamp: 0,
+        url: '',
+        s3Key: undefined,
+        ocrText: undefined,
+        textDensity: undefined,
+      });
+    });
+  });
+
+  // ─────────────────────────────────────────────────────
   // warning
   // ─────────────────────────────────────────────────────
 
@@ -386,6 +483,123 @@ describe('stream-event-processor — Pipeline events', () => {
       );
 
       expect(mockSetState.getState().warnings).toEqual(['Partial failure (failed: enrichment)']);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────
+  // v2: Assembly Pipeline Events
+  // ─────────────────────────────────────────────────────
+
+  describe('meta (v2)', () => {
+    it('should update meta, tabCount, tabLabels and reset tabs', () => {
+      processEvent(
+        {
+          event: 'meta',
+          title: 'Test Video',
+          contentTags: ['food'],
+          modifiers: [],
+          primaryTag: 'food',
+          tabCount: 3,
+          tabLabels: [
+            { id: 'ingredients', label: 'Ingredients', emoji: '🧅' },
+            { id: 'steps', label: 'Steps', emoji: '👨‍🍳' },
+            { id: 'tips', label: 'Tips', emoji: '💡' },
+          ],
+        },
+        mockSetState.setState,
+      );
+
+      const state = mockSetState.getState();
+      expect(state.meta).toEqual({
+        videoId: '',
+        videoTitle: 'Test Video',
+        creator: '',
+        contentTags: ['food'],
+        modifiers: [],
+        primaryTag: 'food',
+        userGoal: '',
+      });
+      expect(state.tabs).toEqual([]);
+      expect(state.tabCount).toBe(3);
+      expect(state.tabLabels).toHaveLength(3);
+      expect(state.tabLabels[0]).toEqual({ id: 'ingredients', label: 'Ingredients', emoji: '🧅' });
+    });
+
+    it('should default missing fields to empty values', () => {
+      processEvent({ event: 'meta' }, mockSetState.setState);
+
+      const state = mockSetState.getState();
+      expect(state.meta?.videoTitle).toBe('');
+      expect(state.meta?.contentTags).toEqual([]);
+      expect(state.meta?.primaryTag).toBe('learning');
+      expect(state.tabCount).toBe(0);
+      expect(state.tabLabels).toEqual([]);
+    });
+  });
+
+  describe('tab_ready (v2)', () => {
+    it('should append assembled tab', () => {
+      processEvent(
+        {
+          event: 'tab_ready',
+          id: 'ingredients',
+          label: 'Ingredients',
+          emoji: '🧅',
+          component: 'checklist',
+          props: { items: [{ label: 'Pasta' }], tabLabel: 'Ingredients' },
+          crossTabLinks: [{ targetTab: 'steps', label: 'Go to steps' }],
+        },
+        mockSetState.setState,
+      );
+
+      const tabs = mockSetState.getState().tabs;
+      expect(tabs).toHaveLength(1);
+      expect(tabs[0].component).toBe('checklist');
+      expect(tabs[0].props).toEqual({ items: [{ label: 'Pasta' }], tabLabel: 'Ingredients' });
+      expect(tabs[0].crossTabLinks).toEqual([{ targetTab: 'steps', label: 'Go to steps' }]);
+    });
+
+    it('should accumulate multiple tabs', () => {
+      processEvent(
+        { event: 'tab_ready', id: 'tab1', label: 'Tab 1', emoji: '1️⃣', component: 'display_section', props: {} },
+        mockSetState.setState,
+      );
+      processEvent(
+        { event: 'tab_ready', id: 'tab2', label: 'Tab 2', emoji: '2️⃣', component: 'display_section', props: {} },
+        mockSetState.setState,
+      );
+
+      expect(mockSetState.getState().tabs).toHaveLength(2);
+    });
+
+    it('should default missing props to empty object', () => {
+      processEvent(
+        { event: 'tab_ready', id: 'overview', label: 'Overview', emoji: '📋', component: 'overview' },
+        mockSetState.setState,
+      );
+
+      expect(mockSetState.getState().tabs[0].props).toEqual({});
+    });
+  });
+
+  describe('complete (v2)', () => {
+    it('should store processingTimeMs without setting phase (done event handles that)', () => {
+      processEvent(
+        { event: 'complete', tabCount: 4, processingTimeMs: 3500 },
+        mockSetState.setState,
+      );
+
+      const state = mockSetState.getState();
+      expect(state.processingTimeMs).toBe(3500);
+      // complete does NOT set phase or confetti — done event handles that
+      expect(state.confettiCount).toBe(0);
+    });
+
+    it('should not affect confettiCount when cached', () => {
+      processEvent({ event: 'cached' }, mockSetState.setState);
+      processEvent({ event: 'complete', tabCount: 3, processingTimeMs: 100 }, mockSetState.setState);
+
+      expect(mockSetState.getState().confettiCount).toBe(0);
     });
   });
 });

@@ -1,5 +1,5 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useVideo, useRetryVideo } from "@/hooks/use-videos";
 import { useSummaryStream } from "@/hooks/use-summary-stream";
 import { useProcessingStore } from "@/stores/processing-store";
@@ -8,27 +8,35 @@ import { Button } from "@/components/ui/button";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { Loader2, ArrowLeft, RefreshCw, AlertCircle } from "lucide-react";
 import { OutputRouter } from "@/components/video-detail/OutputRouter";
-import type { VideoOutput } from "@vie/types";
+import { VideoPlayerProvider } from "@/contexts/VideoPlayerContext";
+import { CollapsibleVideoPlayer } from "@/components/video-detail/shell/CollapsibleVideoPlayer";
+import { buildSynthesisFromMeta } from "@/lib/synthesis-utils";
+import type { TabEntry } from "@vie/types";
 
 export function VideoDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data, isLoading, error, refetch } = useVideo(id || "");
+  const { data, isLoading, error, refetch } = useVideo(id ?? "");
   const retryVideo = useRetryVideo();
 
   // Extract data safely (may be undefined during loading/error)
-  const video = data?.video;
-  const cachedOutput = data?.output ?? null;
+  const video = data ?? null;
 
   // Determine if we should stream
   const isProcessing = video?.status === "pending" || video?.status === "processing";
   const videoSummaryId = video?.videoSummaryId || "";
 
-  // Skip page-level stream when useProcessingManager already has one active
-  // (prevents duplicate SSE requests for the same video)
-  const hasManagerStream = useProcessingStore(
-    (s) => videoSummaryId ? s.streams.has(videoSummaryId) : false
-  );
+  // Tell the processing manager to yield streaming to the page-level hook
+  // (the manager aborts its stream when viewingVideoSummaryId is set)
+  const setViewingVideo = useProcessingStore((s) => s.setViewingVideo);
+  useEffect(() => {
+    if (videoSummaryId) {
+      setViewingVideo(videoSummaryId);
+    }
+    return () => {
+      setViewingVideo(null);
+    };
+  }, [videoSummaryId, setViewingVideo]);
 
   // Stable callback to avoid recreating on every render
   const handleStreamComplete = useCallback(() => {
@@ -36,59 +44,64 @@ export function VideoDetailPage() {
   }, [refetch]);
 
   // Handle retry for failed videos
-  const handleRetry = useCallback(() => {
+  const handleRetry = () => {
     if (!video?.youtubeId) return;
     retryVideo.mutate(
       { youtubeId: video.youtubeId, folderId: video.folderId },
       {
         onSuccess: (result) => {
-          // Navigate to the new video
           navigate(`/video/${result.video.id}`);
         },
       }
     );
-  }, [video?.youtubeId, video?.folderId, retryVideo, navigate]);
+  };
 
   // Use streaming hook when processing
-  const streamState = useSummaryStream({
+  const {
+    metadata: streamMetadata,
+    duration: streamDuration,
+    tabs: streamTabs,
+    meta: streamMeta,
+    synthesis: streamSynthesis,
+    tabCount,
+    tabLabels,
+    phase,
+  } = useSummaryStream({
     videoSummaryId,
-    enabled: isProcessing && !!videoSummaryId && !hasManagerStream,
+    enabled: isProcessing && !!videoSummaryId,
     onComplete: handleStreamComplete,
   });
 
-
-  // Memoize merged video object to avoid creating new reference on every render
-  // Must be called before early returns (Rules of Hooks)
+  // Merge streamed metadata into video object
   const mergedVideo = useMemo(() => {
     if (!video) return null;
     return {
       ...video,
-      // Use streamed metadata if available
-      title: streamState.metadata?.title || video.title,
-      channel: streamState.metadata?.channel || video.channel,
-      thumbnailUrl: streamState.metadata?.thumbnailUrl || video.thumbnailUrl,
-      duration: streamState.duration || video.duration,
-      // Use streamed context or fall back to video context
-      context: streamState.metadata?.context || video.context,
+      title: streamMetadata?.title || video.title,
+      creator: streamMetadata?.channel || video.creator,
+      thumbnailUrl: streamMetadata?.thumbnailUrl || video.thumbnailUrl,
+      duration: streamDuration || video.duration,
     };
-  }, [video, streamState.metadata, streamState.duration]);
+  }, [video, streamMetadata, streamDuration]);
 
-  // Build structured output from streaming state or cached API response
-  const output = useMemo((): VideoOutput | null => {
-    // Cached result from the API (completed video)
-    if (cachedOutput) return cachedOutput;
-    // Build from streaming state if we have intent
-    if (isProcessing && streamState.intent) {
-      return {
-        outputType: streamState.intent.outputType,
-        intent: streamState.intent,
-        output: streamState.output ?? { type: streamState.intent.outputType, data: {} as never },
-        synthesis: streamState.synthesis ?? { tldr: "", keyTakeaways: [], masterSummary: "", seoDescription: "" },
-        ...(streamState.enrichment ? { enrichment: streamState.enrichment } : {}),
-      };
-    }
+  // Resolve tabs: prefer streaming tabs, then cached tabs from API
+  const resolvedTabs = useMemo((): TabEntry[] | null => {
+    if (streamTabs.length > 0) return streamTabs;
+    if (video?.tabs && Array.isArray(video.tabs) && video.tabs.length > 0) return video.tabs as TabEntry[];
     return null;
-  }, [cachedOutput, isProcessing, streamState.intent, streamState.output, streamState.synthesis, streamState.enrichment]);
+  }, [video?.tabs, streamTabs]);
+
+  // Resolve meta: prefer streaming meta, then cached meta from API
+  const resolvedMeta = useMemo(() => {
+    if (streamMeta) return streamMeta;
+    return video?.meta ?? null;
+  }, [video?.meta, streamMeta]);
+
+  // Resolve synthesis for TLDR/takeaways display
+  const synthesis = useMemo(() => {
+    if (streamSynthesis) return streamSynthesis;
+    return buildSynthesisFromMeta(resolvedMeta);
+  }, [streamSynthesis, resolvedMeta]);
 
   // Loading state
   if (isLoading) {
@@ -102,12 +115,12 @@ export function VideoDetailPage() {
   }
 
   // Error state
-  if (error || !data || !mergedVideo) {
+  if (error || !video || !mergedVideo) {
     return (
       <Layout>
         <div className="text-center p-4 md:p-6 py-12">
           <p className="text-red-500">Failed to load video</p>
-          <Link to="/">
+          <Link to="/board">
             <Button variant="outline" className="mt-4">
               <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
             </Button>
@@ -128,7 +141,7 @@ export function VideoDetailPage() {
             Something went wrong while processing this video.
           </p>
           <div className="flex gap-3 justify-center">
-            <Link to="/">
+            <Link to="/board">
               <Button variant="outline">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back
               </Button>
@@ -148,10 +161,9 @@ export function VideoDetailPage() {
   }
 
   const isStreaming = isProcessing &&
-    streamState.phase !== "done" &&
-    streamState.phase !== "cancelled" &&
-    streamState.phase !== "error";
-
+    phase !== "done" &&
+    phase !== "cancelled" &&
+    phase !== "error";
 
   // Issue #13: Error boundary fallback for rendering errors from malformed streaming state
   const errorFallback = (
@@ -171,14 +183,31 @@ export function VideoDetailPage() {
 
   return (
     <ErrorBoundary key={id} fallback={errorFallback}>
-      <Layout>
-        <OutputRouter
-          video={mergedVideo}
-          output={output}
-          isStreaming={isStreaming}
-          streamingState={isProcessing ? streamState : undefined}
-        />
-      </Layout>
+      <VideoPlayerProvider>
+        <Layout>
+          <div className="mx-auto w-full max-w-4xl px-4 pt-4 md:px-6 md:pt-6">
+            {video.youtubeId && (
+              <CollapsibleVideoPlayer
+                youtubeId={video.youtubeId}
+                title={mergedVideo.title}
+              />
+            )}
+          </div>
+          <OutputRouter
+            title={mergedVideo.title}
+            videoSummaryId={videoSummaryId}
+            tabs={resolvedTabs}
+            meta={resolvedMeta}
+            synthesis={synthesis}
+            isStreaming={isStreaming}
+            tabCount={tabCount}
+            tabLabels={tabLabels}
+            youtubeId={video.youtubeId}
+            creator={mergedVideo.creator ?? undefined}
+            duration={mergedVideo.duration}
+          />
+        </Layout>
+      </VideoPlayerProvider>
     </ErrorBoundary>
   );
 }

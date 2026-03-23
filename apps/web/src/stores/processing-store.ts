@@ -20,6 +20,9 @@ interface ProcessingState {
   /** Active streams indexed by videoSummaryId */
   streams: Map<string, ProcessingStreamState>;
 
+  /** Video currently being viewed on the detail page (page-level stream takes priority) */
+  viewingVideoSummaryId: string | null;
+
   /** Set or update stream state for a video */
   setStreamState: (videoSummaryId: string, state: ProcessingStreamState) => void;
 
@@ -29,12 +32,16 @@ interface ProcessingState {
   /** Get stream state for a specific video */
   getStreamState: (videoSummaryId: string) => ProcessingStreamState | undefined;
 
+  /** Set the video currently being viewed (detail page takes over streaming) */
+  setViewingVideo: (videoSummaryId: string | null) => void;
+
   /** Clear all streams (for logout) */
   clearAllStreams: () => void;
 }
 
 export const useProcessingStore = create<ProcessingState>((set, get) => ({
   streams: new Map(),
+  viewingVideoSummaryId: null,
 
   setStreamState: (videoSummaryId, state) => {
     set((prev) => {
@@ -56,8 +63,12 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
     return get().streams.get(videoSummaryId);
   },
 
+  setViewingVideo: (videoSummaryId) => {
+    set({ viewingVideoSummaryId: videoSummaryId });
+  },
+
   clearAllStreams: () => {
-    set({ streams: new Map() });
+    set({ streams: new Map(), viewingVideoSummaryId: null });
   },
 }));
 

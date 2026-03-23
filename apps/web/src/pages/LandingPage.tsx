@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { Sparkles, ArrowRight, Play, Loader2 } from "lucide-react";
+import { useNavigate, Link, Navigate } from "react-router-dom";
+import { Sparkles, ArrowRight, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/stores/auth-store";
-import { useAddVideo } from "@/hooks/use-videos";
 import { isYouTubeUrl } from "@/lib/youtube-utils";
 
 const OUTPUT_EXAMPLES = [
@@ -26,8 +25,7 @@ function OutputExamples() {
   );
 }
 
-function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean }) {
-  const navigate = useNavigate();
+function LandingHeader() {
   return (
     <header className="flex items-center justify-between px-6 py-4">
       <div className="flex items-center gap-2">
@@ -35,20 +33,12 @@ function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean }) {
         <span className="font-bold text-gradient-primary">VIE</span>
       </div>
       <div className="flex items-center gap-2">
-        {isAuthenticated ? (
-          <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}>
-            Dashboard
-          </Button>
-        ) : (
-          <>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/login">Log in</Link>
-            </Button>
-            <Button size="sm" asChild>
-              <Link to="/register">Sign up</Link>
-            </Button>
-          </>
-        )}
+        <Button variant="ghost" size="sm" asChild>
+          <Link to="/login">Log in</Link>
+        </Button>
+        <Button size="sm" asChild>
+          <Link to="/register">Sign up</Link>
+        </Button>
       </div>
     </header>
   );
@@ -58,30 +48,22 @@ export function LandingPage() {
   const [url, setUrl] = useState("");
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const addVideo = useAddVideo();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Auto-redirect authenticated users to their board
+  if (isAuthenticated) {
+    return <Navigate to="/board" replace />;
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = url.trim();
     if (!trimmed || !isYouTubeUrl(trimmed)) return;
-
-    if (isAuthenticated) {
-      try {
-        const result = await addVideo.mutateAsync({ url: trimmed });
-        if (result?.video?.id) {
-          navigate(`/video/${result.video.id}`);
-        }
-      } catch {
-        // addVideo.isError is set automatically by React Query
-      }
-    } else {
-      navigate("/login", { state: { returnUrl: trimmed } });
-    }
+    navigate("/login", { state: { returnUrl: `/generate?url=${encodeURIComponent(trimmed)}` } });
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <LandingHeader isAuthenticated={isAuthenticated} />
+      <LandingHeader />
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 pb-20">
         <div className="max-w-2xl w-full text-center space-y-8">
@@ -112,23 +94,13 @@ export function LandingPage() {
                 type="submit"
                 size="sm"
                 className="rounded-xl px-4 shrink-0"
-                disabled={!url.trim() || !isYouTubeUrl(url.trim()) || addVideo.isPending}
+                disabled={!url.trim() || !isYouTubeUrl(url.trim())}
               >
-                {addVideo.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    Summarize
-                    <ArrowRight className="h-4 w-4 ml-1" />
-                  </>
-                )}
+                Summarize
+                <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
           </form>
-
-          {addVideo.isError && (
-            <p className="text-destructive text-sm">Failed to process video. Please try again.</p>
-          )}
 
           <OutputExamples />
         </div>

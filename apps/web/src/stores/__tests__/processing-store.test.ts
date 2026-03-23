@@ -28,11 +28,13 @@ const createFullStreamState = (
   processingTimeMs: null,
   warnings: [],
   confettiCount: 0,
-  intent: null,
+  triage: null,
   extractionProgress: null,
-  output: null,
+  domainData: null,
   enrichment: null,
   synthesis: null,
+  meta: null,
+  tabs: [],
   ...overrides,
 });
 

@@ -9,6 +9,3 @@
 if (!import.meta.env.DEV) {
   throw new Error('lib/dev should not be imported in production');
 }
-
-export * from './mock-blocks';
-export * from './mock-videos';

@@ -16,9 +16,6 @@ vi.stubGlobal('import', {
 import { ColorPalette } from '../ColorPalette';
 import { Typography } from '../Typography';
 import { SpacingScale } from '../SpacingScale';
-import { BlockShowcase } from '../BlockShowcase';
-import { showcaseEntries } from '@/lib/dev/mock-blocks';
-
 // Mock getComputedStyle for color copying
 beforeAll(() => {
   Object.defineProperty(window, 'getComputedStyle', {
@@ -77,16 +74,16 @@ describe('Design System Components', () => {
       expect(screen.getByText('vie-peach')).toBeInTheDocument();
     });
 
-    it('renders output gradients section with all 10 types', () => {
+    it('renders output gradients section with all 8 content tags', () => {
       render(<ColorPalette />);
 
       expect(screen.getByText('Output Gradients')).toBeInTheDocument();
-      const expectedTypes = [
-        'explanation', 'recipe', 'code_walkthrough', 'study_kit', 'trip_planner',
-        'workout', 'verdict', 'highlights', 'music_guide', 'project_guide',
+      const expectedTags = [
+        'learning', 'food', 'tech', 'travel',
+        'fitness', 'review', 'music', 'project',
       ];
-      for (const type of expectedTypes) {
-        expect(screen.getByText(type)).toBeInTheDocument();
+      for (const tag of expectedTags) {
+        expect(screen.getByText(tag)).toBeInTheDocument();
       }
     });
   });
@@ -152,95 +149,4 @@ describe('Design System Components', () => {
     });
   });
 
-  describe('BlockShowcase', () => {
-    it('renders showcase entries count', () => {
-      render(<BlockShowcase />);
-
-      expect(screen.getByText(/unique components/)).toBeInTheDocument();
-    });
-
-    it('renders category filter pills', () => {
-      render(<BlockShowcase />);
-
-      // Should have "All" pill and category pills (with counts)
-      expect(screen.getByText(/^All \(/)).toBeInTheDocument();
-      expect(screen.getByText(/^Text \(/)).toBeInTheDocument();
-      expect(screen.getByText(/^Code \(/)).toBeInTheDocument();
-      expect(screen.getByText(/^Data \(/)).toBeInTheDocument();
-    });
-
-    it('renders all showcase entries as cards', () => {
-      render(<BlockShowcase />);
-
-      // Each entry should have its label visible (use getAllByText since some labels like
-      // "Comparison" may also appear as category badge text on other cards)
-      for (const entry of showcaseEntries) {
-        const matches = screen.getAllByText(entry.label);
-        expect(matches.length).toBeGreaterThanOrEqual(1);
-      }
-    });
-
-    it('filters by category when pill is clicked', () => {
-      render(<BlockShowcase />);
-
-      // Click "Travel" category (unique enough to avoid conflicts)
-      const travelPill = screen.getByText(/^Travel \(/);
-      fireEvent.click(travelPill);
-
-      // Should only show Travel entries
-      const travelEntries = showcaseEntries.filter((e) => e.category === 'Travel');
-      const nonTravelEntries = showcaseEntries.filter((e) => e.category !== 'Travel');
-
-      for (const entry of travelEntries) {
-        expect(screen.getByText(entry.label)).toBeInTheDocument();
-      }
-
-      // Non-travel entries should not be visible
-      for (const entry of nonTravelEntries) {
-        expect(screen.queryByText(entry.label)).not.toBeInTheDocument();
-      }
-    });
-
-    it('filters by search text', () => {
-      render(<BlockShowcase />);
-
-      const searchInput = screen.getByPlaceholderText('Filter blocks...');
-      fireEvent.change(searchInput, { target: { value: 'Fitness' } });
-
-      expect(screen.getByText('FitnessBlock')).toBeInTheDocument();
-      expect(screen.queryByText('Paragraph')).not.toBeInTheDocument();
-    });
-
-    it('shows variant tabs for multi-variant entries', () => {
-      render(<BlockShowcase />);
-
-      // Callout has 5 variants: tip, warning, note, chef_tip, security
-      expect(screen.getByText('tip')).toBeInTheDocument();
-      expect(screen.getByText('warning')).toBeInTheDocument();
-      expect(screen.getByText('note')).toBeInTheDocument();
-    });
-
-    it('switches variant content when tab is clicked', () => {
-      render(<BlockShowcase />);
-
-      // FitnessBlock has exercise and workout_timer variants
-      const workoutTab = screen.getByText('workout_timer');
-      fireEvent.click(workoutTab);
-
-      // After clicking, the workout_timer content should be visible
-      // The JSON toggle should work for the current variant
-      expect(workoutTab).toBeInTheDocument();
-    });
-
-    it('toggles JSON view', () => {
-      render(<BlockShowcase />);
-
-      // Find any JSON toggle button and click it
-      const jsonButtons = screen.getAllByText('JSON');
-      fireEvent.click(jsonButtons[0]);
-
-      // Should show JSON content (blockId is a field in every block)
-      expect(screen.getByText(/"blockId"/)).toBeInTheDocument();
-    });
-  });
 });
