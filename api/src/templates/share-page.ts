@@ -1,15 +1,12 @@
-import type { VideoContext, OutputType, VideoSummary } from '@vie/types';
 import { config } from '../config.js';
 
 interface SharePageData {
   title: string;
-  channel: string | null;
+  creator: string | null;
   thumbnailUrl: string | null;
   duration: number | null;
   youtubeId: string;
-  outputType: OutputType;
-  context: VideoContext | null;
-  summary: VideoSummary;
+  tldr: string;
   shareSlug: string;
   sharedAt: string;
 }
@@ -34,14 +31,14 @@ function escapeHtml(str: string): string {
 
 export function renderSharePage(data: SharePageData): string {
   const {
-    title, channel, thumbnailUrl, duration,
-    youtubeId, outputType, summary, shareSlug, sharedAt,
+    title, creator, thumbnailUrl, duration,
+    youtubeId, tldr, shareSlug, sharedAt,
   } = data;
 
   const safeTitle = escapeHtml(title);
-  const safeChannel = channel ? escapeHtml(channel) : '';
-  const description = summary?.tldr
-    ? escapeHtml(summary.tldr.slice(0, 200))
+  const safeCreator = creator ? escapeHtml(creator) : '';
+  const description = tldr
+    ? escapeHtml(tldr.slice(0, 200))
     : `Video summary for ${safeTitle}`;
   const pageUrl = `${config.FRONTEND_URL}/s/${shareSlug}`;
   const ogImageUrl = `${config.FRONTEND_URL}/s/${shareSlug}/og-image.png`;
@@ -53,11 +50,11 @@ export function renderSharePage(data: SharePageData): string {
     '@context': 'https://schema.org',
     '@type': 'VideoObject',
     name: title,
-    description: summary?.tldr || '',
+    description: tldr || '',
     thumbnailUrl: ytThumb,
     uploadDate: sharedAt,
     ...(duration && { duration: `PT${Math.floor(duration / 60)}M${duration % 60}S` }),
-    ...(channel && { author: { '@type': 'Person', name: channel } }),
+    ...(creator && { author: { '@type': 'Person', name: creator } }),
   };
 
   return `<!DOCTYPE html>
@@ -90,19 +87,17 @@ export function renderSharePage(data: SharePageData): string {
     .thumb { width: 100%; border-radius: 12px; aspect-ratio: 16/9; object-fit: cover; }
     .meta { opacity: 0.7; font-size: 14px; margin: 8px 0; }
     .tldr { font-size: 18px; line-height: 1.6; margin: 16px 0; }
-    .badge { display: inline-block; padding: 4px 12px; border-radius: 16px; background: #1e293b; font-size: 12px; text-transform: uppercase; }
     .redirect { text-align: center; margin-top: 32px; font-size: 14px; opacity: 0.5; }
   </style>
 </head>
 <body>
   <article>
-    <img class="thumb" src="${ytThumb}" alt="${safeTitle}" loading="lazy">
+    <img class="thumb" src="${escapeHtml(ytThumb)}" alt="${safeTitle}" loading="lazy">
     <h1>${safeTitle}</h1>
     <p class="meta">
-      ${safeChannel ? `${safeChannel} · ` : ''}${durationStr ? `${durationStr} · ` : ''}<span class="badge">${outputType}</span>
+      ${safeCreator ? `${safeCreator} · ` : ''}${durationStr || ''}
     </p>
-    ${summary?.tldr ? `<p class="tldr">${escapeHtml(summary.tldr)}</p>` : ''}
-    ${summary?.keyTakeaways?.length ? `<h2>Key Takeaways</h2><ul>${summary.keyTakeaways.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ul>` : ''}
+    ${tldr ? `<p class="tldr">${escapeHtml(tldr)}</p>` : ''}
   </article>
   <p class="redirect">Loading interactive view...</p>
   <noscript><p style="text-align:center"><a href="${escapeHtml(pageUrl)}">View full interactive summary</a></p></noscript>

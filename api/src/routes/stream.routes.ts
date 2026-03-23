@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { ObjectId, Db } from 'mongodb';
+import { ObjectId } from 'mongodb';
 import { config } from '../config.js';
 import { VideoNotFoundError } from '../utils/errors.js';
 import { handleSSEPreflight, setSSECorsHeaders, setSSEResponseHeaders } from '../utils/cors.js';
@@ -10,8 +10,6 @@ const videoSummaryIdParamSchema = z.object({
 });
 
 export async function streamRoutes(fastify: FastifyInstance) {
-  const db: Db = fastify.mongo.db;
-
   /**
    * OPTIONS /api/videos/:videoSummaryId/stream
    *
@@ -35,12 +33,9 @@ export async function streamRoutes(fastify: FastifyInstance) {
     const { videoSummaryId } = videoSummaryIdParamSchema.parse(req.params);
 
     // Verify user has access to this video
-    const userVideo = await db.collection('userVideos').findOne({
-      userId: new ObjectId(req.user.userId),
-      videoSummaryId: new ObjectId(videoSummaryId),
-    });
-
-    if (!userVideo) {
+    const { videoRepository } = fastify.container;
+    const hasAccess = await videoRepository.userHasAccessToSummary(req.user.userId, videoSummaryId);
+    if (!hasAccess) {
       throw new VideoNotFoundError();
     }
 
@@ -87,8 +82,8 @@ export async function streamRoutes(fastify: FastifyInstance) {
         cleanedUp = true;
         try {
           await reader.cancel();
-        } catch {
-          // Ignore cancellation errors
+        } catch (err) {
+          req.log.debug({ err }, 'Reader cancel error during cleanup');
         }
       };
 
@@ -100,6 +95,7 @@ export async function streamRoutes(fastify: FastifyInstance) {
       // Stream chunks with proper cleanup
       // Parse SSE events to persist metadata early (allows resumption after refresh)
       let buffer = '';
+      const pendingWrites: Promise<unknown>[] = [];
       try {
         while (true) {
           const { done, value } = await reader.read();
@@ -122,13 +118,14 @@ export async function streamRoutes(fastify: FastifyInstance) {
               const event = JSON.parse(data);
               // Persist metadata to DB when received so title is available after refresh
               if (event.event === 'metadata' && event.title) {
-                const { videoRepository } = fastify.container;
-                await videoRepository.updateCacheEntry(videoSummaryId, {
-                  title: event.title,
-                  channel: event.channel,
-                  thumbnailUrl: event.thumbnailUrl,
-                  duration: event.duration,
-                });
+                pendingWrites.push(
+                  videoRepository.updateCacheEntry(videoSummaryId, {
+                    title: event.title,
+                    channel: event.channel,
+                    thumbnailUrl: event.thumbnailUrl,
+                    duration: event.duration,
+                  })
+                );
 
                 // Broadcast metadata to frontend via WebSocket for sidebar sync
                 fastify.broadcast(req.user.userId, {
@@ -143,53 +140,20 @@ export async function streamRoutes(fastify: FastifyInstance) {
                 });
               }
 
-              // Persist detection result (category + outputType) when received
-              if (event.event === 'detection_result' && event.outputType) {
-                const { videoService } = fastify.container;
-                await videoService.persistDetectionResult(
-                  videoSummaryId,
-                  event.outputType,
-                  event.category,
-                  event.confidence
-                );
-              }
-
               // ─── Pipeline event persistence ───
-              if (event.event === 'intent_detected') {
-                const { videoRepository } = fastify.container;
-                await videoRepository.updateIntent(videoSummaryId, {
-                  outputType: event.outputType,
-                  confidence: event.confidence,
-                  userGoal: event.userGoal,
-                  sections: event.sections,
-                });
-              }
-
-              if (event.event === 'extraction_complete') {
-                const { videoRepository } = fastify.container;
-                await videoRepository.updateOutput(videoSummaryId, {
-                  type: event.outputType,
-                  data: event.data,
-                });
-              }
-
-              if (event.event === 'enrichment_complete') {
-                const { videoRepository } = fastify.container;
-                await videoRepository.updateEnrichment(videoSummaryId, {
-                  quiz: event.quiz,
-                  flashcards: event.flashcards,
-                  cheatSheet: event.cheatSheet,
-                });
-              }
-
+              // Only persist synthesis for crash recovery display (SEO, sharing).
+              // Raw triage/output/enrichment are no longer stored — the Python
+              // summarizer saves the final assembledMeta + assembledTabs via
+              // save_structured_result() at the end of the pipeline.
               if (event.event === 'synthesis_complete' && event.masterSummary) {
-                const { videoRepository } = fastify.container;
-                await videoRepository.updateSynthesis(videoSummaryId, {
-                  tldr: event.tldr,
-                  keyTakeaways: event.keyTakeaways,
-                  masterSummary: event.masterSummary,
-                  seoDescription: event.seoDescription,
-                });
+                pendingWrites.push(
+                  videoRepository.updateSynthesis(videoSummaryId, {
+                    tldr: event.tldr,
+                    keyTakeaways: event.keyTakeaways,
+                    masterSummary: event.masterSummary,
+                    seoDescription: event.seoDescription,
+                  })
+                );
               }
             } catch (err) {
               // Log parse errors in development for debugging
@@ -203,6 +167,17 @@ export async function streamRoutes(fastify: FastifyInstance) {
           reply.raw.write(chunk);
         }
       } finally {
+        // Await all pending DB writes before closing the stream to prevent data loss
+        if (pendingWrites.length > 0) {
+          const results = await Promise.allSettled(pendingWrites);
+          const failed = results.filter(r => r.status === 'rejected');
+          if (failed.length > 0) {
+            req.log.warn(
+              { failed: failed.length, total: results.length, videoSummaryId },
+              'Some DB writes failed during stream'
+            );
+          }
+        }
         await cleanup();
       }
 

@@ -116,9 +116,8 @@ describe('stream routes', () => {
 
     describe('authorization', () => {
       it('should return 404 when user does not have access to video', async () => {
-        // Mock MongoDB to return no userVideo record (user doesn't have access)
-        const db = app.mongo.db;
-        const findOneSpy = vi.spyOn(db.collection('userVideos'), 'findOne').mockResolvedValue(null);
+        // Mock repository to deny access
+        mockContainer.videoRepository.userHasAccessToSummary.mockResolvedValueOnce(false);
 
         const response = await app.inject({
           method: 'GET',
@@ -128,8 +127,6 @@ describe('stream routes', () => {
 
         expect(response.statusCode).toBe(404);
         expect(response.json()).toHaveProperty('error', 'VIDEO_NOT_FOUND');
-
-        findOneSpy.mockRestore();
       });
     });
 

@@ -3,8 +3,8 @@ import { VideoRepository, VideoSummaryCacheDocument } from '../repositories/vide
 import { SummarizerClient, type ProviderConfig } from './summarizer-client.js';
 import { extractYoutubeId } from '../utils/youtube.js';
 import { InvalidYouTubeUrlError, VideoNotFoundError, VersionCreationError, InvalidCategoryError } from '../utils/errors.js';
-import { isValidOutputType } from '@vie/types';
-import type { UserTier, OutputType } from '@vie/types';
+import { buildMetaFromDoc, buildTabsFromDoc } from '../utils/meta-builder.js';
+import type { UserTier } from '@vie/types';
 
 export interface CreateVideoOptions {
   folderId?: string;
@@ -312,33 +312,24 @@ export class VideoService {
 
     const summary = await this.videoRepository.findCacheById(video.videoSummaryId.toString());
 
+    // Build clean frontend response using shared meta/tabs builder
+    // VideoSummaryCacheDocument has dynamic fields; cast via unknown for meta extraction
+    const doc = (summary as unknown) as Record<string, unknown> | undefined;
+    const meta = doc ? buildMetaFromDoc(doc) : null;
+    const tabs = doc ? buildTabsFromDoc(doc) : null;
+
     return {
-      video: {
-        id: video._id.toString(),
-        videoSummaryId: video.videoSummaryId.toString(),
-        youtubeId: video.youtubeId,
-        title: video.title || summary?.title,
-        channel: video.channel || summary?.channel,
-        duration: video.duration || summary?.duration,
-        thumbnailUrl: video.thumbnailUrl || summary?.thumbnailUrl,
-        status: summary?.status || video.status,
-        folderId: video.folderId?.toString() || null,
-        // Progressive summarization fields
-        chapters: summary?.chapters || null,
-        chapterSource: summary?.chapterSource || null,
-        descriptionAnalysis: summary?.descriptionAnalysis || null,
-        // Video context for persona-aware rendering
-        context: summary?.context || null,
-      },
-      summary: summary?.summary || null,
-      // Structured output (if intent-based pipeline was used)
-      output: (summary as any)?.intent ? {
-        outputType: (summary as any).intent.outputType ?? summary?.outputType,
-        intent: (summary as any).intent,
-        output: (summary as any).output ?? null,
-        synthesis: (summary as any).synthesis ?? null,
-        enrichment: (summary as any).enrichment ?? null,
-      } : null,
+      id: video._id.toString(),
+      videoSummaryId: video.videoSummaryId.toString(),
+      youtubeId: video.youtubeId,
+      title: video.title || summary?.title,
+      creator: video.channel || summary?.channel,
+      duration: video.duration || summary?.duration,
+      thumbnailUrl: video.thumbnailUrl || summary?.thumbnailUrl,
+      status: summary?.status || video.status,
+      folderId: video.folderId?.toString() || null,
+      meta,
+      tabs,
     };
   }
 
@@ -365,22 +356,22 @@ export class VideoService {
     const video = await this.videoRepository.findUserVideo(userId, videoId);
     if (!video) throw new VideoNotFoundError();
 
-    const CATEGORY_TO_OUTPUT: Record<string, OutputType> = {
-      cooking: 'recipe',
-      coding: 'code_walkthrough',
-      travel: 'trip_planner',
-      reviews: 'verdict',
-      fitness: 'workout',
-      education: 'study_kit',
-      podcast: 'highlights',
-      diy: 'project_guide',
-      gaming: 'highlights',
-      music: 'music_guide',
-      standard: 'explanation',
+    const CATEGORY_TO_TAG: Record<string, string> = {
+      cooking: 'food',
+      coding: 'tech',
+      travel: 'travel',
+      reviews: 'review',
+      fitness: 'fitness',
+      education: 'learning',
+      podcast: 'learning',
+      diy: 'project',
+      gaming: 'tech',
+      music: 'music',
+      standard: 'learning',
     };
 
-    const outputType = CATEGORY_TO_OUTPUT[category];
-    if (!outputType) throw new InvalidCategoryError(category);
+    const contentTag = CATEGORY_TO_TAG[category];
+    if (!contentTag) throw new InvalidCategoryError(category);
 
     const videoSummaryId = video.videoSummaryId.toString();
     const cache = await this.videoRepository.findCacheById(videoSummaryId);
@@ -393,27 +384,14 @@ export class VideoService {
         originalCategory: existingContext.category || 'standard',
         category,
       },
-      outputType,
     });
 
     return {
       videoSummaryId,
       category,
-      outputType,
+      contentTag,
       previousCategory: existingContext.category || 'standard',
     };
-  }
-
-  /** Persist detection result from summarizer SSE stream */
-  async persistDetectionResult(videoSummaryId: string, outputType: string, category?: string, confidence?: number): Promise<void> {
-    if (!isValidOutputType(outputType)) return;
-    await this.videoRepository.updateCacheEntry(videoSummaryId, {
-      outputType,
-      context: {
-        category: category || 'standard',
-        categoryConfidence: confidence,
-      },
-    });
   }
 
   // Check if user owns a video with this youtubeId
