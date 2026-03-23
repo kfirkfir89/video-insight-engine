@@ -6,12 +6,12 @@ const mockPublicSummary = {
   id: '507f1f77bcf86cd799439011',
   youtubeId: 'dQw4w9WgXcQ',
   title: 'Test Video',
-  channel: 'Test Channel',
+  creator: 'Test Channel',
   thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
   duration: 300,
-  outputType: 'summary',
-  context: null,
-  summary: { tldr: 'Test summary', keyTakeaways: ['Point 1'], chapters: [], concepts: [] },
+  status: 'completed',
+  meta: { contentTags: ['learning'], primaryTag: 'learning', tldr: 'Test summary' },
+  tabs: [{ id: 'key_points', label: 'Key Points', emoji: '💡', component: 'timeline', props: {} }],
   shareSlug: 'aBcDeFgHiJ',
   viewsCount: 10,
   likesCount: 5,
@@ -66,7 +66,7 @@ describe('SSR routes', () => {
       expect(html).toContain('<meta property="og:url"');
       expect(html).toContain('<meta property="og:type"');
       expect(html).toContain('Test Video');
-      expect(html).toContain('Test summary');
+      expect(html).toContain('Test summary'); // tldr from meta
     });
 
     it('should contain JSON-LD script tag', async () => {
@@ -114,10 +114,9 @@ describe('SSR routes', () => {
         validSlug,
         {
           title: mockPublicSummary.title,
-          channel: mockPublicSummary.channel,
+          channel: mockPublicSummary.creator,
           thumbnailUrl: mockPublicSummary.thumbnailUrl,
           youtubeId: mockPublicSummary.youtubeId,
-          outputType: mockPublicSummary.outputType,
         }
       );
     });

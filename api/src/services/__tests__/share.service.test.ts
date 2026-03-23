@@ -159,7 +159,6 @@ describe('ShareService', () => {
         channel: 'Test Channel',
         thumbnailUrl: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
         duration: 212,
-        outputType: 'explanation',
         context: { persona: 'standard', language: 'en' },
         summary: { chapters: [] },
         viewsCount: 42,
@@ -175,13 +174,12 @@ describe('ShareService', () => {
         id: docId.toString(),
         youtubeId: 'dQw4w9WgXcQ',
         title: 'Test Video Title',
-        channel: 'Test Channel',
+        creator: 'Test Channel',
         thumbnailUrl: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
         duration: 212,
-        outputType: 'explanation',
-        context: { persona: 'standard', language: 'en' },
-        summary: { chapters: [] },
-        output: null,
+        status: 'completed',
+        meta: null,
+        tabs: null,
         shareSlug: slug,
         viewsCount: 42,
         likesCount: 7,
@@ -199,7 +197,7 @@ describe('ShareService', () => {
       mockShareRepo.findBySlug.mockResolvedValue({
         _id: docId,
         youtubeId: 'abc123',
-        // title, channel, thumbnailUrl, duration, outputType, context missing
+        // title, channel, thumbnailUrl, duration, context missing
         summary: { chapters: [] },
         // viewsCount, likesCount, sharedAt missing
         createdAt,
@@ -209,11 +207,10 @@ describe('ShareService', () => {
       const result = await service.getPublicSummary(slug, '10.0.0.1');
 
       expect(result.title).toBe('Untitled Video');
-      expect(result.channel).toBeNull();
+      expect(result.creator).toBeNull();
       expect(result.thumbnailUrl).toBeNull();
       expect(result.duration).toBeNull();
-      expect(result.outputType).toBe('explanation');
-      expect(result.context).toBeNull();
+      expect(result.status).toBe('completed');
       expect(result.viewsCount).toBe(0);
       expect(result.likesCount).toBe(0);
       // Falls back to createdAt when sharedAt is missing

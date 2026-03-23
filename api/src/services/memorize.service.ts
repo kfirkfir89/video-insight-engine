@@ -170,7 +170,7 @@ export class MemorizeService {
             id: sectionId,
             timestamp: '00:00',
             title: intentSection?.label ?? sectionId.replace(/_/g, ' '),
-            content: [{ type: 'typed_output', data: (videoSummary.output!.data as Record<string, unknown>)[sectionId] }] as unknown as import('@vie/types').ContentBlock[],
+            content: [{ type: 'typed_output', data: (videoSummary.output!.data as Record<string, unknown>)[sectionId] }],
           };
         });
         startSeconds = input.startSeconds;

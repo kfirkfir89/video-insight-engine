@@ -1,0 +1,153 @@
+{
+  "components": [
+    "spot_explorer",
+    "timeline",
+    "code_explorer",
+    "comparison",
+    "gallery",
+    "checklist",
+    "step_player",
+    "exercise_tracker",
+    "quiz",
+    "flash_deck",
+    "scenario",
+    "clip_player",
+    "lyrics_player",
+    "verdict",
+    "budget",
+    "overview",
+    "info_grid"
+  ],
+  "domains": {
+    "learning": {
+      "emoji": "📚",
+      "label": "Learning",
+      "gradient": "linear-gradient(135deg, var(--vie-plum), var(--vie-sky))",
+      "defaultTabs": [
+        { "id": "key_points", "component": "overview", "dataSource": "learning.keyPoints", "label": "Key Points", "emoji": "💡" },
+        { "id": "concepts", "component": "flash_deck", "dataSource": "learning.concepts", "label": "Concepts", "emoji": "📚" },
+        { "id": "takeaways", "component": "checklist", "dataSource": "learning.takeaways", "label": "Takeaways", "emoji": "🎯" },
+        { "id": "timestamps", "component": "timeline", "dataSource": "learning.timestamps", "label": "Timestamps", "emoji": "🕐" }
+      ]
+    },
+    "tech": {
+      "emoji": "💻",
+      "label": "Tech",
+      "gradient": "linear-gradient(135deg, var(--vie-sky), var(--vie-mint))",
+      "defaultTabs": [
+        { "id": "code", "component": "code_explorer", "dataSource": "tech.snippets", "label": "Code", "emoji": "💻" },
+        { "id": "setup", "component": "step_player", "dataSource": "tech.setup", "label": "Setup", "emoji": "⚙️" },
+        { "id": "patterns", "component": "code_explorer", "dataSource": "tech.patterns", "label": "Patterns", "emoji": "🧩" }
+      ]
+    },
+    "fitness": {
+      "emoji": "💪",
+      "label": "Fitness",
+      "gradient": "linear-gradient(135deg, var(--vie-rose), var(--vie-coral))",
+      "defaultTabs": [
+        { "id": "exercises", "component": "exercise_tracker", "dataSource": "fitness.exercises", "label": "Exercises", "emoji": "🏋️" },
+        { "id": "timer", "component": "exercise_tracker", "dataSource": "fitness.timer", "label": "Timer", "emoji": "⏱️" },
+        { "id": "tips", "component": "overview", "dataSource": "fitness.tips", "label": "Tips", "emoji": "💡" }
+      ]
+    },
+    "food": {
+      "emoji": "🍳",
+      "label": "Food",
+      "gradient": "linear-gradient(135deg, var(--vie-coral), var(--vie-peach))",
+      "defaultTabs": [
+        { "id": "ingredients", "component": "checklist", "dataSource": "food.ingredients", "label": "Ingredients", "emoji": "🛒" },
+        { "id": "steps", "component": "step_player", "dataSource": "food.steps", "label": "Steps", "emoji": "👨‍🍳" },
+        { "id": "tips", "component": "overview", "dataSource": "food.tips", "label": "Tips", "emoji": "💡" }
+      ]
+    },
+    "music": {
+      "emoji": "🎵",
+      "label": "Music",
+      "gradient": "linear-gradient(135deg, var(--vie-rose), var(--vie-plum))",
+      "defaultTabs": [
+        { "id": "analysis", "component": "overview", "dataSource": "music.analysis", "label": "Analysis", "emoji": "🎼" },
+        { "id": "structure", "component": "timeline", "dataSource": "music.structure", "label": "Structure", "emoji": "🎵" },
+        { "id": "credits", "component": "info_grid", "dataSource": "music.credits", "label": "Credits", "emoji": "🎤" }
+      ]
+    },
+    "travel": {
+      "emoji": "✈️",
+      "label": "Travel",
+      "gradient": "linear-gradient(135deg, var(--vie-forest), var(--vie-mint))",
+      "defaultTabs": [
+        { "id": "itinerary", "component": "spot_explorer", "dataSource": "travel.itinerary", "label": "Itinerary", "emoji": "📅" },
+        { "id": "budget", "component": "budget", "dataSource": "travel.budget", "label": "Budget", "emoji": "💰" },
+        { "id": "packing", "component": "checklist", "dataSource": "travel.packingList", "label": "Pack List", "emoji": "🎒" }
+      ]
+    },
+    "review": {
+      "emoji": "⭐",
+      "label": "Review",
+      "gradient": "linear-gradient(135deg, var(--vie-honey), var(--vie-peach))",
+      "defaultTabs": [
+        { "id": "verdict", "component": "verdict", "dataSource": "review.verdict", "label": "Verdict", "emoji": "🏆" },
+        { "id": "pros_cons", "component": "comparison", "dataSource": "review.pros", "label": "Pros & Cons", "emoji": "⚖️" },
+        { "id": "specs", "component": "info_grid", "dataSource": "review.specs", "label": "Specs", "emoji": "📊" }
+      ]
+    },
+    "project": {
+      "emoji": "🔨",
+      "label": "Project",
+      "gradient": "linear-gradient(135deg, var(--vie-honey), var(--vie-forest))",
+      "defaultTabs": [
+        { "id": "steps", "component": "step_player", "dataSource": "project.steps", "label": "Steps", "emoji": "📝" },
+        { "id": "materials", "component": "checklist", "dataSource": "project.materials", "label": "Materials", "emoji": "🛒" },
+        { "id": "safety", "component": "overview", "dataSource": "project.safetyWarnings", "label": "Safety", "emoji": "⚠️" }
+      ]
+    }
+  },
+  "modifiers": {
+    "narrative": {
+      "emoji": "📖",
+      "label": "Narrative"
+    },
+    "finance": {
+      "emoji": "💰",
+      "label": "Finance"
+    }
+  },
+  "enrichment": {
+    "default": "enrich/enrich_study.txt",
+    "learning": "enrich/enrich_study.txt",
+    "tech": "enrich/enrich_tech.txt",
+    "fitness": "enrich/enrich_fitness.txt",
+    "food": "enrich/enrich_food.txt",
+    "music": "enrich/enrich_music.txt",
+    "travel": "enrich/enrich_travel.txt",
+    "review": "enrich/enrich_review.txt",
+    "project": "enrich/enrich_project.txt"
+  },
+  "categoryMap": {
+    "cooking": "food",
+    "coding": "tech",
+    "education": "learning",
+    "podcast": "learning",
+    "reviews": "review",
+    "gaming": "tech",
+    "diy": "project",
+    "fitness": "fitness",
+    "travel": "travel",
+    "music": "music",
+    "default": "learning",
+    "standard": "learning",
+    "recipe": "food",
+    "code": "tech",
+    "programming": "tech",
+    "tutorial": "tech",
+    "study": "learning",
+    "lecture": "learning",
+    "workout": "fitness",
+    "exercise": "fitness",
+    "review": "review",
+    "craft": "project",
+    "tech": "tech",
+    "food": "food",
+    "learning": "learning",
+    "project": "project"
+  }
+}

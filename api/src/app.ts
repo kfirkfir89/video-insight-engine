@@ -27,7 +27,6 @@ import { ssrRoutes } from './routes/ssr.routes.js';
 import { overrideRoutes } from './routes/override.routes.js';
 import { paymentRoutes } from './routes/payment.routes.js';
 import { preferencesRoutes } from './routes/preferences.routes.js';
-import { blocksRoutes } from './routes/blocks.routes.js';
 
 export interface BuildAppOptions {
   logger?: FastifyServerOptions['logger'];
@@ -118,6 +117,15 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
       });
     }
 
+    // Fastify plugin errors (rate-limit, auth, etc.) — respect their statusCode
+    if (typeof error.statusCode === 'number' && error.statusCode !== 500) {
+      const errorCode = 'code' in error && typeof error.code === 'string' ? error.code : 'ERROR';
+      return reply.status(error.statusCode).send({
+        error: errorCode,
+        message: error.message,
+      });
+    }
+
     // Log unexpected errors
     request.log.error(error);
 
@@ -144,7 +152,6 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   await fastify.register(shareRoutes, { prefix: '/api/share' });
   await fastify.register(paymentRoutes, { prefix: '/api/payments' });
   await fastify.register(preferencesRoutes, { prefix: '/api/users/me/preferences' });
-  await fastify.register(blocksRoutes, { prefix: '/api/videos' });  // Block editing
   await fastify.register(internalRoutes, { prefix: '/internal' });
 
   // SSR routes (top-level, no /api prefix — for social media crawlers)

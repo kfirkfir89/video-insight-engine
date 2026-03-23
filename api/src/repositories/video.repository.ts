@@ -34,9 +34,18 @@ export interface VideoSummaryCacheDocument {
   // Pipeline output fields
   pipelineVersion?: string; // Legacy field in DB, no longer set
   intent?: unknown;
+  triage?: unknown;
   output?: unknown;
   enrichment?: unknown;
   synthesis?: unknown;
+  // New clean shape (v3)
+  creator?: string;
+  meta?: unknown;
+  tabs?: unknown[];
+  pipeline?: unknown;
+  // Legacy v2 (backward compat reads)
+  assembledMeta?: unknown;
+  assembledTabs?: unknown[];
 }
 
 export interface UserVideoDocument {
@@ -373,10 +382,10 @@ export class VideoRepository {
 
   // ─── Pipeline output methods ───
 
-  async updateIntent(id: string, intent: unknown): Promise<void> {
+  async updateTriage(id: string, triage: unknown): Promise<void> {
     await this.cacheCollection.updateOne(
       { _id: new ObjectId(id) },
-      { $set: { intent, updatedAt: new Date() } },
+      { $set: { triage, updatedAt: new Date() } },
     );
   }
 
@@ -401,24 +410,32 @@ export class VideoRepository {
     );
   }
 
-  /** Update a single block's data within a video summary's chapters by blockId */
-  async updateBlock(videoSummaryId: string, blockId: string, data: Record<string, unknown>): Promise<boolean> {
-    // Build the $set for each field in data, targeting the matched block
-    const setFields: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(data)) {
-      setFields[`summary.chapters.$[chapter].content.$[block].${key}`] = value;
-    }
+  // ─── v2: Assembly methods ───
 
+  async updateAssembledMeta(id: string, meta: unknown): Promise<void> {
+    await this.cacheCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { assembledMeta: meta, assembledTabs: [], updatedAt: new Date() } },
+    );
+  }
+
+  async appendAssembledTab(id: string, tab: unknown): Promise<void> {
+    return this.appendAssembledTabs(id, [tab]);
+  }
+
+  async appendAssembledTabs(id: string, tabs: unknown[]): Promise<void> {
+    if (tabs.length === 0) return;
+    const MAX_TABS = 30;
     const result = await this.cacheCollection.updateOne(
-      { _id: new ObjectId(videoSummaryId) },
-      { $set: setFields },
+      { _id: new ObjectId(id) },
       {
-        arrayFilters: [
-          { 'chapter.content': { $exists: true } },
-          { 'block.blockId': blockId },
-        ],
+        $push: { assembledTabs: { $each: tabs, $slice: -MAX_TABS } } as Record<string, unknown>,
+        $set: { updatedAt: new Date() },
       },
     );
-    return result.modifiedCount > 0;
+    if (result.modifiedCount === 0) {
+      throw new Error(`appendAssembledTabs: no document matched id=${id}`);
+    }
   }
+
 }

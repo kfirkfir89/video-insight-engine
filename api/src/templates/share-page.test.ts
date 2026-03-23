@@ -3,18 +3,11 @@ import { renderSharePage } from './share-page.js';
 
 const mockData = {
   title: 'Test Video Title',
-  channel: 'Test Channel',
+  creator: 'Test Channel',
   thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
   duration: 3723, // 1:02:03
   youtubeId: 'dQw4w9WgXcQ',
-  outputType: 'summary' as const,
-  context: null,
-  summary: {
-    tldr: 'A test summary of the video content.',
-    keyTakeaways: ['Takeaway 1', 'Takeaway 2'],
-    chapters: [],
-    concepts: [],
-  },
+  tldr: 'A test summary of the video content.',
   shareSlug: 'aBcDeFgHiJ',
   sharedAt: '2024-01-01T00:00:00.000Z',
 };
@@ -73,13 +66,13 @@ describe('renderSharePage', () => {
     expect(jsonLdContent).toContain('\\u003c');
   });
 
-  it('should include channel name when provided', () => {
+  it('should include creator name when provided', () => {
     const html = renderSharePage(mockData);
     expect(html).toContain('Test Channel');
   });
 
-  it('should handle missing channel', () => {
-    const data = { ...mockData, channel: null };
+  it('should handle missing creator', () => {
+    const data = { ...mockData, creator: null };
     const html = renderSharePage(data);
     expect(html).toContain('<!DOCTYPE html>');
   });
@@ -95,12 +88,6 @@ describe('renderSharePage', () => {
     expect(html).toContain('A test summary of the video content.');
   });
 
-  it('should include key takeaways', () => {
-    const html = renderSharePage(mockData);
-    expect(html).toContain('Takeaway 1');
-    expect(html).toContain('Takeaway 2');
-  });
-
   it('should include the share slug in OG image URL', () => {
     const html = renderSharePage(mockData);
     expect(html).toContain('/s/aBcDeFgHiJ/og-image.png');
@@ -109,11 +96,6 @@ describe('renderSharePage', () => {
   it('should include redirect script', () => {
     const html = renderSharePage(mockData);
     expect(html).toContain('window.location.replace');
-  });
-
-  it('should include the output type badge', () => {
-    const html = renderSharePage(mockData);
-    expect(html).toContain('summary');
   });
 
   it('should handle missing duration', () => {

@@ -8,14 +8,15 @@ RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
 WORKDIR /app
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY packages/shared ./packages/shared
 COPY packages/types ./packages/types
 COPY api ./api
 
 # Scoped install (only API + workspace deps)
 RUN pnpm install --frozen-lockfile --filter @vie/api...
 
-# Build types first, then API
-RUN pnpm --filter @vie/types build && pnpm --filter @vie/api build
+# Build shared first, then types, then API
+RUN pnpm --filter @vie/shared build && pnpm --filter @vie/types build && pnpm --filter @vie/api build
 
 # Clean production bundle
 RUN pnpm --filter @vie/api deploy --prod /prod/api

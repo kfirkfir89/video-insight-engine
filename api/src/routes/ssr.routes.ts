@@ -19,15 +19,14 @@ export async function ssrRoutes(fastify: FastifyInstance) {
     const { slug } = shareSlugParamsSchema.parse(req.params);
     const summary = await shareService.getPublicSummary(slug);
 
+    const meta = (summary.meta ?? {}) as Record<string, unknown>;
     const html = renderSharePage({
       title: summary.title,
-      channel: summary.channel,
+      creator: summary.creator,
       thumbnailUrl: summary.thumbnailUrl,
       duration: summary.duration,
       youtubeId: summary.youtubeId,
-      outputType: summary.outputType,
-      context: summary.context,
-      summary: summary.summary,
+      tldr: typeof meta.tldr === 'string' ? meta.tldr : '',
       shareSlug: slug,
       sharedAt: summary.sharedAt,
     });
@@ -47,14 +46,14 @@ export async function ssrRoutes(fastify: FastifyInstance) {
     },
   }, async (req, reply) => {
     const { slug } = shareSlugParamsSchema.parse(req.params);
+    // No IP passed — OG image requests from crawlers should not inflate view counts
     const summary = await shareService.getPublicSummary(slug);
 
     const image = await ogImageService.getOgImage(slug, {
       title: summary.title,
-      channel: summary.channel,
+      channel: summary.creator,
       thumbnailUrl: summary.thumbnailUrl,
       youtubeId: summary.youtubeId,
-      outputType: summary.outputType,
     });
 
     if (!image) {

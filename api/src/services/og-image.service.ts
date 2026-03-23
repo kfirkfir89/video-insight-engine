@@ -16,11 +16,11 @@ interface OgImageInput {
   channel: string | null;
   thumbnailUrl: string | null;
   youtubeId: string;
-  outputType: string;
 }
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const MAX_CACHE_SIZE = 100;
+const ALLOWED_THUMBNAIL_HOSTS = ['img.youtube.com', 'i.ytimg.com', 'i3.ytimg.com', 'i1.ytimg.com'];
 
 export class OgImageService {
   private readonly imageCache = new Map<string, { buffer: Buffer; lastAccessedAt: number }>();
@@ -43,6 +43,23 @@ export class OgImageService {
     try {
       const imageUrl = data.thumbnailUrl
         || `https://img.youtube.com/vi/${data.youtubeId}/maxresdefault.jpg`;
+
+      // SSRF protection: only allow known safe thumbnail domains over HTTPS
+      try {
+        const parsed = new URL(imageUrl);
+        const allowedHosts = ALLOWED_THUMBNAIL_HOSTS;
+        if (parsed.protocol !== 'https:') {
+          this.logger.warn({ slug, imageUrl }, 'Rejected non-HTTPS thumbnail URL');
+          return null;
+        }
+        if (!allowedHosts.includes(parsed.hostname)) {
+          this.logger.warn({ slug, imageUrl }, 'Rejected non-YouTube thumbnail URL');
+          return null;
+        }
+      } catch {
+        this.logger.warn({ slug, imageUrl }, 'Invalid thumbnail URL');
+        return null;
+      }
 
       const response = await fetch(imageUrl, {
         signal: AbortSignal.timeout(5000),

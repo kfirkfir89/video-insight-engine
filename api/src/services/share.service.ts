@@ -6,23 +6,21 @@ import {
   ShareNotFoundError,
   VideoNotFoundError,
 } from '../utils/errors.js';
-import type { VideoContext, OutputType, VideoSummary, VideoOutput } from '@vie/types';
+import { buildMetaFromDoc, buildTabsFromDoc, type NormalizedMeta } from '../utils/meta-builder.js';
 
 const SLUG_LENGTH = 10;
 
-/** Public-facing video summary for shared pages */
+/** Public-facing video summary for shared pages — clean frontend shape */
 interface PublicSummaryResponse {
   id: string;
   youtubeId: string;
   title: string;
-  channel: string | null;
+  creator: string | null;
   thumbnailUrl: string | null;
   duration: number | null;
-  outputType: OutputType;
-  context: VideoContext | null;
-  summary: VideoSummary;
-  /** Structured output from the intent-driven pipeline */
-  output: VideoOutput | null;
+  status: string;
+  meta: NormalizedMeta | null;
+  tabs: unknown[] | null;
   shareSlug: string;
   viewsCount: number;
   likesCount: number;
@@ -97,27 +95,21 @@ export class ShareService {
       });
     }
 
-    // Build structured output if intent-driven pipeline was used
-    const docAny = doc as unknown as Record<string, unknown>;
-    const structuredOutput: VideoOutput | null = docAny.intent ? {
-      outputType: ((docAny.intent as Record<string, unknown>).outputType as OutputType) ?? (doc.outputType as OutputType),
-      intent: docAny.intent as VideoOutput['intent'],
-      output: (docAny.output as VideoOutput['output']) ?? null,
-      synthesis: (docAny.synthesis as VideoOutput['synthesis']) ?? null,
-      enrichment: (docAny.enrichment as VideoOutput['enrichment']) ?? null,
-    } as VideoOutput : null;
+    // Build clean frontend response using shared meta/tabs builder
+    const docAsRecord = doc as unknown as Record<string, unknown>;
+    const meta = buildMetaFromDoc(docAsRecord);
+    const tabs = buildTabsFromDoc(docAsRecord);
 
     return {
       id: doc._id.toString(),
       youtubeId: doc.youtubeId,
       title: doc.title || 'Untitled Video',
-      channel: doc.channel || null,
+      creator: doc.channel || null,
       thumbnailUrl: doc.thumbnailUrl || null,
       duration: doc.duration || null,
-      outputType: (doc.outputType as OutputType) || 'explanation',
-      context: (doc.context as VideoContext) || null,
-      summary: doc.summary as VideoSummary,
-      output: structuredOutput,
+      status: doc.status || 'completed',
+      meta,
+      tabs,
       shareSlug: slug,
       viewsCount: doc.viewsCount ?? 0,
       likesCount: doc.likesCount ?? 0,
