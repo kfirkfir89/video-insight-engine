@@ -81,29 +81,15 @@ def _extract_playlist_sync(playlist_id: str, max_videos: int = 100) -> PlaylistD
     """
     url = f"https://www.youtube.com/playlist?list={playlist_id}"
 
-    info = None
-    last_error = None
-
-    # Try direct connection first, then proxy if needed
-    for use_proxy in [False, True]:
-        opts = _build_playlist_opts(use_proxy=use_proxy)
-        try:
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url, download=False)
-                if info:
-                    if use_proxy:
-                        logger.info(f"Playlist {playlist_id}: extracted via proxy")
-                    break
-        except (DownloadError, ExtractorError, OSError, ConnectionError) as e:
-            last_error = e
-            if not use_proxy:
-                logger.debug(f"Direct connection failed, trying proxy: {e}")
-                continue
-            raise
+    # yt-dlp works directly without proxy
+    opts = _build_playlist_opts(use_proxy=False)
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except (DownloadError, ExtractorError, OSError, ConnectionError) as e:
+        raise ValueError(f"Failed to extract playlist: {e}") from e
 
     if not info:
-        if last_error:
-            raise ValueError(f"Failed to extract playlist: {last_error}")
         raise ValueError("Playlist not found or unavailable")
 
     # Extract playlist metadata
@@ -150,8 +136,8 @@ def _extract_playlist_sync(playlist_id: str, max_videos: int = 100) -> PlaylistD
         ))
 
     logger.info(
-        f"Playlist {playlist_id}: extracted {len(videos)} videos "
-        f"(title={playlist_title}, channel={channel})"
+        "Playlist %s: extracted %d videos (title=%s, channel=%s)",
+        playlist_id, len(videos), playlist_title, channel,
     )
 
     # Use first video's thumbnail if no playlist thumbnail

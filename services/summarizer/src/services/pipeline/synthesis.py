@@ -6,8 +6,10 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ...models.output_types import SynthesisResult
+from ...models.pipeline_types import SynthesisResult
 from ...utils.json_parsing import parse_json_response
+from ...utils.llm_retry import call_llm_with_retry
+from .pipeline_helpers import sanitize_for_prompt
 
 if TYPE_CHECKING:
     from ...services.llm import LLMService
@@ -29,6 +31,7 @@ async def synthesize(
     duration: int | None,
     output_type: str,
     extraction_summary: str,
+    video_context: str = "",
 ) -> SynthesisResult:
     """Generate synthesis from extraction data.
 
@@ -37,14 +40,22 @@ async def synthesize(
     prompt_template = _load_synthesis_prompt()
     prompt = (
         prompt_template
-        .replace("{title}", title)
-        .replace("{channel}", channel or "Unknown")
+        .replace("{title}", sanitize_for_prompt(title))
+        .replace("{channel}", sanitize_for_prompt(channel or "Unknown"))
         .replace("{duration_minutes}", str(round(duration / 60)) if duration is not None and duration > 0 else "unknown")
         .replace("{output_type}", output_type)
         .replace("{extraction_summary}", extraction_summary[:4000])
+        .replace("{video_context}", video_context or "Not available")
     )
 
-    raw = await llm_service.call_llm(prompt, max_tokens=8192)
+    raw = await call_llm_with_retry(
+        llm_service, prompt,
+        max_tokens=8192, timeout=30.0, max_retries=2,
+        stage_name="synthesis", json_mode=True, use_fast_model=True,
+    )
+    if not raw:
+        raise ValueError("Synthesis LLM call failed after retries")
+
     logger.debug("Synthesis raw response: %.500s", raw)
     data = parse_json_response(raw)
 

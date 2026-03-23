@@ -1,11 +1,11 @@
-"""SSE streaming endpoint for intent-driven video summarization.
+"""SSE streaming endpoint for triage-driven video summarization.
 
-Pipeline: Intent -> Extract -> Enrich -> Synthesize (4-7 LLM calls).
+Pipeline: Triage -> Extract -> Enrich -> Synthesize (4-7 LLM calls).
 
 Phases:
 1. INSTANT: Metadata from yt-dlp
 2. TRANSCRIPT: Fetch and clean transcript
-3. INTENT: Detect output type and sections
+3. TRIAGE: Determine content domains and tab layout
 4. EXTRACTION: Adaptive structured extraction (1-3 calls)
 5. ENRICHMENT: Quiz/flashcards/cheat sheet (conditional)
 6. SYNTHESIS: TLDR, takeaways, master summary
@@ -13,8 +13,8 @@ Phases:
 
 import asyncio
 import logging
+import time
 import uuid
-from datetime import datetime, timezone
 from typing import Annotated, Any, AsyncGenerator
 
 from pydantic import BaseModel
@@ -23,42 +23,81 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from llm_common.context import llm_video_id_var, llm_feature_var
+from llm_common.context import llm_video_id_var  # noqa: F401 — used in phases
 from litellm.exceptions import APIError as LitellmAPIError, RateLimitError, Timeout as LitellmTimeout
+import redis.exceptions as redis_exceptions
 
+from src.config import settings
 from src.dependencies import get_video_repository, get_llm_service, create_llm_provider
-from src.models.schemas import ProcessingStatus, ErrorCode, ProviderConfig, TranscriptSegment
+from src.models.schemas import ProcessingStatus, ErrorCode, ProviderConfig
 from src.repositories.mongodb_repository import MongoDBVideoRepository
 from src.services.llm import LLMService
-from src.services.transcription.transcript import clean_transcript
-from src.services.video.youtube import extract_video_data
-from src.services.video.description_analyzer import analyze_description, DescriptionAnalysis
-from src.services.video.sponsorblock import get_sponsor_segments, filter_transcript_segments
 from src.exceptions import TranscriptError
-from src.services.pipeline.intent_detector import detect_intent, get_canonical_sections
-from src.services.pipeline.extractor import extract
-from src.services.pipeline.synthesis import synthesize
-from src.services.pipeline.enrichment import enrich
 from src.services.media.s3_client import s3_client
-from src.services.transcription.transcript_fetcher import fetch_transcript
-from src.services.override_state import check_override, clear_override
-from src.services.pipeline.pipeline_helpers import (
-    sse_event,
-    PipelineTimer,
-    validate_duration,
-    truncate_json_safely,
-    normalize_segments,
-    refresh_frame_urls as _refresh_frame_urls,
+from src.services.cache.response_cache import response_cache
+from src.services.override_state import clear_override
+from src.services.pipeline.context import PipelineContext
+from src.services.pipeline.pipeline_helpers import sse_event, PipelineTimer, run_parallel_phases
+from src.routes.cached_response import (
+    build_frontend_response,  # noqa: F401 — re-exported for backward compat
+    stream_cached_structured as _stream_cached_structured,
+)
+from src.services.pipeline.phases import (
+    run_phase_metadata,
+    run_phase_transcript,
+    run_phase_frames,
+    run_phase_plan,
+    run_phase_extraction,
+    run_phase_synthesis,
+    run_phase_enrichment,
+    run_phase_assembly,
 )
 
 logger = logging.getLogger(__name__)
 
+# In-memory lock to prevent duplicate pipeline runs for the same video.
+# IMPORTANT: Only safe for single-process asyncio deployments.  All dict
+# mutations happen on the main event-loop thread, so no external lock is
+# needed.  Multi-process/multi-worker deployments require Redis-based locking.
+# TODO: Migrate to Redis-based locking when scaling to multiple workers.
+_processing_locks: dict[str, tuple[asyncio.Event, float]] = {}
+_LOCK_TTL_SECONDS = 360  # 60s buffer beyond wait_for timeout to prevent cleanup/wait race
+_LOCK_MAX_SIZE = 500  # Hard cap to prevent unbounded growth between cleanups
+_last_lock_cleanup: float = 0.0
+
+
+def _cleanup_stale_locks() -> None:
+    """Remove locks older than TTL to prevent memory leaks from abandoned connections.
+
+    Throttled to run at most once per 60 seconds to avoid O(n) scan per request.
+    Also enforces a hard cap on dict size for burst protection.
+
+    Re-validates staleness at pop time to avoid removing a freshly-inserted
+    lock that replaced the stale one between scan and pop (TOCTOU).
+    """
+    global _last_lock_cleanup
+    now = time.monotonic()
+    if now - _last_lock_cleanup < 60 and len(_processing_locks) <= _LOCK_MAX_SIZE:
+        return
+    _last_lock_cleanup = now
+    if len(_processing_locks) > _LOCK_MAX_SIZE:
+        logger.warning("Processing lock dict exceeded max size (%d > %d), forcing cleanup", len(_processing_locks), _LOCK_MAX_SIZE)
+    stale_keys = [k for k, (_, created) in _processing_locks.items() if now - created > _LOCK_TTL_SECONDS]
+    for k in stale_keys:
+        entry = _processing_locks.get(k)
+        # Re-check: only pop if the entry is still the same stale one
+        if entry and now - entry[1] > _LOCK_TTL_SECONDS:
+            popped = _processing_locks.pop(k, None)
+            # Only signal the event if we popped the exact same stale entry
+            # (prevents signaling a freshly-inserted lock from a new pipeline run)
+            if popped is entry:
+                entry[0].set()  # Unblock any waiters
 
 router = APIRouter()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Main Streaming Generator (Intent-Driven Pipeline)
+# Main Streaming Generator (Triage-Driven Pipeline)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -68,7 +107,7 @@ async def stream_summarization(
     repository: MongoDBVideoRepository,
     llm_service: LLMService,
 ) -> AsyncGenerator[str, None]:
-    """Intent-driven pipeline: Intent -> Extract -> Enrich -> Synthesize (4-7 LLM calls)."""
+    """Triage-driven pipeline: Triage -> Extract -> Enrich -> Synthesize (4-7 LLM calls)."""
     timer = PipelineTimer()
 
     try:
@@ -77,191 +116,140 @@ async def stream_summarization(
             yield sse_event("error", {"message": "YouTube ID not found"})
             return
 
-        repository.update_status(video_summary_id, ProcessingStatus.PROCESSING)
+        # Check Redis cache first (same YouTube video = instant serve)
+        if settings.REDIS_ENABLED:
+            try:
+                cached = await response_cache.get_response(youtube_id)
+                cached_meta = cached.get("meta", {}) if isinstance(cached, dict) else {}
+                if (
+                    cached
+                    and isinstance(cached, dict)
+                    and cached.get("status") == ProcessingStatus.COMPLETED.value
+                    and cached.get("youtubeId") == youtube_id  # Verify cache integrity
+                    and isinstance(cached.get("tabs"), list)  # Required field present
+                    and len(cached["tabs"]) > 0  # Reject empty tab lists
+                    and isinstance(cached["tabs"][0], dict)  # Spot-check first tab
+                    and isinstance(cached_meta, dict)
+                    and len(cached_meta) > 0  # Reject empty meta
+                ):
+                    logger.info("[pipeline] Redis cache HIT for youtube_id=%s", youtube_id)
+                    # Fire-and-forget DB save — don't block the cache-hit fast path
+                    if entry.get("status") != ProcessingStatus.COMPLETED.value:
+                        _vid_id = video_summary_id  # capture for lambda
+                        task = asyncio.create_task(asyncio.to_thread(repository.save_structured_result, video_summary_id, cached))
+                        task.add_done_callback(
+                            lambda t, vid=_vid_id: logger.error(
+                                "Cache-hit DB save failed for %s: %s", vid, t.exception(),
+                            ) if t.exception() else None
+                        )
+                    async for event in _stream_cached_structured(video_summary_id, cached):
+                        yield event
+                    return
+            except (OSError, redis_exceptions.ConnectionError) as e:
+                logger.debug("Redis cache check failed (non-critical): %s", e)
+
+        await asyncio.to_thread(repository.update_status, video_summary_id, ProcessingStatus.PROCESSING)
         logger.info("[pipeline] START video_id=%s youtube_id=%s", video_summary_id, youtube_id)
 
         # Set video context for LLM usage tracking
         llm_video_id_var.set(youtube_id)
 
-        # Phase 1: Metadata
-        llm_feature_var.set("summarize:metadata")
-        video_data = await extract_video_data(youtube_id)
-        yield sse_event("metadata", {
-            "title": video_data.title,
-            "channel": video_data.channel,
-            "thumbnailUrl": video_data.thumbnail_url,
-            "duration": video_data.duration,
-        })
-
-        # Validate duration before proceeding
-        validate_duration(video_data.duration)
-
-        # Phase 2: Transcript
-        llm_feature_var.set("summarize:transcript")
-        transcript_data = None
-        is_music = (video_data.context.category == "music") if video_data.context else False
-        async for item in fetch_transcript(youtube_id, video_data, video_data.duration, is_music=is_music):
-            if isinstance(item, str):
-                yield item
-            else:
-                transcript_data = item
-
-        if not transcript_data:
-            raise TranscriptError("Failed to fetch transcript", ErrorCode.NO_TRANSCRIPT)
-
-        yield sse_event("transcript_ready", {"duration": video_data.duration})
-        clean_text = clean_transcript(transcript_data.raw_text)
-
-        # Phase 2b: SponsorBlock — filter sponsor segments from transcript
-        try:
-            sponsor_segments = await get_sponsor_segments(youtube_id)
-            if sponsor_segments and transcript_data.segments:
-                normalized = normalize_segments(transcript_data.segments)
-                typed_segments = [TranscriptSegment(**s) for s in normalized]
-                filtered = filter_transcript_segments(typed_segments, sponsor_segments)
-                if filtered:
-                    clean_text = clean_transcript(
-                        " ".join(s.text for s in filtered)
-                    )
-                    logger.info("SponsorBlock: filtered %d sponsor segments", len(sponsor_segments))
-        except Exception as e:
-            logger.warning("SponsorBlock failed (non-critical): %s", e)
-
-        # Phase 3: Intent Detection + Description Analysis (concurrent)
-        llm_feature_var.set("summarize:intent")
-        override = check_override(video_summary_id)
-        if override:
-            category_hint = override.get("category")
-        else:
-            category_hint = video_data.context.category if video_data.context else None
-
-        intent_task = detect_intent(
-            llm_service,
-            title=video_data.title,
-            description=video_data.description or "",
-            duration=video_data.duration or 0,
-            category_hint=category_hint,
-            transcript_preview=clean_text[:2000],
-        )
-        desc_task = analyze_description(
-            video_data.description or "",
-            fast_model=llm_service.fast_model,
+        ctx = PipelineContext(
+            video_summary_id=video_summary_id,
+            youtube_id=youtube_id,
+            entry=entry,
+            repository=repository,
+            llm_service=llm_service,
+            timer=timer,
         )
 
-        intent, description_analysis = await asyncio.gather(intent_task, desc_task, return_exceptions=True)
-        if isinstance(intent, BaseException):
-            raise intent  # Intent is critical — re-raise
+        # Phase 1: Metadata (sequential — sets video_data needed by everything)
+        phase_start = time.monotonic()
+        async for event in run_phase_metadata(ctx):
+            yield event
+        ctx.phase_times["metadata"] = round(time.monotonic() - phase_start, 1)
 
-        yield sse_event("intent_detected", {
-            "outputType": intent.output_type,
-            "confidence": intent.confidence,
-            "userGoal": intent.user_goal,
-            "sections": [s.model_dump(by_alias=True) for s in intent.sections],
-        })
+        # Phase 2: Transcript + Frames (parallel — both only need youtube_id + video_data)
+        phase_start = time.monotonic()
+        async for event in run_parallel_phases([run_phase_transcript, run_phase_frames], ctx):
+            yield event
+        ctx.phase_times["transcript_frames"] = round(time.monotonic() - phase_start, 1)
 
-        if isinstance(description_analysis, DescriptionAnalysis) and description_analysis.has_content:
-            yield sse_event("description_analysis", description_analysis.to_dict())
+        # Phase 2.5: Inject visual context into transcript (after both phases complete)
+        phase_start = time.monotonic()
+        if ctx.clean_text and (ctx.frame_descriptions or ctx.scene_frames_all):
+            from src.services.pipeline.scene_frames import inject_visual_context
 
-        # Phase 4: Adaptive Extraction
-        llm_feature_var.set("summarize:extraction")
-        extraction_data = None
-        video_info = {
-            "title": video_data.title,
-            "channel": video_data.channel,
-            "duration": video_data.duration,
-        }
-        async for evt in extract(llm_service, intent.output_type, clean_text, video_info, intent):
-            event_name = evt["event"]
-            yield sse_event(event_name, {k: v for k, v in evt.items() if k != "event"})
-            if event_name == "extraction_complete":
-                extraction_data = evt.get("data")
+            segments = ctx.transcript_data.segments if ctx.transcript_data else None
+            ctx.clean_text = inject_visual_context(
+                ctx.clean_text, segments, ctx.frame_descriptions, ctx.scene_frames_all,
+            )
+            annotation_count = ctx.clean_text.count("[VISUAL at") + ctx.clean_text.count("[ON-SCREEN TEXT at")
+            if annotation_count:
+                logger.info("[pipeline] Injected %d visual annotations into transcript", annotation_count)
+        ctx.phase_times["visual_inject"] = round(time.monotonic() - phase_start, 1)
 
-        # Phase 5: Enrichment (conditional)
-        llm_feature_var.set("summarize:enrichment")
-        enrichment_data = None
-        if extraction_data:
-            enrichment_result = await enrich(llm_service, intent.output_type, extraction_data, video_data.title)
-            if enrichment_result:
-                enrichment_data = enrichment_result.model_dump(by_alias=True)
-                yield sse_event("enrichment_complete", enrichment_data)
+        # Phase 3-6: Sequential (each depends on the previous)
+        # Note: synthesis depends on extraction_data, so they cannot be parallelized.
+        for phase in [
+            run_phase_plan,
+            run_phase_extraction,
+            run_phase_synthesis,
+            run_phase_enrichment,
+            run_phase_assembly,
+        ]:
+            phase_start = time.monotonic()
+            async for event in phase(ctx):
+                yield event
+            ctx.phase_times[phase.__name__.replace("run_phase_", "")] = round(time.monotonic() - phase_start, 1)
 
-        # Phase 6: Synthesis
-        llm_feature_var.set("summarize:synthesis")
-        extraction_summary = truncate_json_safely(extraction_data, 4000) if extraction_data else ""
-        synthesis_result = await synthesize(
-            llm_service,
-            title=video_data.title,
-            channel=video_data.channel,
-            duration=video_data.duration,
-            output_type=intent.output_type,
-            extraction_summary=extraction_summary,
+        # One-line pipeline summary with ALL phase timings
+        pt = ctx.phase_times
+        plan_ok = "ok" if ctx.plan_result is not None else "FAIL"
+        enrich_ok = "ok" if ctx.enrichment_data else "FAIL"
+        logger.info(
+            "[pipeline] DONE youtube_id=%s in %.0fs | "
+            "metadata=%.1fs transcript_frames=%.1fs visual_inject=%.1fs "
+            "plan=%.1fs(%s) extraction=%.1fs synthesis=%.1fs enrichment=%.1fs(%s) assembly=%.1fs | tabs=%d",
+            youtube_id, timer.elapsed(),
+            pt.get("metadata", 0),
+            pt.get("transcript_frames", 0),
+            pt.get("visual_inject", 0),
+            pt.get("plan", 0), plan_ok,
+            pt.get("extraction", 0),
+            pt.get("synthesis", 0),
+            pt.get("enrichment", 0), enrich_ok,
+            pt.get("assembly", 0),
+            len(ctx.triage.tabs) if ctx.triage else 0,
         )
-        yield sse_event("synthesis_complete", {
-            "tldr": synthesis_result.tldr,
-            "keyTakeaways": synthesis_result.key_takeaways,
-            "masterSummary": synthesis_result.master_summary,
-            "seoDescription": synthesis_result.seo_description,
-        })
-
-        # Save result
-        result = {
-            "status": ProcessingStatus.COMPLETED.value,
-            "title": video_data.title,
-            "channel": video_data.channel,
-            "thumbnailUrl": video_data.thumbnail_url,
-            "duration": video_data.duration,
-            "outputType": intent.output_type,
-            "intent": intent.model_dump(by_alias=True),
-            "output": {"type": intent.output_type, "data": extraction_data},
-            "enrichment": enrichment_data,
-            "synthesis": synthesis_result.model_dump(by_alias=True),
-            "summary": {
-                "tldr": synthesis_result.tldr,
-                "keyTakeaways": synthesis_result.key_takeaways,
-                "masterSummary": synthesis_result.master_summary,
-            },
-            "processedAt": datetime.now(timezone.utc),
-            "processingTimeMs": int(timer.elapsed() * 1000),
-        }
-
-        # Include description analysis if available
-        if isinstance(description_analysis, DescriptionAnalysis) and description_analysis.has_content:
-            result["descriptionAnalysis"] = description_analysis.to_dict()
-
-        repository.save_structured_result(video_summary_id, result)
-
-        processing_time = int(timer.elapsed() * 1000)
-        yield sse_event("done", {"videoSummaryId": video_summary_id, "processingTimeMs": processing_time})
-        yield "data: [DONE]\n\n"
 
     except TranscriptError as e:
         logger.info("[pipeline] FAILED video_id=%s error=TranscriptError total=%.1fs", video_summary_id, timer.elapsed())
-        repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), e.code)
+        await asyncio.to_thread(repository.update_status, video_summary_id, ProcessingStatus.FAILED, str(e), e.code)
         yield sse_event("error", {"message": str(e), "code": e.code.value})
 
     except RateLimitError as e:
         logger.warning("[pipeline] FAILED video_id=%s error=RateLimitError total=%.1fs", video_summary_id, timer.elapsed())
-        repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.RATE_LIMITED)
+        await asyncio.to_thread(repository.update_status, video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.RATE_LIMITED)
         yield sse_event("error", {"message": "AI service rate limited. Please try again in a moment.", "code": ErrorCode.RATE_LIMITED.value})
 
     except LitellmTimeout as e:
         logger.warning("[pipeline] FAILED video_id=%s error=Timeout total=%.1fs", video_summary_id, timer.elapsed())
-        repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.LLM_ERROR)
+        await asyncio.to_thread(repository.update_status, video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.LLM_ERROR)
         yield sse_event("error", {"message": "Request took too long. Please try again.", "code": ErrorCode.LLM_ERROR.value})
 
     except LitellmAPIError as e:
         logger.error("[pipeline] FAILED video_id=%s error=APIError total=%.1fs", video_summary_id, timer.elapsed())
-        repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.LLM_ERROR)
+        await asyncio.to_thread(repository.update_status, video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.LLM_ERROR)
         yield sse_event("error", {"message": "AI service error. Please try again.", "code": ErrorCode.LLM_ERROR.value})
 
     except Exception as e:
         error_ref = str(uuid.uuid4())[:8]
-        logger.error("[pipeline] FAILED video_id=%s error=%s ref=%s total=%.1fs", video_summary_id, type(e).__name__, error_ref, timer.elapsed())
-        repository.update_status(video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.UNKNOWN_ERROR)
+        logger.error("[pipeline] FAILED video_id=%s error=%s ref=%s total=%.1fs", video_summary_id, type(e).__name__, error_ref, timer.elapsed(), exc_info=True)
+        await asyncio.to_thread(repository.update_status, video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.UNKNOWN_ERROR)
         yield sse_event("error", {"message": f"An unexpected error occurred (ref: {error_ref}).", "code": ErrorCode.UNKNOWN_ERROR.value})
     finally:
-        if video_summary_id:
-            clear_override(video_summary_id)
+        await asyncio.to_thread(clear_override, video_summary_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -278,10 +266,10 @@ async def stream_summary(
     """
     Stream video summarization via Server-Sent Events.
 
-    Intent-driven pipeline delivers content in phases:
+    Triage-driven pipeline delivers content in phases:
     1. INSTANT (~1 sec): Metadata from yt-dlp
     2. TRANSCRIPT: Fetch and clean transcript
-    3. INTENT: Detect output type and sections
+    3. TRIAGE: Determine content domains and tab layout
     4. EXTRACTION: Adaptive structured extraction (1-3 calls)
     5. ENRICHMENT: Quiz/flashcards/cheat sheet (conditional)
     6. SYNTHESIS: TLDR, takeaways, master summary
@@ -292,7 +280,7 @@ async def stream_summary(
     except (InvalidId, TypeError):
         raise HTTPException(status_code=400, detail="Invalid video summary ID format")
 
-    entry = repository.get_video_summary(video_summary_id)
+    entry = await asyncio.to_thread(repository.get_video_summary, video_summary_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Video summary not found")
 
@@ -310,107 +298,69 @@ async def stream_summary(
 
     # Return cached result if already completed
     if entry.get("status") == ProcessingStatus.COMPLETED.value:
-        # Detect format: new pipeline stores "output.type" field, legacy stores "summary.chapters"
-        output_field = entry.get("output")
-        is_structured = (
-            (isinstance(output_field, dict) and "type" in output_field)
-            or entry.get("pipelineVersion") == "2.0"
-        )
-        streamer = _stream_cached_structured if is_structured else _stream_cached_result
         return StreamingResponse(
-            streamer(video_summary_id, entry),
+            _stream_cached_structured(video_summary_id, entry),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
         )
 
-    # Always use the new pipeline for fresh summarizations
+    # Prevent duplicate pipeline runs: if another connection is already processing
+    # this video, wait for it to finish and serve the cached result.
+    _cleanup_stale_locks()  # Periodic cleanup to prevent memory leaks from abandoned connections
+
+    # Atomic check-and-register: setdefault returns existing lock if present,
+    # otherwise inserts new_lock. This avoids TOCTOU race between check and set.
+    new_lock = (asyncio.Event(), time.monotonic())
+    existing_lock = _processing_locks.setdefault(video_summary_id, new_lock)
+
+    if existing_lock is not new_lock:
+        # Another request is already processing this video — wait for it
+        logger.info("Duplicate stream request for %s — waiting for existing pipeline", video_summary_id)
+        try:
+            await asyncio.wait_for(existing_lock[0].wait(), timeout=300)
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Pipeline timed out waiting for existing run")
+        entry = await asyncio.to_thread(repository.get_video_summary, video_summary_id)
+        if entry and entry.get("status") == ProcessingStatus.COMPLETED.value:
+            # Clean up any stale lock before returning — prevents memory leak
+            _processing_locks.pop(video_summary_id, None)
+            return StreamingResponse(
+                _stream_cached_structured(video_summary_id, entry),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+            )
+        if entry and entry.get("status") == ProcessingStatus.FAILED.value:
+            _processing_locks.pop(video_summary_id, None)
+            raise HTTPException(status_code=502, detail="Previous pipeline run failed. Please retry.")
+        # Status is stuck PROCESSING — try to atomically claim ownership.
+        # Use setdefault so only one concurrent waiter-fallthrough wins the race.
+        new_lock = (asyncio.Event(), time.monotonic())
+        actual = _processing_locks.setdefault(video_summary_id, new_lock)
+        if actual is not new_lock:
+            # Another waiter already claimed it — reject this request
+            raise HTTPException(status_code=409, detail="Pipeline already running. Please retry.")
+
+    # Capture entry as fallback — but re-fetch inside the stream for freshness
+    fallback_entry: dict[str, Any] = entry  # type: ignore[assignment]  # guaranteed non-None at this point
+
+    async def _locked_stream() -> AsyncGenerator[str, None]:
+        try:
+            # Re-fetch entry for fresh state (outer entry may be stale
+            # after waiting for a lock or when the lock-wait path falls through).
+            fresh = await asyncio.to_thread(repository.get_video_summary, video_summary_id)
+            current_entry: dict[str, Any] = fresh if fresh is not None else fallback_entry
+            async for chunk in stream_summarization(video_summary_id, current_entry, repository, llm_service):
+                yield chunk
+        finally:
+            lock = _processing_locks.pop(video_summary_id, None)
+            if lock:
+                lock[0].set()
+
     return StreamingResponse(
-        stream_summarization(video_summary_id, entry, repository, llm_service),
+        _locked_stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
     )
-
-
-async def _stream_cached_result(video_summary_id: str, entry: dict[str, Any]) -> AsyncGenerator[str, None]:
-    """Stream a legacy cached result as SSE events."""
-    yield sse_event("cached", {"videoSummaryId": video_summary_id})
-    yield sse_event("metadata", {
-        "title": entry.get("title"),
-        "channel": entry.get("channel"),
-        "thumbnailUrl": entry.get("thumbnail_url"),
-        "duration": entry.get("duration"),
-        "context": entry.get("context"),
-    })
-
-    if chapters := entry.get("chapters"):
-        yield sse_event("chapters", {
-            "chapters": chapters,
-            "isCreatorChapters": entry.get("chapter_source") == "creator",
-        })
-
-    if desc_analysis := entry.get("description_analysis"):
-        yield sse_event("description_analysis", desc_analysis)
-
-    summary = entry.get("summary", {})
-    yield sse_event("synthesis_complete", {
-        "tldr": summary.get("tldr", ""),
-        "keyTakeaways": summary.get("key_takeaways", []),
-    })
-
-    # Refresh presigned URLs for cached visual blocks before emitting
-    summary_chapters = summary.get("chapters", [])
-    _refresh_frame_urls(summary_chapters)
-
-    for i, chapter in enumerate(summary_chapters):
-        yield sse_event("chapter_ready", {"index": i, "chapter": chapter})
-
-    yield sse_event("concepts_complete", {"concepts": summary.get("concepts", [])})
-
-    if master_summary := summary.get("master_summary"):
-        yield sse_event("master_summary_complete", {"masterSummary": master_summary})
-
-    yield sse_event("done", {"videoSummaryId": video_summary_id, "cached": True})
-    yield "data: [DONE]\n\n"
-
-
-async def _stream_cached_structured(video_summary_id: str, entry: dict[str, Any]) -> AsyncGenerator[str, None]:
-    """Stream a cached structured result as SSE events."""
-    yield sse_event("cached", {"videoSummaryId": video_summary_id})
-    yield sse_event("metadata", {
-        "title": entry.get("title"),
-        "channel": entry.get("channel"),
-        "thumbnailUrl": entry.get("thumbnailUrl") or entry.get("thumbnail_url"),
-        "duration": entry.get("duration"),
-    })
-
-    if intent := entry.get("intent"):
-        # Re-apply canonical sections to fix stale tab IDs from older cached results
-        output_type = intent.get("outputType") or (entry.get("output", {}) or {}).get("type")
-        if output_type:
-            canonical = get_canonical_sections(output_type)
-            intent["sections"] = [s.model_dump(by_alias=True) for s in canonical]
-        yield sse_event("intent_detected", intent)
-
-    if output := entry.get("output"):
-        yield sse_event("extraction_complete", {
-            "outputType": output.get("type"),
-            "data": output.get("data"),
-        })
-
-    if enrichment := entry.get("enrichment"):
-        yield sse_event("enrichment_complete", enrichment)
-
-    synthesis = entry.get("synthesis", {})
-    summary = entry.get("summary", {})
-    yield sse_event("synthesis_complete", {
-        "tldr": synthesis.get("tldr") or summary.get("tldr", ""),
-        "keyTakeaways": synthesis.get("keyTakeaways") or summary.get("keyTakeaways", []),
-        "masterSummary": synthesis.get("masterSummary") or summary.get("masterSummary", ""),
-        "seoDescription": synthesis.get("seoDescription", ""),
-    })
-
-    yield sse_event("done", {"videoSummaryId": video_summary_id, "cached": True})
-    yield "data: [DONE]\n\n"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -444,7 +394,7 @@ async def regenerate_summary(
     except (InvalidId, TypeError):
         raise HTTPException(status_code=400, detail="Invalid video summary ID format")
 
-    entry = repository.get_video_summary(video_summary_id)
+    entry = await asyncio.to_thread(repository.get_video_summary, video_summary_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Video summary not found")
 
@@ -466,7 +416,16 @@ async def regenerate_summary(
             generation=entry.get("generation"),
         )
 
-    repository.update_status(video_summary_id, ProcessingStatus.PENDING)
+    await asyncio.to_thread(repository.update_status, video_summary_id, ProcessingStatus.PENDING)
+
+    # Invalidate Redis cache for this video
+    youtube_id = entry.get("youtubeId") or entry.get("youtube_id")
+    if youtube_id and settings.REDIS_ENABLED:
+        try:
+            await response_cache.invalidate(youtube_id)
+            logger.info("Invalidated Redis cache for youtube_id=%s", youtube_id)
+        except (OSError, redis_exceptions.ConnectionError) as e:
+            logger.debug("Redis cache invalidation failed (non-critical): %s", e)
 
     return RegenerateResponse(
         status="ready",

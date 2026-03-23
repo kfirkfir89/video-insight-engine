@@ -1,0 +1,543 @@
+"""Assembly orchestrator — assembles final VIEResponse from pipeline outputs.
+
+Resolves data sources, runs assemblers, validates domain requirements,
+injects frame thumbnails, and produces the final {meta, tabs[]} shape.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from typing import Any
+
+from .assemblers import (
+    ASSEMBLER_REGISTRY,
+    _chapters_to_timeline,
+    assemble_display_section,
+    infer_component,
+)
+from .cross_tab import resolve_cross_tab_links
+
+logger = logging.getLogger(__name__)
+
+
+# ─────────────────────────────────────────────────────
+# Data Source Resolution
+# ─────────────────────────────────────────────────────
+
+
+def resolve_data_source(
+    data_source: str,
+    extraction: dict,
+    enrichment: dict | None = None,
+) -> Any:
+    """Resolve a dot-notation dataSource to actual data.
+
+    Examples:
+        "travel.itinerary"   -> extraction["travel"]["itinerary"]
+        "enrichment.quiz"    -> enrichment["quiz"]
+        "fitness"            -> extraction["fitness"]
+    """
+    if not data_source:
+        return None
+
+    parts = data_source.split(".")
+
+    if parts[0] == "enrichment":
+        if not enrichment:
+            return None
+        obj: Any = enrichment
+        for part in parts[1:]:
+            if part == "*":
+                return obj
+            if isinstance(obj, dict) and part in obj:
+                obj = obj[part]
+            else:
+                return None
+        return obj
+
+    obj = extraction
+    for part in parts:
+        if part == "*":
+            return obj
+        if isinstance(obj, dict) and part in obj:
+            obj = obj[part]
+        else:
+            return None
+    return obj
+
+
+# ─────────────────────────────────────────────────────
+# Frame Utilities
+# ─────────────────────────────────────────────────────
+
+
+def find_nearest_frame(
+    timestamp_seconds: float,
+    frames: list[dict],
+    max_distance: float = 30.0,
+) -> dict | None:
+    """Find the frame closest to a given timestamp."""
+    if not frames:
+        return None
+    nearest = min(frames, key=lambda f: abs(f.get("timestamp", 0) - timestamp_seconds))
+    if abs(nearest.get("timestamp", 0) - timestamp_seconds) <= max_distance:
+        return nearest
+    return None
+
+
+def inject_frame_thumbnails(
+    items: list[dict],
+    frames: list[dict],
+    all_frames: list[dict] | None = None,
+) -> list[dict]:
+    """Add thumbnailUrl to items that have timestamp/startTime fields."""
+    if not frames:
+        return items
+
+    s3_frames = [f for f in frames if f.get("s3_url")]
+    match_pool = all_frames if all_frames else s3_frames
+
+    for item in items:
+        ts = item.get("timestamp") or item.get("startTime") or item.get("seconds") or item.get("time")
+        if ts is not None:
+            try:
+                ts_float = float(ts) if not isinstance(ts, str) else None
+            except (ValueError, TypeError):
+                ts_float = None
+            if ts_float is not None:
+                nearest = find_nearest_frame(ts_float, match_pool)
+                if nearest and nearest.get("s3_url"):
+                    item["thumbnailUrl"] = nearest["s3_url"]
+                elif nearest and s3_frames:
+                    s3_nearest = find_nearest_frame(ts_float, s3_frames)
+                    if s3_nearest:
+                        item["thumbnailUrl"] = s3_nearest.get("s3_url", "")
+    return items
+
+
+def find_description_for_frame(
+    frame: dict,
+    frame_descriptions: list[dict],
+    tolerance: float = 5.0,
+) -> dict | None:
+    """Find a vision description matching a frame by timestamp."""
+    if not frame_descriptions:
+        return None
+    ts = frame.get("timestamp", 0)
+    best = None
+    best_distance = float("inf")
+    for desc in frame_descriptions:
+        distance = abs(desc.get("timestamp_sec", 0) - ts)
+        if distance < best_distance:
+            best_distance = distance
+            best = desc
+    return best if best_distance <= tolerance else None
+
+
+# ─────────────────────────────────────────────────────
+# Domain Requirement Validation
+# ─────────────────────────────────────────────────────
+
+_DOMAIN_REQUIREMENTS: dict[str, dict] = {
+    "food":     {"required": ["step_player", "checklist"], "max": {"flash_deck": 1}},
+    "project":  {"required": ["step_player", "checklist"], "max": {"flash_deck": 1}},
+    "review":   {"required": ["verdict", "comparison"],    "max": {"flash_deck": 1}},
+    "fitness":  {"required": ["exercise_tracker"],         "max": {"flash_deck": 1}},
+    "tech":     {"required": ["code_explorer"],            "max": {"flash_deck": 1, "quiz": 1}},
+    "travel":   {"required": ["spot_explorer"],            "max": {"flash_deck": 1}},
+    "music":    {"required": ["lyrics_player"],            "max": {"flash_deck": 1}},
+    "learning": {"required": [],                           "max": {"flash_deck": 1, "quiz": 1}},
+}
+
+
+def _validate_domain_requirements(tabs: list[dict], primary_tag: str) -> None:
+    """Validate assembled tabs against domain requirements in-place."""
+    reqs = _DOMAIN_REQUIREMENTS.get(primary_tag, {})
+    tab_components = [t.get("component", "") for t in tabs]
+
+    for req in reqs.get("required", []):
+        if req not in tab_components:
+            logger.warning(
+                "Domain '%s' requires '%s' but it's missing from assembled tabs",
+                primary_tag, req,
+            )
+
+    for comp, limit in reqs.get("max", {}).items():
+        indices = [i for i, t in enumerate(tabs) if t.get("component") == comp]
+        if len(indices) > limit:
+            logger.warning(
+                "'%s' appears %dx (max %d for domain '%s') — keeping first %d only",
+                comp, len(indices), limit, primary_tag, limit,
+            )
+            for idx in reversed(indices[limit:]):
+                tabs.pop(idx)
+
+    for tab in tabs:
+        if not tab.get("goal"):
+            logger.warning("Tab '%s' has empty goal", tab.get("id", "?"))
+        if not tab.get("label"):
+            logger.warning("Tab '%s' has empty label", tab.get("id", "?"))
+        label = tab.get("label", "")
+        if "<Untitled" in label or "Untitled Chapter" in label:
+            tab["label"] = "Introduction"
+
+
+# ─────────────────────────────────────────────────────
+# Post-Processing
+# ─────────────────────────────────────────────────────
+
+_UNTITLED_RE = re.compile(r'<?\s*Untitled\s+Chapter\s+(\d+)\s*>?', re.IGNORECASE)
+_NO_COUNT_COMPONENTS = frozenset({"overview", "verdict", "budget"})
+
+_COUNT_KEYS: dict[str, str] = {
+    "spot_explorer": "spots",
+    "checklist": "items",
+    "step_player": "steps",
+    "exercise_tracker": "exercises",
+    "flash_deck": "cards",
+    "quiz": "questions",
+    "scenario": "scenarios",
+    "info_grid": "items",
+    "timeline": "entries",
+    "code_explorer": "snippets",
+    "clip_player": "clips",
+    "gallery": "images",
+    "comparison": "comparisons",
+    "lyrics_player": "sections",
+}
+
+
+def _post_process_tabs(tabs: list[dict]) -> None:
+    """Apply post-processing rules to assembled tabs in-place."""
+    for i, tab in enumerate(tabs):
+        label = tab.get("label", "")
+        props = tab.get("props", {})
+        emoji = tab.get("emoji", "")
+
+        if emoji and label.startswith(emoji):
+            label = label[len(emoji):].lstrip()
+            tab["label"] = label
+
+        match = _UNTITLED_RE.search(label)
+        if match:
+            label = "Introduction" if i == 0 else f"Part {match.group(1)}"
+            tab["label"] = label
+
+        if isinstance(props, dict):
+            for key in ("steps", "spots", "entries", "items"):
+                items_list = props.get(key)
+                if isinstance(items_list, list):
+                    for idx_in_list, item in enumerate(items_list):
+                        if isinstance(item, dict):
+                            for field in ("instruction", "label", "title", "name"):
+                                val = item.get(field)
+                                if isinstance(val, str):
+                                    m = _UNTITLED_RE.search(val)
+                                    if m:
+                                        item[field] = "Introduction" if idx_in_list == 0 else f"Part {m.group(1)}"
+
+        component = tab.get("component", "")
+        if component not in _NO_COUNT_COMPONENTS and isinstance(props, dict):
+            if not re.match(r'^\d+\s', label):
+                count_key = _COUNT_KEYS.get(component)
+                if count_key and count_key in props:
+                    data_list = props[count_key]
+                    if isinstance(data_list, list) and len(data_list) > 0:
+                        count = len(data_list)
+                        tab["label"] = f"{count} {label}"
+
+
+# ─────────────────────────────────────────────────────
+# Empty Data Detection + Cross-Domain Fallback
+# ─────────────────────────────────────────────────────
+
+# Mapping of equivalent fields across domains for fallback resolution.
+# When primary domain field is empty, try these alternatives in other domains.
+_FIELD_EQUIVALENTS: dict[str, list[str]] = {
+    "concepts": ["keyMoments", "keyPoints", "takeaways"],
+    "keyPoints": ["takeaways", "keyMoments", "quotes", "savingTips"],
+    "timestamps": ["keyMoments"],
+    "takeaways": ["keyMoments", "takeaways", "keyPoints", "savingTips"],
+    "keyMoments": ["keyPoints", "concepts", "takeaways"],
+    "tips": ["savingTips", "transportationTips", "accommodationTips", "takeaways"],
+    "packingList": ["savingTips", "tips", "takeaways"],
+    "itinerary": ["keyMoments", "spots", "costs"],
+    "restaurants": ["spots", "keyMoments"],
+}
+
+
+def _is_empty_data(data: Any) -> bool:
+    """Check if resolved data is effectively empty (None or empty collection)."""
+    if data is None:
+        return True
+    if isinstance(data, (list, dict)) and len(data) == 0:
+        return True
+    return False
+
+
+def _cross_domain_fallback(
+    data_source: str,
+    extraction: dict,
+    enrichment: dict | None = None,
+) -> Any:
+    """Try other extraction domains when primary domain field is empty.
+
+    Given "learning.concepts" with empty data, scans narrative, tech, etc.
+    for the same field name or equivalent fields.
+    """
+    parts = data_source.split(".")
+    if len(parts) != 2:
+        return None
+
+    primary_domain, field = parts
+
+    # Try exact field name in other domains first
+    for domain, domain_data in extraction.items():
+        if domain == primary_domain or not isinstance(domain_data, dict):
+            continue
+        candidate = domain_data.get(field)
+        if not _is_empty_data(candidate):
+            logger.info(
+                "Cross-domain fallback: %s.%s (empty) → %s.%s (%d items)",
+                primary_domain, field, domain, field,
+                len(candidate) if isinstance(candidate, (list, dict)) else 1,
+            )
+            return candidate
+
+    # Try equivalent field names in other domains
+    equivalents = _FIELD_EQUIVALENTS.get(field, [])
+    for domain, domain_data in extraction.items():
+        if domain == primary_domain or not isinstance(domain_data, dict):
+            continue
+        for equiv_field in equivalents:
+            candidate = domain_data.get(equiv_field)
+            if not _is_empty_data(candidate):
+                logger.info(
+                    "Cross-domain fallback: %s.%s (empty) → %s.%s (%d items)",
+                    primary_domain, field, domain, equiv_field,
+                    len(candidate) if isinstance(candidate, (list, dict)) else 1,
+                )
+                return candidate
+
+    return None
+
+
+# ─────────────────────────────────────────────────────
+# Main Assembly Orchestrator
+# ─────────────────────────────────────────────────────
+
+
+def assemble_response(
+    triage: dict,
+    extraction: dict,
+    enrichment: dict | None,
+    synthesis: dict | None,
+    video_meta: dict | None = None,
+    description_analysis: dict | None = None,
+    frames: list[dict] | None = None,
+    gallery_frames: list[dict] | None = None,
+    all_frames: list[dict] | None = None,
+    frame_descriptions: list[dict] | None = None,
+) -> dict:
+    """Assemble the final VIEResponse v2 from pipeline outputs.
+
+    Returns:
+        dict: { meta, tabs: TabEntry[] }.
+    """
+    video_meta = video_meta or {}
+
+    meta: dict[str, Any] = {
+        "contentTags": triage.get("contentTags", ["learning"]),
+        "modifiers": triage.get("modifiers", []),
+        "primaryTag": triage.get("primaryTag", "learning"),
+        "userGoal": triage.get("userGoal", ""),
+    }
+
+    if synthesis:
+        meta["tldr"] = synthesis.get("tldr", "")
+        meta["seoDescription"] = synthesis.get("seoDescription", "")
+        meta["masterSummary"] = synthesis.get("masterSummary", "")
+        meta["keyTakeaways"] = synthesis.get("keyTakeaways", [])
+
+    if description_analysis:
+        meta["descriptionAnalysis"] = description_analysis
+
+    primary_tag = meta["primaryTag"]
+    raw_tabs = triage.get("tabs", [])
+    all_tab_ids = {t.get("id", "") for t in raw_tabs if isinstance(t, dict)}
+
+    assembled_tabs: list[dict] = []
+
+    for raw_tab in raw_tabs:
+        if not isinstance(raw_tab, dict):
+            continue
+
+        tab_id = raw_tab.get("id", "")
+        data_source = raw_tab.get("dataSource", "")
+        component = raw_tab.get("component") or infer_component(tab_id)
+
+        data = resolve_data_source(data_source, extraction, enrichment)
+        data_resolved = data is not None
+
+        # Treat empty collections as missing — lets fallback logic try other domains
+        if _is_empty_data(data):
+            data = None
+            data_resolved = False
+
+        # Cross-domain fallback: when primary domain field is empty, try other domains
+        if data is None and "." in data_source:
+            data = _cross_domain_fallback(data_source, extraction, enrichment)
+            if data is not None:
+                data_resolved = True
+
+        if data is None:
+            if tab_id in ("exercises", "timer"):
+                data = extraction.get("fitness")
+            elif tab_id == "pros_cons":
+                review = extraction.get("review", {})
+                if isinstance(review, dict):
+                    data = {"pros": review.get("pros", []), "cons": review.get("cons", []), "comparisons": review.get("comparisons", [])}
+            elif component == "timeline":
+                data = (extraction.get("learning") or {}).get("timestamps")
+
+        if component == "timeline":
+            yt_chapters = (video_meta or {}).get("chapters", [])
+            if isinstance(yt_chapters, list) and len(yt_chapters) > 0:
+                data = _chapters_to_timeline(yt_chapters)
+                data_resolved = True
+
+        # Components that build from synthesis/meta, not extraction data
+        _SELF_SUFFICIENT = {"overview", "budget"}
+        if not data_resolved and data is None and component not in _SELF_SUFFICIENT:
+            available = list(extraction.keys())
+            logger.warning(
+                "No data for tab id=%r, dataSource=%r — not in extraction/enrichment. "
+                "Available extraction keys: %s",
+                tab_id, data_source, available,
+            )
+
+        assembler = ASSEMBLER_REGISTRY.get(component, assemble_display_section)
+        tab_with_hints = {**raw_tab, "_primary_tag": primary_tag,
+                          "_synthesis": synthesis, "_video_meta": video_meta}
+
+        try:
+            props = assembler(tab_with_hints, data, extraction, enrichment)
+        except Exception as e:
+            logger.warning(
+                "TAB DROPPED: id=%r, component=%r, dataSource=%r — assembler raised %s: %s",
+                tab_id, component, data_source, type(e).__name__, e,
+            )
+            props = None
+
+        if props is not None and frames:
+            for key in ("entries", "spots", "steps", "clips", "images"):
+                if key in props and isinstance(props[key], list):
+                    inject_frame_thumbnails(props[key], frames, all_frames=all_frames)
+
+        if props is None:
+            if data_resolved or data is not None:
+                data_summary = (
+                    f"list[{len(data)}]" if isinstance(data, list)
+                    else f"dict(keys={list(data.keys())})" if isinstance(data, dict)
+                    else repr(type(data).__name__)
+                ) if data is not None else "None"
+                logger.warning(
+                    "TAB DROPPED: id=%r, component=%r, dataSource=%r — "
+                    "assembler returned None (data was %s)",
+                    tab_id, component, data_source, data_summary,
+                )
+            continue
+
+        assembled_tabs.append({
+            "id": tab_id,
+            "label": raw_tab.get("label", tab_id),
+            "emoji": raw_tab.get("emoji", ""),
+            "component": component,
+            "props": props,
+            "goal": raw_tab.get("goal", ""),
+            "crossTabLinks": [],
+        })
+
+    # Resolve cross-tab links
+    all_assembled_tab_ids = {t["id"] for t in assembled_tabs}
+    globally_linked: set[str] = set()
+    for tab in assembled_tabs:
+        links = resolve_cross_tab_links(
+            tab_id=tab["id"],
+            all_tab_ids=all_assembled_tab_ids,
+            component=tab.get("component"),
+            all_tabs=assembled_tabs,
+            primary_tag=primary_tag,
+        )
+        deduped = []
+        for link in links:
+            target = link["targetTab"]
+            if target not in globally_linked:
+                deduped.append(link)
+                globally_linked.add(target)
+        tab["crossTabLinks"] = deduped
+
+    _validate_domain_requirements(assembled_tabs, primary_tag)
+
+    # Conditional gallery auto-append
+    _gallery_source = gallery_frames if gallery_frames else frames
+    if _gallery_source and len(_gallery_source) > 0:
+        gallery_images = []
+        non_generic_count = 0
+        for f in sorted(_gallery_source, key=lambda x: x.get("timestamp", 0)):
+            ts = f.get("timestamp", 0)
+            mins = int(ts) // 60
+            secs = int(ts) % 60
+            caption = f"Moment at {mins}:{secs:02d}"
+            if frame_descriptions:
+                desc = find_description_for_frame(f, frame_descriptions)
+                if desc and desc.get("content"):
+                    caption = desc["content"]
+            if caption.startswith("Moment at") and f.get("ocr_text"):
+                caption = f.get("ocr_text", caption)
+
+            if not caption.startswith("Moment at"):
+                non_generic_count += 1
+
+            gallery_images.append({
+                "url": f.get("s3_url", ""),
+                "caption": caption,
+                "timestamp": ts,
+                "thumbnailUrl": f.get("s3_url", ""),
+            })
+
+        has_enough_frames = len(gallery_images) > 8
+        has_good_captions = non_generic_count > len(gallery_images) * 0.5
+        if gallery_images and has_enough_frames and has_good_captions:
+            layout = "grid" if len(gallery_images) > 10 else "carousel"
+            assembled_tabs.append({
+                "id": "frames-gallery",
+                "label": "Visual Moments",
+                "emoji": "\U0001f5bc\ufe0f",
+                "component": "gallery",
+                "props": {
+                    "images": gallery_images,
+                    "layout": layout,
+                    "enableLightbox": True,
+                    "onImageClick": "seek",
+                },
+                "goal": "Browse key visual moments from the video",
+                "crossTabLinks": [],
+            })
+
+    _post_process_tabs(assembled_tabs)
+
+    # Assembly summary
+    planned_ids = [t.get("id", "?") for t in raw_tabs if isinstance(t, dict)]
+    assembled_ids = {t["id"] for t in assembled_tabs}
+    dropped_ids = [tid for tid in planned_ids if tid not in assembled_ids]
+    if dropped_ids:
+        logger.warning(
+            "[assembly] Assembled %d/%d tabs, dropped: %s",
+            len(assembled_tabs), len(planned_ids), dropped_ids,
+        )
+    else:
+        logger.info("[assembly] Assembled %d/%d tabs (none dropped)", len(assembled_tabs), len(planned_ids))
+
+    return {"meta": meta, "tabs": assembled_tabs}
