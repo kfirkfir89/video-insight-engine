@@ -1,6 +1,6 @@
 # Caching Strategy
 
-Token optimization through system-level caching.
+Multi-layer caching for cost optimization and fast responses.
 
 ---
 
@@ -20,41 +20,76 @@ Total: $3X for identical work
 
 ## Solution
 
-Process once, reuse forever.
+Process once, reuse forever. Three cache layers:
 
-| Data              | Cached? | Collection             |
-| ----------------- | ------- | ---------------------- |
-| Video summaries   | ✅ Yes  | `videoSummaryCache`    |
-| System expansions | ✅ Yes  | `systemExpansionCache` |
-| User chats        | ❌ No   | `userChats`            |
+| Layer     | Store    | Keyed By               | Purpose                    |
+| --------- | -------- | ---------------------- | -------------------------- |
+| L1        | Redis    | `youtube_id`           | Full VIEResponse (fastest) |
+| L2        | MongoDB  | `youtubeId` field      | Persistent video summaries |
+| L3        | S3       | `youtube_id` prefix    | Extracted video frames     |
 
 ---
 
 ## Cache Flows
 
-### Video Summary Cache
+### Video Summary Cache (3-Layer)
 
 ```
 User submits YouTube URL
          │
          ▼
-   Check videoSummaryCache
-   by youtubeId
+   Check Redis (L1)
+   by youtube_id
          │
     ┌────┴────┐
     │         │
    HIT      MISS
     │         │
     ▼         ▼
-  Reuse    Process with LLM
-  cached        │
-    │           ▼
-    │      Save to cache
+  Return   Check MongoDB (L2)
+  instant  by youtubeId
+  ($0.00)      │
+    │     ┌────┴────┐
+    │     │         │
+    │    HIT      MISS
+    │     │         │
+    │     ▼         ▼
+    │   Return   Process with LLM
+    │   cached        │
+    │     │           ▼
+    │     │      Save to MongoDB (L2)
+    │     │      Save to Redis (L1)
+    │     │           │
+    │     └─────┬─────┘
     │           │
     └─────┬─────┘
           │
           ▼
    Create userVideo reference
+```
+
+### S3 Frame Cache
+
+```
+Pipeline needs frames for video
+         │
+         ▼
+   Check S3 for existing frames
+   by youtube_id prefix
+         │
+    ┌────┴────┐
+    │         │
+   HIT      MISS
+    │         │
+    ▼         ▼
+  Skip     Extract frames (FFmpeg)
+  extraction  Score + select ~25
+    │         Upload to S3
+    │           │
+    └─────┬─────┘
+          │
+          ▼
+   Return frame URLs
 ```
 
 ### System Expansion Cache
@@ -88,15 +123,12 @@ User clicks "Explain" on section
 User sends message
          │
          ▼
-   Load memorized item context
+   Load video context
    Load chat history
          │
          ▼
    ALWAYS call LLM
    (personalized, contextual)
-         │
-         ▼
-   Save to userChats
          │
          ▼
    Return response
@@ -108,53 +140,35 @@ User sends message
 
 Popular React tutorial, 100 users:
 
-| Scenario      | LLM Calls | Cost     |
-| ------------- | --------- | -------- |
-| Without cache | 100       | $50-100  |
-| With cache    | 1         | $0.50-1  |
-| **Savings**   |           | **~99%** |
+| Scenario            | LLM Calls | Cost     |
+| ------------------- | --------- | -------- |
+| Without cache       | 100       | $50-100  |
+| With MongoDB cache  | 1         | $0.50-1  |
+| Redis cache hit     | 0         | $0.00    |
+| **Savings**         |           | **~99%** |
+
+With the Redis layer, cache hits skip the MongoDB query entirely for even faster response times.
 
 ---
 
 ## What's Cached vs Not
 
-### ✅ System Cache (Shared)
+### System Cache (Shared)
 
-| Data              | Why                                  |
-| ----------------- | ------------------------------------ |
-| Video summaries   | Same video = same summary            |
-| System expansions | Same section = same base explanation |
+| Data              | Store          | Why                                  |
+| ----------------- | -------------- | ------------------------------------ |
+| VIEResponse       | Redis          | Instant serve, same video = $0.00    |
+| Video summaries   | MongoDB        | Persistent, same video = same output |
+| System expansions | MongoDB        | Same section = same explanation      |
+| Video frames      | S3             | Skip re-extraction for known videos  |
 
-### ❌ User Data (Per-User)
+### User Data (Per-User)
 
 | Data            | Why                                   |
 | --------------- | ------------------------------------- |
 | User chats      | Personalized conversations            |
-| Memorized items | User's selection (but copies content) |
 | Folders         | User organization                     |
 | Notes           | Personal annotations                  |
-
----
-
-## Memorized Items: Special Case
-
-Memorized items are **user data** but **copy content** from cache:
-
-```
-User clicks "Memorize"
-         │
-         ▼
-   Load from system cache
-         │
-         ▼
-   COPY content into
-   memorizedItem.source.content
-         │
-         ▼
-   Save to user's collection
-```
-
-This ensures memorized items work **independently** - even if source changes.
 
 ---
 
@@ -178,14 +192,14 @@ To invalidate (e.g., improved prompts):
 1. Add `version` field to cache entries
 2. Bump version = regenerate
 3. Migrate old caches via script if needed
+4. Redis entries can be flushed independently of MongoDB
 
 ---
 
-## No Redis Needed
+## Redis Configuration
 
-The "cache" is just MongoDB collections. No Redis because:
-
-- Data is permanent (no TTL)
-- Full query flexibility needed
-- Simpler stack
-- Add Redis later if needed for rate limiting, sessions, or scaling
+- **Image:** `redis:7-alpine`
+- **Port:** 6379
+- **Persistence:** AOF (`--appendonly yes`)
+- **Connection:** `REDIS_URL=redis://vie-redis:6379`
+- **Data:** Full VIEResponse JSON keyed by `youtube_id`

@@ -64,6 +64,7 @@ This project uses OKLCH (Oklab Lightness Chroma Hue) for perceptually uniform co
 | `--input` | `oklch(89% 0.012 285)` | Input borders |
 | `--ring` | `oklch(58% 0.24 292)` | Focus rings |
 | `--radius` | `0.75rem` | Border radius (12px) |
+| `--border-width` | `1px` | Default border width |
 
 ### Dark Mode (Deep indigo-purple, hue ~280)
 
@@ -336,6 +337,16 @@ Tailwind's default spacing scale (4px base):
 | `font-medium` | 500 | Emphasis |
 | `font-semibold` | 600 | Headings, block headers |
 | `font-bold` | 700 | Strong emphasis |
+
+---
+
+## Border Width
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--border-width` | `1px` | Default border width for all `border` utilities |
+
+Change `--border-width` in `:root` to uniformly adjust all border widths. Use `calc(var(--border-width) * N)` for multiples (e.g., thick left accents).
 
 ---
 

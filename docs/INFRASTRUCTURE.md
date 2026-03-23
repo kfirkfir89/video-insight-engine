@@ -6,21 +6,22 @@ Docker setup, networking, and environment configuration.
 
 ## Services Overview
 
-| Service        | Image/Build             | Port  | Purpose           |
-| -------------- | ----------------------- | ----- | ----------------- |
-| vie-web        | ./apps/web              | 5173  | React frontend    |
-| vie-api        | ./api                   | 3000  | Node.js backend   |
-| vie-summarizer | ./services/summarizer   | 8000  | Python service    |
-| vie-explainer  | ./services/explainer    | 8001  | Python MCP server |
-| vie-mongodb    | mongo:7                 | 27017 | Database          |
+| Service        | Image/Build             | Port       | Purpose            |
+| -------------- | ----------------------- | ---------- | ------------------ |
+| vie-web        | ./apps/web              | 5173       | React frontend     |
+| vie-api        | ./api                   | 3000       | Node.js backend    |
+| vie-summarizer | ./services/summarizer   | 8000       | Python service     |
+| vie-explainer  | ./services/explainer    | 8001       | Python MCP server  |
+| vie-admin      | ./services/admin        | 8002       | Admin dashboard    |
+| vie-mongodb    | mongo:7                 | 27017      | Database           |
+| vie-redis      | redis:7-alpine          | 6379       | Response cache     |
+| vie-qdrant     | qdrant/qdrant:latest    | 6333/6334  | Vector DB (RAG)    |
 
 ---
 
 ## Docker Compose
 
 ```yaml
-version: "3.8"
-
 services:
   # ═══════════════════════════════════════════════
   # INFRASTRUCTURE
@@ -38,11 +39,30 @@ services:
       MONGO_INITDB_DATABASE: video-insight-engine
     networks:
       - vie-network
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
-      interval: 10s
-      timeout: 5s
-      retries: 5
+
+  vie-redis:
+    image: redis:7-alpine
+    container_name: vie-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - vie_redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - vie-network
+
+  vie-qdrant:
+    image: qdrant/qdrant:latest
+    container_name: vie-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - vie_qdrant_data:/qdrant/storage
+    networks:
+      - vie-network
 
   # ═══════════════════════════════════════════════
   # APPLICATION SERVICES
@@ -50,8 +70,8 @@ services:
 
   vie-api:
     build:
-      context: ./api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: api/Dockerfile
     container_name: vie-api
     restart: unless-stopped
     ports:
@@ -61,20 +81,21 @@ services:
       PORT: 3000
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
       SUMMARIZER_URL: http://vie-summarizer:8000
+      EXPLAINER_URL: http://vie-explainer:8001
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-change-in-production}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
     networks:
       - vie-network
     depends_on:
       vie-mongodb:
         condition: service_healthy
-      vie-explainer:
-        condition: service_started
 
   vie-summarizer:
     build:
-      context: ./services/summarizer
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/summarizer/Dockerfile
     container_name: vie-summarizer
     restart: unless-stopped
     ports:
@@ -83,7 +104,12 @@ services:
       PYTHONUNBUFFERED: 1
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
       LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      REDIS_URL: redis://vie-redis:6379
+      QDRANT_HOST: vie-qdrant
+      QDRANT_PORT: 6333
+      S3_BUCKET: ${S3_BUCKET:-vie-transcripts}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
     networks:
       - vie-network
     depends_on:
@@ -92,8 +118,8 @@ services:
 
   vie-explainer:
     build:
-      context: ./services/explainer
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/explainer/Dockerfile
     container_name: vie-explainer
     restart: unless-stopped
     ports:
@@ -102,7 +128,28 @@ services:
       PYTHONUNBUFFERED: 1
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
       LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    networks:
+      - vie-network
+    depends_on:
+      vie-mongodb:
+        condition: service_healthy
+
+  vie-admin:
+    build:
+      context: .
+      dockerfile: services/admin/Dockerfile
+    container_name: vie-admin
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      PYTHONUNBUFFERED: 1
+      MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key-change-me}
+      VIE_API_URL: http://vie-api:3000
+      VIE_SUMMARIZER_URL: http://vie-summarizer:8000
+      VIE_EXPLAINER_URL: http://vie-explainer:8001
     networks:
       - vie-network
     depends_on:
@@ -111,8 +158,8 @@ services:
 
   vie-web:
     build:
-      context: ./apps/web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/web/Dockerfile
     container_name: vie-web
     restart: unless-stopped
     ports:
@@ -131,6 +178,8 @@ networks:
 
 volumes:
   vie_mongodb_data:
+  vie_redis_data:
+  vie_qdrant_data:
 ```
 
 ---
@@ -161,12 +210,40 @@ GOOGLE_API_KEY=                 # Required if using Gemini
 # JWT Authentication
 # ────────────────────────────────────────────────────
 JWT_SECRET=change-this-to-a-long-random-string
-JWT_EXPIRES_IN=7d
+JWT_REFRESH_SECRET=change-this-to-another-random-string
+JWT_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
 
 # ────────────────────────────────────────────────────
 # Internal Service URLs
 # ────────────────────────────────────────────────────
 SUMMARIZER_URL=http://localhost:8000
+INTERNAL_SECRET=change-this-for-inter-service-auth
+
+# ────────────────────────────────────────────────────
+# Redis (Response Cache)
+# ────────────────────────────────────────────────────
+REDIS_URL=redis://vie-redis:6379
+
+# ────────────────────────────────────────────────────
+# Qdrant (Vector DB for RAG)
+# ────────────────────────────────────────────────────
+QDRANT_HOST=vie-qdrant
+QDRANT_PORT=6333
+
+# ────────────────────────────────────────────────────
+# S3 Media Storage (Frames, Transcripts)
+# ────────────────────────────────────────────────────
+S3_BUCKET=vie-transcripts
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_ENDPOINT_URL=              # Optional: LocalStack for local dev
+
+# ────────────────────────────────────────────────────
+# Admin Panel
+# ────────────────────────────────────────────────────
+ADMIN_API_KEY=change-this-admin-key
 
 # ────────────────────────────────────────────────────
 # Frontend URLs (for production)
@@ -180,19 +257,22 @@ SUMMARIZER_URL=http://localhost:8000
 ## Network Topology
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                   vie-network (Docker bridge)                    │
-│                                                                  │
-│  External Access:                                                │
-│  ├── :5173 → vie-web (Frontend)                                 │
-│  └── :3000 → vie-api (API)                                      │
-│                                                                  │
-│  Internal Only:                                                  │
-│  ├── vie-mongodb:27017                                          │
-│  ├── vie-summarizer:8000                                        │
-│  └── vie-explainer:8001                                          │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                   vie-network (Docker bridge)                         │
+│                                                                       │
+│  External Access:                                                     │
+│  ├── :5173 → vie-web (Frontend)                                      │
+│  ├── :3000 → vie-api (API)                                           │
+│  └── :8002 → vie-admin (Admin Dashboard)                             │
+│                                                                       │
+│  Internal Only:                                                       │
+│  ├── vie-mongodb:27017    (Database)                                 │
+│  ├── vie-redis:6379       (Response Cache)                           │
+│  ├── vie-qdrant:6333/6334 (Vector DB)                                │
+│  ├── vie-summarizer:8000  (Pipeline)                                 │
+│  └── vie-explainer:8001   (MCP Server)                               │
+│                                                                       │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -200,24 +280,28 @@ SUMMARIZER_URL=http://localhost:8000
 ## Service Dependencies
 
 ```
-vie-mongodb ─────┬─────────────────────────────────┐
-                 │                                 │
-                 ▼                                 ▼
-           vie-api ◄─────────────────────── vie-explainer
+vie-mongodb ─────┬──────────────────────────────────────────┐
+vie-redis ───────┤                                          │
+vie-qdrant ──────┤                                          │
+                 │                                          │
+                 ▼                                          ▼
+           vie-api ◄──────────────────────────────── vie-explainer
                  │
                  ├──────────► vie-web
+                 ├──────────► vie-admin
                  │
                  ▼
-          vie-summarizer
+          vie-summarizer ──► vie-redis, vie-qdrant, S3
 ```
 
 Startup order:
 
-1. vie-mongodb
+1. vie-mongodb, vie-redis, vie-qdrant (infrastructure, parallel)
 2. vie-explainer (needs MongoDB)
-3. vie-api (needs MongoDB, Explainer)
-4. vie-summarizer (needs MongoDB)
-5. vie-web (needs vie-api)
+3. vie-api (needs MongoDB)
+4. vie-summarizer (needs MongoDB, Redis, Qdrant)
+5. vie-admin (needs MongoDB)
+6. vie-web (needs vie-api)
 
 ---
 
@@ -400,7 +484,7 @@ This section documents the MVP implementation phases that were followed to build
 - Transcript fetching via yt-dlp
 - Metadata and chapter extraction
 - LLM pipeline with parallel processing
-- Persona detection from YouTube metadata
+- Category detection from YouTube metadata
 - Error handling for video edge cases:
   - NO_TRANSCRIPT, VIDEO_TOO_LONG, VIDEO_TOO_SHORT
   - VIDEO_UNAVAILABLE, VIDEO_RESTRICTED, LIVE_STREAM
@@ -460,13 +544,18 @@ This section documents the MVP implementation phases that were followed to build
 - [x] Organize with folders
 - [x] Add notes to items
 
-### Post-MVP Features (Planned)
+### Phase 7+: Beyond MVP (Ongoing)
 
-| Feature     | Priority | Description                        |
-| ----------- | -------- | ---------------------------------- |
-| Export      | High     | Export memorized items as markdown |
-| Search      | High     | Full-text search across content    |
-| Tags        | Medium   | Tag-based organization             |
-| Bulk import | Medium   | Import from YouTube playlists      |
-| Sharing     | Low      | Share memorized items              |
-| Mobile      | Low      | Responsive design / native app     |
+The system has evolved significantly beyond the original MVP phases:
+
+- **Plan-based pipeline**: Replaced persona detection with LLM classifier + plan stage for adaptive content extraction
+- **Assembly stage**: Pure-code stage that converts extraction data into component-addressed `TabEntry[]`
+- **Interactive components**: 15+ interactive renderers (Quiz, FlashDeck, Budget, Verdict, Comparison, etc.)
+- **Redis response cache**: Full VIEResponse caching for instant serves
+- **Qdrant vector DB**: RAG-based video chat with semantic search
+- **Frame intelligence**: Vision LLM analysis of video frames, S3 storage, gallery display
+- **Chunked extraction**: Chapter-aware batched extraction for long videos (>30min)
+- **Admin dashboard**: LLM usage tracking, cost monitoring, video management
+- **Sharing**: Public share links with SSR for OG metadata
+- **Playlist support**: YouTube playlist import and batch processing
+- **Multi-provider LLM**: Anthropic, OpenAI, Gemini via LiteLLM abstraction

@@ -10,9 +10,8 @@ Personal video knowledge management system.
 
 | Feature       | Description                                                    |
 | ------------- | -------------------------------------------------------------- |
-| **Summarize** | YouTube URL → Structured summary (cached)                      |
-| **Explain**   | Section/concept → Documentation (cached) or chat (interactive) |
-| **Memorize**  | Save content → Personal collection + chat                      |
+| **Summarize** | YouTube URL → Interactive knowledge app (cached)               |
+| **Assistant**  | AI chat about saved content (coming soon)                      |
 
 ---
 
@@ -22,21 +21,23 @@ Personal video knowledge management system.
 | ------------------ | -------------------------------------------------- | ----------------------------------- |
 | **Security**       | [docs/SECURITY.md](./docs/SECURITY.md)             | Auth, rate limiting, CORS           |
 | **Error Handling** | [docs/ERROR-HANDLING.md](./docs/ERROR-HANDLING.md) | Error codes, retry, DLQ             |
-| **Data Models**    | [docs/DATA-MODELS.md](./docs/DATA-MODELS.md)       | MongoDB schemas, ContentBlock types |
+| **Data Models**    | [docs/DATA-MODELS.md](./docs/DATA-MODELS.md)       | MongoDB schemas, VIEResponse, TabEntry types |
 | **Cross-Cutting**  | [docs/CROSS-CUTTING.md](./docs/CROSS-CUTTING.md)   | Multi-service work, contracts       |
 
 ---
 
 ## Tech Stack
 
-| Service            | Technology                                   | Port  |
-| ------------------ | -------------------------------------------- | ----- |
-| **vie-api**        | Node.js + Fastify + TypeScript + AI          | 3000  |
-| **vie-web**        | React + Vite + TypeScript + AI SDK           | 5173  |
-| **vie-summarizer** | Python + FastAPI + LiteLLM (Multi-Provider)  | 8000  |
-| **vie-explainer**  | Python + Starlette + FastMCP + LiteLLM       | 8001  |
-| **vie-admin**      | Python + FastAPI + React + Recharts          | 8002  |
-| **vie-mongodb**    | MongoDB 7                                    | 27017 |
+| Service            | Technology                                                  | Port      |
+| ------------------ | ----------------------------------------------------------- | --------- |
+| **vie-api**        | Node.js + Fastify + TypeScript + AI                         | 3000      |
+| **vie-web**        | React + Vite + TypeScript + AI SDK                          | 5173      |
+| **vie-summarizer** | Python + FastAPI + LiteLLM (Multi-Provider)                 | 8000      |
+| **vie-explainer**  | Python + Starlette + FastMCP + LiteLLM (Assistant — coming soon) | 8001      |
+| **vie-admin**      | Python + FastAPI + React + Recharts                         | 8002      |
+| **vie-mongodb**    | MongoDB 7                                                   | 27017     |
+| **vie-redis**      | Redis 7                                                     | 6379      |
+| **vie-qdrant**     | Qdrant                                                      | 6333/6334 |
 
 ---
 
@@ -106,7 +107,7 @@ video-insight-engine/
 ├── .claude/        # Claude Code infrastructure
 ├── docs/           # Documentation
 ├── dev/            # Task planning (survives context resets)
-├── packages/       # Shared code (@vie/types, @vie/utils)
+├── packages/       # Shared code (@vie/shared, @vie/types, @vie/utils)
 ├── api/            # vie-api - MAIN GATEWAY (Node.js + Fastify)
 ├── services/       # Backend services (summarizer, explainer)
 ├── apps/           # Frontend (web)
@@ -159,12 +160,11 @@ video-insight-engine/
 
 ## Key Design Decisions
 
-| Decision         | Choice       | Why                              |
-| ---------------- | ------------ | -------------------------------- |
-| EXPLAINER as MCP | MCP Server   | Two tools, future AI integration |
-| System cache     | MongoDB      | Same video = one LLM call        |
-| Memorized items  | Copy content | Works without source             |
-| No Redis (MVP)   | Simplicity   | Add later if needed              |
+| Decision           | Choice           | Why                                |
+| ------------------ | ---------------- | ---------------------------------- |
+| Assistant (future) | MCP Server       | MCP Server → future user agent     |
+| System cache       | Redis + MongoDB  | Same video = instant serve ($0.00) |
+| Qdrant             | Vector DB        | RAG transcript search (future)     |
 
 ---
 
@@ -203,8 +203,8 @@ open http://localhost:5173
 
 ### System
 
-- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) - System diagram, persona detection, SSE pipeline
-- [docs/DATA-MODELS.md](./docs/DATA-MODELS.md) - MongoDB schemas, ContentBlock types, VideoContext
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) - System diagram, pipeline phases, SSE streaming
+- [docs/DATA-MODELS.md](./docs/DATA-MODELS.md) - MongoDB schemas, VIEResponse v2, TabEntry types
 - [docs/CACHING.md](./docs/CACHING.md) - Cache strategy
 - [docs/CROSS-CUTTING.md](./docs/CROSS-CUTTING.md) - Multi-service work
 
@@ -222,7 +222,7 @@ open http://localhost:5173
 
 ### Frontend
 
-- [docs/FRONTEND.md](./docs/FRONTEND.md) - React/Vite, components, styling, state
+- [docs/FRONTEND.md](./docs/FRONTEND.md) - React/Vite, interactive components, composable output
 
 ### Infrastructure
 

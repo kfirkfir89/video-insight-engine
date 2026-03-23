@@ -7,59 +7,47 @@ System overview and data flows.
 ## System Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                vie-web                                       │
-│                          React + Vite + TypeScript                           │
-│                               Port: 5173                                     │
-└───────────────────────────────────┬─────────────────────────────────────────┘
-                                    │ HTTP / WebSocket
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                vie-api                                       │
-│                        Node.js + Fastify + TypeScript                        │
-│                               Port: 3000                                     │
-│                                                                              │
-│  • REST API for frontend                                                     │
-│  • MCP Client (connects to vie-explainer)                                    │
-│  • HTTP calls to vie-summarizer                                              │
-│  • WebSocket for real-time updates                                           │
-└──────────┬─────────────────────────────────────────────────┬────────────────┘
-           │                                                  │
-           │ HTTP POST                                        │ MCP Protocol
-           ▼                                                  ▼
-┌────────────────────┐  ┌───────────────────┐  ┌─────────────────────────────┐
-│   vie-summarizer   │  │   vie-mongodb     │  │      vie-explainer           │
-│  Python + FastAPI  │  │    MongoDB 7      │  │  Python + Starlette + MCP   │
-│    Port: 8000      │  │   Port: 27017     │  │      Port: 8001             │
-│                    │  │                   │  │                             │
-│ • Receive HTTP req │  │ System Cache:     │  │ MCP Tools:                  │
-│ • Fetch transcript │  │ • videoSummaryCache│ │ • explain_auto (cached)      │
-│ • Process with LLM │  │ • systemExpansion │  │ • video_chat (ephemeral)     │
-│ • Save to cache    │  │   Cache           │  │                             │
-│                    │  │                   │  │                             │
-└─────────┬──────────┘  │ User Data:        │  └─────────────────────────────┘
-          │             │ • users           │
-          │             │ • folders         │
-          │             │ • userVideos      │
-          │             │ • memorizedItems  │
-          │             │ • userChats       │
-          └────────────►└───────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│                         vie-web (React 19)                         │
+│  Tailwind v4 · shadcn/ui · 36 UI components · 17 interactives    │
+│  ComposableOutput → COMPONENT_REGISTRY[tab.component] → render    │
+│  VideoPlayerContext (seekTo) · SSE stream consumer                 │
+└──────────────────────────┬────────────────────────────────────────┘
+                           │ SSE (Server-Sent Events)
+                           ↓
+┌───────────────────────────────────────────────────────────────────┐
+│                        vie-api (Node.js · Fastify)                 │
+│  Routes · Auth · MongoDB CRUD · Orchestration                      │
+└──────────────────────────┬────────────────────────────────────────┘
+                           │ HTTP
+                           ↓
+┌───────────────────────────────────────────────────────────────────┐
+│                    vie-summarizer (Python · FastAPI)                │
+│  Pipeline: metadata → [transcript + frames] parallel               │
+│           → plan (classifier + triage) → extraction                │
+│           → synthesis → enrichment → assembly                      │
+│  Storage: MongoDB + Redis (cache) + S3 (frames/transcripts)       │
+│  Vector:  Qdrant (background embedding storage)                    │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Service Communication
 
-| From           | To             | Protocol       | Purpose                     |
-| -------------- | -------------- | -------------- | --------------------------- |
-| vie-web        | vie-api        | HTTP/WS        | API calls, status updates   |
-| vie-api        | vie-mongodb    | MongoDB driver | Data operations             |
-| vie-api        | vie-summarizer | HTTP POST      | Trigger summarization       |
-| vie-api        | vie-explainer  | **MCP**        | Call explain tools          |
-| vie-summarizer | vie-mongodb    | MongoDB driver | Save to cache               |
-| vie-summarizer | Claude API     | HTTP           | LLM generation              |
-| vie-explainer  | vie-mongodb    | MongoDB driver | Cache + chats               |
-| vie-explainer  | Claude API     | HTTP           | LLM generation              |
+| From           | To             | Protocol       | Purpose                          |
+| -------------- | -------------- | -------------- | -------------------------------- |
+| vie-web        | vie-api        | HTTP/SSE       | API calls, streaming updates     |
+| vie-api        | vie-mongodb    | MongoDB driver | Data operations                  |
+| vie-api        | vie-summarizer | HTTP POST      | Trigger summarization            |
+| vie-api        | vie-explainer  | **MCP**        | Call explain tools               |
+| vie-summarizer | vie-mongodb    | MongoDB driver | Save structured results          |
+| vie-summarizer | vie-redis      | Redis          | Response caching                 |
+| vie-summarizer | vie-qdrant     | HTTP           | Vector storage (background)      |
+| vie-summarizer | S3             | HTTP           | Frame + transcript storage       |
+| vie-summarizer | LLM APIs       | HTTP           | LiteLLM (Anthropic/OpenAI/Google)|
+| vie-explainer  | vie-mongodb    | MongoDB driver | Cache + chats                    |
+| vie-explainer  | LLM APIs       | HTTP           | LLM generation                   |
 
 ---
 
@@ -73,7 +61,7 @@ User submits YouTube URL
          ▼
 ┌─────────────────────┐
 │ vie-api checks      │
-│ videoSummaryCache   │
+│ videoSummaryCache    │
 └──────────┬──────────┘
            │
     ┌──────┴──────┐
@@ -85,22 +73,26 @@ User submits YouTube URL
  userVideo   to vie-summarizer
  reference        │
     │             ▼
-    │    ┌────────────────┐
-    │    │ vie-summarizer │
-    │    │                │
-    │    │ 1. Transcript  │
-    │    │ 2. LLM process │
-    │    │ 3. Save cache  │
-    │    └───────┬────────┘
+    │    ┌────────────────────┐
+    │    │ vie-summarizer     │
+    │    │                    │
+    │    │ 1. Redis cache chk │
+    │    │    HIT → instant   │
+    │    │    MISS → continue │
+    │    │ 2. Transcript      │
+    │    │ 3. Plan + extract  │
+    │    │ 4. Assemble        │
+    │    │ 5. Save cache      │
+    │    └───────┬────────────┘
     │            │
     │     Status: done
-    │     (DB update)
+    │     (DB + Redis update)
     │            │
     └─────┬──────┘
           │
           ▼
     User sees summary
-    (via polling or WebSocket)
+    (via SSE stream)
 ```
 
 ### 2. Explain Auto (Cached)
@@ -161,175 +153,179 @@ User sends message about video
      Chat history in React state
 ```
 
-### 4. Memorize
-
-```
-User clicks "Memorize"
-         │
-         ▼
-┌─────────────────────┐
-│ vie-api:            │
-│ 1. Load from cache  │
-│ 2. Copy content     │
-│ 3. Create item      │
-└──────────┬──────────┘
-           │
-           ▼
-   Item in Memorized tab
-   (independent copy)
-```
-
 ---
 
-## Persona Detection Flow
+## Pipeline Flow
 
-Persona is determined **immediately from yt-dlp metadata** (NOT from LLM). This is fast, consistent, and free.
+Content type is determined by a **plan phase** that runs a classifier (fast model) concurrently with a plan LLM call to pick content tags and design tab layout.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         PERSONA DETECTION FLOW                              │
+│                           PIPELINE FLOW                                     │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  1. yt-dlp extracts video metadata                                         │
-│     │                                                                       │
-│     ├── title: "React Tutorial for Beginners"                              │
-│     ├── description: "#react #javascript #webdev..."                       │
-│     ├── categories: ["Science & Technology"]                               │
-│     └── tags: ["react", "javascript", "tutorial", "coding"]                │
+│  1. METADATA (yt-dlp, ~1-3s)                                              │
+│     └── Title, channel, thumbnail, duration, chapters                      │
 │                                                                             │
-│  2. extract_video_context() is called                                      │
-│     │                                                                       │
-│     ├── _extract_hashtags(description) → ["react", "javascript", "webdev"] │
-│     │                                                                       │
-│     └── _determine_persona(category, tags, hashtags)                       │
-│         │                                                                   │
-│         ├── Load rules from: prompts/detection/persona_rules.json          │
-│         │                                                                   │
-│         ├── Check CODE persona:                                            │
-│         │   - Category "Science & Technology" matches? ✓                   │
-│         │   - Tags/hashtags match keywords? ✓ ("react", "javascript")      │
-│         │   - RESULT: "code" persona                                       │
-│         │                                                                   │
-│         └── Return: "code"                                                  │
+│  2. TRANSCRIPT + FRAMES (parallel, ~10-30s)                                │
+│     ├── Transcript: S3 cache → yt-dlp → API → Gemini → Whisper           │
+│     └── Frames: FFmpeg scene detect → score → select ~25 → S3 upload      │
 │                                                                             │
-│  3. VideoContext created and passed to LLM prompts                         │
-│     VideoContext(persona="code", displayTags=["React", "JavaScript"...])   │
+│  2.5 VISUAL CONTEXT INJECTION (~0-1s)                                      │
+│     └── [VISUAL at M:SS] annotations injected into transcript              │
+│                                                                             │
+│  3. CLASSIFIER + PLAN (concurrent, ~2-5s)                                  │
+│     ├── Classifier: fast model, domain + format detection (non-blocking)   │
+│     └── Plan: Sonnet call → contentTags, tab layout, extractionGuidance   │
+│     ├── 8 primary tags: learning, tech, fitness, food, music, travel,     │
+│     │   review, project                                                    │
+│     ├── 2 modifier tags: narrative, finance                                │
+│     └── Classifier overrides category_hint when confidence > 0.6          │
+│                                                                             │
+│  4. EXTRACTION (1-5+ LLM calls, ~10-60s)                                  │
+│     ├── Schema-injected: base_extraction.txt + schemas/{tag}.txt           │
+│     ├── Short: single call; Long (>30min): chunked by chapters             │
+│     └── Pydantic validation + count check                                  │
+│                                                                             │
+│  5. SYNTHESIS (1 LLM call, ~5-10s)                                        │
+│     └── TLDR, takeaways, master summary (fast model)                       │
+│                                                                             │
+│  6. ENRICHMENT (0-1 LLM call, ~5-10s)                                     │
+│     └── Quiz + flashcards + scenarios (domains with enrichment mapping)    │
+│                                                                             │
+│  7. ASSEMBLY (pure code, <10ms)                                            │
+│     ├── 18 assemblers in ASSEMBLER_REGISTRY                                │
+│     ├── Extraction → TabEntry[] with component-addressed props             │
+│     ├── Frame thumbnail injection                                          │
+│     └── Cross-tab link resolution                                          │
+│                                                                             │
+│  8. SAVE + STREAM COMPLETE                                                 │
+│     ├── SSE: tab_ready events (progressive rendering)                      │
+│     ├── Store to MongoDB (meta + tabs)                                     │
+│     ├── Store to Redis (response cache)                                    │
+│     └── SSE: complete + done + [DONE]                                      │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Persona Mapping Rules
+### Content Tag → Domain Schema
 
-| Category | Keywords | Persona |
-|----------|----------|---------|
-| Science & Technology | programming, coding, react, python, api, github... | `code` |
-| Science & Technology | (no code keywords) | `tech` |
-| Howto & Style | recipe, cooking, food, chef, meal, kitchen... | `recipe` |
-| Music / Entertainment | music, song, album, lyrics, official video, concert... | `music` |
-| Education | (any) | `educational` |
-| (other) | (any) | `standard` |
+| ContentTag | Schema File | Example Tabs |
+|------------|-------------|-------------|
+| `learning` | `schemas/learning.txt` | key_points, concepts, takeaways, timestamps |
+| `tech` | `schemas/tech.txt` | overview, setup, code, patterns, cheat_sheet |
+| `food` | `schemas/food.txt` | overview, ingredients, steps, tips |
+| `fitness` | `schemas/fitness.txt` | overview, exercises, timer, tips |
+| `travel` | `schemas/travel.txt` | overview, itinerary, packing, budget |
+| `review` | `schemas/review.txt` | overview, verdict, pros_cons, specs |
+| `music` | `schemas/music.txt` | overview, analysis, structure, lyrics |
+| `project` | `schemas/project.txt` | overview, materials, tools, steps |
 
 ---
 
-## SSE Streaming Pipeline
+## SSE Streaming Pipeline (v2)
 
-The summarization pipeline uses Server-Sent Events (SSE) to stream results progressively.
+The pipeline uses Server-Sent Events (SSE) to stream results progressively with component-addressed tabs.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    STREAMING PHASES (SSE Events)                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  PHASE 1: INSTANT (~1-3 seconds)                                           │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  yt-dlp Extraction (single call, no LLM)                            │   │
-│  │                                                                      │   │
-│  │  Output events:                                                      │   │
-│  │    - metadata (title, channel, thumbnail, duration)                 │   │
-│  │    - chapters (if creator chapters exist)                            │   │
-│  │    - sponsor_segments (SponsorBlock API)                             │   │
-│  │    - transcript_ready                                                │   │
-│  │    - VideoContext with PERSONA (code/recipe/music/standard)          │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
+│  PHASE 1: METADATA (~1-3s, no LLM)                                        │
+│    Events: metadata, chapters                                               │
 │                                                                             │
-│  PHASE 2: PARALLEL ANALYSIS (~2-5 seconds)                                 │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  Three tasks run simultaneously using asyncio.gather():              │   │
-│  │                                                                      │   │
-│  │  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐     │   │
-│  │  │ Task A: Desc     │ │ Task B: TLDR     │ │ Task C: First    │     │   │
-│  │  │ Analysis         │ │ Generation       │ │ Section          │     │   │
-│  │  │ (Haiku ~1-2s)    │ │ (Sonnet ~2-3s)   │ │ (Sonnet ~3-5s)   │     │   │
-│  │  └──────────────────┘ └──────────────────┘ └──────────────────┘     │   │
-│  │                                                                      │   │
-│  │  Output events: description_analysis, synthesis_complete,            │   │
-│  │                 section_ready (index 0)                              │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
+│  PHASE 2: TRANSCRIPT + FRAMES (parallel, ~10-30s)                          │
+│    Events: transcript_ready, sponsor_segments, frames                       │
 │                                                                             │
-│  PHASE 3: SECTION SUMMARIES (progressive, ~3-5s per batch)                 │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  Process remaining sections in batches (SECTION_BATCH_SIZE = 3)     │   │
-│  │                                                                      │   │
-│  │  Batch 1: Sections 2-4 (parallel) → section_ready events            │   │
-│  │  Batch 2: Sections 5-7 (parallel) → section_ready events            │   │
-│  │  ...                                                                 │   │
-│  │                                                                      │   │
-│  │  Each section uses PERSONA for content block styling                 │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
+│  PHASE 2.5: VISUAL CONTEXT INJECTION (~0-1s, no LLM)                      │
+│    Injects [VISUAL at M:SS] annotations into transcript                     │
 │                                                                             │
-│  PHASE 4: CONCEPTS (~3-5 seconds)                                          │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  Extract key concepts from timestamped transcript                   │   │
-│  │  Output event: concepts_complete                                     │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
+│  PHASE 3: CLASSIFIER + PLAN (concurrent, ~2-5s)                            │
+│    Events: triage_complete (contentTags, tabs, confidence)                   │
+│    → Classifier (fast model) runs concurrently with plan (Sonnet)          │
+│    → Frontend shows tab skeleton immediately                                │
 │                                                                             │
-│  PHASE 5: SAVE & DONE                                                      │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  - Save complete result to MongoDB                                  │   │
-│  │  - Emit "done" event with processingTimeMs                          │   │
-│  │  - Emit "[DONE]" to close SSE stream                                │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
+│  PHASE 4: EXTRACTION (1-5+ LLM calls, ~10-60s)                            │
+│    Events: extraction_progress, extraction_complete                          │
+│    → Short: single call; Long >30min: chunked by chapters                  │
+│                                                                             │
+│  PHASE 5: SYNTHESIS (1 LLM call, ~5-10s)                                  │
+│    Events: synthesis_complete                                                │
+│                                                                             │
+│  PHASE 6: ENRICHMENT (0-1 LLM call, ~5-10s)                               │
+│    Events: enrichment_complete (if applicable)                               │
+│                                                                             │
+│  PHASE 7: ASSEMBLY (pure code, <10ms)                                      │
+│    Events: meta, tab_ready[] (progressive)                                   │
+│    → Each tab_ready event renders one tab immediately                       │
+│                                                                             │
+│  PHASE 8: SAVE + DONE                                                      │
+│    Events: complete (tabCount, processingTimeMs), done, [DONE]              │
+│    → MongoDB: meta + tabs saved                                             │
+│    → Redis: full response cached for instant re-serve                      │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### LLM Calls Summary
 
-For a typical 10-section video:
+For a typical video (< 30 min):
 
-| Phase | Model | Calls | Parallel? |
-|-------|-------|-------|-----------|
-| Phase 2 | Haiku | 1 (description) | Yes |
-| Phase 2 | Sonnet | 1 (TLDR) | Yes |
-| Phase 2 | Sonnet | 1 (first section) | Yes |
-| Phase 3 | Sonnet | 9 (remaining sections) | Batched (3) |
-| Phase 4 | Sonnet | 1 (concepts) | No |
+| Stage | Model | Calls | Timeout |
+|-------|-------|-------|---------|
+| Classifier | Fast (Haiku/mini/flash-lite) | 1 | 10s |
+| Plan | Sonnet | 1 | 30s |
+| Extraction | Sonnet | 1-2 | 240s |
+| Synthesis | Fast (Haiku/mini/flash-lite) | 1 | 30s |
+| Enrichment | Fast (Haiku/mini/flash-lite) | 0-1 | 90s |
+| Assembly | None (pure code) | 0 | <10ms |
 
-**Total: ~13 LLM calls, ~20-30 seconds**
+**Total: 4-6 LLM calls, ~20-50 seconds, ~$0.09/video**
+
+Classifier and Plan run concurrently. Plan produces `PlanResult` (identity, tabs, contentTags, extractionGuidance) which flows to all downstream phases for creator-aware, context-rich output.
+
+For long videos (>30 min), extraction uses chunked batching (2-5 additional calls).
 
 ---
 
 ## Network Topology
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                   vie-network (Docker bridge)                    │
-│                                                                  │
-│  ┌───────────┐  ┌───────────┐  ┌─────────────┐  ┌────────────┐ │
-│  │ vie-web   │  │ vie-api   │  │vie-summarizer│ │vie-explainer│ │
-│  │  :5173    │  │  :3000    │  │   :8000     │  │   :8001    │ │
-│  └─────┬─────┘  └─────┬─────┘  └──────┬──────┘  └─────┬──────┘ │
-│        │              │               │                │        │
-│        └──────────────┼───────────────┼────────────────┘        │
-│                       │               │                         │
-│                       ▼               │                         │
-│                ┌─────────────┐        │                         │
-│                │ vie-mongodb │◄───────┘                         │
-│                │   :27017    │                                   │
-│                └─────────────┘                                   │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        vie-network (Docker bridge)                           │
+│                                                                              │
+│  ┌───────────┐  ┌───────────┐  ┌──────────────┐  ┌─────────────┐           │
+│  │ vie-web   │  │ vie-api   │  │vie-summarizer│  │vie-explainer│           │
+│  │  :5173    │  │  :3000    │  │   :8000      │  │   :8001     │           │
+│  └─────┬─────┘  └─────┬─────┘  └──────┬───────┘  └──────┬──────┘           │
+│        │              │               │                  │                  │
+│        └──────────────┼───────────────┼──────────────────┘                  │
+│                       │               │                                     │
+│                       ▼               │                                     │
+│                ┌─────────────┐        │                                     │
+│                │ vie-mongodb │◄───────┤                                     │
+│                │   :27017    │        │                                     │
+│                └─────────────┘        │                                     │
+│                                       │                                     │
+│                ┌─────────────┐        │                                     │
+│                │  vie-redis  │◄───────┤                                     │
+│                │   :6379     │        │                                     │
+│                └─────────────┘        │                                     │
+│                                       │                                     │
+│                ┌─────────────┐        │                                     │
+│                │ vie-qdrant  │◄───────┘                                     │
+│                │   :6333     │                                               │
+│                └─────────────┘                                               │
+│                                                                              │
+│  ┌───────────┐                                                              │
+│  │ vie-admin │                                                              │
+│  │  :8002    │                                                              │
+│  └───────────┘                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 
 Exposed ports:
   - 5173  → Frontend
   - 3000  → API
+  - 8002  → Admin
 ```

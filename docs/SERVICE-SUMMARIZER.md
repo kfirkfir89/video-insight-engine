@@ -44,28 +44,38 @@ services/summarizer/
     │   └── override.py           # Detection override endpoint
     │
     ├── services/
-    │   ├── llm.py                # LLMService (thin wrapper around provider)
+    │   ├── llm.py                # LLMService (call_llm + call_llm_fast)
     │   ├── llm_provider.py       # LiteLLM multi-provider abstraction
     │   ├── usage_tracker.py      # LLM usage tracking
-    │   ├── output_type.py        # Category → OutputType mapping (override compat)
     │   ├── override_state.py     # In-memory override state
     │   ├── status_callback.py    # Status callback
     │   │
-    │   ├── pipeline/             # 4-stage summarization pipeline
-    │   │   ├── intent_detector.py    # Intent detection (output type)
-    │   │   ├── extractor.py          # Adaptive extraction (1-3 LLM calls)
-    │   │   ├── enrichment.py         # Quiz/flashcards/cheat sheet
-    │   │   ├── synthesis.py          # TLDR, takeaways, master summary
+    │   ├── pipeline/             # Plan-based summarization pipeline
+    │   │   ├── classifier.py         # LLM domain+format classifier (fast model, concurrent)
+    │   │   ├── plan.py               # Plan stage → merged manifest+triage in single Sonnet call
+    │   │   ├── triage.py             # Triage validation/fallback (TriageResult model + tab validation)
+    │   │   ├── prompt_builder.py     # Schema-injection prompt builder + video_context
+    │   │   ├── extractor.py          # Adaptive extraction (single/overflow/chunked) + prompt caching
+    │   │   ├── extraction_merger.py  # Per-domain merge + dedup for chunked extraction
+    │   │   ├── enrichment.py         # Quiz/flashcards (all domains via enrichment map)
+    │   │   ├── synthesis.py          # TLDR, takeaways (Sonnet, hierarchical for long)
+    │   │   ├── assembly.py           # Assembly stage (extraction → component props)
+    │   │   ├── post_processor.py     # Tab cleanup, celebrations, count validation
     │   │   └── pipeline_helpers.py   # SSE events, timer, data classes
     │   │
     │   ├── transcription/        # Transcript fetching & storage
     │   │   ├── transcript.py         # Transcript cleaning & formatting
     │   │   ├── transcript_fetcher.py # Multi-source fallback chain
+    │   │   ├── transcript_chunker.py # Chapter-aware transcript splitting
     │   │   ├── transcript_store.py   # S3 transcript persistence
     │   │   ├── gemini_transcriber.py # Gemini Flash transcription
     │   │   └── whisper_transcriber.py # Whisper fallback
     │   │
-    │   ├── media/                # Frame extraction & S3 storage
+    │   ├── media/                # Frame extraction, vision & S3 storage
+    │   │   ├── scene_extractor.py    # Scene keyframe extraction (yt-dlp + FFmpeg) + smart selection
+    │   │   ├── frame_scorer.py       # Frame scoring (visual, face, text, uniqueness) + selection
+    │   │   ├── frame_analyzer.py     # Vision LLM analysis of top frames (scene type, content)
+    │   │   ├── frame_ocr.py          # OCR on text-heavy frames (Tesseract)
     │   │   ├── frame_extractor.py    # Video frame extraction + S3 upload
     │   │   ├── image_dedup.py        # Perceptual hashing for dedup
     │   │   ├── s3_client.py          # Async S3 client
@@ -83,32 +93,44 @@ services/summarizer/
     │   └── mongodb_repository.py # MongoDB implementation
     │
     ├── prompts/
-    │   ├── intent_detect.txt     # Intent detection prompt
-    │   ├── extract_smart.txt     # Explanation extraction
-    │   ├── extract_recipe.txt    # Recipe extraction
-    │   ├── extract_code.txt      # Code walkthrough extraction
-    │   ├── extract_study.txt     # Study kit extraction
-    │   ├── extract_trip.txt      # Trip planner extraction
-    │   ├── extract_workout.txt   # Workout extraction
-    │   ├── extract_verdict.txt   # Verdict/review extraction
-    │   ├── extract_highlights.txt # Highlights/podcast extraction
-    │   ├── extract_music.txt     # Music guide extraction
-    │   ├── extract_project.txt   # Project/DIY guide extraction
-    │   ├── enrich_study.txt      # Study enrichment (quiz, flashcards)
-    │   ├── enrich_code.txt       # Code enrichment (cheat sheet)
-    │   ├── synthesis.txt         # Synthesis prompt
-    │   └── accuracy_rules.txt    # Shared accuracy rules
+    │   ├── plan.txt              # Plan prompt → merged manifest+triage (identity, tabs, extraction guidance)
+    │   ├── triage.txt            # Triage prompt (fallback only, injects component_toolkit.txt)
+    │   ├── component_toolkit.txt # Component descriptions + datasource paths (injected into plan/triage)
+    │   ├── base_extraction.txt   # Schema-injection extraction template + video_context + prompt caching
+    │   ├── classify.txt          # Domain+format classifier prompt (fast model, 8 domains + 17 formats)
+    │   ├── chapter_detect.txt    # AI chapter detection prompt (fast model)
+    │   ├── quality_rules.txt     # JSON extraction quality rules
+    │   ├── enrich/               # Per-domain enrichment prompts (+ video_context + tab_goals)
+    │   ├── synthesis.txt         # Synthesis prompt (+ video_context + tone matching)
+    │   └── schemas/              # Domain schemas (injected into base_extraction)
+    │       ├── learning.txt
+    │       ├── tech.txt
+    │       ├── fitness.txt
+    │       ├── food.txt
+    │       ├── music.txt
+    │       ├── travel.txt
+    │       ├── review.txt
+    │       ├── project.txt
+    │       ├── narrative.txt     # Modifier
+    │       └── finance.txt       # Modifier
     │
     ├── utils/
     │   ├── json_parsing.py       # Robust JSON recovery
+    │   ├── llm_retry.py          # LLM call with timeout + retry + backoff
+    │   ├── worker_pool.py        # ProcessPoolExecutor for CPU-bound tasks
     │   ├── content_extractor.py  # Summary/bullet extraction
     │   ├── transcript_slicer.py  # Time-range transcript slicing
-    │   ├── accuracy_rules.py     # Per-output-type completeness rules
     │   └── constants.py          # Constants
+    │
+    ├── shared_config/
+    │   ├── __init__.py
+    │   └── domain_config.py      # Reads domains.json (Docker mount or local fallback)
     │
     └── models/
         ├── schemas.py            # Pydantic models
-        └── output_types.py       # 10 typed output Pydantic models
+        ├── domain_types.py       # Domain data models (Food, Travel, Music, etc.)
+        ├── pipeline_types.py     # Pipeline models (PlanResult, ManifestResult, TriageResult, etc.)
+        └── vie_response_v2.py    # VIEResponse v2 models (TabEntry, CrossTabLink, etc.)
 ```
 
 ---
@@ -148,9 +170,9 @@ LOG_FORMAT=console              # console or json
 
 ---
 
-## Processing Pipeline (Intent-Driven)
+## Processing Pipeline (Plan-Driven)
 
-The pipeline uses 4-7 LLM calls (vs 18-25 in the legacy chapter pipeline):
+The pipeline uses 3-6 LLM calls with a plan-first architecture:
 
 ```
  1. CONNECT via SSE
@@ -158,49 +180,105 @@ The pipeline uses 4-7 LLM calls (vs 18-25 in the legacy chapter pipeline):
     └─▶ If cached: stream structured result immediately
     └─▶ If pending: start processing pipeline
 
- 2. FETCH METADATA (yt-dlp)
+ 2. FETCH METADATA (yt-dlp) + DESCRIPTION ANALYSIS
     └─▶ Title, channel, thumbnail, duration, chapters
     └─▶ Category pre-detection from metadata
-    └─▶ SSE: metadata event
+    └─▶ Description analysis: extract links, resources, social links
+    └─▶ SSE: metadata event, description_analysis event
 
- 3. FETCH TRANSCRIPT (Multi-Source Fallback Chain)
-    └─▶ 0. S3 cached transcript (avoids all YouTube calls)
-    └─▶ 1. yt-dlp subtitles (embedded in video metadata)
-    └─▶ 2. youtube-transcript-api (with rate limit retry)
-    └─▶ 3. Gemini Flash (audio transcription, ~30-90s, ~$0.04/26min)
-    └─▶ 4. OpenAI Whisper (audio fallback, ~5-15min, ~$0.16/26min)
-    └─▶ SSE: transcript_ready event
+ 3. TRANSCRIPT + FRAMES (parallel via asyncio.Queue)
+    ┌─▶ TRANSCRIPT (Multi-Source Fallback Chain)
+    │   └─▶ 0. S3 cached transcript (avoids all YouTube calls)
+    │   └─▶ 1. yt-dlp subtitles (embedded in video metadata)
+    │   └─▶ 2. youtube-transcript-api (with rate limit retry)
+    │   └─▶ 3. Gemini Flash (audio transcription, ~30-90s, ~$0.04/26min)
+    │   └─▶ 4. OpenAI Whisper (audio fallback, ~5-15min, ~$0.16/26min)
+    │   └─▶ SSE: transcript_ready event
+    │
+    └─▶ FRAMES (smart frame selection, non-critical)
+        └─▶ S3 cache check: skip extraction if frames already exist for this video
+        └─▶ Per-video asyncio.Lock prevents duplicate concurrent extractions
+        └─▶ yt-dlp downloads worst-quality video to temp file (~15-20s)
+        └─▶ FFmpeg scene detection on local file (~10-15s, 20-50x realtime)
+        └─▶ Smart scoring (CPU only, ~2-3s): visual interest, face detection, text density, uniqueness
+        └─▶ Time-slot selection: ~25 frames evenly distributed across video duration
+        └─▶ Gallery classification: top ~12 frames by score for Visual Moments tab
+        └─▶ Batch parallel S3 upload (8 concurrent, only selected frames — not all detected)
+        └─▶ OCR + Vision LLM analysis run in parallel:
+            ├─▶ OCR: Tesseract on text-heavy frames
+            └─▶ Vision: top 8 frames → Sonnet (scene_type, content, text_visible) ~$0.02-0.03
+        └─▶ SSE: frames event (selected frames only — timestamps, presigned URLs, OCR text)
+        └─▶ Graceful degradation: failure returns empty result, pipeline continues
 
- 4. INTENT DETECTION (1 LLM call)
-    └─▶ Determine output type from metadata + transcript preview
-    └─▶ 10 types: explanation, recipe, code_walkthrough, study_kit,
-        trip_planner, workout, verdict, highlights, music_guide, project_guide
-    └─▶ Fallback: category-based mapping if confidence < 0.6
-    └─▶ Standard section IDs enforced (must match frontend tabs)
-    └─▶ SSE: intent_detected event
+ 3.5 VISUAL CONTEXT INJECTION (after both parallel phases complete)
+    └─▶ Injects [VISUAL at M:SS] annotations from vision LLM into transcript at correct positions
+    └─▶ Injects [ON-SCREEN TEXT at M:SS] annotations from OCR for non-vision frames
+    └─▶ Uses segment timestamps for precise positioning (fallback: character estimation)
+    └─▶ Filters talking_head frames with no educational value
+    └─▶ Deduplicates: vision frames don't also get OCR annotations
+    └─▶ Toggle: FRAME_VISION_ENABLED=false skips vision (OCR-only like before)
 
- 5. ADAPTIVE EXTRACTION (1-3 LLM calls)
-    └─▶ <4K words: single extraction call
-    └─▶ 4-20K words: single + overflow retry if validation fails
-    └─▶ >3h videos AND >20K words: segmented extraction (token-based splitting)
+ 4. CLASSIFIER + PLAN (1-2 LLM calls)
+    └─▶ Classifier (fast model): domain + format classification (8 domains, 17 formats)
+    │   └─▶ 10s timeout, 1 retry, ~$0.001 per video, json_mode
+    │   └─▶ Overrides rule-based category_hint when confidence > 0.6
+    │   └─▶ Sets content_format on PipelineContext (tutorial, commentary, reaction, etc.)
+    │   └─▶ Skipped when admin override is active
+    └─▶ Plan (Sonnet, 30s timeout, 2 retries, json_mode + prompt caching)
+        └─▶ Single call replaces old Manifest + Triage (2 calls → 1, saves ~30-50s)
+        └─▶ Analyzes: creator identity, core promise, unique angle, extraction guidance
+        └─▶ Designs: contentTags, modifiers, tab layout with component toolkit
+        └─▶ Item counts for extraction quality validation
+        └─▶ video_context flows to all downstream phases (compact ~300 chars)
+        └─▶ 8 primary tags: learning, tech, fitness, food, music, travel, review, project
+        └─▶ 2 modifier tags: narrative, finance
+        └─▶ Fallback: category-based mapping if confidence < 0.6
+        └─▶ SSE: triage_complete, meta events
+
+ 5. ADAPTIVE EXTRACTION (1-5+ LLM calls, json_mode + prompt caching)
+    └─▶ Schema-injected: base_extraction.txt + schemas/{tag}.txt per content tag
+    └─▶ Prompt caching: static template (schemas/rules/instructions) cached, transcript dynamic
+    └─▶ SHORT (<30 min):
+    │   └─▶ <5.3K words: single extraction call
+    │   └─▶ 5.3K+ words: overflow extraction (single call, dynamic timeout)
+    └─▶ LONG (>30 min, with chapters):
+    │   └─▶ Chapter splitting: YouTube chapters → AI detect → time-split → single fallback
+    │   └─▶ Batch chapters by 50K token limit
+    │   └─▶ Parallel extraction per batch (max 3 concurrent, asyncio.Semaphore)
+    │   └─▶ Fast model for multi-batch, default model for single batch
+    │   └─▶ Per-domain merge: dedup lists, re-number ordered items, keep richest scalars
     └─▶ Pydantic validation on all output
+    └─▶ Post-extraction: count validation against plan (advisory, logs warnings)
     └─▶ SSE: extraction_progress events, then extraction_complete
 
- 6. ENRICHMENT (0-1 LLM calls, conditional)
-    └─▶ study_kit: quiz + flashcards
-    └─▶ code_walkthrough: cheat sheet
-    └─▶ Other types: skipped (no LLM call)
+ 6b. EXTRACTION RETRY (advisory, 0-1 additional LLM calls)
+    └─▶ Compare manifest item counts vs extraction output (60% threshold)
+    └─▶ Max 1 retry; use best-effort result if retry doesn't improve
+    └─▶ Exception-safe: retry failure uses original extraction
+
+ 7. ENRICHMENT (0-1 LLM calls, 45s timeout, 2 retries)
+    └─▶ All domains with enrichment mapping get quiz + flashcards + scenarios
+    └─▶ Domain gate via domains.json enrichment map (dynamic, not hardcoded)
     └─▶ Non-critical: failure returns None gracefully
     └─▶ SSE: enrichment_complete event (if applicable)
 
- 7. SYNTHESIS (1 LLM call)
-    └─▶ Generate TLDR, key takeaways, master summary, SEO description
+ 8. SYNTHESIS (1 LLM call, Sonnet, 30s timeout, 2 retries)
+    └─▶ TLDR, takeaways, master summary
+    └─▶ Hierarchical mode for long videos (>5 chapters): chapter summaries + truncated extraction (6K chars)
+    └─▶ Exception-safe: failure emits empty synthesis_complete
     └─▶ SSE: synthesis_complete event
 
- 8. SAVE TO CACHE
-    └─▶ Store structured result via save_structured_result()
-    └─▶ Fields: intent, output (type + data), enrichment, synthesis
-    └─▶ Set status = "completed"
+ 9. ASSEMBLY + SAVE + COMPLETE
+    └─▶ Assembly: pure code (<10ms) — transforms extraction → component-addressed TabEntry[]
+    └─▶ 18 assemblers in ASSEMBLER_REGISTRY (spot_explorer, timeline, code_explorer, etc.)
+    └─▶ Frame thumbnail injection: items with timestamps get thumbnailUrl from nearest S3 frame
+    └─▶ Gallery tab: ~12 curated frames from gallery_frames (not all uploaded frames)
+    └─▶ Cross-tab links resolved from static LINK_RULES
+    └─▶ SSE: tab_ready events (progressive rendering)
+    └─▶ Store result to MongoDB + Redis cache (if enabled)
+    └─▶ Transcript S3 storage (background, non-blocking)
+    └─▶ Qdrant chunks (if enabled): transcript embeddings (background task)
+    └─▶ SSE: complete event (tabCount, processingTimeMs)
     └─▶ SSE: done event + [DONE] signal
 ```
 
@@ -213,14 +291,31 @@ The pipeline uses 4-7 LLM calls (vs 18-25 in the legacy chapter pipeline):
 ```python
 # src/services/llm.py
 class LLMService:
-    """Thin wrapper around LLMProvider. Pipeline modules call _call_llm()."""
+    """Thin wrapper around LLMProvider. Pipeline modules use call_llm_with_retry()."""
 
     def __init__(self, provider: LLMProvider):
         self._provider = provider
 
-    async def _call_llm(self, prompt: str, max_tokens: int = 2000) -> str:
-        async with asyncio.timeout(settings.LLM_TIMEOUT_SECONDS):
-            return await self._provider.complete(prompt, max_tokens=max_tokens)
+    async def call_llm(self, prompt: str, max_tokens: int = 2000, timeout: float | None = None) -> str:
+        effective_timeout = timeout or settings.LLM_TIMEOUT_SECONDS
+        async with asyncio.timeout(effective_timeout):
+            return await self._provider.complete(prompt, max_tokens=max_tokens, timeout=effective_timeout)
+```
+
+### LLM Retry Utility
+
+```python
+# src/utils/llm_retry.py — All pipeline stages use this instead of calling llm_service directly
+async def call_llm_with_retry(
+    llm_service, prompt, *, max_tokens=4096, timeout=60.0, max_retries=2, stage_name="unknown"
+) -> str | None:
+    """Timeout + retry + exponential backoff. Returns raw string or None (never raises)."""
+
+# Stage-specific configurations:
+# Plan:        timeout=30s,  retries=2  (Sonnet, replaces old Manifest + Triage)
+# Extraction:  timeout=120s, retries=1  (dynamic timeout for overflow)
+# Enrichment:  timeout=45s,  retries=2
+# Synthesis:   timeout=30s,  retries=2
 ```
 
 ### Pipeline Modules
@@ -228,20 +323,27 @@ class LLMService:
 ```python
 # All pipeline modules follow the same pattern:
 # - Accept llm_service, repository, and domain-specific args
-# - Call llm_service._call_llm() for LLM interactions
+# - Call call_llm_with_retry() for LLM interactions (not llm_service directly)
 # - Return typed results (Pydantic models or dicts)
 
-# src/services/pipeline/intent_detector.py
-async def detect_intent(llm_service, transcript_preview, video_data, ...) -> IntentResult
+# src/services/pipeline/plan.py
+async def run_plan(llm_service, transcript, video_data, ...) -> PlanResult | None
+# Single Sonnet call replaces old Manifest + Triage (2 calls → 1)
+
+# src/services/pipeline/triage.py (fallback/validation only)
+# TriageResult model + tab validation when plan confidence < 0.6
 
 # src/services/pipeline/extractor.py
-async def extract(llm_service, transcript, intent, ...) -> AsyncGenerator[dict, None]
+async def extract(llm_service, transcript, triage, ...) -> AsyncGenerator[dict, None]
 
 # src/services/pipeline/enrichment.py
-async def enrich(llm_service, output_type, extraction_data, ...) -> EnrichmentData | None
+async def enrich(llm_service, content_tag, extraction_data, ...) -> EnrichmentData | None
 
 # src/services/pipeline/synthesis.py
 async def synthesize(llm_service, extraction_text, video_title, ...) -> SynthesisResult
+
+# src/services/pipeline/post_processor.py
+def validate_extraction_counts(manifest: ManifestResult, extraction: dict) -> list[str]
 ```
 
 **Model mapping (config.py):**
@@ -255,24 +357,24 @@ MODEL_MAP = {
 
 ---
 
-## Output Type System
+## Content Tag System
 
-The pipeline uses intent detection (LLM) to determine the output type from video metadata + transcript preview. Each type has a dedicated extraction prompt and Pydantic model.
+The pipeline uses triage (LLM) to determine content tags from manifest + metadata. Each tag has a domain schema injected into a shared extraction template.
 
-### 10 Output Types
+### 8 Primary Content Tags + 2 Modifiers
 
-| OutputType | Category Fallback | Pydantic Model | Enrichment |
-|------------|-------------------|----------------|------------|
-| explanation | (default) | ExplanationOutput | - |
-| recipe | cooking | RecipeOutput | - |
-| code_walkthrough | coding, programming | CodeWalkthroughOutput | cheat sheet |
-| study_kit | education | StudyKitOutput | quiz, flashcards |
-| trip_planner | travel | TripPlannerOutput | - |
-| workout | fitness | WorkoutOutput | - |
-| verdict | reviews | VerdictOutput | - |
-| highlights | podcast, interview | HighlightsOutput | - |
-| music_guide | music | MusicGuideOutput | - |
-| project_guide | diy, craft | ProjectGuideOutput | - |
+| ContentTag | Category Fallback | Domain Schema | Enrichment |
+|------------|-------------------|---------------|------------|
+| learning | education (default) | `schemas/learning.txt` | quiz, flashcards, scenarios |
+| tech | coding, programming | `schemas/tech.txt` | quiz, flashcards, scenarios |
+| fitness | fitness | `schemas/fitness.txt` | - |
+| food | cooking | `schemas/food.txt` | - |
+| music | music | `schemas/music.txt` | - |
+| travel | travel | `schemas/travel.txt` | - |
+| review | reviews | `schemas/review.txt` | - |
+| project | diy, craft | `schemas/project.txt` | - |
+| narrative | podcast, interview | `schemas/narrative.txt` | Modifier only |
+| finance | — | `schemas/finance.txt` | Modifier only |
 
 ### SSE Event Protocol
 
@@ -282,57 +384,108 @@ The pipeline uses intent detection (LLM) to determine the output type from video
 | `metadata` | `{title, channel, thumbnailUrl, duration}` |
 | `transcript_ready` | `{duration}` |
 | `sponsor_segments` | `{count, filteredDuration}` (SponsorBlock integration) |
-| `intent_detected` | `{outputType, confidence, userGoal, sections}` |
-| `description_analysis` | `{links, resources, socialLinks}` (concurrent with intent) |
+| `description_analysis` | `{links, resources, socialLinks}` (concurrent with manifest) |
+| `triage_complete` | `{contentTags, modifiers, primaryTag, tabs, confidence}` |
 | `extraction_progress` | `{section, percent}` (multiple events) |
-| `extraction_complete` | `{outputType, data}` |
-| `enrichment_complete` | `{quiz?, flashcards?, cheatSheet?}` (conditional) |
+| `extraction_complete` | `{domain-keyed data}` |
+| `enrichment_complete` | `{quiz?, flashcards?, scenarios?}` (learning and tech domains only) |
 | `synthesis_complete` | `{tldr, keyTakeaways, masterSummary, seoDescription}` |
-| `done` | `{videoSummaryId, cached?}` |
+| `frames` | `{frames: [{index, timestamp, url, s3Key?, ocrText?}]}` (scene frames) |
+| `meta` | `{VIEResponseMeta}` (assembled meta) |
+| `tab_ready` | `{id, label, emoji, component, props, crossTabLinks?}` (progressive tab) |
+| `complete` | `{tabCount, processingTimeMs}` (v2 completion) |
+| `done` | `{videoSummaryId, cached?, phase: "done"}` (legacy + confetti trigger) |
 | `[DONE]` | Terminal signal |
 
 ### Key Design Decisions
 
 | Decision | Choice | Why |
 |----------|--------|-----|
-| Standard section IDs | Always use `_TYPE_SECTIONS` dict | LLM returns creative IDs that don't match frontend tabs |
+| Triage-first | LLM picks tags + designs tabs | More flexible than fixed output types |
+| Schema injection | `base_extraction.txt` + `schemas/{tag}.txt` | One extraction prompt, domain schemas swapped in |
+| Plan stage | Single Sonnet call replaces Manifest + Triage | 2 calls → 1, saves ~30-50s, better coherence |
+| Plan fallback | Falls back to category-based mapping if confidence < 0.6 | Safety net when LLM plan fails or is low-confidence |
+| Count validation advisory | Logs warnings at 60% threshold | Never blocks pipeline, just flags missing items |
+| Legacy coercion | `field_validator(mode="before")` | Accepts old string format for travel tips and music analysis |
+| Finance modifier costs-only | `costs[]` + `savingTips[]`, no budget | Primary domain owns budget structure |
 | Adaptive extraction | 1-3 calls by word count | Prevents token overflow on long videos |
-| Null coercion validators | `@field_validator(mode="before")` | LLMs sometimes return null for required fields |
-| Category fallback | Map video category to output type | Safety net when intent confidence < 0.6 |
+| Category fallback | Map video category to content tag | Safety net when triage confidence < 0.6 |
+| Shared domain config | `@vie/shared` `domains.json` via Docker mount | Single source of truth for domains, tabs, gradients, categories across TS + Python |
 
 ---
 
 ## Output Schema
 
-The pipeline stores structured results with `intent`, `output`, `enrichment`, and `synthesis` fields:
+The pipeline stores results in two formats for backward compatibility:
+
+### v2 Schema (current — component-addressed tabs)
 
 ```python
 # MongoDB document structure (after pipeline completes):
 {
-    "intent": {
-        "output_type": "explanation",  # one of 10 types
-        "confidence": 0.95,
-        "sections": ["overview", "key_points", "concepts", "takeaways"]
+    # v1 fields (still written for backward compat)
+    "triage": {
+        "contentTags": ["learning"],       # 1-2 primary content tags
+        "modifiers": [],                    # 0-2 modifier tags (narrative, finance)
+        "primaryTag": "learning",           # First content tag
+        "tabs": [                           # LLM-designed tab layout
+            {"id": "key_points", "label": "Key Points", "emoji": "💡", "dataSource": "learning.keyPoints"},
+            {"id": "concepts", "label": "Core Concepts", "emoji": "🧠", "dataSource": "learning.concepts"}
+        ],
+        "confidence": 0.95
     },
-    "output": {
-        "type": "explanation",
-        "data": { ... }  # Typed per output model (ExplanationOutput, RecipeOutput, etc.)
-    },
-    "enrichment": {
-        "quiz": [...],        # study_kit only
-        "flashcards": [...],  # study_kit only
-        "cheatSheet": "..."   # code_walkthrough only
-    },
+    "output": { ... },                      # Domain-keyed extraction data
+    "enrichment": { ... },                  # Quiz, flashcards, scenarios (all enrichment-mapped domains)
     "synthesis": {
         "tldr": "...",
         "keyTakeaways": ["..."],
         "masterSummary": "...",
         "seoDescription": "..."
-    }
+    },
+
+    # v2 fields (assembly stage output — used by frontend)
+    "assembledMeta": {
+        "videoId": "...",
+        "videoTitle": "...",
+        "creator": "...",
+        "contentTags": ["learning"],
+        "modifiers": [],
+        "primaryTag": "learning",
+        "userGoal": "...",
+        "tldr": "...",
+        "keyTakeaways": [...],
+        "masterSummary": "...",
+        "seoDescription": "..."
+    },
+    "assembledTabs": [                      # Component-addressed tabs
+        {
+            "id": "key_points",
+            "label": "Key Points",
+            "emoji": "💡",
+            "component": "key_points",      # Maps to COMPONENT_REGISTRY on frontend
+            "props": {                      # Pre-resolved props for the component
+                "items": [...]
+            },
+            "crossTabLinks": [
+                {"targetTab": "concepts", "label": "Related Concepts"}
+            ]
+        }
+    ]
 }
 ```
 
-See `src/models/output_types.py` for all 10 Pydantic output models.
+### Frontend Meta Resolution
+
+The API builds a clean response using `meta-builder.ts`:
+1. New shape: `doc.meta` (has `contentTags` directly)
+2. Legacy v2: `doc.assembledMeta` + `doc.synthesis`
+3. Oldest: `doc.triage` + `doc.synthesis`
+
+### Security: Field Allowlist
+
+`save_structured_result()` in `mongodb_repository.py` uses a field allowlist (`_ALLOWED_RESULT_KEYS`) to prevent arbitrary field injection into MongoDB documents.
+
+See `src/models/domain_types.py` for domain data models, `src/models/pipeline_types.py` for pipeline types, and `src/models/vie_response_v2.py` for assembly output models.
 
 ---
 
@@ -401,6 +554,80 @@ WHISPER_ENABLED=true
 WHISPER_MAX_DURATION_MINUTES=60
 OPENAI_API_KEY=sk-...  # Required for Whisper
 ```
+
+---
+
+## Chunked Extraction (Long Videos >30 min)
+
+Videos longer than 30 minutes use a chapter-aware, batched extraction pipeline for better quality and reliability.
+
+### Pipeline Flow
+
+```
+SHORT (<30 min):   Current pipeline unchanged (single/overflow extraction)
+MEDIUM (30-120m):  Chapter split → 1-2 batch extraction calls → merge
+LONG (2+ hours):   Chapter split → 2-5 batch calls → hierarchical synthesis → merge
+```
+
+### Chapter Splitting (`transcript_chunker.py`)
+
+Fallback chain for splitting transcripts into chapters:
+1. **YouTube chapters** — highest quality, from yt-dlp `video_data.chapters`
+2. **AI chapter detection** — fast model LLM call with `chapter_detect.txt` prompt
+3. **Time-based splitting** — ~5-minute segments when no chapters available
+4. **Single chunk fallback** — treat entire transcript as one chunk (current behavior)
+
+### Batched Extraction (`extractor.py`)
+
+- Groups chapters into batches of ≤50K tokens (`batch_chapters()`)
+- Parallel extraction per batch with `asyncio.Semaphore(3)` for concurrency
+- Fast model for multi-batch, default model for single batch
+- Chapter headers injected into transcript for better context
+
+### Extraction Merger (`extraction_merger.py`)
+
+Per-domain merge logic for combining batch results:
+- **Identity-based dedup** — name, label, term (case-insensitive)
+- **Ordered list re-numbering** — step, order, number fields
+- **Longest scalar selection** — keeps richest description/text
+- **Recursive dict merge** — deep merge of nested structures
+
+### Hierarchical Synthesis
+
+For videos with >5 chapters, synthesis uses chapter summaries + truncated extraction (6K chars) instead of raw extraction data.
+
+### Fast Model Routing
+
+Model routing by stage:
+- Plan: Sonnet (primary model, 30s timeout, 2 retries) — replaces old Manifest + Triage
+- Classifier: fast model (10s timeout, 1 retry)
+- Synthesis: `use_fast_model=True` (30s timeout)
+- Multi-batch extraction: `use_fast_model=True` (120s timeout)
+- Single-batch extraction: Sonnet (primary model)
+
+### Prompt Safety Net (`llm_retry.py`)
+
+Hard character limit per model before every LLM call:
+- Anthropic: 600K chars, OpenAI: 380K chars, Gemini: 3M chars
+- Warning log when truncation triggers
+- Prevents context overflow even without chunking
+
+### Configuration (`config.py`)
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `CHUNKED_EXTRACTION_THRESHOLD` | 1800 (30 min) | Duration threshold for chunked path |
+| `MAX_TOKENS_PER_BATCH` | 50000 | Max tokens per extraction batch |
+| `CHAPTER_BATCH_SIZE` | 3 | Chapters per batch target |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/services/transcription/transcript_chunker.py` | Chapter splitting with fallback chain |
+| `src/services/pipeline/extraction_merger.py` | Per-domain merge + dedup |
+| `src/prompts/chapter_detect.txt` | AI chapter detection prompt |
+| `src/utils/llm_retry.py` | Fast model routing + prompt truncation |
 
 ---
 

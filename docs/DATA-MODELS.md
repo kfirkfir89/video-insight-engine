@@ -10,7 +10,7 @@ MongoDB collections and schemas.
 
 | Collection | Purpose |
 |------------|---------|
-| `videoSummaryCache` | One summary per YouTube video |
+| `videoSummaryCache` | One summary per YouTube video (MongoDB + Redis cache layer) |
 | `systemExpansionCache` | One expansion per section/concept |
 
 ### User Data (Per-User)
@@ -20,285 +20,51 @@ MongoDB collections and schemas.
 | `users` | Accounts |
 | `folders` | Organization hierarchy |
 | `userVideos` | User's video library |
-| `memorizedItems` | User's knowledge collection |
-| `userChats` | Conversations about memorized items |
+| `memorizedItems` | User's knowledge collection (legacy -- no UI, backend routes exist) |
+| `userChats` | Conversations (legacy -- migrating to RAG chat) |
 
 ---
 
-# ContentBlock Types
+## Legacy: ContentBlock Types (Removed)
 
-Dynamic content blocks that LLM returns for article-like summaries. Each block has a `blockId` (UUID for stable referencing), a `type`, and optional `variant` for specialized styling.
-
-## Block Type Reference
-
-| Type | Purpose | Fields |
-|------|---------|--------|
-| `paragraph` | Prose text, explanations, transitions | `blockId`, `text`, `variant?` |
-| `bullets` | Unordered lists | `blockId`, `items[]`, `variant?` |
-| `numbered` | Sequential steps, processes | `blockId`, `items[]`, `variant?` |
-| `do_dont` | Best practices, comparisons | `blockId`, `do[]`, `dont[]` |
-| `example` | Code snippets, demonstrations | `blockId`, `title?`, `code`, `explanation?`, `variant?` |
-| `callout` | Tips, warnings, important notes | `blockId`, `style` (tip/warning/note/chef_tip/security), `text`, `variant?` |
-| `definition` | Key term introductions | `blockId`, `term`, `meaning` |
-| `keyvalue` | Specs, costs, stats, metadata | `blockId`, `items[]` (key/value pairs), `variant?` |
-| `comparison` | Side-by-side comparisons | `blockId`, `left`, `right`, `variant?` |
-| `timestamp` | Video navigation links | `blockId`, `time`, `seconds`, `label` |
-| `quote` | Speaker quotes, testimonials | `blockId`, `text`, `attribution?`, `timestamp?` |
-| `statistic` | Metrics, data points | `blockId`, `items[]` (value/label/context/trend) |
-| `visual` | Video frame screenshots | `blockId`, `description?`, `timestamp?`, `label?`, `s3_key?`, `imageUrl?`, `variant?` |
-| `problem_solution` | Problem/solution pairs | `blockId`, `problem`, `solution`, `context?` |
-
-## TypeScript Interfaces
-
-```typescript
-// ===== BASE BLOCK =====
-
-interface BaseBlock {
-  blockId: string;     // UUID - stable identifier for referencing
-  type: string;
-  variant?: string;
-}
-
-// ===== CONTENT BLOCKS =====
-
-interface ParagraphBlock extends BaseBlock {
-  type: 'paragraph';
-  text: string;
-}
-
-interface BulletsBlock extends BaseBlock {
-  type: 'bullets';
-  variant?: 'ingredients' | string;  // Recipe: "ingredients"
-  items: string[];
-}
-
-interface NumberedBlock extends BaseBlock {
-  type: 'numbered';
-  variant?: 'cooking_steps' | string;  // Recipe: "cooking_steps"
-  items: string[];
-}
-
-interface DoDoNotBlock extends BaseBlock {
-  type: 'do_dont';
-  do: string[];
-  dont: string[];
-}
-
-interface ExampleBlock extends BaseBlock {
-  type: 'example';
-  variant?: 'terminal_command' | string;  // Code: "terminal_command"
-  title?: string;
-  code: string;
-  explanation?: string;
-}
-
-interface CalloutBlock extends BaseBlock {
-  type: 'callout';
-  variant?: 'chef_tip' | string;  // Recipe: "chef_tip"
-  style: 'tip' | 'warning' | 'note' | 'chef_tip' | 'security';
-  text: string;
-}
-
-interface DefinitionBlock extends BaseBlock {
-  type: 'definition';
-  term: string;
-  meaning: string;
-}
-
-interface KeyValueBlock extends BaseBlock {
-  type: 'keyvalue';
-  variant?: 'specs' | 'cost' | 'stats' | 'info' | 'location';
-  items: { key: string; value: string }[];
-}
-
-interface ComparisonBlock extends BaseBlock {
-  type: 'comparison';
-  variant?: 'dos_donts' | 'pros_cons' | 'versus' | 'before_after';
-  left: { label: string; items: string[] };
-  right: { label: string; items: string[] };
-}
-
-interface TimestampBlock extends BaseBlock {
-  type: 'timestamp';
-  time: string;       // "5:23"
-  seconds: number;    // 323 (for video seeking)
-  label: string;      // "Setting up the project"
-}
-
-interface QuoteBlock extends BaseBlock {
-  type: 'quote';
-  text: string;
-  attribution?: string;
-  timestamp?: number;
-}
-
-interface StatisticBlock extends BaseBlock {
-  type: 'statistic';
-  items: {
-    value: string;
-    label: string;
-    context?: string;
-    trend?: 'up' | 'down' | 'neutral';
-  }[];
-}
-
-/** Individual frame within a multi-frame visual block (slideshow/gallery). */
-interface VisualFrame {
-  timestamp: number;
-  s3_key?: string;
-  imageUrl?: string;
-  caption?: string;
-}
-
-interface VisualBlock extends BaseBlock {
-  type: 'visual';
-  description?: string;
-  timestamp?: number;         // Seconds into video
-  label?: string;
-  s3_key?: string;            // S3 object key (permanent, for presigned URL generation)
-  imageUrl?: string;          // Ephemeral presigned URL (refreshed at response time)
-  variant?: 'diagram' | 'screenshot' | 'demo' | 'whiteboard' | 'slideshow' | 'gallery';
-  frames?: VisualFrame[];     // Multi-frame: slideshows, galleries, step-by-step sequences
-}
-
-interface ProblemSolutionBlock extends BaseBlock {
-  type: 'problem_solution';
-  problem: string;
-  solution: string;
-  context?: string;
-}
-
-// ===== UNION TYPE =====
-
-type ContentBlock =
-  // Core blocks
-  | ParagraphBlock
-  | BulletsBlock
-  | NumberedBlock
-  | DoDoNotBlock
-  | ExampleBlock
-  | CalloutBlock
-  | DefinitionBlock
-  | KeyValueBlock
-  | ComparisonBlock
-  | TimestampBlock
-  | QuoteBlock
-  | StatisticBlock
-  | VisualBlock
-  | ProblemSolutionBlock
-  // V2.1 category-specific blocks
-  | TranscriptBlock
-  | TimelineBlock
-  | ToolListBlock
-  | IngredientBlock
-  | StepBlock
-  | NutritionBlock
-  | CodeBlock
-  | TerminalBlock
-  | FileTreeBlock
-  | LocationBlock
-  | ItineraryBlock
-  | CostBlock
-  | ProConBlock
-  | RatingBlock
-  | VerdictBlock
-  | ExerciseBlock
-  | WorkoutTimerBlock
-  | QuizBlock
-  | GuestBlock
-  | TableBlock;
-```
-
-## Variant Examples by Category
-
-### Coding Category
-```json
-{"blockId": "uuid-1", "type": "example", "variant": "terminal_command", "code": "npm install", "explanation": "..."}
-{"blockId": "uuid-2", "type": "comparison", "variant": "dos_donts", "left": {"label": "Do", "items": [...]}, "right": {"label": "Don't", "items": [...]}}
-{"blockId": "uuid-3", "type": "timestamp", "time": "5:23", "seconds": 323, "label": "Setting up the config"}
-```
-
-### Cooking Category
-```json
-{"blockId": "uuid-1", "type": "keyvalue", "variant": "info", "items": [{"key": "Prep Time", "value": "15 min"}, {"key": "Servings", "value": "4"}]}
-{"blockId": "uuid-2", "type": "bullets", "variant": "ingredients", "items": ["2 cups flour", "1 tsp salt"]}
-{"blockId": "uuid-3", "type": "numbered", "variant": "cooking_steps", "items": ["Preheat oven to 350°F", ...]}
-{"blockId": "uuid-4", "type": "callout", "variant": "chef_tip", "style": "chef_tip", "text": "Let dough rest 10 min"}
-```
-
-### Reviews Category
-```json
-{"blockId": "uuid-1", "type": "keyvalue", "variant": "specs", "items": [{"key": "Battery", "value": "14hrs"}, {"key": "Weight", "value": "1.2kg"}]}
-{"blockId": "uuid-2", "type": "comparison", "variant": "pros_cons", "left": {"label": "Pros", "items": [...]}, "right": {"label": "Cons", "items": [...]}}
-```
+The block-based content system was replaced by the composable output system (v2) with component-addressed tabs. See the `assembledTabs` field in videoSummaryCache for the current data shape.
 
 ---
 
-# VideoContext
+# Content Tag System (v2)
 
-Metadata extracted from YouTube to enable content-aware summarization with specialized UI views.
+The triage pipeline determines content tags from video metadata and transcript manifest. Tags drive schema selection, tab layout, and enrichment.
+
+### 8 Primary Content Tags + 2 Modifiers
+
+| ContentTag | Domain Schema | Enrichment |
+|------------|---------------|------------|
+| `learning` | `schemas/learning.txt` | quiz, flashcards, scenarios |
+| `tech` | `schemas/tech.txt` | quiz, flashcards, scenarios |
+| `fitness` | `schemas/fitness.txt` | - |
+| `food` | `schemas/food.txt` | - |
+| `music` | `schemas/music.txt` | - |
+| `travel` | `schemas/travel.txt` | - |
+| `review` | `schemas/review.txt` | - |
+| `project` | `schemas/project.txt` | - |
+| `narrative` | `schemas/narrative.txt` | Modifier only |
+| `finance` | `schemas/finance.txt` | Modifier only |
+
+### Legacy: VideoContext
+
+Still present in older documents for backward compatibility:
 
 ```typescript
 interface VideoContext {
-  category: string;            // Detected: "coding", "cooking", "travel", "fitness", etc.
-  youtubeCategory: string;     // Raw YouTube category: "Science & Technology", "Entertainment"
-  tags: string[];              // Raw tags from YouTube (max 15)
-  displayTags: string[];       // Cleaned for UI display (max 6)
-  categoryConfidence?: number; // Detection confidence (0.0-1.0), used internally
+  category: string;            // Detected category (used as triage fallback)
+  youtubeCategory: string;     // Raw YouTube category
+  tags: string[];              // Raw tags from YouTube
+  displayTags: string[];       // Cleaned for UI display
+  categoryConfidence?: number; // Detection confidence
 }
 ```
 
-## Category Detection
-
-Category is detected independently using **weighted scoring** (not derived from persona):
-
-| Signal | Weight | Description |
-|--------|--------|-------------|
-| Keywords (tags + hashtags) | 40% | Primary content indicator |
-| YouTube category | 30% | Supportive, but unreliable alone |
-| Title patterns | 15% | Pattern matching ("recipe", "tutorial", etc.) |
-| Channel patterns | 15% | Known channels (jamie oliver, fireship, etc.) |
-
-**LLM Fallback:** If confidence < 0.4, uses fast model (Haiku) for classification.
-
-### Valid Categories
-
-`cooking`, `coding`, `fitness`, `travel`, `education`, `podcast`, `reviews`, `gaming`, `diy`, `music`, `standard`
-
-### Category to OutputType Mapping (v1.4)
-
-OutputType is what the system produces — derived from category:
-
-| Category | OutputType | Label |
-|----------|-----------|-------|
-| `cooking` | `recipe` | Recipe |
-| `coding` | `tutorial` | Tutorial |
-| `fitness` | `workout` | Workout |
-| `education` | `study_guide` | Study Guide |
-| `travel` | `travel_plan` | Travel Plan |
-| `reviews` | `review` | Review |
-| `podcast` | `podcast_notes` | Podcast Notes |
-| `diy` | `diy_guide` | DIY Guide |
-| `gaming` | `game_guide` | Game Guide |
-| `music` | `music_guide` | Music Guide |
-| `standard` | `summary` | Summary |
-
-### Category to Persona Mapping
-
-Persona is derived FROM category for LLM prompt selection:
-
-| Category | Persona | Purpose |
-|----------|---------|---------|
-| `cooking` | `recipe` | Recipe-specific prompts |
-| `coding` | `code` | Code tutorial prompts |
-| `reviews` | `review` | Product review prompts |
-| `podcast` | `interview` | Interview/podcast prompts |
-| `fitness` | `fitness` | Workout prompts |
-| `travel` | `travel` | Travel guide prompts |
-| `education` | `education` | Educational prompts |
-| other | `standard` | Generic prompts |
-
-**Key Principle:** Category detection is independent of persona. A video can have category="cooking" even if persona falls back to "standard".
+Category serves as a fallback when triage confidence < 0.6. The triage LLM now determines content tags directly from manifest + metadata.
 
 ---
 
@@ -323,9 +89,14 @@ One entry per YouTube video. Shared across all users.
   thumbnailUrl: string | null,
   language: string | null,        // ISO 639-1 ("en", "es", etc.)
 
-  // Video context (category + tags)
+  // Video context (classification + tags)
+  // Note: Now includes contentTags/primaryTag from plan stage.
+  // The legacy `category` field is kept for backward compat but
+  // contentTags is the authoritative classification source.
   context: {
-    category: "coding" | "cooking" | "podcast" | "reviews" | "general",
+    category: string,                // Legacy category (fallback only)
+    contentTags: string[],           // From plan stage: ["learning", "tech"]
+    primaryTag: string,              // First content tag
     youtubeCategory: string,
     tags: string[],
     displayTags: string[]
@@ -349,7 +120,8 @@ One entry per YouTube video. Shared across all users.
     endMs: number
   }] | null,
 
-  // Processed summary
+  // Processed summary (legacy v1 format — kept for backward compat,
+  // new pipeline populates assembledMeta/assembledTabs instead)
   summary: {
     tldr: string,
     keyTakeaways: string[],
@@ -379,10 +151,62 @@ One entry per YouTube video. Shared across all users.
     }]
   } | null,
 
-  // Output type (v1.4)
-  outputType: "recipe" | "tutorial" | "workout" | "study_guide" | "travel_plan" |
-              "review" | "podcast_notes" | "diy_guide" | "game_guide" |
-              "music_guide" | "summary",    // Default: "summary"
+  // ─── Pipeline v2 fields (triage-based) ───
+
+  // Triage result
+  triage: {
+    contentTags: string[],          // ["learning", "tech"]
+    modifiers: string[],            // ["narrative", "finance"]
+    primaryTag: string,             // First content tag
+    tabs: [{                        // LLM-designed tab layout
+      id: string,
+      label: string,
+      emoji: string,
+      dataSource: string            // e.g., "learning.keyPoints"
+    }],
+    confidence: number
+  } | null,
+
+  // Domain-keyed extraction data
+  output: Record<string, unknown> | null,
+
+  // Enrichment (quiz, flashcards, scenarios)
+  enrichment: Record<string, unknown> | null,
+
+  // Synthesis (TLDR, takeaways, master summary)
+  synthesis: {
+    tldr: string,
+    keyTakeaways: string[],
+    masterSummary: string,
+    seoDescription: string
+  } | null,
+
+  // v2 Assembly output (component-addressed tabs)
+  assembledMeta: {
+    videoId: string,
+    videoTitle: string,
+    creator: string,
+    contentTags: string[],
+    modifiers: string[],
+    primaryTag: string,
+    userGoal: string,
+    tldr: string,
+    keyTakeaways: string[],
+    masterSummary: string,
+    seoDescription: string
+  } | null,
+
+  assembledTabs: [{
+    id: string,                     // e.g., "key_points"
+    label: string,                  // e.g., "Key Points"
+    emoji: string,                  // e.g., "💡"
+    component: string,              // Maps to COMPONENT_REGISTRY on frontend
+    props: Record<string, unknown>, // Pre-resolved props for the component
+    crossTabLinks?: [{              // Cross-tab navigation links
+      targetTab: string,
+      label: string
+    }]
+  }] | null,
 
   // Share metadata (v1.4)
   shareSlug: string | null,         // nanoid 10-char URL-safe slug (unique when set)
@@ -393,15 +217,6 @@ One entry per YouTube video. Shared across all users.
 
   // Expiration (v1.4) — TTL index fires on non-null Date
   expiresAt: Date | null,           // null = never expires (pro/team), Date = will be removed
-
-  // Consolidated data (v1.4) — cross-chapter merged blocks
-  consolidated: {
-    ingredients?: ContentBlock[],   // Recipe: all ingredients merged
-    steps?: ContentBlock[],         // Recipe: all steps merged
-    code?: ContentBlock[],          // Tutorial: all code blocks
-    exercises?: ContentBlock[],     // Workout: all exercises
-    // ... per output-type
-  } | null,
 
   // Cache metadata
   version: number,
@@ -620,6 +435,8 @@ User's video library. References shared cache.
 
 ## memorizedItems
 
+> **Status: Legacy/Deprecated** -- Backend routes exist but no UI. Will be removed in future cleanup.
+
 User's personal knowledge collection.
 
 ```javascript
@@ -725,7 +542,7 @@ Conversations about memorized items.
 │                       USER DATA                               │
 │                                                               │
 │   userVideos ──────────────▶ memorizedItems ◀── userChats    │
-│   (library)                  (collection)       (per-item)   │
+│   (library)                  (legacy)           (legacy)     │
 │       │                           │                          │
 │       └───────────────────────────┘                          │
 │                    │                                         │

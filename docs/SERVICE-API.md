@@ -50,7 +50,7 @@ api/
     │   ├── folders.routes.ts
     │   ├── videos.routes.ts
     │   ├── playlists.routes.ts
-    │   ├── memorize.routes.ts
+    │   ├── memorize.routes.ts    # (legacy)
     │   ├── explain.routes.ts
     │   ├── stream.routes.ts      # SSE proxy to summarizer
     │   ├── share.routes.ts       # Share creation + public access (v1.4)
@@ -70,7 +70,7 @@ api/
     │   ├── playlist.service.ts
     │   ├── memorize.service.ts
     │   ├── summarizer-client.ts  # HTTP client for summarizer
-    │   ├── explainer-client.ts   # HTTP client for explainer
+    │   ├── explainer-client.ts   # HTTP client for explainer (Assistant — future agent)
     │   ├── share.service.ts      # Share creation, public access (v1.4)
     │   ├── og-image.service.ts   # OG image generation (v1.4)
     │   ├── payment.service.ts    # Paddle webhook + checkout (v1.4)
@@ -109,12 +109,12 @@ All services and repositories are created in a central container and injected in
 // src/container.ts
 export interface Container {
   videoRepository: VideoRepository;
-  memorizeRepository: MemorizeRepository;
+  memorizeRepository: MemorizeRepository; // legacy
   shareRepository: ShareRepository;      // v1.4
   videoService: VideoService;
   folderService: FolderService;
   authService: AuthService;
-  memorizeService: MemorizeService;
+  memorizeService: MemorizeService;      // legacy
   playlistService: PlaylistService;
   explainerClient: ExplainerClient;
   summarizerClient: SummarizerClient;

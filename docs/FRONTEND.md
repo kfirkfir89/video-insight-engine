@@ -48,79 +48,82 @@ apps/web/
     │   ├── client.ts             # Fetch wrapper
     │   ├── auth.ts
     │   ├── folders.ts
+    │   ├── playlists.ts
     │   ├── videos.ts
-    │   ├── memorize.ts
     │   ├── explain.ts
     │   └── share.ts              # Share link API client
     │
     ├── components/
-    │   ├── ui/                   # shadcn components
+    │   ├── ui/                   # shadcn components (Layer 1)
+    │   │
+    │   ├── vie/                  # VIE Component Library (Layer 2)
+    │   │   ├── index.ts              # Barrel export — import from '@/components/vie'
+    │   │   ├── cards/                # GlassCard, ExpandableCard, HeroCard, ImageCard, VideoHero
+    │   │   ├── data/                 # ScoreRing, StatPill, Badge, KeyValue, CostDisplay, Timer, Timestamp
+    │   │   ├── content/              # TextBlock, CodeSnippet, QuoteBlock, TableView, ListItems, DefinitionItem
+    │   │   ├── navigation/           # TabBar, ProgressBar, CrossTabButton, SectionNav, Stepper, BackForward
+    │   │   ├── interactive/          # CheckItem, FlipCard, OptionGrid, ActionButton, EmojiMarker, MapLink
+    │   │   ├── feedback/             # Celebration, FadeIn, InlineScore, Shake, Callout
+    │   │   └── media/                # VideoClip, ImageGallery, AudioSnippet
     │   │
     │   ├── layout/
-    │   │   ├── Layout.tsx              # Sidebar + main content (no header)
+    │   │   ├── Layout.tsx              # Sidebar + AppHeader + main content
+    │   │   ├── AppHeader.tsx           # Top bar: sidebar toggle, VIE branding, theme, user
+    │   │   ├── LeftSidebarIconStrip.tsx # Collapsed sidebar icon strip
     │   │   ├── MobileBottomNav.tsx     # Fixed bottom nav (md:hidden)
     │   │   └── MobileFAB.tsx           # Floating action button (md:hidden)
     │   │
-    │   ├── video-detail/
-    │   │   ├── VideoDetailLayout.tsx     # Orchestrator (responsive)
-    │   │   ├── VideoDetailDesktop.tsx    # Desktop layout + sticky right panel
-    │   │   ├── VideoDetailMobile.tsx     # Mobile single-column layout
-    │   │   ├── RightPanelTabs.tsx        # Tab-based right panel (chapters, minimap, chat)
-    │   │   ├── VideoHero.tsx             # Hero card — metadata + TL;DR
-    │   │   ├── video-detail-types.ts     # Shared TypeScript types
-    │   │   ├── FlowRowRenderer.tsx       # Shared auto-flow row renderer (5 row types)
-    │   │   ├── SectionCard.tsx
-    │   │   ├── ContentBlockRenderer.tsx  # Dynamic content blocks (editable prop)
-    │   │   ├── DetectionOverride.tsx    # Output type override dropdown
-    │   │   ├── InlineEditor.tsx         # contentEditable wrapper
-    │   │   ├── containers/              # Interactive view containers
-    │   │   │   ├── TabbedView.tsx       # Glass pill tabs, ARIA compliant
-    │   │   │   ├── SwipeableView.tsx    # Touch gesture nav
-    │   │   │   ├── StepThroughView.tsx  # Step-by-step navigator
-    │   │   │   ├── ProgressView.tsx     # Completion tracking (localStorage)
-    │   │   │   └── TimerView.tsx        # Countdown timer
-    │   │   ├── blocks/                   # V2.1 Block Component Library
-    │   │   │   ├── __tests__/            # Unit tests (18 files)
-    │   │   │   ├── index.ts              # Barrel export
-    │   │   │   ├── BulletsBlock.tsx      # Basic
-    │   │   │   ├── NumberedBlock.tsx
-    │   │   │   ├── ExampleBlock.tsx
-    │   │   │   ├── CalloutBlock.tsx
-    │   │   │   ├── ChecklistBlock.tsx    # Unified: tool_list + ingredient
-    │   │   │   ├── StepBlock.tsx         # Unified: step + numbered (simple mode)
-    │   │   │   ├── NutritionBlock.tsx
-    │   │   │   ├── CodeBlock.tsx         # Technical (plain monochrome)
-    │   │   │   ├── TerminalBlock.tsx
-    │   │   │   ├── FileTreeBlock.tsx
-    │   │   │   ├── ProConBlock.tsx       # Review
-    │   │   │   ├── RatingBlock.tsx
-    │   │   │   ├── VerdictBlock.tsx
-    │   │   │   ├── LocationBlock.tsx     # Travel
-    │   │   │   ├── ItineraryBlock.tsx
-    │   │   │   ├── CostBlock.tsx
-    │   │   │   ├── FitnessBlock.tsx      # Unified: exercise + workout_timer
-    │   │   │   ├── QuizBlock.tsx         # Education
-    │   │   │   ├── GuestBlock.tsx        # Interview
-    │   │   │   ├── ProblemSolutionBlock.tsx  # Quality
-    │   │   │   └── VisualBlock.tsx
-    │   │   └── views/                    # Persona-specific views
-    │   │       ├── ViewLayout.tsx           # Layout primitives (row, column, section)
-    │   │       ├── SectionHeader.tsx
-    │   │       ├── CodeView.tsx             # Uses StepThroughView container
-    │   │       ├── RecipeView.tsx           # Uses TabbedView container
-    │   │       ├── EducationView.tsx        # Uses ProgressView container
-    │   │       ├── FitnessView.tsx          # Uses TimerView container
-    │   │       └── StandardView.tsx         # Uses auto-flow layout engine
+    │   ├── video-detail/               # Video output rendering
+    │   │   ├── OutputRouter.tsx          # Routes to v2 (assembledTabs) or v1 fallback
+    │   │   ├── output/
+    │   │   │   ├── ComposableOutput.tsx      # v2: COMPONENT_REGISTRY → render by tab.component
+    │   │   │   ├── ComposableOutputV1.tsx    # v1: resolveTabData fallback
+    │   │   │   ├── DisplaySection.tsx        # Data-driven section renderer
+    │   │   │   ├── CrossTabLink.tsx          # Cross-tab navigation
+    │   │   │   ├── TabLayout.tsx             # Tab shell + navigation
+    │   │   │   ├── GlassCard.tsx             # Card wrapper
+    │   │   │   ├── Celebration.tsx           # Confetti celebration
+    │   │   │   ├── ProgressBar.tsx           # Streaming progress
+    │   │   │   ├── TabIntro.tsx              # Tab introduction section
+    │   │   │   ├── TabCoordinationContext.tsx # Tab state coordination
+    │   │   │   ├── RecipePlayer.tsx          # Cooking mode player
+    │   │   │   ├── RecipeStepView.tsx        # Recipe step rendering
+    │   │   │   ├── RecipeIngredientPanel.tsx # Recipe ingredient panel
+    │   │   │   ├── display-type-guards.ts   # Type guards for display sections
+    │   │   │   ├── link-rules.ts            # Cross-tab link resolution rules
+    │   │   │   ├── interactive/              # 21 interactive renderers
+    │   │   │   │   ├── OverviewInteractive.tsx
+    │   │   │   │   ├── InfoGridInteractive.tsx
+    │   │   │   │   ├── ChecklistInteractive.tsx
+    │   │   │   │   ├── StepByStepInteractive.tsx
+    │   │   │   │   ├── ComparisonInteractive.tsx
+    │   │   │   │   ├── QuizInteractive.tsx
+    │   │   │   │   ├── FlashDeckInteractive.tsx
+    │   │   │   │   ├── ScenarioInteractive.tsx
+    │   │   │   │   ├── CodeExplorer.tsx
+    │   │   │   │   ├── SpotExplorer.tsx
+    │   │   │   │   ├── ExerciseInteractive.tsx
+    │   │   │   │   ├── VerdictInteractive.tsx
+    │   │   │   │   ├── BudgetInteractive.tsx
+    │   │   │   │   ├── TimelineExplorer.tsx
+    │   │   │   │   ├── GalleryInteractive.tsx
+    │   │   │   │   ├── ClipPlayerInteractive.tsx
+    │   │   │   │   └── LyricsPlayerInteractive.tsx
+    │   │   │   └── skeletons/                # Loading skeletons
+    │   │   └── shell/
+    │   │       ├── CollapsibleVideoPlayer.tsx # CSS-hidden YouTube player
+    │   │       └── TabCoordinationContext.tsx # Tab coordination (shell-level)
     │   │
     │   ├── rag/                          # RAG Components
     │   │   ├── __tests__/                # Unit tests
     │   │   ├── RAGSourceCard.tsx         # Source display card
-    │   │   └── RAGChatPanel.tsx          # Chat interface
+    │   │   ├── RAGChatPanel.tsx          # Chat interface
+    │   │   └── ChatBlockRenderer.tsx     # Renders blocks in chat context
     │   │
     │   ├── sidebar/
     │   │   ├── Sidebar.tsx             # Main sidebar container
     │   │   ├── SidebarHeader.tsx       # Logo + close button
-    │   │   ├── SidebarTabs.tsx         # Summaries/Memorized tab bar
+    │   │   ├── SidebarTabs.tsx         # Collection/Assistant tab bar
     │   │   ├── SidebarSection.tsx      # Tab content area (folder tree)
     │   │   ├── SidebarToolbar.tsx      # Search, sort, selection controls
     │   │   ├── SidebarFooter.tsx       # Video count + theme + user
@@ -145,36 +148,40 @@ apps/web/
     │   ├── playlists/
     │   │   └── PlaylistPreview.tsx
     │   │
-    │   ├── board/
-    │   │   ├── BoardCard.tsx           # Output card with gradient + emoji
-    │   │   └── BoardGrid.tsx           # CSS columns masonry layout
-    │   │
-    │   └── memorize/
-    │       ├── MemorizedGrid.tsx
-    │       ├── MemorizedCard.tsx
-    │       └── ChatPanel.tsx
+    │   └── rag/
+    │       └── RAGChatPanel.tsx        # Chat panel (used in sidebar Assistant tab)
+    │
+    ├── contexts/
+    │   ├── VideoPlayerContext.tsx   # YouTube player state + seekTo
+    │   └── TabStateContext.tsx      # Tab-level state coordination
     │
     ├── hooks/
-    │   ├── useAuth.ts
-    │   ├── useFolders.ts
-    │   ├── useVideos.ts
+    │   ├── use-videos.ts
+    │   ├── use-folders.ts
     │   ├── use-playlists.ts
-    │   ├── useMemorized.ts
-    │   ├── use-summary-stream.ts     # SSE streaming + detection_result + confetti
+    │   ├── use-summary-stream.ts     # SSE streaming + triage_complete + confetti
     │   ├── use-processing-manager.ts # Auto-resume & sidebar sync
     │   ├── use-share.ts             # Share link creation + clipboard
-    │   ├── use-output-state.ts      # Mutable block state + undo/redo
-    │   ├── use-websocket.ts          # Real-time updates
-    │   └── use-long-press.ts         # Long press gesture hook
+    │   ├── use-sidebar-chat.ts      # Sidebar chat integration
+    │   ├── use-streaming-chat.ts    # AI SDK chat streaming
+    │   ├── use-video-chat.ts        # Video-scoped chat
+    │   ├── use-websocket.ts         # Real-time updates
+    │   ├── use-theme.ts             # Theme toggle hook
+    │   ├── use-long-press.ts        # Long press gesture hook
+    │   ├── use-media-query.ts       # Responsive breakpoint detection
+    │   ├── use-is-truncated.ts      # Text truncation detection
+    │   ├── use-sidebar-text-size.ts # Sidebar text scaling
+    │   ├── use-folder-drag-drop.ts  # DnD for folders
+    │   └── use-drag-scrollbar.ts    # Drag-to-scroll behavior
     │
     ├── pages/
     │   ├── LoginPage.tsx
+    │   ├── RegisterPage.tsx
     │   ├── LandingPage.tsx          # Public homepage with URL input
-    │   ├── BoardPage.tsx            # Pinterest-style masonry grid
-    │   ├── SharePage.tsx            # Public share view (/s/:slug)
-    │   ├── DashboardPage.tsx
-    │   ├── VideoPage.tsx
-    │   └── MemorizedPage.tsx
+    │   ├── BoardPage.tsx            # Folder explorer + video grid (authenticated home)
+    │   ├── GeneratePage.tsx         # Centered URL input for new summaries
+    │   ├── VideoDetailPage.tsx      # Video detail + output rendering
+    │   └── SharePage.tsx            # Public share view (/s/:slug)
     │
     ├── stores/
     │   ├── auth-store.ts        # Auth + anonymous generation tracking
@@ -183,28 +190,47 @@ apps/web/
     │
     └── lib/
         ├── utils.ts
-        ├── api.ts
         ├── query-keys.ts
-        ├── output-type-config.ts  # OutputType → emoji, gradient, label, accent
-        ├── block-labels.ts        # i18n-ready block labels
-        ├── block-layout.ts        # Block sizing, spacing matrix, sidebar classification
-        └── block-layout.ts        # Block sizing, spacing matrix
+        ├── query-client.ts
+        ├── output-type-config.ts     # OutputType → emoji, gradient, label, accent
+        ├── tab-data-resolver.ts      # Resolves tab data from VIEResponse (v1)
+        ├── build-vie-response.ts     # Builds VIEResponse from extraction data
+        ├── synthesis-utils.ts        # Synthesis data utilities
+        ├── ingredient-step-matcher.ts # Recipe ingredient-step matching
+        ├── stream-event-processor.ts # SSE event parsing and processing
+        ├── stream-cache.ts           # Stream response caching
+        ├── sse-validators.ts         # SSE event validation
+        ├── timestamp-utils.ts        # Timestamp formatting
+        ├── string-utils.ts           # String manipulation utilities
+        ├── url-utils.ts              # URL parsing
+        ├── youtube-utils.ts          # YouTube URL/ID utilities
+        ├── style-utils.ts            # Style helpers
+        ├── folder-utils.ts           # Folder tree utilities
+        ├── dom-utils.ts              # DOM helpers
+        ├── layout-constants.ts       # Layout sizing constants
+        ├── keyboard-nav.ts           # Keyboard navigation helpers
+        ├── image-hosts.ts            # Image host URL utilities
+        ├── stream-error-messages.ts  # Error message formatting
+        ├── concept-utils.ts          # Concept parsing utilities
+        ├── sse-logger.ts             # SSE debug logging
+        └── dev/                      # Dev-only utilities
+            ├── index.ts
+            └── mock-interactive-blocks.ts  # Mock data for interactive components
 ```
 
 ---
 
 ## Routes
 
-| Path             | Page          | Auth       | Description                         |
-| ---------------- | ------------- | ---------- | ----------------------------------- |
-| `/`              | LandingPage   | Public     | URL input, live examples            |
-| `/login`         | LoginPage     | Public     | Sign in                             |
-| `/register`      | RegisterPage  | Public     | Sign up                             |
-| `/board`         | BoardPage     | Protected  | Pinterest masonry grid (home)       |
-| `/video/:id`     | VideoPage     | Protected  | Video detail + sections             |
-| `/memorized/:id` | MemorizedPage | Protected  | Item detail + chat                  |
-| `/s/:slug`       | SharePage     | Public     | Public read-only shared output      |
-| `/dashboard`     | DashboardPage | Protected  | Two-tab interface (legacy)          |
+| Path             | Page            | Auth       | Description                         |
+| ---------------- | --------------- | ---------- | ----------------------------------- |
+| `/`              | LandingPage     | Public     | URL input; auto-redirects to /board if authenticated |
+| `/login`         | LoginPage       | Public     | Sign in → redirects to /board       |
+| `/register`      | RegisterPage    | Public     | Sign up → redirects to /board       |
+| `/board`         | BoardPage       | Protected  | Folder explorer + video grid (home) |
+| `/generate`      | GeneratePage    | Protected  | Centered URL input for new summaries|
+| `/video/:id`     | VideoDetailPage | Protected  | Video detail + output rendering     |
+| `/s/:slug`       | SharePage       | Public     | Public read-only shared output      |
 
 ---
 
@@ -662,777 +688,92 @@ function AddVideoForm() {
 
 ---
 
-# Content Block Rendering
+# Composable Output System (v2)
 
-Dynamic content blocks allow the LLM to return article-like summaries instead of rigid "paragraph + bullets" format.
+The output system renders video summaries using component-addressed tabs assembled by the backend.
 
-## ContentBlockRenderer Component
+## Architecture
 
-```tsx
-// src/components/video-detail/ContentBlockRenderer.tsx
-import { ContentBlock } from "@vie/types";
-import { cn } from "@/lib/utils";
-import { Lightbulb, AlertTriangle, Info, Check, X } from "lucide-react";
-
-interface Props {
-  block: ContentBlock;
-  persona?: string;
-  onTimestampClick?: (seconds: number) => void;
-}
-
-export function ContentBlockRenderer({ block, persona, onTimestampClick }: Props) {
-  switch (block.type) {
-    case "paragraph":
-      return <p className="text-muted-foreground leading-relaxed">{block.text}</p>;
-
-    case "bullets":
-      return (
-        <ul className={cn(
-          "list-disc list-inside space-y-1",
-          block.variant === "ingredients" && "bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-400 pl-4 py-2"
-        )}>
-          {block.items.map((item, i) => <li key={i}>{item}</li>)}
-        </ul>
-      );
-
-    case "numbered":
-      return (
-        <ol className={cn(
-          "list-decimal list-inside space-y-1",
-          block.variant === "cooking_steps" && "bg-orange-50 dark:bg-orange-950/20 border-l-4 border-orange-400 pl-4 py-2"
-        )}>
-          {block.items.map((item, i) => <li key={i}>{item}</li>)}
-        </ol>
-      );
-
-    case "example":
-      return (
-        <div className="rounded-lg border bg-muted/50 p-4">
-          {block.title && <p className="font-medium mb-2">{block.title}</p>}
-          <pre className="font-mono text-sm overflow-x-auto"><code>{block.code}</code></pre>
-          {block.explanation && <p className="mt-2 text-sm text-muted-foreground">{block.explanation}</p>}
-        </div>
-      );
-
-    case "callout":
-      const icons = { tip: Lightbulb, warning: AlertTriangle, note: Info };
-      const colors = {
-        tip: "border-amber-400 bg-amber-50 dark:bg-amber-950/20",
-        warning: "border-red-400 bg-red-50 dark:bg-red-950/20",
-        note: "border-blue-400 bg-blue-50 dark:bg-blue-950/20",
-      };
-      const Icon = icons[block.style];
-      return (
-        <div className={cn("rounded-lg border-l-4 p-4", colors[block.style])}>
-          <div className="flex gap-2">
-            <Icon className="h-5 w-5 shrink-0" />
-            <p>{block.text}</p>
-          </div>
-        </div>
-      );
-
-    case "definition":
-      return (
-        <div className="rounded-lg bg-muted/30 p-4">
-          <span className="font-semibold">{block.term}:</span> {block.meaning}
-        </div>
-      );
-
-    case "keyvalue":
-      return (
-        <dl className={cn(
-          "grid grid-cols-2 gap-2 rounded-lg bg-muted/30 p-4",
-          block.variant === "specs" && "bg-slate-50 dark:bg-slate-950/20"
-        )}>
-          {block.items.map((item, i) => (
-            <div key={i} className="contents">
-              <dt className="font-medium text-muted-foreground">{item.key}</dt>
-              <dd>{item.value}</dd>
-            </div>
-          ))}
-        </dl>
-      );
-
-    case "comparison":
-      return (
-        <div className="grid grid-cols-2 gap-4">
-          <div className={cn(
-            "rounded-lg p-4",
-            block.variant === "dos_donts" ? "bg-green-50 dark:bg-green-950/20" : "bg-muted/30"
-          )}>
-            <h4 className="font-medium flex items-center gap-2 mb-2">
-              {block.variant === "dos_donts" && <Check className="h-4 w-4 text-green-600" />}
-              {block.left.label}
-            </h4>
-            <ul className="space-y-1">
-              {block.left.items.map((item, i) => <li key={i}>{item}</li>)}
-            </ul>
-          </div>
-          <div className={cn(
-            "rounded-lg p-4",
-            block.variant === "dos_donts" ? "bg-red-50 dark:bg-red-950/20" : "bg-muted/30"
-          )}>
-            <h4 className="font-medium flex items-center gap-2 mb-2">
-              {block.variant === "dos_donts" && <X className="h-4 w-4 text-red-600" />}
-              {block.right.label}
-            </h4>
-            <ul className="space-y-1">
-              {block.right.items.map((item, i) => <li key={i}>{item}</li>)}
-            </ul>
-          </div>
-        </div>
-      );
-
-    case "timestamp":
-      return (
-        <button
-          onClick={() => onTimestampClick?.(block.seconds)}
-          className="inline-flex items-center gap-2 text-primary hover:underline"
-        >
-          <span className="font-mono text-sm bg-muted px-2 py-0.5 rounded">{block.time}</span>
-          <span>{block.label}</span>
-        </button>
-      );
-
-    default:
-      return null;
-  }
-}
+```
+Backend Assembly → TabEntry[] → SSE tab_ready events
+                                      ↓
+OutputRouter → ComposableOutput → COMPONENT_REGISTRY → Interactive Renderers
+              (v2 path)                                  (21 components)
+                                      or
+              ComposableOutputV1 → resolveTabData → renderInteractive
+              (v1 fallback)
 ```
 
-## View Selection by Persona
+## Component Layer Model
 
-```tsx
-// src/components/video-detail/VideoDetailLayout.tsx
-const ViewComponent = useMemo(() => {
-  switch (video.context?.persona) {
-    case 'code':
-      return CodeView;
-    case 'recipe':
-      return RecipeView;
-    default:
-      return StandardView;
-  }
-}, [video.context?.persona]);
-
-// Display tags
-{video.context?.displayTags?.length > 0 && (
-  <div className="flex gap-2 flex-wrap mb-4">
-    {video.context.displayTags.map(tag => (
-      <span key={tag} className="px-2 py-0.5 bg-muted rounded-full text-xs text-muted-foreground">
-        #{tag}
-      </span>
-    ))}
-  </div>
-)}
+```
+Layer 1: shadcn/ui    (components/ui/)        — Accessible primitives (Button, Dialog, etc.)
+Layer 2: VIE Library  (components/vie/)       — Domain-free, reusable presentation components
+Layer 3: Interactives (output/interactive/)   — Self-contained mini-apps with state
+Layer 4: Shell        (video-detail/shell/)   — State coordination (TabCoordinationContext)
 ```
 
-## SectionCard with Content Blocks
+**Rules:**
+- Layer 2 (vie/) takes only primitive props (string, number, ReactNode) — no `@vie/types`
+- Layer 2 components are all wrapped in `React.memo()`
+- Import vie/ components via barrel: `import { GlassCard, ScoreRing } from '@/components/vie'`
+- Layer 3 interactives compose from Layer 2 components
 
-```tsx
-// src/components/video-detail/SectionCard.tsx
-function SectionCard({ section, onExplain, onMemorize, onTimestampClick }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <span className="font-mono text-sm text-muted-foreground">{section.timestamp}</span>
-          {section.title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Prefer content blocks if available */}
-        {section.content && section.content.length > 0 ? (
-          section.content.map((block, i) => (
-            <ContentBlockRenderer
-              key={i}
-              block={block}
-              onTimestampClick={onTimestampClick}
-            />
-          ))
-        ) : (
-          /* Fallback to legacy fields */
-          <>
-            <p className="text-muted-foreground">{section.summary}</p>
-            {section.bullets?.length > 0 && (
-              <ul className="list-disc list-inside space-y-1">
-                {section.bullets.map((b, i) => <li key={i}>{b}</li>)}
-              </ul>
-            )}
-          </>
-        )}
-      </CardContent>
-      <CardFooter className="gap-2">
-        <Button variant="outline" size="sm" onClick={onExplain}>Explain</Button>
-        <Button variant="outline" size="sm" onClick={onMemorize}>Memorize</Button>
-      </CardFooter>
-    </Card>
-  );
-}
+### Key Components
+
+| Component | Purpose |
+|-----------|---------|
+| `OutputRouter` | Routes to v2 (assembledTabs) or v1 (triage + extraction) path |
+| `ComposableOutput` | Maps `tab.component` to `COMPONENT_REGISTRY` renderer |
+| `ComposableOutputV1` | Legacy fallback: `resolveTabData()` + `renderInteractive()` |
+| `DisplaySection` | Data-driven section renderer for simple data display |
+| `TabLayout` | Tab shell with navigation, progress, celebrations |
+| `TabCoordinationContext` | Cross-tab state (activeTab, completedTabs) |
+| `CrossTabLink` | Navigates between related tabs |
+| `CollapsibleVideoPlayer` | CSS-hidden YouTube player with `seekTo` support |
+| `RecipePlayer` | Cooking mode: ingredient panel + step-by-step player |
+
+### COMPONENT_REGISTRY (21 Interactive Renderers)
+
+Each tab's `component` field maps to a renderer in `ComposableOutput.tsx`:
+
+| Component Name | Renderer | Description |
+|---------------|----------|-------------|
+| `overview` | OverviewInteractive | Collapsible sections, stat pills, bookmarking |
+| `info_grid` | InfoGridInteractive | Search/filter, click-to-copy, expandable rows, sort |
+| `checklist` | ChecklistInteractive | Checkbox items, serving scaler, grouped items |
+| `step_player` | StepByStepInteractive | Progress tracking, timers, video sync |
+| `comparison` | ComparisonInteractive | Per-row winner highlighting, verdict ScoreRing, pros/cons |
+| `quiz` | QuizInteractive | Streak counter, end summary, retry, celebration |
+| `flash_deck` | FlashDeckInteractive | Keyboard + touch swipe, shuffleable |
+| `scenario` | ScenarioInteractive | Scenario-based learning exercises |
+| `code_explorer` | CodeExplorer | Code snippets with navigate/showAll modes |
+| `spot_explorer` | SpotExplorer | Location spots with sections |
+| `exercise_tracker` | ExerciseInteractive | Sets/reps, warmup/cooldown, difficulty |
+| `verdict` | VerdictInteractive | Sub-category ScoreRings, agree/disagree poll, expandable |
+| `budget` | BudgetInteractive | Editable amounts, SVG donut chart, savings calculator |
+| `timeline` | TimelineExplorer | currentTime highlight, auto-expand, seek |
+| `gallery` | GalleryInteractive | Grid/carousel/hero_stack layouts, seek |
+| `clip_player` | ClipPlayerInteractive | Video clip playback with filters |
+| `lyrics_player` | LyricsPlayerInteractive | Synced lyrics sections with seek |
+| `display_section` | DisplaySection | Generic data-driven fallback renderer |
+
+### Data Flow
+
 ```
+1. SSE triage_complete → tabs skeleton appears
+2. SSE tab_ready[]     → each tab rendered progressively
+3. SSE complete        → celebration, final state
+```
+
+### Tab Coordination
+
+`TabCoordinationContext` manages:
+- Active tab state (persisted in sessionStorage per videoId)
+- Completed tabs tracking
+- Cross-tab navigation via `CrossTabLink`
 
 ---
-
-## Block Layout Engine
-
-Content-aware layout engine that measures block content at runtime and arranges blocks intelligently.
-
-### Architecture
-
-```
-measureBlock() (content-weight.ts)
-  → ContentWeight: micro | compact | standard | expanded
-    → computeAutoFlowLayout() (auto-flow-layout.ts)
-      → FlowRow[] (greedy left-to-right pairing)
-        → FlowRowRenderer (shared component)
-          → CSS container query grids (index.css)
-```
-
-### Content Weight System (`lib/content-weight.ts`)
-
-Blocks are measured at runtime based on their content (string length, item count):
-
-| Weight | Spans | Examples |
-|--------|-------|---------|
-| `micro` | 1 | Single stat, timestamp, short paragraph (<80 chars) |
-| `compact` | 2 | Callout, 1-2 item list, short code (<5 lines) |
-| `standard` | 4 | Normal paragraph, 3-5 item list, code block |
-| `expanded` | 4 (full) | Long paragraph (500+ chars), 6+ item list |
-
-### Auto-Flow Layout (`lib/auto-flow-layout.ts`)
-
-Greedy pairing algorithm that produces 5 row types:
-
-| Row Type | Grid | Rule |
-|----------|------|------|
-| `full` | 1fr | Expanded blocks, or standard without neighbors |
-| `sidebar-main` | 280px + 1fr | Compact + standard adjacent |
-| `equal-2` | 1fr 1fr | Two compact blocks |
-| `equal-3` | 1fr 1fr 1fr | Three consecutive compact blocks |
-| `equal-4` | 1fr 1fr 1fr 1fr | Four+ consecutive micro blocks |
-
-Works without measurements (type-based fallback) for backward compatibility.
-
-### Container Queries (`index.css`)
-
-Grid classes adapt to content area width (not viewport):
-
-- `.content-container` on chapters wrapper
-- `.flow-grid-equal-2`: 2 cols @ 500px+
-- `.flow-grid-equal-3`: 3 cols @ 600px+ (2 @ 400px+)
-- `.flow-grid-equal-4`: 4 cols @ 700px+ (3 @ 600px+, 2 @ 400px+)
-
-### Spacing Matrix (`lib/block-layout.ts`)
-
-Progressive spacing between block categories (prose, list, visual, dense):
-
-| prev \ curr | prose | list | visual | dense |
-|-------------|-------|------|--------|-------|
-| prose | mt-1.5 | mt-2 | mt-3 | mt-2 |
-| list | mt-2 | mt-2 | mt-3 | mt-2 |
-| visual | mt-3 | mt-3 | mt-2.5 | mt-2.5 |
-| dense | mt-2 | mt-2 | mt-2.5 | mt-1.5 |
-
----
-
-# Specialized Block Components (V2.1)
-
-The Content Block Library V2.1 introduces 18 specialized block components organized by persona/use-case. All components follow consistent patterns and are fully tested.
-
-## Component Architecture
-
-```
-src/components/video-detail/blocks/
-├── __tests__/           # Unit tests for all blocks
-├── index.ts             # Barrel export
-├── ListBlock.tsx        # Bullet lists (unordered only)
-├── ExampleBlock.tsx     # Code examples (single dark design)
-├── CalloutBlock.tsx
-├── ChecklistBlock.tsx   # Unified: tool_list + ingredient (checkbox + serving scaler)
-├── StepBlock.tsx        # Unified: step + numbered (simple mode for numbered)
-├── NutritionBlock.tsx
-├── CodeBlock.tsx        # Plain monochrome code display
-├── TerminalBlock.tsx
-├── FileTreeBlock.tsx
-├── ProConBlock.tsx      # Review blocks
-├── RatingBlock.tsx
-├── VerdictBlock.tsx
-├── LocationBlock.tsx    # Travel blocks
-├── ItineraryBlock.tsx
-├── CostBlock.tsx
-├── FitnessBlock.tsx     # Unified: exercise + workout_timer
-├── QuizBlock.tsx        # Education blocks
-└── GuestBlock.tsx       # Interview blocks
-```
-
-## Block Types Reference
-
-| Block Type | Component | Persona | Key Features |
-|------------|-----------|---------|--------------|
-| `ingredient` | ChecklistBlock | Recipe | Serving scaler, checkbox items |
-| `tool_list` | ChecklistBlock | Various | Checkbox items, notes |
-| `step` | StepBlock | Recipe | Progress tracking, timing, video sync |
-| `numbered` | StepBlock (simple) | Various | Non-interactive numbered list |
-| `nutrition` | NutritionBlock | Recipe | Table layout, nutrient display |
-| `code` | CodeBlock | Code | Plain monochrome, copy, line numbers |
-| `terminal` | TerminalBlock | Code | Command display, copy functionality |
-| `file_tree` | FileTreeBlock | Code | Expandable folders, keyboard nav |
-| `pro_con` | ComparisonRenderer | Review | Split layout (via ContentBlockRenderer adaptation) |
-| `rating` | RatingBlock | Review | Stars/progress bar, breakdown |
-| `verdict` | VerdictBlock | Review | Verdict types, best-for lists |
-| `location` | LocationBlock | Travel | Map links, coordinates |
-| `itinerary` | ItineraryBlock | Travel | Day/activity timeline |
-| `cost` | CostBlock | Travel | Currency formatting, totals |
-| `exercise` | FitnessBlock | Fitness | Sets/reps, difficulty badges, demo links |
-| `workout_timer` | FitnessBlock | Fitness | Interactive timer, interval tracking |
-| `quiz` | QuizBlock | Education | Interactive Q&A, explanations |
-| `guest` | GuestBlock | Interview | Social links, avatar, bio |
-
-## Block Visual Design Language
-
-All 27 block components implement a unified "Enterprise Calm" design language. This section documents the visual patterns, premium CSS utilities, and rules for maintaining consistency.
-
-### Premium Utility Matrix
-
-Which blocks use which premium CSS utilities:
-
-| Utility | Blocks Using It |
-|---------|----------------|
-| `stagger-children` | ListBlock, ChecklistBlock, StepBlock, FitnessBlock, ItineraryBlock, CostBlock, TimelineBlock, TranscriptBlock |
-| `hover-lift` | ChecklistBlock (items), FitnessBlock (items), ItineraryBlock (activities), CostBlock (items), LocationBlock (card), GuestBlock (social links) |
-| `hover-scale` | QuizBlock (options), FitnessBlock (timer controls) |
-| `glass-surface` | ChecklistBlock (scaler), FitnessBlock (timer controls), NutritionBlock (header), CostBlock (total) |
-| `text-gradient-primary` | RatingBlock (large scores), StepBlock (numbers) |
-| `text-gradient-warm` | RatingBlock (star scores), NutritionBlock (daily values) |
-| `fade-divider` | ChecklistBlock, FitnessBlock, CostBlock, ItineraryBlock, NutritionBlock, TranscriptBlock, RatingBlock, ListBlock |
-| `block-card` | Interactive blocks via `BlockWrapper variant="card"` (ChecklistBlock, StepBlock, QuizBlock, FitnessBlock, FileTreeBlock, TranscriptBlock, CostBlock, DefinitionBlock) |
-| `block-accent` | CalloutBlock (top fade-edge gradient line via `::before`, no left border) |
-| `block-code-container` | CodeBlock, TerminalBlock |
-| `block-label-minimal` | Transparent blocks with small muted label (RatingBlock, VerdictBlock, LocationBlock, NutritionBlock, GuestBlock, ItineraryBlock, FitnessBlock) |
-| `table-fade-dividers` | TableBlock — gradient fade-edge dividers on inner lines only |
-
-### Dark Mode Glow Usage
-
-| Glow Class | Block | Element |
-|------------|-------|---------|
-| `badge-glow-success` | FitnessBlock | Beginner difficulty badge |
-| `badge-glow-warning` | FitnessBlock | Intermediate difficulty badge |
-| `badge-glow-destructive` | FitnessBlock | Advanced difficulty badge |
-| `amount-badge-glow` | ChecklistBlock | Amount/unit badge |
-| `timer-glow` | FitnessBlock | Timer digit display |
-| `day-number-glow` | ItineraryBlock | Day number circle |
-| `avatar-glow` | GuestBlock | Avatar ring |
-
-### Design Scales
-
-All blocks follow these standardized scales (defined in `index.css` comments):
-
-| Element | Value | Classes |
-|---------|-------|---------|
-| Card padding | 20px | `p-5` |
-| Card inner gap | 12px | `space-y-3` |
-| List item gap | 6px | `space-y-1.5` |
-| Card border radius | 14px | `rounded-xl` |
-| Header text | 12px uppercase | `text-xs font-semibold uppercase tracking-widest` |
-| Body text | 14px relaxed | `text-sm leading-relaxed` |
-| Metadata | 12px muted | `text-xs text-muted-foreground` |
-| Header icon | 16px | `h-4 w-4 shrink-0` |
-| Inline icon | 14px | `h-3.5 w-3.5 shrink-0` |
-
-### Building a New Block (Example)
-
-```tsx
-import { BlockWrapper } from './BlockWrapper';
-import { BLOCK_LABELS } from '@/lib/block-labels';
-import { ListChecks } from 'lucide-react';
-
-export function MyNewBlock({ block }: { block: MyBlockType }) {
-  if (!block.items?.length) return null;
-
-  return (
-    <BlockWrapper
-      blockId={block.blockId}
-      variant="card"
-      label="My Block"
-      headerIcon={<ListChecks className="h-4 w-4" />}
-      headerLabel={BLOCK_LABELS.myBlock}
-    >
-      <div className="space-y-1.5 stagger-children">
-        {block.items.map((item, i) => (
-          <div key={i}>
-            <div className="hover-lift rounded-lg border border-border/40 p-3">
-              <span className="text-sm leading-relaxed">{item.text}</span>
-            </div>
-            {i < block.items.length - 1 && <div className="fade-divider mt-1.5" />}
-          </div>
-        ))}
-      </div>
-    </BlockWrapper>
-  );
-}
-```
-
----
-
-## Recipe Blocks (Phase 2)
-
-### ChecklistBlock (ingredient + tool_list)
-
-Unified component for ingredient lists and tool lists. Dispatches by `block.type`.
-
-```tsx
-<ChecklistBlock
-  block={{
-    type: 'ingredient',
-    blockId: 'block-1',
-    items: [
-      { name: 'flour', amount: '2', unit: 'cups' },
-      { name: 'sugar', amount: '1', unit: 'cup', notes: 'optional' },
-    ],
-    servings: 4,
-  }}
-/>
-```
-
-**Features:**
-- Shared `useCheckedSet` hook for checkbox toggle logic
-- Serving size scaler for ingredients (+/- buttons, proportional scaling)
-- Checkbox for each item
-- Tool list variant shows notes per item
-
-### StepBlock
-
-Step-by-step instructions with progress tracking.
-
-```tsx
-<StepBlock
-  block={{
-    type: 'step',
-    blockId: 'block-1',
-    steps: [
-      { instruction: 'Preheat oven to 350°F', duration: '5 min', timestamp: 120 },
-      { instruction: 'Mix dry ingredients', tips: ['Sift flour first'] },
-    ],
-  }}
-  onPlay={(seconds) => seekToTime(seconds)}
-/>
-```
-
-**Features:**
-- Completion checkboxes
-- Duration display
-- Tips expansion
-- Video timestamp links
-
-### NutritionBlock
-
-Displays nutritional information in table format.
-
-```tsx
-<NutritionBlock
-  block={{
-    type: 'nutrition',
-    blockId: 'block-1',
-    nutrients: [
-      { name: 'Calories', amount: '250', unit: 'kcal' },
-      { name: 'Protein', amount: '12', unit: 'g', percentDailyValue: 24 },
-    ],
-    servingSize: '1 cup (240g)',
-  }}
-/>
-```
-
-## Technical Blocks (Phase 3)
-
-### CodeBlock
-
-Plain monochrome code display with copy functionality.
-
-```tsx
-<CodeBlock
-  block={{
-    type: 'code',
-    blockId: 'block-1',
-    code: 'const greeting = "Hello, World!";',
-    language: 'typescript',
-    filename: 'example.ts',
-    highlightLines: [1],
-  }}
-/>
-```
-
-**Features:**
-- Plain monochrome rendering (no syntax highlighting dependency)
-- Language badge or filename header
-- Copy to clipboard with feedback
-- Line numbers (multi-line only)
-- Line highlighting
-
-### TerminalBlock
-
-Command-line display with copy support.
-
-```tsx
-<TerminalBlock
-  block={{
-    type: 'terminal',
-    blockId: 'block-1',
-    commands: [
-      { command: 'npm install', output: 'added 150 packages' },
-      { command: 'npm run build' },
-    ],
-    shell: 'bash',
-  }}
-/>
-```
-
-### FileTreeBlock
-
-Interactive file/folder tree with keyboard navigation.
-
-```tsx
-<FileTreeBlock
-  block={{
-    type: 'file_tree',
-    blockId: 'block-1',
-    tree: [
-      {
-        type: 'folder',
-        name: 'src',
-        children: [
-          { type: 'file', name: 'index.ts' },
-          { type: 'file', name: 'app.tsx' },
-        ],
-      },
-      { type: 'file', name: 'package.json' },
-    ],
-  }}
-/>
-```
-
-**Features:**
-- Expandable/collapsible folders
-- File type icons
-- Keyboard navigation (Enter, Space)
-- ARIA tree role for accessibility
-
-## Review Blocks (Phase 4)
-
-### ProConBlock
-
-Split pros/cons display.
-
-```tsx
-<ProConBlock
-  block={{
-    type: 'pro_con',
-    blockId: 'block-1',
-    pros: [
-      { text: 'Fast performance', weight: 'strong' },
-      { text: 'Great documentation' },
-    ],
-    cons: [
-      { text: 'Steep learning curve' },
-    ],
-  }}
-/>
-```
-
-### RatingBlock
-
-Rating display with stars or progress bar.
-
-```tsx
-<RatingBlock
-  block={{
-    type: 'rating',
-    blockId: 'block-1',
-    score: 4.5,
-    maxScore: 5,
-    label: 'Overall Rating',
-    breakdown: [
-      { category: 'Performance', score: 5 },
-      { category: 'Design', score: 4 },
-    ],
-  }}
-/>
-```
-
-**Features:**
-- Star display for 5-point scales
-- Progress bar for larger scales (10, 100)
-- Half-star support
-- Category breakdown
-- Score clamping
-
-### VerdictBlock
-
-Final verdict with recommendations.
-
-```tsx
-<VerdictBlock
-  block={{
-    type: 'verdict',
-    blockId: 'block-1',
-    verdict: 'Highly Recommended',
-    verdictType: 'positive',
-    summary: 'Excellent choice for most users.',
-    bestFor: ['Power users', 'Developers'],
-    notFor: ['Beginners'],
-  }}
-/>
-```
-
-## Travel Blocks (Phase 5)
-
-### LocationBlock
-
-Location display with map links.
-
-```tsx
-<LocationBlock
-  block={{
-    type: 'location',
-    blockId: 'block-1',
-    name: 'Eiffel Tower',
-    address: 'Champ de Mars, Paris',
-    coordinates: { lat: 48.8584, lng: 2.2945 },
-  }}
-/>
-```
-
-### ItineraryBlock
-
-Day-by-day travel itinerary.
-
-```tsx
-<ItineraryBlock
-  block={{
-    type: 'itinerary',
-    blockId: 'block-1',
-    days: [
-      {
-        day: 1,
-        title: 'Arrival Day',
-        activities: [
-          { time: '10:00', activity: 'Airport pickup', location: 'CDG Airport' },
-          { time: '14:00', activity: 'Hotel check-in' },
-        ],
-      },
-    ],
-  }}
-/>
-```
-
-### CostBlock
-
-Cost breakdown with currency formatting.
-
-```tsx
-<CostBlock
-  block={{
-    type: 'cost',
-    blockId: 'block-1',
-    currency: 'USD',
-    items: [
-      { name: 'Flight', amount: 450 },
-      { name: 'Hotel', amount: 800, perUnit: 'night', quantity: 5 },
-    ],
-    total: 1250,
-  }}
-/>
-```
-
-## Fitness Blocks
-
-### FitnessBlock (exercise + workout_timer)
-
-Unified component for exercises and workout timers. Dispatches by `block.type`.
-
-```tsx
-// Exercise mode
-<FitnessBlock
-  block={{
-    type: 'exercise',
-    blockId: 'block-1',
-    exercises: [
-      { name: 'Push-ups', sets: 3, reps: '10', difficulty: 'beginner' },
-      { name: 'Plank', duration: '60s', timestamp: 120 },
-    ],
-  }}
-  onPlay={(seconds) => seekToTime(seconds)}
-/>
-
-// Timer mode
-<FitnessBlock
-  block={{
-    type: 'workout_timer',
-    blockId: 'block-1',
-    intervals: [
-      { type: 'work', name: 'High knees', duration: 30 },
-      { type: 'rest', name: 'Rest', duration: 10 },
-    ],
-    rounds: 3,
-  }}
-/>
-```
-
-**Exercise features:** Sets/reps, difficulty badges, demo links, rest periods
-**Timer features:** Start/Pause/Reset, visual countdown, interval progress, round counter, completion state
-
-## Education Blocks
-
-### QuizBlock
-
-Interactive quiz with answer reveal.
-
-```tsx
-<QuizBlock
-  block={{
-    type: 'quiz',
-    blockId: 'block-1',
-    questions: [
-      {
-        question: 'What is 2 + 2?',
-        options: ['3', '4', '5'],
-        correctIndex: 1,
-        explanation: 'Basic arithmetic.',
-      },
-    ],
-  }}
-/>
-```
-
-**Features:**
-- Answer selection with feedback
-- Correct/incorrect styling
-- Show/hide answer buttons
-- Explanation display
-- Disabled state after selection
-
-## Interview Blocks (Phase 7)
-
-### GuestBlock
-
-Guest/interviewee profile display.
-
-```tsx
-<GuestBlock
-  block={{
-    type: 'guest',
-    blockId: 'block-1',
-    name: 'Jane Doe',
-    title: 'CEO',
-    company: 'Tech Corp',
-    bio: 'Industry veteran with 20 years experience.',
-    avatarUrl: 'https://example.com/avatar.jpg',
-    socialLinks: [
-      { platform: 'twitter', url: 'https://twitter.com/janedoe' },
-      { platform: 'linkedin', url: 'https://linkedin.com/in/janedoe' },
-    ],
-  }}
-/>
-```
 
 ## RAG Components
 
@@ -1462,57 +803,6 @@ Chat interface for RAG-powered conversations.
   initialMessages={[...]}
   onSendMessage={async (message) => {...}}
 />
-```
-
-## Shared Patterns
-
-### Empty State Handling
-
-All blocks return `null` when their primary data is empty:
-
-```tsx
-if (!block.exercises?.length) return null;
-if (!block.tree?.length) return null;
-```
-
-### Accessibility
-
-All blocks follow accessibility best practices:
-- `aria-hidden="true"` on decorative icons
-- Proper `role` attributes (tree, treeitem, button)
-- `aria-expanded` for expandable sections
-- Keyboard navigation support
-- Focus-visible styling
-
-### BLOCK_LABELS
-
-Centralized i18n-ready labels in `src/lib/block-labels.ts`:
-
-```typescript
-import { BLOCK_LABELS } from '@/lib/block-labels';
-
-// Usage
-<span>{BLOCK_LABELS.sets}</span>  // "Sets"
-<span>{BLOCK_LABELS.copied}</span> // "Copied!"
-```
-
-### Testing Pattern
-
-All block tests follow consistent structure:
-
-```typescript
-const createMockBlock = (overrides = {}): BlockType => ({
-  type: 'block_type',
-  blockId: 'block-1',
-  // ... default values
-  ...overrides,
-});
-
-describe('BlockComponent', () => {
-  describe('rendering', () => {...});
-  describe('interactions', () => {...});
-  describe('accessibility', () => {...});
-});
 ```
 
 ---
@@ -1665,7 +955,9 @@ function AppRoutes() {
 
 ```typescript
 interface ProcessingStreamState {
-  phase: StreamPhase;  // "connecting" | "metadata" | "transcript" | "sections" | "done" | "error"
+  phase: StreamPhase;
+  // StreamPhase = "idle" | "connecting" | "metadata" | "triage" | "extraction"
+  //             | "enrichment" | "synthesis" | "done" | "cancelled" | "error"
   metadata: {
     title?: string;
     channel?: string;
@@ -1746,56 +1038,33 @@ const DevToolPanel = import.meta.env.DEV
   : null;
 ```
 
-## Dev Pages
+## Design System Page (`/dev/design-system`)
 
-Two dev-only pages provide component documentation and live previews.
-
-### Design System Page (`/dev/design-system`)
-
-Living style guide for all design tokens and components. All 32 block types are showcased with premium polish applied (stagger animations, hover-lift, glass-surface, dark mode glow effects).
+Living style guide for all design tokens and components.
 
 | Section | Contents |
 |---------|----------|
 | Color Palette | Semantic colors (background, foreground, primary, etc.) with swatches |
 | Typography | Text scale (xs-4xl) and font weights |
 | Spacing Scale | Tailwind spacing tokens (1-12) with visual boxes |
-| Status Indicators | Pending, processing, completed, failed states |
-| Category Accents | All 10 category accent colors |
-| Content Blocks | All 32 block types with live previews, JSON toggle, and premium polish |
-| Category Views | All 10 view components (CodeView, RecipeView, etc.) |
-
-**Verification tips:**
-- Toggle dark mode to verify glow effects on badges, timers, avatars, and day numbers
-- Stagger animations fire on mount — refresh the page to see entrance animations
-- Hover over ingredient items, exercise cards, itinerary activities to verify `hover-lift`
-
-### Video Examples Page (`/dev/video-examples`)
-
-Complete video pages with realistic mock data for all 10 categories.
-
-| Category | Mock Video |
-|----------|------------|
-| cooking | Gordon Ramsay's Perfect Carbonara |
-| coding | React 19 Hooks Complete Tutorial |
-| fitness | 30-Min Full Body HIIT Workout |
-| travel | 7 Days in Japan Complete Guide |
-| education | Quantum Computing Explained |
-| podcast | Lex Fridman #400: Naval Ravikant |
-| reviews | iPhone 15 Pro Max 6-Month Review |
-| gaming | Elden Ring Beginner's Walkthrough |
-| diy | Build a Standing Desk from Scratch |
-| standard | Understanding the Stock Market 2024 |
+| Cards Showcase | GlassCard, ExpandableCard, HeroCard, ImageCard, VideoHero |
+| Interactive Block Showcase | All interactive renderers with live previews |
+| UI Showcase | Buttons, badges, dialogs, toasts, form elements |
+| VIE Library Showcase | All Layer 2 components: data, content, navigation, feedback, media |
 
 ### Dev Page Files
 
 | File | Purpose |
 |------|---------|
 | `pages/dev/DesignSystemPage.tsx` | Design system page |
-| `pages/dev/VideoExamplesPage.tsx` | Video examples page |
-| `components/dev/design-system/*.tsx` | Token showcase components |
-| `components/dev/video-examples/*.tsx` | Video example components |
-| `lib/dev/mock-blocks.ts` | Factory functions for all 31 block types |
-| `lib/dev/mock-videos.ts` | Mock video data for all 10 categories |
+| `components/dev/design-system/ColorPalette.tsx` | Color token showcase |
+| `components/dev/design-system/Typography.tsx` | Typography showcase |
+| `components/dev/design-system/SpacingScale.tsx` | Spacing showcase |
+| `components/dev/design-system/CardsShowcase.tsx` | Card component showcase |
+| `components/dev/design-system/InteractiveBlockShowcase.tsx` | Interactive renderer showcase |
+| `components/dev/design-system/UIShowcase.tsx` | UI primitives showcase |
+| `components/dev/design-system/VIELibraryShowcase.tsx` | VIE component library showcase |
+| `lib/dev/mock-interactive-blocks.ts` | Mock data for interactive components |
 
 ### Production Safety
 
@@ -1804,12 +1073,6 @@ All dev code has production guards:
 if (!import.meta.env.DEV) {
   throw new Error('This module should not be imported in production');
 }
-```
-
-Dev pages are verified to be tree-shaken via:
-```bash
-grep -r "DesignSystemPage" dist/  # Returns nothing
-grep -r "mock-videos" dist/        # Returns nothing
 ```
 
 ---
@@ -1826,7 +1089,3 @@ grep -r "mock-videos" dist/        # Returns nothing
 | `transition-all` | Be specific: `transition-colors` |
 | Dynamic class construction | Use complete class strings |
 | Missing focus states | Always include `focus-visible:ring` |
-| Missing `stagger-children` | Add to list containers with >3 items |
-| Muted callout icons | Match icon color to callout `accentColor` |
-| Missing dark mode glow | Add glow utility class to colored elements (badges, numbers, avatars) |
-| No `hover-lift` on sub-cards | Add to interactive cards-within-cards |
