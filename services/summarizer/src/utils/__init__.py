@@ -8,7 +8,7 @@ from src.utils.content_extractor import (
     extract_summary_from_content,
     extract_bullets_from_content,
 )
-from src.utils.json_parsing import parse_json_response
+from src.utils.json_parsing import parse_json_response, strip_markdown_fences
 from src.utils.constants import YOUTUBE_ID_RE
 
 __all__ = [
@@ -17,5 +17,6 @@ __all__ = [
     "extract_summary_from_content",
     "extract_bullets_from_content",
     "parse_json_response",
+    "strip_markdown_fences",
     "YOUTUBE_ID_RE",
 ]

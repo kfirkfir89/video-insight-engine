@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated
@@ -18,7 +19,10 @@ from src.dependencies import get_video_repository, get_mongo_client
 from src.repositories.mongodb_repository import MongoDBVideoRepository
 from src.routes.stream import router as stream_router
 from src.routes.override import router as override_router
+from src.routes.frames import router as frames_router
 from src.services.media.frame_extractor import check_dependencies as check_frame_deps
+from src.utils.worker_pool import shutdown_pool
+from src.services.cache.response_cache import response_cache
 
 # Configure structured logging (JSON in production, console in development)
 configure_structlog(json_format=settings.log_format == "json")
@@ -28,8 +32,33 @@ _usage_callback = None
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application lifespan: register LLM usage tracking callback."""
+    """Application lifespan: register LLM usage tracking callback and preload models."""
     global _usage_callback
+
+    # Validate secrets before anything else
+    from src.config import validate_secrets
+    validate_secrets()
+
+    # Preload spaCy model to avoid blocking the event loop on first request.
+    # Fail hard if model missing — pipeline will crash on first video otherwise.
+    try:
+        from src.services.transcript.cleaner import _get_nlp
+        await asyncio.to_thread(_get_nlp)
+        logger.info("spacy_model_preloaded")
+    except Exception as e:
+        logger.error("spacy_preload_failed — pipeline will not function without spaCy model", error=str(e))
+        raise RuntimeError(f"Cannot start without spaCy model: {e}") from e
+
+    # Preload SentenceTransformer model at startup (avoids cold-start latency
+    # and repeated model load logs on first embedding request per worker).
+    try:
+        from src.services.vector.embedding import _get_model
+        await asyncio.to_thread(_get_model)
+        logger.info("sentence_transformer_model_preloaded")
+    except Exception as e:
+        # Non-fatal: embedding is used for RAG, not critical pipeline path
+        logger.warning("sentence_transformer_preload_failed", error=str(e))
+
     try:
         import litellm
         from llm_common import MongoDBUsageCallback
@@ -46,6 +75,18 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
     yield
 
+    # Shutdown worker pool
+    try:
+        shutdown_pool()
+    except Exception as e:
+        logger.warning("worker_pool_shutdown_failed", error=str(e))
+
+    # Close Redis connection pool
+    try:
+        await response_cache.close()
+    except Exception as e:
+        logger.warning("redis_shutdown_failed", error=str(e))
+
     if _usage_callback:
         try:
             _usage_callback.shutdown_sync()
@@ -60,6 +101,7 @@ add_request_context_middleware(app)
 # Register routers
 app.include_router(stream_router)
 app.include_router(override_router)
+app.include_router(frames_router)
 
 
 @app.get("/health")

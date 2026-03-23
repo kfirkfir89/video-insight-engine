@@ -2,10 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies (ffmpeg for Whisper, nodejs for yt-dlp JS challenges)
+# Install system dependencies (ffmpeg for Whisper, nodejs for yt-dlp JS challenges, tesseract for OCR)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     nodejs \
+    tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 
 # Install shared llm-common package
@@ -15,6 +16,12 @@ RUN pip install --no-cache-dir /tmp/llm-common/ && rm -rf /tmp/llm-common/
 # Install Python dependencies
 COPY services/summarizer/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Download spaCy model for sentence segmentation
+RUN python -m spacy download en_core_web_sm
+
+# Create frame storage directory
+RUN mkdir -p storage/frames
 
 # Copy source
 COPY services/summarizer/src/ ./src/

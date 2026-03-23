@@ -1,7 +1,8 @@
 """MongoDB implementation of video repository."""
+from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 from bson import ObjectId
 from pymongo.database import Database
 
@@ -20,7 +21,7 @@ class MongoDBVideoRepository:
         self._db = database
         self._collection = database.videoSummaryCache
 
-    def get_video_summary(self, video_summary_id: str) -> Optional[dict]:
+    def get_video_summary(self, video_summary_id: str) -> dict | None:
         """Get video summary cache entry."""
         return self._collection.find_one({"_id": ObjectId(video_summary_id)})
 
@@ -28,8 +29,8 @@ class MongoDBVideoRepository:
         self,
         video_summary_id: str,
         status: ProcessingStatus,
-        error_message: Optional[str] = None,
-        error_code: Optional[ErrorCode] = None,
+        error_message: str | None = None,
+        error_code: ErrorCode | None = None,
     ) -> None:
         """Update processing status."""
         update: dict[str, Any] = {
@@ -47,132 +48,29 @@ class MongoDBVideoRepository:
             {"$set": update}
         )
 
-    def save_result(self, video_summary_id: str, result: dict) -> None:
-        """Save processing result to cache (legacy chapter-based pipeline).
-
-        Deprecated: New pipeline uses save_structured_result() instead.
-        Kept for backward compatibility with any in-flight legacy requests.
-        """
-        update_data: dict[str, Any] = {
-            "title": result["title"],
-            "channel": result.get("channel"),
-            "duration": result.get("duration"),
-            "thumbnailUrl": result.get("thumbnail_url"),
-            "transcript": result["transcript"],
-            "transcriptType": result["transcript_type"],
-            # Normalized transcript segments (Phase 2 - transcript system)
-            "transcriptSegments": [
-                {"text": seg["text"], "startMs": seg["startMs"], "endMs": seg["endMs"]}
-                for seg in result.get("transcript_segments", [])
-            ] if result.get("transcript_segments") else None,
-            "transcriptSource": result.get("transcript_source"),
-            "summary": {
-                "tldr": result["summary"]["tldr"],
-                "keyTakeaways": result["summary"]["key_takeaways"],
-                "chapters": [
-                    {
-                        "id": s["id"],
-                        "timestamp": s["timestamp"],
-                        "startSeconds": s.get("startSeconds") or s.get("start_seconds", 0),
-                        "endSeconds": s.get("endSeconds") or s.get("end_seconds", 0),
-                        "title": s["title"],
-                        "originalTitle": s.get("originalTitle") or s.get("original_title"),
-                        "generatedTitle": s.get("generatedTitle") or s.get("generated_title"),
-                        "isCreatorChapter": s.get("isCreatorChapter") or s.get("is_creator_chapter"),
-                        "content": s.get("content"),  # Dynamic content blocks - source of truth
-                        "view": s.get("view"),
-                        # Sliced transcript for this chapter (RAG/display)
-                        "transcript": s.get("transcript"),
-                    }
-                    for s in result["summary"]["chapters"]
-                ],
-                "concepts": [
-                    {
-                        "id": c["id"],
-                        "name": c["name"],
-                        "definition": c.get("definition"),
-                        "timestamp": c.get("timestamp"),
-                        "chapterIndex": c.get("chapter_index"),
-                        "aliases": c.get("aliases", []),
-                    }
-                    for c in result["summary"]["concepts"]
-                ],
-                "masterSummary": result["summary"].get("master_summary"),
-            },
-            "status": ProcessingStatus.COMPLETED.value,
-            "processedAt": _utc_now(),
-            "processingTimeMs": result.get("processing_time_ms"),
-            "tokenUsage": result.get("token_usage"),
-            "updatedAt": _utc_now(),
-        }
-
-        # Add chapters if present (progressive summarization)
-        if "chapters" in result:
-            update_data["chapters"] = [
-                {
-                    "startSeconds": ch["startSeconds"],
-                    "endSeconds": ch["endSeconds"],
-                    "title": ch["title"],
-                    "isCreatorChapter": ch.get("isCreatorChapter", False),
-                }
-                for ch in result["chapters"]
-            ]
-
-        # Add chapter source if present
-        if "chapter_source" in result:
-            update_data["chapterSource"] = result["chapter_source"]
-
-        # Add description analysis if present (progressive summarization)
-        if "description_analysis" in result:
-            update_data["descriptionAnalysis"] = result["description_analysis"]
-
-        # Add video context if present (persona-aware summarization)
-        if "context" in result and result["context"]:
-            update_data["context"] = result["context"]
-
-        # Add output type at top level for querying/filtering
-        if "output_type" in result:
-            update_data["outputType"] = result["output_type"]
-
-        # Add total tokens (sum of prompt + completion) for usage tracking
-        token_usage = result.get("token_usage", {})
-        total_tokens = token_usage.get("total_tokens", 0) or (
-            token_usage.get("prompt_tokens", 0) + token_usage.get("completion_tokens", 0)
-        )
-        if total_tokens:
-            update_data["totalTokens"] = total_tokens
-
-        # Add consolidated cross-chapter data if present
-        if "consolidated" in result and result["consolidated"]:
-            update_data["consolidated"] = result["consolidated"]
-
-        # Add S3 reference for raw transcript (Phase 3 - transcript storage)
-        if "raw_transcript_ref" in result:
-            update_data["rawTranscriptRef"] = result["raw_transcript_ref"]
-
-        # Add generation metadata (Phase 3 - for regeneration tracking)
-        if "generation" in result:
-            update_data["generation"] = {
-                "model": result["generation"]["model"],
-                "promptVersion": result["generation"]["prompt_version"],
-                "generatedAt": result["generation"]["generated_at"],
-            }
-
-        self._collection.update_one(
-            {"_id": ObjectId(video_summary_id)},
-            {"$set": update_data}
-        )
+    # Allowlist of fields the pipeline may write via save_structured_result.
+    # New pipeline uses meta+tabs as the canonical shape.
+    _ALLOWED_RESULT_KEYS = frozenset({
+        "meta", "tabs", "triage", "synthesis", "enrichment",
+        "assembledMeta", "assembledTabs", "pipeline",
+        "status", "title", "creator", "duration", "thumbnailUrl",
+        "youtubeId", "rawTranscriptRef", "generation",
+        "descriptionAnalysis", "channel", "processedAt", "processingTimeMs",
+        # Backward compat: older pipeline shapes / Redis-cached docs may include these
+        "output", "summary", "outputType", "context", "intent",
+    })
 
     def save_structured_result(self, video_summary_id: str, result: dict) -> None:
-        """Save structured pipeline result (intent-driven pipeline).
+        """Save structured pipeline result (triage-driven pipeline).
 
-        Stores the result dict directly — the new pipeline builds the exact
-        MongoDB document shape in stream_summarization().
+        Stores allowlisted fields from result — prevents injection of
+        arbitrary fields like _id or userId.
         """
-        update_data = {**result, "updatedAt": _utc_now()}
+        filtered = {k: v for k, v in result.items() if k in self._ALLOWED_RESULT_KEYS}
+        filtered["updatedAt"] = _utc_now()
         self._collection.update_one(
             {"_id": ObjectId(video_summary_id)},
-            {"$set": update_data}
+            {"$set": filtered}
         )
 
     def increment_retry(self, video_summary_id: str) -> int:
@@ -187,7 +85,7 @@ class MongoDBVideoRepository:
     def set_provider_config(
         self,
         video_summary_id: str,
-        providers: Optional[dict[str, Any]] = None,
+        providers: dict[str, Any] | None = None,
     ) -> None:
         """Store provider config for dev tools override."""
         if providers:

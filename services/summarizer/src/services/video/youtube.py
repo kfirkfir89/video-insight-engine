@@ -18,12 +18,10 @@ import asyncio
 import json
 import logging
 import re
-import time
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Protocol, TypedDict, runtime_checkable
-from urllib.parse import quote
+from typing import Any, TypedDict
 
 import requests
 import tenacity
@@ -45,39 +43,9 @@ VALID_CATEGORIES: frozenset[str] = frozenset([
 ])
 
 
-@runtime_checkable
-class FastLLMProvider(Protocol):
-    """Protocol for LLM providers that support fast classification.
-
-    Used for type-safe LLM provider injection in classify_category_with_llm.
-    """
-
-    async def complete_fast(
-        self,
-        prompt: str,
-        max_tokens: int = 50,
-        timeout: float = 5.0,
-    ) -> str:
-        """Generate quick completion using fast model."""
-        ...
-
-
 # -----------------------------------------------------------------------------
 # Video Context Extraction
 # -----------------------------------------------------------------------------
-
-class PersonaConfig(TypedDict):
-    """Configuration for a single persona detection rule."""
-    keywords: list[str]
-    categories: list[str]
-
-
-class PersonaRules(TypedDict):
-    """Structure of persona_rules.json."""
-    personas: dict[str, PersonaConfig]
-    default_persona: str
-
-
 class CategoryKeywords(TypedDict):
     """Keywords config for category detection."""
     primary: list[str]
@@ -110,21 +78,6 @@ class CategoryRules(TypedDict):
     detection_config: DetectionConfig
     categories: dict[str, CategoryConfig]
     default_category: str
-
-
-@lru_cache(maxsize=1)
-def _load_persona_rules() -> PersonaRules:
-    """Load persona detection rules from JSON file.
-
-    Returns:
-        Dict with 'personas' containing keyword/category rules,
-        and 'default_persona' for fallback.
-
-    Note:
-        Results are cached to avoid repeated disk reads.
-    """
-    path = PROMPTS_DIR / "detection" / "persona_rules.json"
-    return json.loads(path.read_text())
 
 
 @lru_cache(maxsize=1)
@@ -183,7 +136,6 @@ class VideoContext:
     """
     youtube_category: str | None
     category: str  # "cooking", "coding", "travel", etc.
-    persona: str  # "code", "recipe", "standard", etc.
     tags: list[str]
     display_tags: list[str]
     category_confidence: float = 1.0
@@ -312,149 +264,6 @@ def _detect_category(
     return best_category, best_score
 
 
-# Single source of truth: category → persona mapping.
-# Used by select_persona() and imported by llm.py for the inverse mapping.
-CATEGORY_TO_PERSONA: dict[str, str] = {
-    'cooking': 'recipe',
-    'coding': 'code',
-    'podcast': 'interview',
-    'reviews': 'review',
-    'fitness': 'fitness',
-    'travel': 'travel',
-    'education': 'education',
-    'gaming': 'standard',  # No gaming-specific persona yet
-    'diy': 'standard',     # No DIY-specific persona yet
-    'music': 'music',
-}
-
-
-def select_persona(category: str) -> str:
-    """Select LLM persona based on detected category.
-
-    The persona determines which prompt templates and examples are used
-    for summarization. Category is the user-facing classification,
-    persona is the internal LLM configuration.
-
-    Args:
-        category: Detected video category ('cooking', 'coding', etc.)
-
-    Returns:
-        Persona string for LLM prompts ('recipe', 'code', 'standard', etc.)
-    """
-    return CATEGORY_TO_PERSONA.get(category, 'standard')
-
-
-async def classify_category_with_llm(
-    title: str,
-    channel: str,
-    tags: list[str],
-    description: str,
-    llm_provider: FastLLMProvider,
-) -> str:
-    """Use LLM fast model to classify video category when rule-based scoring is uncertain.
-
-    Called only when rule-based confidence < threshold (0.4).
-    Uses fast/cheap model (e.g., Haiku) with ~1-2s latency.
-
-    Args:
-        title: Video title
-        channel: Channel name
-        tags: Video tags
-        description: Video description (truncated)
-        llm_provider: LLMProvider instance for making the call
-
-    Returns:
-        Detected category ('cooking', 'coding', 'travel', etc.)
-        Falls back to 'standard' on error or invalid response.
-    """
-    # Build concise classification prompt
-    tags_str = ", ".join(tags[:15]) if tags else "none"
-    desc_truncated = (description[:500] + "...") if len(description) > 500 else description
-
-    prompt = f"""Classify this YouTube video into exactly ONE category.
-
-Title: {title[:200]}
-Channel: {channel[:100] if channel else 'Unknown'}
-Tags: {tags_str}
-Description: {desc_truncated}
-
-Categories (pick ONE):
-- cooking: Recipes, cooking tutorials, food preparation
-- coding: Programming tutorials, software development
-- fitness: Workouts, exercise routines, gym content
-- travel: Travel vlogs, destination guides
-- education: Educational content, lectures, explainers
-- podcast: Interviews, conversations, podcasts
-- reviews: Product reviews, unboxing, comparisons
-- gaming: Gameplay, walkthroughs, gaming content
-- diy: DIY projects, crafts, building
-- music: Music videos, songs, albums, concerts, live performances
-- standard: None of the above
-
-Respond with ONLY the category name, nothing else."""
-
-    try:
-        response = await llm_provider.complete_fast(prompt, max_tokens=20, timeout=5.0)
-        category = response.strip().lower()
-
-        # Validate response
-        if category in VALID_CATEGORIES:
-            logger.info("LLM classified category: %s", category)
-            return category
-
-        logger.warning("LLM returned invalid category '%s', falling back to standard", category)
-        return "standard"
-
-    except Exception as e:
-        logger.warning("LLM category classification failed: %s, falling back to standard", e)
-        return "standard"
-
-
-def get_llm_fallback_threshold() -> float:
-    """Get the confidence threshold for LLM fallback.
-
-    Returns:
-        Threshold value (default 0.4). If category detection confidence
-        is below this, LLM fallback should be triggered.
-    """
-    rules = _load_category_rules()
-    return rules.get("detection_config", {}).get("llm_fallback_threshold", 0.4)
-
-
-def _determine_persona(
-    category: str | None,
-    tags: list[str],
-    hashtags: list[str],
-) -> str:
-    """DEPRECATED: Use _detect_category() + select_persona() instead.
-
-    This function uses AND logic which fails when YouTube category
-    doesn't match even if keywords are strong.
-
-    Kept for backward compatibility with tests.
-    TODO: Remove this function and migrate tests to select_persona().
-    """
-    rules = _load_persona_rules()
-
-    # Combine tags and hashtags for keyword matching
-    all_terms = set(t.lower() for t in tags) | set(hashtags)
-
-    # Check each persona defined in rules
-    for persona_name, config in rules.get("personas", {}).items():
-        keywords = set(config.get("keywords", []))
-        categories = set(config.get("categories", []))
-
-        # Must be in matching category AND have matching keywords
-        is_matching_category = category in categories if category else False
-        has_matching_keywords = bool(all_terms & keywords)
-
-        if is_matching_category and has_matching_keywords:
-            return persona_name
-
-    # Default to standard persona
-    return rules.get("default_persona", "standard")
-
-
 def _build_display_tags(
     tags: list[str],
     hashtags: list[str],
@@ -544,21 +353,17 @@ def extract_video_context(
         title=title,
     )
 
-    # Select persona based on detected category (NEW)
-    persona = select_persona(category)
-
     # Build display tags
     display_tags = _build_display_tags(tags, hashtags)
 
     logger.info(
-        "Video context: category=%s (confidence=%.2f), persona=%s, youtube_category=%s, tags=%d, hashtags=%d",
-        category, confidence, persona, youtube_category, len(tags), len(hashtags),
+        "Video context: category=%s (confidence=%.2f), youtube_category=%s, tags=%d, hashtags=%d",
+        category, confidence, youtube_category, len(tags), len(hashtags),
     )
 
     return VideoContext(
         youtube_category=youtube_category,
         category=category,
-        persona=persona,
         tags=tags,
         display_tags=display_tags,
         category_confidence=confidence,
@@ -683,69 +488,54 @@ def _parse_chapters(info: dict[str, Any]) -> list[Chapter]:
 
     return chapters
 
-def _fetch_subtitles_from_url(url: str) -> list[SubtitleSegment]:
+@tenacity.retry(
+    stop=tenacity.stop_after_attempt(2),
+    wait=tenacity.wait_fixed(2),
+    retry=tenacity.retry_if_exception_type(requests.exceptions.HTTPError),
+    before_sleep=lambda retry_state: logger.warning(
+        "Subtitle fetch retry %d after error: %s", retry_state.attempt_number, retry_state.outcome.exception()
+    ),
+)
+def _fetch_subtitle_data_sync(url: str, max_bytes: int = 10 * 1024 * 1024) -> dict:
+    """Fetch subtitle JSON data from URL with retry on HTTP errors.
+
+    SYNC — must be called from asyncio.to_thread (via _extract_video_data_sync).
+
+    Args:
+        url: Subtitle URL to fetch.
+        max_bytes: Maximum response body size (default 10 MB).
+    """
+    response = requests.get(
+        url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=30, stream=True,
+    )
+    response.raise_for_status()
+    # Read with size limit to prevent memory exhaustion from oversized responses
+    chunks: list[bytes] = []
+    total = 0
+    for chunk in response.iter_content(chunk_size=65536):
+        total += len(chunk)
+        if total > max_bytes:
+            response.close()
+            raise ValueError(f"Subtitle response exceeds {max_bytes} bytes limit")
+        chunks.append(chunk)
+    import json as _json
+    return _json.loads(b"".join(chunks))
+
+
+def _fetch_subtitles_from_url_sync(url: str) -> list[SubtitleSegment]:
     """Fetch and parse subtitles from a URL (json3 format).
 
-    Tries direct connection first, then proxy on 429.
+    SYNC — must be called from asyncio.to_thread (via _extract_video_data_sync).
     """
     segments: list[SubtitleSegment] = []
 
-    # Build list of proxy configs to try: direct first, then proxy
-    proxy_configs: list[dict[str, str] | None] = [None]
-    if settings.WEBSHARE_PROXY_USERNAME and settings.WEBSHARE_PROXY_PASSWORD:
-        user = quote(settings.WEBSHARE_PROXY_USERNAME, safe="")
-        pwd = quote(settings.WEBSHARE_PROXY_PASSWORD, safe="")
-        proxy_url = f"http://{user}-rotate:{pwd}@p.webshare.io:80"
-        proxy_configs.append({'http': proxy_url, 'https': proxy_url})
-
-    # Strategy: try direct, on 429 wait 2s and switch to proxy immediately
-    # NOTE: Uses synchronous requests.get + time.sleep because this function is
-    # always called from _extract_video_data_sync via asyncio.to_thread.
-    # Do NOT call this function directly from an async context.
     data = None
     try:
-        response = requests.get(
-            url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=30,
-        )
-        response.raise_for_status()
-        data = response.json()
+        data = _fetch_subtitle_data_sync(url)
     except requests.exceptions.HTTPError as e:
-        if e.response is not None and e.response.status_code == 429:
-            if len(proxy_configs) > 1:
-                # Proxy available — backoff then fall through to proxy section below
-                logger.warning("Subtitle fetch 429 (direct), switching to proxy")
-                time.sleep(2)
-            else:
-                # No proxy available — backoff and retry direct once
-                logger.warning("Subtitle fetch 429 (direct), retrying after 2s backoff")
-                time.sleep(2)
-                try:
-                    response = requests.get(
-                        url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=30,
-                    )
-                    response.raise_for_status()
-                    data = response.json()
-                except Exception as retry_err:
-                    logger.warning("Subtitle fetch retry failed: %s", retry_err)
-        else:
-            logger.warning("Subtitle fetch HTTP error (direct): %s", e)
+        logger.warning("Subtitle fetch HTTP error: %s", e)
     except Exception as e:
-        logger.warning("Subtitle fetch error (direct): %s", e)
-
-    # Proxy attempt if direct failed
-    if not data and len(proxy_configs) > 1:
-        try:
-            response = requests.get(
-                url, headers={'User-Agent': 'Mozilla/5.0'},
-                proxies=proxy_configs[1], timeout=30,
-            )
-            response.raise_for_status()
-            data = response.json()
-        except requests.exceptions.HTTPError as e:
-            status = e.response.status_code if e.response is not None else "unknown"
-            logger.warning("Subtitle fetch HTTP %s (proxy): %s", status, e)
-        except Exception as e:
-            logger.warning("Subtitle fetch error (proxy): %s", e)
+        logger.warning("Subtitle fetch error: %s", e)
 
     if not data:
         return segments
@@ -833,33 +623,20 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
     """
     url = f"https://www.youtube.com/watch?v={video_id}"
 
-    # Issue #15: Try direct connection first with retry, fallback to proxy if needed
-    info = None
-    last_error = None
-
-    for use_proxy in [False, True]:
-        opts = _build_yt_dlp_opts(use_proxy=use_proxy)
-        try:
-            info = _extract_with_retry(url, opts)
-            if info:
-                if use_proxy:
-                    logger.info("Video %s: extracted via proxy", video_id)
-                break
-        except Exception as e:
-            last_error = e
-            error_msg = str(e).lower()
-            # If already using proxy or error is not proxy-related, continue to next attempt
-            if use_proxy or 'proxy' not in error_msg:
-                continue
-            # Error might be proxy-related, will retry with proxy on next iteration
-            logger.debug("Direct connection failed, trying proxy: %s", e)
+    # yt-dlp works directly without proxy — no need for proxy fallback
+    opts = _build_yt_dlp_opts(use_proxy=False)
+    try:
+        info = _extract_with_retry(url, opts)
+    except Exception as e:
+        raise TranscriptError(
+            f"Failed to extract video information: {e}",
+            ErrorCode.VIDEO_UNAVAILABLE,
+        ) from e
 
     if not info:
-        if last_error:
-            raise last_error
         raise TranscriptError(
             "Failed to extract video information",
-            ErrorCode.VIDEO_UNAVAILABLE
+            ErrorCode.VIDEO_UNAVAILABLE,
         )
 
     # Check for live streams
@@ -915,7 +692,7 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
             break
 
     if subtitle_url:
-        subtitles = _fetch_subtitles_from_url(subtitle_url)
+        subtitles = _fetch_subtitles_from_url_sync(subtitle_url)
         # Clean subtitle text
         for seg in subtitles:
             seg.text = _clean_subtitle_text(seg.text)
@@ -925,7 +702,7 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
 
     # Phase 1: Extract video context (category, persona, tags)
     context = extract_video_context(info, description)
-    logger.info("Video %s: persona=%s, tags=%d", video_id, context.persona, len(context.display_tags))
+    logger.info("Video %s: category=%s, tags=%d", video_id, context.category, len(context.display_tags))
 
     return VideoData(
         video_id=video_id,

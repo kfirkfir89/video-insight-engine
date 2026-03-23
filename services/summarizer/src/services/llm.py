@@ -1,7 +1,7 @@
 """LLM service for video summarization.
 
 Uses LiteLLM via LLMProvider for multi-provider support (Anthropic, OpenAI, Gemini).
-Pipeline modules (intent_detector, extractor, enrichment, synthesis) use call_llm()
+Pipeline modules (triage, extractor, enrichment, synthesis) use call_llm()
 for all LLM interactions.
 """
 
@@ -35,21 +35,56 @@ class LLMService:
         """Get the configured fast model from the provider."""
         return self._provider.fast_model
 
-    async def call_llm(self, prompt: str, max_tokens: int = 2000) -> str:
+    @property
+    def model(self) -> str:
+        """Get the configured default model name."""
+        return self._provider.model
+
+    async def call_llm_fast(
+        self, prompt: str, max_tokens: int = 4096, timeout: float | None = None, json_mode: bool = False,
+    ) -> str:
+        """Make an async LLM call using the fast model.
+
+        Args:
+            prompt: The prompt to send
+            max_tokens: Maximum tokens in response
+            timeout: Per-call timeout override (seconds). Falls back to 15s default.
+            json_mode: When True, request JSON-only output from the model.
+
+        Returns:
+            Generated text content
+        """
+        effective_timeout = timeout if timeout is not None else 15.0
+        async with asyncio.timeout(effective_timeout):
+            return await self._provider.complete_fast(
+                prompt, max_tokens=max_tokens, timeout=effective_timeout, json_mode=json_mode,
+            )
+
+    async def call_llm(
+        self, prompt: str, max_tokens: int = 2000, timeout: float | None = None,
+        json_mode: bool = False, cache_static: str | None = None,
+    ) -> str:
         """Make an async LLM call.
 
         Args:
             prompt: The prompt to send
             max_tokens: Maximum tokens in response
+            timeout: Per-call timeout override (seconds). Falls back to LLM_TIMEOUT_SECONDS.
+            json_mode: When True, request JSON-only output from the model.
+            cache_static: Static prompt content for Anthropic prompt caching.
 
         Returns:
             Generated text content
 
         Raises:
-            TimeoutError: If LLM call exceeds configured timeout
+            TimeoutError: If LLM call exceeds timeout
         """
-        async with asyncio.timeout(settings.LLM_TIMEOUT_SECONDS):
-            return await self._provider.complete(prompt, max_tokens=max_tokens)
+        effective_timeout = timeout if timeout is not None else settings.LLM_TIMEOUT_SECONDS
+        async with asyncio.timeout(effective_timeout):
+            return await self._provider.complete(
+                prompt, max_tokens=max_tokens, timeout=effective_timeout,
+                json_mode=json_mode, cache_static=cache_static,
+            )
 
     async def stream_llm(
         self, prompt: str, max_tokens: int = 2000

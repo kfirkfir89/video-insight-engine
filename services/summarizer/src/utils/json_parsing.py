@@ -7,6 +7,36 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def strip_markdown_fences(text: str) -> str:
+    """Strip markdown code fences from LLM response text.
+
+    Handles patterns like:
+      ```json\\n{...}\\n```
+      ```\\n{...}\\n```
+      ```python\\n{...}\\n```
+
+    Returns the inner content with fences removed, or the original text
+    (stripped of whitespace) if no fences are found.
+    """
+    stripped = text.strip()
+    if not stripped.startswith("```"):
+        return stripped
+
+    # Remove opening fence + optional language tag
+    first_nl = stripped.find("\n")
+    if first_nl >= 0:
+        stripped = stripped[first_nl + 1:]
+    else:
+        # No newline — just strip the opening backticks (e.g. "```{...}```")
+        stripped = stripped[3:]
+
+    # Remove closing fence
+    if stripped.rstrip().endswith("```"):
+        stripped = stripped.rstrip()[:-3].rstrip()
+
+    return stripped
+
+
 def _strip_json_comments(text: str) -> str:
     """Remove // line comments from JSON text while preserving strings.
 
@@ -111,13 +141,7 @@ def _repair_truncated_json(text: str) -> str | None:
     import re
 
     # Strip markdown fences
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        first_nl = stripped.find("\n")
-        if first_nl >= 0:
-            stripped = stripped[first_nl + 1:]
-        if stripped.rstrip().endswith("```"):
-            stripped = stripped.rstrip()[:-3]
+    stripped = strip_markdown_fences(text)
 
     # Find first JSON start
     obj_start = stripped.find("{")
@@ -259,15 +283,7 @@ def parse_json_array_response(text: str, fallback: list[Any] | None = None) -> l
         Parsed JSON list, or fallback/empty list on failure.
     """
     # Strip markdown code fences
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        first_nl = stripped.find("\n")
-        if first_nl >= 0:
-            stripped = stripped[first_nl + 1:]
-        if stripped.rstrip().endswith("```"):
-            stripped = stripped.rstrip()[:-3]
-    else:
-        stripped = text
+    stripped = strip_markdown_fences(text)
 
     try:
         start, end = _find_json_array_boundaries(stripped)
@@ -322,18 +338,19 @@ def _repair_json(text: str) -> str:
 
 def _try_parse_json(text: str) -> dict[str, Any] | None:
     """Try multiple strategies to parse JSON."""
+    last_error = None
     # Strategy 1: Direct parse
     try:
         return json.loads(text)
-    except json.JSONDecodeError:
-        pass
+    except json.JSONDecodeError as e:
+        last_error = e
 
     # Strategy 2: Repair and retry
     repaired = _repair_json(text)
     try:
         return json.loads(repaired)
-    except json.JSONDecodeError:
-        pass
+    except json.JSONDecodeError as e:
+        last_error = e
 
     # Strategy 3: strict=False (allows control chars in strings)
     try:
@@ -341,9 +358,11 @@ def _try_parse_json(text: str) -> dict[str, Any] | None:
         result, _ = decoder.raw_decode(repaired)
         if isinstance(result, dict):
             return result
-    except (json.JSONDecodeError, ValueError):
-        pass
+    except (json.JSONDecodeError, ValueError) as e:
+        last_error = e
 
+    if last_error:
+        logger.debug("All JSON parse strategies failed: %s", last_error)
     return None
 
 
@@ -364,15 +383,7 @@ def parse_json_response(text: str, fallback: dict[str, Any] | None = None) -> di
         Parsed JSON dict, or fallback/empty dict on failure.
     """
     # Strip markdown code fences before parsing
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        first_nl = stripped.find("\n")
-        if first_nl >= 0:
-            stripped = stripped[first_nl + 1:]
-        if stripped.rstrip().endswith("```"):
-            stripped = stripped.rstrip()[:-3]
-    else:
-        stripped = text
+    stripped = strip_markdown_fences(text)
 
     start, end = _find_json_boundaries(stripped)
     if start >= 0 and end > start:
@@ -387,17 +398,14 @@ def parse_json_response(text: str, fallback: dict[str, Any] | None = None) -> di
         result = _try_parse_json(cleaned)
         if result is not None:
             return result
-        logger.warning("Failed to parse JSON response, preview: %.300s", raw_json[:300])
+        logger.warning("Failed to parse JSON response (boundaries=%d:%d, len=%d), tail: %.200s", start, end, len(raw_json), raw_json[-200:])
 
     # Fallback: try to repair truncated JSON
     repaired = _repair_truncated_json(text)
     if repaired:
-        try:
-            result = _try_parse_json(repaired)
-            if result is not None and isinstance(result, dict):
-                logger.warning("Repaired truncated JSON response (original len=%d)", len(text))
-                return result
-        except (json.JSONDecodeError, ValueError):
-            pass
+        result = _try_parse_json(repaired)
+        if result is not None and isinstance(result, dict):
+            logger.warning("Repaired truncated JSON response (original len=%d)", len(text))
+            return result
 
     return fallback if fallback is not None else {}

@@ -11,11 +11,15 @@ Contains self-contained utilities:
 - JSON truncation
 """
 
+import asyncio
 import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, AsyncGenerator, Callable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .context import PipelineContext
 
 from src.config import settings
 from src.exceptions import TranscriptError
@@ -214,3 +218,80 @@ def refresh_frame_urls(chapters: list[dict]) -> None:
                         refreshed += 1
     if refreshed:
         logger.debug("Refreshed %d presigned frame URLs", refreshed)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Prompt Sanitization
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def sanitize_for_prompt(text: str, max_len: int = 500) -> str:
+    """Sanitize user-controlled text before injecting into prompt templates.
+
+    Strips curly braces (template placeholders) and angle brackets (XML-tag
+    injection in prompt sections like <transcript>) and truncates to prevent
+    prompt bloat. Use for video titles, descriptions, channel names, and any
+    other user-controlled metadata injected into LLM prompts.
+
+    Angle brackets are replaced with Unicode look-alikes (‹›) rather than
+    stripped so that titles like "React <Suspense>" remain readable in
+    prompts while preventing XML-tag injection into prompt sections.
+    """
+    sanitized = text.replace("{", "").replace("}", "").replace("<", "‹").replace(">", "›")
+    return sanitized[:max_len]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Parallel Phase Runner
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SENTINEL = object()
+
+
+async def run_parallel_phases(
+    phases: list[Callable[["PipelineContext"], AsyncGenerator[str, None]]],
+    ctx: "PipelineContext",
+) -> AsyncGenerator[str, None]:
+    """Run multiple pipeline phases in parallel, yielding SSE events in arrival order.
+
+    Uses an asyncio.Queue so events stream to the frontend in real-time
+    as each phase produces them (no buffering).
+
+    If any phase raises an exception, remaining phases are cancelled
+    and the exception is re-raised to the caller.  Any SSE events already
+    queued by non-failed phases are discarded — this is intentional since
+    the pipeline cannot continue after a phase failure.
+    """
+    queue: asyncio.Queue[str | BaseException | object] = asyncio.Queue()
+
+    async def _run_phase(phase_fn: Callable) -> None:
+        try:
+            async for event in phase_fn(ctx):
+                await queue.put(event)
+        except Exception as exc:
+            # Annotate exception with phase name for debuggability
+            phase_name = getattr(phase_fn, "__name__", str(phase_fn))
+            exc.add_note(f"Failed in parallel phase: {phase_name}")
+            await queue.put(exc)
+        finally:
+            await queue.put(_SENTINEL)
+
+    tasks = [asyncio.create_task(_run_phase(phase)) for phase in phases]
+
+    try:
+        completed = 0
+        while completed < len(tasks):
+            item = await queue.get()
+            if item is _SENTINEL:
+                completed += 1
+            elif isinstance(item, BaseException):
+                for t in tasks:
+                    t.cancel()
+                raise item
+            else:
+                yield item  # type: ignore[misc]
+    finally:
+        # Ensure all tasks are cleaned up and exceptions consumed
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)

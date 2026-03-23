@@ -6,7 +6,7 @@ from pydantic import BaseModel
 Provider = Literal["anthropic", "openai", "gemini"]
 
 # Transcript source types for tracking fetch method
-TranscriptSource = Literal["ytdlp", "api", "proxy", "whisper", "gemini", "metadata"]
+TranscriptSource = Literal["ytdlp", "api", "proxy", "whisper", "gemini", "metadata", "s3"]
 
 
 class ProcessingStatus(str, Enum):
