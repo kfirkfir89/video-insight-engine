@@ -4,7 +4,7 @@ import { Loader2, Folder as FolderIcon, Play } from "lucide-react";
 import { FolderCard } from "./FolderCard";
 import { VideoCard } from "./VideoCard";
 import { useUIStore } from "@/stores/ui-store";
-import { getFolderColorStyle } from "@/lib/style-utils";
+import { getFolderColorStyle } from "@/features/sidebar/lib/style-utils";
 
 /**
  * Context object for folder-related display options.

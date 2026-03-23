@@ -16,9 +16,9 @@ if (!import.meta.env.DEV) {
 
 import { useState } from 'react';
 import { GlassCard, ProgressBar } from '@/components/vie';
-import { DisplaySection } from '@/components/video-detail/output/DisplaySection';
-import { Celebration } from '@/components/video-detail/output/Celebration';
-import { CrossTabLink } from '@/components/video-detail/output/CrossTabLink';
+import { DisplaySection } from '@/features/video-output/components/output/DisplaySection';
+import { Celebration } from '@/features/video-output/components/output/Celebration';
+import { CrossTabLink } from '@/features/video-output/components/output/CrossTabLink';
 
 function ShowcaseSection({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (

@@ -1,7 +1,7 @@
 import type { Folder, Video } from "@/types";
 import { Card } from "@/components/ui/card";
 import { Folder as FolderIcon, ChevronRight } from "lucide-react";
-import { getFolderItemCount } from "@/lib/folder-utils";
+import { getFolderItemCount } from "@/features/sidebar/lib/folder-utils";
 
 interface FolderCardProps {
   folder: Folder;

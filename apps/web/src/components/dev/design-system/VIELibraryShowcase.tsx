@@ -62,7 +62,7 @@ import {
 } from '@/components/vie';
 
 // Output helpers (not in vie/ but part of the output system)
-import { DisplaySection } from '@/components/video-detail/output/DisplaySection';
+import { DisplaySection } from '@/features/video-output/components/output/DisplaySection';
 
 // ── Shared layout helpers ──
 

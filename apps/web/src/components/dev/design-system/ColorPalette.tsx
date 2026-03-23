@@ -12,7 +12,7 @@ if (!import.meta.env.DEV) {
 import { useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { OUTPUT_TYPE_CONFIG } from '@/lib/output-type-config';
+import { OUTPUT_TYPE_CONFIG } from '@/features/video-output/lib/output-type-config';
 import type { OutputType } from '@vie/types';
 
 interface ColorToken {

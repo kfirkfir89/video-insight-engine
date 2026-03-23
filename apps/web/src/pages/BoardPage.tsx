@@ -5,7 +5,7 @@ import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { useAllVideos, useVideos } from "@/hooks/use-videos";
 import { useFolders } from "@/hooks/use-folders";
 import { useUIStore } from "@/stores/ui-store";
-import { buildBreadcrumbPath, getSubfolders } from "@/lib/folder-utils";
+import { buildBreadcrumbPath, getSubfolders } from "@/features/sidebar/lib/folder-utils";
 import { FolderOpen } from "lucide-react";
 
 export function BoardPage() {

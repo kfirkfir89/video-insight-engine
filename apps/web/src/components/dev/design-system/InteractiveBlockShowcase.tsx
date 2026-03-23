@@ -36,7 +36,7 @@ import {
   GalleryInteractive,
   ClipPlayerInteractive,
   LyricsPlayerInteractive,
-} from '@/components/video-detail/output/interactive';
+} from '@/features/video-output/components/output/interactive';
 
 import {
   // Core block data

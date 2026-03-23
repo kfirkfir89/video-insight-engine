@@ -34,188 +34,84 @@ VITE_WS_URL=ws://localhost:3000/ws
 ## Project Structure
 
 ```
-apps/web/
-├── Dockerfile
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-├── index.html
-└── src/
-    ├── main.tsx
-    ├── App.tsx
-    │
-    ├── api/
-    │   ├── client.ts             # Fetch wrapper
-    │   ├── auth.ts
-    │   ├── folders.ts
-    │   ├── playlists.ts
-    │   ├── videos.ts
-    │   ├── explain.ts
-    │   └── share.ts              # Share link API client
-    │
-    ├── components/
-    │   ├── ui/                   # shadcn components (Layer 1)
-    │   │
-    │   ├── vie/                  # VIE Component Library (Layer 2)
-    │   │   ├── index.ts              # Barrel export — import from '@/components/vie'
-    │   │   ├── cards/                # GlassCard, ExpandableCard, HeroCard, ImageCard, VideoHero
-    │   │   ├── data/                 # ScoreRing, StatPill, Badge, KeyValue, CostDisplay, Timer, Timestamp
-    │   │   ├── content/              # TextBlock, CodeSnippet, QuoteBlock, TableView, ListItems, DefinitionItem
-    │   │   ├── navigation/           # TabBar, ProgressBar, CrossTabButton, SectionNav, Stepper, BackForward
-    │   │   ├── interactive/          # CheckItem, FlipCard, OptionGrid, ActionButton, EmojiMarker, MapLink
-    │   │   ├── feedback/             # Celebration, FadeIn, InlineScore, Shake, Callout
-    │   │   └── media/                # VideoClip, ImageGallery, AudioSnippet
-    │   │
-    │   ├── layout/
-    │   │   ├── Layout.tsx              # Sidebar + AppHeader + main content
-    │   │   ├── AppHeader.tsx           # Top bar: sidebar toggle, VIE branding, theme, user
-    │   │   ├── LeftSidebarIconStrip.tsx # Collapsed sidebar icon strip
-    │   │   ├── MobileBottomNav.tsx     # Fixed bottom nav (md:hidden)
-    │   │   └── MobileFAB.tsx           # Floating action button (md:hidden)
-    │   │
-    │   ├── video-detail/               # Video output rendering
-    │   │   ├── OutputRouter.tsx          # Routes to v2 (assembledTabs) or v1 fallback
-    │   │   ├── output/
-    │   │   │   ├── ComposableOutput.tsx      # v2: COMPONENT_REGISTRY → render by tab.component
-    │   │   │   ├── ComposableOutputV1.tsx    # v1: resolveTabData fallback
-    │   │   │   ├── DisplaySection.tsx        # Data-driven section renderer
-    │   │   │   ├── CrossTabLink.tsx          # Cross-tab navigation
-    │   │   │   ├── TabLayout.tsx             # Tab shell + navigation
-    │   │   │   ├── GlassCard.tsx             # Card wrapper
-    │   │   │   ├── Celebration.tsx           # Confetti celebration
-    │   │   │   ├── ProgressBar.tsx           # Streaming progress
-    │   │   │   ├── TabIntro.tsx              # Tab introduction section
-    │   │   │   ├── TabCoordinationContext.tsx # Tab state coordination
-    │   │   │   ├── RecipePlayer.tsx          # Cooking mode player
-    │   │   │   ├── RecipeStepView.tsx        # Recipe step rendering
-    │   │   │   ├── RecipeIngredientPanel.tsx # Recipe ingredient panel
-    │   │   │   ├── display-type-guards.ts   # Type guards for display sections
-    │   │   │   ├── link-rules.ts            # Cross-tab link resolution rules
-    │   │   │   ├── interactive/              # 21 interactive renderers
-    │   │   │   │   ├── OverviewInteractive.tsx
-    │   │   │   │   ├── InfoGridInteractive.tsx
-    │   │   │   │   ├── ChecklistInteractive.tsx
-    │   │   │   │   ├── StepByStepInteractive.tsx
-    │   │   │   │   ├── ComparisonInteractive.tsx
-    │   │   │   │   ├── QuizInteractive.tsx
-    │   │   │   │   ├── FlashDeckInteractive.tsx
-    │   │   │   │   ├── ScenarioInteractive.tsx
-    │   │   │   │   ├── CodeExplorer.tsx
-    │   │   │   │   ├── SpotExplorer.tsx
-    │   │   │   │   ├── ExerciseInteractive.tsx
-    │   │   │   │   ├── VerdictInteractive.tsx
-    │   │   │   │   ├── BudgetInteractive.tsx
-    │   │   │   │   ├── TimelineExplorer.tsx
-    │   │   │   │   ├── GalleryInteractive.tsx
-    │   │   │   │   ├── ClipPlayerInteractive.tsx
-    │   │   │   │   └── LyricsPlayerInteractive.tsx
-    │   │   │   └── skeletons/                # Loading skeletons
-    │   │   └── shell/
-    │   │       ├── CollapsibleVideoPlayer.tsx # CSS-hidden YouTube player
-    │   │       └── TabCoordinationContext.tsx # Tab coordination (shell-level)
-    │   │
-    │   ├── rag/                          # RAG Components
-    │   │   ├── __tests__/                # Unit tests
-    │   │   ├── RAGSourceCard.tsx         # Source display card
-    │   │   ├── RAGChatPanel.tsx          # Chat interface
-    │   │   └── ChatBlockRenderer.tsx     # Renders blocks in chat context
-    │   │
-    │   ├── sidebar/
-    │   │   ├── Sidebar.tsx             # Main sidebar container
-    │   │   ├── SidebarHeader.tsx       # Logo + close button
-    │   │   ├── SidebarTabs.tsx         # Collection/Assistant tab bar
-    │   │   ├── SidebarSection.tsx      # Tab content area (folder tree)
-    │   │   ├── SidebarToolbar.tsx      # Search, sort, selection controls
-    │   │   ├── SidebarFooter.tsx       # Video count + theme + user
-    │   │   ├── AddVideoInput.tsx       # URL input (video/playlist)
-    │   │   ├── SearchInput.tsx         # Debounced search input
-    │   │   ├── SortDropdown.tsx        # Sort options dropdown
-    │   │   ├── SelectionToolbar.tsx    # Bulk actions toolbar
-    │   │   ├── VideoItem.tsx           # Video row with drag-drop
-    │   │   ├── VideoContextMenu.tsx    # Video actions menu
-    │   │   ├── FolderItem.tsx          # Folder row with drag-drop
-    │   │   └── FolderContextMenu.tsx   # Folder actions menu
-    │   │
-    │   ├── folders/
-    │   │   ├── FolderTree.tsx
-    │   │   └── CreateFolderDialog.tsx
-    │   │
-    │   ├── videos/
-    │   │   ├── VideoGrid.tsx
-    │   │   ├── VideoCard.tsx
-    │   │   └── AddVideoDialog.tsx
-    │   │
-    │   ├── playlists/
-    │   │   └── PlaylistPreview.tsx
-    │   │
-    │   └── rag/
-    │       └── RAGChatPanel.tsx        # Chat panel (used in sidebar Assistant tab)
-    │
-    ├── contexts/
-    │   ├── VideoPlayerContext.tsx   # YouTube player state + seekTo
-    │   └── TabStateContext.tsx      # Tab-level state coordination
-    │
-    ├── hooks/
-    │   ├── use-videos.ts
-    │   ├── use-folders.ts
-    │   ├── use-playlists.ts
-    │   ├── use-summary-stream.ts     # SSE streaming + triage_complete + confetti
-    │   ├── use-processing-manager.ts # Auto-resume & sidebar sync
-    │   ├── use-share.ts             # Share link creation + clipboard
-    │   ├── use-sidebar-chat.ts      # Sidebar chat integration
-    │   ├── use-streaming-chat.ts    # AI SDK chat streaming
-    │   ├── use-video-chat.ts        # Video-scoped chat
-    │   ├── use-websocket.ts         # Real-time updates
-    │   ├── use-theme.ts             # Theme toggle hook
-    │   ├── use-long-press.ts        # Long press gesture hook
-    │   ├── use-media-query.ts       # Responsive breakpoint detection
-    │   ├── use-is-truncated.ts      # Text truncation detection
-    │   ├── use-sidebar-text-size.ts # Sidebar text scaling
-    │   ├── use-folder-drag-drop.ts  # DnD for folders
-    │   └── use-drag-scrollbar.ts    # Drag-to-scroll behavior
-    │
-    ├── pages/
-    │   ├── LoginPage.tsx
-    │   ├── RegisterPage.tsx
-    │   ├── LandingPage.tsx          # Public homepage with URL input
-    │   ├── BoardPage.tsx            # Folder explorer + video grid (authenticated home)
-    │   ├── GeneratePage.tsx         # Centered URL input for new summaries
-    │   ├── VideoDetailPage.tsx      # Video detail + output rendering
-    │   └── SharePage.tsx            # Public share view (/s/:slug)
-    │
-    ├── stores/
-    │   ├── auth-store.ts        # Auth + anonymous generation tracking
-    │   ├── processing-store.ts  # Video processing state
-    │   └── ui-store.ts
-    │
-    └── lib/
-        ├── utils.ts
-        ├── query-keys.ts
-        ├── query-client.ts
-        ├── output-type-config.ts     # OutputType → emoji, gradient, label, accent
-        ├── tab-data-resolver.ts      # Resolves tab data from VIEResponse (v1)
-        ├── build-vie-response.ts     # Builds VIEResponse from extraction data
-        ├── synthesis-utils.ts        # Synthesis data utilities
-        ├── ingredient-step-matcher.ts # Recipe ingredient-step matching
-        ├── stream-event-processor.ts # SSE event parsing and processing
-        ├── stream-cache.ts           # Stream response caching
-        ├── sse-validators.ts         # SSE event validation
-        ├── timestamp-utils.ts        # Timestamp formatting
-        ├── string-utils.ts           # String manipulation utilities
-        ├── url-utils.ts              # URL parsing
-        ├── youtube-utils.ts          # YouTube URL/ID utilities
-        ├── style-utils.ts            # Style helpers
-        ├── folder-utils.ts           # Folder tree utilities
-        ├── dom-utils.ts              # DOM helpers
-        ├── layout-constants.ts       # Layout sizing constants
-        ├── keyboard-nav.ts           # Keyboard navigation helpers
-        ├── image-hosts.ts            # Image host URL utilities
-        ├── stream-error-messages.ts  # Error message formatting
-        ├── concept-utils.ts          # Concept parsing utilities
-        ├── sse-logger.ts             # SSE debug logging
-        └── dev/                      # Dev-only utilities
-            ├── index.ts
-            └── mock-interactive-blocks.ts  # Mock data for interactive components
+apps/web/src/
+├── main.tsx
+├── App.tsx
+│
+├── pages/                          # ALL route pages
+│   ├── LoginPage.tsx
+│   ├── RegisterPage.tsx
+│   ├── LandingPage.tsx             # Public homepage with URL input
+│   ├── BoardPage.tsx               # Folder explorer + video grid
+│   ├── GeneratePage.tsx            # Centered URL input for new summaries
+│   ├── VideoDetailPage.tsx         # Video detail + output rendering
+│   ├── SharePage.tsx               # Public share view (/s/:slug)
+│   └── dev/DesignSystemPage.tsx
+│
+├── components/                     # SHARED components
+│   ├── ui/                         # shadcn/ui primitives
+│   ├── vie/                        # VIE Component Library
+│   │   ├── index.ts                # Barrel — import from '@/components/vie'
+│   │   ├── cards/                  # GlassCard, ExpandableCard, HeroCard, VideoHero
+│   │   ├── data/                   # ScoreRing, StatPill, Badge, Timer, Timestamp
+│   │   ├── content/                # TextBlock, CodeSnippet, QuoteBlock, TableView
+│   │   ├── navigation/            # TabBar, ProgressBar, SectionNav, Stepper
+│   │   ├── interactive/           # CheckItem, FlipCard, OptionGrid, ActionButton
+│   │   ├── feedback/              # Celebration, FadeIn, InlineScore, Shake
+│   │   └── media/                 # VideoClip, ImageGallery, AudioSnippet
+│   ├── layout/                     # App shell
+│   │   ├── Layout.tsx, AppHeader.tsx, LeftSidebarIconStrip.tsx
+│   │   ├── MobileBottomNav.tsx, MobileFAB.tsx
+│   ├── collections/                # Collection picker/panel (4 files)
+│   ├── rag/                        # RAG chat components (4 files)
+│   ├── videos/                     # VideoGrid, VideoCard, YouTubePlayer, etc.
+│   ├── playlists/                  # PlaylistPreview
+│   └── dev/                        # Design system showcases
+│
+├── features/                       # Complex, multi-concern features
+│   ├── sidebar/                    # Navigation system (30+ files)
+│   │   ├── Sidebar.tsx, index.ts   # Root + barrel (lazy import)
+│   │   ├── core/                   # SidebarHeader, SidebarToolbar, SidebarTabs,
+│   │   │                           # SidebarSection, SearchInput, SortDropdown,
+│   │   │                           # TextSizeToggle, DndProvider, SelectionToolbar
+│   │   ├── folders/                # FolderItem, FolderTree, FolderContextMenu,
+│   │   │                           # FolderTreeSelect, FolderSelector, FolderRenameInput,
+│   │   │                           # CreateFolderButton, CreateSubfolderInput, NewFolder*
+│   │   ├── videos/                 # VideoItem, VideoContextMenu, UnassignedVideosList, AddVideoInput
+│   │   ├── dialogs/                # BulkDeleteDialog, DeleteFolderDialog, DeleteVideoDialog
+│   │   ├── hooks/                  # use-sidebar-text-size, use-long-press, use-is-truncated,
+│   │   │                           # use-folder-drag-drop, use-sidebar-chat
+│   │   └── lib/                    # folder-utils, style-utils, layout-constants
+│   │
+│   └── video-output/               # Video output rendering (40+ files)
+│       ├── components/
+│       │   ├── OutputRouter.tsx     # Routes v2 (assembledTabs) or v1 fallback
+│       │   ├── CollapsibleVideoPlayer.tsx
+│       │   └── output/
+│       │       ├── ComposableOutput.tsx, ComposableOutputV1.tsx
+│       │       ├── DisplaySection.tsx, TabLayout.tsx, CrossTabLink.tsx
+│       │       ├── RecipePlayer.tsx, RecipeStepView.tsx, RecipeIngredientPanel.tsx
+│       │       ├── interactive/    # 17+ interactive renderers (Quiz, FlashDeck, etc.)
+│       │       ├── skeletons/      # Loading skeletons
+│       │       └── lib/            # tab-data-resolver, format-utils, ingredient-step-matcher
+│       ├── hooks/                  # use-summary-stream, use-processing-manager
+│       ├── stores/                 # processing-store
+│       ├── contexts/               # TabStateContext, VideoPlayerContext
+│       └── lib/                    # streaming/ (SSE pipeline), synthesis-utils, output-type-config
+│
+├── api/                            # API client modules
+├── hooks/                          # SHARED hooks (8 files)
+│   ├── use-folders, use-videos, use-playlists   # Data hooks
+│   ├── use-share, use-websocket, use-theme      # Feature hooks
+│   └── use-media-query, use-drag-scrollbar      # UI utility hooks
+├── lib/                            # SHARED utilities (5 files)
+│   ├── utils.ts (cn()), query-client.ts, query-keys.ts
+│   ├── youtube-utils.ts, string-utils.ts
+│   └── dev/                        # Dev mock data
+├── stores/                         # GLOBAL stores (auth-store, ui-store)
+├── styles/                         # Global CSS
+├── test/                           # Test setup + mocks
+└── types/                          # Shared types
 ```
 
 ---
