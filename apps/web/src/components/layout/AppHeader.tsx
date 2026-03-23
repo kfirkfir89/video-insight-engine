@@ -19,7 +19,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { AddVideoInput } from "@/components/sidebar/AddVideoInput";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { getInitials } from "@/lib/string-utils";
@@ -67,12 +66,8 @@ export function AppHeader() {
           )}
         </div>
 
-        {/* Center: URL input */}
-        <div className="flex-1 flex justify-center min-w-0">
-          <div className="max-w-md w-full">
-            <AddVideoInput />
-          </div>
-        </div>
+        {/* Spacer */}
+        <div className="flex-1" />
 
         {/* Right: theme + user */}
         <div className="flex items-center gap-1 shrink-0">

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Library, Brain } from "lucide-react";
+import { Library, MessageCircle } from "lucide-react";
 import { useUIStore, useActiveSection, type ActiveSection } from "@/stores/ui-store";
 import { useAllVideos } from "@/hooks/use-videos";
 import { useFolders } from "@/hooks/use-folders";
@@ -9,11 +9,12 @@ interface TabConfig {
   key: ActiveSection;
   label: string;
   icon: typeof Library;
+  showCount?: boolean;
 }
 
 const TABS: TabConfig[] = [
-  { key: "summarized", label: "Summaries", icon: Library },
-  { key: "memorized", label: "Memorized", icon: Brain },
+  { key: "summarized", label: "Collection", icon: Library, showCount: true },
+  { key: "assistant", label: "Assistant", icon: MessageCircle },
 ];
 
 export function SidebarTabs() {
@@ -22,34 +23,22 @@ export function SidebarTabs() {
 
   const { data: videosData } = useAllVideos();
   const { data: summarizedFolders } = useFolders("summarized");
-  const { data: memorizedFolders } = useFolders("memorized");
 
-  const { summarizedCount, memorizedCount } = useMemo(() => {
+  const summarizedCount = useMemo(() => {
     const sumFolderIds = new Set(
       (summarizedFolders?.folders ?? []).map((f) => f.id)
     );
-    const memFolderIds = new Set(
-      (memorizedFolders?.folders ?? []).map((f) => f.id)
-    );
     const videos = videosData?.videos ?? [];
-    return {
-      summarizedCount: videos.filter(
-        (v) => !v.folderId || sumFolderIds.has(v.folderId)
-      ).length,
-      memorizedCount: videos.filter(
-        (v) => v.folderId && memFolderIds.has(v.folderId)
-      ).length,
-    };
-  }, [videosData?.videos, summarizedFolders?.folders, memorizedFolders?.folders]);
-
-  const getCounts = (key: ActiveSection) =>
-    key === "summarized" ? summarizedCount : memorizedCount;
+    return videos.filter(
+      (v) => !v.folderId || sumFolderIds.has(v.folderId)
+    ).length;
+  }, [videosData?.videos, summarizedFolders?.folders]);
 
   return (
     <div className="flex items-center shrink-0 px-2 gap-1 py-1">
       {TABS.map((tab) => {
         const isActive = activeSection === tab.key;
-        const count = getCounts(tab.key);
+        const count = tab.showCount ? summarizedCount : 0;
         const Icon = tab.icon;
         return (
           <button

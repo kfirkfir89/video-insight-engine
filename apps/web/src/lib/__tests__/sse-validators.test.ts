@@ -166,7 +166,7 @@ describe('sse-validators', () => {
       expect(result?.content?.[0]).toEqual({ blockId: 'block-1', type: 'paragraph', text: 'Hello world' });
     });
 
-    it('should filter out invalid content blocks', () => {
+    it('should pass through content blocks without filtering', () => {
       const chapter = {
         id: 's1',
         timestamp: '0:00',
@@ -175,14 +175,15 @@ describe('sse-validators', () => {
         title: 'Intro',
         content: [
           { blockId: 'block-1', type: 'paragraph', text: 'Valid' },
-          { blockId: 'block-2', type: 'invalid_type', data: 'Invalid' },
+          { blockId: 'block-2', type: 'unknown_type', data: 'Unknown' },
           { blockId: 'block-3', type: 'bullets', items: ['Valid items'] },
         ],
       };
 
       const result = validateChapter(chapter);
 
-      expect(result?.content).toHaveLength(2);
+      // Content blocks are passed through without per-block validation
+      expect(result?.content).toHaveLength(3);
     });
   });
 

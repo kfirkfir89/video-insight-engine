@@ -1,4 +1,4 @@
-import type { ContentBlock, OutputType, VideoOutput } from "@vie/types";
+import type { TabEntry, VIEResponseMeta } from "@vie/types";
 import { request } from "./client";
 
 interface ShareLinkResponse {
@@ -10,15 +10,16 @@ export interface SharedOutput {
   id: string;
   youtubeId: string;
   title: string;
-  channel: string | null;
+  creator: string | null;
   thumbnailUrl: string | null;
   duration: number | null;
-  outputType: OutputType;
-  tldr?: string;
-  /** Structured output from intent-driven pipeline */
-  output: VideoOutput | null;
-  /** @deprecated Legacy content blocks for old shares */
-  blocks: ContentBlock[];
+  status: string;
+  meta: VIEResponseMeta | null;
+  tabs: TabEntry[] | null;
+  shareSlug: string;
+  viewsCount: number;
+  likesCount: number;
+  sharedAt: string;
 }
 
 export const shareApi = {

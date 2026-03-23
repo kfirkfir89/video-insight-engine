@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, ChevronRight, RefreshCw, Wrench, Video, ListVideo, Palette, Eye } from "lucide-react";
+import { ChevronDown, ChevronRight, RefreshCw, Wrench, Video, ListVideo, Palette } from "lucide-react";
 import { ProviderSelector, type Provider } from "./ProviderSelector";
 import { useAddVideo } from "@/hooks/use-videos";
 import { usePlaylistPreview, usePlaylistImport } from "@/hooks/use-playlists";
@@ -192,17 +192,6 @@ export function DevToolPanel() {
               >
                 <Palette className="h-3 w-3" />
                 Design System
-              </Link>
-              <Link
-                to="/dev/video-examples"
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-[10px] rounded",
-                  "bg-yellow-500/10 text-yellow-700 dark:text-yellow-300",
-                  "hover:bg-yellow-500/20 transition-colors"
-                )}
-              >
-                <Eye className="h-3 w-3" />
-                Video Examples
               </Link>
             </div>
           </div>

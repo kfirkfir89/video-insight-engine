@@ -3,8 +3,9 @@ import { useParams, Link } from "react-router-dom";
 import { Sparkles, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useShareOutput } from "@/hooks/use-share";
-import { OutputShell } from "@/components/video-detail/output/OutputShell";
-import type { VideoResponse, VideoOutput } from "@vie/types";
+import { OutputRouter } from "@/components/video-detail/OutputRouter";
+import { buildSynthesisFromMeta } from "@/lib/synthesis-utils";
+import type { TabEntry } from "@vie/types";
 
 /** Error boundary for shared content — a malformed block shouldn't crash the page. */
 class ShareContentBoundary extends Component<
@@ -42,35 +43,23 @@ export function SharePage() {
   // Set document title for social sharing / SEO
   useEffect(() => {
     if (shareData?.title) {
-      document.title = `${shareData.title} | VIE`;
+      document.title = `${String(shareData.title).slice(0, 200)} | VIE`;
     }
     return () => {
       document.title = "Video Insight Engine";
     };
   }, [shareData?.title]);
 
-  // Build minimal VideoResponse for OutputShell
-  const video = useMemo((): VideoResponse | null => {
-    if (!shareData) return null;
-    return {
-      id: shareData.id,
-      videoSummaryId: shareData.id,
-      youtubeId: shareData.youtubeId,
-      title: shareData.title,
-      channel: shareData.channel,
-      duration: shareData.duration,
-      thumbnailUrl: shareData.thumbnailUrl,
-      status: "completed",
-      folderId: null,
-      createdAt: new Date().toISOString(),
-      outputType: shareData.outputType,
-    };
-  }, [shareData]);
+  // Extract tabs and meta from share data
+  const tabs = useMemo((): TabEntry[] | null => {
+    return (shareData?.tabs as TabEntry[] | undefined) ?? null;
+  }, [shareData?.tabs]);
 
-  // Use the structured output directly from the API
-  const output = useMemo((): VideoOutput | null => {
-    return shareData?.output ?? null;
-  }, [shareData?.output]);
+  const meta = useMemo(() => {
+    return shareData?.meta ?? null;
+  }, [shareData?.meta]);
+
+  const synthesis = useMemo(() => buildSynthesisFromMeta(meta), [meta]);
 
   if (isLoading) {
     return (
@@ -89,7 +78,7 @@ export function SharePage() {
           This shared link may have expired or been removed.
         </p>
         <Button asChild>
-          <Link to="/">
+          <Link to="/board">
             Go to VIE <ArrowRight className="h-4 w-4 ml-1" />
           </Link>
         </Button>
@@ -115,14 +104,20 @@ export function SharePage() {
       {/* Shared content */}
       <main className="flex-1">
         <ShareContentBoundary>
-          {video && output ? (
-            <OutputShell video={video} output={output} />
+          {tabs && tabs.length > 0 ? (
+            <OutputRouter
+              title={shareData.title}
+              videoSummaryId={shareData.id}
+              tabs={tabs}
+              meta={meta}
+              synthesis={synthesis}
+            />
           ) : (
             <div className="max-w-3xl mx-auto w-full px-4 py-8">
               <div className="glass rounded-2xl p-6 space-y-4">
                 <h1 className="text-xl font-bold">{shareData.title}</h1>
-                {shareData.tldr && (
-                  <p className="text-muted-foreground">{shareData.tldr}</p>
+                {typeof meta?.tldr === 'string' && meta.tldr && (
+                  <p className="text-muted-foreground">{meta.tldr}</p>
                 )}
               </div>
               <div className="mt-8 text-center text-sm text-muted-foreground/60">

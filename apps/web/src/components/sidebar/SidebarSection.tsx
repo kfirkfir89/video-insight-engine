@@ -12,17 +12,12 @@ import { useUIStore, useSelectionMode, useActiveSection } from "@/stores/ui-stor
 import { buildFolderTree, sortVideos, filterBySearch } from "@/lib/folder-utils";
 import { SIDEBAR_SELECTION } from "@/lib/layout-constants";
 import { cn } from "@/lib/utils";
-import type { FolderType } from "@/types";
 
-interface SidebarSectionProps {
-  type: FolderType;
-}
-
-export function SidebarSection({ type }: SidebarSectionProps) {
+export function SidebarSection() {
   const activeSection = useActiveSection();
 
-  // Only render if this is the active section
-  const isVisible = activeSection === type;
+  // Only render when summarized tab is active
+  const isVisible = activeSection === "summarized";
 
   // Zustand state
   const sortOption = useUIStore((s) => s.sidebarSortOption);
@@ -35,7 +30,7 @@ export function SidebarSection({ type }: SidebarSectionProps) {
   const exitSelectionMode = useUIStore((s) => s.exitSelectionMode);
 
   // Data fetching
-  const { data: foldersData, isLoading: foldersLoading } = useFolders(type);
+  const { data: foldersData, isLoading: foldersLoading } = useFolders("summarized");
   const { data: videosData, isLoading: videosLoading } = useAllVideos();
 
   const folders = foldersData?.folders ?? [];
@@ -50,9 +45,8 @@ export function SidebarSection({ type }: SidebarSectionProps) {
   const isSearching = searchQuery.trim().length > 0;
 
   // Compute flat item order for range selection (only when in selection mode).
-  // useMemo retained: feeds into useEffect deps — referential stability is a correctness concern.
   const itemOrder = useMemo(() => {
-    if (type !== "summarized" || !selectionMode) return [] as string[];
+    if (!selectionMode) return [] as string[];
 
     const order: string[] = [];
 
@@ -78,12 +72,9 @@ export function SidebarSection({ type }: SidebarSectionProps) {
     }
 
     return order;
-  }, [type, selectionMode, filteredFolders, filteredVideos, unassignedVideos, expandedFolderIds]);
+  }, [selectionMode, filteredFolders, filteredVideos, unassignedVideos, expandedFolderIds]);
 
   // Sync derived itemOrder to Zustand store for range-select consumers.
-  // useEffect is intentional: setItemOrder is an external store sink, not derived UI state.
-  // Tradeoff: one-render delay — store consumers see stale order until next commit.
-  // Acceptable because range-select only fires on user click (never same frame as filter change).
   useEffect(() => {
     setItemOrder(itemOrder);
   }, [itemOrder, setItemOrder]);
@@ -110,9 +101,8 @@ export function SidebarSection({ type }: SidebarSectionProps) {
   };
 
   // Root drop target for moving items to root level
-  // Disable when not visible so dnd-kit skips collision detection for hidden sections
   const { isOver: isRootOver, setNodeRef: setRootDropRef } = useDroppable({
-    id: `root-${type}`,
+    id: "root-summarized",
     data: { type: "root", folderId: null },
     disabled: !isVisible,
   });
@@ -158,17 +148,15 @@ export function SidebarSection({ type }: SidebarSectionProps) {
             <>
               <FolderTree
                 folders={filteredFolders}
-                type={type}
+                type="summarized"
                 videos={filteredVideos}
                 allFolders={folders}
               />
 
-              {type === "summarized" && (
-                <UnassignedVideosList
-                  videos={unassignedVideos}
-                  folders={folders}
-                />
-              )}
+              <UnassignedVideosList
+                videos={unassignedVideos}
+                folders={folders}
+              />
             </>
           )}
 

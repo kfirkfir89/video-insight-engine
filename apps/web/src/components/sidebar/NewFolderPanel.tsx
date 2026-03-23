@@ -3,8 +3,8 @@ import { Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { useActiveSection } from "@/stores/ui-store";
 import { useCreateFolder, useFolders } from "@/hooks/use-folders";
+import type { FolderType } from "@/types";
 
 interface NewFolderPanelProps {
   onComplete: () => void;
@@ -13,9 +13,9 @@ interface NewFolderPanelProps {
 export function NewFolderPanel({ onComplete }: NewFolderPanelProps) {
   const [name, setName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const activeSection = useActiveSection();
+  const folderType: FolderType = "summarized";
   const createFolder = useCreateFolder();
-  const { data: foldersData } = useFolders(activeSection);
+  const { data: foldersData } = useFolders(folderType);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -40,7 +40,7 @@ export function NewFolderPanel({ onComplete }: NewFolderPanelProps) {
     try {
       await createFolder.mutateAsync({
         name: trimmed,
-        type: activeSection,
+        type: folderType,
         parentId: null,
       });
       setName("");

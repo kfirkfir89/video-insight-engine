@@ -13,15 +13,24 @@ ENV VITE_WS_URL=$VITE_WS_URL
 ENV VITE_ENABLE_DEV_LOGIN=$VITE_ENABLE_DEV_LOGIN
 
 # Copy all source files first
+COPY packages/shared/ packages/shared/
 COPY packages/types/ packages/types/
 COPY apps/web/ apps/web/
 
+# Build the shared package first (types depends on it)
+RUN cd packages/shared && npm install && npm run build
+
 # Build the types package
-RUN cd packages/types && npm install && npm run build
+RUN cd packages/types && \
+    sed -i 's/"@vie\/shared": "workspace:\*"/"@vie\/shared": "file:..\/shared"/' package.json && \
+    npm install && npm run build
 
 # Install and build web app
-# Replace workspace reference with local path
-RUN cd apps/web && sed -i 's/"@vie\/types": "workspace:\^"/"@vie\/types": "file:..\/..\/packages\/types"/' package.json && npm install && npm run build
+# Replace workspace references with local paths
+RUN cd apps/web && \
+    sed -i 's/"@vie\/types": "workspace:\^"/"@vie\/types": "file:..\/..\/packages\/types"/' package.json && \
+    sed -i 's/"@vie\/shared": "workspace:\*"/"@vie\/shared": "file:..\/..\/packages\/shared"/' package.json && \
+    npm install && npm run build
 
 FROM nginx:alpine
 

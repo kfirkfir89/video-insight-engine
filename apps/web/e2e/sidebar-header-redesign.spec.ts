@@ -1,60 +1,61 @@
 import { test, expect } from "./fixtures";
 
+// Sidebar is lazy-loaded; the Suspense skeleton is a <div>, so <aside>
+// only appears after the chunk finishes loading.  Give it extra time.
+const SIDEBAR_TIMEOUT = 15_000;
+
 test.describe("Sidebar Header Redesign", () => {
   test.describe("Sidebar Structure & Hierarchy", () => {
     test("should render sidebar with new component hierarchy", async ({
       authenticatedPage: page,
     }) => {
-      // Wait for sidebar to load
+      // Wait for lazy-loaded sidebar to appear
       const sidebar = page.locator("aside");
-      await expect(sidebar).toBeVisible();
+      await expect(sidebar).toBeVisible({ timeout: SIDEBAR_TIMEOUT });
 
       // SidebarHeader: logo + branding
-      const brandingText = sidebar.getByText("Video Insight");
+      const brandingText = sidebar.getByText("VIE");
       await expect(brandingText).toBeVisible();
 
       // Toolbar: search button visible (search input is in collapsible panel)
       const searchButton = sidebar.getByLabel("Search");
       await expect(searchButton).toBeVisible();
 
-      // SidebarTabs: Summaries and Memorized tabs
-      const summariesTab = sidebar.getByText("Summaries");
-      await expect(summariesTab).toBeVisible();
+      // SidebarTabs: Collection and Assistant tabs
+      const collectionTab = sidebar.getByText("Collection");
+      await expect(collectionTab).toBeVisible();
 
-      const memorizedTab = sidebar.getByText("Memorized");
-      await expect(memorizedTab).toBeVisible();
+      const assistantTab = sidebar.getByText("Assistant");
+      await expect(assistantTab).toBeVisible();
 
       // AppHeader: theme toggle and user dropdown are in the header, not sidebar
       const header = page.locator("header");
       await expect(header).toBeVisible();
 
-      const themeToggle = header.getByRole("button", {
-        name: "Toggle theme",
-      });
+      const themeToggle = header.getByRole("button", { name: /Theme:/ });
       await expect(themeToggle).toBeVisible();
 
       const userButton = header.locator(
         '[data-slot="dropdown-menu-trigger"]'
       );
       await expect(userButton.first()).toBeVisible();
-
-      // URL input is in the AppHeader
-      const urlInput = header.getByPlaceholder("Paste YouTube URL...");
-      await expect(urlInput).toBeVisible();
     });
 
     test("should have correct visual hierarchy order (top to bottom)", async ({
       authenticatedPage: page,
     }) => {
       const sidebar = page.locator("aside");
-      await expect(sidebar).toBeVisible();
+      await expect(sidebar).toBeVisible({ timeout: SIDEBAR_TIMEOUT });
 
       // Get bounding boxes of key sidebar elements to verify order
       const brandingBox = await sidebar
-        .getByText("Video Insight")
+        .getByText("VIE")
         .boundingBox();
-      const summariesTabBox = await sidebar
-        .getByText("Summaries")
+      const newButtonBox = await sidebar
+        .getByRole("button", { name: "New", exact: true })
+        .boundingBox();
+      const collectionTabBox = await sidebar
+        .getByText("Collection")
         .boundingBox();
       // Search button is in the toolbar row below tabs
       const searchButtonBox = await sidebar
@@ -62,12 +63,14 @@ test.describe("Sidebar Header Redesign", () => {
         .boundingBox();
 
       expect(brandingBox).not.toBeNull();
-      expect(summariesTabBox).not.toBeNull();
+      expect(newButtonBox).not.toBeNull();
+      expect(collectionTabBox).not.toBeNull();
       expect(searchButtonBox).not.toBeNull();
 
-      // Verify top-to-bottom order: branding → tabs → toolbar
-      expect(brandingBox!.y).toBeLessThan(summariesTabBox!.y);
-      expect(summariesTabBox!.y).toBeLessThan(searchButtonBox!.y);
+      // Verify top-to-bottom order: branding → new button → tabs → toolbar
+      expect(brandingBox!.y).toBeLessThan(newButtonBox!.y);
+      expect(newButtonBox!.y).toBeLessThan(collectionTabBox!.y);
+      expect(collectionTabBox!.y).toBeLessThan(searchButtonBox!.y);
     });
 
     test("should show sidebar toggle in app header", async ({
@@ -82,7 +85,7 @@ test.describe("Sidebar Header Redesign", () => {
       authenticatedPage: page,
     }) => {
       const sidebar = page.locator("aside");
-      await expect(sidebar).toBeVisible();
+      await expect(sidebar).toBeVisible({ timeout: SIDEBAR_TIMEOUT });
 
       // Find the FolderPlus button (add folder) in the sidebar toolbar
       const newFolderTooltipTrigger = sidebar.locator("button").filter({
@@ -93,33 +96,35 @@ test.describe("Sidebar Header Redesign", () => {
   });
 
   test.describe("Tab Switching", () => {
-    test("should switch between Summaries and Memorized tabs", async ({
+    test("should switch between Collection and Assistant tabs", async ({
       authenticatedPage: page,
     }) => {
       const sidebar = page.locator("aside");
+      await expect(sidebar).toBeVisible({ timeout: SIDEBAR_TIMEOUT });
 
-      // Summaries should be active by default
-      const summariesTab = sidebar.getByText("Summaries");
-      const memorizedTab = sidebar.getByText("Memorized");
+      // Collection should be active by default
+      const collectionTab = sidebar.getByText("Collection");
+      const assistantTab = sidebar.getByText("Assistant");
 
-      // Click Memorized tab
-      await memorizedTab.click();
+      // Click Assistant tab
+      await assistantTab.click();
       await page.waitForTimeout(300);
 
-      // Click back to Summaries
-      await summariesTab.click();
+      // Chat panel should be visible
+      const chatHeader = sidebar.getByText("Chat with your knowledge");
+      await expect(chatHeader).toBeVisible();
+
+      // Click back to Collection
+      await collectionTab.click();
       await page.waitForTimeout(300);
 
       // Should still be functional
-      await expect(summariesTab).toBeVisible();
+      await expect(collectionTab).toBeVisible();
     });
   });
 
   test.describe("App Header Layout", () => {
-    // NOTE: The original "No Global Header" test was replaced because the
-    // sidebar-header redesign introduced an AppHeader component. The app
-    // now HAS a global header with sidebar toggle, URL input, and controls.
-    test("should have app header with sidebar toggle, URL input, and controls", async ({
+    test("should have app header with sidebar toggle and controls", async ({
       authenticatedPage: page,
     }) => {
       // AppHeader renders a <header> element
@@ -130,26 +135,19 @@ test.describe("Sidebar Header Redesign", () => {
       const toggleButton = header.getByLabel("Hide sidebar");
       await expect(toggleButton).toBeVisible();
 
-      // URL input in center
-      const urlInput = header.getByPlaceholder("Paste YouTube URL...");
-      await expect(urlInput).toBeVisible();
-
       // Theme toggle on right
-      const themeToggle = header.getByRole("button", { name: "Toggle theme" });
+      const themeToggle = header.getByRole("button", { name: /Theme:/ });
       await expect(themeToggle).toBeVisible();
     });
 
-    test("should have app icon linking to home page", async ({
+    test("should have New button in sidebar", async ({
       authenticatedPage: page,
     }) => {
       const sidebar = page.locator("aside");
-      await expect(sidebar).toBeVisible();
+      await expect(sidebar).toBeVisible({ timeout: SIDEBAR_TIMEOUT });
 
-      // The branding link should navigate to home
-      const brandingLink = sidebar.locator('a[href="/"]').filter({
-        hasText: "Video Insight",
-      });
-      await expect(brandingLink).toBeVisible();
+      const newButton = sidebar.getByRole("button", { name: "New", exact: true });
+      await expect(newButton).toBeVisible();
     });
 
     test("should show theme toggle and user profile in header", async ({
@@ -159,7 +157,7 @@ test.describe("Sidebar Header Redesign", () => {
       await expect(header).toBeVisible();
 
       // Header should have theme toggle and user dropdown
-      const themeToggle = header.getByRole("button", { name: "Toggle theme" });
+      const themeToggle = header.getByRole("button", { name: /Theme:/ });
       const userDropdown = header.locator('[data-slot="dropdown-menu-trigger"]');
 
       await expect(themeToggle).toBeVisible();
@@ -172,7 +170,7 @@ test.describe("Sidebar Header Redesign", () => {
       authenticatedPage: page,
     }) => {
       const sidebar = page.locator("aside");
-      await expect(sidebar).toBeVisible();
+      await expect(sidebar).toBeVisible({ timeout: SIDEBAR_TIMEOUT });
 
       const hasOverflow = await sidebar.evaluate((el) => {
         return el.scrollWidth > el.clientWidth;
@@ -201,13 +199,13 @@ test.describe("Sidebar Header Redesign", () => {
       await page.waitForTimeout(300);
 
       const sidebar = page.locator("aside");
-      await expect(sidebar).toBeVisible();
+      await expect(sidebar).toBeVisible({ timeout: SIDEBAR_TIMEOUT });
 
       // Key elements should still be visible
-      const branding = sidebar.getByText("Video Insight");
+      const branding = sidebar.getByText("VIE");
       await expect(branding).toBeVisible();
 
-      const tabs = sidebar.getByText("Summaries");
+      const tabs = sidebar.getByText("Collection");
       await expect(tabs).toBeVisible();
     });
 
@@ -215,7 +213,7 @@ test.describe("Sidebar Header Redesign", () => {
       authenticatedPage: page,
     }) => {
       const sidebar = page.locator("aside");
-      await expect(sidebar).toBeVisible();
+      await expect(sidebar).toBeVisible({ timeout: SIDEBAR_TIMEOUT });
 
       // Click toggle button in AppHeader (uses aria-label)
       const hideButton = page.getByLabel("Hide sidebar");
@@ -232,14 +230,14 @@ test.describe("Sidebar Header Redesign", () => {
       await page.waitForTimeout(300);
 
       // Sidebar should be visible again
-      await expect(sidebar).toBeVisible();
+      await expect(sidebar).toBeVisible({ timeout: SIDEBAR_TIMEOUT });
     });
 
     test("should show icon strip when sidebar is closed", async ({
       authenticatedPage: page,
     }) => {
       const sidebar = page.locator("aside");
-      await expect(sidebar).toBeVisible();
+      await expect(sidebar).toBeVisible({ timeout: SIDEBAR_TIMEOUT });
 
       // Close sidebar
       const hideButton = page.getByLabel("Hide sidebar");
@@ -301,7 +299,7 @@ test.describe("Sidebar Header Redesign", () => {
 
       // Use first aside (sidebar) - video detail page has a second aside for sticky chapter nav
       const sidebar = page.locator("aside").first();
-      await expect(sidebar).toBeVisible();
+      await expect(sidebar).toBeVisible({ timeout: SIDEBAR_TIMEOUT });
 
       // Find the active video item
       const activeVideo = sidebar.locator(

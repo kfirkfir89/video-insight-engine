@@ -27,11 +27,11 @@ const LandingPage = lazy(() =>
 const BoardPage = lazy(() =>
   import("@/pages/BoardPage").then((m) => ({ default: m.BoardPage }))
 );
+const GeneratePage = lazy(() =>
+  import("@/pages/GeneratePage").then((m) => ({ default: m.GeneratePage }))
+);
 const SharePage = lazy(() =>
   import("@/pages/SharePage").then((m) => ({ default: m.SharePage }))
-);
-const DashboardPage = lazy(() =>
-  import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage }))
 );
 const VideoDetailPage = lazy(() =>
   import("@/pages/VideoDetailPage").then((m) => ({
@@ -44,13 +44,6 @@ const DesignSystemPage = import.meta.env.DEV
   ? lazy(() =>
       import("@/pages/dev/DesignSystemPage").then((m) => ({
         default: m.DesignSystemPage,
-      }))
-    )
-  : null;
-const VideoExamplesPage = import.meta.env.DEV
-  ? lazy(() =>
-      import("@/pages/dev/VideoExamplesPage").then((m) => ({
-        default: m.VideoExamplesPage,
       }))
     )
   : null;
@@ -154,10 +147,10 @@ function AppRoutes() {
             }
           />
           <Route
-            path="/dashboard"
+            path="/generate"
             element={
               <ProtectedRoute>
-                <DashboardPage />
+                <GeneratePage />
               </ProtectedRoute>
             }
           />
@@ -170,6 +163,9 @@ function AppRoutes() {
             }
           />
 
+          {/* Backward compat redirect */}
+          <Route path="/dashboard" element={<Navigate to="/board" replace />} />
+
           {/* Dev-only routes - completely tree-shaken in production */}
           {import.meta.env.DEV && DesignSystemPage && (
             <Route
@@ -177,13 +173,6 @@ function AppRoutes() {
               element={<DesignSystemPage />}
             />
           )}
-          {import.meta.env.DEV && VideoExamplesPage && (
-            <Route
-              path="/dev/video-examples"
-              element={<VideoExamplesPage />}
-            />
-          )}
-
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

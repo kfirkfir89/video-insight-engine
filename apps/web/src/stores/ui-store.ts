@@ -52,7 +52,7 @@ function computeRangeSelection(
   };
 }
 
-export type ActiveSection = "summarized" | "memorized";
+export type ActiveSection = "summarized" | "assistant";
 
 export type RightPanelId = "none" | "minimap" | "chapters" | "chat";
 
@@ -127,6 +127,70 @@ interface UIState {
   setItemOrder: (items: string[]) => void;
   handleVideoSelection: (videoId: string, shiftKey: boolean, ctrlKey: boolean) => void;
   handleFolderSelection: (folderId: string, shiftKey: boolean, ctrlKey: boolean) => void;
+}
+
+/**
+ * Build selection updates for both videos and folders.
+ * Returns a partial UIState for shift+click (range), ctrl+click (toggle), and normal click (single).
+ */
+function buildSelectionUpdate(
+  state: UIState,
+  id: string,
+  type: "video" | "folder",
+  shiftKey: boolean,
+  ctrlKey: boolean,
+): Partial<UIState> {
+  const isVideo = type === "video";
+  const itemId = `${isVideo ? "v_" : "f_"}${id}`;
+  const ownIds = isVideo ? state.selectedVideoIds : state.selectedFolderIds;
+
+  // If not in selection mode, enter it
+  if (!state.selectionMode) {
+    return {
+      selectionMode: true,
+      selectedVideoIds: isVideo ? [id] : [],
+      selectedFolderIds: isVideo ? [] : [id],
+      lastClickedItemId: itemId,
+    };
+  }
+
+  // Shift+Click: range selection
+  if (shiftKey && state.lastClickedItemId && state.itemOrder.length > 0) {
+    const result = computeRangeSelection(
+      state.itemOrder,
+      state.lastClickedItemId,
+      itemId,
+      ctrlKey,
+      state.selectedVideoIds,
+      state.selectedFolderIds,
+    );
+    if (result) {
+      return {
+        selectedVideoIds: result.videoIds,
+        selectedFolderIds: result.folderIds,
+      };
+    }
+  }
+
+  // Ctrl+Click: toggle selection
+  if (ctrlKey) {
+    const toggled = ownIds.includes(id)
+      ? ownIds.filter((x) => x !== id)
+      : [...ownIds, id];
+    return {
+      ...(isVideo
+        ? { selectedVideoIds: toggled }
+        : { selectedFolderIds: toggled }),
+      lastClickedItemId: itemId,
+    };
+  }
+
+  // Normal click: single selection
+  return {
+    selectedVideoIds: isVideo ? [id] : [],
+    selectedFolderIds: isVideo ? [] : [id],
+    lastClickedItemId: itemId,
+  };
 }
 
 export const useUIStore = create<UIState>()(
@@ -238,121 +302,11 @@ export const useUIStore = create<UIState>()(
       setItemOrder: (items) => set({ itemOrder: items }),
 
       handleVideoSelection: (videoId, shiftKey, ctrlKey) => {
-        const state = get();
-        const itemId = `v_${videoId}`;
-
-        // If not in selection mode, enter it
-        if (!state.selectionMode) {
-          set({
-            selectionMode: true,
-            selectedVideoIds: [videoId],
-            selectedFolderIds: [],
-            lastClickedItemId: itemId,
-          });
-          return;
-        }
-
-        // Shift+Click: range selection
-        if (shiftKey && state.lastClickedItemId && state.itemOrder.length > 0) {
-          const result = computeRangeSelection(
-            state.itemOrder,
-            state.lastClickedItemId,
-            itemId,
-            ctrlKey, // preserveExisting
-            state.selectedVideoIds,
-            state.selectedFolderIds
-          );
-          if (result) {
-            set({
-              selectedVideoIds: result.videoIds,
-              selectedFolderIds: result.folderIds,
-            });
-            return;
-          }
-        }
-
-        // Ctrl+Click: toggle selection
-        if (ctrlKey) {
-          const ids = state.selectedVideoIds;
-          if (ids.includes(videoId)) {
-            set({
-              selectedVideoIds: ids.filter((id) => id !== videoId),
-              lastClickedItemId: itemId,
-            });
-          } else {
-            set({
-              selectedVideoIds: [...ids, videoId],
-              lastClickedItemId: itemId,
-            });
-          }
-          return;
-        }
-
-        // Normal click: single selection
-        set({
-          selectedVideoIds: [videoId],
-          selectedFolderIds: [],
-          lastClickedItemId: itemId,
-        });
+        set(buildSelectionUpdate(get(), videoId, "video", shiftKey, ctrlKey));
       },
 
       handleFolderSelection: (folderId, shiftKey, ctrlKey) => {
-        const state = get();
-        const itemId = `f_${folderId}`;
-
-        // If not in selection mode, enter it
-        if (!state.selectionMode) {
-          set({
-            selectionMode: true,
-            selectedVideoIds: [],
-            selectedFolderIds: [folderId],
-            lastClickedItemId: itemId,
-          });
-          return;
-        }
-
-        // Shift+Click: range selection
-        if (shiftKey && state.lastClickedItemId && state.itemOrder.length > 0) {
-          const result = computeRangeSelection(
-            state.itemOrder,
-            state.lastClickedItemId,
-            itemId,
-            ctrlKey, // preserveExisting
-            state.selectedVideoIds,
-            state.selectedFolderIds
-          );
-          if (result) {
-            set({
-              selectedVideoIds: result.videoIds,
-              selectedFolderIds: result.folderIds,
-            });
-            return;
-          }
-        }
-
-        // Ctrl+Click: toggle selection
-        if (ctrlKey) {
-          const ids = state.selectedFolderIds;
-          if (ids.includes(folderId)) {
-            set({
-              selectedFolderIds: ids.filter((id) => id !== folderId),
-              lastClickedItemId: itemId,
-            });
-          } else {
-            set({
-              selectedFolderIds: [...ids, folderId],
-              lastClickedItemId: itemId,
-            });
-          }
-          return;
-        }
-
-        // Normal click: single selection
-        set({
-          selectedVideoIds: [],
-          selectedFolderIds: [folderId],
-          lastClickedItemId: itemId,
-        });
+        set(buildSelectionUpdate(get(), folderId, "folder", shiftKey, ctrlKey));
       },
     }),
     {
@@ -367,6 +321,13 @@ export const useUIStore = create<UIState>()(
         sidebarTextSize: state.sidebarTextSize,
         sidebarSortOption: state.sidebarSortOption,
       }),
+      // Migrate persisted "memorized" → "summarized" for users with old localStorage
+      // TODO: Remove after 2026-06-01 when all users have migrated
+      onRehydrateStorage: () => (state) => {
+        if (state && (state.activeSection as string) === "memorized") {
+          state.activeSection = "summarized";
+        }
+      },
     }
   )
 );

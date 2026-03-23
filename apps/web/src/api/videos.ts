@@ -1,6 +1,6 @@
 import { request } from "./client";
-import type { Video, VideoSummary } from "@/types";
-import type { VideoOutput } from "@vie/types";
+import type { Video } from "@/types";
+import type { TabEntry, VIEResponseMeta } from "@vie/types";
 
 export interface ListVideosParams {
   folderId?: string;
@@ -22,6 +22,20 @@ export interface ProviderConfig {
   fallback?: Provider | null;
 }
 
+export interface VideoDetail {
+  id: string;
+  videoSummaryId: string;
+  youtubeId: string;
+  title: string;
+  creator: string | null;
+  duration: number | null;
+  thumbnailUrl: string | null;
+  status: string;
+  folderId: string | null;
+  meta: VIEResponseMeta | null;
+  tabs: TabEntry[] | null;
+}
+
 export const videosApi = {
   async list(params: ListVideosParams = {}): Promise<ListVideosResponse> {
     const searchParams = new URLSearchParams();
@@ -33,9 +47,7 @@ export const videosApi = {
     return request(`/videos${query ? `?${query}` : ""}`);
   },
 
-  async get(
-    id: string
-  ): Promise<{ video: Video; summary: VideoSummary | null; output?: VideoOutput | null }> {
+  async get(id: string): Promise<VideoDetail> {
     return request(`/videos/${id}`);
   },
 

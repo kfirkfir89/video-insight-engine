@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseTimestamp, matchConceptsToChapters, extractBlockText } from '../timestamp-utils';
-import type { SummaryChapter, Concept, ContentBlock } from '@vie/types';
+import type { SummaryChapter, Concept } from '@vie/types';
 
 // ─────────────────────────────────────────────────────
 // Test Fixtures
@@ -10,7 +10,7 @@ const createChapter = (
   id: string,
   startSeconds: number,
   endSeconds: number,
-  content?: ContentBlock[],
+  content?: Record<string, unknown>[],
 ): SummaryChapter => ({
   id,
   timestamp: `${Math.floor(startSeconds / 60)}:${String(startSeconds % 60).padStart(2, '0')}`,
@@ -397,7 +397,7 @@ describe('timestamp-utils', () => {
             steps: [
               { number: 1, instruction: 'Mix the Sourdough Starter with flour' },
             ],
-          } as ContentBlock,
+          },
         ]),
       ];
       const concepts: Concept[] = [
@@ -843,12 +843,12 @@ describe('timestamp-utils', () => {
 
   describe('extractBlockText', () => {
     it('should extract text from paragraph blocks', () => {
-      const block: ContentBlock = { blockId: 'b1', type: 'paragraph', text: 'Hello world' };
+      const block: Record<string, unknown> ={ blockId: 'b1', type: 'paragraph', text: 'Hello world' };
       expect(extractBlockText(block)).toBe('Hello world');
     });
 
     it('should extract text from definition blocks', () => {
-      const block: ContentBlock = {
+      const block: Record<string, unknown> ={
         blockId: 'b1', type: 'definition', term: 'API', meaning: 'Application Programming Interface',
       };
       expect(extractBlockText(block)).toContain('API');
@@ -863,7 +863,7 @@ describe('timestamp-utils', () => {
           { number: 1, instruction: 'Preheat oven', tips: 'Use convection mode' },
           { number: 2, instruction: 'Mix ingredients' },
         ],
-      } as ContentBlock;
+      };
       const text = extractBlockText(block);
       expect(text).toContain('Preheat oven');
       expect(text).toContain('Use convection mode');
@@ -871,7 +871,7 @@ describe('timestamp-utils', () => {
     });
 
     it('should extract text from bullet items', () => {
-      const block: ContentBlock = {
+      const block: Record<string, unknown> ={
         blockId: 'b1', type: 'bullets', items: ['First item', 'Second item'],
       };
       const text = extractBlockText(block);
@@ -880,7 +880,7 @@ describe('timestamp-utils', () => {
     });
 
     it('should return empty string for blocks with no text fields', () => {
-      const block = { blockId: 'b1', type: 'code', language: 'js', code: 'x = 1' } as ContentBlock;
+      const block = { blockId: 'b1', type: 'code', language: 'js', code: 'x = 1' };
       expect(extractBlockText(block)).toBe('');
     });
   });

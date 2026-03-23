@@ -12,22 +12,26 @@ if (!import.meta.env.DEV) {
 }
 
 import { useState } from 'react';
-import { Palette, Type, Ruler, LayoutGrid } from 'lucide-react';
+import { Palette, Type, Ruler, Component, Boxes, MousePointerClick } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 import { ColorPalette } from '@/components/dev/design-system/ColorPalette';
 import { Typography } from '@/components/dev/design-system/Typography';
 import { SpacingScale } from '@/components/dev/design-system/SpacingScale';
-import { BlockShowcase } from '@/components/dev/design-system/BlockShowcase';
+import { UIShowcase } from '@/components/dev/design-system/UIShowcase';
+import { VIELibraryShowcase } from '@/components/dev/design-system/VIELibraryShowcase';
+import { InteractiveBlockShowcase } from '@/components/dev/design-system/InteractiveBlockShowcase';
 
-type Section = 'colors' | 'typography' | 'spacing' | 'blocks';
+type Section = 'colors' | 'typography' | 'spacing' | 'ui' | 'vie' | 'interactive';
 
 const sections: { id: Section; label: string; icon: React.ReactNode }[] = [
-  { id: 'colors', label: 'Colors', icon: <Palette className="h-4 w-4" /> },
+  { id: 'colors', label: 'Colors & Tokens', icon: <Palette className="h-4 w-4" /> },
   { id: 'typography', label: 'Typography', icon: <Type className="h-4 w-4" /> },
   { id: 'spacing', label: 'Spacing', icon: <Ruler className="h-4 w-4" /> },
-  { id: 'blocks', label: 'Blocks', icon: <LayoutGrid className="h-4 w-4" /> },
+  { id: 'ui', label: 'UI Primitives', icon: <Component className="h-4 w-4" /> },
+  { id: 'vie', label: 'VIE Library', icon: <Boxes className="h-4 w-4" /> },
+  { id: 'interactive', label: 'Interactive', icon: <MousePointerClick className="h-4 w-4" /> },
 ];
 
 function SectionContent({ section }: { section: Section }) {
@@ -38,8 +42,12 @@ function SectionContent({ section }: { section: Section }) {
       return <Typography />;
     case 'spacing':
       return <SpacingScale />;
-    case 'blocks':
-      return <BlockShowcase />;
+    case 'ui':
+      return <UIShowcase />;
+    case 'vie':
+      return <VIELibraryShowcase />;
+    case 'interactive':
+      return <InteractiveBlockShowcase />;
   }
 }
 
@@ -63,13 +71,13 @@ export function DesignSystemPage() {
 
       <div className="container py-8 px-4 sm:px-6 lg:px-8">
         {/* Tab Navigation */}
-        <nav className="mb-8 flex gap-1 rounded-lg border border-border/40 bg-muted/30 p-1 w-fit" aria-label="Design system sections">
+        <nav className="mb-8 flex gap-1 rounded-lg border border-border/40 bg-muted/30 p-1 w-fit max-w-full overflow-x-auto" aria-label="Design system sections">
           {sections.map((section) => (
             <button
               key={section.id}
               onClick={() => setActiveSection(section.id)}
               className={cn(
-                'flex items-center gap-2 rounded-md px-4 py-2 text-sm transition-colors',
+                'flex items-center gap-2 rounded-md px-4 py-2 text-sm transition-colors whitespace-nowrap',
                 activeSection === section.id
                   ? 'bg-background text-foreground font-medium shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'

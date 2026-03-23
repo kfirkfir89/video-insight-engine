@@ -24,7 +24,7 @@ export function LoginPage() {
 
     try {
       await login(email, password);
-      navigate("/");
+      navigate("/board");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -82,8 +82,12 @@ export function LoginPage() {
                 variant="secondary"
                 className="w-full"
                 onClick={async () => {
-                  await login("admin@admin.com", "Admin123");
-                  navigate("/");
+                  try {
+                    await login("admin@admin.com", "Admin123");
+                    navigate("/board");
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Dev login failed");
+                  }
                 }}
               >
                 Admin Login (Dev Only)

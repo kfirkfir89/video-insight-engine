@@ -1,4 +1,4 @@
-import type { Concept, ContentBlock, SummaryChapter } from "@vie/types";
+import type { Concept, SummaryChapter } from "@vie/types";
 import { getNameVariants } from "./concept-utils";
 
 /**
@@ -63,7 +63,7 @@ function normalizeChapterRanges(chapters: SummaryChapter[]): SummaryChapter[] {
  * Extract searchable text from a content block.
  * Uses `in` checks to safely access common text fields across block types.
  */
-export function extractBlockText(block: ContentBlock): string {
+export function extractBlockText(block: Record<string, unknown>): string {
   const parts: string[] = [];
 
   if ("text" in block && typeof block.text === "string") parts.push(block.text);

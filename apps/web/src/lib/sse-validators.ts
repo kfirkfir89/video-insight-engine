@@ -12,17 +12,12 @@ import {
   type Chapter,
   type SummaryChapter,
   type Concept,
-  type ContentBlock,
   type DescriptionLink,
   type Resource,
   type RelatedVideo,
   type SocialLink,
   type VideoContext,
 } from '@vie/types';
-import { contentBlockSchema } from './block-schemas';
-
-// Re-export so existing consumers don't break
-export { contentBlockSchema } from './block-schemas';
 
 // ─────────────────────────────────────────────────────
 // Zod Schemas
@@ -48,10 +43,8 @@ export const summaryChapterSchema = z.object({
   generated_title: z.string().optional().nullable(), // Backend compatibility
   isCreatorChapter: z.boolean().optional(),
   is_creator_chapter: z.boolean().optional(), // Backend compatibility
-  // Content blocks use z.any() here to allow partial success - individual blocks
-  // are validated by validateContentBlocks() in validateChapter(), which filters
-  // out invalid blocks while keeping valid ones (graceful degradation).
-  content: z.array(z.any()).optional(),
+  // Legacy content blocks — pass through without validation
+  content: z.array(z.record(z.unknown())).optional(),
   // Transcript slice for this chapter (RAG/display)
   transcript: z.string().optional(),
 });
@@ -102,28 +95,6 @@ export function validateChapters(data: unknown): Chapter[] {
 }
 
 /**
- * Validate and filter content blocks, returning only valid blocks.
- * Invalid blocks are logged and filtered out rather than failing validation.
- */
-function validateContentBlocks(blocks: unknown[] | undefined): ContentBlock[] | undefined {
-  if (!blocks || !Array.isArray(blocks) || blocks.length === 0) {
-    return undefined;
-  }
-
-  const validBlocks: ContentBlock[] = [];
-  for (const block of blocks) {
-    const result = contentBlockSchema.safeParse(block);
-    if (result.success) {
-      validBlocks.push(result.data as ContentBlock);
-    } else {
-      sseLogger.warn('Invalid content block filtered out:', result.error.message);
-    }
-  }
-
-  return validBlocks.length > 0 ? validBlocks : undefined;
-}
-
-/**
  * Validate chapter from SSE event.
  * Returns null if validation fails.
  * Normalizes snake_case to camelCase for backend compatibility.
@@ -135,8 +106,6 @@ export function validateChapter(data: unknown): SummaryChapter | null {
     return null;
   }
   const d = result.data;
-  // Normalize snake_case to camelCase
-  // Note: summary and bullets are no longer stored - content blocks are the source of truth
   return {
     id: d.id,
     timestamp: d.timestamp,
@@ -146,7 +115,7 @@ export function validateChapter(data: unknown): SummaryChapter | null {
     originalTitle: d.originalTitle ?? d.original_title,
     generatedTitle: d.generatedTitle ?? d.generated_title ?? undefined,
     isCreatorChapter: d.isCreatorChapter ?? d.is_creator_chapter ?? false,
-    content: validateContentBlocks(d.content), // Validated dynamic content blocks
+    content: d.content,
   };
 }
 
@@ -188,7 +157,6 @@ export function validateDescriptionAnalysis(data: unknown): {
     sseLogger.warn('Invalid description analysis:', result.error.message);
     return null;
   }
-  // Cast to expected type - Zod validates structure, runtime handles flexible string types
   return result.data as {
     links: DescriptionLink[];
     resources: Resource[];
@@ -241,7 +209,6 @@ export function validateMetadataEvent(data: unknown): VideoMetadata {
     channel: result.data.channel,
     thumbnailUrl: result.data.thumbnailUrl,
     duration: result.data.duration,
-    // Zod schema validates VideoCategory enum, cast to VideoContext type
     context: result.data.context as VideoContext | undefined,
   };
 }
@@ -361,6 +328,11 @@ const VALID_SSE_PHASES = [
   'chapter_summaries',
   'concepts',
   'master_summary',
+  // Triage pipeline phases
+  'triage',
+  'extraction',
+  'enrichment',
+  'synthesis',
 ] as const;
 
 type SSEPhase = typeof VALID_SSE_PHASES[number];

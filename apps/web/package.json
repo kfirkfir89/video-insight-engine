@@ -27,6 +27,7 @@
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-query": "^5.90.16",
+    "@vie/shared": "workspace:*",
     "@vie/types": "workspace:^",
     "ai": "^6.0.27",
     "class-variance-authority": "^0.7.1",

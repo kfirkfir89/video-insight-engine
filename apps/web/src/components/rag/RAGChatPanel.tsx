@@ -4,10 +4,8 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollContainer } from '@/components/ui/scroll-container';
-import { ContentBlocks } from '@/components/video-detail/ContentBlocks';
+import { ChatBlockRenderer } from './ChatBlockRenderer';
 import { RAGSourceCard } from './RAGSourceCard';
-import type { ContentBlock } from '@vie/types';
-
 interface RAGSource {
   title: string;
   youtubeId: string;
@@ -21,7 +19,7 @@ interface RAGMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  blocks?: ContentBlock[];
+  blocks?: Record<string, unknown>[];
   sources?: RAGSource[];
   isStreaming?: boolean;
   createdAt: string;
@@ -89,11 +87,10 @@ const MessageBubble = memo(function MessageBubble({
 
         {/* Content Blocks (assistant only) */}
         {!isUser && message.blocks && message.blocks.length > 0 && (
-          <div className="mt-2">
-            <ContentBlocks
-              blocks={message.blocks}
-              onPlay={onSeek}
-            />
+          <div className="mt-2 space-y-2">
+            {message.blocks.map((block, i) => (
+              <ChatBlockRenderer key={(block.blockId as string) ?? i} block={block as { type: string; [key: string]: unknown }} onPlay={onSeek} />
+            ))}
           </div>
         )}
 
@@ -139,7 +136,7 @@ export const RAGChatPanel = memo(function RAGChatPanel({
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages.length]);
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
