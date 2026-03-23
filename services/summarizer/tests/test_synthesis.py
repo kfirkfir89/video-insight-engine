@@ -11,6 +11,9 @@ def mock_llm():
     """Mock LLM service."""
     service = MagicMock()
     service.call_llm = AsyncMock()
+    service.call_llm_fast = AsyncMock()
+    service.model = "anthropic/claude-sonnet-4-5-20250929"
+    service.fast_model = "anthropic/claude-3-5-haiku-20241022"
     return service
 
 
@@ -19,7 +22,7 @@ class TestSynthesize:
 
     @pytest.mark.asyncio
     async def test_returns_synthesis_result(self, mock_llm):
-        mock_llm.call_llm.return_value = json.dumps({
+        mock_llm.call_llm_fast.return_value = json.dumps({
             "tldr": "A comprehensive guide to testing.",
             "keyTakeaways": ["Write tests first", "Mock external deps"],
             "masterSummary": "This video covers testing fundamentals and best practices.",
@@ -42,7 +45,7 @@ class TestSynthesize:
 
     @pytest.mark.asyncio
     async def test_handles_null_channel(self, mock_llm):
-        mock_llm.call_llm.return_value = json.dumps({
+        mock_llm.call_llm_fast.return_value = json.dumps({
             "tldr": "Summary",
             "keyTakeaways": ["Takeaway"],
             "masterSummary": "Full summary text",
@@ -60,12 +63,12 @@ class TestSynthesize:
 
         assert result.tldr == "Summary"
         # Verify "Unknown" was passed to the prompt
-        prompt = mock_llm.call_llm.call_args[0][0]
+        prompt = mock_llm.call_llm_fast.call_args[0][0]
         assert "Unknown" in prompt
 
     @pytest.mark.asyncio
     async def test_handles_null_duration(self, mock_llm):
-        mock_llm.call_llm.return_value = json.dumps({
+        mock_llm.call_llm_fast.return_value = json.dumps({
             "tldr": "Summary",
             "keyTakeaways": ["Takeaway"],
             "masterSummary": "Full summary",
@@ -82,12 +85,12 @@ class TestSynthesize:
         )
 
         assert result.tldr == "Summary"
-        prompt = mock_llm.call_llm.call_args[0][0]
+        prompt = mock_llm.call_llm_fast.call_args[0][0]
         assert "unknown" in prompt
 
     @pytest.mark.asyncio
     async def test_raises_on_empty_response(self, mock_llm):
-        mock_llm.call_llm.return_value = "Sorry, I cannot do that."
+        mock_llm.call_llm_fast.return_value = "Sorry, I cannot do that."
 
         with pytest.raises(ValueError, match="Failed to parse"):
             await synthesize(
@@ -101,9 +104,10 @@ class TestSynthesize:
 
     @pytest.mark.asyncio
     async def test_raises_on_llm_error(self, mock_llm):
-        mock_llm.call_llm.side_effect = TimeoutError("timeout")
+        """Synthesis raises ValueError when retry utility exhausts all attempts."""
+        mock_llm.call_llm_fast.side_effect = TimeoutError("timeout")
 
-        with pytest.raises(TimeoutError):
+        with pytest.raises(ValueError, match="Synthesis LLM call failed"):
             await synthesize(
                 mock_llm,
                 title="Test",
@@ -115,7 +119,7 @@ class TestSynthesize:
 
     @pytest.mark.asyncio
     async def test_truncates_long_extraction_summary(self, mock_llm):
-        mock_llm.call_llm.return_value = json.dumps({
+        mock_llm.call_llm_fast.return_value = json.dumps({
             "tldr": "Summary",
             "keyTakeaways": ["Takeaway"],
             "masterSummary": "Full summary",
@@ -132,6 +136,6 @@ class TestSynthesize:
             extraction_summary=long_summary,
         )
 
-        prompt = mock_llm.call_llm.call_args[0][0]
+        prompt = mock_llm.call_llm_fast.call_args[0][0]
         # The extraction_summary is truncated to 4000 chars
         assert "x" * 4001 not in prompt
