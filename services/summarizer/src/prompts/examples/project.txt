@@ -1,0 +1,39 @@
+Here is one high-quality example of project extraction output. Match this density, specificity, and field completeness in your response.
+
+Video: "Build a Floating Wall Shelf — Beginner Woodworking" (25 minutes)
+
+{
+  "projectName": "Floating Wall Shelf with Hidden French Cleat",
+  "difficulty": "beginner",
+  "estimatedTime": "3-4 hours",
+  "estimatedCost": "$45",
+  "materials": [
+    {"name": "1x8 pine board", "quantity": "1 x 6 feet", "cost": "$12", "notes": "Select grade, check for warping by sighting down the edge"},
+    {"name": "1x4 pine board", "quantity": "1 x 4 feet", "cost": "$6", "notes": "For the French cleat — same wood species as shelf for color match"},
+    {"name": "#8 x 2-inch wood screws", "quantity": "12", "cost": "$4", "notes": "GRK R4 self-countersinking recommended — no pre-drilling needed"},
+    {"name": "Wood glue", "quantity": "1 bottle", "cost": "$5", "notes": "Titebond III for any shelf near a kitchen or bathroom (waterproof)"},
+    {"name": "220-grit sandpaper", "quantity": "3 sheets", "cost": "$3", "notes": "For final sanding before finish"},
+    {"name": "Danish oil finish", "quantity": "1 can (half-pint)", "cost": "$10", "notes": "Natural or dark walnut — one coat is enough for pine"},
+    {"name": "3-inch lag screws + wall anchors", "quantity": "2 each", "cost": "$5", "notes": "Toggle bolts if mounting in drywall without studs"}
+  ],
+  "tools": [
+    {"name": "Miter saw or circular saw", "required": true, "alternative": "Hand saw with miter box ($15 at any hardware store)"},
+    {"name": "Drill/driver", "required": true, "alternative": null},
+    {"name": "Speed square", "required": true, "alternative": "Any 90-degree square"},
+    {"name": "Level (24-inch)", "required": true, "alternative": "Phone level app works in a pinch"},
+    {"name": "Clamps (2x bar clamps)", "required": false, "alternative": "Stack heavy books on the glue joint for 1 hour"},
+    {"name": "Stud finder", "required": true, "alternative": "Knock on the wall and listen for solid vs hollow sound"}
+  ],
+  "steps": [
+    {"number": 1, "title": "Cut shelf and cleat pieces", "instruction": "Cut the 1x8 to 24 inches for the shelf top. Cut the 1x4 to 22 inches, then rip it at 45 degrees lengthwise on the table saw to create the two halves of the French cleat.", "duration": "15 min", "tips": "Mark all cuts before turning on the saw — batch cutting is more accurate and safer", "safetyNote": "Use a push stick for the 45-degree rip cut — fingers stay 6 inches from the blade minimum", "timestamp": 120},
+    {"number": 2, "title": "Sand all surfaces", "instruction": "Sand every surface with 120-grit first to remove mill marks, then finish with 220-grit. Pay extra attention to the front edge — this is what people see and touch.", "duration": "20 min", "tips": "Sand WITH the grain only. Cross-grain scratches show through the finish and look terrible.", "safetyNote": "Wear a dust mask — pine dust is an irritant", "timestamp": 340},
+    {"number": 3, "title": "Assemble the shelf box", "instruction": "Apply wood glue to the mating edges. Attach the cleat half to the back of the shelf using #8 screws at 6-inch intervals. Clamp and wipe excess glue with a damp cloth immediately.", "duration": "30 min", "tips": "Wipe glue squeeze-out NOW — dried glue won't absorb finish and leaves ugly light spots", "safetyNote": null, "timestamp": 580},
+    {"number": 4, "title": "Apply finish", "instruction": "Apply Danish oil with a lint-free cloth in thin, even coats. Wipe off excess after 15 minutes. Let cure for 8 hours.", "duration": "20 min + 8 hours cure", "tips": "One thin coat looks better than two thick coats on pine — the wood absorbs unevenly with too much oil", "safetyNote": "Dispose of oily rags properly — lay flat to dry outdoors. Bunched-up Danish oil rags can spontaneously combust.", "timestamp": 920},
+    {"number": 5, "title": "Mount the wall cleat", "instruction": "Find studs with the stud finder. Mark level line at desired height. Screw the wall half of the French cleat into at least one stud using 3-inch lag screws. If no stud available, use toggle bolt anchors rated for 50+ lbs.", "duration": "15 min", "tips": "French cleats are dead simple — the 45-degree cuts lock together under gravity. The shelf lifts straight up to remove.", "safetyNote": "Verify the cleat is level before drilling — a crooked shelf is obvious and unfixable without new holes", "timestamp": 1150}
+  ],
+  "safetyWarnings": [
+    "Always wear safety glasses when cutting or drilling",
+    "Dispose of finish-soaked rags flat outdoors — spontaneous combustion risk",
+    "Use push stick for any cut where fingers would be within 6 inches of the blade"
+  ]
+}

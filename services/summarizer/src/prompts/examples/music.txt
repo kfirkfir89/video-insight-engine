@@ -1,0 +1,35 @@
+Here is one high-quality example of music extraction output. Match this density, specificity, and field completeness in your response.
+
+Video: "Why Bohemian Rhapsody Still Blows Minds — A Production Breakdown" (19 minutes)
+
+{
+  "title": "Bohemian Rhapsody",
+  "artist": "Queen",
+  "genre": ["progressive rock", "art rock", "opera rock"],
+  "credits": [
+    {"role": "Songwriter", "name": "Freddie Mercury"},
+    {"role": "Producer", "name": "Roy Thomas Baker"},
+    {"role": "Lead vocals", "name": "Freddie Mercury"},
+    {"role": "Guitar", "name": "Brian May"},
+    {"role": "Bass", "name": "John Deacon"},
+    {"role": "Drums", "name": "Roger Taylor"},
+    {"role": "Engineer", "name": "Gary Lyons"}
+  ],
+  "analysis": [
+    {"aspect": "Production", "emoji": "🎛️", "detail": "Recorded at Rockfield Studios in 1975 using 24-track analog tape. The opera section alone required 180 vocal overdubs across 3 weeks — they literally wore the tape thin until you could see through it. Roy Thomas Baker says they had to bounce tracks repeatedly because they ran out of channels."},
+    {"aspect": "Vocals", "emoji": "🎤", "detail": "Freddie's vocal range spans nearly 4 octaves in this track. The speaker highlights the transition from the ballad (chest voice, intimate) to the opera section (full belt, operatic vibrato) as 'the most dramatic vocal gear shift in rock history.' The 'Galileo' section layers Freddie, Brian, and Roger singing in different octaves simultaneously."},
+    {"aspect": "Arrangement", "emoji": "📐", "detail": "The song has no repeating chorus — unprecedented for a radio hit. It's structured as 6 distinct sections: a cappella intro (0:00), ballad (0:49), guitar solo (3:03), opera (3:36), hard rock (4:07), and outro (4:55). The speaker argues this is actually a 'song suite' — 6 miniature songs stitched seamlessly."},
+    {"aspect": "Mixing", "emoji": "🔊", "detail": "Hard-panned stereo: guitar left, piano right, vocals center. The opera section uses extreme stereo separation so the 'Galileo/Figaro' call-and-response bounces left to right like a ping-pong match. The speaker demonstrates with a stereo visualizer."},
+    {"aspect": "Cultural impact", "emoji": "🌍", "detail": "Rejected by the label as 'too long for radio' at 5:55 — DJ Kenny Everett played it 14 times in one weekend after Mercury gave him a copy. It topped UK charts for 9 weeks in 1975, then again for 5 weeks in 1991 after Wayne's World."}
+  ],
+  "structure": [
+    {"name": "A cappella intro", "timestamp": 0, "duration": "49s", "description": "Four-part harmony, no instruments — sets the operatic tone immediately. Piano enters at the very last beat as a transition."},
+    {"name": "Ballad", "timestamp": 49, "duration": "2:14", "description": "Piano-driven confession. Freddie's voice is close-mic'd and intimate. 'Mama, just killed a man' — the speaker notes this is sung like a whispered confession, not a performance."},
+    {"name": "Guitar solo", "timestamp": 183, "duration": "33s", "description": "Brian May's Red Special through a Vox AC30 — the famous orchestral guitar tone. Triple-tracked and harmonized in thirds."},
+    {"name": "Opera section", "timestamp": 216, "duration": "31s", "description": "180 overdubbed vocal tracks. Galileo/Figaro call-and-response. The tempo accelerates from 72 BPM to 142 BPM across 30 seconds — the speaker calls it 'the most controlled chaos in rock.'"},
+    {"name": "Hard rock", "timestamp": 247, "duration": "48s", "description": "Sudden drop into a heavy riff — Brian May's guitar is detuned a half step for extra heaviness. Roger Taylor's kick drum pattern drives at 148 BPM."},
+    {"name": "Outro/coda", "timestamp": 295, "duration": "60s", "description": "Returns to the ballad piano. Freddie's final 'nothing really matters' is barely above a whisper. Gong hit at the very end — the speaker says it's 'the period at the end of a 6-minute sentence.'"}
+  ],
+  "lyrics": [],
+  "themes": ["mortality and consequence", "theatrical self-expression", "breaking format conventions", "artistic ambition over commercial safety"]
+}

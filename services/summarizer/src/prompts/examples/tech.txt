@@ -1,0 +1,41 @@
+Here is one high-quality example of tech extraction output. Match this density, specificity, and field completeness in your response.
+
+Video: "Build a REST API with Express.js and TypeScript" (18 minutes)
+
+{
+  "languages": ["TypeScript", "SQL"],
+  "frameworks": ["Express.js 4.18", "Prisma 5.7", "Zod 3.22"],
+  "topics": ["REST API design", "input validation", "ORM setup", "error handling middleware"],
+  "setup": {
+    "commands": [
+      "mkdir my-api && cd my-api",
+      "npm init -y",
+      "npm install express prisma @prisma/client zod",
+      "npm install -D typescript @types/express @types/node ts-node-dev",
+      "npx tsc --init",
+      "npx prisma init --datasource-provider sqlite"
+    ],
+    "dependencies": [
+      {"name": "express", "version": "4.18"},
+      {"name": "prisma", "version": "5.7"},
+      {"name": "@prisma/client", "version": "5.7"},
+      {"name": "zod", "version": "3.22"}
+    ],
+    "envVars": [
+      {"name": "DATABASE_URL", "description": "Prisma database connection string", "example": "file:./dev.db"},
+      {"name": "PORT", "description": "Server port", "example": "3000"}
+    ]
+  },
+  "snippets": [
+    {"filename": "src/routes/users.ts", "language": "typescript", "code": "import { Router } from 'express';\nimport { z } from 'zod';\nimport { prisma } from '../db';\n\nconst router = Router();\n\nconst CreateUserSchema = z.object({\n  name: z.string().min(2),\n  email: z.string().email(),\n});\n\nrouter.post('/', async (req, res, next) => {\n  try {\n    const data = CreateUserSchema.parse(req.body);\n    const user = await prisma.user.create({ data });\n    res.status(201).json(user);\n  } catch (err) {\n    next(err);\n  }\n});\n\nexport default router;", "explanation": "User creation route with Zod validation — parse() throws ZodError on invalid input, caught by error middleware", "timestamp": 420},
+    {"filename": "src/middleware/errorHandler.ts", "language": "typescript", "code": "import { ErrorRequestHandler } from 'express';\nimport { ZodError } from 'zod';\n\nexport const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {\n  if (err instanceof ZodError) {\n    res.status(422).json({ errors: err.flatten().fieldErrors });\n    return;\n  }\n  console.error(err);\n  res.status(500).json({ error: 'Internal server error' });\n};", "explanation": "Centralized error handler — converts ZodError to 422 with field-level errors, catches everything else as 500", "timestamp": 680}
+  ],
+  "patterns": [
+    {"title": "Validate at the boundary", "doExample": "const data = CreateUserSchema.parse(req.body); // Zod throws on invalid", "dontExample": "const { name, email } = req.body; // No validation — trusting raw input", "explanation": "Parsing at the route boundary guarantees typed data downstream — no manual checks needed in service layer"}
+  ],
+  "cheatSheet": [
+    {"title": "Prisma migrate", "code": "npx prisma migrate dev --name init", "description": "Create and apply a migration after changing schema.prisma"},
+    {"title": "Prisma studio", "code": "npx prisma studio", "description": "Open GUI browser to inspect and edit database records"},
+    {"title": "ts-node-dev watch", "code": "npx ts-node-dev --respawn src/index.ts", "description": "Auto-restart server on file changes during development"}
+  ]
+}

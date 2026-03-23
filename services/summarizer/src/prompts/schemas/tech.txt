@@ -1,0 +1,80 @@
+<domain_schema name="tech">
+TECH DATA — TechData schema
+
+Extract structured programming/tech content.
+
+{
+  "languages": ["Exact language names used"],
+  "frameworks": ["Exact framework/library names with versions if mentioned"],
+  "topics": ["Programming topics covered"],
+  "setup": {
+    "commands": ["Exact CLI commands shown"],
+    "dependencies": [
+      {
+        "name": "exact-package-name",
+        "version": "exact version or null"
+      }
+    ],
+    "envVars": [
+      {
+        "name": "VARIABLE_NAME",
+        "description": "What it does",
+        "example": "example_value"
+      }
+    ]
+  },
+  "snippets": [
+    {
+      "filename": "exact filename or null",
+      "language": "language identifier",
+      "code": "Exact code from the video — preserve variable names, imports, formatting",
+      "explanation": "What this code does and why",
+      "timestamp": null
+    }
+  ],
+> UI: Each snippet → CodeExplorer page. Fill filename for badge, language for syntax label, explanation for context below code. Fill timestamp for "Jump to" link.
+  "patterns": [
+    {
+      "title": "Pattern name",
+      "doExample": "Correct approach with code",
+      "dontExample": "Anti-pattern with code",
+      "explanation": "Why the do approach is better"
+    }
+  ],
+> UI: Each pattern → do/don't side-by-side view. Fill both doExample and dontExample for the comparison layout.
+  "cheatSheet": [
+    {
+      "title": "Quick reference item",
+      "code": "Code snippet",
+      "description": "When to use this"
+    }
+  ]
+}
+
+// Example for a coding tutorial:
+{
+  "snippets": [
+    {"filename": "App.tsx", "language": "tsx", "code": "const router = createBrowserRouter([\n  { path: '/', element: <Home /> },\n  { path: '/about', element: <About /> }\n]);", "explanation": "Basic router setup with createBrowserRouter", "timestamp": 230}
+  ],
+  "setup": {
+    "commands": ["npx create-react-app my-app --template typescript", "npm install react-router-dom"],
+    "dependencies": [{"name": "react-router-dom", "version": "6.20"}],
+    "envVars": []
+  }
+}
+
+SCALING (video is {duration_minutes} minutes):
+- Under 15 min: 2-4 snippets, 1-3 patterns, 3-5 cheatSheet items
+- 15-30 min: 4-8 snippets, 2-5 patterns, 5-8 cheatSheet items
+- Over 30 min: 6-12 snippets, 3-8 patterns, 8-15 cheatSheet items
+- Include all code shown — every function, command, and example
+
+RULES:
+- Include all code snippets and commands shown in the video
+- Preserve exact variable names, function names, class names, imports
+- Package names exact: "express" not "Express.js framework"
+- Version numbers preserved: "React 18" not "latest React"
+- Error messages quoted exactly when discussed
+- Every step should be reproducible — no skipping setup
+- Include actual console output/results when shown
+</domain_schema>

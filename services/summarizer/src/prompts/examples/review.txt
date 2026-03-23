@@ -1,0 +1,55 @@
+Here is one high-quality example of review extraction output. Match this density, specificity, and field completeness in your response.
+
+Video: "iPhone 15 Pro Max — 3 Month Honest Review" (14 minutes)
+
+{
+  "product": "Apple iPhone 15 Pro Max",
+  "price": "$1,199",
+  "rating": {
+    "score": 8.0,
+    "maxScore": 10.0,
+    "label": "Great"
+  },
+  "pros": [
+    "Titanium frame cuts weight by 19g vs 14 Pro Max — noticeably lighter in the pocket",
+    "Action button is genuinely useful — reviewer uses it for silent mode toggle and camera launch",
+    "48MP main camera with 5x optical zoom — first iPhone to match Samsung's telephoto range",
+    "A17 Pro chip handles console-quality games (Resident Evil Village runs at 30fps stable)",
+    "USB-C finally — same cable for phone, iPad, MacBook, and Nintendo Switch"
+  ],
+  "cons": [
+    "Battery life is identical to 14 Pro Max despite Apple's claims — still needs a charge by 10pm with heavy use",
+    "Titanium scratches more easily than stainless steel — reviewer's unit has visible marks after 3 months without a case",
+    "Starting at 256GB in 2024 is frustrating — 4K ProRes video fills that in a week",
+    "No improvement in charging speed — still maxes at 27W vs Samsung's 45W"
+  ],
+  "specs": [
+    {"key": "Display", "value": "6.7-inch Super Retina XDR OLED, 2796×1290, 120Hz ProMotion"},
+    {"key": "Chip", "value": "A17 Pro (3nm), 6-core CPU, 6-core GPU"},
+    {"key": "Main Camera", "value": "48MP, ƒ/1.78, sensor-shift OIS, 24mm"},
+    {"key": "Telephoto", "value": "12MP, ƒ/2.8, 5x optical zoom (120mm)"},
+    {"key": "Battery", "value": "4,441mAh, up to 29 hours video playback"},
+    {"key": "Storage", "value": "256GB / 512GB / 1TB"},
+    {"key": "Weight", "value": "221g (19g lighter than 14 Pro Max)"},
+    {"key": "Charging", "value": "27W wired, 15W MagSafe wireless"}
+  ],
+  "comparisons": [
+    {"feature": "Telephoto zoom", "thisProduct": "5x optical (120mm), 12MP", "competitor": "10x optical (230mm), 50MP", "competitorName": "Samsung Galaxy S24 Ultra", "winner": "right"},
+    {"feature": "Weight", "thisProduct": "221g (titanium frame)", "competitor": "232g (titanium frame)", "competitorName": "Samsung Galaxy S24 Ultra", "winner": "left"},
+    {"feature": "Charging speed", "thisProduct": "27W wired, full charge in 90 min", "competitor": "45W wired, full charge in 55 min", "competitorName": "Samsung Galaxy S24 Ultra", "winner": "right"},
+    {"feature": "Video recording", "thisProduct": "4K 60fps ProRes, Cinematic mode", "competitor": "8K 30fps, no ProRes equivalent", "competitorName": "Samsung Galaxy S24 Ultra", "winner": "left"}
+  ],
+  "verdict": {
+    "badge": "recommended",
+    "bestFor": ["iPhone users upgrading from 12 or older", "Mobile videographers who need ProRes", "Users who want the Apple ecosystem integration"],
+    "notFor": ["14 Pro Max owners — the upgrade is marginal", "Budget-conscious buyers — the 15 Pro at $999 is 90% of this phone", "People who need fast charging"],
+    "bottomLine": "The best iPhone ever made, but the jump from 14 Pro Max is small. Upgrade from 12/13 is transformative; from 14 Pro, wait for 16.",
+    "subScores": [
+      {"category": "Camera", "score": 9.0},
+      {"category": "Performance", "score": 9.5},
+      {"category": "Battery", "score": 7.0},
+      {"category": "Value", "score": 6.5},
+      {"category": "Build Quality", "score": 8.5}
+    ]
+  }
+}

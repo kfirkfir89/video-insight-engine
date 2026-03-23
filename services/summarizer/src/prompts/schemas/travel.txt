@@ -1,0 +1,86 @@
+<domain_schema name="travel">
+TRAVEL DATA — TravelData schema
+
+Extract a complete, actionable trip plan.
+
+{
+  "itinerary": [
+    {
+      "day": 1,
+      "city": "City or area name",
+      "theme": "Brief day theme (e.g., 'Historic Old Town & Local Food')",
+      "spots": [
+        {
+          "name": "EXACT place name from video",
+          "emoji": "single emoji matching spot type",
+          "description": "What to do/see — specific details from the video",
+          "cost": "Entry fee or estimated cost with currency, or null",
+          "duration": "How long to spend (e.g., '2-3 hours')",
+          "mapQuery": "Place Name, City, Country (Google Maps searchable)",
+          "tips": "Specific tip from the video (e.g., 'Book online to skip the 2-hour line')"
+        }
+      ],
+      "tips": ["Day-level tips from the video"]
+    }
+  ],
+> UI: Each spot becomes a SpotExplorer card. Fill emoji + mapQuery + cost + duration for rich expandable cards. Missing mapQuery = no "Open in Maps" button.
+
+  "budget": {
+    "total": 0,
+    "currency": "USD",
+    "breakdown": [
+      {
+        "category": "Accommodation | Food | Transport | Activities | Shopping | Miscellaneous",
+        "amount": 0,
+        "currency": "USD",
+        "notes": "Specific recommendation from video"
+      }
+    ]
+  },
+> UI: Budget breakdown → BudgetInteractive with total header + category bars. Fill all categories mentioned for complete budget view.
+
+  "packingList": [
+    {
+      "item": "Destination-specific item",
+      "category": "Essentials | Clothing | Electronics | Documents | Health",
+      "essential": true
+    }
+  ],
+> UI: Packing list → ChecklistInteractive with progress bar. Fill category for grouping headers, essential for priority badges.
+
+  "accommodationTips": [
+    {"text": "Where to stay, neighborhood recommendation", "type": "tip | warning | info"}
+  ],
+  "transportationTips": [
+    {"text": "How to get around — specific transit lines, passes, costs", "type": "tip | warning | info"}
+  ],
+  "bestSeason": "Best time to visit if mentioned, or null"
+}
+
+// Example for a travel vlog:
+{
+  "itinerary": [
+    {
+      "day": 1, "city": "Tokyo", "theme": "Arrival & Asakusa Exploration",
+      "spots": [
+        {"name": "Senso-ji Temple", "emoji": "⛩️", "description": "Tokyo's oldest temple — stunning Kaminarimon gate, incense hall, and fortune slips", "cost": "Free", "duration": "1.5 hours", "mapQuery": "Senso-ji Temple, Asakusa, Tokyo, Japan", "tips": "Visit before 9am to avoid crowds — the gate is lit up beautifully at dawn"}
+      ],
+      "tips": ["Get a Suica card at the airport — works on all trains and convenience stores"]
+    }
+  ],
+  "budget": {"total": 1200, "currency": "USD", "breakdown": [{"category": "Accommodation", "amount": 400, "currency": "USD", "notes": "Kuramae hostel, $55/night for 7 nights"}]}
+}
+
+SCALING (video is {duration_minutes} minutes):
+- Under 15 min: 1-2 days, key spots, basic budget
+- 15-30 min: full itinerary, all spots mentioned, packing list, budget breakdown
+- Over 30 min: comprehensive itinerary, all spots with tips, detailed budget, accommodation & transport tips, bestSeason
+
+RULES:
+- mapQuery must be a real Google Maps searchable string with city and country
+- All prices with currency: "€18" not "cheap"
+- Include all spots/attractions mentioned in the video
+- Budget should reflect what the video states, not generic estimates
+- Packing list should be destination-specific
+- Minimum: 1 day with spots, 5 packing items
+</domain_schema>
