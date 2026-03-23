@@ -3,8 +3,8 @@ import { useParams, Link } from "react-router-dom";
 import { Sparkles, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useShareOutput } from "@/hooks/use-share";
-import { OutputRouter } from "@/components/video-detail/OutputRouter";
-import { buildSynthesisFromMeta } from "@/lib/synthesis-utils";
+import { OutputRouter } from "@/features/video-output/components/OutputRouter";
+import { buildSynthesisFromMeta } from "@/features/video-output/lib/synthesis-utils";
 import type { TabEntry } from "@vie/types";
 
 /** Error boundary for shared content — a malformed block shouldn't crash the page. */

@@ -1,5 +1,5 @@
 import { Layout } from "@/components/layout/Layout";
-import { AddVideoInput } from "@/components/sidebar/AddVideoInput";
+import { AddVideoInput } from "@/features/sidebar/videos/AddVideoInput";
 import { Sparkles } from "lucide-react";
 
 export function GeneratePage() {

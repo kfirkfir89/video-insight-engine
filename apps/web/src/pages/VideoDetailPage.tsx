@@ -1,16 +1,16 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo } from "react";
 import { useVideo, useRetryVideo } from "@/hooks/use-videos";
-import { useSummaryStream } from "@/hooks/use-summary-stream";
-import { useProcessingStore } from "@/stores/processing-store";
+import { useSummaryStream } from "@/features/video-output/hooks/use-summary-stream";
+import { useProcessingStore } from "@/features/video-output/stores/processing-store";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { Loader2, ArrowLeft, RefreshCw, AlertCircle } from "lucide-react";
-import { OutputRouter } from "@/components/video-detail/OutputRouter";
-import { VideoPlayerProvider } from "@/contexts/VideoPlayerContext";
-import { CollapsibleVideoPlayer } from "@/components/video-detail/shell/CollapsibleVideoPlayer";
-import { buildSynthesisFromMeta } from "@/lib/synthesis-utils";
+import { OutputRouter } from "@/features/video-output/components/OutputRouter";
+import { VideoPlayerProvider } from "@/features/video-output/contexts/VideoPlayerContext";
+import { CollapsibleVideoPlayer } from "@/features/video-output/components/CollapsibleVideoPlayer";
+import { buildSynthesisFromMeta } from "@/features/video-output/lib/synthesis-utils";
 import type { TabEntry } from "@vie/types";
 
 export function VideoDetailPage() {

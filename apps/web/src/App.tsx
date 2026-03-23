@@ -4,7 +4,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWebSocket } from "@/hooks/use-websocket";
-import { useProcessingManager } from "@/hooks/use-processing-manager";
+import { useProcessingManager } from "@/features/video-output/hooks/use-processing-manager";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 

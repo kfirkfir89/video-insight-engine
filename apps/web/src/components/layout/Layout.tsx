@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 // Lazy load Sidebar - it includes DnD Kit context (~100KB)
 const Sidebar = lazy(() =>
-  import("@/components/sidebar").then((m) => ({ default: m.Sidebar }))
+  import("@/features/sidebar").then((m) => ({ default: m.Sidebar }))
 );
 
 function SidebarSkeleton() {
