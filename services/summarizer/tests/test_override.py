@@ -138,9 +138,7 @@ class TestOverrideEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["category"] == "cooking"
-        assert data["outputType"] == "recipe"
-        assert data["persona"] == "recipe"
-        assert data["outputTypeLabel"] == "Recipe"
+        assert "contentTag" in data
 
     @pytest.mark.anyio
     async def test_missing_secret_returns_401(self, test_app):
@@ -206,7 +204,6 @@ class TestOverrideEndpoint:
         result = check_override("video-test")
         assert result is not None
         assert result["category"] == "fitness"
-        assert result["output_type"] == "workout"
 
     @pytest.mark.anyio
     async def test_category_case_insensitive(self, test_app, valid_secret):
@@ -290,9 +287,7 @@ class TestOverrideRequestModel:
     def test_response_model(self):
         resp = OverrideResponse(
             category="cooking",
-            outputType="recipe",
-            outputTypeLabel="Recipe",
-            persona="recipe",
+            contentTag="food",
         )
         assert resp.category == "cooking"
-        assert resp.outputType == "recipe"
+        assert resp.contentTag == "food"

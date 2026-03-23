@@ -287,39 +287,27 @@ class TestExtractPlaylistSync:
         assert result.channel is None
 
     @patch("src.services.video.playlist.yt_dlp.YoutubeDL")
-    def test_download_error_with_proxy_fallback(self, mock_ydl_class):
-        """Test fallback to proxy on download error."""
-        from yt_dlp.utils import DownloadError
-
-        # First call fails, second succeeds (with proxy)
-        mock_ydl_direct = MagicMock()
-        mock_ydl_direct.extract_info.side_effect = DownloadError("Blocked")
-
-        mock_ydl_proxy = MagicMock()
-        mock_ydl_proxy.extract_info.return_value = {
-            "title": "Test Playlist",
-            "uploader": "Test Channel",
-            "thumbnails": [],
-            "entries": [{"id": "video1", "title": "Video 1", "duration": 120}],
-        }
-
-        mock_ydl_class.return_value.__enter__.side_effect = [mock_ydl_direct, mock_ydl_proxy]
-
-        result = _extract_playlist_sync("PLtest123")
-
-        assert result.title == "Test Playlist"
-        assert len(result.videos) == 1
-
-    @patch("src.services.video.playlist.yt_dlp.YoutubeDL")
-    def test_both_attempts_fail(self, mock_ydl_class):
-        """Test error when both direct and proxy attempts fail."""
+    def test_download_error_raises_value_error(self, mock_ydl_class):
+        """Test that DownloadError is wrapped in ValueError."""
         from yt_dlp.utils import DownloadError
 
         mock_ydl = MagicMock()
-        mock_ydl.extract_info.side_effect = DownloadError("Blocked everywhere")
+        mock_ydl.extract_info.side_effect = DownloadError("Blocked")
         mock_ydl_class.return_value.__enter__.return_value = mock_ydl
 
-        with pytest.raises(DownloadError):
+        with pytest.raises(ValueError, match="Failed to extract playlist"):
+            _extract_playlist_sync("PLtest123")
+
+    @patch("src.services.video.playlist.yt_dlp.YoutubeDL")
+    def test_extractor_error_raises_value_error(self, mock_ydl_class):
+        """Test that ExtractorError is wrapped in ValueError."""
+        from yt_dlp.utils import ExtractorError
+
+        mock_ydl = MagicMock()
+        mock_ydl.extract_info.side_effect = ExtractorError("Extractor failed")
+        mock_ydl_class.return_value.__enter__.return_value = mock_ydl
+
+        with pytest.raises(ValueError, match="Failed to extract playlist"):
             _extract_playlist_sync("PLtest123")
 
 

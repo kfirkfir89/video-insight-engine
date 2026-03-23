@@ -3,6 +3,7 @@
 from src.utils.json_parsing import (
     parse_json_response,
     parse_json_array_response,
+    strip_markdown_fences,
     _strip_json_comments,
     _repair_truncated_json,
 )
@@ -211,4 +212,66 @@ class TestParseJsonResponseTruncated:
         result = parse_json_array_response(text)
         assert isinstance(result, list)
         assert len(result) >= 1
+        assert result[0]["name"] == "foo"
+
+
+class TestStripMarkdownFences:
+    """Tests for strip_markdown_fences utility."""
+
+    def test_json_fence(self):
+        text = '```json\n{"key": "value"}\n```'
+        assert strip_markdown_fences(text) == '{"key": "value"}'
+
+    def test_plain_fence(self):
+        text = '```\n{"key": "value"}\n```'
+        assert strip_markdown_fences(text) == '{"key": "value"}'
+
+    def test_no_fence(self):
+        text = '{"key": "value"}'
+        assert strip_markdown_fences(text) == '{"key": "value"}'
+
+    def test_whitespace_around_fence(self):
+        text = '  \n```json\n{"key": "value"}\n```\n  '
+        assert strip_markdown_fences(text) == '{"key": "value"}'
+
+    def test_fence_no_newline_after_lang(self):
+        """Edge case: no newline after language tag."""
+        text = '```json{"key": "value"}```'
+        result = strip_markdown_fences(text)
+        assert '{"key": "value"}' in result
+
+    def test_multiline_json_fence(self):
+        text = '```json\n{\n  "key": "value",\n  "num": 42\n}\n```'
+        result = strip_markdown_fences(text)
+        assert '"key": "value"' in result
+        assert '"num": 42' in result
+        assert '```' not in result
+
+    def test_preserves_non_fenced_text(self):
+        text = 'Here is some plain text'
+        assert strip_markdown_fences(text) == text
+
+    def test_fence_with_trailing_text(self):
+        """Closing fence followed by extra whitespace is stripped."""
+        text = '```json\n{"a": 1}\n```  '
+        assert strip_markdown_fences(text) == '{"a": 1}'
+
+
+class TestParseJsonResponseWithFences:
+    """Integration: parse_json_response handles markdown-fenced JSON."""
+
+    def test_fenced_json_object(self):
+        text = '```json\n{"score": 10, "label": "good"}\n```'
+        result = parse_json_response(text)
+        assert result == {"score": 10, "label": "good"}
+
+    def test_fenced_json_with_preamble(self):
+        text = 'Here is the result:\n\n```json\n{"score": 10}\n```\n\nDone.'
+        result = parse_json_response(text)
+        assert result == {"score": 10}
+
+    def test_fenced_json_array(self):
+        text = '```json\n[{"name": "foo"}, {"name": "bar"}]\n```'
+        result = parse_json_array_response(text)
+        assert len(result) == 2
         assert result[0]["name"] == "foo"
