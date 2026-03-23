@@ -1,0 +1,56 @@
+Here is one high-quality example of travel extraction output. Match this density, specificity, and field completeness in your response.
+
+Video: "Barcelona on a Budget — 3 Days Under €300" (16 minutes)
+
+{
+  "itinerary": [
+    {
+      "day": 1,
+      "city": "Barcelona",
+      "theme": "Gothic Quarter & Waterfront",
+      "spots": [
+        {"name": "La Boqueria Market", "emoji": "🍊", "description": "Walk through the most famous food market in Europe — grab a €3 fresh fruit smoothie and people-watch at the fish counter", "cost": "€5-15 for snacks", "duration": "45 min", "mapQuery": "La Boqueria, Las Ramblas, Barcelona, Spain", "tips": "Go before 10am — after that it's packed with tour groups and prices jump 30%"},
+        {"name": "Gothic Quarter", "emoji": "🏛️", "description": "Wander the medieval streets around Plaça del Rei — free to explore, stunning 14th-century architecture, Instagram-worthy alleys", "cost": "Free", "duration": "2 hours", "mapQuery": "Barri Gòtic, Barcelona, Spain", "tips": "Download a free walking tour from GuruWalk — the guides work on tips, usually €5-10"},
+        {"name": "Barceloneta Beach", "emoji": "🏖️", "description": "Relax at the city beach — 1km of sand, free sunbathing, beach bars serve €3 beers", "cost": "Free", "duration": "2-3 hours", "mapQuery": "Barceloneta Beach, Barcelona, Spain", "tips": "Bring your own towel and water — vendors on the beach charge triple"}
+      ],
+      "tips": ["Buy a T-Casual card for €11.35 — gives you 10 metro rides, enough for 3 days if you walk between nearby spots"]
+    },
+    {
+      "day": 2,
+      "city": "Barcelona",
+      "theme": "Gaudí & Gràcia Neighborhood",
+      "spots": [
+        {"name": "Park Güell", "emoji": "🦎", "description": "Gaudí's mosaic wonderland on a hilltop — the free zone has great views, but the monumental zone (€10) is worth it for the famous mosaic bench", "cost": "€10 (online, saves €3)", "duration": "1.5 hours", "mapQuery": "Park Güell, Barcelona, Spain", "tips": "Book the first slot at 9:30am online — sells out days ahead, and morning light is best for photos"},
+        {"name": "Gràcia neighborhood", "emoji": "🎨", "description": "The bohemian quarter with independent shops, €8 lunch menú del día, and the best vermouth bars in the city", "cost": "€8-12 for lunch", "duration": "2 hours", "mapQuery": "Gràcia, Barcelona, Spain", "tips": "Ask for the menú del día at any restaurant — 3 courses for €8-12, the same meal à la carte costs €25+"}
+      ],
+      "tips": ["Skip Sagrada Família interior unless you booked weeks ago — €26 entry and sold out. The exterior view from the park across the street is free and almost as impressive."]
+    }
+  ],
+  "budget": {
+    "total": 280,
+    "currency": "EUR",
+    "breakdown": [
+      {"category": "Accommodation", "amount": 105, "currency": "EUR", "notes": "Generator Hostel, €35/night for 3 nights — 4-bed dorm in Gràcia"},
+      {"category": "Food", "amount": 90, "currency": "EUR", "notes": "€30/day — market breakfast, menú del día lunch, tapas dinner"},
+      {"category": "Transport", "amount": 25, "currency": "EUR", "notes": "Airport bus €7.75 each way + T-Casual card €11.35"},
+      {"category": "Activities", "amount": 40, "currency": "EUR", "notes": "Park Güell €10, walking tour tips €10, beach day free"},
+      {"category": "Miscellaneous", "amount": 20, "currency": "EUR", "notes": "Souvenirs, phone charger, unexpected snacks"}
+    ]
+  },
+  "packingList": [
+    {"item": "Universal EU adapter (Type C/F)", "category": "Electronics", "essential": true},
+    {"item": "Reef-safe sunscreen SPF 50", "category": "Health", "essential": true},
+    {"item": "Lightweight daypack (anti-theft with hidden zipper)", "category": "Essentials", "essential": true},
+    {"item": "Quick-dry travel towel", "category": "Essentials", "essential": true},
+    {"item": "Refillable water bottle", "category": "Essentials", "essential": false},
+    {"item": "Comfortable walking shoes — you'll walk 15-20k steps/day", "category": "Clothing", "essential": true}
+  ],
+  "accommodationTips": [
+    {"text": "Stay in Gràcia or Eixample — cheaper than Las Ramblas area and feels more local. Generator Hostel has the best price/location ratio.", "type": "tip"}
+  ],
+  "transportationTips": [
+    {"text": "Aerobus from airport to Plaça Catalunya takes 35 minutes and costs €7.75 — cheaper and faster than a taxi (€35+)", "type": "tip"},
+    {"text": "Everything in the center is walkable within 20 minutes — save metro rides for Park Güell and Montjuïc", "type": "info"}
+  ],
+  "bestSeason": "April-May or September-October — warm enough for the beach, fewer crowds, and hotel prices drop 40% from peak summer"
+}

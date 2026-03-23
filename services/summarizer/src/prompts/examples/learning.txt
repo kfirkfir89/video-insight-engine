@@ -1,0 +1,36 @@
+Here is one high-quality example of learning extraction output. Match this density, specificity, and field completeness in your response.
+
+Video: "How Memory Actually Works — The Science of Forgetting" (22 minutes)
+
+{
+  "keyPoints": [
+    {"emoji": "🧠", "title": "The forgetting curve drops 70% in 24 hours without review", "detail": "Ebbinghaus discovered that we lose ~70% of new information within 24 hours. The speaker shows his original 1885 data curve and explains that the steepest drop happens in the first 20 minutes.", "timestamp": 85},
+    {"emoji": "🔁", "title": "Spaced repetition beats cramming by 200% on long-term retention", "detail": "A 2013 study at UC San Diego compared students who studied 4 hours straight vs. 4 hours over 4 days. Spaced group scored 200% higher on a test 30 days later. The key is increasing intervals: 1 day → 3 days → 7 days → 21 days.", "timestamp": 340},
+    {"emoji": "😴", "title": "Sleep consolidation moves memories from hippocampus to cortex", "detail": "During deep sleep (stage 3 NREM), the hippocampus replays the day's experiences and transfers stable patterns to the neocortex. The speaker calls this 'overnight refactoring' — the brain compresses and links new info to existing knowledge.", "timestamp": 580},
+    {"emoji": "🏋️", "title": "Retrieval practice is 3x more effective than re-reading", "detail": "Testing yourself forces the brain to reconstruct the memory, strengthening the neural pathway each time. A 2011 Purdue study found students who practiced retrieval retained 50% more after one week than students who re-read the same material 4 times.", "timestamp": 790},
+    {"emoji": "🔗", "title": "Elaborative encoding doubles retention by linking to existing knowledge", "detail": "Connecting new information to something you already know creates multiple retrieval paths. The speaker uses the analogy: 'A fact with one hook can fall off the wall — a fact with five hooks stays forever.'", "timestamp": 1020}
+  ],
+  "concepts": [
+    {"name": "Forgetting curve", "emoji": "📉", "definition": "Ebbinghaus's 1885 discovery that memory retention decays exponentially over time without reinforcement. Within 20 minutes you lose 40%, within 24 hours you lose 70%, and within a month you lose 90%.", "example": "The speaker shows the original Ebbinghaus curve plotted against his own test results — they match almost exactly after 140 years.", "analogy": "Like a sandcastle at the shore — the tide erodes it fast at first, then slower, unless you keep rebuilding.", "connections": ["spaced repetition", "retrieval practice"]},
+    {"name": "Spaced repetition", "emoji": "📅", "definition": "A study technique that spaces reviews at increasing intervals — 1 day, 3 days, 7 days, 21 days — to catch memories right before they fade, making each review more efficient.", "example": "The speaker demonstrates with Anki flashcards, showing how the algorithm schedules cards at increasing intervals based on recall accuracy.", "analogy": "Like watering a plant — too often is wasteful, too rare and it dies. Space it just right and it thrives.", "connections": ["forgetting curve", "active recall"]},
+    {"name": "Retrieval practice", "emoji": "🏋️", "definition": "The act of pulling information from memory without looking at the source. Each successful retrieval strengthens the memory trace more than passive re-exposure.", "example": "Instead of re-reading chapter notes, close the book and write down everything you remember — the struggle to recall is what builds the memory.", "analogy": null, "connections": ["testing effect", "spaced repetition"]}
+  ],
+  "takeaways": [
+    "Review new material within 24 hours to prevent the steepest part of the forgetting curve",
+    "Use spaced repetition with increasing intervals: 1 → 3 → 7 → 21 days",
+    "Test yourself instead of re-reading — retrieval practice is 3x more effective",
+    "Sleep 7-8 hours after learning to allow hippocampal consolidation",
+    "Link new concepts to existing knowledge with elaborative encoding"
+  ],
+  "timestamps": [
+    {"time": "0:00", "seconds": 0, "label": "Introduction — why we forget"},
+    {"time": "1:25", "seconds": 85, "label": "The forgetting curve explained"},
+    {"time": "5:40", "seconds": 340, "label": "Spaced repetition technique"},
+    {"time": "9:40", "seconds": 580, "label": "Sleep and memory consolidation"},
+    {"time": "13:10", "seconds": 790, "label": "Retrieval practice vs re-reading"},
+    {"time": "17:00", "seconds": 1020, "label": "Elaborative encoding strategies"},
+    {"time": "20:30", "seconds": 1230, "label": "Summary and practical system"}
+  ],
+  "keyQuestion": "Why do we forget most of what we learn, and what proven techniques prevent it?",
+  "summary": "Memory decays exponentially without reinforcement (Ebbinghaus forgetting curve), but three evidence-based techniques dramatically improve retention: spaced repetition at increasing intervals, retrieval practice instead of re-reading, and sleeping well after learning sessions."
+}

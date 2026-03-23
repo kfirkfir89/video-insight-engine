@@ -1,0 +1,51 @@
+<domain_schema name="narrative">
+NARRATIVE MODIFIER — NarrativeData schema
+
+Additional extraction for content with storytelling elements.
+Merge this INTO the main domain data.
+
+{
+  "keyMoments": [
+    {
+      "timestamp": null,
+      "description": "What happened at this moment",
+      "mood": "Emotional tone (e.g., 'triumphant', 'tense', 'humorous')",
+      "emoji": "matching emoji"
+    }
+  ],
+> UI: Key moments → TimelineExplorer entries. Fill mood for filterable pills, emoji for timeline markers.
+  "quotes": [
+    {
+      "text": "Exact verbatim quote",
+      "speaker": "Who said it",
+      "timestamp": null,
+      "context": "Brief context for the quote"
+    }
+  ],
+  "takeaways": [
+    "Narrative-driven takeaways or lessons from the story"
+  ]
+}
+
+// Example for a documentary-style video:
+{
+  "keyMoments": [
+    {"timestamp": 340, "description": "Founder reveals the company nearly went bankrupt in 2019 — had $800 left in the account", "mood": "tense", "emoji": "😰"},
+    {"timestamp": 720, "description": "Product launch day — first 1000 units sell out in 47 minutes", "mood": "triumphant", "emoji": "🎉"}
+  ],
+  "quotes": [
+    {"text": "We had eight hundred dollars and a dream. That's it.", "speaker": "Alex Chen", "timestamp": 345, "context": "Describing the lowest point before their breakthrough"}
+  ],
+  "takeaways": ["Persistence through near-failure was the defining factor in their success"]
+}
+
+SCALING (video is {duration_minutes} minutes):
+- Under 15 min: 2-3 key moments, 2-3 quotes, 2-3 takeaways
+- 15-30 min: 4-6 key moments, 3-5 quotes, 3-5 takeaways
+- Over 30 min: 6-10 key moments, 5-8 quotes, 5-8 takeaways
+
+RULES:
+- Quotes must be exact — don't paraphrase
+- Attribute quotes to the correct speaker
+- Only include moments that are narratively significant
+</domain_schema>

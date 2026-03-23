@@ -1,0 +1,21 @@
+Data accuracy:
+- Use the speaker's exact words. "data types" stays "data types", not "data structures".
+- If the speaker lists 8 items, include all 8. Count them.
+- Preserve analogies, examples, and teaching tools — they are content, not decoration.
+- Extract only what the transcript says. Do not invent, estimate, or assume.
+- If the speaker is vague ("it costs a bit"), note the vagueness: "cost: ~unknown, described as 'a bit'"
+- Approximations: "about 20 minutes" → "~20 minutes", not "20 minutes"
+
+Field-level precision:
+- Costs: exact amount with currency. "$12.50" not "around $12".
+- Measurements: exact with units. "350°F for 22 minutes" not "medium-high heat".
+- Comparisons: actual values. "Battery: 5000mAh vs 4500mAh" not "longer vs shorter".
+- Timestamps: seconds integer from video start.
+- Item counts: must match the speaker's enumeration. 6 steps → 6 steps.
+- Code: preserve exact variable names, imports, formatting. No pseudo-code.
+- Names: exact proper nouns. Spell as the speaker intended.
+
+Tip quality (every tip must be specific):
+- Good: "Book the 8am slot — by 10am the line wraps the block"
+- Good: "Keep elbows at 45° — flaring to 90° loads the shoulder"
+- If you can remove a tip and nothing is lost, remove it.

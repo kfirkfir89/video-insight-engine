@@ -1,0 +1,132 @@
+<component_toolkit>
+COMPONENT TOOLKIT:
+Pick the component that matches what the user DOES, not what the data looks like.
+Tab IDs are free-form (any unique snake_case). Components are the routing key.
+
+CROSS-DOMAIN USAGE:
+Components are NOT domain-locked. checklist works for prerequisites (tech), packing lists (travel), and ingredients (food). step_player works for setup guides (tech), cooking steps (food), and itinerary planning (travel). comparison works for tech trade-offs, product features, and concept differences. spot_explorer works for browsable items in any domain — tech resources, learning topics, gear lists. Choose components by UX GOAL, not content domain. Exception: quiz, scenario, and flash_deck are restricted — see LEARNING section for limits.
+
+EXPLORATION — user browses and discovers:
+
+  overview ⭐ RECOMMENDED AS FIRST OR SECOND TAB
+    CREATES: Landing page with stats, summary, key takeaways, and navigation to other tabs
+    GOOD FOR: Orienting the user — "what is this video about and where should I start?"
+    NEEDS: meta fields (masterSummary, keyTakeaways, descriptionAnalysis)
+    DATASOURCE: "meta"
+
+  spot_explorer
+    CREATES: Browsable guide with expandable cards, map links, cost badges, tips
+    GOOD FOR: Places to visit, restaurants to try, products to consider, gear to buy
+    NEEDS: Array of items with name, emoji, description, cost, mapQuery or actionUrl
+    DATASOURCE: "travel.itinerary", "food.*", or "learning.keyPoints" (for topics/resources as browsable cards)
+
+  info_grid ⭐ GREAT FOR REFERENCE DATA
+    CREATES: Searchable/filterable card grid with key-value pairs, specs, or tag clouds
+    GOOD FOR: Specs, credits, tips, features, metadata — anything users look up, not read linearly
+    NEEDS: Array of items with key, value, optional emoji/category
+    DATASOURCE: Any domain data that is key-value shaped
+
+  code_explorer
+    CREATES: Syntax-highlighted code with step-through navigation and copy button
+    GOOD FOR: Code to copy, commands to run, patterns to reference
+    NEEDS: Array of snippets with code, language, explanation, filename
+
+  comparison
+    CREATES: Side-by-side data table or pros/cons columns
+    GOOD FOR: Helping user decide between options, weighing trade-offs
+    NEEDS: pros[], cons[], or comparison rows with feature/left/right
+    DATASOURCE: "tech.cheatSheet", "learning.concepts", "learning.keyPoints", or "review.pros" — assembler converts all shapes
+
+  gallery
+    CREATES: Image grid with captions and lightbox
+    GOOD FOR: Visual reference — dishes, views, products, before/after
+    NEEDS: Array of images with caption and optional tags
+
+ACTION — user completes tasks:
+
+  checklist
+    CREATES: Checkable list with progress bar and celebration on completion
+    GOOD FOR: Items to buy, pack, prepare, collect — things user checks off in REAL LIFE
+    NEEDS: Array of items with label, optional amount/unit/group/note
+    NOTE: For items the user checks off in real life — shopping, packing, prep tasks.
+
+  step_player ⭐ GREAT FOR ANY ORDERED PROCESS
+    CREATES: Step-through guide with inline timers, tips, and completion tracking
+    GOOD FOR: Ordered processes — cooking, building, installing, assembling, setup guides
+    NEEDS: Array of numbered steps with instruction, optional duration/tip/safetyNote
+    DATASOURCE: "project.steps" for build guides, "food.steps" for recipes, "fitness.exercises" for workouts
+
+  exercise_tracker
+    CREATES: Exercise cards with set tracking, rest timers, form cue expansion
+    GOOD FOR: Workouts to follow at the gym or at home
+    NEEDS: Array of exercises with name, sets, reps, rest, formCues, modifications
+
+LEARNING — user tests understanding:
+  LIMIT: quiz and scenario are for learning and tech domains ONLY.
+
+  quiz
+    CREATES: Scored multiple-choice test with explanations and celebration
+    GOOD FOR: Testing knowledge retention, exam prep, self-assessment
+    NEEDS: Array of questions with options, correctIndex, explanation
+    DATASOURCE: ALWAYS "enrichment.quiz" — quiz data ONLY comes from enrichment
+    DOMAIN LIMIT: learning and tech only
+
+  flash_deck
+    CREATES: Flip cards with front/back, navigation, progress tracking
+    GOOD FOR: Memorizing concepts, vocabulary, patterns, API reference, theory
+    NEEDS: Array of items with front (term/question/code) and back (definition/answer)
+    DATASOURCE: "enrichment.flashcards" (preferred) OR "{domain}.concepts" from extraction
+    LIMIT: Maximum 1 flash_deck tab per video. Study material ONLY — concepts a student would memorize.
+    NEVER USE FOR: tips, features, analysis, trivia, chef tips, product features, song analysis.
+    front must be a real term or concept name. Never a category label like "chef_tip" or "pro_tip".
+
+  scenario
+    CREATES: "Which X for Y?" challenges with option grid, scoring, explanations
+    GOOD FOR: Testing applied knowledge, decision-making practice
+    NEEDS: Array of scenarios with question, options (one correct), explanations
+    DATASOURCE: ALWAYS "enrichment.scenarios" — scenario data ONLY comes from enrichment
+    DOMAIN LIMIT: learning and tech only
+
+MEDIA — user watches/listens:
+
+  clip_player ⭐ RICHER ALTERNATIVE TO TIMELINE
+    CREATES: Video clip segments with mood filters and auto-advance
+    GOOD FOR: Highlight reels, key moments, demos, funny scenes — any moment worth rewatching
+    NEEDS: Array of clips with startSeconds, endSeconds, title, mood, videoId
+    PREFER clip_player over timeline when you want users to actually watch segments, not just jump.
+
+  lyrics_player
+    CREATES: Song structure display with synced lyrics and section navigation
+    GOOD FOR: Following along with music, analyzing song structure
+    NEEDS: Song sections with name, lines, timestamps, optional analysis
+
+DISPLAY — user reads (USE SPARINGLY — max 1 display tab per output):
+
+  verdict — Score ring + recommendation badge + best-for/not-for lists
+  budget — Total + category breakdown bars + saving tips
+
+LOW PRIORITY — use only when clearly warranted:
+
+  timeline
+    CREATES: Timestamped moments with mood filters and optional video clips
+    NEEDS: Array of moments with timestamp, title, description, mood
+    DATASOURCE: "learning.timestamps" (this is the only valid timeline datasource)
+    CAVEAT: Only use when chapters have descriptions AND meaningful labels.
+    Bare "Intro", "Part 1", "Section 2" labels are NOT worth a tab.
+    Prefer clip_player for key moments — it lets users actually watch, not just jump.
+
+<valid_datasources>
+tech: tech.snippets, tech.patterns, tech.cheatSheet, tech.setup.commands, tech.topics
+learning: learning.keyPoints, learning.concepts, learning.takeaways, learning.timestamps
+project: project.steps, project.materials, project.tools, project.safetyWarnings
+food: food.ingredients, food.steps, food.tips, food.equipment, food.substitutions
+travel: travel.itinerary, travel.budget, travel.packingList
+review: review.pros, review.cons, review.specs, review.comparisons, review.verdict
+fitness: fitness.exercises, fitness.warmup, fitness.cooldown, fitness.timer
+music: music.analysis, music.structure, music.lyrics, music.credits
+enrichment: enrichment.quiz, enrichment.flashcards, enrichment.scenarios
+
+Use only the paths listed here. If a path is not listed, it does not exist.
+For timeline component, always use learning.timestamps as the datasource.
+</valid_datasources>
+</component_toolkit>
