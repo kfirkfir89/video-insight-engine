@@ -22,8 +22,10 @@ Separate creation from startup for testability:
 // app.ts
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: { level: config.LOG_LEVEL,
-      transport: isDev ? { target: 'pino-pretty' } : undefined },
+    logger: {
+      level: config.LOG_LEVEL,
+      transport: isDev ? { target: "pino-pretty" } : undefined,
+    },
   });
   await app.register(cors, { origin: config.CORS_ORIGINS });
   await app.register(helmet);
@@ -33,7 +35,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
 // server.ts
 const app = await buildApp();
-await app.listen({ port: config.PORT, host: '0.0.0.0' });
+await app.listen({ port: config.PORT, host: "0.0.0.0" });
 ```
 
 ---
@@ -45,17 +47,17 @@ Group by feature, attach schemas, delegate to services:
 ```typescript
 // routes/index.ts
 export async function routes(app: FastifyInstance) {
-  await app.register(userRoutes, { prefix: '/api/v1/users' });
-  await app.register(healthRoutes, { prefix: '/health' });
+  await app.register(userRoutes, { prefix: "/api/v1/users" });
+  await app.register(healthRoutes, { prefix: "/health" });
 }
 
 // users/user.route.ts
 export async function userRoutes(app: FastifyInstance) {
-  app.post('/', {
+  app.post("/", {
     schema: { body: zodToJsonSchema(createUserBody) },
     handler: createUser,
   });
-  app.get('/:id', { preHandler: [authenticate], handler: getUser });
+  app.get("/:id", { preHandler: [authenticate], handler: getUser });
 }
 ```
 
@@ -66,17 +68,23 @@ export async function userRoutes(app: FastifyInstance) {
 Wrap with `fastify-plugin`, always type-augment:
 
 ```typescript
-import fp from 'fastify-plugin';
+import fp from "fastify-plugin";
 
-declare module 'fastify' {
-  interface FastifyInstance { db: Database; }
-  interface FastifyRequest { user?: TokenPayload; }
+declare module "fastify" {
+  interface FastifyInstance {
+    db: Database;
+  }
+  interface FastifyRequest {
+    user?: TokenPayload;
+  }
 }
 
 export const databasePlugin = fp(async (app, opts) => {
   const client = await connectToDatabase(opts.uri);
-  app.decorate('db', client);
-  app.addHook('onClose', async () => { await client.close(); });
+  app.decorate("db", client);
+  app.addHook("onClose", async () => {
+    await client.close();
+  });
 });
 ```
 
@@ -89,11 +97,11 @@ Request lifecycle: `onRequest → preParsing → preValidation → preHandler �
 Use hooks for cross-cutting concerns. Use route-specific `preHandler` for auth:
 
 ```typescript
-app.addHook('onRequest', async (request) => {
+app.addHook("onRequest", async (request) => {
   request.startTime = Date.now();
 });
 
-app.get('/admin', {
+app.get("/admin", {
   preHandler: [authenticate, requireAdmin],
   handler: adminHandler,
 });
@@ -109,10 +117,18 @@ Set a global error handler. Handle graceful shutdown:
 app.setErrorHandler((error, request, reply) => {
   request.log.error(error);
   if (error instanceof AppError)
-    return reply.status(error.statusCode).send({ error: { code: error.code, message: error.message } });
+    return reply
+      .status(error.statusCode)
+      .send({ error: { code: error.code, message: error.message } });
   if (error.validation)
-    return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', details: error.validation } });
-  return reply.status(500).send({ error: { code: 'INTERNAL_ERROR', message: 'Something went wrong' } });
+    return reply
+      .status(400)
+      .send({ error: { code: "VALIDATION_ERROR", details: error.validation } });
+  return reply
+    .status(500)
+    .send({
+      error: { code: "INTERNAL_ERROR", message: "Something went wrong" },
+    });
 });
 
 // Graceful shutdown
@@ -122,8 +138,8 @@ const shutdown = async (signal: string) => {
   await database.close();
   process.exit(0);
 };
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 ```
 
 ---

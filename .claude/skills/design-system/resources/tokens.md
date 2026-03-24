@@ -32,19 +32,19 @@ Colors use OKLCH: `oklch(lightness% chroma hue)` — perceptually uniform, intui
 
 ## Core Semantic Colors
 
-| Token | Light OKLCH | Dark OKLCH | Purpose |
-|-------|-------------|------------|---------|
-| `--background` | `98.5% 0.006 285` | `12% 0.03 280` | Page bg |
-| `--foreground` | `16% 0.03 280` | `94% 0.008 285` | Primary text |
-| `--primary` | `58% 0.24 292` | `68% 0.26 292` | Violet-indigo CTAs |
-| `--secondary` | `94% 0.012 290` | `22% 0.025 280` | Secondary buttons |
-| `--muted` | `95% 0.008 285` | `20% 0.02 280` | Muted backgrounds |
-| `--muted-foreground` | `45% 0.025 280` | `65% 0.015 280` | Muted text |
-| `--accent` | `95% 0.02 310` | `22% 0.03 310` | Hover states |
-| `--destructive` | `55% 0.22 18` | `65% 0.22 18` | Error/delete |
-| `--border` | `89% 0.012 285` | `25% 0.02 280` | Borders |
-| `--ring` | `58% 0.24 292` | `68% 0.26 292` | Focus rings |
-| `--radius` | `0.75rem` | same | Border radius (12px) |
+| Token                | Light OKLCH       | Dark OKLCH      | Purpose              |
+| -------------------- | ----------------- | --------------- | -------------------- |
+| `--background`       | `98.5% 0.006 285` | `12% 0.03 280`  | Page bg              |
+| `--foreground`       | `16% 0.03 280`    | `94% 0.008 285` | Primary text         |
+| `--primary`          | `58% 0.24 292`    | `68% 0.26 292`  | Violet-indigo CTAs   |
+| `--secondary`        | `94% 0.012 290`   | `22% 0.025 280` | Secondary buttons    |
+| `--muted`            | `95% 0.008 285`   | `20% 0.02 280`  | Muted backgrounds    |
+| `--muted-foreground` | `45% 0.025 280`   | `65% 0.015 280` | Muted text           |
+| `--accent`           | `95% 0.02 310`    | `22% 0.03 310`  | Hover states         |
+| `--destructive`      | `55% 0.22 18`     | `65% 0.22 18`   | Error/delete         |
+| `--border`           | `89% 0.012 285`   | `25% 0.02 280`  | Borders              |
+| `--ring`             | `58% 0.24 292`    | `68% 0.26 292`  | Focus rings          |
+| `--radius`           | `0.75rem`         | same            | Border radius (12px) |
 
 Card, popover, input tokens follow the same pattern — see `index.css` for full values.
 
@@ -54,20 +54,20 @@ Card, popover, input tokens follow the same pattern — see `index.css` for full
 
 **Status** (process states):
 
-| Status | Token | Usage |
-|--------|-------|-------|
-| Pending | `text-status-pending` | `oklch(79.5% 0.18 86)` / `82%` dark |
-| Processing | `text-status-processing` | `oklch(62% 0.21 250)` / `68%` dark |
-| Success | `text-status-success` | `oklch(60% 0.15 155)` / `65%` dark |
-| Error | `text-status-error` | Uses `--destructive` |
+| Status     | Token                    | Usage                               |
+| ---------- | ------------------------ | ----------------------------------- |
+| Pending    | `text-status-pending`    | `oklch(79.5% 0.18 86)` / `82%` dark |
+| Processing | `text-status-processing` | `oklch(62% 0.21 250)` / `68%` dark  |
+| Success    | `text-status-success`    | `oklch(60% 0.15 155)` / `65%` dark  |
+| Error      | `text-status-error`      | Uses `--destructive`                |
 
 **Feedback** (callouts, badges, validation):
 
-| Semantic | Tokens | Usage |
-|----------|--------|-------|
-| Success | `text-success`, `bg-success-soft` | Positive feedback, pro items |
-| Warning | `text-warning`, `bg-warning-soft` | Caution, tips |
-| Info | `text-info`, `bg-info-soft` | Informational notes |
+| Semantic | Tokens                            | Usage                        |
+| -------- | --------------------------------- | ---------------------------- |
+| Success  | `text-success`, `bg-success-soft` | Positive feedback, pro items |
+| Warning  | `text-warning`, `bg-warning-soft` | Caution, tips                |
+| Info     | `text-info`, `bg-info-soft`       | Informational notes          |
 
 Each has `-foreground` and `-soft` variants for text-on-color and soft backgrounds.
 
@@ -77,13 +77,13 @@ Each has `-foreground` and `-soft` variants for text-on-color and soft backgroun
 
 Apply `.category-*` class to container, access via CSS variables in children:
 
-| Category | Accent | Category | Accent |
-|----------|--------|----------|--------|
-| cooking | `#FF6B35` | coding | `#22D3EE` |
-| travel | `#10B981` | reviews | `#F59E0B` |
-| fitness | `#EF4444` | education | `#8B5CF6` |
-| podcast | `#EC4899` | gaming | `#6366F1` |
-| diy | `#D97706` | standard | `#6B7280` |
+| Category | Accent    | Category  | Accent    |
+| -------- | --------- | --------- | --------- |
+| cooking  | `#FF6B35` | coding    | `#22D3EE` |
+| travel   | `#10B981` | reviews   | `#F59E0B` |
+| fitness  | `#EF4444` | education | `#8B5CF6` |
+| podcast  | `#EC4899` | gaming    | `#6366F1` |
+| diy      | `#D97706` | standard  | `#6B7280` |
 
 ```tsx
 <article className={`category-${persona.toLowerCase()}`}>

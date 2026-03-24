@@ -45,19 +45,19 @@ GET    /api/v1/users?status=active&sort=-createdAt&page=2&limit=20
 
 ## Status Codes
 
-| Code | When |
-|------|------|
-| 200 | GET/PATCH/PUT success |
-| 201 | POST created |
-| 204 | DELETE success |
-| 400 | Validation error |
-| 401 | Missing/invalid auth |
-| 403 | Valid auth, no permission |
-| 404 | Not found |
-| 409 | Conflict/duplicate |
-| 422 | Business rule violated |
-| 429 | Rate limited |
-| 500 | Internal error |
+| Code | When                      |
+| ---- | ------------------------- |
+| 200  | GET/PATCH/PUT success     |
+| 201  | POST created              |
+| 204  | DELETE success            |
+| 400  | Validation error          |
+| 401  | Missing/invalid auth      |
+| 403  | Valid auth, no permission |
+| 404  | Not found                 |
+| 409  | Conflict/duplicate        |
+| 422  | Business rule violated    |
+| 429  | Rate limited              |
+| 500  | Internal error            |
 
 ---
 
@@ -87,10 +87,17 @@ Parse sort strings into MongoDB-compatible objects:
 ```typescript
 function parseSort(sort?: string): Record<string, 1 | -1> {
   if (!sort) return { createdAt: -1 };
-  return sort.split(',').reduce((acc, field) => {
-    acc[field.startsWith('-') ? field.slice(1) : field] = field.startsWith('-') ? -1 : 1;
-    return acc;
-  }, {} as Record<string, 1 | -1>);
+  return sort.split(",").reduce(
+    (acc, field) => {
+      acc[field.startsWith("-") ? field.slice(1) : field] = field.startsWith(
+        "-",
+      )
+        ? -1
+        : 1;
+      return acc;
+    },
+    {} as Record<string, 1 | -1>,
+  );
 }
 ```
 
@@ -99,13 +106,13 @@ function parseSort(sort?: string): Record<string, 1 | -1> {
 ## Versioning & Deprecation
 
 ```typescript
-app.register(v1Routes, { prefix: '/api/v1' });
-app.register(v2Routes, { prefix: '/api/v2' });
+app.register(v1Routes, { prefix: "/api/v1" });
+app.register(v2Routes, { prefix: "/api/v2" });
 
 // Deprecation headers on v1
-reply.header('Deprecation', 'true');
-reply.header('Sunset', 'Sat, 31 Dec 2024 23:59:59 GMT');
-reply.header('Link', '</api/v2/users>; rel="successor-version"');
+reply.header("Deprecation", "true");
+reply.header("Sunset", "Sat, 31 Dec 2024 23:59:59 GMT");
+reply.header("Link", '</api/v2/users>; rel="successor-version"');
 ```
 
 ---

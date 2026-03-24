@@ -12,7 +12,6 @@ We're approaching context limits. Please update the development documentation to
 For each task in `/dev/active/`:
 
 - Update `[task-name]-context.md` with:
-
   - Current implementation state
   - Key decisions made this session
   - Files modified and why

@@ -18,14 +18,14 @@ Local state, context, server state (React Query), global state (Zustand), and UR
 
 Ask in order: (1) Can it be derived? Compute it. (2) One component? `useState`. (3) Parent+children? Lift state. (4) Siblings? Common parent. (5) Distant components? Context or Zustand. (6) From server? React Query.
 
-| Type | Example | Solution |
-|------|---------|----------|
-| UI State | Modal open, tab active | useState |
-| Form State | Input values, validation | React Hook Form |
-| Server State | User data, posts | React Query |
-| URL State | Filters, pagination | useSearchParams |
-| Global UI | Theme, sidebar toggle | Context or Zustand |
-| Global App | Auth, cart | Zustand |
+| Type         | Example                  | Solution           |
+| ------------ | ------------------------ | ------------------ |
+| UI State     | Modal open, tab active   | useState           |
+| Form State   | Input values, validation | React Hook Form    |
+| Server State | User data, posts         | React Query        |
+| URL State    | Filters, pagination      | useSearchParams    |
+| Global UI    | Theme, sidebar toggle    | Context or Zustand |
+| Global App   | Auth, cart               | Zustand            |
 
 ---
 
@@ -35,10 +35,10 @@ ALWAYS use query key factories. ALWAYS invalidate related queries on mutation su
 
 ```tsx
 export const userKeys = {
-  all: ['users'] as const,
-  lists: () => [...userKeys.all, 'list'] as const,
+  all: ["users"] as const,
+  lists: () => [...userKeys.all, "list"] as const,
   list: (filters: UsersFilter) => [...userKeys.lists(), filters] as const,
-  detail: (id: string) => [...userKeys.all, 'detail', id] as const,
+  detail: (id: string) => [...userKeys.all, "detail", id] as const,
 };
 
 export function useUsers(filters: UsersFilter = {}) {
@@ -60,7 +60,8 @@ ALWAYS use selectors. ALWAYS define actions inside the store.
 const useCartStore = create<CartStore>((set, get) => ({
   items: [],
   addItem: (item) => set((s) => ({ items: [...s.items, item] })),
-  removeItem: (id) => set((s) => ({ items: s.items.filter((i) => i.id !== id) })),
+  removeItem: (id) =>
+    set((s) => ({ items: s.items.filter((i) => i.id !== id) })),
   total: () => get().items.reduce((sum, i) => sum + i.price, 0),
 }));
 
@@ -79,7 +80,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
   return context;
 }
 ```
@@ -92,10 +93,13 @@ ALWAYS use `useSearchParams` for filters, pagination, and any state that should 
 
 ```tsx
 const [searchParams, setSearchParams] = useSearchParams();
-const page = Number(searchParams.get('page')) || 1;
+const page = Number(searchParams.get("page")) || 1;
 
 const setPage = (p: number) => {
-  setSearchParams((prev) => { prev.set('page', String(p)); return prev; });
+  setSearchParams((prev) => {
+    prev.set("page", String(p));
+    return prev;
+  });
 };
 ```
 
@@ -112,7 +116,9 @@ const itemCount = items.length;
 
 // WRONG: storing derived values
 const [filteredItems, setFilteredItems] = useState([]);
-useEffect(() => { setFilteredItems(items.filter(i => i.active)); }, [items]);
+useEffect(() => {
+  setFilteredItems(items.filter((i) => i.active));
+}, [items]);
 ```
 
 ---

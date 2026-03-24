@@ -19,12 +19,12 @@ Vitest, React Testing Library, and testing best practices.
 ALWAYS follow Arrange-Act-Assert. One logical assertion per test.
 
 ```tsx
-describe('Counter', () => {
-  it('increments count when button is clicked', async () => {
+describe("Counter", () => {
+  it("increments count when button is clicked", async () => {
     const user = userEvent.setup();
     render(<Counter initialCount={0} />);
-    await user.click(screen.getByRole('button', { name: /increment/i }));
-    expect(screen.getByText('Count: 1')).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /increment/i }));
+    expect(screen.getByText("Count: 1")).toBeInTheDocument();
   });
 });
 ```
@@ -47,10 +47,10 @@ NEVER use `getByClassName`, `querySelector`, or any selector tied to styling.
 Use `findBy` (combines getBy + waitFor) for elements that appear asynchronously. Use `waitFor` for assertions on async state changes.
 
 ```tsx
-it('loads user data', async () => {
+it("loads user data", async () => {
   render(<UserProfile userId="123" />);
   expect(screen.getByText(/loading/i)).toBeInTheDocument();
-  const userName = await screen.findByText('John Doe');
+  const userName = await screen.findByText("John Doe");
   expect(userName).toBeInTheDocument();
 });
 ```
@@ -63,9 +63,9 @@ ALWAYS prefer MSW over manual fetch mocking for realistic network behavior.
 
 ```tsx
 const server = setupServer(
-  http.get('/api/users/:id', ({ params }) => {
-    return HttpResponse.json({ id: params.id, name: 'John Doe' });
-  })
+  http.get("/api/users/:id", ({ params }) => {
+    return HttpResponse.json({ id: params.id, name: "John Doe" });
+  }),
 );
 beforeAll(() => server.listen());
 afterEach(() => server.resetHandlers());
@@ -80,7 +80,9 @@ Use `renderHook` with a wrapper providing required context (QueryClient, Router)
 
 ```tsx
 const { result } = renderHook(() => useCounter(0));
-act(() => { result.current.increment(); });
+act(() => {
+  result.current.increment();
+});
 expect(result.current.count).toBe(1);
 ```
 
@@ -92,11 +94,13 @@ ALWAYS create a custom render that wraps providers.
 
 ```tsx
 function renderWithProviders(ui: React.ReactElement) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>{ui}</BrowserRouter>
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 ```

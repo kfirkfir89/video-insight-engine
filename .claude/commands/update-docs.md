@@ -10,6 +10,7 @@ Update project documentation to reflect recent changes: $ARGUMENTS
 ### 1. Analyze Changes
 
 Identify what documentation needs updating based on $ARGUMENTS:
+
 - New features added
 - Architecture changes
 - Pattern changes
@@ -21,22 +22,23 @@ Identify what documentation needs updating based on $ARGUMENTS:
 
 Check and update relevant files in `docs/`:
 
-| Change Type | Files to Check |
-|-------------|----------------|
-| New API endpoints | `docs/API-REFERENCE.md` |
+| Change Type          | Files to Check                                      |
+| -------------------- | --------------------------------------------------- |
+| New API endpoints    | `docs/API-REFERENCE.md`                             |
 | Architecture changes | `docs/ARCHITECTURE.md`, `docs/PROJECT-STRUCTURE.md` |
-| New service | `docs/SERVICE-*.md` (create if needed) |
-| Data model changes | `docs/DATA-MODELS.md` |
-| Security changes | `docs/SECURITY.md` |
-| Error handling | `docs/ERROR-HANDLING.md` |
-| Caching changes | `docs/CACHING.md` |
-| Infrastructure | `docs/INFRASTRUCTURE.md` |
-| Cross-cutting | `docs/CROSS-CUTTING.md` |
-| Frontend changes | `docs/FRONTEND.md` |
+| New service          | `docs/SERVICE-*.md` (create if needed)              |
+| Data model changes   | `docs/DATA-MODELS.md`                               |
+| Security changes     | `docs/SECURITY.md`                                  |
+| Error handling       | `docs/ERROR-HANDLING.md`                            |
+| Caching changes      | `docs/CACHING.md`                                   |
+| Infrastructure       | `docs/INFRASTRUCTURE.md`                            |
+| Cross-cutting        | `docs/CROSS-CUTTING.md`                             |
+| Frontend changes     | `docs/FRONTEND.md`                                  |
 
 ### 3. Update CLAUDE.md
 
 Check if changes affect:
+
 - Tech stack table
 - Available commands table
 - Available agents table
@@ -47,6 +49,7 @@ Check if changes affect:
 ### 4. Update README.md
 
 Check if changes affect:
+
 - Project description
 - Features list
 - Installation/setup instructions

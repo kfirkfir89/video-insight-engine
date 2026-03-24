@@ -17,13 +17,16 @@ JWT tokens, password hashing, RBAC, resource ownership, and token lifecycle.
 ## Password Hashing
 
 ```typescript
-import bcrypt from 'bcrypt';
+import bcrypt from "bcrypt";
 const SALT_ROUNDS = 12;
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, SALT_ROUNDS);
 }
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+export async function verifyPassword(
+  password: string,
+  hash: string,
+): Promise<boolean> {
   return bcrypt.compare(password, hash); // Already timing-safe
 }
 ```
@@ -33,21 +36,37 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 ## JWT Token Pair
 
 ```typescript
-interface TokenPayload { sub: string; email: string; roles: string[]; type: 'access' | 'refresh'; }
+interface TokenPayload {
+  sub: string;
+  email: string;
+  roles: string[];
+  type: "access" | "refresh";
+}
 
 export function createAccessToken(user: User): string {
-  const payload = { sub: user.id, email: user.email, roles: user.roles, type: 'access' };
-  return jwt.sign(payload, config.JWT_SECRET, { expiresIn: '15m' });
+  const payload = {
+    sub: user.id,
+    email: user.email,
+    roles: user.roles,
+    type: "access",
+  };
+  return jwt.sign(payload, config.JWT_SECRET, { expiresIn: "15m" });
 }
 
 export function createRefreshToken(user: User): string {
-  const payload = { sub: user.id, email: user.email, roles: user.roles, type: 'refresh' };
-  return jwt.sign(payload, config.JWT_REFRESH_SECRET, { expiresIn: '7d' });
+  const payload = {
+    sub: user.id,
+    email: user.email,
+    roles: user.roles,
+    type: "refresh",
+  };
+  return jwt.sign(payload, config.JWT_REFRESH_SECRET, { expiresIn: "7d" });
 }
 
 export function verifyAccessToken(token: string): TokenPayload {
   const payload = jwt.verify(token, config.JWT_SECRET) as TokenPayload;
-  if (payload.type !== 'access') throw new UnauthorizedError('Invalid token type');
+  if (payload.type !== "access")
+    throw new UnauthorizedError("Invalid token type");
   return payload;
 }
 ```
@@ -59,19 +78,29 @@ export function verifyAccessToken(token: string): TokenPayload {
 ```typescript
 export async function authenticate(request: FastifyRequest): Promise<void> {
   const header = request.headers.authorization;
-  if (!header?.startsWith('Bearer ')) throw new UnauthorizedError('Missing authorization');
-  try { request.user = verifyAccessToken(header.slice(7)); }
-  catch (e) { throw new UnauthorizedError(e instanceof jwt.TokenExpiredError ? 'Token expired' : 'Invalid token'); }
+  if (!header?.startsWith("Bearer "))
+    throw new UnauthorizedError("Missing authorization");
+  try {
+    request.user = verifyAccessToken(header.slice(7));
+  } catch (e) {
+    throw new UnauthorizedError(
+      e instanceof jwt.TokenExpiredError ? "Token expired" : "Invalid token",
+    );
+  }
 }
 
 const ROLE_HIERARCHY: Record<string, string[]> = {
-  admin: ['admin', 'moderator', 'user'], moderator: ['moderator', 'user'], user: ['user'],
+  admin: ["admin", "moderator", "user"],
+  moderator: ["moderator", "user"],
+  user: ["user"],
 };
 export function requireRole(...allowed: string[]) {
   return async (request: FastifyRequest): Promise<void> => {
-    const hasAccess = request.user?.roles.some(role =>
-      (ROLE_HIERARCHY[role] ?? [role]).some(r => allowed.includes(r)));
-    if (!hasAccess) throw new ForbiddenError(`Requires role: ${allowed.join(' or ')}`);
+    const hasAccess = request.user?.roles.some((role) =>
+      (ROLE_HIERARCHY[role] ?? [role]).some((r) => allowed.includes(r)),
+    );
+    if (!hasAccess)
+      throw new ForbiddenError(`Requires role: ${allowed.join(" or ")}`);
   };
 }
 ```
@@ -82,13 +111,13 @@ export function requireRole(...allowed: string[]) {
 
 ```typescript
 export async function requireOwnership(
-  request: FastifyRequest<{ Params: { id: string } }>
+  request: FastifyRequest<{ Params: { id: string } }>,
 ): Promise<void> {
   const resource = await resourceRepo.findById(request.params.id);
   if (!resource) throw new NotFoundError();
   const isOwner = resource.userId === request.user.sub;
-  if (!isOwner && !request.user.roles.includes('admin'))
-    throw new ForbiddenError('Not authorized');
+  if (!isOwner && !request.user.roles.includes("admin"))
+    throw new ForbiddenError("Not authorized");
   request.resource = resource;
 }
 ```
@@ -103,7 +132,7 @@ Store revoked tokens in Redis with TTL matching token expiry. On refresh, check 
 export class TokenStore {
   constructor(private readonly redis: Redis) {}
   async revoke(token: string, expiresIn: number) {
-    await this.redis.setex(`revoked:${token}`, expiresIn, '1');
+    await this.redis.setex(`revoked:${token}`, expiresIn, "1");
   }
   async isRevoked(token: string): Promise<boolean> {
     return (await this.redis.get(`revoked:${token}`)) !== null;

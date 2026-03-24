@@ -17,24 +17,29 @@ Socket.IO setup, authentication, rooms, presence, rate limiting, and scaling.
 ## Socket.IO Setup with Auth
 
 ```typescript
-import { Server as SocketIOServer } from 'socket.io';
+import { Server as SocketIOServer } from "socket.io";
 
 export async function initializeSocket(app: FastifyInstance) {
   const io = new SocketIOServer(app.server, {
-    cors: { origin: config.CORS_ORIGINS, credentials: true }, pingTimeout: 60000,
+    cors: { origin: config.CORS_ORIGINS, credentials: true },
+    pingTimeout: 60000,
   });
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth.token;
-      if (!token) return next(new Error('Authentication required'));
+      if (!token) return next(new Error("Authentication required"));
       socket.data.user = await verifyToken(token);
       next();
-    } catch { next(new Error('Invalid token')); }
+    } catch {
+      next(new Error("Invalid token"));
+    }
   });
-  io.on('connection', (socket) => {
+  io.on("connection", (socket) => {
     socket.join(`user:${socket.data.user.id}`);
     registerChatHandlers(socket);
-    socket.on('disconnect', (reason) => logger.info({ userId: socket.data.user.id, reason }, 'Disconnected'));
+    socket.on("disconnect", (reason) =>
+      logger.info({ userId: socket.data.user.id, reason }, "Disconnected"),
+    );
   });
 }
 ```
@@ -47,20 +52,28 @@ export async function initializeSocket(app: FastifyInstance) {
 export function registerChatHandlers(socket: Socket) {
   const userId = socket.data.user.id;
 
-  socket.on('chat:join', async ({ roomId }: { roomId: string }) => {
-    if (!await chatService.canAccessRoom(userId, roomId)) {
-      return socket.emit('error', { message: 'Access denied' });
+  socket.on("chat:join", async ({ roomId }: { roomId: string }) => {
+    if (!(await chatService.canAccessRoom(userId, roomId))) {
+      return socket.emit("error", { message: "Access denied" });
     }
     socket.join(`room:${roomId}`);
     const messages = await chatService.getRecentMessages(roomId, 50);
-    socket.emit('chat:history', { roomId, messages });
+    socket.emit("chat:history", { roomId, messages });
   });
 
-  socket.on('chat:message', async ({ roomId, content }: { roomId: string; content: string }) => {
-    if (!content?.trim()) return socket.emit('error', { message: 'Empty message' });
-    const message = await chatService.createMessage({ roomId, userId, content: content.trim() });
-    getIO().to(`room:${roomId}`).emit('chat:message', message);
-  });
+  socket.on(
+    "chat:message",
+    async ({ roomId, content }: { roomId: string; content: string }) => {
+      if (!content?.trim())
+        return socket.emit("error", { message: "Empty message" });
+      const message = await chatService.createMessage({
+        roomId,
+        userId,
+        content: content.trim(),
+      });
+      getIO().to(`room:${roomId}`).emit("chat:message", message);
+    },
+  );
 }
 ```
 
@@ -75,16 +88,16 @@ export function registerPresence(socket: Socket) {
   const userId = socket.data.user.id;
   if (!onlineUsers.has(userId)) {
     onlineUsers.set(userId, new Set());
-    socket.broadcast.emit('presence:online', { userId });
+    socket.broadcast.emit("presence:online", { userId });
   }
   onlineUsers.get(userId)!.add(socket.id);
 
-  socket.on('disconnect', () => {
+  socket.on("disconnect", () => {
     const sockets = onlineUsers.get(userId);
     sockets?.delete(socket.id);
     if (sockets?.size === 0) {
       onlineUsers.delete(userId);
-      socket.broadcast.emit('presence:offline', { userId });
+      socket.broadcast.emit("presence:offline", { userId });
     }
   });
 }
@@ -95,21 +108,34 @@ export function registerPresence(socket: Socket) {
 ## Rate Limiting & Error Handling
 
 ```typescript
-function checkRateLimit(socketId: string, event: string, limit: number, windowMs: number): boolean {
+function checkRateLimit(
+  socketId: string,
+  event: string,
+  limit: number,
+  windowMs: number,
+): boolean {
   const key = `${socketId}:${event}`;
   const now = Date.now();
   const current = rateLimits.get(key);
-  if (!current || now > current.resetAt) { rateLimits.set(key, { count: 1, resetAt: now + windowMs }); return true; }
+  if (!current || now > current.resetAt) {
+    rateLimits.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
   if (current.count >= limit) return false;
   current.count++;
   return true;
 }
 
-function withErrorHandling<T>(handler: (socket: Socket, payload: T) => Promise<void>) {
+function withErrorHandling<T>(
+  handler: (socket: Socket, payload: T) => Promise<void>,
+) {
   return async (socket: Socket, payload: T) => {
-    try { await handler(socket, payload); }
-    catch (error) {
-      socket.emit('error', { message: error instanceof AppError ? error.message : 'Internal error' });
+    try {
+      await handler(socket, payload);
+    } catch (error) {
+      socket.emit("error", {
+        message: error instanceof AppError ? error.message : "Internal error",
+      });
     }
   };
 }
@@ -120,7 +146,7 @@ function withErrorHandling<T>(handler: (socket: Socket, payload: T) => Promise<v
 ## Scaling with Redis Adapter
 
 ```typescript
-import { createAdapter } from '@socket.io/redis-adapter';
+import { createAdapter } from "@socket.io/redis-adapter";
 const pubClient = createClient({ url: config.REDIS_URL });
 const subClient = pubClient.duplicate();
 await Promise.all([pubClient.connect(), subClient.connect()]);
@@ -133,9 +159,9 @@ io.adapter(createAdapter(pubClient, subClient));
 ## Emitting from HTTP Routes
 
 ```typescript
-app.post('/api/messages', async (request, reply) => {
+app.post("/api/messages", async (request, reply) => {
   const message = await messageService.create(request.body);
-  getIO().to(`room:${message.roomId}`).emit('chat:message', message);
+  getIO().to(`room:${message.roomId}`).emit("chat:message", message);
   return message;
 });
 ```

@@ -90,6 +90,7 @@ This directory contains Claude Code's configuration, commands, skills, rules, an
 │   ├── skill-rules.json   # Activation rules
 │   ├── backend-node/      # Node.js/Fastify patterns
 │   ├── backend-python/    # Python/FastAPI patterns
+│   ├── design-system/     # Icons, tokens, components
 │   └── react-vite/        # React/Vite patterns
 │
 ├── rules/                 # Enforced guidelines
@@ -98,17 +99,32 @@ This directory contains Claude Code's configuration, commands, skills, rules, an
 │   ├── code-quality.md    # Code standards
 │   ├── security.md        # Security requirements
 │   ├── testing.md         # Testing standards
-│   └── git-workflow.md    # Git conventions
+│   ├── git-workflow.md    # Git conventions
+│   ├── syntax-typescript.md # Path-scoped: TS/TSX files
+│   └── syntax-python.md  # Path-scoped: Python files
 │
 ├── agents/                # Specialized assistants
-│   ├── test-writer.md
+│   ├── api-tester.md
+│   ├── code-reviewer.md
 │   ├── debug-investigator.md
+│   ├── doc-generator.md
+│   ├── frontend-error-fixer.md
+│   ├── plan-auditor.md
 │   ├── refactor-planner.md
-│   └── doc-generator.md
+│   ├── security-auditor.md
+│   └── test-writer.md
 │
 └── hooks/                 # Automatic triggers
-    ├── skill-activation-prompt.ts  # Suggests skills on prompt
-    └── post-tool-use-tracker.sh    # Tracks file changes
+    ├── __tests__/                  # Hook unit tests
+    ├── skill-activation-prompt.ts  # Suggests skills on prompt (UserPromptSubmit)
+    ├── tdd-guard.ts                # TDD enforcement (PreToolUse)
+    ├── skill-block-guard.ts        # Block writes until skills read (PreToolUse)
+    ├── post-tool-use-tracker.sh    # Tracks file changes (PostToolUse)
+    ├── auto-format.sh              # ESLint/ruff auto-fix (PostToolUse)
+    ├── continuous-learning.ts      # Pattern learning from edits (PostToolUse)
+    ├── skill-read-tracker.ts       # Tracks skill file reads (PostToolUse/Read)
+    ├── tsc-check-stop.sh           # TypeScript check on stop (Stop)
+    └── auto-save-context.sh        # Save task context on stop (Stop)
 ```
 
 ---
@@ -150,11 +166,12 @@ Claude MUST:
 
 ### Available Skills
 
-| Skill | Triggers | Resources |
-|-------|----------|-----------|
-| [backend-node](./skills/backend-node/SKILL.md) | API, route, fastify, endpoint | fastify.md, services.md, mongodb.md |
-| [backend-python](./skills/backend-python/SKILL.md) | Python, FastAPI, summarizer, explainer | fastapi.md, services.md |
-| [react-vite](./skills/react-vite/SKILL.md) | Component, React, frontend, UI | react.md, state.md, forms.md |
+| Skill                                              | Triggers                               | Resources                           |
+| -------------------------------------------------- | -------------------------------------- | ----------------------------------- |
+| [backend-node](./skills/backend-node/SKILL.md)     | API, route, fastify, endpoint          | fastify.md, services.md, mongodb.md |
+| [backend-python](./skills/backend-python/SKILL.md) | Python, FastAPI, summarizer, explainer | fastapi.md, services.md             |
+| [design-system](./skills/design-system/SKILL.md)   | Icon, token, design, theme             | components.md, tokens.md, icons.md  |
+| [react-vite](./skills/react-vite/SKILL.md)         | Component, React, frontend, UI         | react.md, state.md, forms.md        |
 
 ---
 
@@ -177,6 +194,13 @@ Claude MUST:
 | Security      | [security.md](./rules/security.md)                   | Required      |
 | Testing       | [testing.md](./rules/testing.md)                     | Required      |
 | Git Workflow  | [git-workflow.md](./rules/git-workflow.md)           | Required      |
+
+### Path-Scoped Rules (load only when editing matching files)
+
+| Rule              | File                                                 | Applies To                                              |
+| ----------------- | ---------------------------------------------------- | ------------------------------------------------------- |
+| TypeScript Syntax | [syntax-typescript.md](./rules/syntax-typescript.md) | `api/**/*.ts`, `apps/**/*.{ts,tsx}`, `packages/**/*.ts` |
+| Python Syntax     | [syntax-python.md](./rules/syntax-python.md)         | `services/**/*.py`                                      |
 
 ---
 
@@ -351,24 +375,41 @@ Saves current context before clearing chat.
 
 ## Hooks
 
-### Skill Activation Hook
+All hooks are configured in `settings.json` and run automatically at specific lifecycle points.
 
-**Trigger:** Every prompt submission
+### UserPromptSubmit
 
-**Actions:**
+| Hook                           | Purpose                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------ |
+| **skill-activation-prompt.ts** | Matches prompt keywords against `skill-rules.json`, suggests relevant skills and resources |
 
-1. Checks prompt for skill keywords
-2. Displays matching skills and resources
-3. Shows active tasks reminder
+### PreToolUse (Edit\|Write\|MultiEdit)
 
-### Post-Tool-Use Tracker
+| Hook                     | Purpose                                                                  |
+| ------------------------ | ------------------------------------------------------------------------ |
+| **tdd-guard.ts**         | Enforces TDD workflow — blocks code writes if tests aren't written first |
+| **skill-block-guard.ts** | Blocks code writes until required skill files have been read             |
 
-**Trigger:** After file edits
+### PostToolUse (Edit\|Write\|MultiEdit)
 
-**Actions:**
+| Hook                         | Purpose                                                          |
+| ---------------------------- | ---------------------------------------------------------------- |
+| **post-tool-use-tracker.sh** | Tracks which files were modified, auto-detects project structure |
+| **auto-format.sh**           | Runs ESLint `--fix` (TS/JS) or ruff (Python) on saved files      |
+| **continuous-learning.ts**   | Learns patterns from edits for future suggestions                |
 
-- Tracks which files were modified
-- Helps with documentation updates
+### PostToolUse (Read)
+
+| Hook                      | Purpose                                                        |
+| ------------------------- | -------------------------------------------------------------- |
+| **skill-read-tracker.ts** | Tracks when skill files are read, unblocks `skill-block-guard` |
+
+### Stop
+
+| Hook                     | Purpose                                                         |
+| ------------------------ | --------------------------------------------------------------- |
+| **tsc-check-stop.sh**    | Runs TypeScript compilation check across services when stopping |
+| **auto-save-context.sh** | Saves current task context to `dev/active/` on stop             |
 
 ---
 

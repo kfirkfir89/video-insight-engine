@@ -42,13 +42,19 @@ const myVariants = cva("base-classes", {
   defaultVariants: { variant: "default", size: "default" },
 });
 
-interface Props extends React.HTMLAttributes<HTMLDivElement>,
-  VariantProps<typeof myVariants> {}
+interface Props
+  extends
+    React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof myVariants> {}
 
 const MyComponent = React.forwardRef<HTMLDivElement, Props>(
   ({ className, variant, size, ...props }, ref) => (
-    <div ref={ref} className={cn(myVariants({ variant, size, className }))} {...props} />
-  )
+    <div
+      ref={ref}
+      className={cn(myVariants({ variant, size, className }))}
+      {...props}
+    />
+  ),
 );
 ```
 
@@ -70,13 +76,13 @@ Key elements: base classes (always applied), variants object (mutually exclusive
 
 All block components use `BlockWrapper` with 5 variants:
 
-| Variant | Class | Use |
-|---------|-------|-----|
-| `card` | `block-card` | Most blocks (rounded-xl, shadow, hover lift) |
-| `accent` | `block-accent` | Callouts, definitions (left-border accent) |
-| `code` | `block-code-container` | Code/terminal (dark IDE surface) |
-| `inline` | `block-inline` | Bullets, numbered lists (no border) |
-| `transparent` | none | Minimal inline content |
+| Variant       | Class                  | Use                                          |
+| ------------- | ---------------------- | -------------------------------------------- |
+| `card`        | `block-card`           | Most blocks (rounded-xl, shadow, hover lift) |
+| `accent`      | `block-accent`         | Callouts, definitions (left-border accent)   |
+| `code`        | `block-code-container` | Code/terminal (dark IDE surface)             |
+| `inline`      | `block-inline`         | Bullets, numbered lists (no border)          |
+| `transparent` | none                   | Minimal inline content                       |
 
 ```tsx
 <BlockWrapper
@@ -86,8 +92,10 @@ All block components use `BlockWrapper` with 5 variants:
   headerAction={<ScaleButton />}
 >
   <div className="space-y-1.5 stagger-children">
-    {items.map(item => (
-      <div key={item.name} className="hover-lift rounded-lg p-2">{item.name}</div>
+    {items.map((item) => (
+      <div key={item.name} className="hover-lift rounded-lg p-2">
+        {item.name}
+      </div>
     ))}
   </div>
 </BlockWrapper>
@@ -97,30 +105,30 @@ All block components use `BlockWrapper` with 5 variants:
 
 ### Design Scales
 
-| Element | Classes |
-|---------|---------|
-| Card padding | `p-5` (20px) |
-| Card inner gap | `space-y-3` (12px) |
-| List item gap | `space-y-1.5` (6px) |
-| Header text | `text-xs font-semibold uppercase tracking-widest` |
-| Body text | `text-sm leading-relaxed` |
-| Metadata | `text-xs text-muted-foreground` |
-| Header icon | `h-4 w-4 shrink-0` |
-| Inline icon | `h-3.5 w-3.5 shrink-0` |
+| Element        | Classes                                           |
+| -------------- | ------------------------------------------------- |
+| Card padding   | `p-5` (20px)                                      |
+| Card inner gap | `space-y-3` (12px)                                |
+| List item gap  | `space-y-1.5` (6px)                               |
+| Header text    | `text-xs font-semibold uppercase tracking-widest` |
+| Body text      | `text-sm leading-relaxed`                         |
+| Metadata       | `text-xs text-muted-foreground`                   |
+| Header icon    | `h-4 w-4 shrink-0`                                |
+| Inline icon    | `h-3.5 w-3.5 shrink-0`                            |
 
 ### Premium Utility Application
 
-| Scenario | Utility |
-|----------|---------|
-| Lists >3 items | `stagger-children` on parent |
-| Interactive sub-cards | `hover-lift` |
-| Section headers / control bars | `glass-surface` |
-| Hero numbers / scores | `text-gradient-primary` |
-| Rating scores | `text-gradient-warm` |
-| Between list items | `fade-divider` |
-| Callout icons | Color matches `accentColor` (not `text-muted-foreground`) |
-| Dark mode colored elements | Appropriate `*-glow` class |
-| Interactive options | `hover-scale` |
+| Scenario                       | Utility                                                   |
+| ------------------------------ | --------------------------------------------------------- |
+| Lists >3 items                 | `stagger-children` on parent                              |
+| Interactive sub-cards          | `hover-lift`                                              |
+| Section headers / control bars | `glass-surface`                                           |
+| Hero numbers / scores          | `text-gradient-primary`                                   |
+| Rating scores                  | `text-gradient-warm`                                      |
+| Between list items             | `fade-divider`                                            |
+| Callout icons                  | Color matches `accentColor` (not `text-muted-foreground`) |
+| Dark mode colored elements     | Appropriate `*-glow` class                                |
+| Interactive options            | `hover-scale`                                             |
 
 ---
 

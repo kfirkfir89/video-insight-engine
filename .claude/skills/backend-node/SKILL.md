@@ -13,16 +13,16 @@ You are a principal-level backend engineer specializing in Node.js, Fastify, Typ
 
 ## Tech Stack
 
-| Technology | Version | Purpose |
-|-----------|---------|---------|
-| Node.js | 20+ | Runtime |
-| Fastify | 5.x | HTTP framework |
-| TypeScript | 5.x | Type safety |
-| MongoDB | 7.x | Primary database |
-| Redis | 7.x | Caching, sessions, queues |
-| Vitest | Latest | Testing |
-| Zod | Latest | Schema validation |
-| Vercel AI SDK | Latest | LLM integration |
+| Technology    | Version | Purpose                   |
+| ------------- | ------- | ------------------------- |
+| Node.js       | 20+     | Runtime                   |
+| Fastify       | 5.x     | HTTP framework            |
+| TypeScript    | 5.x     | Type safety               |
+| MongoDB       | 7.x     | Primary database          |
+| Redis         | 7.x     | Caching, sessions, queues |
+| Vitest        | Latest  | Testing                   |
+| Zod           | Latest  | Schema validation         |
+| Vercel AI SDK | Latest  | LLM integration           |
 
 ---
 
@@ -98,23 +98,24 @@ src/users/
 
 ## When Working On...
 
-| Task | Read These Resources | Key Patterns |
-|------|---------------------|--------------|
-| Routes, plugins, middleware | [fastify.md](resources/fastify.md) | Plugin encapsulation, schema validation, hooks |
-| Services, repositories, DI | [services.md](resources/services.md) | Constructor injection, container pattern, controller layer |
-| MongoDB queries, schemas | [mongodb.md](resources/mongodb.md) | Cursor pagination, compound indexes, embed vs reference |
-| JWT auth, RBAC, ownership | [auth.md](resources/auth.md) | Token types, role hierarchy, preHandler hooks |
-| Error classes, logging | [errors.md](resources/errors.md) | AppError hierarchy, pino structured logging, Sentry |
-| Redis, queues, Docker | [infrastructure.md](resources/infrastructure.md) | CacheService, BullMQ, health checks, env config |
-| Unit/integration tests | [testing.md](resources/testing.md) | AAA pattern, factories, vitest mocking |
-| REST design, pagination | [api-design.md](resources/api-design.md) | URL structure, response format, versioning |
-| Input validation, OWASP | [security.md](resources/security.md) | Zod schemas, rate limiting, CORS, helmet |
-| LLM calls, streaming | [ai-integration.md](resources/ai-integration.md) | AI SDK, generateText, streamText, tool calling |
-| RAG, MCP, agents | [ai-patterns.md](resources/ai-patterns.md) | Vector store, embeddings, guardrails |
-| File uploads, S3 | [file-uploads.md](resources/file-uploads.md) | Multipart, presigned URLs, image processing |
-| WebSockets, real-time | [websockets.md](resources/websockets.md) | Socket.IO, rooms, presence, Redis adapter |
+| Task                        | Read These Resources                             | Key Patterns                                               |
+| --------------------------- | ------------------------------------------------ | ---------------------------------------------------------- |
+| Routes, plugins, middleware | [fastify.md](resources/fastify.md)               | Plugin encapsulation, schema validation, hooks             |
+| Services, repositories, DI  | [services.md](resources/services.md)             | Constructor injection, container pattern, controller layer |
+| MongoDB queries, schemas    | [mongodb.md](resources/mongodb.md)               | Cursor pagination, compound indexes, embed vs reference    |
+| JWT auth, RBAC, ownership   | [auth.md](resources/auth.md)                     | Token types, role hierarchy, preHandler hooks              |
+| Error classes, logging      | [errors.md](resources/errors.md)                 | AppError hierarchy, pino structured logging, Sentry        |
+| Redis, queues, Docker       | [infrastructure.md](resources/infrastructure.md) | CacheService, BullMQ, health checks, env config            |
+| Unit/integration tests      | [testing.md](resources/testing.md)               | AAA pattern, factories, vitest mocking                     |
+| REST design, pagination     | [api-design.md](resources/api-design.md)         | URL structure, response format, versioning                 |
+| Input validation, OWASP     | [security.md](resources/security.md)             | Zod schemas, rate limiting, CORS, helmet                   |
+| LLM calls, streaming        | [ai-integration.md](resources/ai-integration.md) | AI SDK, generateText, streamText, tool calling             |
+| RAG, MCP, agents            | [ai-patterns.md](resources/ai-patterns.md)       | Vector store, embeddings, guardrails                       |
+| File uploads, S3            | [file-uploads.md](resources/file-uploads.md)     | Multipart, presigned URLs, image processing                |
+| WebSockets, real-time       | [websockets.md](resources/websockets.md)         | Socket.IO, rooms, presence, Redis adapter                  |
 
 **Cross-cutting combinations:**
+
 - Auth work → also read [security.md](resources/security.md) + [errors.md](resources/errors.md)
 - AI features → also read [ai-patterns.md](resources/ai-patterns.md) + [errors.md](resources/errors.md)
 - Real-time → also read [infrastructure.md](resources/infrastructure.md)
@@ -124,13 +125,13 @@ src/users/
 
 ## Project-Specific References
 
-| Need | Reference |
-|------|-----------|
-| System architecture | [docs/ARCHITECTURE.md](../../../docs/ARCHITECTURE.md) |
-| Data models | [docs/DATA-MODELS.md](../../../docs/DATA-MODELS.md) |
-| API endpoints | [docs/API-REFERENCE.md](../../../docs/API-REFERENCE.md) |
-| Error handling | [docs/ERROR-HANDLING.md](../../../docs/ERROR-HANDLING.md) |
-| Security | [docs/SECURITY.md](../../../docs/SECURITY.md) |
+| Need                | Reference                                                 |
+| ------------------- | --------------------------------------------------------- |
+| System architecture | [docs/ARCHITECTURE.md](../../../docs/ARCHITECTURE.md)     |
+| Data models         | [docs/DATA-MODELS.md](../../../docs/DATA-MODELS.md)       |
+| API endpoints       | [docs/API-REFERENCE.md](../../../docs/API-REFERENCE.md)   |
+| Error handling      | [docs/ERROR-HANDLING.md](../../../docs/ERROR-HANDLING.md) |
+| Security            | [docs/SECURITY.md](../../../docs/SECURITY.md)             |
 
 ---
 

@@ -10,18 +10,21 @@ Execute the complete task workflow for: $ARGUMENTS
 Run these steps in order:
 
 ### Step 1: Verify Task Plan
+
 - Check `dev/active/$ARGUMENTS/` exists
 - Read the plan and context files
 - Confirm implementation matches the plan
 - List all files that were modified for this task
 
 ### Step 2: Generate/Run Tests
+
 - Identify files modified for this task
 - Generate tests for new code (apply /test patterns)
 - Run existing tests to verify nothing broke
 - Report coverage for modified files
 
 ### Step 3: Security Check
+
 - Run security audit on modified files (apply /security-check patterns)
 - Check for:
   - Hardcoded secrets
@@ -31,6 +34,7 @@ Run these steps in order:
   - Error exposure
 
 ### Step 4: Code Review
+
 - Review all changes for this task (apply /review patterns)
 - Check:
   - Type safety
@@ -40,6 +44,7 @@ Run these steps in order:
   - Proper logging
 
 ### Step 5: Update Documentation
+
 - Update project documentation (apply /update-docs patterns)
 - Check and update:
   - `docs/` folder (API, architecture, services, etc.)
@@ -87,6 +92,7 @@ Run these steps in order:
 ## On Failure
 
 If any step fails, stop and report:
+
 - Which step failed
 - What the issues are
 - How to fix them
@@ -129,6 +135,7 @@ Task `$ARGUMENTS` not found in `dev/active/`.
 ## After Successful Completion
 
 Consider:
+
 - Moving task docs to `dev/completed/` or archiving
 - Running `/ship` if ready to deploy
 - Updating the task status in `-tasks.md` to 100% complete

@@ -35,7 +35,9 @@ export class CacheService {
   async set<T>(key: string, value: T, ttl = this.defaultTTL) {
     await this.redis.setex(key, ttl, JSON.stringify(value));
   }
-  async delete(key: string) { await this.redis.del(key); }
+  async delete(key: string) {
+    await this.redis.del(key);
+  }
 }
 ```
 
@@ -46,17 +48,23 @@ export class CacheService {
 Use queues for async work (email, notifications, processing). Configure retries and backoff:
 
 ```typescript
-const emailQueue = new Queue<EmailJob>('email', {
-  connection: { host: 'localhost', port: 6379 },
+const emailQueue = new Queue<EmailJob>("email", {
+  connection: { host: "localhost", port: 6379 },
   defaultJobOptions: {
-    attempts: 3, backoff: { type: 'exponential', delay: 1000 },
-    removeOnComplete: 100, removeOnFail: 1000,
+    attempts: 3,
+    backoff: { type: "exponential", delay: 1000 },
+    removeOnComplete: 100,
+    removeOnFail: 1000,
   },
 });
 
-const emailWorker = new Worker<EmailJob>('email', async (job) => {
-  await emailService.send(job.data);
-}, { connection: { host: 'localhost', port: 6379 }, concurrency: 5 });
+const emailWorker = new Worker<EmailJob>(
+  "email",
+  async (job) => {
+    await emailService.send(job.data);
+  },
+  { connection: { host: "localhost", port: 6379 }, concurrency: 5 },
+);
 ```
 
 ---
@@ -64,17 +72,27 @@ const emailWorker = new Worker<EmailJob>('email', async (job) => {
 ## Health Checks
 
 ```typescript
-app.get('/health', async (request, reply) => {
+app.get("/health", async (request, reply) => {
   const services: Record<string, string> = {};
-  try { await mongoose.connection.db.admin().ping(); services.mongodb = 'connected'; }
-  catch { services.mongodb = 'disconnected'; }
-  try { await redis.ping(); services.redis = 'connected'; }
-  catch { services.redis = 'disconnected'; }
-  const healthy = Object.values(services).every(s => s === 'connected');
-  reply.status(healthy ? 200 : 503).send({ status: healthy ? 'healthy' : 'unhealthy', services });
+  try {
+    await mongoose.connection.db.admin().ping();
+    services.mongodb = "connected";
+  } catch {
+    services.mongodb = "disconnected";
+  }
+  try {
+    await redis.ping();
+    services.redis = "connected";
+  } catch {
+    services.redis = "disconnected";
+  }
+  const healthy = Object.values(services).every((s) => s === "connected");
+  reply
+    .status(healthy ? 200 : 503)
+    .send({ status: healthy ? "healthy" : "unhealthy", services });
 });
 
-app.get('/health/live', async () => ({ status: 'alive' }));
+app.get("/health/live", async () => ({ status: "alive" }));
 ```
 
 ---
@@ -85,7 +103,9 @@ Validate once at startup. Export typed config:
 
 ```typescript
 const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  NODE_ENV: z
+    .enum(["development", "production", "test"])
+    .default("development"),
   PORT: z.coerce.number().default(3000),
   MONGODB_URI: z.string().url(),
   REDIS_URL: z.string().url(),
@@ -96,7 +116,10 @@ const envSchema = z.object({
 
 function loadConfig() {
   const result = envSchema.safeParse(process.env);
-  if (!result.success) { console.error('Invalid env vars:', result.error.format()); process.exit(1); }
+  if (!result.success) {
+    console.error("Invalid env vars:", result.error.format());
+    process.exit(1);
+  }
   return result.data;
 }
 export const config = loadConfig();

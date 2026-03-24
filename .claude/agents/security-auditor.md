@@ -25,12 +25,12 @@ You are a security specialist focused on application security. Systematically re
 
 ## Severity
 
-| Level | Impact | Examples |
-|-------|--------|----------|
-| Critical | System compromise | RCE, injection, auth bypass |
-| High | Data breach | XSS, IDOR, data exposure |
-| Medium | Limited impact | CSRF, info disclosure |
-| Low | Minimal | Missing headers, verbose errors |
+| Level    | Impact            | Examples                        |
+| -------- | ----------------- | ------------------------------- |
+| Critical | System compromise | RCE, injection, auth bypass     |
+| High     | Data breach       | XSS, IDOR, data exposure        |
+| Medium   | Limited impact    | CSRF, info disclosure           |
+| Low      | Minimal           | Missing headers, verbose errors |
 
 ## Output Per Issue
 

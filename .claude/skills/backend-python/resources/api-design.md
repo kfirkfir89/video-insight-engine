@@ -44,18 +44,18 @@ class ErrorResponse(BaseModel):
 
 ## Status Codes
 
-| Code | When |
-|------|------|
-| 200 | Success (GET, PATCH) |
-| 201 | Created (POST) |
-| 204 | No Content (DELETE) |
-| 400 | Bad request (validation) |
-| 401 | Unauthorized |
-| 403 | Forbidden |
-| 404 | Not found |
-| 409 | Conflict (duplicate) |
-| 422 | Business rule violation |
-| 429 | Rate limited |
+| Code | When                     |
+| ---- | ------------------------ |
+| 200  | Success (GET, PATCH)     |
+| 201  | Created (POST)           |
+| 204  | No Content (DELETE)      |
+| 400  | Bad request (validation) |
+| 401  | Unauthorized             |
+| 403  | Forbidden                |
+| 404  | Not found                |
+| 409  | Conflict (duplicate)     |
+| 422  | Business rule violation  |
+| 429  | Rate limited             |
 
 ---
 

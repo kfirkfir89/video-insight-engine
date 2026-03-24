@@ -15,14 +15,14 @@ Project-specific icon mappings and conventions for vie-web using lucide-react.
 
 ## Sizing by Context
 
-| Context | Classes | Notes |
-|---------|---------|-------|
-| Button icon (with text) | `h-4 w-4 mr-2` | |
-| Button icon (icon-only) | `h-4 w-4` | Use `size="icon"` button |
-| Sidebar items | `h-4 w-4` | Or `useSidebarTextClasses` hook |
-| Sidebar secondary | `h-3.5 w-3.5` | Chevrons, status indicators |
-| Section headers | `h-6 w-6` | |
-| Empty states | `h-12 w-12` / `h-16 w-16` | Centered, muted color |
+| Context                 | Classes                   | Notes                           |
+| ----------------------- | ------------------------- | ------------------------------- |
+| Button icon (with text) | `h-4 w-4 mr-2`            |                                 |
+| Button icon (icon-only) | `h-4 w-4`                 | Use `size="icon"` button        |
+| Sidebar items           | `h-4 w-4`                 | Or `useSidebarTextClasses` hook |
+| Sidebar secondary       | `h-3.5 w-3.5`             | Chevrons, status indicators     |
+| Section headers         | `h-6 w-6`                 |                                 |
+| Empty states            | `h-12 w-12` / `h-16 w-16` | Centered, muted color           |
 
 Sidebar icons support responsive sizing via `useSidebarTextClasses` hook — returns `mainIconClasses` and `secondaryIconClasses` that scale with user preference (small/medium/large).
 
@@ -32,44 +32,44 @@ Sidebar icons support responsive sizing via `useSidebarTextClasses` hook — ret
 
 ### Status Icons
 
-| Status | Icon | Color | Animation |
-|--------|------|-------|-----------|
-| Pending | `Clock` | `text-status-pending` | none |
-| Processing | `Loader2` | `text-status-processing` | `animate-spin` |
-| Success | `CheckCircle` | `text-status-success` | none |
-| Error | `AlertCircle` | `text-status-error` | none |
+| Status     | Icon          | Color                    | Animation      |
+| ---------- | ------------- | ------------------------ | -------------- |
+| Pending    | `Clock`       | `text-status-pending`    | none           |
+| Processing | `Loader2`     | `text-status-processing` | `animate-spin` |
+| Success    | `CheckCircle` | `text-status-success`    | none           |
+| Error      | `AlertCircle` | `text-status-error`      | none           |
 
 Use `<StatusIcon status="processing" className="h-4 w-4" />` for automatic icon/color/animation selection.
 
 ### Navigation & Actions
 
-| Action | Icon | | Action | Icon |
-|--------|------|-|--------|------|
-| Add/Create | `Plus` | | Delete | `Trash2` |
-| Edit | `Pencil` | | Close | `X` |
-| More options | `MoreVertical` | | Expand/Collapse | `ChevronRight`/`ChevronDown` |
-| Back | `ArrowLeft` | | External link | `ExternalLink` |
-| Copy | `Copy`/`Check` | | Search | `Search` |
-| Refresh | `RefreshCw` | | | |
+| Action       | Icon           |     | Action          | Icon                         |
+| ------------ | -------------- | --- | --------------- | ---------------------------- |
+| Add/Create   | `Plus`         |     | Delete          | `Trash2`                     |
+| Edit         | `Pencil`       |     | Close           | `X`                          |
+| More options | `MoreVertical` |     | Expand/Collapse | `ChevronRight`/`ChevronDown` |
+| Back         | `ArrowLeft`    |     | External link   | `ExternalLink`               |
+| Copy         | `Copy`/`Check` |     | Search          | `Search`                     |
+| Refresh      | `RefreshCw`    |     |                 |                              |
 
 ### Content Types
 
-| Content | Icon | | Content | Icon |
-|---------|------|-|---------|------|
-| Video | `Film` | | Play/Pause | `Play`/`Pause` |
-| Folder | `Folder`/`FolderOpen` | | Bookmark | `Bookmark` |
-| Document | `FileText` | | Code | `Code2`/`FileCode` |
-| Link | `Link2` | | Quote | `Quote` |
+| Content  | Icon                  |     | Content    | Icon               |
+| -------- | --------------------- | --- | ---------- | ------------------ |
+| Video    | `Film`                |     | Play/Pause | `Play`/`Pause`     |
+| Folder   | `Folder`/`FolderOpen` |     | Bookmark   | `Bookmark`         |
+| Document | `FileText`            |     | Code       | `Code2`/`FileCode` |
+| Link     | `Link2`               |     | Quote      | `Quote`            |
 
 ### Persona/Category Icons
 
-| Persona | Icon | | Persona | Icon |
-|---------|------|-|---------|------|
-| Cooking | `ChefHat` | | Coding | `Code2` |
-| Fitness | `Dumbbell` | | Travel | `MapPin`/`Compass` |
-| Reviews | `Star` | | Education | `Book`/`GraduationCap` |
-| Podcast | `Radio` | | Gaming | `Gamepad2` |
-| DIY | `Wrench`/`Hammer` | | Default | `Film` |
+| Persona | Icon              |     | Persona   | Icon                   |
+| ------- | ----------------- | --- | --------- | ---------------------- |
+| Cooking | `ChefHat`         |     | Coding    | `Code2`                |
+| Fitness | `Dumbbell`        |     | Travel    | `MapPin`/`Compass`     |
+| Reviews | `Star`            |     | Education | `Book`/`GraduationCap` |
+| Podcast | `Radio`           |     | Gaming    | `Gamepad2`             |
+| DIY     | `Wrench`/`Hammer` |     | Default   | `Film`                 |
 
 ### AI & Chat
 

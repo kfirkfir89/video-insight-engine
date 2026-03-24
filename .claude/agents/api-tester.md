@@ -25,16 +25,16 @@ You are an API testing specialist. You systematically test endpoints and report 
 
 ## Status Codes
 
-| Code | When |
-|------|------|
-| 200 | GET/PUT/PATCH success |
-| 201 | POST created |
-| 204 | DELETE success |
-| 400 | Validation failure |
-| 401 | No/invalid auth |
-| 403 | Insufficient permissions |
-| 404 | Not found |
-| 409 | Conflict/duplicate |
+| Code | When                     |
+| ---- | ------------------------ |
+| 200  | GET/PUT/PATCH success    |
+| 201  | POST created             |
+| 204  | DELETE success           |
+| 400  | Validation failure       |
+| 401  | No/invalid auth          |
+| 403  | Insufficient permissions |
+| 404  | Not found                |
+| 409  | Conflict/duplicate       |
 
 ## Report Format
 

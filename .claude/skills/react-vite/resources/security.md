@@ -19,11 +19,11 @@ XSS prevention, token storage, CSRF, input validation, and frontend security.
 React auto-escapes JSX expressions. The risk is `dangerouslySetInnerHTML` and user-controlled URLs.
 
 ```tsx
-import DOMPurify from 'dompurify';
+import DOMPurify from "dompurify";
 
 function RichContent({ html }: { html: string }) {
   const sanitized = DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'li'],
+    ALLOWED_TAGS: ["b", "i", "em", "strong", "p", "br", "ul", "li"],
     ALLOWED_ATTR: [],
   });
   return <div dangerouslySetInnerHTML={{ __html: sanitized }} />;
@@ -34,8 +34,11 @@ ALWAYS validate URLs:
 
 ```tsx
 function isValidUrl(url: string): boolean {
-  try { return ['http:', 'https:'].includes(new URL(url).protocol); }
-  catch { return false; }
+  try {
+    return ["http:", "https:"].includes(new URL(url).protocol);
+  } catch {
+    return false;
+  }
 }
 ```
 
@@ -43,12 +46,12 @@ function isValidUrl(url: string): boolean {
 
 ## Token Storage
 
-| Storage | Security | Use For |
-|---------|----------|---------|
-| Memory variable | Highest | Access tokens (lost on refresh) |
-| HttpOnly cookie | High | Auth tokens (server-set, no JS access) |
-| sessionStorage | Medium | Non-sensitive session data |
-| localStorage | Low | Preferences only — NEVER tokens |
+| Storage         | Security | Use For                                |
+| --------------- | -------- | -------------------------------------- |
+| Memory variable | Highest  | Access tokens (lost on refresh)        |
+| HttpOnly cookie | High     | Auth tokens (server-set, no JS access) |
+| sessionStorage  | Medium   | Non-sensitive session data             |
+| localStorage    | Low      | Preferences only — NEVER tokens        |
 
 ---
 
@@ -65,7 +68,11 @@ ALWAYS validate with Zod on the client AND expect server validation too.
 ```tsx
 const userSchema = z.object({
   email: z.string().email(),
-  name: z.string().min(2).max(100).regex(/^[a-zA-Z\s]+$/),
+  name: z
+    .string()
+    .min(2)
+    .max(100)
+    .regex(/^[a-zA-Z\s]+$/),
 });
 ```
 
@@ -77,7 +84,7 @@ ONLY use `VITE_` prefix for public, non-sensitive values (API base URL, public k
 
 ```tsx
 // Validate at startup
-if (!import.meta.env.VITE_API_URL) throw new Error('VITE_API_URL required');
+if (!import.meta.env.VITE_API_URL) throw new Error("VITE_API_URL required");
 ```
 
 ---
@@ -98,4 +105,4 @@ ALWAYS set Content-Security-Policy headers. ALWAYS use `rel="noopener noreferrer
 
 ## Rules Summary
 
-React's JSX escaping prevents most XSS, but dangerouslySetInnerHTML requires DOMPurify with an explicit allowlist. URLs must validate against http/https protocols. Auth tokens live in memory or HttpOnly cookies, never localStorage. All inputs validate with Zod on both client and server. VITE_ env vars are public — secrets stay server-side. External links always get noopener noreferrer, and CSP headers restrict script sources. The frontend assumes all user input is hostile.
+React's JSX escaping prevents most XSS, but dangerouslySetInnerHTML requires DOMPurify with an explicit allowlist. URLs must validate against http/https protocols. Auth tokens live in memory or HttpOnly cookies, never localStorage. All inputs validate with Zod on both client and server. VITE\_ env vars are public — secrets stay server-side. External links always get noopener noreferrer, and CSP headers restrict script sources. The frontend assumes all user input is hostile.
