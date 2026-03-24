@@ -1,229 +1,72 @@
 # Video Insight Engine
 
-Personal video knowledge management system.
-
-> **For Claude Code:** Read this first, then relevant skill/doc based on task.
-
----
-
-## What It Does
-
-| Feature       | Description                                                    |
-| ------------- | -------------------------------------------------------------- |
-| **Summarize** | YouTube URL → Interactive knowledge app (cached)               |
-| **Assistant**  | AI chat about saved content (coming soon)                      |
-
----
-
-## ⚠️ Critical Docs (Read First)
-
-| Topic              | Document                                           | When to Read                        |
-| ------------------ | -------------------------------------------------- | ----------------------------------- |
-| **Security**       | [docs/SECURITY.md](./docs/SECURITY.md)             | Auth, rate limiting, CORS           |
-| **Error Handling** | [docs/ERROR-HANDLING.md](./docs/ERROR-HANDLING.md) | Error codes, retry, DLQ             |
-| **Data Models**    | [docs/DATA-MODELS.md](./docs/DATA-MODELS.md)       | MongoDB schemas, VIEResponse, TabEntry types |
-| **Cross-Cutting**  | [docs/CROSS-CUTTING.md](./docs/CROSS-CUTTING.md)   | Multi-service work, contracts       |
-
----
+Personal video knowledge management system — YouTube URL to interactive knowledge app.
 
 ## Tech Stack
 
-| Service            | Technology                                                  | Port      |
-| ------------------ | ----------------------------------------------------------- | --------- |
-| **vie-api**        | Node.js + Fastify + TypeScript + AI                         | 3000      |
-| **vie-web**        | React + Vite + TypeScript + AI SDK                          | 5173      |
-| **vie-summarizer** | Python + FastAPI + LiteLLM (Multi-Provider)                 | 8000      |
-| **vie-explainer**  | Python + Starlette + FastMCP + LiteLLM (Assistant — coming soon) | 8001      |
-| **vie-admin**      | Python + FastAPI + React + Recharts                         | 8002      |
-| **vie-mongodb**    | MongoDB 7                                                   | 27017     |
-| **vie-redis**      | Redis 7                                                     | 6379      |
-| **vie-qdrant**     | Qdrant                                                      | 6333/6334 |
+| Service | Tech | Port |
+|---------|------|------|
+| vie-api | Node.js + Fastify + TypeScript | 3000 |
+| vie-web | React 19 + Vite + TypeScript + AI SDK | 5173 |
+| vie-summarizer | Python + FastAPI + LiteLLM | 8000 |
+| vie-explainer | Python + Starlette + FastMCP + LiteLLM | 8001 |
+| vie-admin | Python + FastAPI + React + Recharts | 8002 |
+| vie-mongodb | MongoDB 7 | 27017 |
+| vie-redis | Redis 7 | 6379 |
+| vie-qdrant | Qdrant | 6333/6334 |
 
----
+## Task Workflow
 
-## Working on a Task?
+1. Check `dev/active/` for current tasks — read `plan.md`, `context.md`, `tasks.md`
+2. When skill activation hook fires: READ the SKILL.md and ALL suggested resource files BEFORE writing code
+3. Load skill by service: api → `backend-node`, web → `react-vite`, summarizer/explainer → `backend-python`
 
-### 1. Check for Active Dev Docs
+## Commands
 
-```bash
-ls dev/active/
-```
-
-If task exists, read the `plan.md`, `context.md`, `tasks.md`.
-
-### 2. Load Relevant Skill
-
-| Working on...    | Load skill                                                                         |
-| ---------------- | ---------------------------------------------------------------------------------- |
-| vie-api backend  | [.claude/skills/backend-node/SKILL.md](./.claude/skills/backend-node/SKILL.md)     |
-| vie-web frontend | [.claude/skills/react-vite/SKILL.md](./.claude/skills/react-vite/SKILL.md)         |
-| vie-summarizer   | [.claude/skills/backend-python/SKILL.md](./.claude/skills/backend-python/SKILL.md) |
-| vie-explainer    | [.claude/skills/backend-python/SKILL.md](./.claude/skills/backend-python/SKILL.md) |
-
-### 3. Check Service Documentation
-
-| Service        | Documentation                                              |
-| -------------- | ---------------------------------------------------------- |
-| vie-api        | [docs/SERVICE-API.md](./docs/SERVICE-API.md)               |
-| vie-web        | [docs/FRONTEND.md](./docs/FRONTEND.md)                     |
-| vie-summarizer | [docs/SERVICE-SUMMARIZER.md](./docs/SERVICE-SUMMARIZER.md) |
-| vie-explainer  | [docs/SERVICE-EXPLAINER.md](./docs/SERVICE-EXPLAINER.md)   |
-| vie-admin      | [docs/SERVICE-ADMIN.md](./docs/SERVICE-ADMIN.md)           |
-
----
-
-## ⚠️ MANDATORY RULES
-
-### Skill Enforcement (CRITICAL)
-
-**When the skill activation hook fires, you MUST:**
-
-1. **READ the SKILL.md file** using the Read tool
-2. **READ all suggested resource files** using the Read tool
-3. **APPLY the patterns** from those files in your response
-
-This is NOT optional. Do NOT write code until you have read the activated skills.
-
-### Rules Reference
-
-Check [.claude/rules/](./.claude/rules/) for detailed guidelines:
-
-| Rule | File | Enforcement |
-|------|------|-------------|
-| Skill Reading | [skill-enforcement.md](./.claude/rules/skill-enforcement.md) | **MANDATORY** |
-| Code Quality | [code-quality.md](./.claude/rules/code-quality.md) | Required |
-| Security | [security.md](./.claude/rules/security.md) | Required |
-| Testing | [testing.md](./.claude/rules/testing.md) | Required |
-| Git Workflow | [git-workflow.md](./.claude/rules/git-workflow.md) | Required |
-
----
+| Command | Purpose |
+|---------|---------|
+| `/task-plan {name}` | Create task documentation |
+| `/resume {task}` | Resume after chat clear |
+| `/complete-task {task}` | Plan → test → security → review |
+| `/review` | Code review changes |
+| `/test {file}` | Generate tests |
+| `/ship` | Pre-deploy checklist |
+| `/security-check` | Security audit |
 
 ## Project Structure
 
-See [docs/PROJECT-STRUCTURE.md](./docs/PROJECT-STRUCTURE.md) for complete folder layout.
-
 ```
 video-insight-engine/
-├── .claude/        # Claude Code infrastructure
-├── docs/           # Documentation
+├── .claude/        # Skills, agents, hooks, commands, rules
+├── docs/           # Architecture, security, error handling, services
 ├── dev/            # Task planning (survives context resets)
-├── packages/       # Shared code (@vie/shared, @vie/types, @vie/utils)
-├── api/            # vie-api - MAIN GATEWAY (Node.js + Fastify)
-├── services/       # Backend services (summarizer, explainer)
-├── apps/           # Frontend (web)
+├── packages/       # @vie/shared, @vie/types, @vie/utils
+├── api/            # vie-api gateway (Node.js + Fastify)
+├── services/       # summarizer, explainer (Python)
+├── apps/           # web frontend (React)
 └── scripts/        # Utility scripts
 ```
 
----
+## Critical Docs
 
-## Available Commands
-
-| Command                  | Purpose                                        |
-| ------------------------ | ---------------------------------------------- |
-| `/task-plan {name}`      | Create task documentation                      |
-| `/task-plan-update`      | Update docs before context reset               |
-| `/list-tasks`            | List all active tasks with status              |
-| `/resume {task}`         | Resume an active task after chat clear         |
-| `/complete-task {task}`  | Full workflow: plan → test → security → review |
-| `/update-docs {changes}` | Update docs/, CLAUDE.md, README.md             |
-| `/review`                | Code review recent changes                     |
-| `/test {file}`           | Generate tests                                 |
-| `/ship`                  | Pre-deploy checklist                           |
-| `/security-check`        | Security audit                                 |
-
----
-
-## Available Agents
-
-| Agent                    | Purpose                                   |
-| ------------------------ | ----------------------------------------- |
-| **plan-auditor**         | Audit docs & infrastructure before coding |
-| **code-reviewer**        | Review code for issues                    |
-| **refactor-planner**     | Plan safe refactoring                     |
-| **test-writer**          | Generate comprehensive tests              |
-| **doc-generator**        | Create documentation                      |
-| **debug-investigator**   | Systematic debugging                      |
-| **security-auditor**     | Security vulnerability review             |
-| **api-tester**           | API endpoint testing                      |
-| **frontend-error-fixer** | React/TypeScript error fixing             |
-
----
-
-## Hooks (Automatic)
-
-| Hook                      | Trigger      | Purpose                  |
-| ------------------------- | ------------ | ------------------------ |
-| **skill-activation**      | Every prompt | Suggests relevant skills |
-| **post-tool-use-tracker** | After edits  | Tracks modified files    |
-
----
-
-## Key Design Decisions
-
-| Decision           | Choice           | Why                                |
-| ------------------ | ---------------- | ---------------------------------- |
-| Assistant (future) | MCP Server       | MCP Server → future user agent     |
-| System cache       | Redis + MongoDB  | Same video = instant serve ($0.00) |
-| Qdrant             | Vector DB        | RAG transcript search (future)     |
-
----
+| When | Read |
+|------|------|
+| Auth, rate limiting, CORS | [docs/SECURITY.md](./docs/SECURITY.md) |
+| Error codes, retry, DLQ | [docs/ERROR-HANDLING.md](./docs/ERROR-HANDLING.md) |
+| MongoDB schemas, VIEResponse | [docs/DATA-MODELS.md](./docs/DATA-MODELS.md) |
+| Multi-service contracts | [docs/CROSS-CUTTING.md](./docs/CROSS-CUTTING.md) |
+| System architecture | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) |
+| API contracts | [docs/API-REFERENCE.md](./docs/API-REFERENCE.md) |
+| Service docs | [docs/SERVICE-API.md](./docs/SERVICE-API.md), [SERVICE-SUMMARIZER.md](./docs/SERVICE-SUMMARIZER.md), [SERVICE-EXPLAINER.md](./docs/SERVICE-EXPLAINER.md) |
+| Frontend patterns | [docs/FRONTEND.md](./docs/FRONTEND.md) |
 
 ## Quick Start
 
 ```bash
-# 1. Setup
-cp .env.example .env
-# Add ANTHROPIC_API_KEY
-
-# 2. Start
+cp .env.example .env  # Add ANTHROPIC_API_KEY
 docker-compose up -d
-
-# 3. Verify
-curl http://localhost:3000/health
-curl http://localhost:8000/health
-
-# 4. Open
+curl http://localhost:3000/health && curl http://localhost:8000/health
 open http://localhost:5173
 ```
 
----
-
-## When Starting Work
-
-1. Read [dev/scratchpad.md](./dev/scratchpad.md) for recent context
-2. Check `dev/active/` for current tasks
-3. Run `/task-plan {task}` if starting new task
-4. Skills auto-suggest based on your work
-5. Quality checks run automatically on edits
-6. Context saved automatically when you stop
-
----
-
-## 📚 Full Documentation Index
-
-### System
-
-- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) - System diagram, pipeline phases, SSE streaming
-- [docs/DATA-MODELS.md](./docs/DATA-MODELS.md) - MongoDB schemas, VIEResponse v2, TabEntry types
-- [docs/CACHING.md](./docs/CACHING.md) - Cache strategy
-- [docs/CROSS-CUTTING.md](./docs/CROSS-CUTTING.md) - Multi-service work
-
-### Security & Error Handling
-
-- [docs/SECURITY.md](./docs/SECURITY.md) - Auth, rate limiting, CORS
-- [docs/ERROR-HANDLING.md](./docs/ERROR-HANDLING.md) - Error codes, retry, DLQ
-
-### API & Services
-
-- [docs/API-REFERENCE.md](./docs/API-REFERENCE.md) - REST, WebSocket, MCP, SSE APIs
-- [docs/SERVICE-API.md](./docs/SERVICE-API.md) - vie-api implementation
-- [docs/SERVICE-SUMMARIZER.md](./docs/SERVICE-SUMMARIZER.md) - vie-summarizer implementation
-- [docs/SERVICE-EXPLAINER.md](./docs/SERVICE-EXPLAINER.md) - vie-explainer MCP implementation
-
-### Frontend
-
-- [docs/FRONTEND.md](./docs/FRONTEND.md) - React/Vite, interactive components, composable output
-
-### Infrastructure
-
-- [docs/INFRASTRUCTURE.md](./docs/INFRASTRUCTURE.md) - Docker, networking, implementation history
+This is a monorepo with 4 services (api, web, summarizer, explainer), shared packages (@vie/types, @vie/shared, @vie/utils), Redis+MongoDB caching (same video = instant serve at $0.00), and Qdrant for future RAG. The assistant feature uses MCP Server for future user agent integration. When the skill activation hook fires, always read SKILL.md and all suggested resources before writing any code — this is mandatory with no exceptions. Follow conventional commits, never commit to main directly, and validate all user input at system boundaries.

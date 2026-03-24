@@ -1,67 +1,18 @@
 # Security Rules
 
-## Secrets
+<rules>
+- NEVER hardcode secrets, API keys, or passwords — use environment variables (exposed secrets = full system compromise)
+- ALWAYS validate ALL user input and sanitize before database queries (prevents injection attacks)
+- ALWAYS use parameterized queries — never string concatenation for queries (SQL/NoSQL injection vector)
+- NEVER expose stack traces, internal paths, or structure to users (information disclosure enables targeted attacks)
+- NEVER log sensitive information — API keys, passwords, PII, tokens (log exposure = credential leak)
+- ALWAYS verify auth on every protected route and check permissions at the data layer (route-only auth is bypassable)
+- ALWAYS configure CORS properly — never `*` in production (allows cross-origin attacks)
+- ALWAYS apply rate limits to auth endpoints, expensive operations, and public APIs (prevents brute force and DoS)
+</rules>
 
-- NEVER hardcode secrets, API keys, or passwords
-- Use environment variables for all sensitive data
-- Check for exposed secrets before committing
-- Don't log sensitive information
+Escape output to prevent XSS. Set secure cookie flags. Use security headers (CSP, X-Frame-Options). Verify resource ownership before operations. Audit sensitive operations. Keep dependencies updated and check for known vulnerabilities.
 
-## Input Validation
+Project-specific auth, rate limiting, CORS, and security middleware patterns: [docs/SECURITY.md](../../docs/SECURITY.md).
 
-- Validate ALL user input
-- Sanitize before database queries
-- Escape output to prevent XSS
-- Use parameterized queries (no string concatenation)
-
-## Authentication
-
-- Verify auth on every protected route
-- Use secure session handling
-- Implement proper RBAC
-- Never expose user IDs in URLs where avoidable
-
-## Authorization
-
-- Check permissions at the data layer, not just routes
-- Verify resource ownership before operations
-- Use principle of least privilege
-- Audit sensitive operations
-
-## Dependencies
-
-- Keep dependencies updated
-- Check for known vulnerabilities
-- Audit before adding new packages
-- Prefer well-maintained packages
-
-## Error Handling
-
-- Don't expose stack traces to users
-- Don't reveal internal paths or structure
-- Log security events
-- Return generic error messages externally
-
-## CORS & Headers
-
-- Configure CORS properly (not `*` in production)
-- Use security headers (CSP, X-Frame-Options, etc.)
-- Set secure cookie flags
-
-## Rate Limiting
-
-- Apply rate limits to auth endpoints
-- Apply rate limits to expensive operations
-- Apply rate limits to public APIs
-
-## Project-Specific
-
-Refer to [docs/SECURITY.md](../../docs/SECURITY.md) for:
-- Auth patterns specific to this project
-- Rate limiting configuration
-- CORS setup
-- Security middleware
-
-## Enforcement Level
-
-**Required** - Security rules must be followed.
+**Enforcement:** Required — security rules must be followed.

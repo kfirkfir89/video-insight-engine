@@ -1,15 +1,24 @@
 # React Patterns
 
-Component design, hooks, and composition patterns.
+Component design, hooks, composition, and React 19 features.
+
+<rules>
+- ALWAYS use named function declarations with typed props interfaces (causes poor DX if anonymous/untyped)
+- ALWAYS extract reusable logic into custom hooks — components should compose hooks, not contain raw useEffect/useState chains (causes untestable, duplicated logic)
+- ALWAYS use compound components for complex UI with shared state (causes prop explosion if using config objects)
+- ALWAYS call hooks unconditionally at the top level — never inside conditions or loops (breaks Rules of Hooks)
+- ALWAYS clean up subscriptions and event listeners in useEffect return (causes memory leaks)
+- NEVER use class components — function components only (causes React 19 incompatibility)
+- NEVER store derived state in useState — compute during render (causes sync bugs and extra re-renders)
+</rules>
 
 ---
 
 ## Functional Components
 
-### DO ✅
+ALWAYS use named exports with typed props. Never anonymous default exports.
 
 ```tsx
-// Named export, typed props
 interface UserCardProps {
   user: User;
   onSelect?: (id: string) => void;
@@ -17,22 +26,9 @@ interface UserCardProps {
 
 export function UserCard({ user, onSelect }: UserCardProps) {
   return (
-    <div className="user-card" onClick={() => onSelect?.(user.id)}>
+    <div onClick={() => onSelect?.(user.id)}>
       <img src={user.avatar} alt={user.name} />
       <span>{user.name}</span>
-    </div>
-  );
-}
-```
-
-### DON'T ❌
-
-```tsx
-// Anonymous default export, untyped
-export default function({ user, onSelect }) {
-  return (
-    <div onClick={() => onSelect(user.id)}>
-      {user.name}
     </div>
   );
 }
@@ -42,46 +38,15 @@ export default function({ user, onSelect }) {
 
 ## Custom Hooks
 
-### DO ✅
+ALWAYS encapsulate reusable stateful logic in hooks. Name them `use*`.
 
 ```tsx
-// Encapsulate logic in custom hooks
 function useToggle(initial = false) {
   const [value, setValue] = useState(initial);
-  
   const toggle = useCallback(() => setValue((v) => !v), []);
   const setTrue = useCallback(() => setValue(true), []);
   const setFalse = useCallback(() => setValue(false), []);
-  
   return { value, toggle, setTrue, setFalse };
-}
-
-// Usage
-function Modal() {
-  const { value: isOpen, setTrue: open, setFalse: close } = useToggle();
-  
-  return (
-    <>
-      <button onClick={open}>Open</button>
-      {isOpen && <Dialog onClose={close} />}
-    </>
-  );
-}
-```
-
-### DON'T ❌
-
-```tsx
-// Logic scattered in component
-function Modal() {
-  const [isOpen, setIsOpen] = useState(false);
-  
-  return (
-    <>
-      <button onClick={() => setIsOpen(true)}>Open</button>
-      {isOpen && <Dialog onClose={() => setIsOpen(false)} />}
-    </>
-  );
 }
 ```
 
@@ -89,10 +54,9 @@ function Modal() {
 
 ## Compound Components
 
-### DO ✅
+ALWAYS use for related components sharing state. Parent provides context, children consume.
 
 ```tsx
-// Parent provides context, children consume it
 const SelectContext = createContext<SelectContextType | null>(null);
 
 function Select({ children, value, onChange }: SelectProps) {
@@ -106,238 +70,50 @@ function Select({ children, value, onChange }: SelectProps) {
 function Option({ value, children }: OptionProps) {
   const ctx = useContext(SelectContext);
   if (!ctx) throw new Error('Option must be inside Select');
-  
   return (
-    <button
-      className={ctx.value === value ? 'selected' : ''}
-      onClick={() => ctx.onChange(value)}
-    >
+    <button className={ctx.value === value ? 'selected' : ''} onClick={() => ctx.onChange(value)}>
       {children}
     </button>
   );
 }
-
 Select.Option = Option;
-
-// Usage - clean, composable API
-<Select value={color} onChange={setColor}>
-  <Select.Option value="red">Red</Select.Option>
-  <Select.Option value="blue">Blue</Select.Option>
-</Select>
-```
-
----
-
-## Render Props
-
-### DO ✅
-
-```tsx
-// When children need data from parent
-interface MouseTrackerProps {
-  children: (position: { x: number; y: number }) => React.ReactNode;
-}
-
-function MouseTracker({ children }: MouseTrackerProps) {
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      setPosition({ x: e.clientX, y: e.clientY });
-    };
-    window.addEventListener('mousemove', handler);
-    return () => window.removeEventListener('mousemove', handler);
-  }, []);
-  
-  return <>{children(position)}</>;
-}
-
-// Usage
-<MouseTracker>
-  {({ x, y }) => <div>Mouse: {x}, {y}</div>}
-</MouseTracker>
-```
-
----
-
-## Controlled vs Uncontrolled
-
-### Controlled (Recommended)
-
-```tsx
-// Parent owns the state
-function ControlledInput({ value, onChange }: InputProps) {
-  return (
-    <input
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    />
-  );
-}
-
-// Usage
-const [name, setName] = useState('');
-<ControlledInput value={name} onChange={setName} />
-```
-
-### Uncontrolled (When Needed)
-
-```tsx
-// Component owns its state, parent reads via ref
-function UncontrolledInput({ defaultValue }: InputProps) {
-  const ref = useRef<HTMLInputElement>(null);
-  
-  return <input ref={ref} defaultValue={defaultValue} />;
-}
-
-// Usage - read value imperatively
-const inputRef = useRef<HTMLInputElement>(null);
-const handleSubmit = () => console.log(inputRef.current?.value);
 ```
 
 ---
 
 ## Error Boundaries
 
-Wrap every major section in an error boundary so one broken component doesn't crash the entire page.
-
-### DO ✅
+ALWAYS wrap every major section (sidebar, header, main content). One broken component must not crash the page.
 
 ```tsx
 import { ErrorBoundary } from 'react-error-boundary';
 
-function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
-  return (
-    <div role="alert" className="p-4 rounded-lg bg-red-50 text-red-800">
-      <p className="font-medium">Something went wrong</p>
-      <pre className="text-sm mt-2">{error.message}</pre>
-      <button onClick={resetErrorBoundary} className="mt-3 underline">
-        Try again
-      </button>
-    </div>
-  );
-}
-
-// Wrap every major section — sidebar, header, main content, widgets
 function App() {
   return (
     <div className="flex">
       <ErrorBoundary FallbackComponent={ErrorFallback}>
         <Sidebar />
       </ErrorBoundary>
-
-      <main className="flex-1">
-        <ErrorBoundary FallbackComponent={ErrorFallback}>
-          <Header />
-        </ErrorBoundary>
-
-        <ErrorBoundary FallbackComponent={ErrorFallback}>
-          <MainContent />
-        </ErrorBoundary>
-      </main>
+      <ErrorBoundary FallbackComponent={ErrorFallback}>
+        <MainContent />
+      </ErrorBoundary>
     </div>
   );
 }
 ```
 
-### Strategy
-
-| Boundary Level | Purpose |
-|----------------|---------|
-| Route level | Prevents blank page — catches any error in the route |
-| Feature level | Sidebar crash doesn't break main content |
-| Widget level | Individual card failure shows fallback, rest works |
-
-### Key Rules
-
-- **Every async data section** needs a boundary — API failures are the most common crash source
-- **Never catch errors silently** — always show a fallback UI with a retry option
-- **Log errors** — use `onError` prop to send to your error tracking service
-- **Don't wrap individual tiny components** — that's overkill. Wrap at the feature/section level
-
----
-
-## Refs
-
-### DO ✅
-
-```tsx
-// DOM access
-function AutoFocusInput() {
-  const inputRef = useRef<HTMLInputElement>(null);
-  
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-  
-  return <input ref={inputRef} />;
-}
-
-// Mutable value that doesn't trigger re-render
-function useInterval(callback: () => void, delay: number) {
-  const savedCallback = useRef(callback);
-  
-  useEffect(() => {
-    savedCallback.current = callback;
-  }, [callback]);
-  
-  useEffect(() => {
-    const id = setInterval(() => savedCallback.current(), delay);
-    return () => clearInterval(id);
-  }, [delay]);
-}
-```
-
-### DON'T ❌
-
-```tsx
-// Using ref to store state that should trigger re-render
-const countRef = useRef(0);
-countRef.current++; // Won't re-render!
-```
-
----
-
-## forwardRef
-
-### DO ✅
-
-```tsx
-// Forward ref to inner element
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary';
-}
-
-const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = 'primary', children, ...props }, ref) => {
-    return (
-      <button ref={ref} className={`btn btn-${variant}`} {...props}>
-        {children}
-      </button>
-    );
-  }
-);
-
-Button.displayName = 'Button';
-```
+Boundary levels: route-level (prevents blank page), feature-level (sidebar crash doesn't break content), widget-level (card failure shows fallback). ALWAYS log errors via `onError` prop to error tracking.
 
 ---
 
 ## useEffect Patterns
 
-### DO ✅
+ALWAYS include cleanup. ALWAYS include correct dependencies.
 
 ```tsx
-// Cleanup subscriptions
-useEffect(() => {
-  const subscription = api.subscribe(handleUpdate);
-  return () => subscription.unsubscribe();
-}, []);
-
 // Fetch with abort
 useEffect(() => {
   const controller = new AbortController();
-  
   async function fetchData() {
     try {
       const res = await fetch(url, { signal: controller.signal });
@@ -346,229 +122,71 @@ useEffect(() => {
       if (e.name !== 'AbortError') setError(e);
     }
   }
-  
   fetchData();
   return () => controller.abort();
 }, [url]);
 ```
 
-### DON'T ❌
+NEVER use useEffect to set derived state. NEVER omit dependencies. NEVER forget cleanup for subscriptions.
+
+---
+
+## forwardRef
+
+ALWAYS use when exposing DOM refs from wrapper components. Set `displayName`.
 
 ```tsx
-// Missing dependencies
-useEffect(() => {
-  fetchUser(userId); // userId not in deps!
-}, []);
-
-// No cleanup for subscriptions
-useEffect(() => {
-  window.addEventListener('resize', handler);
-  // Missing cleanup!
-}, []);
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ variant = 'primary', children, ...props }, ref) => (
+    <button ref={ref} className={`btn btn-${variant}`} {...props}>{children}</button>
+  )
+);
+Button.displayName = 'Button';
 ```
 
 ---
 
 ## React 19 Hooks
 
-React 19 introduces new hooks for actions, optimistic updates, and async operations.
+**useActionState** — Track form action lifecycle (pending, success, error). Use for form submissions with server actions.
 
-### useActionState
+**use()** — Read promises (suspends until resolved) or context conditionally. Wrap consumers in `<Suspense>`.
 
-Tracks the lifecycle of form actions (pending, success, error).
+**useOptimistic** — Show immediate UI feedback before async completes. Pair with `useTransition`.
 
-```tsx
-import { useActionState } from "react";
-
-function LoginForm() {
-  const [state, submitAction, isPending] = useActionState(
-    async (previousState, formData: FormData) => {
-      const email = formData.get("email") as string;
-      const password = formData.get("password") as string;
-
-      try {
-        await loginUser(email, password);
-        return { success: true, error: null };
-      } catch (error) {
-        return { success: false, error: "Invalid credentials" };
-      }
-    },
-    { success: false, error: null }
-  );
-
-  return (
-    <form action={submitAction}>
-      <input name="email" type="email" required />
-      <input name="password" type="password" required />
-
-      {state.error && <p className="text-red-500">{state.error}</p>}
-
-      <button type="submit" disabled={isPending}>
-        {isPending ? "Signing in..." : "Sign in"}
-      </button>
-    </form>
-  );
-}
-```
-
-### use() Hook
-
-Read promises and context directly in components (suspends until resolved).
-
-```tsx
-import { use, Suspense } from "react";
-
-// With Promises - component suspends until resolved
-function UserProfile({ userPromise }: { userPromise: Promise<User> }) {
-  const user = use(userPromise);
-
-  return (
-    <div>
-      <h1>{user.name}</h1>
-      <p>{user.email}</p>
-    </div>
-  );
-}
-
-// Usage - wrap in Suspense
-function App() {
-  const userPromise = fetchUser(userId);
-
-  return (
-    <Suspense fallback={<UserSkeleton />}>
-      <UserProfile userPromise={userPromise} />
-    </Suspense>
-  );
-}
-
-// With Context - can be called conditionally
-function ThemedButton({ showTheme }: { showTheme: boolean }) {
-  if (showTheme) {
-    const theme = use(ThemeContext);
-    return <button className={theme.buttonClass}>Themed</button>;
-  }
-  return <button>Default</button>;
-}
-```
-
-### useOptimistic
-
-Built-in optimistic updates without external libraries.
-
-```tsx
-import { useOptimistic, useTransition } from "react";
-
-function LikeButton({ postId, likes }: { postId: string; likes: number }) {
-  const [isPending, startTransition] = useTransition();
-  const [optimisticLikes, addOptimisticLike] = useOptimistic(
-    likes,
-    (currentLikes, increment: number) => currentLikes + increment
-  );
-
-  const handleLike = () => {
-    startTransition(async () => {
-      addOptimisticLike(1);
-      await likePost(postId);
-    });
-  };
-
-  return (
-    <button onClick={handleLike} disabled={isPending}>
-      {optimisticLikes} likes
-    </button>
-  );
-}
-
-// With array state
-function TodoList({ todos }: { todos: Todo[] }) {
-  const [optimisticTodos, addOptimisticTodo] = useOptimistic(
-    todos,
-    (state, newTodo: Todo) => [...state, { ...newTodo, pending: true }]
-  );
-
-  const addTodo = async (text: string) => {
-    const newTodo = { id: crypto.randomUUID(), text, pending: false };
-    addOptimisticTodo(newTodo);
-    await createTodo(newTodo);
-  };
-
-  return (
-    <ul>
-      {optimisticTodos.map((todo) => (
-        <li key={todo.id} className={todo.pending ? "opacity-50" : ""}>
-          {todo.text}
-        </li>
-      ))}
-    </ul>
-  );
-}
-```
-
-### useFormStatus
-
-Access form submission status from within form components.
-
-```tsx
-import { useFormStatus } from "react-dom";
-
-// Must be used inside a <form>
-function SubmitButton() {
-  const { pending, data, method, action } = useFormStatus();
-
-  return (
-    <button type="submit" disabled={pending}>
-      {pending ? "Submitting..." : "Submit"}
-    </button>
-  );
-}
-
-// Usage
-function ContactForm() {
-  async function submitForm(formData: FormData) {
-    "use server";
-    await saveContact(formData);
-  }
-
-  return (
-    <form action={submitForm}>
-      <input name="name" required />
-      <input name="email" type="email" required />
-      <SubmitButton />
-    </form>
-  );
-}
-```
-
-### When to Use Each Hook
+**useFormStatus** — Access form pending state from submit buttons inside a `<form>`. Must be used inside a form child component.
 
 | Hook | Use Case |
 |------|----------|
-| `useActionState` | Form submissions with server actions, need state + pending |
-| `use()` | Read promises (with Suspense) or context conditionally |
-| `useOptimistic` | Show immediate feedback before async completes |
-| `useFormStatus` | Submit buttons that need to know form state |
+| `useActionState` | Form submissions, need state + pending |
+| `use()` | Read promises with Suspense, conditional context |
+| `useOptimistic` | Immediate feedback before async completes |
+| `useFormStatus` | Submit buttons aware of form state |
 
 ---
 
-## Quick Reference
+## Feature Module Exports
 
-| Pattern | When to Use |
-|---------|-------------|
-| Custom Hook | Reusable stateful logic |
-| Compound Component | Related components that share state |
-| Render Props | Dynamic children based on parent data |
-| forwardRef | Expose DOM ref from component |
-| Error Boundary | Catch and handle component errors |
+ALWAYS use a barrel `index.ts` that exports only the public API of a feature.
 
-| Hook | Purpose |
-|------|---------|
-| useState | Local component state |
-| useEffect | Side effects, subscriptions |
-| useRef | DOM access, mutable values |
-| useCallback | Stable function reference |
-| useMemo | Expensive computations |
-| useContext | Consume context value |
-| useActionState | Form action lifecycle (React 19) |
-| use | Read promises/context (React 19) |
-| useOptimistic | Optimistic updates (React 19) |
-| useFormStatus | Form submission status (React 19) |
+```tsx
+// src/features/users/index.ts
+export { UsersPage } from './pages/UsersPage';
+export { UserCard } from './components/UserCard';
+export { useUsers, useUser } from './hooks/useUsers';
+export type { User, CreateUserData } from './types';
+```
+
+---
+
+## Edge Cases
+
+- **Render props vs hooks:** Prefer hooks for data sharing. Use render props only when children need dynamic data from a parent that tracks external state (e.g., mouse position tracker).
+- **Refs for mutable values:** Use `useRef` for values that change but should NOT trigger re-renders (interval IDs, previous values). If it should trigger re-render, use `useState`.
+- **Controlled vs uncontrolled:** Default to controlled inputs. Use uncontrolled only for performance-critical forms or when integrating third-party libraries that manage their own state.
+
+---
+
+## Rules Summary
+
+Use named function components with typed props, extract logic into custom hooks, and compose with compound components and children — never config objects. Every major section gets an ErrorBoundary. All hooks are called unconditionally at the top level, all effects include cleanup and correct dependencies, and derived state is computed during render. Use React 19 hooks (useActionState, use, useOptimistic, useFormStatus) for form actions and optimistic updates. Never use class components, anonymous exports, conditional hooks, or useState for derived values.

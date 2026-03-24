@@ -1,75 +1,21 @@
 # Code Quality Rules
 
-## File Size
+<rules>
+- ALWAYS read 1-2 existing files of the same type in the same directory before creating new files — match their style, naming, structure, and patterns exactly (inconsistent style across a codebase is worse than any single bad pattern)
+- ALWAYS keep files under 500 lines; target 200-400 (split larger files — large files become unmaintainable)
+- NEVER use `any` in TypeScript (disables type safety, bugs become runtime errors instead of compile errors)
+- NEVER leave empty catch blocks (silently swallows errors, makes debugging impossible)
+- ALWAYS use descriptive names: camelCase (TS/JS), snake_case (Python), PascalCase (classes/types/components), SCREAMING_SNAKE_CASE (constants)
+- ALWAYS handle errors explicitly with user-friendly messages and appropriate logging
+- NEVER commit dead code: unused imports, commented-out code, TODO without tracking issue, console.log/print statements
+- ALWAYS keep functions under 50 lines with max 5 mutable locals (extract helpers for copy-pasted logic)
+- ALWAYS use pipeline pattern for functions with 3+ phases — each stage is an independent testable function with explicit context in/results out
+</rules>
 
-- Target: 200-400 lines per file
-- Maximum: 500 lines (split if larger)
-- Exception: Generated files, type definitions
+**TypeScript:** Prefer interfaces over type aliases for objects. Use strict null checks. Document complex types.
 
-## Naming
+**Python:** Use type hints on all function signatures. Use Pydantic for validation. Document complex types with docstrings.
 
-- Use descriptive names that explain purpose
-- camelCase for variables/functions (TypeScript/JavaScript)
-- snake_case for variables/functions (Python)
-- PascalCase for classes/types/components
-- SCREAMING_SNAKE_CASE for constants
+**Comments:** Comment "why" not "what". No obvious comments. Keep comments current.
 
-## Structure
-
-- One component/class per file
-- Group related functionality
-- Separate concerns (logic, UI, data)
-- Keep functions focused (single responsibility)
-
-## No Dead Code
-
-- Remove unused imports
-- Delete commented-out code
-- No TODO without tracking issue
-- Clean up console.log/print statements before commit
-
-## Error Handling
-
-- Always handle errors explicitly
-- No empty catch blocks
-- User-friendly error messages
-- Log errors appropriately for debugging
-
-## Types (TypeScript)
-
-- Avoid `any` type
-- Prefer interfaces over type aliases for objects
-- Use strict null checks
-- Document complex types
-
-## Types (Python)
-
-- Use type hints for function signatures
-- Use Pydantic for data validation
-- Document complex types with docstrings
-
-## Comments
-
-- Code should be self-documenting
-- Comment "why", not "what"
-- Keep comments up to date
-- No obvious comments (e.g., `// increment i`)
-
-## Function Complexity
-
-- Maximum: 50 lines per function (excluding docstrings)
-- Maximum: 5 mutable local variables per function
-- No copy-pasted logic — extract shared helpers
-- If a function has more than 3 phases/stages, use a pipeline pattern
-- State shared across phases must be explicit (dataclass/dict), not loose locals
-
-## Pipeline / Workflow Code
-
-- Each stage must be an independent, testable function
-- Stage functions receive context in, return results out
-- No implicit dependencies between stages via mutable closure variables
-- Timeout/fallback logic belongs in the stage, not the orchestrator
-
-## Enforcement Level
-
-**Required** - Follow unless explicitly overridden by user.
+**Enforcement:** Required — follow unless explicitly overridden by user.

@@ -1,242 +1,86 @@
 # State Management
 
-Local state, context, server state, and global state patterns.
+Local state, context, server state (React Query), global state (Zustand), and URL state patterns.
+
+<rules>
+- ALWAYS use React Query for server data — never useState+useEffect for fetching (causes stale data, race conditions, no caching)
+- ALWAYS derive computed values during render — never store in useState and sync with useEffect (causes sync bugs and double renders)
+- ALWAYS use Zustand selectors to pick specific state slices — never select entire store (causes unnecessary re-renders on every update)
+- ALWAYS create typed context with null default and a custom hook that throws if used outside provider (causes silent undefined errors)
+- NEVER put frequently-changing values in Context — use Zustand or component-local state (causes re-render cascade to all consumers)
+- NEVER duplicate server data into local state — use React Query's cache directly (causes stale copies)
+- NEVER mutate state directly — always use immutable updates with spread or functional setState (causes missed re-renders)
+</rules>
 
 ---
 
-## useState Patterns
+## State Decision Flow
 
-### DO ✅
+Ask in order: (1) Can it be derived? Compute it. (2) One component? `useState`. (3) Parent+children? Lift state. (4) Siblings? Common parent. (5) Distant components? Context or Zustand. (6) From server? React Query.
 
-```tsx
-// Simple state
-const [count, setCount] = useState(0);
-
-// Functional updates for derived state
-setCount((prev) => prev + 1);
-
-// Lazy initial state (expensive computation)
-const [data, setData] = useState(() => computeExpensiveValue());
-
-// Object state - spread to update
-const [user, setUser] = useState({ name: '', email: '' });
-setUser((prev) => ({ ...prev, name: 'John' }));
-```
-
-### DON'T ❌
-
-```tsx
-// Mutating state directly
-user.name = 'John';  // Won't re-render!
-setUser(user);
-
-// Storing derived state
-const [items, setItems] = useState(data);
-const [filteredItems, setFilteredItems] = useState([]); // ❌ Derive instead!
-```
-
----
-
-## useReducer
-
-### DO ✅
-
-```tsx
-// Complex state with multiple related values
-type State = {
-  status: 'idle' | 'loading' | 'success' | 'error';
-  data: User | null;
-  error: string | null;
-};
-
-type Action =
-  | { type: 'FETCH_START' }
-  | { type: 'FETCH_SUCCESS'; payload: User }
-  | { type: 'FETCH_ERROR'; payload: string };
-
-function reducer(state: State, action: Action): State {
-  switch (action.type) {
-    case 'FETCH_START':
-      return { ...state, status: 'loading', error: null };
-    case 'FETCH_SUCCESS':
-      return { status: 'success', data: action.payload, error: null };
-    case 'FETCH_ERROR':
-      return { status: 'error', data: null, error: action.payload };
-    default:
-      return state;
-  }
-}
-
-// Usage
-const [state, dispatch] = useReducer(reducer, {
-  status: 'idle',
-  data: null,
-  error: null,
-});
-
-dispatch({ type: 'FETCH_START' });
-```
-
----
-
-## Context
-
-### DO ✅
-
-```tsx
-// Create typed context
-interface AuthContextType {
-  user: User | null;
-  login: (credentials: Credentials) => Promise<void>;
-  logout: () => void;
-}
-
-const AuthContext = createContext<AuthContextType | null>(null);
-
-// Custom hook with error if used outside provider
-function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
-  return context;
-}
-
-// Provider component
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-
-  const login = async (credentials: Credentials) => {
-    const user = await authApi.login(credentials);
-    setUser(user);
-  };
-
-  const logout = () => {
-    authApi.logout();
-    setUser(null);
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-```
-
-### DON'T ❌
-
-```tsx
-// Default value that hides errors
-const AuthContext = createContext<AuthContextType>({} as AuthContextType);
-
-// Using context for frequently changing values
-const MouseContext = createContext({ x: 0, y: 0 }); // Re-renders everything!
-```
+| Type | Example | Solution |
+|------|---------|----------|
+| UI State | Modal open, tab active | useState |
+| Form State | Input values, validation | React Hook Form |
+| Server State | User data, posts | React Query |
+| URL State | Filters, pagination | useSearchParams |
+| Global UI | Theme, sidebar toggle | Context or Zustand |
+| Global App | Auth, cart | Zustand |
 
 ---
 
 ## React Query (Server State)
 
-### DO ✅
+ALWAYS use query key factories. ALWAYS invalidate related queries on mutation success.
 
 ```tsx
-// Fetch data with caching
-function useUsers() {
+export const userKeys = {
+  all: ['users'] as const,
+  lists: () => [...userKeys.all, 'list'] as const,
+  list: (filters: UsersFilter) => [...userKeys.lists(), filters] as const,
+  detail: (id: string) => [...userKeys.all, 'detail', id] as const,
+};
+
+export function useUsers(filters: UsersFilter = {}) {
   return useQuery({
-    queryKey: ['users'],
-    queryFn: () => api.getUsers(),
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    queryKey: userKeys.list(filters),
+    queryFn: () => api.getUsers(filters),
+    staleTime: 5 * 60 * 1000,
   });
 }
-
-// Usage in component
-function UserList() {
-  const { data: users, isLoading, error } = useUsers();
-
-  if (isLoading) return <Spinner />;
-  if (error) return <ErrorMessage error={error} />;
-
-  return (
-    <ul>
-      {users.map((user) => (
-        <li key={user.id}>{user.name}</li>
-      ))}
-    </ul>
-  );
-}
-
-// Mutations
-function useCreateUser() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: CreateUserData) => api.createUser(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-    },
-  });
-}
-```
-
-### DON'T ❌
-
-```tsx
-// Manual server state management
-const [users, setUsers] = useState([]);
-const [loading, setLoading] = useState(false);
-const [error, setError] = useState(null);
-
-useEffect(() => {
-  setLoading(true);
-  fetch('/api/users')
-    .then((res) => res.json())
-    .then(setUsers)
-    .catch(setError)
-    .finally(() => setLoading(false));
-}, []);
-// Missing: caching, refetching, race conditions, deduplication...
 ```
 
 ---
 
 ## Zustand (Global State)
 
-### DO ✅
+ALWAYS use selectors. ALWAYS define actions inside the store.
 
 ```tsx
-import { create } from 'zustand';
-
-interface CartStore {
-  items: CartItem[];
-  addItem: (item: CartItem) => void;
-  removeItem: (id: string) => void;
-  clearCart: () => void;
-  total: () => number;
-}
-
 const useCartStore = create<CartStore>((set, get) => ({
   items: [],
-  
-  addItem: (item) =>
-    set((state) => ({
-      items: [...state.items, item],
-    })),
-    
-  removeItem: (id) =>
-    set((state) => ({
-      items: state.items.filter((item) => item.id !== id),
-    })),
-    
-  clearCart: () => set({ items: [] }),
-  
-  total: () => get().items.reduce((sum, item) => sum + item.price, 0),
+  addItem: (item) => set((s) => ({ items: [...s.items, item] })),
+  removeItem: (id) => set((s) => ({ items: s.items.filter((i) => i.id !== id) })),
+  total: () => get().items.reduce((sum, i) => sum + i.price, 0),
 }));
 
-// Usage - only re-renders when selected state changes
-function CartCount() {
-  const count = useCartStore((state) => state.items.length);
-  return <span>{count}</span>;
+// ALWAYS select specific slices
+const count = useCartStore((s) => s.items.length);
+```
+
+---
+
+## Context
+
+ALWAYS use typed context with null default. ALWAYS throw in custom hook if used outside provider.
+
+```tsx
+const AuthContext = createContext<AuthContextType | null>(null);
+
+function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  return context;
 }
 ```
 
@@ -244,92 +88,43 @@ function CartCount() {
 
 ## URL State
 
-### DO ✅
+ALWAYS use `useSearchParams` for filters, pagination, and any state that should be shareable via URL.
 
 ```tsx
-import { useSearchParams } from 'react-router-dom';
+const [searchParams, setSearchParams] = useSearchParams();
+const page = Number(searchParams.get('page')) || 1;
 
-function ProductList() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  
-  const category = searchParams.get('category') ?? 'all';
-  const sort = searchParams.get('sort') ?? 'newest';
-  const page = Number(searchParams.get('page')) || 1;
-
-  // Update URL state
-  const setCategory = (newCategory: string) => {
-    setSearchParams((prev) => {
-      prev.set('category', newCategory);
-      prev.set('page', '1'); // Reset page
-      return prev;
-    });
-  };
-
-  // React Query with URL state
-  const { data } = useQuery({
-    queryKey: ['products', { category, sort, page }],
-    queryFn: () => api.getProducts({ category, sort, page }),
-  });
-
-  return (/* ... */);
-}
+const setPage = (p: number) => {
+  setSearchParams((prev) => { prev.set('page', String(p)); return prev; });
+};
 ```
 
 ---
 
 ## Derived State
 
-### DO ✅
+ALWAYS compute during render. NEVER store and sync.
 
 ```tsx
-// Compute, don't store
-function TodoList({ todos }: { todos: Todo[] }) {
-  // ✅ Derived from props
-  const completedCount = todos.filter((t) => t.completed).length;
-  const pendingCount = todos.length - completedCount;
+// CORRECT: derive from source
+const filteredItems = items.filter((i) => i.active);
+const itemCount = items.length;
 
-  return (
-    <div>
-      <p>Completed: {completedCount}</p>
-      <p>Pending: {pendingCount}</p>
-    </div>
-  );
-}
-```
-
-### DON'T ❌
-
-```tsx
-// Storing derived values
-function TodoList({ todos }: { todos: Todo[] }) {
-  const [completedCount, setCompletedCount] = useState(0);
-
-  // ❌ Syncing state
-  useEffect(() => {
-    setCompletedCount(todos.filter((t) => t.completed).length);
-  }, [todos]);
-
-  return <p>Completed: {completedCount}</p>;
-}
+// WRONG: storing derived values
+const [filteredItems, setFilteredItems] = useState([]);
+useEffect(() => { setFilteredItems(items.filter(i => i.active)); }, [items]);
 ```
 
 ---
 
-## Quick Reference
+## Edge Cases
 
-| State Type | Solution |
-|------------|----------|
-| Component UI state | useState |
-| Complex local state | useReducer |
-| Server data | React Query / SWR |
-| Global UI state | Context or Zustand |
-| Shareable state | URL params |
-| Form state | React Hook Form |
+- **useReducer over useState:** When you have 3+ related state values that change together (e.g., status/data/error triple), useReducer prevents impossible states.
+- **Context + Zustand together:** Use Context for dependency-injected services (auth provider), Zustand for app state (cart, UI preferences). They solve different problems.
+- **Stale closure in callbacks:** If a callback needs the latest state but is memoized with useCallback, use a ref to hold the current value instead of adding it to the dependency array.
 
-| Pattern | When to Use |
-|---------|-------------|
-| Lift state up | Multiple components need same state |
-| Context | Avoid prop drilling (> 2 levels) |
-| React Query | Server state with caching |
-| Zustand | Simple global state |
-| URL state | Filters, pagination, shareable state |
+---
+
+## Rules Summary
+
+Server data goes in React Query with key factories and proper invalidation. Global client state lives in Zustand with selectors for targeted re-renders. Context is for dependency injection with typed null defaults and throwing hooks. URL state uses useSearchParams for anything shareable. Derived values are computed during render, never stored. State mutates immutably. Frequently-changing values never go in Context. The useState+useEffect fetch pattern is banned — React Query handles caching, deduplication, refetching, and race conditions.

@@ -13,7 +13,12 @@ Resume work on an existing task from `dev/active/`.
 2. **Read context**: Load `dev/active/$ARGUMENTS/$ARGUMENTS-context.md`
 3. **Read tasks**: Load `dev/active/$ARGUMENTS/$ARGUMENTS-tasks.md`
 4. **Read plan**: Load `dev/active/$ARGUMENTS/$ARGUMENTS-plan.md`
-5. **Show status summary**:
+5. **Check session snapshot**: If `dev/active/$ARGUMENTS/$ARGUMENTS-session-snapshot.json` exists:
+   - Show files edited in last session
+   - Show affected repos
+   - Show timestamp of last auto-save
+   - This was auto-captured by the Stop hook — gives you immediate context
+6. **Show status summary**:
    - Last updated date
    - Completed tasks (✅)
    - In-progress tasks

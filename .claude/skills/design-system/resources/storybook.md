@@ -1,49 +1,30 @@
 # Storybook Setup
 
-Component documentation with Storybook.
+Component documentation with Storybook. **Not currently configured** in this project.
+
+<rules>
+- ALWAYS show all CVA variants in stories when documenting a component (incomplete documentation if skipped)
+- ALWAYS include dark mode preview and accessibility annotations (misses theme/a11y issues)
+- ALWAYS use `tags: ["autodocs"]` for automatic documentation generation (manual docs drift)
+- NEVER create stories without argTypes for variant props (controls panel will be empty)
+</rules>
 
 ---
 
-## Current Status
-
-**Not configured** - Storybook is not currently set up in this project.
-
----
-
-## Future Setup
-
-When Storybook is needed:
-
-### Installation
+## Installation (When Needed)
 
 ```bash
 cd apps/web
 npx storybook@latest init
 ```
 
-### Configuration
+Configure `.storybook/main.ts` with `stories: ["../src/**/*.stories.@(js|jsx|ts|tsx|mdx)"]`, framework `@storybook/react-vite`, and addons: `@storybook/addon-essentials`, `@storybook/addon-a11y`, `@chromatic-com/storybook`.
 
-`.storybook/main.ts`:
-```ts
-import type { StorybookConfig } from "@storybook/react-vite";
+---
 
-const config: StorybookConfig = {
-  stories: ["../src/**/*.stories.@(js|jsx|ts|tsx|mdx)"],
-  addons: [
-    "@storybook/addon-essentials",
-    "@storybook/addon-a11y",
-    "@chromatic-com/storybook",
-  ],
-  framework: "@storybook/react-vite",
-};
-
-export default config;
-```
-
-### Story Pattern
+## Story Pattern
 
 ```tsx
-// Button.stories.tsx
 import type { Meta, StoryObj } from "@storybook/react";
 import { Button } from "./button";
 
@@ -52,65 +33,26 @@ const meta: Meta<typeof Button> = {
   component: Button,
   tags: ["autodocs"],
   argTypes: {
-    variant: {
-      control: "select",
-      options: ["default", "destructive", "outline", "secondary", "ghost", "link"],
-    },
-    size: {
-      control: "select",
-      options: ["default", "sm", "lg", "icon"],
-    },
+    variant: { control: "select", options: ["default", "destructive", "outline", "secondary", "ghost", "link"] },
+    size: { control: "select", options: ["default", "sm", "lg", "icon"] },
   },
 };
-
 export default meta;
 type Story = StoryObj<typeof Button>;
 
-export const Default: Story = {
-  args: {
-    children: "Button",
-    variant: "default",
-  },
-};
-
-export const Destructive: Story = {
-  args: {
-    children: "Delete",
-    variant: "destructive",
-  },
-};
-
-export const WithIcon: Story = {
-  args: {
-    children: (
-      <>
-        <Plus className="h-4 w-4 mr-2" />
-        Add Item
-      </>
-    ),
-  },
-};
+export const Default: Story = { args: { children: "Button", variant: "default" } };
+export const Destructive: Story = { args: { children: "Delete", variant: "destructive" } };
 ```
 
 ---
 
-## Recommended Addons
+## Edge Cases
 
-| Addon | Purpose |
-|-------|---------|
-| `@storybook/addon-essentials` | Core features (controls, docs, actions) |
-| `@storybook/addon-a11y` | Accessibility testing |
-| `@storybook/addon-themes` | Theme switching (light/dark) |
-| `@chromatic-com/storybook` | Visual regression testing |
+- **Custom non-shadcn components**: Still document them with stories, but ensure they follow the same CVA variant pattern for consistency.
+- **Theme-dependent components**: Add a theme decorator to toggle light/dark in the Storybook toolbar using `@storybook/addon-themes`.
 
 ---
 
-## Integration with Design System
+## Rules Summary
 
-When documenting components:
-
-1. Show all CVA variants
-2. Include dark mode preview
-3. Add accessibility annotations
-4. Link to token usage
-5. Show loading/error states
+When Storybook is set up, every component story must show all CVA variants, include dark mode previews, add accessibility annotations via the a11y addon, and use `autodocs` for automatic documentation. Use `argTypes` with `control: "select"` for all variant props. Include loading and error states in stories for completeness.
