@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
+import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { join } from 'path';
 
 interface HookInput {
     session_id: string;
@@ -114,55 +114,6 @@ async function main() {
             }
         }
 
-        // Write skill-state.json for block-enforcement skills
-        const blockedSkills = matchedSkills.filter(s => s.config.enforcement === 'block');
-        if (blockedSkills.length > 0) {
-            try {
-                const cacheDir = join(projectDir, '.claude', 'tsc-cache', data.session_id);
-                const statePath = join(cacheDir, 'skill-state.json');
-
-                // Load existing state to preserve consumed skills
-                let existingState: Record<string, unknown> = {};
-                try {
-                    if (existsSync(statePath)) {
-                        const parsed = JSON.parse(readFileSync(statePath, 'utf-8'));
-                        if (parsed.session_id === data.session_id) {
-                            existingState = parsed.activated || {};
-                        }
-                    }
-                } catch { /* start fresh */ }
-
-                const activated: Record<string, unknown> = { ...existingState };
-                for (const skill of blockedSkills) {
-                    const skillDir = skill.config.skillPath
-                        ? dirname(skill.config.skillPath) + '/'
-                        : `.claude/skills/${skill.name}/`;
-
-                    // Don't overwrite if already consumed
-                    const existing = activated[skill.name] as { consumed?: boolean } | undefined;
-                    if (existing?.consumed) continue;
-
-                    activated[skill.name] = {
-                        enforcement: 'block',
-                        skillPath: skill.config.skillPath || '',
-                        skillDir,
-                        activatedAt: new Date().toISOString(),
-                        consumed: false,
-                    };
-                }
-
-                if (!existsSync(cacheDir)) {
-                    mkdirSync(cacheDir, { recursive: true });
-                }
-                writeFileSync(statePath, JSON.stringify({
-                    session_id: data.session_id,
-                    activated,
-                }, null, 2));
-            } catch {
-                // Silent — don't break skill activation output
-            }
-        }
-
         // ALWAYS show skill status - make it prominent
         let output = '\n';
 
@@ -202,24 +153,6 @@ async function main() {
         }
 
         console.log(output);
-
-        // Check transcript size for compaction warning
-        if (data.transcript_path) {
-            try {
-                const stats = statSync(data.transcript_path);
-                const sizeKB = stats.size / 1024;
-                if (sizeKB > 500) {
-                    let warning = '\n⚠️  CONTEXT SIZE WARNING\n';
-                    warning += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-                    warning += `Transcript: ${Math.round(sizeKB)}KB — approaching compaction threshold.\n`;
-                    warning += 'Run /task-plan-update before context is lost.\n';
-                    warning += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-                    console.log(warning);
-                }
-            } catch {
-                // Ignore — transcript may not exist yet
-            }
-        }
 
         // Check for active tasks and display reminder
         const activeTasksDir = join(projectDir, 'dev', 'active');

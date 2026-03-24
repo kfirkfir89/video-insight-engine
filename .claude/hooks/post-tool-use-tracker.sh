@@ -54,15 +54,6 @@ detect_repo() {
         database|prisma|migrations)
             echo "$repo"
             ;;
-        # Apps directory (e.g., apps/web, apps/admin)
-        apps)
-            local subdir=$(echo "$relative_path" | cut -d'/' -f2)
-            if [[ -n "$subdir" ]]; then
-                echo "apps/$subdir"
-            else
-                echo "$repo"
-            fi
-            ;;
         # Package/monorepo structure
         packages)
             # For monorepos, get the package name
