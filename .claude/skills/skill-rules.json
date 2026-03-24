@@ -4,7 +4,7 @@
   "skills": {
     "backend-node": {
       "type": "domain",
-      "enforcement": "block",
+      "enforcement": "suggest",
       "priority": "high",
       "description": "Node.js/Fastify backend patterns and shared packages",
       "skillPath": ".claude/skills/backend-node/SKILL.md",
@@ -66,7 +66,7 @@
     },
     "backend-python": {
       "type": "domain",
-      "enforcement": "block",
+      "enforcement": "suggest",
       "priority": "high",
       "description": "Python/FastAPI backend patterns for worker services",
       "skillPath": ".claude/skills/backend-python/SKILL.md",
@@ -126,7 +126,7 @@
     },
     "react-vite": {
       "type": "domain",
-      "enforcement": "block",
+      "enforcement": "suggest",
       "priority": "high",
       "description": "React/TypeScript frontend patterns and architecture",
       "skillPath": ".claude/skills/react-vite/SKILL.md",
@@ -183,7 +183,7 @@
     },
     "design-system": {
       "type": "domain",
-      "enforcement": "block",
+      "enforcement": "suggest",
       "priority": "medium",
       "description": "Design system patterns for icons, tokens, and components",
       "skillPath": ".claude/skills/design-system/SKILL.md",
