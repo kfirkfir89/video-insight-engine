@@ -19,18 +19,49 @@ Custom error classes, global error handler, structured logging, monitoring, and 
 ```typescript
 export class AppError extends Error {
   constructor(
-    message: string, public readonly statusCode: number,
-    public readonly code: string, public readonly details?: Record<string, unknown>
-  ) { super(message); this.name = this.constructor.name; }
-  toJSON() { return { code: this.code, message: this.message, details: this.details }; }
+    message: string,
+    public readonly statusCode: number,
+    public readonly code: string,
+    public readonly details?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = this.constructor.name;
+  }
+  toJSON() {
+    return { code: this.code, message: this.message, details: this.details };
+  }
 }
 // Extend for each HTTP status:
-export class ValidationError extends AppError { constructor(msg: string, details?: Record<string, unknown>) { super(msg, 400, 'VALIDATION_ERROR', details); } }
-export class UnauthorizedError extends AppError { constructor(msg = 'Unauthorized') { super(msg, 401, 'UNAUTHORIZED'); } }
-export class ForbiddenError extends AppError { constructor(msg = 'Forbidden') { super(msg, 403, 'FORBIDDEN'); } }
-export class NotFoundError extends AppError { constructor(msg = 'Not found') { super(msg, 404, 'NOT_FOUND'); } }
-export class ConflictError extends AppError { constructor(msg: string) { super(msg, 409, 'CONFLICT'); } }
-export class BusinessError extends AppError { constructor(msg: string, details?: Record<string, unknown>) { super(msg, 422, 'BUSINESS_ERROR', details); } }
+export class ValidationError extends AppError {
+  constructor(msg: string, details?: Record<string, unknown>) {
+    super(msg, 400, "VALIDATION_ERROR", details);
+  }
+}
+export class UnauthorizedError extends AppError {
+  constructor(msg = "Unauthorized") {
+    super(msg, 401, "UNAUTHORIZED");
+  }
+}
+export class ForbiddenError extends AppError {
+  constructor(msg = "Forbidden") {
+    super(msg, 403, "FORBIDDEN");
+  }
+}
+export class NotFoundError extends AppError {
+  constructor(msg = "Not found") {
+    super(msg, 404, "NOT_FOUND");
+  }
+}
+export class ConflictError extends AppError {
+  constructor(msg: string) {
+    super(msg, 409, "CONFLICT");
+  }
+}
+export class BusinessError extends AppError {
+  constructor(msg: string, details?: Record<string, unknown>) {
+    super(msg, 422, "BUSINESS_ERROR", details);
+  }
+}
 ```
 
 ---
@@ -38,20 +69,54 @@ export class BusinessError extends AppError { constructor(msg: string, details?:
 ## Global Error Handler
 
 ```typescript
-export function errorHandler(error: Error, request: FastifyRequest, reply: FastifyReply) {
-  request.log.error({ err: error, requestId: request.id, userId: request.user?.sub, path: request.url });
+export function errorHandler(
+  error: Error,
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  request.log.error({
+    err: error,
+    requestId: request.id,
+    userId: request.user?.sub,
+    path: request.url,
+  });
 
   if (error instanceof AppError) {
-    return reply.status(error.statusCode).send({ success: false, error: error.toJSON() });
+    return reply
+      .status(error.statusCode)
+      .send({ success: false, error: error.toJSON() });
   }
-  if ('validation' in error) {
-    return reply.status(400).send({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid request data', details: (error as any).validation } });
+  if ("validation" in error) {
+    return reply
+      .status(400)
+      .send({
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid request data",
+          details: (error as any).validation,
+        },
+      });
   }
-  if (error.name === 'MongoServerError' && (error as any).code === 11000) {
-    return reply.status(409).send({ success: false, error: { code: 'CONFLICT', message: 'Resource already exists' } });
+  if (error.name === "MongoServerError" && (error as any).code === 11000) {
+    return reply
+      .status(409)
+      .send({
+        success: false,
+        error: { code: "CONFLICT", message: "Resource already exists" },
+      });
   }
   // Never expose internal details
-  reply.status(500).send({ success: false, error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred', requestId: request.id } });
+  reply
+    .status(500)
+    .send({
+      success: false,
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "An unexpected error occurred",
+        requestId: request.id,
+      },
+    });
 }
 ```
 
@@ -60,17 +125,17 @@ export function errorHandler(error: Error, request: FastifyRequest, reply: Fasti
 ## Structured Logging
 
 ```typescript
-import pino from 'pino';
+import pino from "pino";
 
 const logger = pino({
   level: config.LOG_LEVEL,
   timestamp: pino.stdTimeFunctions.isoTime,
-  redact: ['password', 'token', 'authorization', 'cookie'],
+  redact: ["password", "token", "authorization", "cookie"],
 });
 
 // Context-rich child loggers
-const log = logger.child({ userId, action: 'createOrder' });
-log.info({ itemCount: input.items.length }, 'Creating order');
+const log = logger.child({ userId, action: "createOrder" });
+log.info({ itemCount: input.items.length }, "Creating order");
 ```
 
 ---
@@ -78,9 +143,9 @@ log.info({ itemCount: input.items.length }, 'Creating order');
 ## Request ID Tracking
 
 ```typescript
-app.addHook('onRequest', (request, reply, done) => {
-  request.id = request.headers['x-request-id'] as string || randomUUID();
-  reply.header('x-request-id', request.id);
+app.addHook("onRequest", (request, reply, done) => {
+  request.id = (request.headers["x-request-id"] as string) || randomUUID();
+  reply.header("x-request-id", request.id);
   done();
 });
 ```
@@ -90,18 +155,26 @@ app.addHook('onRequest', (request, reply, done) => {
 ## Retry Logic for External Services
 
 ```typescript
-async function withRetry<T>(fn: () => Promise<T>, options: {
-  maxRetries: number; delayMs: number; backoff: 'linear' | 'exponential';
-}): Promise<T> {
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: {
+    maxRetries: number;
+    delayMs: number;
+    backoff: "linear" | "exponential";
+  },
+): Promise<T> {
   let lastError: Error;
   for (let attempt = 1; attempt <= options.maxRetries; attempt++) {
-    try { return await fn(); }
-    catch (error) {
+    try {
+      return await fn();
+    } catch (error) {
       lastError = error as Error;
       if (attempt === options.maxRetries) throw error;
-      const delay = options.backoff === 'exponential'
-        ? options.delayMs * Math.pow(2, attempt - 1) : options.delayMs * attempt;
-      logger.warn({ attempt, delay, error: lastError.message }, 'Retrying');
+      const delay =
+        options.backoff === "exponential"
+          ? options.delayMs * Math.pow(2, attempt - 1)
+          : options.delayMs * attempt;
+      logger.warn({ attempt, delay, error: lastError.message }, "Retrying");
       await sleep(delay);
     }
   }

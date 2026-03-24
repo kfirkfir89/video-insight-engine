@@ -19,6 +19,7 @@ Pre-deployment checklist and verification.
 ## Checklist
 
 ### Code Quality
+
 - [ ] TypeScript compiles (`npm run typecheck`)
 - [ ] ESLint passes (`npm run lint`)
 - [ ] Prettier formatted (`npm run format:check`)
@@ -26,11 +27,13 @@ Pre-deployment checklist and verification.
 - [ ] No TODO without tracking
 
 ### Tests
+
 - [ ] Unit tests pass
 - [ ] Integration tests pass
 - [ ] Coverage acceptable (>80%)
 
 ### Security
+
 - [ ] No secrets in code
 - [ ] No hardcoded credentials
 - [ ] Dependencies up to date
@@ -42,16 +45,19 @@ Pre-deployment checklist and verification.
 - [ ] Error codes consistent (per [docs/ERROR-HANDLING.md](../../docs/ERROR-HANDLING.md))
 
 ### Documentation
+
 - [ ] README updated (if needed)
 - [ ] API docs updated (if new endpoints)
 - [ ] CHANGELOG updated
 
 ### Git
+
 - [ ] Branch is up to date with main
 - [ ] Commit messages follow convention
 - [ ] No merge conflicts
 
 ### Docker
+
 - [ ] Docker build succeeds
 - [ ] Docker compose up works
 - [ ] Health checks pass
@@ -64,24 +70,29 @@ Pre-deployment checklist and verification.
 **Status:** Ready to ship ✅
 
 ### Quality Checks
+
 ✅ TypeScript: No errors
 ✅ ESLint: 0 errors, 0 warnings
 ✅ Prettier: All files formatted
 
 ### Tests
+
 ✅ Unit tests: 45/45 passed
 ✅ Integration: 12/12 passed
 ✅ Coverage: 87%
 
 ### Security
+
 ✅ No secrets detected
 ✅ npm audit: 0 vulnerabilities
 
 ### Docker
+
 ✅ Build: Success
 ✅ Health checks: All passing
 
 ### Recommendations
+
 - Consider adding more edge case tests for video service
 - Update API documentation for new endpoint
 
@@ -96,10 +107,12 @@ Pre-deployment checklist and verification.
 **Status:** Not ready ❌
 
 ### Blockers
+
 ❌ TypeScript: 2 errors
 ❌ Tests: 3 failing
 
 ### Required Actions
+
 1. Fix TypeScript errors in api/src/routes/videos.ts
 2. Fix failing test in video.service.test.ts
 

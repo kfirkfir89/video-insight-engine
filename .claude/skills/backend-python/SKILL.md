@@ -13,18 +13,18 @@ You are a principal-level backend engineer specializing in Python, FastAPI, asyn
 
 ## Tech Stack
 
-| Technology | Version | Purpose |
-|-----------|---------|---------|
-| Python | 3.12+ | Runtime |
-| FastAPI | 0.115+ | Web framework |
-| Pydantic | 2.5+ | Validation, schemas, settings |
-| Motor | 3.x | Async MongoDB driver |
-| Beanie | 1.x | MongoDB ODM (optional) |
-| LiteLLM | latest | Unified LLM API |
-| PydanticAI | latest | Agent framework |
-| pytest | 8+ | Testing (with pytest-asyncio) |
-| structlog | latest | Structured logging |
-| Redis | 7+ | Caching, pub/sub |
+| Technology | Version | Purpose                       |
+| ---------- | ------- | ----------------------------- |
+| Python     | 3.12+   | Runtime                       |
+| FastAPI    | 0.115+  | Web framework                 |
+| Pydantic   | 2.5+    | Validation, schemas, settings |
+| Motor      | 3.x     | Async MongoDB driver          |
+| Beanie     | 1.x     | MongoDB ODM (optional)        |
+| LiteLLM    | latest  | Unified LLM API               |
+| PydanticAI | latest  | Agent framework               |
+| pytest     | 8+      | Testing (with pytest-asyncio) |
+| structlog  | latest  | Structured logging            |
+| Redis      | 7+      | Caching, pub/sub              |
 
 ---
 
@@ -98,46 +98,46 @@ app/
 
 ## When Working On...
 
-| Task | Read These Resources | Key Pattern |
-|------|---------------------|-------------|
-| New FastAPI route/endpoint | [fastapi.md](resources/fastapi.md), [api-design.md](resources/api-design.md) | `Annotated[Service, Depends()]`, Pydantic schemas, response_model |
-| Service/business logic | [services.md](resources/services.md) | Constructor injection, domain exceptions, Protocol interfaces |
-| MongoDB queries/repos | [mongodb.md](resources/mongodb.md) | Motor connection pool, `_to_entity()` mapping, cursor pagination |
-| Async streaming/pipelines | [async-patterns.md](resources/async-patterns.md) | `AsyncGenerator`, `asyncio.gather`, Semaphore, dataclass state |
-| Authentication/authorization | [auth.md](resources/auth.md) | JWT with `python-jose`, `Depends(get_current_user)`, RBAC |
-| Error handling/logging | [errors.md](resources/errors.md) | AppError hierarchy, structlog, exception handlers |
-| Redis/Docker/infra | [infrastructure.md](resources/infrastructure.md) | CacheService, Celery tasks, health checks, Pydantic Settings |
-| Writing tests | [testing.md](resources/testing.md) | pytest + AsyncMock, factories, httpx AsyncClient |
-| REST API conventions | [api-design.md](resources/api-design.md) | URL structure, status codes, pagination, versioning |
-| Security/OWASP | [security.md](resources/security.md) | Input validation, CORS, rate limiting, secrets management |
-| LLM API calls | [ai-integration.md](resources/ai-integration.md) | LiteLLM `acompletion`, streaming, fallbacks, cost tracking |
-| RAG/agents/MCP | [ai-patterns.md](resources/ai-patterns.md) | PydanticAI agents, RAG pipeline, MCP server, guardrails |
-| File uploads/S3 | [file-uploads.md](resources/file-uploads.md) | Validation, presigned URLs, streaming download |
-| WebSockets/real-time | [websockets.md](resources/websockets.md) | ConnectionManager, rooms, Redis pub/sub scaling |
+| Task                         | Read These Resources                                                         | Key Pattern                                                       |
+| ---------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| New FastAPI route/endpoint   | [fastapi.md](resources/fastapi.md), [api-design.md](resources/api-design.md) | `Annotated[Service, Depends()]`, Pydantic schemas, response_model |
+| Service/business logic       | [services.md](resources/services.md)                                         | Constructor injection, domain exceptions, Protocol interfaces     |
+| MongoDB queries/repos        | [mongodb.md](resources/mongodb.md)                                           | Motor connection pool, `_to_entity()` mapping, cursor pagination  |
+| Async streaming/pipelines    | [async-patterns.md](resources/async-patterns.md)                             | `AsyncGenerator`, `asyncio.gather`, Semaphore, dataclass state    |
+| Authentication/authorization | [auth.md](resources/auth.md)                                                 | JWT with `python-jose`, `Depends(get_current_user)`, RBAC         |
+| Error handling/logging       | [errors.md](resources/errors.md)                                             | AppError hierarchy, structlog, exception handlers                 |
+| Redis/Docker/infra           | [infrastructure.md](resources/infrastructure.md)                             | CacheService, Celery tasks, health checks, Pydantic Settings      |
+| Writing tests                | [testing.md](resources/testing.md)                                           | pytest + AsyncMock, factories, httpx AsyncClient                  |
+| REST API conventions         | [api-design.md](resources/api-design.md)                                     | URL structure, status codes, pagination, versioning               |
+| Security/OWASP               | [security.md](resources/security.md)                                         | Input validation, CORS, rate limiting, secrets management         |
+| LLM API calls                | [ai-integration.md](resources/ai-integration.md)                             | LiteLLM `acompletion`, streaming, fallbacks, cost tracking        |
+| RAG/agents/MCP               | [ai-patterns.md](resources/ai-patterns.md)                                   | PydanticAI agents, RAG pipeline, MCP server, guardrails           |
+| File uploads/S3              | [file-uploads.md](resources/file-uploads.md)                                 | Validation, presigned URLs, streaming download                    |
+| WebSockets/real-time         | [websockets.md](resources/websockets.md)                                     | ConnectionManager, rooms, Redis pub/sub scaling                   |
 
 ---
 
 ## Error Categories
 
-| Exception | Status | When |
-|-----------|--------|------|
-| ValidationError | 400 | Invalid input format |
-| UnauthorizedError | 401 | Missing/invalid auth |
-| ForbiddenError | 403 | Valid auth, no permission |
-| NotFoundError | 404 | Resource does not exist |
-| ConflictError | 409 | Duplicate/constraint violation |
-| BusinessError | 422 | Business rule violated |
-| AppError | 500 | Unexpected server error |
+| Exception         | Status | When                           |
+| ----------------- | ------ | ------------------------------ |
+| ValidationError   | 400    | Invalid input format           |
+| UnauthorizedError | 401    | Missing/invalid auth           |
+| ForbiddenError    | 403    | Valid auth, no permission      |
+| NotFoundError     | 404    | Resource does not exist        |
+| ConflictError     | 409    | Duplicate/constraint violation |
+| BusinessError     | 422    | Business rule violated         |
+| AppError          | 500    | Unexpected server error        |
 
 ---
 
 ## Function Design
 
-| Metric | Target | Max | Exceeded? |
-|--------|--------|-----|-----------|
-| Lines | 10-30 | 50 | Extract helpers |
-| Nesting depth | 1-2 | 3 | Use guard clauses |
-| Parameters | 3-4 | 5 | Use Pydantic model |
+| Metric        | Target | Max | Exceeded?          |
+| ------------- | ------ | --- | ------------------ |
+| Lines         | 10-30  | 50  | Extract helpers    |
+| Nesting depth | 1-2    | 3   | Use guard clauses  |
+| Parameters    | 3-4    | 5   | Use Pydantic model |
 
 Use guard clauses (early returns) to keep the happy path at the top indentation level. If a function has numbered comments ("Step 1", "Step 2"), extract each step into a named function.
 
@@ -145,13 +145,13 @@ Use guard clauses (early returns) to keep the happy path at the top indentation 
 
 ## Project-Specific Documentation
 
-| Need | Reference |
-|------|-----------|
-| System architecture | [docs/ARCHITECTURE.md](../../../docs/ARCHITECTURE.md) |
-| Data models | [docs/DATA-MODELS.md](../../../docs/DATA-MODELS.md) |
-| API endpoints | [docs/API-REFERENCE.md](../../../docs/API-REFERENCE.md) |
-| Error handling | [docs/ERROR-HANDLING.md](../../../docs/ERROR-HANDLING.md) |
-| Security | [docs/SECURITY.md](../../../docs/SECURITY.md) |
+| Need                | Reference                                                 |
+| ------------------- | --------------------------------------------------------- |
+| System architecture | [docs/ARCHITECTURE.md](../../../docs/ARCHITECTURE.md)     |
+| Data models         | [docs/DATA-MODELS.md](../../../docs/DATA-MODELS.md)       |
+| API endpoints       | [docs/API-REFERENCE.md](../../../docs/API-REFERENCE.md)   |
+| Error handling      | [docs/ERROR-HANDLING.md](../../../docs/ERROR-HANDLING.md) |
+| Security            | [docs/SECURITY.md](../../../docs/SECURITY.md)             |
 
 ---
 

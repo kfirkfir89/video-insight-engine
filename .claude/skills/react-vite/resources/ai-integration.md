@@ -16,10 +16,10 @@ Vercel AI SDK 6, streaming UI, chat components, and production AI patterns.
 
 ## Package Overview
 
-| Package | Purpose |
-|---------|---------|
+| Package         | Purpose                              |
+| --------------- | ------------------------------------ |
 | `@ai-sdk/react` | React hooks (useChat, useCompletion) |
-| `ai` | Core streaming utilities, transports |
+| `ai`            | Core streaming utilities, transports |
 
 ---
 
@@ -29,11 +29,16 @@ Primary hook for multi-turn conversations with streaming.
 
 ```tsx
 const {
-  messages,      // UIMessage[]
-  input, setInput,
+  messages, // UIMessage[]
+  input,
+  setInput,
   handleSubmit,
-  status,        // 'idle' | 'pending' | 'streaming' | 'complete' | 'error'
-  error, reload, stop, append, setMessages,
+  status, // 'idle' | 'pending' | 'streaming' | 'complete' | 'error'
+  error,
+  reload,
+  stop,
+  append,
+  setMessages,
 } = useChat({
   api: "/api/chat",
   id: "unique-chat-id",
@@ -48,13 +53,13 @@ const isStreaming = status === "streaming";
 
 ## Status-Driven UI
 
-| Status | UI State |
-|--------|----------|
-| `idle` | Ready for input, show suggestions if empty |
-| `pending` | Typing indicator, disabled input |
-| `streaming` | Partial content + cursor animation |
-| `error` | Error banner + retry button via `reload()` |
-| `complete` | Full message + copy/regenerate actions |
+| Status      | UI State                                   |
+| ----------- | ------------------------------------------ |
+| `idle`      | Ready for input, show suggestions if empty |
+| `pending`   | Typing indicator, disabled input           |
+| `streaming` | Partial content + cursor animation         |
+| `error`     | Error banner + retry button via `reload()` |
+| `complete`  | Full message + copy/regenerate actions     |
 
 ---
 

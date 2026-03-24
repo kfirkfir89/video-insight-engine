@@ -115,6 +115,7 @@ Professional code review with structured output, severity levels, and before/aft
 ## Output Format
 
 Generate the following markdown structure. **Filtering rules:**
+
 - **Critical:** Always show ALL critical issues. No cap.
 - **Warnings:** Show top 10 warnings, prioritized by impact. If more exist, note count at bottom.
 - **Info:** Only show if `--all` flag is used. Otherwise omit the section entirely.

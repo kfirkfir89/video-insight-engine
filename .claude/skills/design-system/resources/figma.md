@@ -15,10 +15,10 @@ Translate Figma designs to code using MCP tools and existing design tokens.
 
 ## MCP Tools
 
-| Tool | Purpose |
-|------|---------|
-| `get_figma_data` | Fetch design structure, styles, properties |
-| `download_figma_images` | Export images/icons from Figma |
+| Tool                    | Purpose                                    |
+| ----------------------- | ------------------------------------------ |
+| `get_figma_data`        | Fetch design structure, styles, properties |
+| `download_figma_images` | Export images/icons from Figma             |
 
 Get the file key from URL: `figma.com/design/[FILE_KEY]/...`
 
@@ -36,15 +36,15 @@ Get the file key from URL: `figma.com/design/[FILE_KEY]/...`
 
 ## Token Mapping Reference
 
-| Figma Token | CSS Variable | Tailwind |
-|-------------|-------------|----------|
-| Colors/Primary | `--primary` | `bg-primary`, `text-primary` |
-| Colors/Background | `--background` | `bg-background` |
-| Colors/Muted | `--muted` | `bg-muted`, `text-muted-foreground` |
-| Spacing/Small | 8px | `p-2`, `gap-2` |
-| Spacing/Medium | 16px | `p-4`, `gap-4` |
-| Spacing/Large | 24px | `p-6`, `gap-6` |
-| Radius/Default | `--radius` | `rounded-lg` |
+| Figma Token       | CSS Variable   | Tailwind                            |
+| ----------------- | -------------- | ----------------------------------- |
+| Colors/Primary    | `--primary`    | `bg-primary`, `text-primary`        |
+| Colors/Background | `--background` | `bg-background`                     |
+| Colors/Muted      | `--muted`      | `bg-muted`, `text-muted-foreground` |
+| Spacing/Small     | 8px            | `p-2`, `gap-2`                      |
+| Spacing/Medium    | 16px           | `p-4`, `gap-4`                      |
+| Spacing/Large     | 24px           | `p-6`, `gap-6`                      |
+| Radius/Default    | `--radius`     | `rounded-lg`                        |
 
 ---
 

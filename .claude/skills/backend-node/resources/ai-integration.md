@@ -17,17 +17,17 @@ LLM integration using the Vercel AI SDK — provider abstraction, streaming, str
 ## Provider Setup
 
 ```typescript
-import { createOpenAI } from '@ai-sdk/openai';
-import { createAnthropic } from '@ai-sdk/anthropic';
+import { createOpenAI } from "@ai-sdk/openai";
+import { createAnthropic } from "@ai-sdk/anthropic";
 
 export const openai = createOpenAI({ apiKey: config.OPENAI_API_KEY });
 export const anthropic = createAnthropic({ apiKey: config.ANTHROPIC_API_KEY });
 
 export const models = {
-  fast: openai('gpt-4o-mini'),
-  smart: openai('gpt-4o'),
-  claudeFast: anthropic('claude-sonnet-4-20250514'),
-  claudeSmart: anthropic('claude-opus-4-20250514'),
+  fast: openai("gpt-4o-mini"),
+  smart: openai("gpt-4o"),
+  claudeFast: anthropic("claude-sonnet-4-20250514"),
+  claudeSmart: anthropic("claude-opus-4-20250514"),
 } as const;
 ```
 
@@ -36,12 +36,12 @@ export const models = {
 ## generateText — Non-Interactive
 
 ```typescript
-import { generateText } from 'ai';
+import { generateText } from "ai";
 
 const result = await generateText({
   model: models.fast,
   maxTokens: 1000,
-  system: 'You are a helpful assistant.',
+  system: "You are a helpful assistant.",
   prompt,
 });
 // result.text, result.usage.promptTokens, result.usage.completionTokens
@@ -52,20 +52,24 @@ const result = await generateText({
 ## streamText — Real-Time SSE
 
 ```typescript
-import { streamText } from 'ai';
+import { streamText } from "ai";
 
 const result = streamText({
   model: models.smart,
   messages,
-  onError: (error) => { logger.error('Stream error', { error }); },
-  onFinish: ({ usage }) => { trackUsage(usage).catch(logger.error); },
+  onError: (error) => {
+    logger.error("Stream error", { error });
+  },
+  onFinish: ({ usage }) => {
+    trackUsage(usage).catch(logger.error);
+  },
 });
 
 // SSE endpoint
 reply.raw.writeHead(200, {
-  'Content-Type': 'text/event-stream',
-  'Cache-Control': 'no-cache',
-  Connection: 'keep-alive',
+  "Content-Type": "text/event-stream",
+  "Cache-Control": "no-cache",
+  Connection: "keep-alive",
 });
 for await (const chunk of result.textStream) {
   reply.raw.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
@@ -79,13 +83,13 @@ reply.raw.end();
 ## Structured Output
 
 ```typescript
-import { generateObject } from 'ai';
-import { z } from 'zod';
+import { generateObject } from "ai";
+import { z } from "zod";
 
 const schema = z.object({
   title: z.string(),
   keyPoints: z.array(z.string()),
-  sentiment: z.enum(['positive', 'negative', 'neutral']),
+  sentiment: z.enum(["positive", "negative", "neutral"]),
 });
 
 const result = await generateObject({
@@ -101,10 +105,10 @@ const result = await generateObject({
 ## Tool Calling & Agents
 
 ```typescript
-import { generateText, tool } from 'ai';
+import { generateText, tool } from "ai";
 
 const searchTool = tool({
-  description: 'Search knowledge base',
+  description: "Search knowledge base",
   parameters: z.object({ query: z.string(), limit: z.number().default(5) }),
   execute: async ({ query, limit }) => knowledgeService.search(query, limit),
 });
@@ -123,18 +127,20 @@ const result = await generateText({
 ## Error Handling & Fallbacks
 
 ```typescript
-import { APICallError } from 'ai';
+import { APICallError } from "ai";
 
 try {
   return (await generateText({ model: models.smart, prompt })).text;
 } catch (error) {
   if (config.fallbackModel) {
-    return (await generateText({ model: models[config.fallbackModel], prompt })).text;
+    return (await generateText({ model: models[config.fallbackModel], prompt }))
+      .text;
   }
   if (error instanceof APICallError) {
-    if (error.statusCode === 429) throw new AppError('AI rate limit', 429, 'AI_RATE_LIMIT');
+    if (error.statusCode === 429)
+      throw new AppError("AI rate limit", 429, "AI_RATE_LIMIT");
   }
-  throw new AppError('AI service unavailable', 503, 'AI_ERROR');
+  throw new AppError("AI service unavailable", 503, "AI_ERROR");
 }
 ```
 

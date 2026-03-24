@@ -20,21 +20,27 @@ ALWAYS define schema first, infer types, wire to RHF with zodResolver.
 
 ```tsx
 const loginSchema = z.object({
-  email: z.string().email('Invalid email'),
-  password: z.string().min(8, 'At least 8 characters'),
+  email: z.string().email("Invalid email"),
+  password: z.string().min(8, "At least 8 characters"),
 });
 type LoginFormData = z.infer<typeof loginSchema>;
 
 function LoginForm({ onSubmit }: { onSubmit: (data: LoginFormData) => void }) {
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginFormData>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   });
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
-      <input {...register('email')} />
-      {errors.email && <p className="text-red-500 text-sm">{errors.email.message}</p>}
+      <input {...register("email")} />
+      {errors.email && (
+        <p className="text-red-500 text-sm">{errors.email.message}</p>
+      )}
       <button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? 'Signing in...' : 'Sign in'}
+        {isSubmitting ? "Signing in..." : "Sign in"}
       </button>
     </form>
   );
@@ -52,10 +58,10 @@ const onSubmit = async (data: FormData) => {
   try {
     await api.submit(data);
   } catch (error) {
-    if (error.code === 'EMAIL_EXISTS') {
-      setError('email', { message: 'Already registered' });
+    if (error.code === "EMAIL_EXISTS") {
+      setError("email", { message: "Already registered" });
     } else {
-      setError('root', { message: 'Something went wrong' });
+      setError("root", { message: "Something went wrong" });
     }
   }
 };
@@ -72,8 +78,17 @@ function FormInput({ label, error, id, ...props }: FormInputProps) {
   return (
     <div>
       <label htmlFor={id}>{label}</label>
-      <input id={id} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} {...props} />
-      {error && <p id={`${id}-error`} className="text-sm text-red-500">{error}</p>}
+      <input
+        id={id}
+        aria-invalid={!!error}
+        aria-describedby={error ? `${id}-error` : undefined}
+        {...props}
+      />
+      {error && (
+        <p id={`${id}-error`} className="text-sm text-red-500">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -86,7 +101,7 @@ function FormInput({ label, error, id, ...props }: FormInputProps) {
 Use `useFieldArray` for dynamic lists. Key by `field.id`, not array index.
 
 ```tsx
-const { fields, append, remove } = useFieldArray({ control, name: 'todos' });
+const { fields, append, remove } = useFieldArray({ control, name: "todos" });
 // Render: fields.map((field, index) => <div key={field.id}>...)
 ```
 
@@ -98,7 +113,7 @@ Use `FormProvider` + `useFormContext` for step components. Validate per-step wit
 
 ```tsx
 const nextStep = async () => {
-  const isValid = await methods.trigger(['email', 'name']);
+  const isValid = await methods.trigger(["email", "name"]);
   if (isValid) setStep(step + 1);
 };
 ```
@@ -112,7 +127,11 @@ const nextStep = async () => {
 ```tsx
 function SubmitButton({ children }: { children: React.ReactNode }) {
   const { pending } = useFormStatus();
-  return <button type="submit" disabled={pending}>{pending ? 'Submitting...' : children}</button>;
+  return (
+    <button type="submit" disabled={pending}>
+      {pending ? "Submitting..." : children}
+    </button>
+  );
 }
 ```
 

@@ -22,6 +22,7 @@ Generate tests for specified code.
 ### Unit Tests
 
 For pure functions and classes:
+
 - Test each public method
 - Test edge cases
 - Test error conditions
@@ -30,6 +31,7 @@ For pure functions and classes:
 ### Component Tests
 
 For React components:
+
 - Test rendering
 - Test user interactions
 - Test props handling
@@ -38,6 +40,7 @@ For React components:
 ### Integration Tests
 
 For services:
+
 - Test with real (test) database
 - Test full request flow
 - Test error scenarios
@@ -45,6 +48,7 @@ For services:
 ## Output
 
 Creates test file adjacent to source:
+
 - `video.service.ts` → `video.service.test.ts`
 - `VideoCard.tsx` → `VideoCard.test.tsx`
 - `transcript.py` → `test_transcript.py`
@@ -53,10 +57,10 @@ Creates test file adjacent to source:
 
 ```typescript
 // video.service.test.ts
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { VideoService } from './video.service';
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { VideoService } from "./video.service";
 
-describe('VideoService', () => {
+describe("VideoService", () => {
   // ... generated tests
 });
 ```

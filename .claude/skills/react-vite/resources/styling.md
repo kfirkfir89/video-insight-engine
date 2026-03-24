@@ -20,10 +20,10 @@ ALWAYS define centrally. Every design decision in ONE place.
 
 ```css
 :root {
-  --space-1: 0.25rem;  /* 4px */
-  --space-2: 0.5rem;   /* 8px */
-  --space-4: 1rem;     /* 16px */
-  --space-8: 2rem;     /* 32px */
+  --space-1: 0.25rem; /* 4px */
+  --space-2: 0.5rem; /* 8px */
+  --space-4: 1rem; /* 16px */
+  --space-8: 2rem; /* 32px */
 
   --color-text: #1a1a1a;
   --color-text-muted: #6b7280;
@@ -54,8 +54,12 @@ Accessibility: minimum 4.5:1 contrast ratio for text, 3:1 for large text. Never 
 Use a type scale with consistent ratio. Pair sizes with line heights: tighter for headings (1.2), looser for body (1.6). Use `clamp()` for fluid typography that scales between viewport sizes without breakpoints.
 
 ```css
-h1 { font-size: clamp(1.75rem, 4vw, 3rem); }
-body { font-size: clamp(1rem, 1.5vw, 1.125rem); }
+h1 {
+  font-size: clamp(1.75rem, 4vw, 3rem);
+}
+body {
+  font-size: clamp(1rem, 1.5vw, 1.125rem);
+}
 ```
 
 ---
@@ -90,12 +94,12 @@ ONLY animate `transform` and `opacity`. Duration guidelines: instant feedback 10
 
 ALWAYS use logical properties for internationalization support.
 
-| Physical | Logical | Tailwind |
-|----------|---------|----------|
-| margin-left | margin-inline-start | ms-* |
-| padding-right | padding-inline-end | pe-* |
-| left | inset-inline-start | start-* |
-| text-align: left | text-align: start | text-start |
+| Physical         | Logical             | Tailwind   |
+| ---------------- | ------------------- | ---------- |
+| margin-left      | margin-inline-start | ms-\*      |
+| padding-right    | padding-inline-end  | pe-\*      |
+| left             | inset-inline-start  | start-\*   |
+| text-align: left | text-align: start   | text-start |
 
 ---
 

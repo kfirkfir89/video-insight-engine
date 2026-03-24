@@ -19,7 +19,7 @@ Code splitting, memoization, virtualization, CLS prevention, and bundle optimiza
 ALWAYS lazy-load non-critical routes. Keep home/landing eager.
 
 ```tsx
-const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
 
 function App() {
   return (
@@ -39,11 +39,11 @@ Heavy libraries: load on demand with dynamic import, show skeleton until ready.
 
 ## Memoization Rules
 
-| Tool | Use ONLY When |
-|------|--------------|
-| React.memo | Component re-renders frequently with same props (measured) |
-| useCallback | Function passed to memoized child or in dependency array |
-| useMemo | Expensive calculation (>1ms) or referential equality for context value |
+| Tool        | Use ONLY When                                                          |
+| ----------- | ---------------------------------------------------------------------- |
+| React.memo  | Component re-renders frequently with same props (measured)             |
+| useCallback | Function passed to memoized child or in dependency array               |
+| useMemo     | Expensive calculation (>1ms) or referential equality for context value |
 
 NEVER: memo simple components, useCallback every handler, useMemo cheap computations.
 
@@ -85,10 +85,12 @@ ALWAYS reserve space before content loads.
 ALWAYS use transform for sidebars/drawers. NEVER animate width or toggle display.
 
 ```tsx
-<aside className={cn(
-  'fixed top-0 left-0 h-full w-64 transition-transform duration-200',
-  isOpen ? 'translate-x-0' : '-translate-x-full'
-)} />
+<aside
+  className={cn(
+    "fixed top-0 left-0 h-full w-64 transition-transform duration-200",
+    isOpen ? "translate-x-0" : "-translate-x-full",
+  )}
+/>
 ```
 
 ---
@@ -116,11 +118,11 @@ function useDebounce<T>(value: T, delay: number): T {
 
 ## Bundle Budget
 
-| Target | Budget |
-|--------|--------|
+| Target                | Budget  |
+| --------------------- | ------- |
 | Main bundle (gzipped) | < 100KB |
-| Per-route chunk | < 50KB |
-| Total initial load | < 200KB |
+| Per-route chunk       | < 50KB  |
+| Total initial load    | < 200KB |
 
 Measure with `npx vite-bundle-visualizer`.
 

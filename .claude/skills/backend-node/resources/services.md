@@ -16,11 +16,11 @@ Business logic organization, dependency injection, controller layer, and data ac
 
 ## Layer Responsibilities
 
-| Layer | Contains | Knows About | Returns |
-|-------|----------|-------------|---------|
-| Controller | Request/response mapping | HTTP, calls service | Formatted response |
-| Service | Business logic, orchestration | Domain rules, other services | Domain objects |
-| Repository | Data access, queries | Database driver | Domain objects |
+| Layer      | Contains                      | Knows About                  | Returns            |
+| ---------- | ----------------------------- | ---------------------------- | ------------------ |
+| Controller | Request/response mapping      | HTTP, calls service          | Formatted response |
+| Service    | Business logic, orchestration | Domain rules, other services | Domain objects     |
+| Repository | Data access, queries          | Database driver              | Domain objects     |
 
 ---
 
@@ -31,14 +31,21 @@ export class OrderService {
   constructor(
     private readonly orderRepo: OrderRepository,
     private readonly inventoryService: InventoryService,
-    private readonly emailService: EmailService
+    private readonly emailService: EmailService,
   ) {}
 
   async createOrder(input: CreateOrderInput, userId: string): Promise<Order> {
-    const available = await this.inventoryService.checkAvailability(input.items);
-    if (!available) throw new BusinessError('Items not available');
+    const available = await this.inventoryService.checkAvailability(
+      input.items,
+    );
+    if (!available) throw new BusinessError("Items not available");
     const total = this.calculateTotal(input.items);
-    const order = await this.orderRepo.create({ userId, items: input.items, total, status: 'pending' });
+    const order = await this.orderRepo.create({
+      userId,
+      items: input.items,
+      total,
+      status: "pending",
+    });
     this.emailService.sendOrderConfirmation(order).catch(console.error);
     return order;
   }
@@ -55,12 +62,18 @@ Controllers handle request/response mapping between HTTP and services:
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  async create(request: FastifyRequest<{ Body: CreateUserInput }>, reply: FastifyReply) {
+  async create(
+    request: FastifyRequest<{ Body: CreateUserInput }>,
+    reply: FastifyReply,
+  ) {
     const user = await this.userService.create(request.body);
     reply.status(201).send({ success: true, data: user });
   }
 
-  async getById(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
+  async getById(
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
+  ) {
     const user = await this.userService.findById(request.params.id);
     reply.send({ success: true, data: user });
   }
@@ -83,9 +96,14 @@ export class OrderRepository {
   }
 
   private toEntity(doc: OrderDocument): Order {
-    return { id: doc._id.toString(), userId: doc.userId,
-      items: doc.items, total: doc.total, status: doc.status,
-      createdAt: doc.createdAt };
+    return {
+      id: doc._id.toString(),
+      userId: doc.userId,
+      items: doc.items,
+      total: doc.total,
+      status: doc.status,
+      createdAt: doc.createdAt,
+    };
   }
 }
 ```
@@ -98,10 +116,14 @@ Wire dependencies in a container function:
 
 ```typescript
 export function createOrderContainer(db: Database): OrderContainer {
-  const orderRepo = new OrderRepository(db.collection('orders'));
-  const inventoryService = new InventoryService(db.collection('inventory'));
+  const orderRepo = new OrderRepository(db.collection("orders"));
+  const inventoryService = new InventoryService(db.collection("inventory"));
   const emailService = new EmailService(config.EMAIL);
-  const orderService = new OrderService(orderRepo, inventoryService, emailService);
+  const orderService = new OrderService(
+    orderRepo,
+    inventoryService,
+    emailService,
+  );
   return { orderRepo, inventoryService, emailService, orderService };
 }
 ```

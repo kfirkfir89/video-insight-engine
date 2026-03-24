@@ -22,8 +22,10 @@ let client: MongoClient | null = null;
 export async function connectDatabase(): Promise<MongoClient> {
   if (client) return client;
   client = new MongoClient(config.MONGODB_URI, {
-    maxPoolSize: 10, minPoolSize: 2,
-    serverSelectionTimeoutMS: 5000, socketTimeoutMS: 45000,
+    maxPoolSize: 10,
+    minPoolSize: 2,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
   });
   await client.connect();
   await client.db().admin().ping();
@@ -41,7 +43,12 @@ Embed what's queried together (bounded). Reference what's large or independent:
 interface OrderDocument {
   _id: ObjectId;
   userId: ObjectId;
-  items: Array<{ productId: ObjectId; name: string; price: number; quantity: number }>;
+  items: Array<{
+    productId: ObjectId;
+    name: string;
+    price: number;
+    quantity: number;
+  }>;
   shipping: { address: string; city: string; country: string }; // Embedded: small, bounded
   invoiceId?: ObjectId; // Reference: large, rarely needed
   total: number;
@@ -57,11 +64,14 @@ Create indexes at startup. Match query patterns with compound indexes:
 
 ```typescript
 async function createIndexes(db: Db): Promise<void> {
-  await db.collection('users').createIndex({ email: 1 }, { unique: true });
-  await db.collection('orders').createIndex({ userId: 1, createdAt: -1 }); // Compound
-  await db.collection('sessions').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL
-  await db.collection('orders').createIndex(
-    { status: 1 }, { partialFilterExpression: { status: 'pending' } } // Partial
+  await db.collection("users").createIndex({ email: 1 }, { unique: true });
+  await db.collection("orders").createIndex({ userId: 1, createdAt: -1 }); // Compound
+  await db
+    .collection("sessions")
+    .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL
+  await db.collection("orders").createIndex(
+    { status: 1 },
+    { partialFilterExpression: { status: "pending" } }, // Partial
   );
 }
 ```
@@ -74,8 +84,11 @@ async function createIndexes(db: Db): Promise<void> {
 async function findOrders(userId: string, cursor?: string, limit = 20) {
   const query: Filter<OrderDocument> = { userId: new ObjectId(userId) };
   if (cursor) query._id = { $lt: new ObjectId(cursor) };
-  const docs = await collection.find(query)
-    .sort({ _id: -1 }).limit(limit + 1).toArray();
+  const docs = await collection
+    .find(query)
+    .sort({ _id: -1 })
+    .limit(limit + 1)
+    .toArray();
   const hasMore = docs.length > limit;
   const items = docs.slice(0, limit).map(toEntity);
   return { items, nextCursor: hasMore ? items.at(-1)!.id : undefined };
@@ -90,10 +103,18 @@ Use aggregation for complex queries. Use transactions for multi-document atomici
 
 ```typescript
 // Aggregation
-const [result] = await collection.aggregate([
-  { $match: { userId: new ObjectId(userId) } },
-  { $group: { _id: null, totalOrders: { $sum: 1 }, totalSpent: { $sum: '$total' } } },
-]).toArray();
+const [result] = await collection
+  .aggregate([
+    { $match: { userId: new ObjectId(userId) } },
+    {
+      $group: {
+        _id: null,
+        totalOrders: { $sum: 1 },
+        totalSpent: { $sum: "$total" },
+      },
+    },
+  ])
+  .toArray();
 
 // Transaction
 const session = client.startSession();
@@ -101,14 +122,18 @@ try {
   await session.withTransaction(async () => {
     await accounts.findOneAndUpdate(
       { _id: new ObjectId(fromId), balance: { $gte: amount } },
-      { $inc: { balance: -amount } }, { session }
+      { $inc: { balance: -amount } },
+      { session },
     );
     await accounts.updateOne(
       { _id: new ObjectId(toId) },
-      { $inc: { balance: amount } }, { session }
+      { $inc: { balance: amount } },
+      { session },
     );
   });
-} finally { await session.endSession(); }
+} finally {
+  await session.endSession();
+}
 ```
 
 ---

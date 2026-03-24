@@ -17,21 +17,37 @@ RAG pipelines, MCP servers, agents, embeddings, guardrails, context management, 
 ## MCP Server
 
 ```typescript
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 const server = new Server(
-  { name: 'my-mcp-server', version: '1.0.0' },
-  { capabilities: { tools: {}, resources: {} } }
+  { name: "my-mcp-server", version: "1.0.0" },
+  { capabilities: { tools: {}, resources: {} } },
 );
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [{ name: 'search_docs', description: 'Search documents',
-    inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } }],
+  tools: [
+    {
+      name: "search_docs",
+      description: "Search documents",
+      inputSchema: {
+        type: "object",
+        properties: { query: { type: "string" } },
+        required: ["query"],
+      },
+    },
+  ],
 }));
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
-  if (name === 'search_docs') {
-    return { content: [{ type: 'text', text: JSON.stringify(await docService.search(args.query)) }] };
+  if (name === "search_docs") {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(await docService.search(args.query)),
+        },
+      ],
+    };
   }
   throw new Error(`Unknown tool: ${name}`);
 });
@@ -43,10 +59,18 @@ await server.connect(new StdioServerTransport());
 ## RAG Pipeline
 
 ```typescript
-export async function ragQuery(query: string, topK = 5, minScore = 0.7): Promise<RAGResult> {
+export async function ragQuery(
+  query: string,
+  topK = 5,
+  minScore = 0.7,
+): Promise<RAGResult> {
   const queryEmbedding = await embedText(query);
-  const results = await vectorStore.search({ vector: queryEmbedding, topK, filter: { score: { $gte: minScore } } });
-  const context = results.map((r, i) => `[${i + 1}] ${r.content}`).join('\n\n');
+  const results = await vectorStore.search({
+    vector: queryEmbedding,
+    topK,
+    filter: { score: { $gte: minScore } },
+  });
+  const context = results.map((r, i) => `[${i + 1}] ${r.content}`).join("\n\n");
 
   const result = await generateText({
     model: models.smart,
@@ -54,7 +78,13 @@ export async function ragQuery(query: string, topK = 5, minScore = 0.7): Promise
     prompt: query,
   });
 
-  return { answer: result.text, sources: results.map(r => ({ content: r.content.slice(0, 200), score: r.score })) };
+  return {
+    answer: result.text,
+    sources: results.map((r) => ({
+      content: r.content.slice(0, 200),
+      score: r.score,
+    })),
+  };
 }
 ```
 
@@ -66,14 +96,23 @@ Chunk with overlap, embed in batches, store in vector DB:
 
 ```typescript
 export async function ingestDocuments(documents: Document[]) {
-  const chunks = documents.flatMap(doc =>
-    chunkText(doc.content, { chunkSize: 500, overlap: 50 })
-      .map((chunk, i) => ({ id: `${doc.id}-${i}`, content: chunk, metadata: { ...doc.metadata, parentId: doc.id } }))
+  const chunks = documents.flatMap((doc) =>
+    chunkText(doc.content, { chunkSize: 500, overlap: 50 }).map((chunk, i) => ({
+      id: `${doc.id}-${i}`,
+      content: chunk,
+      metadata: { ...doc.metadata, parentId: doc.id },
+    })),
   );
   for (let i = 0; i < chunks.length; i += 100) {
     const batch = chunks.slice(i, i + 100);
-    const embeddings = await embedTexts(batch.map(c => c.content));
-    await vectorStore.upsert(batch.map((chunk, j) => ({ id: chunk.id, vector: embeddings[j], metadata: { content: chunk.content, ...chunk.metadata } })));
+    const embeddings = await embedTexts(batch.map((c) => c.content));
+    await vectorStore.upsert(
+      batch.map((chunk, j) => ({
+        id: chunk.id,
+        vector: embeddings[j],
+        metadata: { content: chunk.content, ...chunk.metadata },
+      })),
+    );
   }
 }
 ```
@@ -84,8 +123,11 @@ export async function ingestDocuments(documents: Document[]) {
 
 ```typescript
 const finishTool = tool({
-  description: 'Call when you have the final answer',
-  parameters: z.object({ answer: z.string(), confidence: z.number().min(0).max(1) }),
+  description: "Call when you have the final answer",
+  parameters: z.object({
+    answer: z.string(),
+    confidence: z.number().min(0).max(1),
+  }),
 });
 
 const result = await generateText({
@@ -93,10 +135,14 @@ const result = await generateText({
   prompt: query,
   tools: { search: searchTool, finish: finishTool },
   maxSteps: 10,
-  stopWhen: (r) => r.steps.at(-1)?.toolCalls.some(tc => tc.toolName === 'finish') ?? false,
+  stopWhen: (r) =>
+    r.steps.at(-1)?.toolCalls.some((tc) => tc.toolName === "finish") ?? false,
 });
 
-const answer = result.steps.flatMap(s => s.toolCalls).find(tc => tc.toolName === 'finish')?.args.answer ?? result.text;
+const answer =
+  result.steps
+    .flatMap((s) => s.toolCalls)
+    .find((tc) => tc.toolName === "finish")?.args.answer ?? result.text;
 ```
 
 ---
@@ -105,13 +151,20 @@ const answer = result.steps.flatMap(s => s.toolCalls).find(tc => tc.toolName ===
 
 ```typescript
 // Input: prompt injection detection
-const injectionPatterns = [/ignore previous instructions/i, /you are now/i, /forget everything/i];
+const injectionPatterns = [
+  /ignore previous instructions/i,
+  /you are now/i,
+  /forget everything/i,
+];
 function checkInjection(input: string): boolean {
-  return injectionPatterns.some(p => p.test(input));
+  return injectionPatterns.some((p) => p.test(input));
 }
 
 // Output: PII detection and redaction
-const piiPatterns = { ssn: /\b\d{3}-\d{2}-\d{4}\b/g, creditCard: /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g };
+const piiPatterns = {
+  ssn: /\b\d{3}-\d{2}-\d{4}\b/g,
+  creditCard: /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g,
+};
 function redactPII(text: string): string {
   let result = text;
   for (const [type, pattern] of Object.entries(piiPatterns)) {
@@ -136,7 +189,14 @@ class ContextManager {
     this.messages.push(msg);
     if (countTokens(this.messages) > 6000) {
       const old = this.messages.slice(0, -4);
-      this.summary = (await generateText({ model: models.fast, prompt: old.map(m => `${m.role}: ${m.content}`).join('\n'), system: 'Summarize concisely.', maxTokens: 500 })).text;
+      this.summary = (
+        await generateText({
+          model: models.fast,
+          prompt: old.map((m) => `${m.role}: ${m.content}`).join("\n"),
+          system: "Summarize concisely.",
+          maxTokens: 500,
+        })
+      ).text;
       this.messages = this.messages.slice(-4);
     }
   }

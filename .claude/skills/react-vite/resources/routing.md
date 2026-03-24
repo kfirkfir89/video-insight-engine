@@ -57,8 +57,8 @@ For role-based access, check `user.roles` and redirect to `/unauthorized`.
 ALWAYS lazy-load route components. Keep home/landing eager for fast initial load.
 
 ```tsx
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Settings = lazy(() => import('./pages/Settings'));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Settings = lazy(() => import("./pages/Settings"));
 
 function App() {
   return (
@@ -79,12 +79,15 @@ function App() {
 Use `Link` for declarative links, `NavLink` for active-state styling, `useNavigate` for programmatic navigation.
 
 ```tsx
-<NavLink to="/dashboard" className={({ isActive }) => isActive ? 'font-bold' : ''}>
+<NavLink
+  to="/dashboard"
+  className={({ isActive }) => (isActive ? "font-bold" : "")}
+>
   Dashboard
-</NavLink>
+</NavLink>;
 
 // Post-login redirect
-const from = location.state?.from?.pathname || '/dashboard';
+const from = location.state?.from?.pathname || "/dashboard";
 navigate(from, { replace: true });
 ```
 

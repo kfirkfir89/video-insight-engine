@@ -23,10 +23,13 @@ const createUserSchema = z.object({
   password: z.string().min(8).max(100),
 });
 const userParamsSchema = z.object({
-  id: z.string().length(24).regex(/^[a-f0-9]+$/i),
+  id: z
+    .string()
+    .length(24)
+    .regex(/^[a-f0-9]+$/i),
 });
 
-app.post('/users', {
+app.post("/users", {
   schema: { body: zodToJsonSchema(createUserSchema) },
   handler: createUser,
 });
@@ -42,7 +45,7 @@ const user = await collection.findOne({ email }); // Safe
 // NEVER: collection.findOne({ $where: `this.email === '${email}'` })
 
 // PostgreSQL: parameterized queries
-const result = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+const result = await db.query("SELECT * FROM users WHERE email = $1", [email]);
 ```
 
 ---
@@ -52,19 +55,21 @@ const result = await db.query('SELECT * FROM users WHERE email = $1', [email]);
 ```typescript
 await app.register(cors, {
   origin: (origin, cb) => {
-    const allowed = ['https://app.example.com'];
+    const allowed = ["https://app.example.com"];
     cb(null, !origin || allowed.includes(origin));
   },
-  methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+  methods: ["GET", "POST", "PATCH", "DELETE"],
   credentials: true,
 });
 
 await app.register(rateLimit, {
-  global: true, max: 100, timeWindow: '1 minute',
-  keyGenerator: (req) => req.headers['x-forwarded-for'] as string || req.ip,
+  global: true,
+  max: 100,
+  timeWindow: "1 minute",
+  keyGenerator: (req) => (req.headers["x-forwarded-for"] as string) || req.ip,
 });
-app.post('/auth/login', {
-  config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+app.post("/auth/login", {
+  config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
   handler: loginHandler,
 });
 ```
@@ -75,9 +80,11 @@ app.post('/auth/login', {
 
 ```typescript
 await app.register(helmet, {
-  contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"] } },
+  contentSecurityPolicy: {
+    directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"] },
+  },
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
-  frameguard: { action: 'deny' },
+  frameguard: { action: "deny" },
 });
 ```
 
@@ -89,10 +96,12 @@ Validate at startup, never scatter `process.env` access:
 
 ```typescript
 function validateSecrets(): void {
-  const required = ['JWT_SECRET', 'DB_PASSWORD'];
-  const missing = required.filter(key => !process.env[key]);
-  if (missing.length) throw new Error(`Missing env vars: ${missing.join(', ')}`);
-  if (process.env.JWT_SECRET!.length < 32) throw new Error('JWT_SECRET must be 32+ chars');
+  const required = ["JWT_SECRET", "DB_PASSWORD"];
+  const missing = required.filter((key) => !process.env[key]);
+  if (missing.length)
+    throw new Error(`Missing env vars: ${missing.join(", ")}`);
+  if (process.env.JWT_SECRET!.length < 32)
+    throw new Error("JWT_SECRET must be 32+ chars");
 }
 ```
 
@@ -102,14 +111,24 @@ function validateSecrets(): void {
 
 ```typescript
 const app = Fastify({ bodyLimit: 1048576 }); // 1MB default
-app.post('/upload', { bodyLimit: 10485760, handler: uploadHandler }); // 10MB for uploads
+app.post("/upload", { bodyLimit: 10485760, handler: uploadHandler }); // 10MB for uploads
 
 // Secure JSON parsing
-import { parse } from 'secure-json-parse';
-app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
-  try { done(null, parse(body, { protoAction: 'remove', constructorAction: 'remove' })); }
-  catch (err) { done(err as Error, undefined); }
-});
+import { parse } from "secure-json-parse";
+app.addContentTypeParser(
+  "application/json",
+  { parseAs: "string" },
+  (req, body, done) => {
+    try {
+      done(
+        null,
+        parse(body, { protoAction: "remove", constructorAction: "remove" }),
+      );
+    } catch (err) {
+      done(err as Error, undefined);
+    }
+  },
+);
 ```
 
 ---

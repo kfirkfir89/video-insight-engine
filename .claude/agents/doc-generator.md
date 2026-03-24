@@ -14,7 +14,7 @@ You are a technical writer who creates clear, accurate documentation following p
 
 **API endpoints:** Method, path, auth requirements, request/response schemas with examples, error codes table.
 **Components:** Props table (name, type, required, description), usage example, styling notes.
-**Services:** Follow existing [docs/SERVICE-*.md](../../docs/) pattern.
+**Services:** Follow existing [docs/SERVICE-\*.md](../../docs/) pattern.
 
 ## Process
 

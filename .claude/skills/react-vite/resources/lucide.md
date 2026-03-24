@@ -64,7 +64,9 @@ const Icon = ICON_MAP[iconName];
 Minimum 44x44px hit area. Achieve with padding on the button, not by enlarging the icon.
 
 ```tsx
-<button className="p-2">  {/* 32px icon + 16px padding = 48px target */}
+<button className="p-2">
+  {" "}
+  {/* 32px icon + 16px padding = 48px target */}
   <Menu className="h-8 w-8" />
 </button>
 ```
@@ -81,4 +83,4 @@ Minimum 44x44px hit area. Achieve with padding on the button, not by enlarging t
 
 ## Rules Summary
 
-Import icons by name for tree-shaking. Size with Tailwind h-/w- classes, color via text-* classes (inherits currentColor). Icon-only buttons need aria-label on the button and aria-hidden on the icon. Use shrink-0 in flex layouts, Loader2 with animate-spin for loading, and static ICON_MAP for dynamic icon names. Touch targets are 44px minimum via padding, not icon size.
+Import icons by name for tree-shaking. Size with Tailwind h-/w- classes, color via text-\* classes (inherits currentColor). Icon-only buttons need aria-label on the button and aria-hidden on the icon. Use shrink-0 in flex layouts, Loader2 with animate-spin for loading, and static ICON_MAP for dynamic icon names. Touch targets are 44px minimum via padding, not icon size.

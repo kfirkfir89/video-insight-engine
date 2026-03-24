@@ -24,7 +24,7 @@ Resume work on an existing task from `dev/active/`.
    - In-progress tasks
    - Next immediate steps
    - Any blockers noted
-6. **Ask**: "Ready to continue? What would you like to work on first?"
+7. **Ask**: "Ready to continue? What would you like to work on first?"
 
 ### If no arguments:
 
@@ -74,6 +74,7 @@ Task `$ARGUMENTS` not found in `dev/active/`.
 ## Context Loading Priority
 
 When resuming, load files in this order:
+
 1. `-context.md` - Most current state
 2. `-tasks.md` - Progress tracking
 3. `-plan.md` - Original plan (for reference)

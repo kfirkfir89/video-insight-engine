@@ -13,13 +13,13 @@ You are a principal-level design systems engineer specializing in Tailwind CSS 4
 
 ## Tech Stack
 
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| Tailwind CSS | 4.x | Utility-first styling (CSS-first config, no tailwind.config.js) |
-| shadcn/ui | latest | Accessible component primitives (new-york style) |
-| lucide-react | latest | Icon library (tree-shakeable SVG) |
-| CVA | latest | Component variant management |
-| OKLCH | - | Perceptually uniform color space |
+| Technology   | Version | Purpose                                                         |
+| ------------ | ------- | --------------------------------------------------------------- |
+| Tailwind CSS | 4.x     | Utility-first styling (CSS-first config, no tailwind.config.js) |
+| shadcn/ui    | latest  | Accessible component primitives (new-york style)                |
+| lucide-react | latest  | Icon library (tree-shakeable SVG)                               |
+| CVA          | latest  | Component variant management                                    |
+| OKLCH        | -       | Perceptually uniform color space                                |
 
 ---
 
@@ -58,13 +58,13 @@ All tokens live in `apps/web/src/index.css` (`:root` for light, `.dark` for dark
 
 ## When Working On...
 
-| Task | Read | Key Patterns |
-|------|------|-------------|
-| Choosing/using icons | [icons.md](resources/icons.md) | Semantic mappings, sizing by context, `StatusIcon` component |
-| Colors, spacing, theming | [tokens.md](resources/tokens.md) | OKLCH tokens, category accents, premium utilities, dark mode |
-| Building components with CVA/shadcn | [components.md](resources/components.md) | CVA structure, BlockWrapper, compound components, `cn()` |
-| Translating Figma designs | [figma.md](resources/figma.md) | MCP tools, token mapping, design-to-code workflow |
-| Component documentation | [storybook.md](resources/storybook.md) | Not yet configured; future setup patterns |
+| Task                                | Read                                     | Key Patterns                                                 |
+| ----------------------------------- | ---------------------------------------- | ------------------------------------------------------------ |
+| Choosing/using icons                | [icons.md](resources/icons.md)           | Semantic mappings, sizing by context, `StatusIcon` component |
+| Colors, spacing, theming            | [tokens.md](resources/tokens.md)         | OKLCH tokens, category accents, premium utilities, dark mode |
+| Building components with CVA/shadcn | [components.md](resources/components.md) | CVA structure, BlockWrapper, compound components, `cn()`     |
+| Translating Figma designs           | [figma.md](resources/figma.md)           | MCP tools, token mapping, design-to-code workflow            |
+| Component documentation             | [storybook.md](resources/storybook.md)   | Not yet configured; future setup patterns                    |
 
 ---
 

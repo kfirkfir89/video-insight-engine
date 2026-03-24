@@ -69,9 +69,12 @@ function Select({ children, value, onChange }: SelectProps) {
 
 function Option({ value, children }: OptionProps) {
   const ctx = useContext(SelectContext);
-  if (!ctx) throw new Error('Option must be inside Select');
+  if (!ctx) throw new Error("Option must be inside Select");
   return (
-    <button className={ctx.value === value ? 'selected' : ''} onClick={() => ctx.onChange(value)}>
+    <button
+      className={ctx.value === value ? "selected" : ""}
+      onClick={() => ctx.onChange(value)}
+    >
       {children}
     </button>
   );
@@ -86,7 +89,7 @@ Select.Option = Option;
 ALWAYS wrap every major section (sidebar, header, main content). One broken component must not crash the page.
 
 ```tsx
-import { ErrorBoundary } from 'react-error-boundary';
+import { ErrorBoundary } from "react-error-boundary";
 
 function App() {
   return (
@@ -119,7 +122,7 @@ useEffect(() => {
       const res = await fetch(url, { signal: controller.signal });
       setData(await res.json());
     } catch (e) {
-      if (e.name !== 'AbortError') setError(e);
+      if (e.name !== "AbortError") setError(e);
     }
   }
   fetchData();
@@ -137,11 +140,13 @@ ALWAYS use when exposing DOM refs from wrapper components. Set `displayName`.
 
 ```tsx
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = 'primary', children, ...props }, ref) => (
-    <button ref={ref} className={`btn btn-${variant}`} {...props}>{children}</button>
-  )
+  ({ variant = "primary", children, ...props }, ref) => (
+    <button ref={ref} className={`btn btn-${variant}`} {...props}>
+      {children}
+    </button>
+  ),
 );
-Button.displayName = 'Button';
+Button.displayName = "Button";
 ```
 
 ---
@@ -156,12 +161,12 @@ Button.displayName = 'Button';
 
 **useFormStatus** — Access form pending state from submit buttons inside a `<form>`. Must be used inside a form child component.
 
-| Hook | Use Case |
-|------|----------|
-| `useActionState` | Form submissions, need state + pending |
-| `use()` | Read promises with Suspense, conditional context |
-| `useOptimistic` | Immediate feedback before async completes |
-| `useFormStatus` | Submit buttons aware of form state |
+| Hook             | Use Case                                         |
+| ---------------- | ------------------------------------------------ |
+| `useActionState` | Form submissions, need state + pending           |
+| `use()`          | Read promises with Suspense, conditional context |
+| `useOptimistic`  | Immediate feedback before async completes        |
+| `useFormStatus`  | Submit buttons aware of form state               |
 
 ---
 
@@ -171,10 +176,10 @@ ALWAYS use a barrel `index.ts` that exports only the public API of a feature.
 
 ```tsx
 // src/features/users/index.ts
-export { UsersPage } from './pages/UsersPage';
-export { UserCard } from './components/UserCard';
-export { useUsers, useUser } from './hooks/useUsers';
-export type { User, CreateUserData } from './types';
+export { UsersPage } from "./pages/UsersPage";
+export { UserCard } from "./components/UserCard";
+export { useUsers, useUser } from "./hooks/useUsers";
+export type { User, CreateUserData } from "./types";
 ```
 
 ---

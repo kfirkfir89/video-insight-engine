@@ -17,7 +17,7 @@ Unit tests, integration tests, mocking, factories, and coverage with Vitest.
 ## Unit Testing Services
 
 ```typescript
-describe('UserService', () => {
+describe("UserService", () => {
   let service: UserService;
   let mockRepo: { findById: ReturnType<typeof vi.fn> };
 
@@ -26,15 +26,15 @@ describe('UserService', () => {
     service = new UserService(mockRepo as unknown as UserRepository);
   });
 
-  it('returns user when found', async () => {
-    mockRepo.findById.mockResolvedValue(createUser({ id: '123' }));
-    const result = await service.findById('123');
-    expect(result).toEqual(expect.objectContaining({ id: '123' }));
+  it("returns user when found", async () => {
+    mockRepo.findById.mockResolvedValue(createUser({ id: "123" }));
+    const result = await service.findById("123");
+    expect(result).toEqual(expect.objectContaining({ id: "123" }));
   });
 
-  it('throws NotFoundError when not found', async () => {
+  it("throws NotFoundError when not found", async () => {
     mockRepo.findById.mockResolvedValue(null);
-    await expect(service.findById('123')).rejects.toThrow(NotFoundError);
+    await expect(service.findById("123")).rejects.toThrow(NotFoundError);
   });
 });
 ```
@@ -44,21 +44,36 @@ describe('UserService', () => {
 ## Integration Testing Routes
 
 ```typescript
-describe('User Routes', () => {
+describe("User Routes", () => {
   let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); await app.ready(); });
-  afterAll(async () => { await app.close(); });
-
-  it('creates user with valid data', async () => {
-    const res = await app.inject({ method: 'POST', url: '/api/v1/users',
-      payload: { email: 'test@example.com', name: 'Test', password: 'password123' } });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data).not.toHaveProperty('password');
+  beforeAll(async () => {
+    app = await buildApp();
+    await app.ready();
+  });
+  afterAll(async () => {
+    await app.close();
   });
 
-  it('returns 400 for invalid email', async () => {
-    const res = await app.inject({ method: 'POST', url: '/api/v1/users',
-      payload: { email: 'invalid', name: 'Test', password: 'password123' } });
+  it("creates user with valid data", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/users",
+      payload: {
+        email: "test@example.com",
+        name: "Test",
+        password: "password123",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data).not.toHaveProperty("password");
+  });
+
+  it("returns 400 for invalid email", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/users",
+      payload: { email: "invalid", name: "Test", password: "password123" },
+    });
     expect(res.statusCode).toBe(400);
   });
 });
@@ -73,9 +88,10 @@ export function createUser(overrides: Partial<User> = {}): User {
   return {
     id: overrides.id ?? randomUUID(),
     email: overrides.email ?? `user-${randomUUID()}@example.com`,
-    name: overrides.name ?? 'Test User',
-    roles: overrides.roles ?? ['user'],
-    createdAt: new Date(), updatedAt: new Date(),
+    name: overrides.name ?? "Test User",
+    roles: overrides.roles ?? ["user"],
+    createdAt: new Date(),
+    updatedAt: new Date(),
   };
 }
 ```
@@ -85,11 +101,17 @@ export function createUser(overrides: Partial<User> = {}): User {
 ## Test Database
 
 ```typescript
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoMemoryServer } from "mongodb-memory-server";
 let mongod: MongoMemoryServer;
 
-beforeAll(async () => { mongod = await MongoMemoryServer.create(); await mongoose.connect(mongod.getUri()); });
-afterAll(async () => { await mongoose.disconnect(); await mongod.stop(); });
+beforeAll(async () => {
+  mongod = await MongoMemoryServer.create();
+  await mongoose.connect(mongod.getUri());
+});
+afterAll(async () => {
+  await mongoose.disconnect();
+  await mongod.stop();
+});
 afterEach(async () => {
   for (const key in mongoose.connection.collections) {
     await mongoose.connection.collections[key].deleteMany({});
@@ -104,17 +126,19 @@ afterEach(async () => {
 Prefer DI-based mocking over `vi.mock()` for cleaner tests:
 
 ```typescript
-describe('OrderService', () => {
+describe("OrderService", () => {
   let mockEmailService: { sendConfirmation: ReturnType<typeof vi.fn> };
   beforeEach(() => {
-    mockEmailService = { sendConfirmation: vi.fn().mockResolvedValue(undefined) };
+    mockEmailService = {
+      sendConfirmation: vi.fn().mockResolvedValue(undefined),
+    };
     service = new OrderService(mockRepo, mockEmailService);
   });
 
-  it('sends confirmation email', async () => {
+  it("sends confirmation email", async () => {
     await service.createOrder(input, userId);
     expect(mockEmailService.sendConfirmation).toHaveBeenCalledWith(
-      expect.objectContaining({ orderId: expect.any(String) })
+      expect.objectContaining({ orderId: expect.any(String) }),
     );
   });
 });

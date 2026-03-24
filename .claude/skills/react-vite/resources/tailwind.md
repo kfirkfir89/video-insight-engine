@@ -19,15 +19,20 @@ Tailwind CSS 4, CVA variants, shadcn/ui integration, responsive design, and them
 ALWAYS use for class composition and overrides.
 
 ```tsx
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 function Card({ className, ...props }: CardProps) {
-  return <div className={cn('rounded-xl border bg-white p-6 shadow-sm', className)} {...props} />;
+  return (
+    <div
+      className={cn("rounded-xl border bg-white p-6 shadow-sm", className)}
+      {...props}
+    />
+  );
 }
 ```
 
@@ -38,22 +43,26 @@ function Card({ className, ...props }: CardProps) {
 ALWAYS use CVA for multi-variant components. Extends naturally with `VariantProps`.
 
 ```tsx
-import { cva, type VariantProps } from 'class-variance-authority';
+import { cva, type VariantProps } from "class-variance-authority";
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2',
+  "inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2",
   {
     variants: {
       variant: {
-        primary: 'bg-blue-600 text-white hover:bg-blue-700',
-        secondary: 'bg-gray-100 text-gray-900 hover:bg-gray-200',
-        ghost: 'hover:bg-gray-100',
-        destructive: 'bg-red-600 text-white hover:bg-red-700',
+        primary: "bg-blue-600 text-white hover:bg-blue-700",
+        secondary: "bg-gray-100 text-gray-900 hover:bg-gray-200",
+        ghost: "hover:bg-gray-100",
+        destructive: "bg-red-600 text-white hover:bg-red-700",
       },
-      size: { sm: 'h-8 px-3 text-sm', md: 'h-10 px-4 text-sm', lg: 'h-12 px-6 text-base' },
+      size: {
+        sm: "h-8 px-3 text-sm",
+        md: "h-10 px-4 text-sm",
+        lg: "h-12 px-6 text-base",
+      },
     },
-    defaultVariants: { variant: 'primary', size: 'md' },
-  }
+    defaultVariants: { variant: "primary", size: "md" },
+  },
 );
 ```
 

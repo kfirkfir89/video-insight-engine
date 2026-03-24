@@ -17,7 +17,7 @@ Multipart uploads, S3 storage, presigned URLs, image processing, and file valida
 ## Fastify Multipart Setup
 
 ```typescript
-import fastifyMultipart from '@fastify/multipart';
+import fastifyMultipart from "@fastify/multipart";
 
 await app.register(fastifyMultipart, {
   limits: { fileSize: 10 * 1024 * 1024, files: 5, fieldSize: 1024 * 1024 },
@@ -32,21 +32,32 @@ await app.register(fastifyMultipart, {
 Stream directly to S3 via `@aws-sdk/lib-storage`:
 
 ```typescript
-import { Upload } from '@aws-sdk/lib-storage';
+import { Upload } from "@aws-sdk/lib-storage";
 
 async function uploadHandler(request: FastifyRequest) {
   const file = await request.file();
-  if (!file) throw new AppError('No file uploaded', 400, 'NO_FILE');
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype))
-    throw new AppError('Invalid file type', 400, 'INVALID_FILE_TYPE');
+  if (!file) throw new AppError("No file uploaded", 400, "NO_FILE");
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.mimetype))
+    throw new AppError("Invalid file type", 400, "INVALID_FILE_TYPE");
   const key = `uploads/${Date.now()}-${randomUUID()}${path.extname(file.filename)}`;
   const upload = new Upload({
     client: s3Client,
-    params: { Bucket: BUCKET, Key: key, Body: file.file, ContentType: file.mimetype },
+    params: {
+      Bucket: BUCKET,
+      Key: key,
+      Body: file.file,
+      ContentType: file.mimetype,
+    },
   });
   await upload.done();
-  if (file.file.truncated) { await deleteFromS3(key); throw new AppError('File too large', 413, 'FILE_TOO_LARGE'); }
-  return { url: `https://${BUCKET}.s3.${config.AWS_REGION}.amazonaws.com/${key}`, key };
+  if (file.file.truncated) {
+    await deleteFromS3(key);
+    throw new AppError("File too large", 413, "FILE_TOO_LARGE");
+  }
+  return {
+    url: `https://${BUCKET}.s3.${config.AWS_REGION}.amazonaws.com/${key}`,
+    key,
+  };
 }
 ```
 
@@ -57,10 +68,11 @@ async function uploadHandler(request: FastifyRequest) {
 Generate presigned URL, client uploads directly to S3, then confirms:
 
 ```typescript
-app.post('/api/upload/presign', {
+app.post("/api/upload/presign", {
   handler: async (request) => {
     const { filename, contentType } = request.body;
-    if (!isAllowedType(contentType)) throw new AppError('Invalid type', 400, 'INVALID_TYPE');
+    if (!isAllowedType(contentType))
+      throw new AppError("Invalid type", 400, "INVALID_TYPE");
     const key = `uploads/${request.user.id}/${Date.now()}${path.extname(filename)}`;
     const uploadUrl = await getPresignedUploadUrl(key, contentType, 3600);
     return { uploadUrl, key };
@@ -73,13 +85,18 @@ app.post('/api/upload/presign', {
 ## File Validation
 
 ```typescript
-import { fileTypeFromBuffer } from 'file-type';
+import { fileTypeFromBuffer } from "file-type";
 
-async function validateFile(buffer: Buffer, declaredType: string, maxSize: number) {
-  if (buffer.length > maxSize) throw new AppError('File too large', 413, 'FILE_TOO_LARGE');
+async function validateFile(
+  buffer: Buffer,
+  declaredType: string,
+  maxSize: number,
+) {
+  if (buffer.length > maxSize)
+    throw new AppError("File too large", 413, "FILE_TOO_LARGE");
   const detected = await fileTypeFromBuffer(buffer);
   if (!detected || detected.mime !== declaredType)
-    throw new AppError('File type mismatch', 400, 'TYPE_MISMATCH');
+    throw new AppError("File type mismatch", 400, "TYPE_MISMATCH");
 }
 ```
 
@@ -88,20 +105,25 @@ async function validateFile(buffer: Buffer, declaredType: string, maxSize: numbe
 ## Image Processing
 
 ```typescript
-import sharp from 'sharp';
+import sharp from "sharp";
 
 const VARIANTS = [
-  { suffix: 'thumb', width: 150, height: 150, quality: 80 },
-  { suffix: 'medium', width: 800, quality: 85 },
+  { suffix: "thumb", width: 150, height: 150, quality: 80 },
+  { suffix: "medium", width: 800, quality: 85 },
 ];
 
 async function processImage(buffer: Buffer, baseKey: string) {
   const results: Record<string, string> = {};
   for (const v of VARIANTS) {
     const processed = await sharp(buffer)
-      .resize(v.width, v.height, { fit: 'inside', withoutEnlargement: true })
-      .webp({ quality: v.quality ?? 85 }).toBuffer();
-    results[v.suffix] = await uploadToS3(`${baseKey}-${v.suffix}.webp`, Readable.from(processed), 'image/webp');
+      .resize(v.width, v.height, { fit: "inside", withoutEnlargement: true })
+      .webp({ quality: v.quality ?? 85 })
+      .toBuffer();
+    results[v.suffix] = await uploadToS3(
+      `${baseKey}-${v.suffix}.webp`,
+      Readable.from(processed),
+      "image/webp",
+    );
   }
   return results;
 }

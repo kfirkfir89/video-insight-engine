@@ -19,7 +19,10 @@ ARIA, keyboard navigation, screen readers, reduced motion, and inclusive design.
 ALWAYS use `<header>`, `<nav>`, `<main>`, `<footer>`, `<article>`. Add `aria-label` to nav elements when multiple navs exist. Include a skip-to-content link.
 
 ```tsx
-<a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4">
+<a
+  href="#main-content"
+  className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4"
+>
   Skip to main content
 </a>
 ```
@@ -79,7 +82,9 @@ ALWAYS provide visible focus styles. Use `focus-visible:` for keyboard-only indi
 ALWAYS default to no animation. Add motion only inside `prefers-reduced-motion: no-preference`. Use Tailwind's `motion-safe:` / `motion-reduce:` variants.
 
 ```tsx
-<div className="motion-safe:animate-bounce motion-reduce:animate-none">Content</div>
+<div className="motion-safe:animate-bounce motion-reduce:animate-none">
+  Content
+</div>
 ```
 
 Short opacity/transform transitions (<200ms) are generally acceptable even with reduced motion.

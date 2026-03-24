@@ -53,6 +53,7 @@ No active tasks found.
 ## Task Status Calculation
 
 When reading `-tasks.md` files:
+
 - Count lines with `- [x]` or `✅` as completed
 - Count lines with `- [ ]` or `⏳` as pending
 - Count lines with `🔄` or "in progress" as in-progress
