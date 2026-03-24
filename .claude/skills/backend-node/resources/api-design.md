@@ -1,337 +1,94 @@
 # API Design Patterns
 
-REST conventions, versioning, error responses, and OpenAPI.
+REST conventions, response format, versioning, pagination, and OpenAPI.
+
+<rules>
+- ALWAYS use plural nouns for resource URLs (`/users`, not `/user`) with lowercase and hyphens (causes inconsistent API surface if mixed)
+- ALWAYS return consistent envelope: `{ success: true, data, meta? }` for success, `{ success: false, error: { code, message } }` for errors (causes client parsing nightmares if format varies)
+- ALWAYS use correct HTTP status codes: 201 for POST create, 204 for DELETE, 400 for validation, 404 for not found (causes misleading responses if always returning 200)
+- ALWAYS version APIs via URL prefix `/api/v1/` (causes breaking changes affecting all clients if unversioned)
+- ALWAYS use cursor-based pagination for large datasets (causes O(n) performance if using skip/offset at scale)
+- NEVER put verbs in URLs — use HTTP methods instead (causes RESTless API design)
+- NEVER return arrays at root level — always wrap in envelope (causes inability to extend response with metadata)
+</rules>
 
 ---
 
 ## URL Structure
 
-### DO ✅
-
 ```
-# Resources are nouns (plural)
-GET    /api/v1/users          # List users
-GET    /api/v1/users/:id      # Get user
-POST   /api/v1/users          # Create user
-PATCH  /api/v1/users/:id      # Update user
-DELETE /api/v1/users/:id      # Delete user
-
-# Nested resources
-GET    /api/v1/users/:id/posts         # User's posts
-POST   /api/v1/users/:id/posts         # Create post for user
-
-# Actions as sub-resources (when CRUD doesn't fit)
-POST   /api/v1/users/:id/activate      # Activate user
-POST   /api/v1/orders/:id/cancel       # Cancel order
-
-# Filtering, sorting, pagination via query params
+GET    /api/v1/users          # List
+GET    /api/v1/users/:id      # Get one
+POST   /api/v1/users          # Create → 201
+PATCH  /api/v1/users/:id      # Partial update
+DELETE /api/v1/users/:id      # Delete → 204
+POST   /api/v1/users/:id/activate  # Action (when CRUD doesn't fit)
 GET    /api/v1/users?status=active&sort=-createdAt&page=2&limit=20
-```
-
-### DON'T ❌
-
-```
-# Verbs in URLs
-GET    /api/getUsers
-POST   /api/createUser
-POST   /api/deleteUser/:id
-
-# Singular resources
-GET    /api/user/:id
-
-# Inconsistent nesting
-GET    /api/users/:id/post/:postId  # Should be /posts/:postId
-```
-
----
-
-## HTTP Methods
-
-### DO ✅
-
-| Method | Purpose | Idempotent | Request Body |
-|--------|---------|------------|--------------|
-| GET | Read resource | Yes | No |
-| POST | Create resource | No | Yes |
-| PUT | Replace resource | Yes | Yes |
-| PATCH | Partial update | Yes | Yes |
-| DELETE | Remove resource | Yes | No |
-
-```typescript
-// GET - Read (no side effects)
-app.get('/users/:id', getUser);
-
-// POST - Create (returns 201 + Location header)
-app.post('/users', createUser);
-
-// PATCH - Partial update (only send changed fields)
-app.patch('/users/:id', updateUser);
-
-// PUT - Full replace (send entire resource)
-app.put('/users/:id', replaceUser);
-
-// DELETE - Remove (returns 204 No Content)
-app.delete('/users/:id', deleteUser);
 ```
 
 ---
 
 ## Response Format
 
-### DO ✅
-
 ```typescript
-// Success response
-interface SuccessResponse<T> {
-  success: true;
-  data: T;
-  meta?: {
-    page?: number;
-    limit?: number;
-    total?: number;
-    totalPages?: number;
-  };
-}
+// Success (single)
+{ "success": true, "data": { "id": "123", "email": "user@example.com" } }
 
-// Single resource
-{
-  "success": true,
-  "data": {
-    "id": "123",
-    "email": "user@example.com",
-    "name": "John Doe",
-    "createdAt": "2024-01-15T10:30:00Z"
-  }
-}
+// Success (collection)
+{ "success": true, "data": [...], "meta": { "page": 1, "limit": 20, "total": 150 } }
 
-// Collection
-{
-  "success": true,
-  "data": [
-    { "id": "1", "name": "User 1" },
-    { "id": "2", "name": "User 2" }
-  ],
-  "meta": {
-    "page": 1,
-    "limit": 20,
-    "total": 150,
-    "totalPages": 8
-  }
-}
-```
-
-### DON'T ❌
-
-```typescript
-// Inconsistent formats
-{ "user": { ... } }        // One endpoint
-{ "data": { ... } }        // Another endpoint
-{ "result": [ ... ] }      // Yet another
-
-// Array at root (can't extend)
-[{ "id": 1 }, { "id": 2 }]
-```
-
----
-
-## Error Responses
-
-### DO ✅
-
-```typescript
-interface ErrorResponse {
-  success: false;
-  error: {
-    code: string;           // Machine-readable
-    message: string;        // Human-readable
-    details?: unknown;      // Additional info
-    requestId?: string;     // For support
-  };
-}
-
-// 400 Bad Request
-{
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Invalid request data",
-    "details": [
-      { "field": "email", "message": "Invalid email format" },
-      { "field": "age", "message": "Must be at least 18" }
-    ]
-  }
-}
-
-// 401 Unauthorized
-{
-  "success": false,
-  "error": {
-    "code": "UNAUTHORIZED",
-    "message": "Invalid or expired token"
-  }
-}
-
-// 404 Not Found
-{
-  "success": false,
-  "error": {
-    "code": "NOT_FOUND",
-    "message": "User not found",
-    "requestId": "req_abc123"
-  }
-}
-
-// 500 Internal Error (never expose details!)
-{
-  "success": false,
-  "error": {
-    "code": "INTERNAL_ERROR",
-    "message": "An unexpected error occurred",
-    "requestId": "req_abc123"
-  }
-}
+// Error
+{ "success": false, "error": { "code": "VALIDATION_ERROR", "message": "Invalid email", "details": [...] } }
 ```
 
 ---
 
 ## Status Codes
 
-### DO ✅
-
-| Code | When to Use |
-|------|-------------|
-| 200 | Success (GET, PATCH, PUT) |
-| 201 | Created (POST) |
-| 204 | No Content (DELETE) |
-| 400 | Bad Request (validation) |
-| 401 | Unauthorized (no/invalid auth) |
-| 403 | Forbidden (auth ok, no permission) |
-| 404 | Not Found |
-| 409 | Conflict (duplicate, constraint) |
-| 422 | Unprocessable (business rule) |
-| 429 | Too Many Requests |
-| 500 | Internal Server Error |
-| 503 | Service Unavailable |
-
-### DON'T ❌
-
-```typescript
-// 200 for everything
-return reply.status(200).send({ error: 'Not found' });
-
-// Wrong codes
-return reply.status(400).send({ error: 'Not found' }); // Should be 404
-return reply.status(500).send({ error: 'Invalid email' }); // Should be 400
-```
-
----
-
-## Versioning
-
-### DO ✅
-
-```typescript
-// URL versioning (recommended)
-app.register(v1Routes, { prefix: '/api/v1' });
-app.register(v2Routes, { prefix: '/api/v2' });
-
-// Version in URL
-GET /api/v1/users
-GET /api/v2/users  // New format
-
-// Deprecation headers
-reply.header('Deprecation', 'true');
-reply.header('Sunset', 'Sat, 31 Dec 2024 23:59:59 GMT');
-reply.header('Link', '</api/v2/users>; rel="successor-version"');
-```
-
-### DON'T ❌
-
-```typescript
-// No versioning
-GET /api/users  // Breaking changes affect everyone
-
-// Query param versioning (harder to cache)
-GET /api/users?version=2
-```
+| Code | When |
+|------|------|
+| 200 | GET/PATCH/PUT success |
+| 201 | POST created |
+| 204 | DELETE success |
+| 400 | Validation error |
+| 401 | Missing/invalid auth |
+| 403 | Valid auth, no permission |
+| 404 | Not found |
+| 409 | Conflict/duplicate |
+| 422 | Business rule violated |
+| 429 | Rate limited |
+| 500 | Internal error |
 
 ---
 
 ## Pagination
 
-### DO ✅
+Cursor-based for large datasets, offset-based for small:
 
 ```typescript
-// Cursor-based (recommended for large datasets)
-interface CursorPaginationParams {
-  cursor?: string;
-  limit?: number;
-}
+// Cursor-based: GET /api/v1/posts?cursor=abc123&limit=20
+{ "data": [...], "meta": { "nextCursor": "def456", "hasMore": true } }
 
-interface CursorPaginatedResponse<T> {
-  success: true;
-  data: T[];
-  meta: {
-    nextCursor: string | null;
-    hasMore: boolean;
-  };
-}
-
-// GET /api/v1/posts?cursor=eyJpZCI6MTIzfQ&limit=20
-
-// Offset-based (simpler, for small datasets)
-interface OffsetPaginationParams {
-  page?: number;
-  limit?: number;
-}
-
-interface OffsetPaginatedResponse<T> {
-  success: true;
-  data: T[];
-  meta: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-}
-
-// GET /api/v1/users?page=2&limit=20
+// Offset-based: GET /api/v1/users?page=2&limit=20
+{ "data": [...], "meta": { "page": 2, "limit": 20, "total": 150, "totalPages": 8 } }
 ```
 
 ---
 
-## Filtering & Sorting
+## Sorting & Filtering
 
-### DO ✅
+```
+GET /api/v1/users?sort=-createdAt,name  # - prefix = descending
+GET /api/v1/users?status=active&role=admin&createdAfter=2024-01-01
+```
+
+Parse sort strings into MongoDB-compatible objects:
 
 ```typescript
-// Query params for filtering
-GET /api/v1/users?status=active&role=admin&createdAfter=2024-01-01
-
-// Sorting with prefix
-GET /api/v1/users?sort=-createdAt        // Descending
-GET /api/v1/users?sort=name              // Ascending
-GET /api/v1/users?sort=-createdAt,name   // Multiple fields
-
-// Implementation
-interface QueryParams {
-  status?: string;
-  role?: string;
-  sort?: string;
-  page?: number;
-  limit?: number;
-}
-
 function parseSort(sort?: string): Record<string, 1 | -1> {
   if (!sort) return { createdAt: -1 };
-  
   return sort.split(',').reduce((acc, field) => {
-    if (field.startsWith('-')) {
-      acc[field.slice(1)] = -1;
-    } else {
-      acc[field] = 1;
-    }
+    acc[field.startsWith('-') ? field.slice(1) : field] = field.startsWith('-') ? -1 : 1;
     return acc;
   }, {} as Record<string, 1 | -1>);
 }
@@ -339,109 +96,28 @@ function parseSort(sort?: string): Record<string, 1 | -1> {
 
 ---
 
-## OpenAPI / Swagger
-
-### DO ✅
+## Versioning & Deprecation
 
 ```typescript
-// With @fastify/swagger
-import swagger from '@fastify/swagger';
-import swaggerUi from '@fastify/swagger-ui';
+app.register(v1Routes, { prefix: '/api/v1' });
+app.register(v2Routes, { prefix: '/api/v2' });
 
-await app.register(swagger, {
-  openapi: {
-    info: {
-      title: 'API Documentation',
-      version: '1.0.0',
-    },
-    servers: [
-      { url: 'http://localhost:3000', description: 'Development' },
-      { url: 'https://api.example.com', description: 'Production' },
-    ],
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
-        },
-      },
-    },
-  },
-});
-
-await app.register(swaggerUi, {
-  routePrefix: '/docs',
-});
-
-// Schema in routes
-app.get('/users/:id', {
-  schema: {
-    tags: ['Users'],
-    summary: 'Get user by ID',
-    params: userParamsSchema,
-    response: {
-      200: userResponseSchema,
-      404: errorResponseSchema,
-    },
-    security: [{ bearerAuth: [] }],
-  },
-  handler: getUser,
-});
+// Deprecation headers on v1
+reply.header('Deprecation', 'true');
+reply.header('Sunset', 'Sat, 31 Dec 2024 23:59:59 GMT');
+reply.header('Link', '</api/v2/users>; rel="successor-version"');
 ```
 
 ---
 
-## HATEOAS Links
+## Edge Cases
 
-### DO ✅
-
-```typescript
-// Include related links
-{
-  "success": true,
-  "data": {
-    "id": "123",
-    "name": "John Doe",
-    "_links": {
-      "self": { "href": "/api/v1/users/123" },
-      "posts": { "href": "/api/v1/users/123/posts" },
-      "avatar": { "href": "/api/v1/users/123/avatar" }
-    }
-  }
-}
-
-// Pagination links
-{
-  "success": true,
-  "data": [...],
-  "meta": { "page": 2, "totalPages": 5 },
-  "_links": {
-    "self": { "href": "/api/v1/users?page=2" },
-    "first": { "href": "/api/v1/users?page=1" },
-    "prev": { "href": "/api/v1/users?page=1" },
-    "next": { "href": "/api/v1/users?page=3" },
-    "last": { "href": "/api/v1/users?page=5" }
-  }
-}
-```
+- **Empty collections**: Return `{ data: [], meta: { total: 0 } }` — never 404 for empty lists. 404 is for missing individual resources.
+- **Partial updates with null**: PATCH with `{ name: null }` should clear the field. Document whether null means "unset" or "skip".
+- **IDs as strings**: Always use string IDs in responses (future-proof for UUID migration from ObjectId).
 
 ---
 
-## Quick Reference
+## Rules Summary
 
-| Aspect | Convention |
-|--------|------------|
-| URLs | Lowercase, hyphens, plural nouns |
-| Methods | GET=read, POST=create, PATCH=update, DELETE=remove |
-| Versioning | URL prefix `/api/v1/` |
-| Pagination | Cursor-based or offset-based |
-| Sorting | `-field` descending, `field` ascending |
-| Dates | ISO 8601 (`2024-01-15T10:30:00Z`) |
-| IDs | Strings (future-proof) |
-
-| Status | Meaning |
-|--------|---------|
-| 2xx | Success |
-| 4xx | Client error (fix your request) |
-| 5xx | Server error (our fault) |
+URLs use plural nouns with hyphens, versioned under `/api/v1/`. HTTP methods map to operations: GET reads, POST creates (201), PATCH updates, DELETE removes (204). All responses use a consistent `{ success, data/error, meta? }` envelope. Pagination defaults to cursor-based for performance; offset-based is acceptable for small datasets. Sorting uses `-field` for descending. Filtering uses query parameters. API versions include deprecation headers when sunsetting. IDs are always strings. Dates are ISO 8601.

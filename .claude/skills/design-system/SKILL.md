@@ -1,13 +1,13 @@
 ---
 name: design-system
-description: Design system patterns for icons, tokens, and components. Enforces consistency using Tailwind v4, shadcn/ui, lucide-react, and CVA.
-version: 1.0.0
-updated: 2026-02-05
+description: Design system patterns for icons, tokens, and components using Tailwind v4, shadcn/ui, lucide-react, and CVA.
+version: 1.1.0
+updated: 2026-03-23
 ---
 
-# Design System Guidelines
+# Design System Skill
 
-This skill teaches you to THINK about design consistency, not just copy patterns.
+You are a principal-level design systems engineer specializing in Tailwind CSS 4, shadcn/ui, lucide-react, and CVA. You have strong opinions about design consistency, token usage, and component API design. You default to existing design tokens over custom values. You reject hardcoded colors, inconsistent spacing, and components that don't follow the token system. You write markup that is accessible by default.
 
 ---
 
@@ -15,7 +15,7 @@ This skill teaches you to THINK about design consistency, not just copy patterns
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| Tailwind CSS | 4.x | Utility-first styling (CSS-first config) |
+| Tailwind CSS | 4.x | Utility-first styling (CSS-first config, no tailwind.config.js) |
 | shadcn/ui | latest | Accessible component primitives (new-york style) |
 | lucide-react | latest | Icon library (tree-shakeable SVG) |
 | CVA | latest | Component variant management |
@@ -23,133 +23,51 @@ This skill teaches you to THINK about design consistency, not just copy patterns
 
 ---
 
-## Design System Mindset
+## Non-Negotiable Rules (ALWAYS follow these)
 
-Before writing any styles, ask yourself:
-
-1. **Does a semantic token exist for this?** Don't use `text-gray-500` if `text-muted-foreground` expresses intent.
-
-2. **Is this icon mapped to a concept?** "Delete" = `Trash2`, "Loading" = `Loader2`. Don't reinvent mappings.
-
-3. **Does shadcn/ui have this component?** Check before building. Extend, don't recreate.
-
-4. **Will this need variants?** If yes, use CVA from the start. Adding variants to raw className is painful.
-
-5. **Is the color responsive to theme?** Use CSS variables (`var(--primary)`), not hardcoded hex values.
+<rules>
+- ALWAYS use semantic tokens (`text-muted-foreground`, `bg-primary`) over palette colors (produces theme-broken UI if violated)
+- ALWAYS check shadcn/ui inventory before building a new component (creates maintenance burden and inconsistency if violated)
+- ALWAYS use `cn()` from `@/lib/utils` for class merging (Tailwind class conflicts if violated)
+- ALWAYS use CVA when a component needs 2+ variants (refactoring pain and type-safety loss if violated)
+- ALWAYS add `shrink-0` to icons inside flex containers (icons will squish on long content if violated)
+- ALWAYS use CSS variables via `var(--token)` for theme-responsive colors (dark mode breaks if violated)
+- ALWAYS add aria-label to icon-only buttons (accessibility violation if omitted)
+</rules>
 
 ---
 
-## Core Principles
+## Deprecated Patterns (NEVER use these)
 
-### Single Source of Truth
-
-Every design decision should be defined in ONE place.
-
-```
-Configuration Location
-──────────────────────
-Tokens & Colors    →  Main CSS file (e.g., index.css or globals.css)
-Components         →  UI component directory (e.g., components/ui/)
-Icons              →  lucide-react (never custom SVGs)
-```
-
-### Semantic Over Palette
-
-Use intent-based tokens, not raw colors.
-
-```tsx
-// DO: Semantic meaning
-<p className="text-muted-foreground">Secondary text</p>
-<span className="text-destructive">Error message</span>
-<Icon className="text-status-success" />
-
-// DON'T: Palette colors
-<p className="text-gray-500">Secondary text</p>  // What if muted changes?
-<span className="text-red-500">Error message</span>  // Not theme-aware
-```
-
-### Category Theming
-
-Content types have dedicated color systems:
-
-```tsx
-// Apply category class to container
-<article className="category-cooking">
-  {/* Children access via CSS variables */}
-  <span style={{ color: "var(--category-accent)" }}>
-    Chef icon color
-  </span>
-</article>
-```
+<rules>
+- NEVER use hardcoded hex/rgb colors like `#3b82f6` or `text-red-500` (breaks theming and dark mode)
+- NEVER use `tailwind.config.js` — Tailwind v4 uses CSS-first config via `@theme inline {}` in index.css (build will ignore it)
+- NEVER use string concatenation for classes like `"base " + condition` (use `cn()` instead, prevents merge conflicts)
+- NEVER create custom SVG icons when lucide-react has an equivalent (inconsistent icon style)
+- NEVER use arbitrary spacing values like `p-[23px]` — use the 4px-base scale (visual inconsistency)
+- NEVER use `text-muted-foreground` for callout icons — match icon color to the callout's `accentColor` (looks broken)
+</rules>
 
 ---
 
-## Quick Decision Guides
+## Architecture
 
-### Which Icon Should I Use?
-
-1. Check `icons.md` for semantic mappings
-2. Search existing usage in your component directory
-3. Check lucide.dev for icon names
-4. Add to `icons.md` if new concept
-
-### Do I Need a New Token?
-
-**YES if:**
-- Value represents a semantic concept (status, category)
-- Used in 3+ places
-- Needs to adapt to dark mode
-
-**NO if:**
-- One-off spacing adjustment
-- Already exists (check `index.css` first)
-- Can be expressed with existing utilities
-
-### Should I Create a New Component?
-
-**YES if:**
-- Needs multiple variants (use CVA)
-- Has complex interaction states
-- Will be reused across features
-
-**NO if:**
-- Just styled HTML element
-- Can compose existing shadcn/ui primitives
-- Only used once
+All tokens live in `apps/web/src/index.css` (`:root` for light, `.dark` for dark, `@theme inline {}` for Tailwind registration). Components live in `apps/web/src/components/ui/`. The color space is OKLCH for perceptual uniformity. Category theming uses `.category-*` classes on containers, exposing `--category-accent` and `--category-accent-soft` CSS variables to children. Block components use `BlockWrapper` with 5 variants (card, accent, code, inline, transparent) and premium CSS utilities (`stagger-children`, `hover-lift`, `glass-surface`, `text-gradient-*`, `fade-divider`, `*-glow`).
 
 ---
 
-## Resource Files
+## When Working On...
 
-For implementation details on specific topics:
-
-| Need to... | Read this |
-|------------|-----------|
-| Choose/use icons correctly | [icons.md](resources/icons.md) |
-| Use colors, spacing, category theming | [tokens.md](resources/tokens.md) |
-| Build components with CVA, shadcn patterns | [components.md](resources/components.md) |
-| Translate Figma designs to code | [figma.md](resources/figma.md) |
-| Set up component documentation | [storybook.md](resources/storybook.md) |
+| Task | Read | Key Patterns |
+|------|------|-------------|
+| Choosing/using icons | [icons.md](resources/icons.md) | Semantic mappings, sizing by context, `StatusIcon` component |
+| Colors, spacing, theming | [tokens.md](resources/tokens.md) | OKLCH tokens, category accents, premium utilities, dark mode |
+| Building components with CVA/shadcn | [components.md](resources/components.md) | CVA structure, BlockWrapper, compound components, `cn()` |
+| Translating Figma designs | [figma.md](resources/figma.md) | MCP tools, token mapping, design-to-code workflow |
+| Component documentation | [storybook.md](resources/storybook.md) | Not yet configured; future setup patterns |
 
 ---
 
-## Related Skills
+## Rules Summary
 
-This skill complements:
-
-| Skill | When to Use Together |
-|-------|---------------------|
-| react-vite | Building React components that need design system tokens |
-| react-vite/lucide.md | General Lucide + Tailwind patterns (this skill has project mappings) |
-
----
-
-## Project Documentation
-
-For THIS project's specifics:
-
-| Need | Reference |
-|------|-----------|
-| Full color values | [apps/web/src/index.css](../../../apps/web/src/index.css) |
-| Component inventory | [apps/web/src/components/ui/](../../../apps/web/src/components/ui/) |
-| Frontend patterns | [docs/FRONTEND.md](../../../docs/FRONTEND.md) |
+Every design decision must trace to a semantic token defined in `index.css` — never hardcode colors, and always prefer OKLCH values in `:root`/`.dark` with `@theme inline` registration. Use shadcn/ui primitives before building custom components; when variants are needed, reach for CVA immediately. Icons come exclusively from lucide-react with project-specific semantic mappings; they must use Tailwind sizing classes (`h-4 w-4`), semantic color tokens, and `shrink-0` in flex layouts. Block components wrap in `BlockWrapper`, apply `stagger-children` to lists with more than 3 items, use `hover-lift` on interactive sub-cards, and match callout icon colors to `accentColor`. Class merging always goes through `cn()`, never string concatenation.

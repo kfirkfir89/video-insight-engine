@@ -1,349 +1,141 @@
 # Fastify Patterns
 
-Setup, routing, plugins, and middleware patterns for Fastify.
+Setup, routing, plugins, hooks, and middleware for Fastify.
+
+<rules>
+- ALWAYS separate app creation (`buildApp()`) from server start (`app.listen()`) — testability requires injection via `app.inject()` (causes untestable server if combined)
+- ALWAYS group routes by feature with `app.register(routes, { prefix })` (causes unmaintainable monolith if all routes in one file)
+- ALWAYS attach Zod schemas to route definitions via `schema: { body, params, querystring, response }` (causes unvalidated input if done manually in handlers)
+- ALWAYS encapsulate shared functionality in plugins using `fastify-plugin` (causes scope leaks if not using fp wrapper)
+- ALWAYS type decorators with `declare module 'fastify'` augmentation (causes `any` access if using untyped decorators)
+- NEVER put auth checks in every handler — use `preHandler` hooks (causes duplication and missed checks)
+- NEVER put business logic in route handlers — delegate to services (causes untestable, bloated routes)
+</rules>
 
 ---
 
 ## App Bootstrap
 
-### DO ✅
+Separate creation from startup for testability:
 
 ```typescript
-// Separate app creation from server start
-// app.ts - creates and configures the app
+// app.ts
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: {
-      level: config.LOG_LEVEL,
-      transport: isDev ? { target: 'pino-pretty' } : undefined,
-    },
+    logger: { level: config.LOG_LEVEL,
+      transport: isDev ? { target: 'pino-pretty' } : undefined },
   });
-
-  // Register plugins
   await app.register(cors, { origin: config.CORS_ORIGINS });
   await app.register(helmet);
-
-  // Register routes
   await app.register(routes);
-
   return app;
 }
 
-// server.ts - starts the server
+// server.ts
 const app = await buildApp();
 await app.listen({ port: config.PORT, host: '0.0.0.0' });
-```
-
-### DON'T ❌
-
-```typescript
-// Everything in one file, can't test
-const app = Fastify();
-app.get('/users', handler);
-app.listen({ port: 3000 });
 ```
 
 ---
 
 ## Route Organization
 
-### DO ✅
+Group by feature, attach schemas, delegate to services:
 
 ```typescript
-// Group routes by feature with prefix
 // routes/index.ts
 export async function routes(app: FastifyInstance) {
   await app.register(userRoutes, { prefix: '/api/v1/users' });
-  await app.register(orderRoutes, { prefix: '/api/v1/orders' });
   await app.register(healthRoutes, { prefix: '/health' });
 }
 
 // users/user.route.ts
 export async function userRoutes(app: FastifyInstance) {
-  app.get('/', listUsers);
-  app.get('/:id', getUser);
-  app.post('/', createUser);
-  app.patch('/:id', updateUser);
-  app.delete('/:id', deleteUser);
+  app.post('/', {
+    schema: { body: zodToJsonSchema(createUserBody) },
+    handler: createUser,
+  });
+  app.get('/:id', { preHandler: [authenticate], handler: getUser });
 }
 ```
 
-### DON'T ❌
-
-```typescript
-// All routes in one file
-app.get('/api/v1/users', ...);
-app.get('/api/v1/users/:id', ...);
-app.get('/api/v1/orders', ...);
-app.get('/api/v1/orders/:id', ...);
-// 500 more lines...
-```
-
 ---
 
-## Schema Validation
+## Plugins & Decorators
 
-### DO ✅
-
-```typescript
-// Define schemas with Zod, convert to JSON Schema
-import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
-
-const createUserBody = z.object({
-  email: z.string().email(),
-  name: z.string().min(2).max(100),
-  password: z.string().min(8),
-});
-
-const userParams = z.object({
-  id: z.string().length(24),
-});
-
-// Attach to route
-app.post('/', {
-  schema: {
-    body: zodToJsonSchema(createUserBody),
-    response: {
-      201: { type: 'object' },
-    },
-  },
-  handler: createUser,
-});
-```
-
-### DON'T ❌
+Wrap with `fastify-plugin`, always type-augment:
 
 ```typescript
-// Manual validation in handler
-app.post('/', async (request) => {
-  const { email, password } = request.body;
-  if (!email) throw new Error('Email required');
-  if (!email.includes('@')) throw new Error('Invalid email');
-  // More validation...
-});
-```
-
----
-
-## Plugins
-
-### DO ✅
-
-```typescript
-// Encapsulate related functionality in plugins
 import fp from 'fastify-plugin';
+
+declare module 'fastify' {
+  interface FastifyInstance { db: Database; }
+  interface FastifyRequest { user?: TokenPayload; }
+}
 
 export const databasePlugin = fp(async (app, opts) => {
   const client = await connectToDatabase(opts.uri);
-  
-  // Decorate app with database
   app.decorate('db', client);
-  
-  // Cleanup on close
-  app.addHook('onClose', async () => {
-    await client.close();
-  });
-});
-
-// Usage
-await app.register(databasePlugin, { uri: config.MONGODB_URI });
-app.db.collection('users'); // TypeScript knows about db
-```
-
-### DON'T ❌
-
-```typescript
-// Global database connection
-import { db } from './database';
-
-app.get('/users', async () => {
-  return db.collection('users').find();
+  app.addHook('onClose', async () => { await client.close(); });
 });
 ```
 
 ---
 
-## Hooks
+## Hooks & Lifecycle
 
-### Request Lifecycle
+Request lifecycle: `onRequest → preParsing → preValidation → preHandler → handler → preSerialization → onSend → onResponse`
 
-```
-onRequest → preParsing → preValidation → preHandler → handler → preSerialization → onSend → onResponse
-```
-
-### DO ✅
+Use hooks for cross-cutting concerns. Use route-specific `preHandler` for auth:
 
 ```typescript
-// Use hooks for cross-cutting concerns
 app.addHook('onRequest', async (request) => {
   request.startTime = Date.now();
 });
 
-app.addHook('onResponse', async (request, reply) => {
-  const duration = Date.now() - request.startTime;
-  request.log.info({ duration, statusCode: reply.statusCode }, 'request completed');
-});
-
-// Route-specific hooks
 app.get('/admin', {
   preHandler: [authenticate, requireAdmin],
   handler: adminHandler,
 });
 ```
 
-### DON'T ❌
-
-```typescript
-// Auth check in every handler
-app.get('/users', async (request) => {
-  const user = await verifyToken(request.headers.authorization);
-  if (!user) throw new UnauthorizedError();
-  // actual logic...
-});
-
-app.get('/orders', async (request) => {
-  const user = await verifyToken(request.headers.authorization); // Duplicated!
-  if (!user) throw new UnauthorizedError();
-  // actual logic...
-});
-```
-
 ---
 
-## Decorators
+## Error Handling & Shutdown
 
-### DO ✅
-
-```typescript
-// Type-safe decorators
-declare module 'fastify' {
-  interface FastifyInstance {
-    db: Database;
-    config: Config;
-  }
-  interface FastifyRequest {
-    user?: TokenPayload;
-    startTime?: number;
-  }
-}
-
-// Then decorate
-app.decorate('db', database);
-app.decorateRequest('user', null);
-```
-
-### DON'T ❌
+Set a global error handler. Handle graceful shutdown:
 
 ```typescript
-// Untyped property access
-(app as any).db = database;
-(request as any).user = user;
-```
-
----
-
-## Error Handling
-
-### DO ✅
-
-```typescript
-// Global error handler
 app.setErrorHandler((error, request, reply) => {
   request.log.error(error);
-
-  // Custom app errors
-  if (error instanceof AppError) {
-    return reply.status(error.statusCode).send({
-      error: { code: error.code, message: error.message },
-    });
-  }
-
-  // Validation errors
-  if (error.validation) {
-    return reply.status(400).send({
-      error: { code: 'VALIDATION_ERROR', details: error.validation },
-    });
-  }
-
-  // Unknown errors - don't leak details
-  return reply.status(500).send({
-    error: { code: 'INTERNAL_ERROR', message: 'Something went wrong' },
-  });
+  if (error instanceof AppError)
+    return reply.status(error.statusCode).send({ error: { code: error.code, message: error.message } });
+  if (error.validation)
+    return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', details: error.validation } });
+  return reply.status(500).send({ error: { code: 'INTERNAL_ERROR', message: 'Something went wrong' } });
 });
-```
 
----
-
-## Graceful Shutdown
-
-### DO ✅
-
-```typescript
+// Graceful shutdown
 const shutdown = async (signal: string) => {
-  app.log.info(`${signal} received, shutting down gracefully`);
-  
-  // Stop accepting new connections
+  app.log.info(`${signal} received, shutting down`);
   await app.close();
-  
-  // Close database connections
   await database.close();
-  
   process.exit(0);
 };
-
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 ```
 
-### DON'T ❌
+---
 
-```typescript
-// Hard exit, connections left open
-process.on('SIGINT', () => process.exit(1));
-```
+## Edge Cases
+
+- **Schema validation + custom errors**: Fastify's built-in validation returns generic messages. Override `schemaErrorFormatter` for user-friendly messages.
+- **Plugin scope isolation**: Without `fastify-plugin` wrapper, decorators are scoped to the encapsulating plugin only. Use `fp()` when you need app-wide access.
+- **Streaming responses**: For SSE, write directly to `reply.raw` — Fastify's serialization pipeline won't apply. Set headers manually.
 
 ---
 
-## Testing
+## Rules Summary
 
-### DO ✅
-
-```typescript
-// Use app.inject() for testing
-import { buildApp } from '../app';
-
-describe('User Routes', () => {
-  let app: FastifyInstance;
-
-  beforeAll(async () => {
-    app = await buildApp();
-  });
-
-  afterAll(async () => {
-    await app.close();
-  });
-
-  it('creates a user', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/v1/users',
-      payload: { email: 'test@example.com', name: 'Test' },
-    });
-
-    expect(response.statusCode).toBe(201);
-  });
-});
-```
-
----
-
-## Quick Reference
-
-| Pattern | When to Use |
-|---------|-------------|
-| Plugin | Shared functionality across routes |
-| Hook | Cross-cutting concerns (auth, logging) |
-| Decorator | Add properties to app/request/reply |
-| Schema | Validate all external input |
-| Prefix | Group related routes |
+Every Fastify app separates creation from startup for `app.inject()` testability. Routes register as plugins with prefixes, attach Zod-to-JSON schemas for automatic validation, and delegate all logic to services. Shared functionality lives in `fastify-plugin`-wrapped plugins with typed decorators. Auth and logging use hooks (preHandler for route-specific, onRequest for global). The global error handler maps AppError subclasses to HTTP status codes, handles Fastify validation errors, and never exposes internal details on 500s. Shutdown is graceful: close app first, then database connections.

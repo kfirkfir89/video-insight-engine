@@ -1,63 +1,38 @@
 # Form Patterns
 
-React Hook Form, validation, and form handling best practices.
+React Hook Form + Zod validation, field arrays, multi-step forms, and React 19 form actions.
+
+<rules>
+- ALWAYS use React Hook Form + zodResolver for forms — never manual useState per field (causes validation drift, missing error states, re-render storms)
+- ALWAYS define Zod schemas as the single source of truth — infer TypeScript types with `z.infer<typeof schema>` (causes type/validation mismatch if separate)
+- ALWAYS use `setError('root', ...)` for form-level API errors and `setError('fieldName', ...)` for field-level server errors (causes lost error context if swallowed)
+- ALWAYS use `Controller` for custom components that don't support `{...register()}` (causes uncontrolled form behavior)
+- ALWAYS disable submit button when `isSubmitting || !isDirty` (causes double submissions and no-op saves)
+- NEVER use `onChange` mode unless you need live validation feedback — default `onSubmit` is more performant (causes excessive re-renders on every keystroke)
+- NEVER build multi-field forms with raw useState — even simple 2-field forms benefit from RHF's error handling (causes error state management bugs)
+</rules>
 
 ---
 
-## React Hook Form
+## Basic Form
 
-### DO ✅
+ALWAYS define schema first, infer types, wire to RHF with zodResolver.
 
 ```tsx
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-
-// Define schema
 const loginSchema = z.object({
   email: z.string().email('Invalid email'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z.string().min(8, 'At least 8 characters'),
 });
-
 type LoginFormData = z.infer<typeof loginSchema>;
 
 function LoginForm({ onSubmit }: { onSubmit: (data: LoginFormData) => void }) {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<LoginFormData>({
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   });
-
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <div>
-        <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          {...register('email')}
-          className={errors.email ? 'border-red-500' : ''}
-        />
-        {errors.email && (
-          <p className="text-red-500 text-sm">{errors.email.message}</p>
-        )}
-      </div>
-
-      <div>
-        <label htmlFor="password">Password</label>
-        <input
-          id="password"
-          type="password"
-          {...register('password')}
-          className={errors.password ? 'border-red-500' : ''}
-        />
-        {errors.password && (
-          <p className="text-red-500 text-sm">{errors.password.message}</p>
-        )}
-      </div>
-
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <input {...register('email')} />
+      {errors.email && <p className="text-red-500 text-sm">{errors.email.message}</p>}
       <button type="submit" disabled={isSubmitting}>
         {isSubmitting ? 'Signing in...' : 'Sign in'}
       </button>
@@ -66,162 +41,40 @@ function LoginForm({ onSubmit }: { onSubmit: (data: LoginFormData) => void }) {
 }
 ```
 
-### DON'T ❌
+---
+
+## Server Error Handling
+
+ALWAYS map API errors to field-level or form-level errors.
 
 ```tsx
-// Manual state management
-function LoginForm() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState({});
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    // Manual validation...
-    if (!email.includes('@')) {
-      setErrors({ email: 'Invalid email' });
+const onSubmit = async (data: FormData) => {
+  try {
+    await api.submit(data);
+  } catch (error) {
+    if (error.code === 'EMAIL_EXISTS') {
+      setError('email', { message: 'Already registered' });
+    } else {
+      setError('root', { message: 'Something went wrong' });
     }
-    // More validation...
-  };
-
-  return (/* ... */);
-}
+  }
+};
 ```
 
 ---
 
-## Controlled Components with RHF
+## Reusable Form Components
 
-### DO ✅
+ALWAYS wire `aria-invalid` and `aria-describedby` for accessibility.
 
 ```tsx
-import { Controller } from 'react-hook-form';
-
-function ProfileForm() {
-  const { control, handleSubmit } = useForm<ProfileData>();
-
+function FormInput({ label, error, id, ...props }: FormInputProps) {
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      {/* For custom components that don't support {...register} */}
-      <Controller
-        name="country"
-        control={control}
-        render={({ field }) => (
-          <Select
-            value={field.value}
-            onChange={field.onChange}
-            options={countries}
-          />
-        )}
-      />
-
-      <Controller
-        name="birthDate"
-        control={control}
-        render={({ field }) => (
-          <DatePicker
-            selected={field.value}
-            onChange={field.onChange}
-          />
-        )}
-      />
-    </form>
-  );
-}
-```
-
----
-
-## Validation Schemas
-
-### DO ✅
-
-```tsx
-import { z } from 'zod';
-
-// Reusable field schemas
-const emailSchema = z.string().email('Invalid email');
-const passwordSchema = z
-  .string()
-  .min(8, 'At least 8 characters')
-  .regex(/[A-Z]/, 'At least one uppercase letter')
-  .regex(/[0-9]/, 'At least one number');
-
-// Compose into form schemas
-const registerSchema = z.object({
-  email: emailSchema,
-  password: passwordSchema,
-  confirmPassword: z.string(),
-  acceptTerms: z.literal(true, {
-    errorMap: () => ({ message: 'You must accept the terms' }),
-  }),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: 'Passwords must match',
-  path: ['confirmPassword'],
-});
-
-// Complex validation
-const productSchema = z.object({
-  name: z.string().min(1, 'Required').max(100),
-  price: z.coerce.number().positive('Must be positive'),
-  category: z.enum(['electronics', 'clothing', 'food']),
-  tags: z.array(z.string()).min(1, 'At least one tag'),
-  metadata: z.record(z.string()).optional(),
-});
-```
-
----
-
-## Form State
-
-### DO ✅
-
-```tsx
-function ComplexForm() {
-  const {
-    register,
-    handleSubmit,
-    watch,
-    reset,
-    setValue,
-    formState: {
-      errors,
-      isSubmitting,
-      isDirty,
-      isValid,
-      dirtyFields,
-    },
-  } = useForm<FormData>({
-    defaultValues: {
-      email: '',
-      plan: 'free',
-    },
-    mode: 'onChange', // Validate on change
-  });
-
-  // Watch specific field
-  const selectedPlan = watch('plan');
-
-  // Conditional field
-  return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      <select {...register('plan')}>
-        <option value="free">Free</option>
-        <option value="pro">Pro</option>
-      </select>
-
-      {selectedPlan === 'pro' && (
-        <input {...register('cardNumber')} placeholder="Card number" />
-      )}
-
-      <button type="submit" disabled={isSubmitting || !isDirty || !isValid}>
-        Submit
-      </button>
-
-      <button type="button" onClick={() => reset()}>
-        Reset
-      </button>
-    </form>
+    <div>
+      <label htmlFor={id}>{label}</label>
+      <input id={id} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} {...props} />
+      {error && <p id={`${id}-error`} className="text-sm text-red-500">{error}</p>}
+    </div>
   );
 }
 ```
@@ -230,326 +83,49 @@ function ComplexForm() {
 
 ## Field Arrays
 
-### DO ✅
+Use `useFieldArray` for dynamic lists. Key by `field.id`, not array index.
 
 ```tsx
-import { useFieldArray } from 'react-hook-form';
-
-function TodoForm() {
-  const { control, register, handleSubmit } = useForm<{
-    todos: { text: string; completed: boolean }[];
-  }>({
-    defaultValues: {
-      todos: [{ text: '', completed: false }],
-    },
-  });
-
-  const { fields, append, remove, move } = useFieldArray({
-    control,
-    name: 'todos',
-  });
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      {fields.map((field, index) => (
-        <div key={field.id}>
-          <input {...register(`todos.${index}.text`)} />
-          <button type="button" onClick={() => remove(index)}>
-            Remove
-          </button>
-        </div>
-      ))}
-
-      <button type="button" onClick={() => append({ text: '', completed: false })}>
-        Add Todo
-      </button>
-
-      <button type="submit">Save</button>
-    </form>
-  );
-}
-```
-
----
-
-## Error Handling
-
-### DO ✅
-
-```tsx
-function Form() {
-  const {
-    handleSubmit,
-    setError,
-    formState: { errors },
-  } = useForm<FormData>();
-
-  const onSubmit = async (data: FormData) => {
-    try {
-      await api.submit(data);
-    } catch (error) {
-      if (error.code === 'EMAIL_EXISTS') {
-        // Set field-level error
-        setError('email', {
-          type: 'manual',
-          message: 'This email is already registered',
-        });
-      } else {
-        // Set form-level error
-        setError('root', {
-          type: 'manual',
-          message: 'Something went wrong. Please try again.',
-        });
-      }
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      {errors.root && (
-        <div className="bg-red-100 p-4 text-red-700">
-          {errors.root.message}
-        </div>
-      )}
-      {/* fields... */}
-    </form>
-  );
-}
-```
-
----
-
-## Reusable Form Components
-
-### DO ✅
-
-```tsx
-// Generic input component
-interface FormInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label: string;
-  error?: string;
-}
-
-function FormInput({ label, error, id, ...props }: FormInputProps) {
-  return (
-    <div className="space-y-1">
-      <label htmlFor={id} className="block text-sm font-medium">
-        {label}
-      </label>
-      <input
-        id={id}
-        className={cn(
-          'w-full rounded-md border px-3 py-2',
-          error ? 'border-red-500' : 'border-gray-300'
-        )}
-        aria-invalid={!!error}
-        aria-describedby={error ? `${id}-error` : undefined}
-        {...props}
-      />
-      {error && (
-        <p id={`${id}-error`} className="text-sm text-red-500">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
-// Usage with RHF
-<FormInput
-  id="email"
-  label="Email"
-  type="email"
-  error={errors.email?.message}
-  {...register('email')}
-/>
-```
-
----
-
-## React 19 Form Actions
-
-### useActionState with Forms
-
-Combine React Hook Form validation with React 19 server actions.
-
-```tsx
-import { useActionState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-
-const schema = z.object({
-  email: z.string().email(),
-  message: z.string().min(10),
-});
-
-type FormData = z.infer<typeof schema>;
-
-function ContactForm() {
-  const {
-    register,
-    formState: { errors },
-    handleSubmit,
-  } = useForm<FormData>({
-    resolver: zodResolver(schema),
-  });
-
-  const [state, submitAction, isPending] = useActionState(
-    async (prevState: { error: string | null }, formData: FormData) => {
-      try {
-        await sendContactEmail(formData);
-        return { error: null };
-      } catch {
-        return { error: "Failed to send message" };
-      }
-    },
-    { error: null }
-  );
-
-  const onSubmit = handleSubmit((data) => {
-    submitAction(data);
-  });
-
-  return (
-    <form onSubmit={onSubmit}>
-      <input {...register("email")} placeholder="Email" />
-      {errors.email && <span>{errors.email.message}</span>}
-
-      <textarea {...register("message")} placeholder="Message" />
-      {errors.message && <span>{errors.message.message}</span>}
-
-      {state.error && <div className="text-red-500">{state.error}</div>}
-
-      <button type="submit" disabled={isPending}>
-        {isPending ? "Sending..." : "Send"}
-      </button>
-    </form>
-  );
-}
-```
-
-### useFormStatus for Submit Buttons
-
-Extract submit button to use form status.
-
-```tsx
-import { useFormStatus } from "react-dom";
-
-function SubmitButton({ children }: { children: React.ReactNode }) {
-  const { pending } = useFormStatus();
-
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className={pending ? "opacity-50 cursor-not-allowed" : ""}
-    >
-      {pending ? "Submitting..." : children}
-    </button>
-  );
-}
-
-// Works with native form actions
-function SimpleForm() {
-  return (
-    <form action={async (formData) => {
-      await saveData(formData);
-    }}>
-      <input name="name" required />
-      <SubmitButton>Save</SubmitButton>
-    </form>
-  );
-}
+const { fields, append, remove } = useFieldArray({ control, name: 'todos' });
+// Render: fields.map((field, index) => <div key={field.id}>...)
 ```
 
 ---
 
 ## Multi-Step Forms
 
-### DO ✅
+Use `FormProvider` + `useFormContext` for step components. Validate per-step with `trigger()`.
 
 ```tsx
-function MultiStepForm() {
-  const [step, setStep] = useState(1);
-  const methods = useForm<FormData>({
-    mode: 'onChange',
-  });
+const nextStep = async () => {
+  const isValid = await methods.trigger(['email', 'name']);
+  if (isValid) setStep(step + 1);
+};
+```
 
-  const nextStep = async () => {
-    const fieldsToValidate = step === 1 
-      ? ['email', 'name'] 
-      : ['address', 'city'];
-    
-    const isValid = await methods.trigger(fieldsToValidate);
-    if (isValid) setStep(step + 1);
-  };
+---
 
-  const prevStep = () => setStep(step - 1);
+## React 19 Form Actions
 
-  return (
-    <FormProvider {...methods}>
-      <form onSubmit={methods.handleSubmit(onSubmit)}>
-        {step === 1 && <PersonalInfoStep />}
-        {step === 2 && <AddressStep />}
-        {step === 3 && <ReviewStep />}
+**useActionState** pairs with RHF for server-action forms. **useFormStatus** gives submit buttons access to pending state (must be a child component inside `<form>`).
 
-        <div className="flex gap-4">
-          {step > 1 && (
-            <button type="button" onClick={prevStep}>Back</button>
-          )}
-          {step < 3 ? (
-            <button type="button" onClick={nextStep}>Next</button>
-          ) : (
-            <button type="submit">Submit</button>
-          )}
-        </div>
-      </form>
-    </FormProvider>
-  );
-}
-
-// Step component uses useFormContext
-function PersonalInfoStep() {
-  const { register, formState: { errors } } = useFormContext<FormData>();
-
-  return (
-    <div>
-      <input {...register('email')} />
-      <input {...register('name')} />
-    </div>
-  );
+```tsx
+function SubmitButton({ children }: { children: React.ReactNode }) {
+  const { pending } = useFormStatus();
+  return <button type="submit" disabled={pending}>{pending ? 'Submitting...' : children}</button>;
 }
 ```
 
 ---
 
-## Quick Reference
+## Edge Cases
 
-| RHF Hook | Purpose |
-|----------|---------|
-| useForm | Main form hook |
-| useFormContext | Access form in nested components |
-| useFieldArray | Dynamic array fields |
-| useWatch | Watch field values |
-| useController | Controlled component wrapper |
+- **Conditional fields:** Use `watch('fieldName')` to show/hide fields. Conditionally rendered fields still validate — use `shouldUnregister: true` or adjust schema with `.optional()` when hidden.
+- **File uploads:** Use `Controller` with a file input. Zod can validate with `z.instanceof(File)` or custom refinement.
+- **Cross-field validation:** Use `.refine()` or `.superRefine()` on the object schema. Map errors to specific fields via `path: ['fieldName']`.
 
-| React 19 Hook | Purpose |
-|---------------|---------|
-| useActionState | Track form action lifecycle |
-| useFormStatus | Access form pending state |
+---
 
-| Form State | Description |
-|------------|-------------|
-| isDirty | Form has been modified |
-| isValid | All validations pass |
-| isSubmitting | Form is being submitted |
-| errors | Validation errors |
-| dirtyFields | Which fields changed |
+## Rules Summary
 
-| Validation | When |
-|------------|------|
-| mode: 'onSubmit' | Validate on submit (default) |
-| mode: 'onChange' | Validate on every change |
-| mode: 'onBlur' | Validate on blur |
-| mode: 'all' | All of the above |
+Every form uses React Hook Form with Zod schemas as the single source of truth. Types are inferred from schemas, not duplicated. Server errors map to field-level or root-level via setError. Custom inputs use Controller, dynamic lists use useFieldArray, and multi-step forms use FormProvider with per-step trigger validation. Submit buttons are disabled during submission. React 19 useActionState and useFormStatus integrate with RHF for server actions.

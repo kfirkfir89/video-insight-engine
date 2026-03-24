@@ -1,74 +1,18 @@
 # Testing Rules
 
-## Coverage
+<rules>
+- ALWAYS write tests for new features — minimum 80% coverage for new code (untested code ships bugs)
+- ALWAYS include regression tests with bug fixes (prevents the same bug from recurring)
+- ALWAYS test behavior, not implementation — one assertion per test when possible (implementation-coupled tests break on refactors)
+- ALWAYS use descriptive test names: "should [expected behavior] when [condition]" (unclear names make failures undiagnosable)
+- NEVER mock what you're testing — mock only external dependencies (mocking the subject defeats the test's purpose)
+- ALWAYS clean up mocks after tests (leaked mocks cause flaky cross-test failures)
+</rules>
 
-- Minimum 80% code coverage for new code
-- All new features must have tests
-- Bug fixes must include regression tests
-- Critical paths require higher coverage
+**Test types:** Unit (always for new functions), Integration (new endpoints/data changes), E2E (major features/auth flows).
 
-## Test Types
+**Structure:** `describe('Component') → describe('method') → it('should...')` with Arrange/Act/Assert.
 
-| Type | Purpose | When Required |
-|------|---------|---------------|
-| Unit | Business logic, utilities | Always for new functions |
-| Integration | API endpoints, database | New endpoints, data changes |
-| E2E | Critical user flows | Major features, auth flows |
+**Runners:** API → `cd api && npm test` (Vitest), Web → `cd apps/web && npm test` (Vitest + Testing Library), E2E → `npm run test:e2e` (Playwright). Test files: `*.test.ts` or `*.spec.ts`.
 
-## Test Quality
-
-- Test behavior, not implementation
-- One assertion per test when possible
-- Use descriptive test names
-- Include edge cases and error scenarios
-
-## Test Structure
-
-```
-describe('ComponentName', () => {
-  describe('methodName', () => {
-    it('should do expected behavior', () => {
-      // Arrange
-      // Act
-      // Assert
-    });
-  });
-});
-```
-
-## Naming Conventions
-
-- Test files: `*.test.ts` or `*.spec.ts`
-- Test description: "should [expected behavior] when [condition]"
-- Use meaningful variable names in tests
-
-## Mocking
-
-- Mock external dependencies (APIs, databases)
-- Don't mock what you're testing
-- Keep mocks simple and focused
-- Clean up mocks after tests
-
-## Project-Specific
-
-- Backend tests: Vitest
-- Frontend tests: Vitest + Testing Library
-- E2E tests: Playwright
-- Refer to skill resources for test patterns
-
-## Running Tests
-
-```bash
-# API tests
-cd api && npm test
-
-# Web tests
-cd apps/web && npm test
-
-# E2E tests
-npm run test:e2e
-```
-
-## Enforcement Level
-
-**Required** - New code should have tests.
+**Enforcement:** Required — new code should have tests.

@@ -1,84 +1,17 @@
 # Git Workflow Rules
 
-## Commits
+<rules>
+- ALWAYS use conventional commits: `type(scope): description` — types: feat, fix, docs, style, refactor, test, chore
+- NEVER commit directly to main — always use feature branches and PRs (protects shared branch from broken code)
+- ALWAYS run tests, typecheck, and linter before committing (catches errors before they enter history)
+- NEVER commit debug code, console logs, commented code, or secrets/credentials (pollutes history and risks exposure)
+- ALWAYS keep commits atomic and focused — one logical change per commit (makes bisect and revert possible)
+</rules>
 
-- Use conventional commits format
-- Keep commits atomic and focused
-- Write meaningful commit messages
-- Reference issues when applicable
+**Branches:** `feature/add-caching-layer`, `fix/auth-token-refresh`, `refactor/extract-validation`. Delete after merge.
 
-### Conventional Commits Format
+**PRs:** Include description, link issues, all tests must pass, request review when ready.
 
-```
-<type>(<scope>): <description>
+**This project:** Main branch `main`, feature branches from `main`, CI must pass before merge.
 
-[optional body]
-
-[optional footer]
-```
-
-### Commit Types
-
-| Type | Use For |
-|------|---------|
-| feat | New features |
-| fix | Bug fixes |
-| docs | Documentation only |
-| style | Formatting, no code change |
-| refactor | Code change, no behavior change |
-| test | Adding/fixing tests |
-| chore | Maintenance tasks |
-
-### Examples
-
-```
-feat(api): add cache invalidation endpoint
-fix(auth): handle expired token refresh
-docs(readme): update installation steps
-refactor(web): extract form validation hook
-```
-
-## Branches
-
-- Create feature branches for new work
-- Never commit directly to main
-- Keep branches up to date with main
-- Delete branches after merge
-
-### Branch Naming
-
-```
-feature/add-caching-layer
-fix/auth-token-refresh
-refactor/extract-validation
-```
-
-## Pull Requests
-
-- All changes via PR
-- Include description of changes
-- Link related issues
-- All tests must pass
-- Request review when ready
-
-## Before Commit
-
-- Run tests: `npm test`
-- Check types: `npm run typecheck` (if applicable)
-- Run linter: `npm run lint`
-- Don't commit:
-  - Debug code
-  - Console logs
-  - Commented code
-  - Secrets/credentials
-
-## This Project
-
-- Main branch: `main`
-- Feature branches from: `main`
-- PR reviews: Required for main
-- CI: Must pass before merge
-
-## Enforcement Level
-
-**Required** - Follow git workflow for all changes.
+**Enforcement:** Required — follow git workflow for all changes.

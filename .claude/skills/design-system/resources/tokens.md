@@ -2,493 +2,144 @@
 
 Color, spacing, and typography tokens for vie-web. All tokens defined in `apps/web/src/index.css`.
 
+<rules>
+- ALWAYS use semantic tokens (`bg-primary`, `text-muted-foreground`) over palette colors (breaks theming and dark mode)
+- ALWAYS define new colors in OKLCH format in `:root` + `.dark` + `@theme inline {}` (inconsistent theming if skipped)
+- ALWAYS use Tailwind's 4px-base spacing scale (4, 8, 12, 16, 20, 24, 32, 48px) (visual inconsistency if arbitrary values used)
+- ALWAYS add `stagger-children` to list containers with >3 items (misses entrance animation)
+- NEVER use `tailwind.config.js` — Tailwind v4 is CSS-first via `@theme inline {}` (config file is ignored)
+- NEVER hardcode hex/rgb colors in components (dark mode and theming will break)
+- NEVER use `text-muted-foreground` for callout icons — match the callout's `accentColor` (looks visually broken)
+</rules>
+
 ---
 
 ## Configuration
 
-### Location
-
-Tailwind v4 uses CSS-first configuration. **No `tailwind.config.js`**.
+Tailwind v4 uses CSS-first config. No `tailwind.config.js`. Structure in `apps/web/src/index.css`:
 
 ```
-apps/web/src/index.css    ← All tokens defined here
-├── :root { }             ← Light mode variables
-├── .dark { }             ← Dark mode variables
-├── @theme inline { }     ← Tailwind theme integration
-├── .category-* { }       ← Category accent colors
-└── @layer components { } ← Premium CSS utilities
+:root { }             -- Light mode variables
+.dark { }             -- Dark mode variables
+@theme inline { }     -- Tailwind theme integration
+.category-* { }       -- Category accent colors
+@layer components { } -- Premium CSS utilities
 ```
 
-### OKLCH Color Space
-
-This project uses OKLCH (Oklab Lightness Chroma Hue) for perceptually uniform colors.
-
-```css
-/* Format: oklch(lightness chroma hue) */
---primary: oklch(58% 0.24 292);
-/*              │    │    └─ Hue (0-360, violet-indigo is ~292)
-/*              │    └────── Chroma (0-0.4, saturation)
-/*              └─────────── Lightness (0-100%) */
-```
-
-**Why OKLCH?**
-- Consistent perceived brightness across hues
-- Dark mode adjustments are intuitive (increase L)
-- Better for generating color scales
+Colors use OKLCH: `oklch(lightness% chroma hue)` — perceptually uniform, intuitive dark mode adjustments (increase L), better color scales.
 
 ---
 
 ## Core Semantic Colors
 
-### Light Mode (Violet-indigo undertones, hue ~285/292)
+| Token | Light OKLCH | Dark OKLCH | Purpose |
+|-------|-------------|------------|---------|
+| `--background` | `98.5% 0.006 285` | `12% 0.03 280` | Page bg |
+| `--foreground` | `16% 0.03 280` | `94% 0.008 285` | Primary text |
+| `--primary` | `58% 0.24 292` | `68% 0.26 292` | Violet-indigo CTAs |
+| `--secondary` | `94% 0.012 290` | `22% 0.025 280` | Secondary buttons |
+| `--muted` | `95% 0.008 285` | `20% 0.02 280` | Muted backgrounds |
+| `--muted-foreground` | `45% 0.025 280` | `65% 0.015 280` | Muted text |
+| `--accent` | `95% 0.02 310` | `22% 0.03 310` | Hover states |
+| `--destructive` | `55% 0.22 18` | `65% 0.22 18` | Error/delete |
+| `--border` | `89% 0.012 285` | `25% 0.02 280` | Borders |
+| `--ring` | `58% 0.24 292` | `68% 0.26 292` | Focus rings |
+| `--radius` | `0.75rem` | same | Border radius (12px) |
 
-| Token | OKLCH Value | Usage |
-|-------|-------------|-------|
-| `--background` | `oklch(98.5% 0.006 285)` | Page background |
-| `--foreground` | `oklch(16% 0.03 280)` | Primary text |
-| `--card` | `oklch(99% 0.004 285)` | Card backgrounds |
-| `--card-foreground` | `oklch(16% 0.03 280)` | Card text |
-| `--popover` | `oklch(99% 0.004 285)` | Popover backgrounds |
-| `--popover-foreground` | `oklch(16% 0.03 280)` | Popover text |
-| `--primary` | `oklch(58% 0.24 292)` | Violet-indigo, CTAs |
-| `--primary-foreground` | `oklch(99% 0 0)` | Text on primary |
-| `--secondary` | `oklch(94% 0.012 290)` | Secondary buttons |
-| `--secondary-foreground` | `oklch(25% 0.03 285)` | Text on secondary |
-| `--muted` | `oklch(95% 0.008 285)` | Muted backgrounds |
-| `--muted-foreground` | `oklch(45% 0.025 280)` | Muted text |
-| `--accent` | `oklch(95% 0.02 310)` | Hover states |
-| `--accent-foreground` | `oklch(25% 0.03 285)` | Text on accent |
-| `--destructive` | `oklch(55% 0.22 18)` | Error/delete actions |
-| `--destructive-foreground` | `oklch(99% 0 0)` | Text on destructive |
-| `--border` | `oklch(89% 0.012 285)` | Borders |
-| `--input` | `oklch(89% 0.012 285)` | Input borders |
-| `--ring` | `oklch(58% 0.24 292)` | Focus rings |
-| `--radius` | `0.75rem` | Border radius (12px) |
-| `--border-width` | `1px` | Default border width |
-
-### Dark Mode (Deep indigo-purple, hue ~280)
-
-| Token | OKLCH Value | Notes |
-|-------|-------------|-------|
-| `--background` | `oklch(12% 0.03 280)` | Deep indigo-purple |
-| `--foreground` | `oklch(94% 0.008 285)` | High contrast text |
-| `--card` | `oklch(16% 0.025 280)` | Elevated surfaces |
-| `--card-foreground` | `oklch(94% 0.008 285)` | Card text |
-| `--popover` | `oklch(16% 0.025 280)` | Popover backgrounds |
-| `--popover-foreground` | `oklch(94% 0.008 285)` | Popover text |
-| `--primary` | `oklch(68% 0.26 292)` | Brighter violet for dark |
-| `--primary-foreground` | `oklch(99% 0 0)` | Text on primary |
-| `--secondary` | `oklch(22% 0.025 280)` | Deep secondary |
-| `--secondary-foreground` | `oklch(90% 0.008 285)` | Text on secondary |
-| `--muted` | `oklch(20% 0.02 280)` | Subtle backgrounds |
-| `--muted-foreground` | `oklch(65% 0.015 280)` | Readable muted text |
-| `--accent` | `oklch(22% 0.03 310)` | Hover states |
-| `--accent-foreground` | `oklch(90% 0.008 285)` | Text on accent |
-| `--destructive` | `oklch(65% 0.22 18)` | Brighter red for dark |
-| `--destructive-foreground` | `oklch(99% 0 0)` | Text on destructive |
-| `--border` | `oklch(25% 0.02 280)` | Subtle border |
-| `--input` | `oklch(20% 0.02 280)` | Input borders |
-| `--ring` | `oklch(68% 0.26 292)` | Focus rings |
+Card, popover, input tokens follow the same pattern — see `index.css` for full values.
 
 ---
 
-## Status Colors
+## Status & Feedback Colors
 
-Semantic colors for process states:
+**Status** (process states):
 
-| Status | Token | Light Mode | Dark Mode |
-|--------|-------|------------|-----------|
-| Pending | `--status-pending` | `oklch(79.5% 0.18 86)` | `oklch(82% 0.16 86)` |
-| Processing | `--status-processing` | `oklch(62% 0.21 250)` | `oklch(68% 0.19 250)` |
-| Success | `--status-success` | `oklch(60% 0.15 155)` | `oklch(65% 0.14 155)` |
-| Error | `--status-error` | `var(--destructive)` | `var(--destructive)` |
+| Status | Token | Usage |
+|--------|-------|-------|
+| Pending | `text-status-pending` | `oklch(79.5% 0.18 86)` / `82%` dark |
+| Processing | `text-status-processing` | `oklch(62% 0.21 250)` / `68%` dark |
+| Success | `text-status-success` | `oklch(60% 0.15 155)` / `65%` dark |
+| Error | `text-status-error` | Uses `--destructive` |
 
-**Usage:**
-```tsx
-<span className="text-status-pending">Pending</span>
-<span className="text-status-processing">Processing</span>
-<span className="text-status-success">Completed</span>
-<span className="text-status-error">Failed</span>
+**Feedback** (callouts, badges, validation):
 
-// Background variants
-<div className="bg-status-success/10">Success message</div>
-```
+| Semantic | Tokens | Usage |
+|----------|--------|-------|
+| Success | `text-success`, `bg-success-soft` | Positive feedback, pro items |
+| Warning | `text-warning`, `bg-warning-soft` | Caution, tips |
+| Info | `text-info`, `bg-info-soft` | Informational notes |
 
----
-
-## Feedback Colors
-
-Semantic colors for contextual feedback (callouts, badges, validation):
-
-| Token | Light Mode | Dark Mode | Usage |
-|-------|------------|-----------|-------|
-| `--success` | `oklch(55% 0.16 155)` | `oklch(68% 0.16 155)` | Positive feedback |
-| `--success-foreground` | `oklch(98% 0.01 155)` | `oklch(15% 0.05 155)` | Text on success |
-| `--success-soft` | `oklch(96% 0.04 155)` | `oklch(20% 0.05 155)` | Soft success background |
-| `--warning` | `oklch(78% 0.15 80)` | `oklch(78% 0.13 80)` | Caution/tip feedback |
-| `--warning-foreground` | `oklch(25% 0.06 80)` | `oklch(15% 0.05 80)` | Text on warning |
-| `--warning-soft` | `oklch(96% 0.04 80)` | `oklch(20% 0.04 80)` | Soft warning background |
-| `--info` | `oklch(62% 0.16 255)` | `oklch(68% 0.14 255)` | Informational feedback |
-| `--info-foreground` | `oklch(98% 0.01 255)` | `oklch(15% 0.05 255)` | Text on info |
-| `--info-soft` | `oklch(96% 0.04 255)` | `oklch(20% 0.04 255)` | Soft info background |
-
-**Usage:**
-```tsx
-// Text colors
-<span className="text-success">Correct!</span>
-<span className="text-warning">Caution</span>
-<span className="text-info">Note</span>
-
-// Soft backgrounds (callouts, badges)
-<div className="bg-success-soft text-success">Pro item</div>
-<div className="bg-warning-soft text-warning-foreground">Tip callout</div>
-<div className="bg-info-soft text-info">Note callout</div>
-```
-
----
-
-## Premium Effect Tokens
-
-Tokens that control glow intensity and spread, auto-adjusting per theme:
-
-| Token | Light Mode | Dark Mode | Purpose |
-|-------|------------|-----------|---------|
-| `--glow-strength` | `0.12` | `0.3` | Opacity for glow box-shadows |
-| `--glow-spread` | `12px` | `20px` | Blur radius for glow effects |
-
-These tokens are consumed by the `glow-*` utility classes. Dark mode gets stronger, larger glows for visual bloom.
+Each has `-foreground` and `-soft` variants for text-on-color and soft backgrounds.
 
 ---
 
 ## Category Accent Colors
 
-Content-type theming for visual categorization:
+Apply `.category-*` class to container, access via CSS variables in children:
 
-| Category | Accent (Hex) | Soft (Light) | Soft (Dark) |
-|----------|--------------|--------------|-------------|
-| cooking | `#FF6B35` | `rgba(255, 107, 53, 0.08)` | `rgba(255, 107, 53, 0.06)` |
-| coding | `#22D3EE` | `rgba(34, 211, 238, 0.08)` | `rgba(34, 211, 238, 0.06)` |
-| travel | `#10B981` | `rgba(16, 185, 129, 0.08)` | `rgba(16, 185, 129, 0.06)` |
-| reviews | `#F59E0B` | `rgba(245, 158, 11, 0.08)` | `rgba(245, 158, 11, 0.06)` |
-| fitness | `#EF4444` | `rgba(239, 68, 68, 0.08)` | `rgba(239, 68, 68, 0.06)` |
-| education | `#8B5CF6` | `rgba(139, 92, 246, 0.08)` | `rgba(139, 92, 246, 0.06)` |
-| podcast | `#EC4899` | `rgba(236, 72, 153, 0.08)` | `rgba(236, 72, 153, 0.06)` |
-| gaming | `#6366F1` | `rgba(99, 102, 241, 0.08)` | `rgba(99, 102, 241, 0.06)` |
-| diy | `#D97706` | `rgba(217, 119, 6, 0.08)` | `rgba(217, 119, 6, 0.06)` |
-| standard | `#6B7280` | `rgba(107, 114, 128, 0.06)` | `rgba(107, 114, 128, 0.05)` |
-
-### Using Category Colors
-
-Apply category class to container, access variables in children:
+| Category | Accent | Category | Accent |
+|----------|--------|----------|--------|
+| cooking | `#FF6B35` | coding | `#22D3EE` |
+| travel | `#10B981` | reviews | `#F59E0B` |
+| fitness | `#EF4444` | education | `#8B5CF6` |
+| podcast | `#EC4899` | gaming | `#6366F1` |
+| diy | `#D97706` | standard | `#6B7280` |
 
 ```tsx
-// Apply category class
 <article className={`category-${persona.toLowerCase()}`}>
-  {/* Access via CSS variables */}
-  <div style={{
-    color: "var(--category-accent)",
-    backgroundColor: "var(--category-accent-soft)"
-  }}>
-    Category content
-  </div>
-
-  {/* Or via Tailwind arbitrary values */}
-  <span className="text-[var(--category-accent)]">
-    Accent text
-  </span>
+  <span className="text-[var(--category-accent)]">Accent text</span>
+  <div style={{ backgroundColor: "var(--category-accent-soft)" }}>Soft bg</div>
 </article>
 ```
 
-### Dark Mode Categories
-
-Surface colors become translucent in dark mode (`rgba(accent, 0.04)`), maintaining contrast.
+Dark mode surfaces become translucent (`rgba(accent, 0.04)`) automatically.
 
 ---
 
 ## Premium CSS Utilities
 
-Utility classes defined in `@layer components` in `index.css`. These provide the unified design language across all block components.
+Defined in `@layer components` in `index.css`. Apply these consistently across block components:
 
-### Block Surface Utilities
+**Surfaces**: `block-card` (rounded-xl, shadow, hover lift), `block-accent` (left-border accent), `block-code-container` (dark IDE), `block-inline` (no border, compact).
 
-| Class | Purpose | Details |
-|-------|---------|---------|
-| `block-card` | Standard card surface | `rounded-xl p-5`, subtle shadow, hover translateY(-1px) + shadow lift |
-| `block-accent` | Left-border accent variant | `rounded-lg border-l-[3px]`, muted background, used by callouts/quotes/definitions |
-| `block-code-container` | Dark IDE-style surface | Dark gradient background, subtle inset glow, `rounded-xl` |
-| `block-inline` | No border/bg, compact | `space-y-1.5`, used for lightweight inline content |
-| `block-card-header` | Card header with separator | Flex row with icon + label + optional action, bottom border |
-| `block-code-header` | Code block header bar | Semi-transparent bg, traffic light dots, filename label |
+**Animation**: `stagger-children` (cascading entrance on parent, up to 15 children), `hover-lift` (translateY -2px), `hover-scale` (1.02x hover, 0.98x active), `block-entrance` (single element entrance).
 
-### Animation & Motion Utilities
+**Effects**: `glass-surface` (backdrop-blur, translucent bg), `text-gradient-primary` (brand gradient text), `text-gradient-warm` (gold/amber for ratings), `fade-divider` / `fade-divider-vertical` (gradient separators), `glow-success` (green glow).
 
-| Class | Purpose | Details |
-|-------|---------|---------|
-| `stagger-children` | Cascading entrance animation | Add to parent; children get `fade-slide-up` with 50ms stagger delay (supports up to 15 children) |
-| `hover-lift` | Subtle lift on hover | `translateY(-2px)` + shadow increase on hover |
-| `hover-scale` | Scale on hover/active | `scale(1.02)` on hover, `scale(0.98)` on active |
-| `block-entrance` | Single element entrance | `fade-slide-up` animation, use with `animationDelay` for index-based stagger |
+**Dark mode glows** (via `:is(.dark)`): `badge-glow-success`, `badge-glow-warning`, `badge-glow-destructive`, `amount-badge-glow`, `timer-glow`, `day-number-glow`, `avatar-glow`. Also auto-applied to `block-card:hover`, `timeline-line`, `text-gradient-*`, etc.
 
-### Visual Effect Utilities
-
-| Class | Purpose | Details |
-|-------|---------|---------|
-| `glass-surface` | Frosted glass effect | `backdrop-blur(12px)`, translucent bg, subtle border. Dark mode adds glow |
-| `text-gradient-primary` | Gradient text using primary | Linear gradient from primary to lighter shifted hue |
-| `text-gradient-warm` | Warm gold/amber gradient | `oklch(75% 0.18 40)` to `oklch(82% 0.16 70)`, used for rating scores |
-| `fade-divider` | Gradient horizontal separator | Transparent edges, fades in from sides. Use between list items |
-| `fade-divider-vertical` | Gradient vertical separator | Same as fade-divider but vertical |
-| `glow-success` | Success color box-shadow glow | Green glow, stronger in dark mode |
-
-### Block-Specific Utilities
-
-| Class | Purpose | Used By |
-|-------|---------|---------|
-| `pro-con-bar` | Flexbox bar for pro/con ratio | ProConBlock |
-| `timeline-line` | Vertical gradient line | TimelineBlock, ItineraryBlock |
-| `timeline-line-animated` | Animated vertical line | TimelineBlock |
-| `timeline-dot` | Pulsing dot on first item | TimelineBlock |
-| `definition-item` | Gradient left border + spacing | DefinitionBlock |
-| `numbered-ghost` | Large faded number watermark | NumberedBlock |
-| `step-connector` | Arrow connector between steps | StepBlock |
-| `location-map-bg` | Topographic pattern overlay | LocationBlock |
-| `location-compass` | Decorative compass symbol | LocationBlock |
-| `quote-decorative-mark` | Large gradient quotation mark | QuoteRenderer |
-| `code-traffic-light` | Colored dot (10px circle) | BlockWrapper code variant |
-| `callout-gradient-tip` | Warning-soft gradient bg | CalloutBlock (tip) |
-| `callout-gradient-warning` | Destructive gradient bg | CalloutBlock (warning) |
-| `callout-gradient-note` | Info-soft gradient bg | CalloutBlock (note) |
-| `callout-gradient-security` | Destructive gradient bg | CalloutBlock (security) |
+**Block-specific**: `pro-con-bar`, `timeline-line`/`-animated`, `timeline-dot`, `definition-item`, `numbered-ghost`, `step-connector`, `location-map-bg`, `quote-decorative-mark`, `code-traffic-light`, `callout-gradient-*` (tip/warning/note/security).
 
 ---
 
-## Dark Mode Glow Utilities
+## Spacing, Typography, Border
 
-These classes apply glow effects **only in dark mode** (using `:is(.dark)` selector). They add `filter: drop-shadow()` for subtle luminance bloom on colored elements.
+**Spacing** (4px base): `1`=4px (icon gaps), `2`=8px (tight), `4`=16px (default padding), `5`=20px (card padding), `6`=24px (sections), `8`=32px, `12`=48px (page sections).
 
-| Class | Effect | Used By |
-|-------|--------|---------|
-| `badge-glow-success` | Green glow on badges | ExerciseBlock (beginner difficulty) |
-| `badge-glow-warning` | Yellow glow on badges | ExerciseBlock (intermediate difficulty) |
-| `badge-glow-destructive` | Red glow on badges | ExerciseBlock (advanced difficulty) |
-| `amount-badge-glow` | Primary glow on amount badges | IngredientBlock |
-| `timer-glow` | Large primary glow on timer digits | WorkoutTimerBlock |
-| `day-number-glow` | Primary glow on day numbers | ItineraryBlock |
-| `avatar-glow` | Subtle ring glow on avatars | GuestBlock |
+**Typography**: `text-xs`=12px (captions, block headers), `text-sm`=14px (secondary, block body), `text-base`=16px (body), `text-lg`-`text-4xl` for headings. Weights: `font-normal`(400), `font-medium`(500), `font-semibold`(600 headings), `font-bold`(700).
 
-Additional dark mode enhancements (applied automatically via `:is(.dark)` selectors):
-- `block-card:hover` — ambient bloom on card hover
-- `timeline-line` — line glow
-- `definition-item::before` — border glow
-- `quote-decorative-mark` — text glow
-- `numbered-ghost` — number bloom
-- `step-connector::after` — connector glow
-- `text-gradient-primary` / `text-gradient-warm` — text glow
-- `pro-con-bar` — bar glow
+**Border radius**: `rounded-sm` (-4px), `rounded-md` (-2px), `rounded-lg` (base 12px), `rounded-xl` (+4px, block cards), `rounded-full` (pills).
+
+**Border width**: `--border-width: 1px`. Use `calc(var(--border-width) * N)` for multiples.
 
 ---
 
-## Spacing System
+## Adding New Tokens
 
-Tailwind's default spacing scale (4px base):
+To add a semantic color: 1) Define in `:root` with OKLCH value, 2) Add `.dark` variant with higher lightness, 3) Register in `@theme inline { --color-name: var(--name); }`, 4) Use as `text-name` / `bg-name` in components.
 
-| Class | Value | Pixels | Use Case |
-|-------|-------|--------|----------|
-| `1` | `0.25rem` | 4px | Icon gaps |
-| `2` | `0.5rem` | 8px | Tight spacing |
-| `3` | `0.75rem` | 12px | |
-| `4` | `1rem` | 16px | Default padding |
-| `5` | `1.25rem` | 20px | Card padding (block standard) |
-| `6` | `1.5rem` | 24px | Section spacing |
-| `8` | `2rem` | 32px | Large gaps |
-| `10` | `2.5rem` | 40px | |
-| `12` | `3rem` | 48px | Page sections |
-
-**Usage:**
-```tsx
-<div className="p-4">       {/* padding: 16px */}
-<div className="gap-2">     {/* gap: 8px */}
-<div className="mt-6">      {/* margin-top: 24px */}
-<div className="space-y-4"> {/* vertical spacing: 16px */}
-```
+To add a category: Add `.category-name` with `--category-accent`, `--category-accent-soft`, `--category-surface`, plus `.dark .category-name` variant.
 
 ---
 
-## Typography
+## Edge Cases
 
-### Font Sizes
-
-| Class | Size | Line Height | Use |
-|-------|------|-------------|-----|
-| `text-xs` | 12px | 16px | Captions, badges, block headers |
-| `text-sm` | 14px | 20px | Secondary text, block body |
-| `text-base` | 16px | 24px | Body text |
-| `text-lg` | 18px | 28px | Lead paragraphs |
-| `text-xl` | 20px | 28px | H4 |
-| `text-2xl` | 24px | 32px | H3 |
-| `text-3xl` | 30px | 36px | H2 |
-| `text-4xl` | 36px | 40px | H1 |
-
-### Font Weights
-
-| Class | Weight | Use |
-|-------|--------|-----|
-| `font-normal` | 400 | Body text |
-| `font-medium` | 500 | Emphasis |
-| `font-semibold` | 600 | Headings, block headers |
-| `font-bold` | 700 | Strong emphasis |
+- **One-off spacing**: If a design truly needs non-scale spacing (e.g., `w-[137px]`), use arbitrary values only when it is a fixed external constraint (image size, API dimension). Document why.
+- **Dark mode opacity**: Use higher opacity in dark mode (`bg-primary/10 dark:bg-primary/20`) for equivalent visual weight.
+- **New token threshold**: Create a new token only when the value represents a semantic concept, is used in 3+ places, and needs dark mode adaptation. One-off values do not warrant tokens.
 
 ---
 
-## Border Width
+## Rules Summary
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--border-width` | `1px` | Default border width for all `border` utilities |
-
-Change `--border-width` in `:root` to uniformly adjust all border widths. Use `calc(var(--border-width) * N)` for multiples (e.g., thick left accents).
-
----
-
-## Border Radius
-
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--radius` | `0.75rem` | Default (12px) |
-| `rounded-sm` | `calc(var(--radius) - 4px)` | Small elements |
-| `rounded-md` | `calc(var(--radius) - 2px)` | Medium |
-| `rounded-lg` | `var(--radius)` | Cards, buttons |
-| `rounded-xl` | `calc(var(--radius) + 4px)` | Block cards (standard) |
-| `rounded-full` | `9999px` | Pills, avatars |
-
----
-
-## How to Extend
-
-### Adding a New Semantic Color
-
-1. Add to `:root` in `index.css`:
-```css
-:root {
-  --warning: oklch(75% 0.18 70);  /* Yellow-ish */
-}
-```
-
-2. Add dark mode variant:
-```css
-.dark {
-  --warning: oklch(80% 0.16 70);  /* Brighter for dark */
-}
-```
-
-3. Register with Tailwind in `@theme inline`:
-```css
-@theme inline {
-  --color-warning: var(--warning);
-}
-```
-
-4. Use in components:
-```tsx
-<span className="text-warning">Warning text</span>
-<div className="bg-warning/10">Warning background</div>
-```
-
-### Adding a New Category
-
-1. Add light mode class:
-```css
-.category-music {
-  --category-accent: #A855F7;
-  --category-accent-soft: rgba(168, 85, 247, 0.08);
-  --category-surface: #FAF5FF;
-}
-```
-
-2. Add dark mode variant:
-```css
-.dark .category-music {
-  --category-accent-soft: rgba(168, 85, 247, 0.06);
-  --category-surface: rgba(168, 85, 247, 0.04);
-}
-```
-
-3. Map persona in components that use categories
-
----
-
-## Dark Mode Implementation
-
-Theme switching via `.dark` class on `<html>`:
-
-```tsx
-// ThemeProvider handles class toggling
-<html className={theme === "dark" ? "dark" : ""}>
-
-// Styles automatically adapt
-<div className="bg-card text-card-foreground">
-  Automatically themed
-</div>
-```
-
-### Patterns
-
-```tsx
-// Automatic (preferred)
-<div className="bg-background text-foreground">
-  Uses CSS variables
-</div>
-
-// Manual dark variants (when needed)
-<div className="bg-white dark:bg-gray-900">
-  Explicit overrides
-</div>
-
-// Opacity adjustments
-<div className="bg-primary/10 dark:bg-primary/20">
-  More visible in dark mode
-</div>
-```
-
----
-
-## Anti-Patterns
-
-```css
-/* DON'T: Hardcoded colors */
-.button { background: #3b82f6; }
-
-/* DO: Semantic tokens */
-.button { background: var(--primary); }
-
-/* DON'T: Random spacing */
-.section { padding: 23px 17px; }
-
-/* DO: Scale values */
-.section { padding: 1.5rem 1rem; } /* 24px 16px */
-
-/* DON'T: Duplicate dark mode logic */
-.card { background: white; }
-.dark .card { background: #1f2937; }
-
-/* DO: Single variable reference */
-.card { background: var(--card); }
-
-/* DON'T: Use text-gray-* for dark mode glow effects */
-.badge { color: gray; }
-
-/* DO: Use :is(.dark) glow utilities for dark mode luminance */
-.badge { @apply badge-glow-success; }
-
-/* DON'T: Skip stagger animation on list containers */
-<ul>{items.map(...)}</ul>
-
-/* DO: Add stagger-children to list parents with >3 items */
-<ul className="stagger-children">{items.map(...)}</ul>
-
-/* DON'T: Use muted-foreground for callout icons */
-<Icon className="text-muted-foreground" />
-
-/* DO: Match icon color to callout accentColor */
-<Icon className="text-warning" />
-```
+All tokens live in `index.css` using OKLCH format with `:root` (light), `.dark` (dark), and `@theme inline` (Tailwind registration) — never use `tailwind.config.js`. Use semantic tokens (`bg-primary`, `text-muted-foreground`) for all colors; hardcoded hex/rgb values break theming. Stick to the 4px-base spacing scale and standard typography sizes. Category theming applies `.category-*` on containers and reads `--category-accent` variables in children. Premium utilities (`stagger-children`, `hover-lift`, `glass-surface`, `text-gradient-*`, `fade-divider`, dark mode `*-glow` classes) must be applied consistently in block components. New tokens require OKLCH values in both modes plus `@theme inline` registration.

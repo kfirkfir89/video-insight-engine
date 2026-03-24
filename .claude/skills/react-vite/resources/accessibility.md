@@ -1,730 +1,111 @@
 # Accessibility (React)
 
-ARIA, keyboard navigation, screen readers, and inclusive design patterns.
+ARIA, keyboard navigation, screen readers, reduced motion, and inclusive design.
+
+<rules>
+- ALWAYS use semantic HTML elements (header, nav, main, footer, article, section) — never div soup (causes screen readers to miss page structure)
+- ALWAYS add `aria-label` to icon-only buttons and interactive elements without visible text (causes unlabeled controls for screen readers)
+- ALWAYS trap focus inside modals and restore focus on close (causes focus escape to hidden content behind modal)
+- ALWAYS provide visible focus indicators — never `outline: none` without a replacement (causes keyboard users to lose track of focus)
+- ALWAYS wrap animations in `prefers-reduced-motion` — default to no motion, opt in when user allows (causes vestibular issues for sensitive users)
+- NEVER rely on color alone to convey meaning — use icons, text, or patterns alongside (causes information loss for color-blind users)
+- NEVER remove focus outlines without providing an alternative focus style (causes WCAG 2.1 AA violation)
+</rules>
 
 ---
 
 ## Semantic HTML
 
-### DO ✅
+ALWAYS use `<header>`, `<nav>`, `<main>`, `<footer>`, `<article>`. Add `aria-label` to nav elements when multiple navs exist. Include a skip-to-content link.
 
 ```tsx
-// Use semantic elements
-function PageLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <header role="banner">
-        <nav aria-label="Main navigation">
-          <ul>
-            <li><a href="/">Home</a></li>
-            <li><a href="/about">About</a></li>
-          </ul>
-        </nav>
-      </header>
-
-      <main id="main-content" role="main">
-        {children}
-      </main>
-
-      <footer role="contentinfo">
-        <p>© 2024 Company</p>
-      </footer>
-    </>
-  );
-}
-
-// Skip link for keyboard users
-function SkipLink() {
-  return (
-    <a
-      href="#main-content"
-      className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 
-                 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-black"
-    >
-      Skip to main content
-    </a>
-  );
-}
-```
-
-### DON'T ❌
-
-```tsx
-// Div soup - no semantic meaning
-<div className="header">
-  <div className="nav">
-    <div onClick={navigate}>Home</div>
-  </div>
-</div>
-<div className="content">{children}</div>
-<div className="footer">Footer</div>
+<a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4">
+  Skip to main content
+</a>
 ```
 
 ---
 
 ## ARIA Labels
 
-### DO ✅
+Use `aria-label` when no visible text exists. Use `aria-labelledby` to reference visible text. Use `aria-describedby` for supplementary hints. Use `aria-live="polite"` for dynamic content announcements.
 
 ```tsx
-// Button with icon only
-function IconButton({ icon, label, onClick }: IconButtonProps) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label={label}
-      className="p-2 rounded hover:bg-gray-100"
-    >
-      {icon}
-    </button>
-  );
-}
+<button aria-label="Delete item" onClick={handleDelete}>
+  <TrashIcon aria-hidden="true" />
+</button>
 
-// Usage
-<IconButton icon={<TrashIcon />} label="Delete item" onClick={handleDelete} />
-
-// Form with proper labeling
-function SearchForm() {
-  return (
-    <form role="search" aria-label="Site search">
-      <label htmlFor="search" className="sr-only">
-        Search
-      </label>
-      <input
-        id="search"
-        type="search"
-        placeholder="Search..."
-        aria-describedby="search-hint"
-      />
-      <p id="search-hint" className="sr-only">
-        Press Enter to search
-      </p>
-    </form>
-  );
-}
-
-// Live regions for dynamic content
-function NotificationArea({ message }: { message: string | null }) {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-      className="sr-only"
-    >
-      {message}
-    </div>
-  );
-}
-
-// Alert for important messages
-function Alert({ message }: { message: string }) {
-  return (
-    <div role="alert" className="bg-red-100 p-4 rounded">
-      {message}
-    </div>
-  );
-}
+<div role="status" aria-live="polite" className="sr-only">{statusMessage}</div>
 ```
 
 ---
 
 ## Keyboard Navigation
 
-### DO ✅
+ALWAYS support: Tab (next), Shift+Tab (previous), Enter/Space (activate), Escape (close), Arrow keys (navigate within widgets).
 
-```tsx
-// Focus management in modal
-function Modal({ isOpen, onClose, children }: ModalProps) {
-  const modalRef = useRef<HTMLDivElement>(null);
-  const previousFocus = useRef<HTMLElement | null>(null);
+Modal focus trap: save previous focus, focus modal on open, trap Tab cycling, restore focus on close.
 
-  useEffect(() => {
-    if (isOpen) {
-      // Save current focus
-      previousFocus.current = document.activeElement as HTMLElement;
-      // Focus modal
-      modalRef.current?.focus();
-    } else {
-      // Restore focus
-      previousFocus.current?.focus();
-    }
-  }, [isOpen]);
-
-  // Trap focus inside modal
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      onClose();
-      return;
-    }
-
-    if (e.key !== 'Tab') return;
-
-    const focusable = modalRef.current?.querySelectorAll(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-
-    if (!focusable?.length) return;
-
-    const first = focusable[0] as HTMLElement;
-    const last = focusable[focusable.length - 1] as HTMLElement;
-
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center"
-      onClick={onClose}
-    >
-      <div
-        ref={modalRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title"
-        tabIndex={-1}
-        onKeyDown={handleKeyDown}
-        onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-lg p-6 max-w-md w-full"
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
-// Roving tabindex for lists/menus
-function Menu({ items }: { items: MenuItem[] }) {
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setActiveIndex((i) => (i + 1) % items.length);
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setActiveIndex((i) => (i - 1 + items.length) % items.length);
-        break;
-      case 'Home':
-        e.preventDefault();
-        setActiveIndex(0);
-        break;
-      case 'End':
-        e.preventDefault();
-        setActiveIndex(items.length - 1);
-        break;
-    }
-  };
-
-  return (
-    <ul role="menu" onKeyDown={handleKeyDown}>
-      {items.map((item, index) => (
-        <li
-          key={item.id}
-          role="menuitem"
-          tabIndex={index === activeIndex ? 0 : -1}
-          ref={(el) => index === activeIndex && el?.focus()}
-        >
-          {item.label}
-        </li>
-      ))}
-    </ul>
-  );
-}
-```
+Roving tabindex for menus/lists: active item gets `tabIndex={0}`, others get `tabIndex={-1}`. Move active index with arrow keys.
 
 ---
 
 ## Form Accessibility
 
-### DO ✅
+ALWAYS pair labels with inputs via `htmlFor`/`id`. Mark required fields with `aria-required`. Link errors with `aria-describedby`. Show error summary with `role="alert"`.
 
 ```tsx
-function AccessibleForm() {
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  return (
-    <form aria-describedby="form-errors">
-      {/* Error summary */}
-      {Object.keys(errors).length > 0 && (
-        <div
-          id="form-errors"
-          role="alert"
-          className="bg-red-50 p-4 rounded mb-4"
-        >
-          <h2 className="font-medium text-red-800">Please fix the following:</h2>
-          <ul className="list-disc pl-5 mt-2">
-            {Object.entries(errors).map(([field, message]) => (
-              <li key={field}>
-                <a href={`#${field}`} className="text-red-600 underline">
-                  {message}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Field with error */}
-      <div className="mb-4">
-        <label htmlFor="email" className="block font-medium mb-1">
-          Email <span aria-hidden="true">*</span>
-          <span className="sr-only">(required)</span>
-        </label>
-        <input
-          id="email"
-          type="email"
-          aria-required="true"
-          aria-invalid={!!errors.email}
-          aria-describedby={errors.email ? 'email-error' : undefined}
-          className={`w-full border rounded px-3 py-2 ${
-            errors.email ? 'border-red-500' : 'border-gray-300'
-          }`}
-        />
-        {errors.email && (
-          <p id="email-error" className="text-red-600 text-sm mt-1" role="alert">
-            {errors.email}
-          </p>
-        )}
-      </div>
-
-      {/* Field with hint */}
-      <div className="mb-4">
-        <label htmlFor="password" className="block font-medium mb-1">
-          Password
-        </label>
-        <input
-          id="password"
-          type="password"
-          aria-describedby="password-hint"
-          className="w-full border rounded px-3 py-2"
-        />
-        <p id="password-hint" className="text-gray-500 text-sm mt-1">
-          Must be at least 8 characters
-        </p>
-      </div>
-
-      <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
-        Submit
-      </button>
-    </form>
-  );
-}
-```
-
----
-
-## Screen Reader Only
-
-### DO ✅
-
-```tsx
-// Tailwind sr-only class (or equivalent)
-// .sr-only {
-//   position: absolute;
-//   width: 1px;
-//   height: 1px;
-//   padding: 0;
-//   margin: -1px;
-//   overflow: hidden;
-//   clip: rect(0, 0, 0, 0);
-//   white-space: nowrap;
-//   border: 0;
-// }
-
-// Provide context for screen readers
-function ProductCard({ product }: { product: Product }) {
-  return (
-    <article aria-labelledby={`product-${product.id}`}>
-      <img src={product.image} alt={product.name} />
-      
-      <h2 id={`product-${product.id}`}>{product.name}</h2>
-      
-      <p>
-        <span className="sr-only">Price:</span>
-        ${product.price}
-      </p>
-      
-      <button aria-label={`Add ${product.name} to cart`}>
-        Add to cart
-      </button>
-    </article>
-  );
-}
-
-// Table with proper headers
-function DataTable({ data }: { data: Item[] }) {
-  return (
-    <table>
-      <caption className="sr-only">Product inventory</caption>
-      <thead>
-        <tr>
-          <th scope="col">Name</th>
-          <th scope="col">Price</th>
-          <th scope="col">Stock</th>
-          <th scope="col"><span className="sr-only">Actions</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        {data.map((item) => (
-          <tr key={item.id}>
-            <th scope="row">{item.name}</th>
-            <td>${item.price}</td>
-            <td>{item.stock}</td>
-            <td>
-              <button aria-label={`Edit ${item.name}`}>Edit</button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
+<label htmlFor="email">Email <span aria-hidden="true">*</span></label>
+<input id="email" aria-required="true" aria-invalid={!!error} aria-describedby={error ? 'email-error' : undefined} />
+{error && <p id="email-error" role="alert">{error}</p>}
 ```
 
 ---
 
 ## Focus Indicators
 
-### DO ✅
+ALWAYS provide visible focus styles. Use `focus-visible:` for keyboard-only indicators.
 
 ```tsx
-// Never remove focus outline without replacement
-// tailwind.config.js
-module.exports = {
-  theme: {
-    extend: {
-      // Custom focus ring
-    },
-  },
-};
-
-// Good focus styles
-function Button({ children, ...props }: ButtonProps) {
-  return (
-    <button
-      className="px-4 py-2 bg-blue-600 text-white rounded
-                 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-      {...props}
-    >
-      {children}
-    </button>
-  );
-}
-
-// Focus visible only for keyboard users
-function Link({ href, children }: LinkProps) {
-  return (
-    <a
-      href={href}
-      className="text-blue-600 underline
-                 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-    >
-      {children}
-    </a>
-  );
-}
+<button className="focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
+  Action
+</button>
 ```
-
-### DON'T ❌
-
-```tsx
-// Never do this!
-button:focus {
-  outline: none;
-}
-
-// No visible focus indicator
-<button className="focus:outline-none">{children}</button>
-```
-
----
-
-## Images & Media
-
-### DO ✅
-
-```tsx
-// Informative image - describe content
-<img
-  src="/chart.png"
-  alt="Sales chart showing 50% increase from January to March 2024"
-/>
-
-// Decorative image - empty alt
-<img src="/decorative-border.png" alt="" role="presentation" />
-
-// Complex image with description
-function ComplexChart({ data }: { data: ChartData }) {
-  return (
-    <figure>
-      <img
-        src={data.imageUrl}
-        alt="Quarterly sales comparison"
-        aria-describedby="chart-desc"
-      />
-      <figcaption id="chart-desc">
-        Q1: $100k, Q2: $150k, Q3: $200k, Q4: $180k. 
-        Overall growth of 80% year-over-year.
-      </figcaption>
-    </figure>
-  );
-}
-
-// Video with captions
-function VideoPlayer({ src, captions }: VideoProps) {
-  return (
-    <video controls>
-      <source src={src} type="video/mp4" />
-      <track
-        kind="captions"
-        src={captions}
-        srcLang="en"
-        label="English"
-        default
-      />
-      <p>
-        Your browser doesn't support video.
-        <a href={src}>Download the video</a>.
-      </p>
-    </video>
-  );
-}
-```
-
----
-
-## Loading States
-
-### DO ✅
-
-```tsx
-function LoadingButton({ isLoading, children, ...props }: LoadingButtonProps) {
-  return (
-    <button
-      disabled={isLoading}
-      aria-busy={isLoading}
-      aria-disabled={isLoading}
-      {...props}
-    >
-      {isLoading ? (
-        <>
-          <Spinner aria-hidden="true" />
-          <span className="sr-only">Loading...</span>
-        </>
-      ) : (
-        children
-      )}
-    </button>
-  );
-}
-
-function DataLoader({ isLoading, children }: DataLoaderProps) {
-  return (
-    <div aria-busy={isLoading} aria-live="polite">
-      {isLoading ? (
-        <div role="status">
-          <Spinner aria-hidden="true" />
-          <span className="sr-only">Loading data...</span>
-        </div>
-      ) : (
-        children
-      )}
-    </div>
-  );
-}
-```
-
----
-
-## Color & Contrast
-
-### DO ✅
-
-```tsx
-// Don't rely on color alone
-function StatusBadge({ status }: { status: 'success' | 'error' | 'warning' }) {
-  const config = {
-    success: { icon: <CheckIcon />, label: 'Success', className: 'bg-green-100 text-green-800' },
-    error: { icon: <XIcon />, label: 'Error', className: 'bg-red-100 text-red-800' },
-    warning: { icon: <AlertIcon />, label: 'Warning', className: 'bg-yellow-100 text-yellow-800' },
-  };
-
-  const { icon, label, className } = config[status];
-
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded ${className}`}>
-      {icon}
-      {label}
-    </span>
-  );
-}
-
-// Form errors - not just red text
-function FieldError({ message }: { message: string }) {
-  return (
-    <p className="flex items-center gap-1 text-red-600 text-sm mt-1" role="alert">
-      <ErrorIcon aria-hidden="true" className="w-4 h-4" />
-      {message}
-    </p>
-  );
-}
-```
-
----
-
-## Testing Accessibility
-
-### DO ✅
-
-```tsx
-// Using jest-axe
-import { axe, toHaveNoViolations } from 'jest-axe';
-
-expect.extend(toHaveNoViolations);
-
-test('Button has no accessibility violations', async () => {
-  const { container } = render(<Button>Click me</Button>);
-  const results = await axe(container);
-  expect(results).toHaveNoViolations();
-});
-
-// Testing keyboard navigation
-test('Modal can be closed with Escape', async () => {
-  const onClose = vi.fn();
-  render(<Modal isOpen onClose={onClose}><p>Content</p></Modal>);
-  
-  await userEvent.keyboard('{Escape}');
-  
-  expect(onClose).toHaveBeenCalled();
-});
-
-// Testing screen reader text
-test('Icon button has accessible name', () => {
-  render(<IconButton icon={<TrashIcon />} label="Delete item" onClick={() => {}} />);
-  
-  expect(screen.getByRole('button', { name: 'Delete item' })).toBeInTheDocument();
-});
-```
-
----
-
-## Quick Reference
-
-| Attribute | Purpose |
-|-----------|---------|
-| `aria-label` | Label when no visible text |
-| `aria-labelledby` | Reference visible label |
-| `aria-describedby` | Additional description |
-| `aria-live` | Announce dynamic changes |
-| `aria-hidden` | Hide from screen readers |
-| `aria-expanded` | Toggle state |
-| `aria-current` | Current item in set |
-| `role` | Override semantic role |
-
-| Key | Expected Behavior |
-|-----|-------------------|
-| Tab | Move to next focusable |
-| Shift+Tab | Move to previous |
-| Enter/Space | Activate button |
-| Escape | Close modal/menu |
-| Arrow keys | Navigate within widget |
-
-| WCAG Level | Requirements |
-|------------|--------------|
-| A | Minimum - keyboard, alt text |
-| AA | Standard - contrast, resize |
-| AAA | Enhanced - sign language |
 
 ---
 
 ## Reduced Motion
 
-Users with vestibular disorders can enable `prefers-reduced-motion`. Respect this preference for all animations.
-
-### DO ✅
-
-```css
-/* Default: no motion. Opt-in when user allows it */
-.animated-element {
-  opacity: 1;
-  transform: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .animated-element {
-    animation: fade-slide-up 0.3s ease-out;
-  }
-}
-```
+ALWAYS default to no animation. Add motion only inside `prefers-reduced-motion: no-preference`. Use Tailwind's `motion-safe:` / `motion-reduce:` variants.
 
 ```tsx
-// Hook to check motion preference
-function usePrefersReducedMotion() {
-  const [prefersReduced, setPrefersReduced] = useState(false);
-
-  useEffect(() => {
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setPrefersReduced(query.matches);
-
-    const handler = (e: MediaQueryListEvent) => setPrefersReduced(e.matches);
-    query.addEventListener('change', handler);
-    return () => query.removeEventListener('change', handler);
-  }, []);
-
-  return prefersReduced;
-}
-
-// Usage — skip animation when reduced motion preferred
-function FadeIn({ children }: { children: React.ReactNode }) {
-  const prefersReduced = usePrefersReducedMotion();
-
-  return (
-    <div className={prefersReduced ? '' : 'animate-fade-in'}>
-      {children}
-    </div>
-  );
-}
+<div className="motion-safe:animate-bounce motion-reduce:animate-none">Content</div>
 ```
 
-```tsx
-// Tailwind: use motion-safe / motion-reduce variants
-<div className="motion-safe:animate-bounce motion-reduce:animate-none">
-  Bouncing element (only when motion is allowed)
-</div>
+Short opacity/transform transitions (<200ms) are generally acceptable even with reduced motion.
 
-<div className="transition-transform motion-safe:hover:scale-105">
-  Hover scale (respects motion preference)
-</div>
-```
+---
 
-### DON'T ❌
+## Images and Media
 
-```css
-/* Animations with no reduced-motion fallback */
-.hero {
-  animation: slide-in 0.5s ease-out; /* Always animates — bad */
-}
+Informative images: descriptive `alt` text. Decorative images: `alt=""` with `role="presentation"`. Complex charts: use `aria-describedby` with a text description. Videos: always include captions track.
 
-/* Disabling animation but causing layout jump */
-@media (prefers-reduced-motion: reduce) {
-  * { animation: none !important; } /* Nuclear option — breaks transitions too */
-}
-```
+---
 
-### Key Rules
+## Testing Accessibility
 
-- **Default to no animation.** Add motion only inside `@media (prefers-reduced-motion: no-preference)`
-- **Transitions are usually fine** — short `opacity` and `transform` transitions (< 200ms) are generally acceptable
-- **Avoid autoplay video/parallax** without motion preference check
-- **Test by enabling** "Reduce motion" in OS accessibility settings
+Use jest-axe for automated violation detection. Test keyboard navigation with `userEvent.tab()` and `userEvent.keyboard('{Escape}')`. Verify screen reader text with `getByRole` queries.
+
+---
+
+## Edge Cases
+
+- **Color contrast:** Minimum 4.5:1 for normal text, 3:1 for large text (WCAG AA). Status indicators must use icons/text alongside color.
+- **Touch targets:** Minimum 44x44px on interactive elements. Achieve with padding on the button, not by enlarging content.
+- **Autoplay content:** Never autoplay video or animated content without checking `prefers-reduced-motion`. Provide pause controls.
+
+---
+
+## Rules Summary
+
+Use semantic HTML elements for page structure, aria-label for icon-only controls, and aria-live for dynamic announcements. Modals trap focus and restore it on close. Every interactive element has a visible focus indicator (focus-visible ring). Forms link labels, errors, and hints with htmlFor and aria-describedby. Animations default to off and opt in via prefers-reduced-motion: no-preference. Color never conveys meaning alone. Touch targets are 44px minimum. Test with jest-axe and keyboard-only navigation.

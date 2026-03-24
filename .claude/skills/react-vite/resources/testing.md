@@ -2,202 +2,71 @@
 
 Vitest, React Testing Library, and testing best practices.
 
+<rules>
+- ALWAYS use `userEvent` over `fireEvent` — userEvent simulates real browser behavior (causes missed bugs with synthetic events)
+- ALWAYS query by accessible role first (`getByRole`), then label, then text — never by class name or CSS selector (causes brittle tests coupled to implementation)
+- ALWAYS use the Arrange-Act-Assert pattern with one primary assertion per test (causes debugging difficulty with multi-concern tests)
+- ALWAYS use MSW for API mocking in integration tests — never mock fetch directly (causes unrealistic test behavior)
+- ALWAYS create a `renderWithProviders` helper wrapping QueryClient + Router for component tests (causes boilerplate and missing context errors)
+- NEVER test implementation details (internal state, class names, component structure) — test behavior (causes tests that break on refactoring)
+- NEVER snapshot entire pages — only stable small components (causes meaningless diff noise)
+</rules>
+
 ---
 
 ## Test Structure
 
-### DO ✅
+ALWAYS follow Arrange-Act-Assert. One logical assertion per test.
 
 ```tsx
-// Arrange-Act-Assert pattern
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-
 describe('Counter', () => {
   it('increments count when button is clicked', async () => {
-    // Arrange
     const user = userEvent.setup();
     render(<Counter initialCount={0} />);
-
-    // Act
     await user.click(screen.getByRole('button', { name: /increment/i }));
-
-    // Assert
     expect(screen.getByText('Count: 1')).toBeInTheDocument();
   });
-
-  it('calls onChange when count changes', async () => {
-    // Arrange
-    const user = userEvent.setup();
-    const handleChange = vi.fn();
-    render(<Counter onChange={handleChange} />);
-
-    // Act
-    await user.click(screen.getByRole('button', { name: /increment/i }));
-
-    // Assert
-    expect(handleChange).toHaveBeenCalledWith(1);
-  });
-});
-```
-
-### DON'T ❌
-
-```tsx
-// No structure, multiple concerns
-test('counter works', async () => {
-  render(<Counter />);
-  fireEvent.click(screen.getByText('+')); // Use userEvent instead
-  expect(screen.getByText('1')).toBeInTheDocument();
-  fireEvent.click(screen.getByText('+'));
-  fireEvent.click(screen.getByText('-'));
-  expect(screen.getByText('1')).toBeInTheDocument();
-  // Testing too many things!
 });
 ```
 
 ---
 
-## Query Priorities
+## Query Priority
 
-### DO ✅
+1. `getByRole` — accessible queries (best)
+2. `getByLabelText`, `getByPlaceholderText`, `getByText`
+3. `getByAltText`, `getByTitle`
+4. `getByTestId` — last resort only
 
-```tsx
-// Priority order (most to least preferred)
-
-// 1. Accessible queries (best)
-screen.getByRole('button', { name: /submit/i });
-screen.getByLabelText(/email/i);
-screen.getByPlaceholderText(/search/i);
-screen.getByText(/welcome/i);
-
-// 2. Semantic queries
-screen.getByAltText(/profile/i);
-screen.getByTitle(/close/i);
-
-// 3. Test IDs (last resort)
-screen.getByTestId('custom-element');
-```
-
-### DON'T ❌
-
-```tsx
-// Implementation details
-screen.getByClassName('btn-primary');
-container.querySelector('.submit-button');
-```
-
----
-
-## User Interactions
-
-### DO ✅
-
-```tsx
-import userEvent from '@testing-library/user-event';
-
-it('submits form with user data', async () => {
-  const user = userEvent.setup();
-  const handleSubmit = vi.fn();
-  
-  render(<LoginForm onSubmit={handleSubmit} />);
-
-  // Type in fields
-  await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-  await user.type(screen.getByLabelText(/password/i), 'password123');
-
-  // Submit form
-  await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-  expect(handleSubmit).toHaveBeenCalledWith({
-    email: 'test@example.com',
-    password: 'password123',
-  });
-});
-
-// Other interactions
-await user.hover(element);
-await user.unhover(element);
-await user.selectOptions(select, 'option-value');
-await user.clear(input);
-await user.tab();
-```
-
-### DON'T ❌
-
-```tsx
-// fireEvent doesn't simulate real user behavior
-fireEvent.change(input, { target: { value: 'text' } });
-fireEvent.click(button);
-```
+NEVER use `getByClassName`, `querySelector`, or any selector tied to styling.
 
 ---
 
 ## Async Testing
 
-### DO ✅
+Use `findBy` (combines getBy + waitFor) for elements that appear asynchronously. Use `waitFor` for assertions on async state changes.
 
 ```tsx
-import { render, screen, waitFor } from '@testing-library/react';
-
-it('loads and displays user data', async () => {
+it('loads user data', async () => {
   render(<UserProfile userId="123" />);
-
-  // Wait for loading to finish
   expect(screen.getByText(/loading/i)).toBeInTheDocument();
-
-  // Wait for data to appear
-  await waitFor(() => {
-    expect(screen.getByText('John Doe')).toBeInTheDocument();
-  });
-
-  // Or use findBy (combines getBy + waitFor)
   const userName = await screen.findByText('John Doe');
   expect(userName).toBeInTheDocument();
-});
-
-it('handles error state', async () => {
-  server.use(
-    http.get('/api/user/:id', () => {
-      return HttpResponse.error();
-    })
-  );
-
-  render(<UserProfile userId="123" />);
-
-  await screen.findByText(/error loading user/i);
 });
 ```
 
 ---
 
-## Mocking
+## Mocking with MSW
 
-### DO ✅
+ALWAYS prefer MSW over manual fetch mocking for realistic network behavior.
 
 ```tsx
-// Mock modules
-vi.mock('./api/users', () => ({
-  getUser: vi.fn(),
-}));
-
-// Mock in test
-import { getUser } from './api/users';
-
-beforeEach(() => {
-  vi.mocked(getUser).mockResolvedValue({ id: '1', name: 'John' });
-});
-
-// Mock fetch with MSW (recommended)
-import { http, HttpResponse } from 'msw';
-import { setupServer } from 'msw/node';
-
 const server = setupServer(
   http.get('/api/users/:id', ({ params }) => {
     return HttpResponse.json({ id: params.id, name: 'John Doe' });
   })
 );
-
 beforeAll(() => server.listen());
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
@@ -207,187 +76,41 @@ afterAll(() => server.close());
 
 ## Testing Hooks
 
-### DO ✅
+Use `renderHook` with a wrapper providing required context (QueryClient, Router).
 
 ```tsx
-import { renderHook, act } from '@testing-library/react';
-
-describe('useCounter', () => {
-  it('increments counter', () => {
-    const { result } = renderHook(() => useCounter(0));
-
-    act(() => {
-      result.current.increment();
-    });
-
-    expect(result.current.count).toBe(1);
-  });
-
-  it('accepts initial value', () => {
-    const { result } = renderHook(() => useCounter(10));
-    expect(result.current.count).toBe(10);
-  });
-});
-
-// Hook with dependencies
-describe('useUser', () => {
-  it('fetches user data', async () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <QueryClientProvider client={new QueryClient()}>
-        {children}
-      </QueryClientProvider>
-    );
-
-    const { result } = renderHook(() => useUser('123'), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true);
-    });
-
-    expect(result.current.data).toEqual({ id: '123', name: 'John' });
-  });
-});
-```
-
----
-
-## Component Testing
-
-### DO ✅
-
-```tsx
-// Test behavior, not implementation
-describe('TodoList', () => {
-  const mockTodos = [
-    { id: '1', text: 'Learn React', completed: false },
-    { id: '2', text: 'Write tests', completed: true },
-  ];
-
-  it('renders all todos', () => {
-    render(<TodoList todos={mockTodos} />);
-
-    expect(screen.getByText('Learn React')).toBeInTheDocument();
-    expect(screen.getByText('Write tests')).toBeInTheDocument();
-  });
-
-  it('shows completed todos with strikethrough', () => {
-    render(<TodoList todos={mockTodos} />);
-
-    const completedTodo = screen.getByText('Write tests');
-    expect(completedTodo).toHaveClass('line-through');
-  });
-
-  it('calls onToggle when checkbox clicked', async () => {
-    const user = userEvent.setup();
-    const handleToggle = vi.fn();
-
-    render(<TodoList todos={mockTodos} onToggle={handleToggle} />);
-
-    await user.click(screen.getAllByRole('checkbox')[0]);
-
-    expect(handleToggle).toHaveBeenCalledWith('1');
-  });
-
-  it('shows empty state when no todos', () => {
-    render(<TodoList todos={[]} />);
-
-    expect(screen.getByText(/no todos yet/i)).toBeInTheDocument();
-  });
-});
+const { result } = renderHook(() => useCounter(0));
+act(() => { result.current.increment(); });
+expect(result.current.count).toBe(1);
 ```
 
 ---
 
 ## Test Utilities
 
-### DO ✅
+ALWAYS create a custom render that wraps providers.
 
 ```tsx
-// Custom render with providers
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-
-function createTestQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-    },
-  });
-}
-
-function renderWithProviders(
-  ui: React.ReactElement,
-  options?: RenderOptions
-) {
-  const queryClient = createTestQueryClient();
-
+function renderWithProviders(ui: React.ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        {ui}
-      </BrowserRouter>
-    </QueryClientProvider>,
-    options
+      <BrowserRouter>{ui}</BrowserRouter>
+    </QueryClientProvider>
   );
 }
-
-// Usage
-it('renders with providers', () => {
-  renderWithProviders(<MyComponent />);
-});
 ```
 
 ---
 
-## Snapshot Testing
+## Edge Cases
 
-### DO ✅
-
-```tsx
-// Use sparingly for stable UI
-it('matches snapshot', () => {
-  const { container } = render(<Button variant="primary">Click me</Button>);
-  expect(container).toMatchSnapshot();
-});
-
-// Inline snapshots for small outputs
-it('renders correct classes', () => {
-  const { container } = render(<Button variant="primary" />);
-  expect(container.firstChild).toMatchInlineSnapshot(`
-    <button class="btn btn-primary">
-      Click me
-    </button>
-  `);
-});
-```
-
-### DON'T ❌
-
-```tsx
-// Snapshot entire pages
-expect(container).toMatchSnapshot(); // Brittle, hard to review
-```
+- **Testing loading states:** Assert the loading indicator FIRST, then `await findBy` for the loaded content. This catches regressions where loading is skipped.
+- **Testing error states:** Use `server.use()` to override a handler for a single test. This isolates error path testing.
+- **Snapshot testing:** Use inline snapshots for small stable outputs only. Never snapshot dynamic content or whole pages.
 
 ---
 
-## Quick Reference
+## Rules Summary
 
-| Query Type | When to Use |
-|------------|-------------|
-| getBy | Element exists, sync |
-| queryBy | Element may not exist |
-| findBy | Element appears async |
-| getAllBy | Multiple elements |
-
-| Testing Type | Focus |
-|--------------|-------|
-| Unit | Individual functions, hooks |
-| Component | Single component behavior |
-| Integration | Multiple components together |
-| E2E | Full user flows (Playwright) |
-
-| Best Practice | Why |
-|---------------|-----|
-| Query by role | Accessible, user-centric |
-| Use userEvent | Realistic interactions |
-| Test behavior | Refactor-proof |
-| Mock at boundaries | Isolate from externals |
+Test behavior, not implementation. Query by accessible role, interact with userEvent, assert one thing per test. Mock APIs at the network level with MSW, wrap components in a renderWithProviders helper, and use renderHook for hook testing. Async elements use findBy, error paths use per-test server overrides, and snapshots are reserved for small stable components only.
