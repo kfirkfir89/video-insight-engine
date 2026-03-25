@@ -81,7 +81,7 @@ Starts Docker Compose and waits for all services to be healthy.
 - vie-mongodb (Port 27017)
 - vie-api (Port 3000)
 - vie-summarizer (Port 8000)
-- vie-explainer (Port 8001)
+- vie-assistant (Port 8001)
 - vie-web (Port 5173)
 
 **Timeout:** 120 seconds
@@ -96,7 +96,7 @@ Verifies all services respond correctly:
 | vie-summarizer | /health  | `{"status":"healthy"}`       |
 | vie-mongodb    | ping     | `{"ok":1}`                   |
 | vie-web        | /        | HTML with React mount point  |
-| vie-explainer  | -        | Container running (MCP/stdio) |
+| vie-assistant  | /health  | `{"status":"healthy"}`       |
 
 ### Phase 3: Auth Flow
 
@@ -128,13 +128,13 @@ Tests video submission and processing:
 
 ### Phase 5: Explain Flow (SKIPPED)
 
-**Status:** Blocked - MCP integration not implemented
+**Status:** Blocked - assistant integration not fully implemented
 
 The explain routes return stub responses:
 
 ```typescript
 // api/src/routes/explain.routes.ts
-return { expansion: '# Coming soon\n\nMCP integration pending.' };
+return { expansion: '# Coming soon\n\nAssistant integration pending.' };
 ```
 
 This phase documents the skip reason and verifies routes are accessible.
@@ -249,7 +249,7 @@ TEST_PASSWORD="TestPass123!"
 
 ### Explain Flow Not Testable
 
-The MCP integration between vie-api and vie-explainer is not implemented. The explain routes return placeholder responses.
+The assistant chat integration between vie-api and vie-assistant is not fully tested. The explain routes return placeholder responses.
 
 **Blocking file:** `api/src/routes/explain.routes.ts`
 
@@ -374,4 +374,4 @@ Integration is complete when:
 1. **Production prep:** Review SECURITY.md, configure proper secrets
 2. **Monitoring:** Add logging, metrics, alerts
 3. **CI/CD:** Set up automated testing pipeline
-4. **MCP Integration:** Implement explain routes to enable Phase 5
+4. **Assistant Integration:** Implement chat routes to enable Phase 5

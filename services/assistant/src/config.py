@@ -1,0 +1,111 @@
+"""Configuration settings for vie-assistant service."""
+
+from __future__ import annotations
+
+import logging
+
+from pydantic import Field
+from pydantic_settings import BaseSettings
+
+_DEFAULT_INTERNAL_SECRET = "dev-internal-secret-change-me"
+
+# Model mapping for each provider
+MODEL_MAP = {
+    "anthropic": {
+        "default": "anthropic/claude-sonnet-4-5-20250929",
+        "fast": "anthropic/claude-3-5-haiku-20241022",
+    },
+    "openai": {
+        "default": "openai/gpt-4o",
+        "fast": "openai/gpt-4o-mini",
+    },
+    "gemini": {
+        "default": "gemini/gemini-2.5-flash",
+        "fast": "gemini/gemini-2.5-flash-lite",
+    },
+}
+
+
+def get_model(provider: str = "anthropic", tier: str = "default") -> str:
+    """Get model name for provider and tier."""
+    provider_models = MODEL_MAP.get(provider, MODEL_MAP["anthropic"])
+    return provider_models.get(tier, provider_models["default"])
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables."""
+
+    # Server
+    ASSISTANT_PORT: int = 8001
+
+    # MongoDB
+    MONGODB_URI: str = "mongodb://vie-mongodb:27017/video-insight-engine"
+
+    # Qdrant
+    QDRANT_URL: str = "http://vie-qdrant:6333"
+    QDRANT_COLLECTION: str = "transcript_chunks"
+
+    # Internal auth
+    INTERNAL_SECRET: str = Field(default=_DEFAULT_INTERNAL_SECRET, repr=False)
+
+    # LLM Provider Configuration
+    LLM_PROVIDER: str = "anthropic"
+    LLM_FAST_PROVIDER: str | None = None
+    LLM_FALLBACK_PROVIDER: str | None = None
+    LLM_MODEL: str | None = None
+    LLM_FAST_MODEL: str | None = None
+
+    # Provider API Keys
+    ANTHROPIC_API_KEY: str | None = None
+    OPENAI_API_KEY: str | None = None
+    GEMINI_API_KEY: str | None = None
+
+    # LLM limits
+    LLM_TIMEOUT_SECONDS: float = 60.0
+    LLM_NUM_RETRIES: int = 2
+
+    # Assistant limits
+    MAX_CONTEXT_CHUNKS: int = 8
+    MAX_CONVERSATION_TURNS: int = 20
+
+    # Logging
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "console"
+
+    @property
+    def llm_model(self) -> str:
+        """Get the configured LLM model with provider prefix."""
+        if self.LLM_MODEL:
+            return self.LLM_MODEL
+        return get_model(self.LLM_PROVIDER, "default")
+
+    @property
+    def llm_fast_model(self) -> str:
+        """Get the configured fast LLM model with provider prefix."""
+        if self.LLM_FAST_MODEL:
+            return self.LLM_FAST_MODEL
+        provider = self.LLM_FAST_PROVIDER or self.LLM_PROVIDER
+        return get_model(provider, "fast")
+
+    @property
+    def llm_fallback_models(self) -> list[str] | None:
+        """Get fallback model chain if configured."""
+        if self.LLM_FALLBACK_PROVIDER:
+            return [get_model(self.LLM_FALLBACK_PROVIDER, "default")]
+        return None
+
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
+
+settings = Settings()
+
+
+def validate_internal_secret() -> None:
+    """Warn if INTERNAL_SECRET is using the default value.
+
+    Called from application lifespan (not import time) to avoid breaking test imports.
+    """
+    if settings.INTERNAL_SECRET == _DEFAULT_INTERNAL_SECRET:
+        logging.getLogger(__name__).warning(
+            "INTERNAL_SECRET is using the default value — set it via environment variable in production!"
+        )

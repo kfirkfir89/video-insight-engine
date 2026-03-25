@@ -10,7 +10,7 @@ Use this guide when your task involves:
 
 - Frontend + Backend changes (new API endpoint + UI)
 - vie-api + vie-summarizer (HTTP calls, status updates)
-- vie-api + vie-explainer (MCP tool calls)
+- vie-api + vie-assistant (HTTP + SSE)
 - Any change affecting multiple services
 
 ---
@@ -68,12 +68,12 @@ None (empty body)
 ```
 
 **Where to document:**
-- All API contracts → `docs/API-REFERENCE.md` (REST, WebSocket, MCP, SSE)
+- All API contracts → `docs/API-REFERENCE.md` (REST, WebSocket, SSE)
 
 ### Step 2: Build Backend First
 
 ```
-vie-api                    vie-summarizer/explainer
+vie-api                    vie-summarizer/assistant
   │                              │
   ├── Add route                  │
   ├── Add service method         │
@@ -135,24 +135,24 @@ vie-web
 - `services/summarizer/src/main.py`
 - `docs/API-REFERENCE.md`
 
-### vie-api ↔ vie-explainer (Sync via MCP)
+### vie-api ↔ vie-assistant (HTTP + SSE)
 
 ```
-┌─────────┐    MCP call    ┌──────────────┐
-│ vie-api │───────────────▶│ vie-explainer│
+┌─────────┐   HTTP POST    ┌──────────────┐
+│ vie-api │───────────────▶│ vie-assistant │
 └─────────┘◀───────────────└──────────────┘
-            MCP response
+            SSE stream
 ```
 
 **Pattern:**
-1. vie-api is MCP client
-2. vie-explainer is MCP server with tools
-3. Calls are synchronous (request/response)
+1. vie-api proxies chat requests to vie-assistant via HTTP
+2. vie-assistant streams responses back via SSE
+3. Chat history is passed per-request (no server-side session)
 4. Results may be cached in MongoDB
 
 **Key files:**
-- `api/src/plugins/mcp.ts`
-- `services/explainer/src/server.py`
+- `api/src/services/assistant-client.ts`
+- `services/assistant/src/main.py`
 - `docs/API-REFERENCE.md`
 
 ---
@@ -176,7 +176,7 @@ export interface VideoSummary {
 import { VideoSummary } from '@vie/types';
 ```
 
-### Python (vie-summarizer, vie-explainer)
+### Python (vie-summarizer, vie-assistant)
 
 Define Pydantic models, generate JSON schema if needed:
 
@@ -251,16 +251,16 @@ All services must use the same error codes (from `docs/ERROR-HANDLING.md`):
 |------|------|---------|
 | `NO_TRANSCRIPT` | 422 | vie-summarizer detects, vie-api returns |
 | `VIDEO_TOO_LONG` | 422 | vie-summarizer detects, vie-api returns |
-| `LLM_ERROR` | 500 | vie-summarizer/explainer detects |
+| `LLM_ERROR` | 500 | vie-summarizer/assistant detects |
 
 ### Error Translation
 
 Each service translates errors at its boundary:
 
 ```typescript
-// vie-api: Translate MCP errors to HTTP
+// vie-api: Translate assistant errors to HTTP
 try {
-  const result = await mcp.explainAuto(...);
+  const result = await assistantClient.chat(...);
   return result;
 } catch (error) {
   if (error.code === 'NOT_FOUND') {
@@ -299,20 +299,20 @@ tests
 ### Integration Test Example
 
 ```typescript
-// Test vie-api with mocked MCP
-describe('POST /api/explain/:id/section/:sectionId', () => {
-  it('returns expansion from MCP', async () => {
-    // Mock MCP client
-    mockMcp.explainAuto.mockResolvedValue('# Expansion content');
+// Test vie-api with mocked assistant client
+describe('POST /api/videos/:id/chat', () => {
+  it('returns streamed response from assistant', async () => {
+    // Mock assistant client
+    mockAssistant.chat.mockResolvedValue('The main ingredients are...');
 
     const response = await app.inject({
-      method: 'GET',
-      url: '/api/explain/123/section/456',
+      method: 'POST',
+      url: '/api/videos/123/chat',
       headers: { Authorization: `Bearer ${token}` },
+      payload: { message: 'What are the ingredients?' },
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().expansion).toContain('# Expansion');
   });
 });
 ```
@@ -327,7 +327,7 @@ describe('POST /api/explain/:id/section/:sectionId', () => {
 # Startup order matters!
 1. vie-mongodb      # Database first
 2. vie-summarizer   # Service can start
-3. vie-explainer    # MCP server ready
+3. vie-assistant    # Assistant service ready
 4. vie-api          # API connects to all
 5. vie-web          # Frontend last
 ```
@@ -340,10 +340,10 @@ Each service should verify its dependencies:
 // vie-api health check
 fastify.get('/health', async () => {
   const mongoOk = await checkMongo();
-  const mcpOk = await checkMcp();
+  const assistantOk = await checkAssistant();
 
-  if (!mongoOk || !mcpOk) {
-    return reply.code(503).send({ status: 'unhealthy', mongo: mongoOk, mcp: mcpOk });
+  if (!mongoOk || !assistantOk) {
+    return reply.code(503).send({ status: 'unhealthy', mongo: mongoOk, assistant: assistantOk });
   }
 
   return { status: 'healthy' };
@@ -360,13 +360,13 @@ fastify.get('/health', async () => {
 |---------------|---------------|---------------|
 | vie-api route + vie-web component | backend-node, react-vite | This doc |
 | vie-api + vie-summarizer | backend-node, backend-python | This doc |
-| vie-api + vie-explainer | backend-node, backend-python | This doc |
+| vie-api + vie-assistant | backend-node, backend-python | This doc |
 | Full feature (all services) | All three + This doc | - |
 
 ### Key Documentation
 
 | Need | Document |
 |------|----------|
-| API contracts (REST, WebSocket, MCP, SSE) | [docs/API-REFERENCE.md](./API-REFERENCE.md) |
+| API contracts (REST, WebSocket, SSE) | [docs/API-REFERENCE.md](./API-REFERENCE.md) |
 | Error codes | [docs/ERROR-HANDLING.md](./ERROR-HANDLING.md) |
 | Data models | [docs/DATA-MODELS.md](./DATA-MODELS.md) |

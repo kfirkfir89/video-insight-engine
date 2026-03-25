@@ -92,29 +92,31 @@ services:
         limits:
           memory: 1G
 
-  vie-explainer:
+  vie-assistant:
     build:
-      context: ./services/explainer
-      dockerfile: Dockerfile.prod
-    container_name: vie-explainer
+      context: .
+      dockerfile: services/assistant/Dockerfile
+    container_name: vie-assistant
     restart: always
     environment:
       PYTHONUNBUFFERED: 1
-      PORT: 8001
+      ASSISTANT_PORT: 8001
       MONGODB_URI: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASS}@vie-mongodb:27017/video-insight-engine?authSource=admin
+      QDRANT_URL: http://vie-qdrant:6333
+      QDRANT_COLLECTION: transcript_chunks
       # Multi-provider LLM config
       LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
       LLM_FAST_PROVIDER: ${LLM_FAST_PROVIDER:-}
       LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
-      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-4096}
-      LLM_FAST_MAX_TOKENS: ${LLM_FAST_MAX_TOKENS:-2048}
       # Provider API keys
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       LOG_LEVEL: info
+      MAX_CONTEXT_CHUNKS: 8
+      MAX_CONVERSATION_TURNS: 20
     networks:
       - vie-network
     depends_on:
@@ -123,7 +125,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 2G
 
   vie-frontend:
     build:

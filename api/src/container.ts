@@ -15,7 +15,7 @@ import { FolderService } from './services/folder.service.js';
 import { MemorizeService } from './services/memorize.service.js';
 import { PlaylistService } from './services/playlist.service.js';
 import { SummarizerClient } from './services/summarizer-client.js';
-import { ExplainerClient } from './services/explainer-client.js';
+import { AssistantClient } from './services/assistant-client.js';
 import { ShareService } from './services/share.service.js';
 import { OgImageService } from './services/og-image.service.js';
 import { PaymentService } from './services/payment.service.js';
@@ -36,7 +36,7 @@ export interface Container {
   memorizeService: MemorizeService;
   playlistService: PlaylistService;
   summarizerClient: SummarizerClient;
-  explainerClient: ExplainerClient;
+  assistantClient: AssistantClient;
   shareService: ShareService;
   ogImageService: OgImageService;
   paymentService: PaymentService;
@@ -53,7 +53,7 @@ export function createContainer(db: Db, logger: FastifyBaseLogger): Container {
 
   // Create external clients
   const summarizerClient = new SummarizerClient(logger);
-  const explainerClient = new ExplainerClient(logger);
+  const assistantClient = new AssistantClient(logger);
 
   // Create services with injected dependencies
   const authService = new AuthService(userRepository, logger);
@@ -81,7 +81,7 @@ export function createContainer(db: Db, logger: FastifyBaseLogger): Container {
     memorizeService,
     playlistService,
     summarizerClient,
-    explainerClient,
+    assistantClient,
     shareService,
     ogImageService,
     paymentService,

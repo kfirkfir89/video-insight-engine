@@ -13,8 +13,8 @@ const envSchema = z.object({
   // Additional CORS origins (comma-separated, optional)
   // Combined with FRONTEND_URL to form the full list of allowed origins
   CORS_ADDITIONAL_ORIGINS: z.string().default(''),
-  // Explainer service URL (HTTP API)
-  EXPLAINER_URL: z.string().default('http://vie-explainer:8001'),
+  // Assistant service URL (HTTP API + SSE)
+  ASSISTANT_URL: z.string().default('http://vie-assistant:8001'),
   // Shared secret for internal service-to-service auth
   INTERNAL_SECRET: z.string().min(16).default('dev-internal-secret-change-me'),
   // Configurable rate limits
