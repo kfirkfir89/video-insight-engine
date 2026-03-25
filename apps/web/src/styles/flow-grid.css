@@ -73,8 +73,16 @@
    SECTION & UTILITY STYLES
    ═══════════════════════════════════════════════════ */
 
-/* Block entrance animation — gentle fade-slide */
-.block-entrance {
+/* Entrance animation — gentle fade-slide */
+.entrance-fade {
   opacity: 0;
   animation: var(--animate-fade-slide-up);
+}
+
+/* Reduce-motion: skip animation, show immediately */
+@media (prefers-reduced-motion: reduce) {
+  .entrance-fade {
+    opacity: 1;
+    animation: none;
+  }
 }

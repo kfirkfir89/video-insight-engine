@@ -1,13 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
-// Mock ChatBlockRenderer used by RAGChatPanel for assistant message blocks
-vi.mock('../ChatBlockRenderer', () => ({
-  ChatBlockRenderer: ({ block }: { block: { type: string } }) => (
-    <div data-testid="chat-block">{block.type}</div>
-  ),
-}));
-
 import { RAGChatPanel } from '../RAGChatPanel';
 
 // Mock scrollIntoView as jsdom doesn't support it

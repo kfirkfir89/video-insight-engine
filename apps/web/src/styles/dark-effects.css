@@ -3,14 +3,6 @@
    Glow, bloom, and luminance for dark theme
    ═══════════════════════════════════════════════════ */
 
-/* Card hover bloom in dark mode */
-:is([data-theme="dark"]) .block-card:hover {
-  box-shadow:
-    0 2px 4px oklch(0% 0 0 / 0.2),
-    0 6px 16px oklch(0% 0 0 / 0.18),
-    0 0 1px oklch(from var(--primary) l c h / 0.12);
-}
-
 /* Timeline line glow */
 :is([data-theme="dark"]) .timeline-line {
   filter: drop-shadow(0 0 4px oklch(from var(--primary) l c h / 0.25));

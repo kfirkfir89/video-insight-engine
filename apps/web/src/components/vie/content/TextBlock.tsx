@@ -39,19 +39,16 @@ export const TextBlock = memo(function TextBlock({
   return (
     <div
       className={cn(
-        'block-container block-accent',
-        intent && textBlockVariants({ intent }),
+        textBlockVariants({ intent }),
         className,
       )}
     >
-      <div className="flex items-start gap-1.5">
-        {icon && (
-          <span className={cn('mt-0.5 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:shrink-0', intent ? ACCENT_TEXT[intent] : 'text-muted-foreground')} aria-hidden="true">
-            {icon}
-          </span>
-        )}
-        <p className="text-xs text-muted-foreground">{children}</p>
-      </div>
+      {icon && (
+        <span className={cn('mt-0.5 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:shrink-0', intent ? ACCENT_TEXT[intent] : 'text-muted-foreground')} aria-hidden="true">
+          {icon}
+        </span>
+      )}
+      <p className="text-xs text-muted-foreground">{children}</p>
     </div>
   );
 });
