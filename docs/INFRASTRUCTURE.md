@@ -11,7 +11,7 @@ Docker setup, networking, and environment configuration.
 | vie-web        | ./apps/web              | 5173       | React frontend     |
 | vie-api        | ./api                   | 3000       | Node.js backend    |
 | vie-summarizer | ./services/summarizer   | 8000       | Python service     |
-| vie-explainer  | ./services/explainer    | 8001       | Python MCP server  |
+| vie-assistant  | ./services/assistant    | 8001       | Python RAG + chat  |
 | vie-admin      | ./services/admin        | 8002       | Admin dashboard    |
 | vie-mongodb    | mongo:7                 | 27017      | Database           |
 | vie-redis      | redis:7-alpine          | 6379       | Response cache     |
@@ -81,7 +81,7 @@ services:
       PORT: 3000
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
       SUMMARIZER_URL: http://vie-summarizer:8000
-      EXPLAINER_URL: http://vie-explainer:8001
+      ASSISTANT_URL: http://vie-assistant:8001
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-change-in-production}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
@@ -116,11 +116,11 @@ services:
       vie-mongodb:
         condition: service_healthy
 
-  vie-explainer:
+  vie-assistant:
     build:
       context: .
-      dockerfile: services/explainer/Dockerfile
-    container_name: vie-explainer
+      dockerfile: services/assistant/Dockerfile
+    container_name: vie-assistant
     restart: unless-stopped
     ports:
       - "8001:8001"
@@ -129,6 +129,8 @@ services:
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
       LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      QDRANT_HOST: vie-qdrant
+      QDRANT_PORT: 6333
     networks:
       - vie-network
     depends_on:
@@ -149,7 +151,7 @@ services:
       ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key-change-me}
       VIE_API_URL: http://vie-api:3000
       VIE_SUMMARIZER_URL: http://vie-summarizer:8000
-      VIE_EXPLAINER_URL: http://vie-explainer:8001
+      VIE_ASSISTANT_URL: http://vie-assistant:8001
     networks:
       - vie-network
     depends_on:
@@ -270,7 +272,7 @@ ADMIN_API_KEY=change-this-admin-key
 │  ├── vie-redis:6379       (Response Cache)                           │
 │  ├── vie-qdrant:6333/6334 (Vector DB)                                │
 │  ├── vie-summarizer:8000  (Pipeline)                                 │
-│  └── vie-explainer:8001   (MCP Server)                               │
+│  └── vie-assistant:8001   (RAG Chat)                                 │
 │                                                                       │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -285,7 +287,7 @@ vie-redis ───────┤                                          │
 vie-qdrant ──────┤                                          │
                  │                                          │
                  ▼                                          ▼
-           vie-api ◄──────────────────────────────── vie-explainer
+           vie-api ◄──────────────────────────────── vie-assistant
                  │
                  ├──────────► vie-web
                  ├──────────► vie-admin
@@ -297,7 +299,7 @@ vie-qdrant ──────┤                                          │
 Startup order:
 
 1. vie-mongodb, vie-redis, vie-qdrant (infrastructure, parallel)
-2. vie-explainer (needs MongoDB)
+2. vie-assistant (needs MongoDB, Qdrant)
 3. vie-api (needs MongoDB)
 4. vie-summarizer (needs MongoDB, Redis, Qdrant)
 5. vie-admin (needs MongoDB)
@@ -364,16 +366,12 @@ db.systemExpansionCache.createIndex(
 // User data indexes
 db.users.createIndex({ email: 1 }, { unique: true })
 
-db.folders.createIndex({ userId: 1, type: 1, path: 1 })
+db.folders.createIndex({ userId: 1, path: 1 })
 db.folders.createIndex({ userId: 1, parentId: 1 })
 
 db.userVideos.createIndex({ userId: 1, videoSummaryId: 1 }, { unique: true })
 db.userVideos.createIndex({ userId: 1, folderId: 1 })
 
-db.memorizedItems.createIndex({ userId: 1, folderId: 1 })
-db.memorizedItems.createIndex({ userId: 1, "source.videoSummaryId": 1 })
-
-db.userChats.createIndex({ userId: 1, memorizedItemId: 1 })
 ```
 
 ---
@@ -390,7 +388,7 @@ db.userChats.createIndex({ userId: 1, memorizedItemId: 1 })
 
 - vie-summarizer: Can run multiple instances (load balanced)
 - vie-api: Can run multiple instances (add load balancer)
-- vie-explainer: One instance per vie-api (MCP connection)
+- vie-assistant: Can run multiple instances (stateless HTTP)
 
 ### Monitoring
 
@@ -409,7 +407,7 @@ db.userChats.createIndex({ userId: 1, memorizedItemId: 1 })
 | vie-web (SPA)   | Vercel   | Static React app, edge CDN             |
 | vie-api         | Railway  | Node.js backend, all API routes        |
 | vie-summarizer  | Railway  | Python summarizer service              |
-| vie-explainer   | Railway  | Python MCP server                      |
+| vie-assistant   | Railway  | Python RAG + chat service              |
 | vie-admin       | Railway  | Admin panel (Python + React)           |
 | vie-mongodb     | Railway  | MongoDB 7 database                     |
 
@@ -434,7 +432,7 @@ Browser ──► Vercel Edge ──► /s/:slug rewrite ──► Railway API (
 ### CI/CD
 
 - **GitHub Actions** runs tests on push to `main` / `dev-*` branches and on PRs to `main`
-- Four parallel jobs: api, web, summarizer, explainer
+- Four parallel jobs: api, web, summarizer, assistant
 - All jobs must pass before merge (fail-fast)
 - See `.github/workflows/ci.yml` for configuration
 
@@ -460,14 +458,13 @@ This section documents the MVP implementation phases that were followed to build
 | 2     | Summarizer      | Done |
 | 3     | API             | Done |
 | 4     | Frontend Core   | Done |
-| 5     | EXPLAINER MCP   | Done |
-| 6     | Memorize + Chat | Done |
+| 5     | Assistant       | Done |
 
 ### Phase 1: Infrastructure
 
 **Goal:** All containers running and communicating.
 
-- Created project structure with api/, web/, summarizer/, explainer/
+- Created project structure with api/, web/, summarizer/, assistant/
 - Set up Docker Compose with all services
 - Implemented security middleware:
   - Rate limiting (10/day per user for videos, 10/min per IP for auth)
@@ -497,8 +494,8 @@ This section documents the MVP implementation phases that were followed to build
 - Node.js Fastify service with TypeScript
 - MongoDB connection and JWT authentication
 - WebSocket for real-time updates
-- Auth, folders, videos, explain, memorize routes
-- MCP client connection to explainer
+- Auth, folders, videos, explain routes
+- HTTP client connection to assistant
 
 ### Phase 4: Frontend Core
 
@@ -512,25 +509,14 @@ This section documents the MVP implementation phases that were followed to build
 - Video submission with SSE streaming
 - Real-time status updates
 
-### Phase 5: EXPLAINER MCP
+### Phase 5: Assistant Service
 
-**Goal:** MCP server with explain_auto and explain_chat tools.
+**Goal:** RAG-powered video chat with semantic search.
 
-- Python MCP SDK server
-- explain_auto: cached documentation generation
-- explain_chat: interactive conversations
-- System expansion cache for shared results
-- API integration as MCP client
-
-### Phase 6: Memorize + Chat
-
-**Goal:** Complete memorize workflow with chat.
-
-- Memorize API routes (CRUD)
-- Chat with streaming responses
-- Memorized items grid and detail view
-- Notes editing with auto-save
-- Chat history with continuation
+- Python FastAPI service with Qdrant vector DB
+- Video-scoped RAG chat with transcript embeddings
+- Cached expansion generation for sections and concepts
+- HTTP API integration with vie-api
 
 ### Success Criteria (All Achieved)
 
@@ -539,10 +525,8 @@ This section documents the MVP implementation phases that were followed to build
 - [x] View cached/new summary with progressive loading
 - [x] Browse videos in folders
 - [x] Explain sections and concepts
-- [x] Memorize any content
-- [x] Chat about memorized items
+- [x] Chat about videos with RAG
 - [x] Organize with folders
-- [x] Add notes to items
 
 ### Phase 7+: Beyond MVP (Ongoing)
 

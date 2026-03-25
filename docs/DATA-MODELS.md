@@ -20,8 +20,6 @@ MongoDB collections and schemas.
 | `users` | Accounts |
 | `folders` | Organization hierarchy |
 | `userVideos` | User's video library |
-| `memorizedItems` | User's knowledge collection (legacy -- no UI, backend routes exist) |
-| `userChats` | Conversations (legacy -- migrating to RAG chat) |
 
 ---
 
@@ -324,8 +322,7 @@ One entry per chapter/concept expansion. Shared across all users.
 
   // Preferences
   preferences: {
-    defaultSummarizedFolder: ObjectId | null,
-    defaultMemorizedFolder: ObjectId | null,
+    defaultFolder: ObjectId | null,
     theme: "light" | "dark" | "system"
   },
 
@@ -358,8 +355,7 @@ Materialized path pattern for hierarchy.
   userId: ObjectId,
   
   name: string,
-  type: "summarized" | "memorized",   // Which tab
-  
+
   // Hierarchy
   parentId: ObjectId | null,          // null = root
   path: string,                       // "/AI Learning/LLMs"
@@ -377,7 +373,7 @@ Materialized path pattern for hierarchy.
 
 **Indexes:**
 ```javascript
-{ userId: 1, type: 1, path: 1 }
+{ userId: 1, path: 1 }
 { userId: 1, parentId: 1 }
 ```
 
@@ -433,99 +429,6 @@ User's video library. References shared cache.
 
 ---
 
-## memorizedItems
-
-> **Status: Legacy/Deprecated** -- Backend routes exist but no UI. Will be removed in future cleanup.
-
-User's personal knowledge collection.
-
-```javascript
-{
-  _id: ObjectId,
-  userId: ObjectId,
-  
-  title: string,
-  folderId: ObjectId | null,
-  
-  // What was memorized
-  sourceType: "video_chapter" | "video_concept" | "system_expansion",
-
-  // Source reference
-  source: {
-    videoSummaryId: ObjectId,
-    youtubeId: string,
-    videoTitle: string,
-    videoThumbnail: string,
-    youtubeUrl: string,
-
-    // For chapters
-    startSeconds?: number,
-    endSeconds?: number,
-    chapterIds?: string[],
-    blockIds?: string[],        // Specific content blocks referenced
-
-    // For expansions
-    expansionId?: ObjectId,
-
-    // Cached content (independent)
-    content: {
-      chapters?: [{ id, timestamp, title, content }],  // content blocks only
-      concept?: { name, definition },
-      expansion?: string
-    }
-  },
-  
-  // User additions
-  notes: string | null,
-  tags: string[],
-  
-  createdAt: Date,
-  updatedAt: Date
-}
-```
-
-**Indexes:**
-```javascript
-{ userId: 1, folderId: 1 }
-{ userId: 1, "source.videoSummaryId": 1 }
-{ userId: 1, tags: 1 }
-{ userId: 1, createdAt: -1 }
-```
-
----
-
-## userChats
-
-Conversations about memorized items.
-
-```javascript
-{
-  _id: ObjectId,
-  userId: ObjectId,
-  
-  memorizedItemId: ObjectId,
-  
-  messages: [{
-    role: "user" | "assistant",
-    content: string,
-    createdAt: Date
-  }],
-  
-  title: string | null,
-  
-  createdAt: Date,
-  updatedAt: Date
-}
-```
-
-**Indexes:**
-```javascript
-{ userId: 1, memorizedItemId: 1 }
-{ userId: 1, updatedAt: -1 }
-```
-
----
-
 # Relationships
 
 ```
@@ -535,20 +438,18 @@ Conversations about memorized items.
 │   videoSummaryCache ──────────▶ systemExpansionCache         │
 │   (one per video)              (one per chapter/concept)     │
 └──────────────────────────────────────────────────────────────┘
-              │                            │
-              │ references                 │ references
-              ▼                            ▼
+              │
+              │ references
+              ▼
 ┌──────────────────────────────────────────────────────────────┐
 │                       USER DATA                               │
 │                                                               │
-│   userVideos ──────────────▶ memorizedItems ◀── userChats    │
-│   (library)                  (legacy)           (legacy)     │
-│       │                           │                          │
-│       └───────────────────────────┘                          │
-│                    │                                         │
-│                    ▼                                         │
-│                folders                                       │
-│          (organization)                                      │
+│   userVideos ─────────────────────────────────────────────   │
+│   (library)                                                  │
+│       │                                                      │
+│       ▼                                                      │
+│   folders                                                    │
+│   (organization)                                             │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -560,14 +461,6 @@ Conversations about memorized items.
 
 | Action | Result |
 |--------|--------|
-| User removes video from library | userVideos deleted. Cache stays. Memorized items stay. |
-| User deletes memorized item | Item deleted. Cache unaffected. |
+| User removes video from library | userVideos deleted. Cache stays. |
 | User deletes folder | Move contents to "Unfiled" or delete with contents |
 | User account deleted | Delete all user data. Caches stay (shared). |
-
-## Why Independence?
-
-Memorized items copy content at creation time. They work without the source:
-- User can clean up video library freely
-- Memorized items are the "extracted value"
-- Source reference is just for "where did I learn this?" context

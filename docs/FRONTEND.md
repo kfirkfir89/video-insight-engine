@@ -707,7 +707,7 @@ Chat interface for RAG-powered conversations.
 
 ## MarkdownContent Component
 
-Shared markdown renderer used across all explainer and chat surfaces. Uses `react-markdown` with `@tailwindcss/typography` prose classes.
+Shared markdown renderer used across all chat surfaces. Uses `react-markdown` with `@tailwindcss/typography` prose classes.
 
 **Location:** `src/components/ui/markdown-content.tsx`
 
@@ -749,12 +749,12 @@ This activates `prose prose-sm dark:prose-invert` classes used by MarkdownConten
 ## Vercel AI SDK for Streaming
 
 ```tsx
-import { useExplainerChat } from "@/hooks/use-streaming-chat";
+import { useVideoChat } from "@/hooks/use-streaming-chat";
 import { StreamingText } from "@/components/ui/streaming-text";
 
-function ChatComponent({ memorizedItemId }) {
+function ChatComponent({ videoSummaryId }) {
   const { messages, input, handleInputChange, handleSubmit, isLoading } =
-    useExplainerChat({ memorizedItemId });
+    useVideoChat({ videoSummaryId });
 
   return (
     <div>
