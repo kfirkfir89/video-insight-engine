@@ -190,6 +190,37 @@ def _validate_domain_requirements(tabs: list[dict], primary_tag: str) -> None:
 _UNTITLED_RE = re.compile(r'<?\s*Untitled\s+Chapter\s+(\d+)\s*>?', re.IGNORECASE)
 _NO_COUNT_COMPONENTS = frozenset({"overview", "verdict", "budget"})
 
+# Maps component → required list key. If the list is empty after assembly, drop the tab.
+_COMPONENT_REQUIRED_LISTS: dict[str, str] = {
+    "code_explorer": "snippets",
+    "timeline": "entries",
+    "exercise_tracker": "exercises",
+    "quiz": "questions",
+    "scenario": "scenarios",
+    "spot_explorer": "spots",
+    "clip_player": "clips",
+    "info_grid": "items",
+    "checklist": "items",
+    "step_player": "steps",
+    "flash_deck": "cards",
+    "budget": "breakdown",
+}
+
+
+def _validate_assembled_props(component: str, props: dict) -> bool:
+    """Validate assembled props — return False if the tab should be dropped."""
+    required_key = _COMPONENT_REQUIRED_LISTS.get(component)
+    if required_key is None:
+        return True  # No known required list — let it pass
+    data_list = props.get(required_key)
+    if not isinstance(data_list, list) or len(data_list) == 0:
+        logger.warning(
+            "Validation: component=%r has empty required list %r — dropping tab",
+            component, required_key,
+        )
+        return False
+    return True
+
 _COUNT_KEYS: dict[str, str] = {
     "spot_explorer": "spots",
     "checklist": "items",
@@ -427,6 +458,13 @@ def assemble_response(
             logger.warning(
                 "TAB DROPPED: id=%r, component=%r, dataSource=%r — assembler raised %s: %s",
                 tab_id, component, data_source, type(e).__name__, e,
+            )
+            props = None
+
+        if props is not None and not _validate_assembled_props(component, props):
+            logger.warning(
+                "TAB DROPPED: id=%r, component=%r — failed validation",
+                tab_id, component,
             )
             props = None
 
