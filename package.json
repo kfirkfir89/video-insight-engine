@@ -16,7 +16,7 @@
     "docker:build:api": "docker-compose build vie-api",
     "docker:build:web": "docker-compose build vie-web",
     "docker:build:summarizer": "docker-compose build vie-summarizer",
-    "docker:build:explainer": "docker-compose build vie-explainer",
+    "docker:build:assistant": "docker-compose build vie-assistant",
     "docker:rebuild": "docker-compose build --no-cache",
     "docker:rebuild:api": "docker-compose build --no-cache vie-api",
     "docker:rebuild:web": "docker-compose build --no-cache vie-web",

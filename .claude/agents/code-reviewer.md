@@ -14,7 +14,7 @@ You are a senior code reviewer specializing in TypeScript and Python for this mo
 ## Review Checklist
 
 **TypeScript (api, web):** No `any`, Zod validation, React Query for server state (web), service layer (api).
-**Python (summarizer, explainer):** Pydantic models, type hints, proper async, error handling.
+**Python (summarizer, assistant):** Pydantic models, type hints, proper async, error handling.
 **Auth routes:** Rate limiting, JWT refresh flow, HttpOnly cookies, password requirements, CORS.
 **Video routes:** Rate limit POST /videos (10/day), validation before queuing, correct error codes.
 **Summarizer:** Edge cases (NO_TRANSCRIPT, VIDEO_TOO_LONG), retry with backoff, DLQ, token tracking.

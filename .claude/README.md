@@ -169,7 +169,7 @@ Claude MUST:
 | Skill                                              | Triggers                               | Resources                           |
 | -------------------------------------------------- | -------------------------------------- | ----------------------------------- |
 | [backend-node](./skills/backend-node/SKILL.md)     | API, route, fastify, endpoint          | fastify.md, services.md, mongodb.md |
-| [backend-python](./skills/backend-python/SKILL.md) | Python, FastAPI, summarizer, explainer | fastapi.md, services.md             |
+| [backend-python](./skills/backend-python/SKILL.md) | Python, FastAPI, summarizer, assistant | fastapi.md, services.md             |
 | [design-system](./skills/design-system/SKILL.md)   | Icon, token, design, theme             | components.md, tokens.md, icons.md  |
 | [react-vite](./skills/react-vite/SKILL.md)         | Component, React, frontend, UI         | react.md, state.md, forms.md        |
 

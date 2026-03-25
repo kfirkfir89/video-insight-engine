@@ -6,7 +6,7 @@ Provides:
 - Context binding for structured logs
 - Health check log filter for uvicorn access logs
 
-Used by both summarizer and explainer services.
+Used by both summarizer and assistant services.
 """
 
 import logging

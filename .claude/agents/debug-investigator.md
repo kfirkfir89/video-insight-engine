@@ -25,7 +25,7 @@ You are a debugging specialist who systematically identifies root causes and fix
 **vie-api:** JWT expiry/secret, MongoDB connection/URI, route registration order.
 **vie-web:** Props/conditionals, CORS/network, React Query devtools.
 **vie-summarizer:** RabbitMQ connection, API key/rate limits, video availability.
-**vie-explainer:** stdio transport, tool registration, MongoDB queries.
+**vie-assistant:** RAG chat, tool registration, Qdrant vector search.
 
 ## 3-Fix Rule Red Flags
 

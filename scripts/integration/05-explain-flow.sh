@@ -27,7 +27,7 @@ echo "       -> { response: 'Chat coming soon', chatId: 'stub' }"
 echo ""
 echo "Blocking issue:"
 echo "  - MCP client needs to be implemented in vie-api"
-echo "  - vie-api needs to connect to vie-explainer MCP server"
+echo "  - vie-api needs to connect to vie-assistant service"
 echo "  - This is a separate implementation task"
 echo ""
 

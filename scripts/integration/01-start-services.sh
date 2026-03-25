@@ -87,13 +87,13 @@ if [ $ELAPSED -ge $STARTUP_TIMEOUT ]; then
   exit 1
 fi
 
-# Wait for vie-explainer (container running, port open)
-echo -n "  vie-explainer: "
+# Wait for vie-assistant (container running, port open)
+echo -n "  vie-assistant: "
 ELAPSED=0
 while [ $ELAPSED -lt $STARTUP_TIMEOUT ]; do
-  if docker-compose ps vie-explainer 2>/dev/null | grep -q "Up"; then
+  if docker-compose ps vie-assistant 2>/dev/null | grep -q "Up"; then
     # Check if port is listening
-    if nc -z localhost $EXPLAINER_PORT 2>/dev/null || docker-compose exec -T vie-explainer echo "ok" &>/dev/null; then
+    if nc -z localhost $ASSISTANT_PORT 2>/dev/null || docker-compose exec -T vie-assistant echo "ok" &>/dev/null; then
       echo -e "${GREEN}running${NC} (${ELAPSED}s)"
       break
     fi
