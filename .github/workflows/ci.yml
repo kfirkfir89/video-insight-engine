@@ -32,6 +32,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
         working-directory: .
 
+      - name: Build workspace packages
+        run: pnpm --filter @vie/types --filter @vie/shared build
+        working-directory: .
+
       - run: pnpm test
 
   web:
