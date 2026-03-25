@@ -5,4 +5,4 @@ process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing-only';
 process.env.JWT_REFRESH_SECRET = 'test-jwt-refresh-secret-key-for-testing-only';
 process.env.NODE_ENV = 'test';
 process.env.SUMMARIZER_URL = 'http://localhost:8000';
-process.env.EXPLAINER_URL = 'http://localhost:8001';
+process.env.ASSISTANT_URL = 'http://localhost:8001';

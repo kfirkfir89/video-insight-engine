@@ -29,7 +29,7 @@ const expansionStatusSchema = z.object({
 const statusEventSchema = z.union([videoStatusSchema, expansionStatusSchema]);
 
 export async function internalRoutes(fastify: FastifyInstance) {
-  // POST /internal/status - Receive status updates from summarizer/explainer
+  // POST /internal/status - Receive status updates from summarizer/agent
   fastify.post<{
     Body: z.infer<typeof statusEventSchema>;
   }>('/status', async (req, reply) => {

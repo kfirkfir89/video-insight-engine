@@ -82,7 +82,7 @@ services:
       PORT: 3000
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
       SUMMARIZER_URL: http://vie-summarizer:8000
-      EXPLAINER_URL: http://vie-explainer:8001
+      ASSISTANT_URL: http://vie-assistant:8001
       JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-change-in-production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
@@ -165,29 +165,29 @@ services:
       retries: 5
       start_period: 15s
 
-  vie-explainer:
+  vie-assistant:
     build:
       context: .
-      dockerfile: services/explainer/Dockerfile
-    image: vie-explainer:latest
-    container_name: vie-explainer
+      dockerfile: services/assistant/Dockerfile
+    image: vie-assistant:latest
+    container_name: vie-assistant
     restart: unless-stopped
     ports:
       - "8001:8001"
     volumes:
-      - ./services/explainer/src:/app/src:ro
+      - ./services/assistant/src:/app/src:ro
     environment:
       PYTHONUNBUFFERED: 1
-      PORT: 8001
+      ASSISTANT_PORT: 8001
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
+      QDRANT_URL: http://vie-qdrant:6333
+      QDRANT_COLLECTION: transcript_chunks
       # Multi-provider LLM configuration
-      LLM_PROVIDER: ${EXPLAINER_LLM_PROVIDER:-gemini}
+      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
       LLM_FAST_PROVIDER: ${LLM_FAST_PROVIDER:-}
       LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
-      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-4096}
-      LLM_FAST_MAX_TOKENS: ${LLM_FAST_MAX_TOKENS:-2048}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60.0}
       LLM_NUM_RETRIES: ${LLM_NUM_RETRIES:-2}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -195,10 +195,14 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
+      MAX_CONTEXT_CHUNKS: 8
+      MAX_CONVERSATION_TURNS: 20
     networks:
       - vie-network
     depends_on:
       vie-mongodb:
+        condition: service_healthy
+      vie-qdrant:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
@@ -224,7 +228,7 @@ services:
       ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key-change-me}
       VIE_API_URL: http://vie-api:3000
       VIE_SUMMARIZER_URL: http://vie-summarizer:8000
-      VIE_EXPLAINER_URL: http://vie-explainer:8001
+      VIE_ASSISTANT_URL: http://vie-assistant:8001
       ALERT_COST_THRESHOLD_USD: ${ALERT_COST_THRESHOLD_USD:-0.50}
     networks:
       - vie-network

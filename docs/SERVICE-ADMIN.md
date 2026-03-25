@@ -30,7 +30,7 @@ LLM usage monitoring, system health dashboard, and cost alerting service.
 │  Polls /health endpoints:   │
 │  • vie-api :3000            │
 │  • vie-summarizer :8000     │
-│  • vie-explainer :8001      │
+│  • vie-assistant :8001      │
 └─────────────────────────────┘
 ```
 
@@ -47,7 +47,7 @@ Python package providing automatic LLM call tracking via LiteLLM callbacks.
 
 Registered in:
 - `services/summarizer/src/main.py` (sync mode)
-- `services/explainer/src/server.py` (async mode)
+- `services/assistant/src/server.py` (async mode)
 
 ## API Endpoints
 
@@ -122,7 +122,7 @@ React SPA served as static files from the same container.
 
 | Collection | TTL | Written By | Read By |
 |-----------|-----|-----------|---------|
-| `llm_usage` | 90 days | Callbacks (summarizer, explainer) | Admin |
+| `llm_usage` | 90 days | Callbacks (summarizer, assistant) | Admin |
 | `llm_usage_daily` | None | Admin aggregator | Admin |
 | `llm_alerts` | None | Callbacks + Admin | Admin |
 | `health_history` | 30 days | Admin health poller | Admin |
@@ -134,7 +134,7 @@ ADMIN_API_KEY=<required>
 MONGODB_URI=mongodb://vie-mongodb:27017/video-insight-engine
 VIE_API_URL=http://vie-api:3000
 VIE_SUMMARIZER_URL=http://vie-summarizer:8000
-VIE_EXPLAINER_URL=http://vie-explainer:8001
+VIE_ASSISTANT_URL=http://vie-assistant:8001
 ALERT_COST_THRESHOLD_USD=0.50
 ```
 

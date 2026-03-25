@@ -4,23 +4,21 @@ import { buildApp } from './app.js';
 describe('buildApp', () => {
   describe('with container override', () => {
     it('should allow partial container override for testing', async () => {
-      const mockExplainerClient = {
-        explainAuto: vi.fn().mockResolvedValue({ expansion: 'test' }),
-        explainChat: vi.fn().mockResolvedValue({ chatId: '123', response: 'test' }),
-        explainChatStream: vi.fn().mockResolvedValue({ body: null }),
+      const mockAssistantClient = {
+        chat: vi.fn().mockResolvedValue(new ReadableStream()),
       };
 
       const app = await buildApp({
         logger: false,
         container: {
-          explainerClient: mockExplainerClient as unknown as typeof app.container.explainerClient,
+          assistantClient: mockAssistantClient as unknown as typeof app.container.assistantClient,
         },
       });
 
       await app.ready();
 
       // Verify the mock was injected
-      expect(app.container.explainerClient.explainAuto).toBe(mockExplainerClient.explainAuto);
+      expect(app.container.assistantClient.chat).toBe(mockAssistantClient.chat);
 
       await app.close();
     });
@@ -34,7 +32,7 @@ describe('buildApp', () => {
 
       // Verify container exists and has expected services
       expect(app.container).toBeDefined();
-      expect(app.container.explainerClient).toBeDefined();
+      expect(app.container.assistantClient).toBeDefined();
       expect(app.container.videoService).toBeDefined();
 
       await app.close();

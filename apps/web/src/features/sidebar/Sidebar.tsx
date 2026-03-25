@@ -27,7 +27,7 @@ export const Sidebar = memo(function Sidebar() {
   const exitSelectionMode = useUIStore((s) => s.exitSelectionMode);
   const activeSection = useActiveSection();
 
-  const { messages: chatMessages, sendMessage: handleSendMessage } = useSidebarChat();
+  const { messages: chatMessages, status: chatStatus, sendMessage: handleSendMessage } = useSidebarChat();
 
   // Handle Escape key to exit selection mode
   useEffect(() => {
@@ -71,6 +71,7 @@ export const Sidebar = memo(function Sidebar() {
         <div className="flex-1 min-h-0">
           <RAGChatPanel
             messages={chatMessages}
+            status={chatStatus}
             onSendMessage={handleSendMessage}
             placeholder="Ask about your videos..."
           />

@@ -8,7 +8,7 @@ Complete API documentation for all Video Insight Engine services.
 
 - [REST API](#rest-api) - vie-api HTTP endpoints
 - [WebSocket API](#websocket-api) - Real-time updates
-- [MCP Explainer API](#mcp-explainer-api) - AI explanation tools
+- [Assistant Chat API](#assistant-chat-api) - AI-powered video chat
 - [SSE Streaming API](#sse-streaming-api) - Progressive summarization
 
 ---
@@ -514,7 +514,7 @@ Get auto-generated expansion for a section or concept ("Go Deeper").
 - `targetType`: `section` or `concept`
 - `targetId`: UUID of section or concept
 
-**Logic:** Calls MCP `explain_auto` tool on vie-explainer. Results are cached in `systemExpansionCache`.
+**Logic:** Calls vie-assistant HTTP API. Results are cached in `systemExpansionCache`.
 
 **Response (200):**
 
@@ -543,7 +543,7 @@ Send a message about a video. Ephemeral — no server-side persistence.
 }
 ```
 
-**Logic:** Calls MCP `video_chat` tool on vie-explainer. Chat history is passed from client-side React state.
+**Logic:** Calls vie-assistant HTTP API. Chat history is passed from client-side React state.
 
 **Response (200):**
 
@@ -1187,141 +1187,71 @@ vie-web (user's browser)
 
 ---
 
-# MCP Explainer API
+# Assistant Chat API
 
-Model Context Protocol (MCP) tools exposed by `vie-explainer`.
+AI-powered video chat endpoints served by `vie-assistant` on port 8001, proxied through `vie-api`.
 
-**Transport:** Streamable HTTP at `http://vie-explainer:8001/mcp`
-**Protocol:** MCP spec 2025-03-26
-
----
-
-## Overview
-
-`vie-explainer` is an MCP server with two tools:
-
-| Tool           | Purpose                                    | Cached? |
-| -------------- | ------------------------------------------ | ------- |
-| `explain_auto` | Generate documentation for section/concept | Yes (systemExpansionCache) |
-| `video_chat`   | Chat about a video being viewed            | No (ephemeral) |
+**Communication:** HTTP + SSE between vie-api and vie-assistant.
 
 ---
 
-## Connection
+## POST /api/videos/:videoSummaryId/chat
 
-`vie-api` connects as MCP client using Streamable HTTP:
+Stream a chat response about a specific video. Uses SSE for progressive token delivery.
 
-```typescript
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+**Auth:** Bearer token required.
 
-const transport = new StreamableHTTPClientTransport(
-  new URL("http://vie-explainer:8001/mcp")
-);
-
-const client = new Client({ name: "vie-api", version: "1.0.0" });
-await client.connect(transport);
-```
-
----
-
-## Tool: explain_auto
-
-Generate detailed documentation for a video section or concept. Results are cached in `systemExpansionCache` and reused across all users.
-
-### Schema
+**Request:**
 
 ```json
 {
-  "name": "explain_auto",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "video_summary_id": { "type": "string", "description": "MongoDB ObjectId of video summary" },
-      "target_type": { "type": "string", "enum": ["section", "concept"] },
-      "target_id": { "type": "string", "description": "UUID of the section or concept" }
-    },
-    "required": ["video_summary_id", "target_type", "target_id"]
-  }
+  "message": "What are the main ingredients?",
+  "chatHistory": [
+    { "role": "user", "content": "Hello" },
+    { "role": "assistant", "content": "Hi! How can I help?" }
+  ]
 }
 ```
 
-### Output
-
-Returns markdown string as MCP text content.
-
-### Flow
+**Response:** SSE stream (`text/event-stream`)
 
 ```
-Check systemExpansionCache → HIT: return cached
-                            → MISS: load summary → build prompt → LLM → save → return
+data: {"type":"token","content":"The"}
+data: {"type":"token","content":" main"}
+data: {"type":"token","content":" ingredients"}
+data: {"type":"done"}
 ```
+
+**Errors:**
+
+- 404: Video not found
+- 422: Invalid request body
+- 500: LLM or internal error
 
 ---
 
-## Tool: video_chat
+## POST /api/videos/:videoSummaryId/action
 
-Chat about a specific video. Answers are grounded in the video's content. Ephemeral — no server-side persistence. Chat history is passed by the caller.
+Execute a predefined action on a video (e.g., generate flashcards, quiz). Currently returns 501 (not implemented).
 
-### Schema
+**Auth:** Bearer token required.
+
+**Request:**
 
 ```json
 {
-  "name": "video_chat",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "video_summary_id": { "type": "string", "description": "MongoDB ObjectId of video summary" },
-      "user_message": { "type": "string", "description": "User's question about the video" },
-      "chat_history": {
-        "type": "array",
-        "items": { "type": "object", "properties": { "role": { "type": "string" }, "content": { "type": "string" } } },
-        "description": "Previous messages for multi-turn conversation",
-        "nullable": true
-      }
-    },
-    "required": ["video_summary_id", "user_message"]
-  }
+  "action": "generate_flashcards",
+  "params": {}
 }
 ```
 
-### Output
+**Response (501):**
 
-Returns assistant response string as MCP text content.
-
-### Flow
-
-```
-Load video summary → build context → system prompt + chat_history + user_message → LLM → return
-```
-
----
-
-## Usage from vie-api
-
-```typescript
-// ExplainerClient (api/src/services/explainer-client.ts)
-// Uses callToolWithTimeout wrapper with 30s timeout
-
-// explain_auto
-const expansion = await client.callTool({
-  name: "explain_auto",
-  arguments: {
-    video_summary_id: videoSummaryId,
-    target_type: targetType,
-    target_id: targetId,
-  },
-});
-
-// video_chat
-const response = await client.callTool({
-  name: "video_chat",
-  arguments: {
-    video_summary_id: videoSummaryId,
-    user_message: message,
-    chat_history: chatHistory ?? null,
-  },
-});
+```json
+{
+  "error": "NOT_IMPLEMENTED",
+  "message": "Action endpoints coming soon"
+}
 ```
 
 ---
