@@ -97,6 +97,141 @@ def _to_flash_card(item: dict) -> dict:
     return item
 
 
+def _seconds_to_time_str(seconds: int) -> str:
+    """Convert seconds to M:SS or H:MM:SS time string."""
+    mins, secs = divmod(seconds, 60)
+    hours, mins = divmod(mins, 60)
+    return f"{hours}:{mins:02d}:{secs:02d}" if hours else f"{mins}:{secs:02d}"
+
+
+def _normalize_code_snippet(item: Any) -> dict | None:
+    """Normalize diverse code snippet shapes to {code, language, explanation}."""
+    if isinstance(item, str):
+        stripped = item.strip()
+        return {"code": stripped, "language": "text", "explanation": ""} if stripped else None
+    if not isinstance(item, dict):
+        return None
+    code = item.get("code") or item.get("snippet") or item.get("example") or ""
+    if not code:
+        return None
+    return {
+        "code": code,
+        "language": item.get("language") or item.get("lang") or "text",
+        "explanation": item.get("explanation") or item.get("description") or item.get("detail") or "",
+        "filename": item.get("filename") or None,
+        "timestamp": item.get("timestamp"),
+    }
+
+
+def _normalize_timeline_entry(item: Any, index: int) -> dict | None:
+    """Normalize timeline entry to {label, time, seconds}."""
+    if isinstance(item, str):
+        stripped = item.strip()
+        return {"label": stripped, "time": "0:00", "seconds": 0} if stripped else None
+    if not isinstance(item, dict):
+        return None
+    label = (item.get("label") or item.get("title") or item.get("name")
+             or item.get("description") or f"Point {index + 1}")
+    seconds = item.get("seconds")
+    if seconds is None:
+        ts = next((v for k in ("timestamp", "start_time", "startTime") if (v := item.get(k)) is not None), 0)
+        try:
+            seconds = int(ts)
+        except (ValueError, TypeError):
+            seconds = 0
+    else:
+        try:
+            seconds = int(seconds)
+        except (ValueError, TypeError):
+            seconds = 0
+    time_str = item.get("time") or _seconds_to_time_str(seconds)
+    return {"label": str(label), "time": time_str, "seconds": seconds}
+
+
+def _normalize_exercise(item: Any) -> dict | None:
+    """Normalize exercise to {name, emoji, formCues[], ...}."""
+    if not isinstance(item, dict):
+        return None
+    name = item.get("name") or item.get("title") or item.get("exercise") or "Exercise"
+    form_cues = item.get("formCues") or item.get("form_cues") or []
+    if isinstance(form_cues, str):
+        form_cues = [form_cues] if form_cues.strip() else []
+    modifications = item.get("modifications") or []
+    if isinstance(modifications, str):
+        modifications = [modifications] if modifications.strip() else []
+    result: dict[str, Any] = {
+        "name": str(name),
+        "emoji": item.get("emoji") or "💪",
+        "formCues": form_cues,
+        "modifications": modifications,
+    }
+    for key in ("sets", "reps", "duration", "rest", "difficulty", "timestamp", "description"):
+        if item.get(key) is not None:
+            result[key] = item[key]
+    return result
+
+
+def _normalize_quiz_question(item: Any) -> dict | None:
+    """Normalize quiz question to {question, options[], correctIndex, explanation}."""
+    if not isinstance(item, dict):
+        return None
+    question = item.get("question") or item.get("text") or ""
+    if not question:
+        return None
+    options = item.get("options") or item.get("choices") or []
+    if not isinstance(options, list):
+        return None
+    options = [str(o) for o in options if o is not None]
+    if len(options) < 2:
+        return None
+    correct_index = item.get("correctIndex") if item.get("correctIndex") is not None else item.get("correct_index")
+    if correct_index is None:
+        correct_index = 0
+    try:
+        correct_index = int(correct_index)
+    except (ValueError, TypeError):
+        correct_index = 0
+    correct_index = max(0, min(correct_index, len(options) - 1))
+    return {
+        "question": str(question),
+        "options": options,
+        "correctIndex": correct_index,
+        "explanation": str(item.get("explanation") or ""),
+    }
+
+
+def _normalize_scenario_option(opt: Any) -> dict | None:
+    """Normalize a single scenario option."""
+    if isinstance(opt, str):
+        return {"text": opt, "correct": False, "explanation": ""} if opt.strip() else None
+    if isinstance(opt, dict):
+        text = opt.get("text") or opt.get("label") or ""
+        if not text:
+            return None
+        return {
+            "text": str(text),
+            "correct": bool(opt.get("correct", False)),
+            "explanation": str(opt.get("explanation") or ""),
+        }
+    return None
+
+
+def _normalize_scenario_item(item: Any) -> dict | None:
+    """Normalize scenario to {question, options[]}."""
+    if not isinstance(item, dict):
+        return None
+    question = item.get("question") or item.get("situation") or item.get("text") or ""
+    if not question:
+        return None
+    raw_options = item.get("options") or item.get("choices") or []
+    if not isinstance(raw_options, list):
+        return None
+    options = [o for o in (_normalize_scenario_option(opt) for opt in raw_options) if o is not None]
+    if len(options) < 2:
+        return None
+    return {"question": str(question), "options": options}
+
+
 def _chapters_to_timeline(chapters: list[dict]) -> list[dict]:
     """Convert yt-dlp chapters to timeline entry format."""
     entries = []
@@ -160,7 +295,8 @@ def assemble_timeline(
 ) -> dict | None:
     if not isinstance(data, list) or len(data) < 1:
         return None
-    return {"entries": data}
+    entries = [e for e in (_normalize_timeline_entry(item, i) for i, item in enumerate(data)) if e is not None]
+    return {"entries": entries} if entries else None
 
 
 def assemble_code_explorer(
@@ -168,16 +304,17 @@ def assemble_code_explorer(
 ) -> dict | None:
     if not isinstance(data, list) or len(data) < 1:
         return None
-    return {"snippets": data}
+    snippets = [s for s in (_normalize_code_snippet(item) for item in data) if s is not None]
+    return {"snippets": snippets} if snippets else None
 
 
 def assemble_comparison(
     tab: dict, data: Any, extraction: dict, enrichment: dict | None,
 ) -> dict | None:
     if isinstance(data, dict):
-        pros = data.get("pros", [])
-        cons = data.get("cons", [])
-        comparisons = data.get("comparisons", [])
+        pros = data.get("pros") or []
+        cons = data.get("cons") or []
+        comparisons = data.get("comparisons") or []
         if pros or cons or comparisons:
             normalized = [_normalize_comparison(c) for c in comparisons if isinstance(c, dict)]
             if not pros and not cons and normalized:
@@ -328,9 +465,10 @@ def assemble_exercise_tracker(
     tab: dict, data: Any, extraction: dict, enrichment: dict | None,
 ) -> dict | None:
     if isinstance(data, dict):
-        exercises = data.get("exercises", [])
-        warmup = data.get("warmup", [])
-        cooldown = data.get("cooldown", [])
+        raw_exercises = data.get("exercises") or []
+        warmup = data.get("warmup") or []
+        cooldown = data.get("cooldown") or []
+        exercises = [e for e in (_normalize_exercise(item) for item in raw_exercises) if e is not None] if isinstance(raw_exercises, list) else []
         if not exercises and not warmup:
             return None
         props: dict[str, Any] = {"exercises": exercises}
@@ -340,7 +478,8 @@ def assemble_exercise_tracker(
             props["cooldown"] = cooldown
         return props
     if isinstance(data, list) and len(data) > 0:
-        return {"exercises": data}
+        exercises = [e for e in (_normalize_exercise(item) for item in data) if e is not None]
+        return {"exercises": exercises} if exercises else None
     return None
 
 
@@ -349,7 +488,8 @@ def assemble_quiz(
 ) -> dict | None:
     if not isinstance(data, list) or len(data) < 1:
         return None
-    return {"questions": data}
+    questions = [q for q in (_normalize_quiz_question(item) for item in data) if q is not None]
+    return {"questions": questions} if questions else None
 
 
 def assemble_flash_deck(
@@ -386,7 +526,8 @@ def assemble_scenario(
 ) -> dict | None:
     if not isinstance(data, list) or len(data) < 1:
         return None
-    return {"scenarios": data}
+    scenarios = [s for s in (_normalize_scenario_item(item) for item in data) if s is not None]
+    return {"scenarios": scenarios} if scenarios else None
 
 
 def assemble_verdict(
@@ -470,16 +611,21 @@ def assemble_clip_player(
     clips = []
     for item in data:
         if isinstance(item, dict):
-            label = item.get("label", item.get("title", ""))
-            description = item.get("description", "")
-            timestamp = item.get("timestamp")
-            if not label and not description and timestamp is None:
-                continue
+            label = (item.get("label") or item.get("title") or item.get("name")
+                     or item.get("description") or "Clip")
+            start_seconds = next((v for k in ("startSeconds", "seconds", "timestamp") if (v := item.get(k)) is not None), 0)
+            try:
+                start_seconds = int(start_seconds)
+            except (ValueError, TypeError):
+                start_seconds = 0
+            time_str = item.get("time") or _seconds_to_time_str(start_seconds)
             clips.append({
-                "label": label,
-                "timestamp": timestamp,
+                "label": str(label),
+                "timestamp": item.get("timestamp"),
+                "startSeconds": start_seconds,
+                "time": time_str,
                 "mood": item.get("mood"),
-                "description": description,
+                "description": str(item.get("description") or ""),
             })
     return {"clips": clips} if clips else None
 

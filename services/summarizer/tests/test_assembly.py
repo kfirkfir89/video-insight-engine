@@ -5,6 +5,7 @@ import pytest
 from src.services.pipeline.assembly import (
     ASSEMBLER_REGISTRY,
     _validate_domain_requirements,
+    _validate_assembled_props,
     assemble_response,
     find_nearest_frame,
     inject_frame_thumbnails,
@@ -23,6 +24,15 @@ from src.services.pipeline.assembly import (
     assemble_gallery,
     assemble_clip_player,
     assemble_lyrics_player,
+    assemble_timeline,
+    assemble_code_explorer,
+    assemble_quiz,
+    assemble_scenario,
+    _normalize_code_snippet,
+    _normalize_timeline_entry,
+    _normalize_exercise,
+    _normalize_quiz_question,
+    _normalize_scenario_item,
 )
 
 
@@ -388,7 +398,7 @@ class TestAssembleResponse:
                 "itinerary": [
                     {"day": 1, "city": "Rome", "spots": [{"name": "Colosseum"}, {"name": "Forum"}]},
                 ],
-                "budget": {"total": 2000, "currency": "USD", "breakdown": []},
+                "budget": {"total": 2000, "currency": "USD", "breakdown": [{"item": "Hotels", "amount": 1200}]},
                 "packingList": [{"item": "Sunscreen", "category": "Essentials", "essential": True}],
             },
         }
@@ -1268,3 +1278,346 @@ class TestDomainRequirementValidation:
         ]
         _validate_domain_requirements(tabs, "unknown_domain")
         assert len(tabs) == 1
+
+
+# ─── Data Quality: Normalizer Tests ───
+
+
+class TestCodeExplorerNormalization:
+    """Phase 1.1: _normalize_code_snippet + assemble_code_explorer."""
+
+    def test_string_item_becomes_snippet(self):
+        result = _normalize_code_snippet("console.log('hello')")
+        assert result is not None
+        assert result["code"] == "console.log('hello')"
+        assert result["language"] == "text"
+
+    def test_empty_string_returns_none(self):
+        assert _normalize_code_snippet("") is None
+        assert _normalize_code_snippet("  ") is None
+
+    def test_dict_with_code_key(self):
+        result = _normalize_code_snippet({"code": "x = 1", "language": "python"})
+        assert result is not None
+        assert result["code"] == "x = 1"
+        assert result["language"] == "python"
+
+    def test_dict_alias_snippet(self):
+        result = _normalize_code_snippet({"snippet": "fn main() {}", "lang": "rust"})
+        assert result is not None
+        assert result["code"] == "fn main() {}"
+        assert result["language"] == "rust"
+
+    def test_dict_missing_code_returns_none(self):
+        assert _normalize_code_snippet({"language": "python"}) is None
+
+    def test_non_dict_non_str_returns_none(self):
+        assert _normalize_code_snippet(42) is None
+        assert _normalize_code_snippet(None) is None
+
+    def test_assembler_normalizes_mixed_items(self):
+        data = [
+            "const x = 1",
+            {"code": "fn main() {}", "language": "rust"},
+            42,  # dropped
+            {"language": "go"},  # dropped — no code
+        ]
+        result = assemble_code_explorer({}, data, {}, None)
+        assert result is not None
+        assert len(result["snippets"]) == 2
+
+    def test_assembler_all_invalid_returns_none(self):
+        assert assemble_code_explorer({}, [42, None, ""], {}, None) is None
+
+    def test_valid_data_unchanged(self):
+        """Existing valid data passes through without alteration."""
+        result = _normalize_code_snippet({
+            "code": "print(1)", "language": "python",
+            "explanation": "Prints 1", "filename": "main.py",
+        })
+        assert result["code"] == "print(1)"
+        assert result["explanation"] == "Prints 1"
+        assert result["filename"] == "main.py"
+
+
+class TestTimelineNormalization:
+    """Phase 1.2: _normalize_timeline_entry + assemble_timeline."""
+
+    def test_valid_entry_passthrough(self):
+        result = _normalize_timeline_entry({"label": "Intro", "time": "0:00", "seconds": 0}, 0)
+        assert result is not None
+        assert result["label"] == "Intro"
+        assert result["seconds"] == 0
+
+    def test_missing_time_computed(self):
+        result = _normalize_timeline_entry({"label": "Test", "seconds": 125}, 0)
+        assert result is not None
+        assert result["time"] == "2:05"
+
+    def test_label_aliases(self):
+        result = _normalize_timeline_entry({"title": "Chapter 1", "seconds": 0}, 0)
+        assert result["label"] == "Chapter 1"
+        result = _normalize_timeline_entry({"name": "Section A", "seconds": 0}, 0)
+        assert result["label"] == "Section A"
+
+    def test_string_entry(self):
+        result = _normalize_timeline_entry("Introduction", 0)
+        assert result is not None
+        assert result["label"] == "Introduction"
+        assert result["seconds"] == 0
+
+    def test_empty_string_returns_none(self):
+        assert _normalize_timeline_entry("", 0) is None
+
+    def test_non_dict_non_str_returns_none(self):
+        assert _normalize_timeline_entry(42, 0) is None
+
+    def test_missing_label_gets_default(self):
+        result = _normalize_timeline_entry({"seconds": 60}, 2)
+        assert result["label"] == "Point 3"
+
+    def test_assembler_normalizes(self):
+        data = [
+            {"title": "Start", "timestamp": 0},
+            {"label": "Middle", "seconds": 120},
+            42,  # dropped
+        ]
+        result = assemble_timeline({}, data, {}, None)
+        assert result is not None
+        assert len(result["entries"]) == 2
+        assert result["entries"][0]["label"] == "Start"
+        assert result["entries"][1]["time"] == "2:00"
+
+
+class TestExerciseNormalization:
+    """Phase 1.3: _normalize_exercise + assemble_exercise_tracker."""
+
+    def test_valid_exercise(self):
+        result = _normalize_exercise({"name": "Push-up", "sets": 3, "reps": 10})
+        assert result is not None
+        assert result["name"] == "Push-up"
+        assert result["sets"] == 3
+
+    def test_defaults_filled(self):
+        result = _normalize_exercise({"description": "A cool exercise"})
+        assert result["name"] == "Exercise"
+        assert result["emoji"] == "💪"
+        assert result["formCues"] == []
+        assert result["modifications"] == []
+
+    def test_string_formcues_coerced(self):
+        result = _normalize_exercise({"name": "Squat", "formCues": "Keep back straight"})
+        assert result["formCues"] == ["Keep back straight"]
+
+    def test_string_modifications_coerced(self):
+        result = _normalize_exercise({"name": "Squat", "modifications": "Use chair"})
+        assert result["modifications"] == ["Use chair"]
+
+    def test_non_dict_returns_none(self):
+        assert _normalize_exercise("not a dict") is None
+        assert _normalize_exercise(42) is None
+
+    def test_assembler_normalizes_list(self):
+        data = [
+            {"name": "Push-up"},
+            {"title": "Squat", "sets": 3},
+            "invalid",  # dropped
+        ]
+        result = assemble_exercise_tracker({}, data, {}, None)
+        assert result is not None
+        assert len(result["exercises"]) == 2
+        assert result["exercises"][0]["emoji"] == "💪"
+        assert result["exercises"][1]["name"] == "Squat"
+
+    def test_assembler_normalizes_dict_shape(self):
+        data = {"exercises": [{"name": "Lunge"}], "warmup": [{"name": "Jog"}]}
+        result = assemble_exercise_tracker({}, data, {}, None)
+        assert result is not None
+        assert result["exercises"][0]["emoji"] == "💪"
+
+
+class TestQuizNormalization:
+    """Phase 1.4: _normalize_quiz_question + assemble_quiz."""
+
+    def test_valid_question(self):
+        result = _normalize_quiz_question({
+            "question": "What is 1+1?",
+            "options": ["1", "2", "3"],
+            "correctIndex": 1,
+            "explanation": "Math"
+        })
+        assert result is not None
+        assert result["question"] == "What is 1+1?"
+        assert result["correctIndex"] == 1
+
+    def test_text_alias(self):
+        result = _normalize_quiz_question({"text": "Q?", "choices": ["A", "B"], "correctIndex": 0})
+        assert result is not None
+        assert result["question"] == "Q?"
+
+    def test_too_few_options_dropped(self):
+        assert _normalize_quiz_question({"question": "Q?", "options": ["A"]}) is None
+
+    def test_missing_options_dropped(self):
+        assert _normalize_quiz_question({"question": "Q?"}) is None
+
+    def test_correctindex_clamped(self):
+        result = _normalize_quiz_question({"question": "Q?", "options": ["A", "B"], "correctIndex": 99})
+        assert result["correctIndex"] == 1
+
+    def test_correctindex_negative_clamped(self):
+        result = _normalize_quiz_question({"question": "Q?", "options": ["A", "B"], "correctIndex": -5})
+        assert result["correctIndex"] == 0
+
+    def test_empty_question_dropped(self):
+        assert _normalize_quiz_question({"question": "", "options": ["A", "B"]}) is None
+
+    def test_non_dict_returns_none(self):
+        assert _normalize_quiz_question("not a dict") is None
+
+    def test_assembler_filters_invalid(self):
+        data = [
+            {"question": "Good?", "options": ["A", "B"], "correctIndex": 0},
+            {"question": "", "options": ["A", "B"]},  # dropped
+            {"question": "Lonely?", "options": ["A"]},  # dropped
+        ]
+        result = assemble_quiz({}, data, {}, None)
+        assert result is not None
+        assert len(result["questions"]) == 1
+
+
+class TestScenarioNormalization:
+    """Phase 1.5: _normalize_scenario_item + assemble_scenario."""
+
+    def test_valid_scenario(self):
+        result = _normalize_scenario_item({
+            "question": "What do you do?",
+            "options": [
+                {"text": "Run", "correct": True, "explanation": "Yes"},
+                {"text": "Hide", "correct": False, "explanation": "No"},
+            ],
+        })
+        assert result is not None
+        assert result["question"] == "What do you do?"
+        assert len(result["options"]) == 2
+
+    def test_string_options_normalized(self):
+        result = _normalize_scenario_item({
+            "question": "Pick one",
+            "options": ["Option A", "Option B"],
+        })
+        assert result is not None
+        assert result["options"][0] == {"text": "Option A", "correct": False, "explanation": ""}
+
+    def test_situation_alias(self):
+        result = _normalize_scenario_item({
+            "situation": "Fire alarm rings",
+            "options": ["Evacuate", "Ignore"],
+        })
+        assert result is not None
+        assert result["question"] == "Fire alarm rings"
+
+    def test_too_few_options_dropped(self):
+        assert _normalize_scenario_item({"question": "Q?", "options": ["A"]}) is None
+
+    def test_empty_question_dropped(self):
+        assert _normalize_scenario_item({"question": "", "options": ["A", "B"]}) is None
+
+    def test_non_dict_returns_none(self):
+        assert _normalize_scenario_item("not a dict") is None
+
+    def test_assembler_filters_invalid(self):
+        data = [
+            {"question": "Good?", "options": ["A", "B"]},
+            {"question": "", "options": ["A", "B"]},  # dropped
+        ]
+        result = assemble_scenario({}, data, {}, None)
+        assert result is not None
+        assert len(result["scenarios"]) == 1
+
+
+class TestClipPlayerNormalization:
+    """Phase 1.6: assemble_clip_player defaults."""
+
+    def test_label_fallback_chain(self):
+        result = assemble_clip_player({}, [{"timestamp": 10}], {}, None)
+        assert result is not None
+        assert result["clips"][0]["label"] == "Clip"
+
+    def test_label_from_title(self):
+        result = assemble_clip_player({}, [{"title": "Great moment"}], {}, None)
+        assert result["clips"][0]["label"] == "Great moment"
+
+    def test_start_seconds_from_timestamp(self):
+        result = assemble_clip_player({}, [{"label": "X", "timestamp": 120}], {}, None)
+        assert result["clips"][0]["startSeconds"] == 120
+        assert result["clips"][0]["time"] == "2:00"
+
+    def test_description_defaults_empty(self):
+        result = assemble_clip_player({}, [{"label": "X"}], {}, None)
+        assert result["clips"][0]["description"] == ""
+
+    def test_mood_defaults_none(self):
+        result = assemble_clip_player({}, [{"label": "X"}], {}, None)
+        assert result["clips"][0]["mood"] is None
+
+
+class TestComparisonNullHandling:
+    """Phase 1.7: JSON null → Python None for pros/cons."""
+
+    def test_null_pros_cons_handled(self):
+        """JSON null becomes Python None — `or []` fixes it."""
+        data = {"pros": None, "cons": None, "comparisons": [
+            {"feature": "Speed", "thisProduct": "Fast", "competitor": "Slow", "winner": "left"},
+        ]}
+        result = assemble_comparison({}, data, {}, None)
+        assert result is not None
+        assert isinstance(result["pros"], list)
+        assert isinstance(result["cons"], list)
+        # Winner synthesis still works
+        assert "Speed" in result["pros"]
+
+    def test_null_comparisons_handled(self):
+        data = {"pros": ["Good"], "cons": ["Bad"], "comparisons": None}
+        result = assemble_comparison({}, data, {}, None)
+        assert result is not None
+        assert result["pros"] == ["Good"]
+        assert result["cons"] == ["Bad"]
+
+
+# ─── Data Quality: Validation Checkpoint Tests ───
+
+
+class TestAssemblyValidation:
+    """Phase 2: _validate_assembled_props."""
+
+    def test_valid_props_pass(self):
+        assert _validate_assembled_props("quiz", {"questions": [{"q": "test"}]}) is True
+
+    def test_empty_required_list_fails(self):
+        assert _validate_assembled_props("quiz", {"questions": []}) is False
+
+    def test_missing_required_list_fails(self):
+        assert _validate_assembled_props("timeline", {"data": "something"}) is False
+
+    def test_unknown_component_passes(self):
+        assert _validate_assembled_props("unknown_widget", {"anything": True}) is True
+
+    def test_overview_always_passes(self):
+        """overview has no required list — always passes."""
+        assert _validate_assembled_props("overview", {"data": {"key": "val"}}) is True
+
+    def test_validation_drops_tab_in_full_assembly(self):
+        """End-to-end: assembler returns props with empty list → tab dropped."""
+        triage = {
+            "contentTags": ["learning"],
+            "primaryTag": "learning",
+            "tabs": [
+                {"id": "quizzes", "label": "Quiz", "emoji": "❓", "dataSource": "enrichment.quiz"},
+            ],
+        }
+        # All quiz questions are invalid (empty question text)
+        enrichment = {"quiz": [{"question": "", "options": ["A", "B"]}]}
+        result = assemble_response(triage, {}, enrichment, None)
+        tab_ids = [t["id"] for t in result["tabs"]]
+        assert "quizzes" not in tab_ids

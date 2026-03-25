@@ -27,6 +27,12 @@ from .assemblers import (
     assemble_gallery,
     assemble_clip_player,
     assemble_lyrics_player,
+    # Normalizers (used by tests)
+    _normalize_code_snippet,
+    _normalize_timeline_entry,
+    _normalize_exercise,
+    _normalize_quiz_question,
+    _normalize_scenario_item,
 )
 from .core import (
     assemble_response,
@@ -36,7 +42,9 @@ from .core import (
     find_description_for_frame,
     _post_process_tabs,
     _validate_domain_requirements,
+    _validate_assembled_props,
     _DOMAIN_REQUIREMENTS,
+    _COMPONENT_REQUIRED_LISTS,
 )
 from .cross_tab import resolve_cross_tab_links
 
@@ -51,7 +59,15 @@ __all__ = [
     "find_description_for_frame",
     "_post_process_tabs",
     "_validate_domain_requirements",
+    "_validate_assembled_props",
     "_DOMAIN_REQUIREMENTS",
+    "_COMPONENT_REQUIRED_LISTS",
+    # Normalizers (used by tests)
+    "_normalize_code_snippet",
+    "_normalize_timeline_entry",
+    "_normalize_exercise",
+    "_normalize_quiz_question",
+    "_normalize_scenario_item",
     # Individual assemblers (used by tests)
     "assemble_display_section",
     "assemble_spot_explorer",
