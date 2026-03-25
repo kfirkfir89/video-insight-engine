@@ -74,7 +74,7 @@
         "keywords": [
           "python", "fastapi", "summarizer", "transcript", "youtube",
           "rabbitmq", "worker", "pydantic", "async", "vie-summarizer",
-          "vie-explainer", "retry", "backoff", "dead letter", "dlq",
+          "vie-assistant", "retry", "backoff", "dead letter", "dlq",
           "celery", "motor", "beanie", "pytest", "no transcript",
           "video too long", "edge case", "llm", "openai", "anthropic",
           "claude api", "ai integration", "rag", "embeddings", "pinecone",
@@ -82,9 +82,9 @@
           "agents"
         ],
         "intentPatterns": [
-          "(create|add|implement).*?(python|summarizer|worker|transcript|fastapi|explainer)",
+          "(create|add|implement).*?(python|summarizer|worker|transcript|fastapi|assistant)",
           "(how to|best practice).*?(python|fastapi|async|pydantic|mcp)",
-          "(fix|debug).*?(python|summarizer|worker|explainer)",
+          "(fix|debug).*?(python|summarizer|worker|assistant)",
           "(handle|implement).*?(retry|error|edge case|dlq)",
           "(integrate|use|call).*?(openai|claude|anthropic|llm)",
           "(build|create|implement).*?(rag|agent|mcp|embedding|tool)"
@@ -95,8 +95,8 @@
           "services/**/*",
           "services/summarizer/**/*.py",
           "services/summarizer/src/**/*",
-          "services/explainer/**/*.py",
-          "services/explainer/src/**/*"
+          "services/assistant/**/*.py",
+          "services/assistant/src/**/*"
         ],
         "contentPatterns": [
           "from fastapi",

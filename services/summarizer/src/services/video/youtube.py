@@ -5,7 +5,7 @@ This module provides a single-call extraction of all video data:
 - Chapters (creator-defined timestamps)
 - Description (full text)
 - Subtitles/captions with timestamps
-- Video context (category, persona, tags)
+- Video context (category, tags)
 
 Category detection uses weighted scoring:
 - Keywords (tags + hashtags): 40%
@@ -122,14 +122,9 @@ def _load_category_rules() -> CategoryRules:
 class VideoContext:
     """Context information extracted from video metadata.
 
-    Category and persona are SEPARATE concerns:
-    - category: Video's actual subject (cooking, coding, travel) - for frontend views
-    - persona: Which LLM prompts to use - can fallback without affecting category
-
     Attributes:
         youtube_category: Raw YouTube category (e.g., "Science & Technology")
         category: Detected content category (e.g., "cooking", "coding", "standard")
-        persona: LLM persona for summarization ("code", "recipe", "standard")
         tags: Raw tags from video metadata
         display_tags: Cleaned, deduplicated tags for UI display (max 6)
         category_confidence: Confidence score from detection (0.0-1.0)
@@ -610,7 +605,7 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
     - Creator-defined chapters
     - Full description text
     - Subtitles with timestamps
-    - Video context (category, persona, tags)
+    - Video context (category, tags)
 
     Args:
         video_id: YouTube video ID
@@ -730,7 +725,7 @@ async def extract_video_data(video_id: str) -> VideoData:
     - Creator-defined chapters (timestamps + titles)
     - Full description text
     - Subtitles/captions with timestamps
-    - Video context (category, persona, tags)
+    - Video context (category, tags)
 
     Args:
         video_id: YouTube video ID

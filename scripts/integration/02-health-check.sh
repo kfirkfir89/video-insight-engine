@@ -37,30 +37,24 @@ assert_http_status "$HTTP_STATUS" "200" "vie-summarizer / returns 200"
 assert_json_field "$HTTP_BODY" ".service" "vie-summarizer" "vie-summarizer root identifies service"
 
 # ============================================
-# vie-explainer
+# vie-assistant
 # ============================================
-phase "2.3" "vie-explainer Status Check"
+phase "2.3" "vie-assistant Health Check"
 
-# vie-explainer uses MCP protocol (stdio), not HTTP
-# We can only verify the container is running
 cd "$PROJECT_ROOT"
 
-if docker-compose ps vie-explainer 2>/dev/null | grep -q "Up"; then
-  echo -e "  ${GREEN}PASS${NC}: vie-explainer container is running"
-  PASS_COUNT=$((PASS_COUNT + 1))
-else
-  echo -e "  ${RED}FAIL${NC}: vie-explainer container is not running"
-  FAIL_COUNT=$((FAIL_COUNT + 1))
-fi
+ASSISTANT_URL="http://localhost:${ASSISTANT_PORT}"
+http_get "$ASSISTANT_URL/health"
+assert_http_status "$HTTP_STATUS" "200" "vie-assistant health returns 200"
 
 # Check container logs for startup errors
-EXPLAINER_ERRORS=$(docker-compose logs vie-explainer 2>&1 | grep -i "error\|exception\|traceback" | head -5)
-if [ -z "$EXPLAINER_ERRORS" ]; then
-  echo -e "  ${GREEN}PASS${NC}: vie-explainer has no startup errors"
+ASSISTANT_ERRORS=$(docker-compose logs vie-assistant 2>&1 | grep -i "error\|exception\|traceback" | head -5)
+if [ -z "$ASSISTANT_ERRORS" ]; then
+  echo -e "  ${GREEN}PASS${NC}: vie-assistant has no startup errors"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  echo -e "  ${YELLOW}WARN${NC}: vie-explainer has potential issues in logs:"
-  echo "$EXPLAINER_ERRORS" | sed 's/^/       /'
+  echo -e "  ${YELLOW}WARN${NC}: vie-assistant has potential issues in logs:"
+  echo "$ASSISTANT_ERRORS" | sed 's/^/       /'
 fi
 
 # ============================================

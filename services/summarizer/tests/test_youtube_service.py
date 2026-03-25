@@ -1,6 +1,6 @@
 """Tests for YouTube service (youtube.py).
 
-Tests video data extraction, persona detection, and error handling.
+Tests video data extraction, category detection, and error handling.
 """
 
 import pytest

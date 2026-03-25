@@ -19,7 +19,7 @@ _current_health: dict[str, dict] = {}
 SERVICES = {
     "vie-api": settings.VIE_API_URL,
     "vie-summarizer": settings.VIE_SUMMARIZER_URL,
-    "vie-explainer": settings.VIE_EXPLAINER_URL,
+    "vie-assistant": settings.VIE_ASSISTANT_URL,
 }
 
 

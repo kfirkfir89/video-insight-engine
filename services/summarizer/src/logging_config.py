@@ -16,8 +16,16 @@ from structlog.types import Processor
 
 from src.config import settings
 
+try:
+    from llm_common.middleware import HealthCheckFilter as _HealthCheckFilter
+except ImportError:
 
-from llm_common.middleware import HealthCheckFilter as _HealthCheckFilter
+    class _HealthCheckFilter(logging.Filter):  # type: ignore[no-redef]
+        """Fallback filter when llm_common is not installed."""
+
+        def filter(self, record: logging.LogRecord) -> bool:
+            msg = record.getMessage()
+            return "/health" not in msg
 
 
 def get_log_level() -> int:
