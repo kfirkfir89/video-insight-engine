@@ -299,7 +299,7 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
                 {countBadge}
               </div>
             </TooltipTrigger>
-            <TooltipContent side="right" align="start" sideOffset={8} className="max-w-xs z-[100]">
+            <TooltipContent side="right" align="start" sideOffset={8} className="max-w-xs z-tooltip">
               {folder.name}
             </TooltipContent>
           </Tooltip>

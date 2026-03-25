@@ -89,7 +89,7 @@ export const CollectionPicker = memo(function CollectionPicker({
                   >
                     <div
                       className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: collection.color || '#888' }}
+                      style={{ backgroundColor: collection.color || 'var(--muted-foreground)' }}
                     />
                     <span className="flex-1 truncate">{collection.name}</span>
                     {isSelected && (

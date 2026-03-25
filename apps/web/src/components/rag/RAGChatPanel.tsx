@@ -2,10 +2,10 @@ import { memo, useState, useCallback, useRef, useEffect } from 'react';
 import { MessageCircle, Send, Loader2, User, Bot, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { ScrollContainer } from '@/components/ui/scroll-container';
 import { ChatBlockRenderer } from './ChatBlockRenderer';
 import { RAGSourceCard } from './RAGSourceCard';
+
 interface RAGSource {
   title: string;
   youtubeId: string;
@@ -25,9 +25,13 @@ interface RAGMessage {
   createdAt: string;
 }
 
+type ChatStatus = 'idle' | 'pending' | 'streaming' | 'error';
+
 interface RAGChatPanelProps {
   messages: RAGMessage[];
+  /** @deprecated Use `status` instead */
   isLoading?: boolean;
+  status?: ChatStatus;
   onSendMessage: (message: string) => void;
   onSeek?: (seconds: number) => void;
   placeholder?: string;
@@ -124,6 +128,7 @@ const MessageBubble = memo(function MessageBubble({
 export const RAGChatPanel = memo(function RAGChatPanel({
   messages,
   isLoading,
+  status: statusProp,
   onSendMessage,
   onSeek,
   placeholder = 'Ask a question about your saved content...',
@@ -131,22 +136,72 @@ export const RAGChatPanel = memo(function RAGChatPanel({
 }: RAGChatPanelProps) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
 
-  // Auto-scroll to bottom on new messages
+  // Derive status from prop or backward-compatible isLoading
+  const status: ChatStatus = statusProp ?? (isLoading ? 'pending' : 'idle');
+  const isBusy = status === 'pending' || status === 'streaming';
+
+  // Smart auto-scroll: only scroll if user hasn't scrolled up
+  const scrollToBottom = useCallback(() => {
+    if (!userScrolledUpRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, []);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
+    scrollToBottom();
+  }, [messages.length, scrollToBottom]);
 
-  const handleSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
+  // Detect manual scroll-up via the forwarded scroll container ref
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+      userScrolledUpRef.current = !atBottom;
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Auto-resize textarea
+  const resizeTextarea = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }, []);
+
+  const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
-    if (!trimmed || isLoading) return;
+    if (!trimmed || isBusy) return;
 
     onSendMessage(trimmed);
     setInput('');
-    inputRef.current?.focus();
-  }, [input, isLoading, onSendMessage]);
+    userScrolledUpRef.current = false;
+
+    // Reset textarea height
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+    textareaRef.current?.focus();
+  }, [input, isBusy, onSendMessage]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+    // Shift+Enter → natural newline (default behavior)
+  }, [handleSubmit]);
+
+  const handleFormSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    handleSubmit();
+  }, [handleSubmit]);
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
@@ -156,43 +211,51 @@ export const RAGChatPanel = memo(function RAGChatPanel({
         <h3 className="font-medium">Chat with your knowledge</h3>
       </div>
 
-      {/* Messages */}
-      <ScrollContainer wrapperClassName="flex-1 min-h-0" className="p-4 space-y-4">
-        {messages.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-center text-muted-foreground">
-            <div className="space-y-2">
-              <Sparkles className="h-10 w-10 mx-auto opacity-30" aria-hidden="true" />
-              <p className="text-sm">Start a conversation</p>
-              <p className="text-xs max-w-[200px]">
-                Ask questions about your memorized videos and saved content.
-              </p>
+      {/* Messages with aria-live for screen readers */}
+      <ScrollContainer wrapperClassName="flex-1 min-h-0" className="p-4 space-y-4" ref={scrollContainerRef}>
+        <div aria-live="polite" aria-relevant="additions">
+          {messages.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-center text-muted-foreground">
+              <div className="space-y-2">
+                <Sparkles className="h-10 w-10 mx-auto opacity-30" aria-hidden="true" />
+                <p className="text-sm">Start a conversation</p>
+                <p className="text-xs max-w-[200px]">
+                  Ask questions about your memorized videos and saved content.
+                </p>
+              </div>
             </div>
-          </div>
-        ) : (
-          messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              onSeek={onSeek}
-            />
-          ))
-        )}
+          ) : (
+            messages.map((message) => (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                onSeek={onSeek}
+              />
+            ))
+          )}
+        </div>
         <div ref={messagesEndRef} />
       </ScrollContainer>
 
       {/* Input */}
       <div className="p-4 border-t">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <Input
-            ref={inputRef}
+        <form onSubmit={handleFormSubmit} className="flex gap-2 items-end">
+          <textarea
+            ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              resizeTextarea();
+            }}
+            onKeyDown={handleKeyDown}
+            aria-label={placeholder}
             placeholder={placeholder}
-            disabled={isLoading}
-            className="flex-1"
+            disabled={isBusy}
+            rows={1}
+            className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           />
-          <Button type="submit" disabled={!input.trim() || isLoading}>
-            {isLoading ? (
+          <Button type="submit" disabled={!input.trim() || isBusy}>
+            {isBusy ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             ) : (
               <Send className="h-4 w-4" aria-hidden="true" />

@@ -23,14 +23,14 @@ interface BudgetInteractiveProps {
 }
 
 const DONUT_COLORS = [
-  'oklch(0.7 0.18 250)', // blue
-  'oklch(0.7 0.18 150)', // green
-  'oklch(0.7 0.18 50)',  // orange
-  'oklch(0.7 0.18 330)', // pink
-  'oklch(0.7 0.18 200)', // teal
-  'oklch(0.6 0.15 280)', // purple
-  'oklch(0.7 0.15 90)',  // yellow-green
-  'oklch(0.65 0.15 20)', // red
+  'var(--chart-1)',
+  'var(--chart-2)',
+  'var(--chart-3)',
+  'var(--chart-4)',
+  'var(--chart-5)',
+  'var(--chart-6)',
+  'var(--chart-7)',
+  'var(--chart-8)',
 ];
 
 function formatCurrency(amount: number, currency = 'USD'): string {

@@ -60,7 +60,7 @@ export function FolderContextMenu({
           <MoreVertical className="h-4 w-4 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="right" sideOffset={8} className="w-48 z-[200]">
+      <DropdownMenuContent align="start" side="right" sideOffset={8} className="w-48 z-dropdown">
         {/* Move to folder */}
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>

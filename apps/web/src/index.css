@@ -48,6 +48,23 @@
   --status-success: oklch(60% 0.15 155);
   --status-error: var(--destructive);
 
+  /* Z-index scale */
+  --z-tooltip: 50;
+  --z-dropdown: 100;
+  --z-modal: 200;
+  --z-toast: 300;
+  --z-confetti: 400;
+
+  /* Chart palette */
+  --chart-1: oklch(70% 0.18 250);
+  --chart-2: oklch(70% 0.18 150);
+  --chart-3: oklch(70% 0.18 50);
+  --chart-4: oklch(70% 0.18 330);
+  --chart-5: oklch(70% 0.18 200);
+  --chart-6: oklch(60% 0.15 280);
+  --chart-7: oklch(70% 0.15 90);
+  --chart-8: oklch(65% 0.15 20);
+
   /* Feedback colors (semantic) */
   --success: oklch(55% 0.16 155);
   --success-foreground: oklch(98% 0.01 155);
@@ -91,6 +108,23 @@
   --status-processing: oklch(68% 0.19 250);
   --status-success: oklch(65% 0.14 155);
   --status-error: var(--destructive);
+
+  /* Z-index scale (same in dark) */
+  --z-tooltip: 50;
+  --z-dropdown: 100;
+  --z-modal: 200;
+  --z-toast: 300;
+  --z-confetti: 400;
+
+  /* Chart palette (dark mode — boosted lightness) */
+  --chart-1: oklch(75% 0.16 250);
+  --chart-2: oklch(75% 0.16 150);
+  --chart-3: oklch(75% 0.16 50);
+  --chart-4: oklch(75% 0.16 330);
+  --chart-5: oklch(75% 0.16 200);
+  --chart-6: oklch(65% 0.14 280);
+  --chart-7: oklch(75% 0.14 90);
+  --chart-8: oklch(70% 0.14 20);
 
   /* Feedback colors (dark mode) */
   --success: oklch(68% 0.16 155);
@@ -329,6 +363,23 @@
   --color-vie-rose: var(--vie-rose);
   --color-vie-forest: var(--vie-forest);
   --color-vie-peach: var(--vie-peach);
+
+  /* Z-index scale */
+  --z-index-tooltip: var(--z-tooltip);
+  --z-index-dropdown: var(--z-dropdown);
+  --z-index-modal: var(--z-modal);
+  --z-index-toast: var(--z-toast);
+  --z-index-confetti: var(--z-confetti);
+
+  /* Chart palette */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
 
   /* Animation tokens */
   --animate-fade-slide-up: fade-slide-up 0.4s
