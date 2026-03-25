@@ -163,9 +163,7 @@ Get current user.
 
 ### GET /folders
 
-List folders by type.
-
-**Query:** `?type=summarized|memorized`
+List user's folders.
 
 **Response (200):**
 
@@ -175,7 +173,6 @@ List folders by type.
     {
       "id": "507f1f77bcf86cd799439012",
       "name": "AI Learning",
-      "type": "summarized",
       "parentId": null,
       "path": "/AI Learning",
       "level": 1,
@@ -197,7 +194,6 @@ Create folder.
 ```json
 {
   "name": "React Tutorials",
-  "type": "summarized",
   "parentId": "507f1f77bcf86cd799439012",
   "color": "#10B981",
   "icon": "code"
@@ -210,7 +206,6 @@ Create folder.
 {
   "id": "507f1f77bcf86cd799439013",
   "name": "React Tutorials",
-  "type": "summarized",
   "parentId": "507f1f77bcf86cd799439012",
   "path": "/AI Learning/React Tutorials",
   "level": 2
@@ -376,7 +371,7 @@ Submit YouTube URL for summarization.
 
 Remove video from user's library.
 
-**Note:** Only removes `userVideo` reference. Cache and memorized items unaffected.
+**Note:** Only removes `userVideo` reference. Cache unaffected.
 
 **Response:** `204 No Content`
 
@@ -550,172 +545,6 @@ Send a message about a video. Ephemeral — no server-side persistence.
 ```json
 {
   "response": "The main ingredients for this bread recipe are..."
-}
-```
-
----
-
-## Memorize
-
-> **Legacy endpoints** -- Backend routes exist but are not used by the current frontend. Will be deprecated.
-
-### GET /memorize
-
-List memorized items.
-
-**Query:** `?folderId=xxx` (optional)
-
-**Response (200):**
-
-```json
-{
-  "items": [
-    {
-      "id": "507f1f77bcf86cd799439030",
-      "title": "React Hooks Fundamentals",
-      "sourceType": "video_section",
-      "source": {
-        "videoTitle": "React Hooks Tutorial",
-        "youtubeUrl": "https://youtube.com/watch?v=xxx&t=120"
-      },
-      "folderId": "507f1f77bcf86cd799439013",
-      "tags": ["react", "hooks"],
-      "createdAt": "2024-01-15T10:00:00Z"
-    }
-  ]
-}
-```
-
----
-
-### GET /memorize/:id
-
-Get memorized item with full content.
-
-**Response (200):**
-
-```json
-{
-  "item": {
-    "id": "507f1f77bcf86cd799439030",
-    "title": "React Hooks Fundamentals",
-    "sourceType": "video_section",
-    "source": {
-      "videoSummaryId": "507f1f77bcf86cd799439020",
-      "youtubeId": "dQw4w9WgXcQ",
-      "videoTitle": "React Hooks Tutorial",
-      "videoThumbnail": "https://img.youtube.com/...",
-      "youtubeUrl": "https://youtube.com/watch?v=dQw4w9WgXcQ&t=120",
-      "startSeconds": 120,
-      "endSeconds": 480,
-      "content": {
-        "sections": [
-          {
-            "id": "sec-001",
-            "timestamp": "02:00",
-            "title": "useState Basics",
-            "summary": "...",
-            "bullets": ["..."]
-          }
-        ]
-      }
-    },
-    "notes": "Remember to always include dependencies...",
-    "tags": ["react", "hooks"]
-  }
-}
-```
-
----
-
-### POST /memorize
-
-Create memorized item.
-
-**Request (video section):**
-
-```json
-{
-  "title": "React Hooks Fundamentals",
-  "sourceType": "video_section",
-  "videoSummaryId": "507f1f77bcf86cd799439020",
-  "sectionIds": ["sec-001", "sec-002"],
-  "startSeconds": 120,
-  "endSeconds": 480,
-  "folderId": "507f1f77bcf86cd799439013",
-  "tags": ["react", "hooks"]
-}
-```
-
-**Request (video concept):**
-
-```json
-{
-  "title": "Understanding useState",
-  "sourceType": "video_concept",
-  "videoSummaryId": "507f1f77bcf86cd799439020",
-  "conceptId": "con-001"
-}
-```
-
-**Request (system expansion):**
-
-```json
-{
-  "title": "Deep Dive: useState",
-  "sourceType": "system_expansion",
-  "videoSummaryId": "507f1f77bcf86cd799439020",
-  "expansionId": "507f1f77bcf86cd799439050"
-}
-```
-
-**Response (201):** Created item with cached content.
-
----
-
-### PATCH /memorize/:id
-
-Update memorized item.
-
-**Request:**
-
-```json
-{
-  "title": "React Hooks - Complete Guide",
-  "notes": "Updated notes...",
-  "tags": ["react", "hooks", "state"],
-  "folderId": "507f1f77bcf86cd799439014"
-}
-```
-
-**Response (200):** Updated item.
-
----
-
-### DELETE /memorize/:id
-
-Delete memorized item.
-
-**Response:** `204 No Content`
-
----
-
-### GET /memorize/:id/chats
-
-List chats for memorized item.
-
-**Response (200):**
-
-```json
-{
-  "chats": [
-    {
-      "id": "507f1f77bcf86cd799439040",
-      "title": "Understanding hooks",
-      "messageCount": 5,
-      "updatedAt": "2024-01-15T12:00:00Z"
-    }
-  ]
 }
 ```
 

@@ -40,14 +40,15 @@ System overview and data flows.
 | vie-web        | vie-api        | HTTP/SSE       | API calls, streaming updates     |
 | vie-api        | vie-mongodb    | MongoDB driver | Data operations                  |
 | vie-api        | vie-summarizer | HTTP POST      | Trigger summarization            |
-| vie-api        | vie-explainer  | **MCP**        | Call explain tools               |
+| vie-api        | vie-assistant  | HTTP           | Explain + RAG video chat         |
 | vie-summarizer | vie-mongodb    | MongoDB driver | Save structured results          |
 | vie-summarizer | vie-redis      | Redis          | Response caching                 |
 | vie-summarizer | vie-qdrant     | HTTP           | Vector storage (background)      |
 | vie-summarizer | S3             | HTTP           | Frame + transcript storage       |
 | vie-summarizer | LLM APIs       | HTTP           | LiteLLM (Anthropic/OpenAI/Google)|
-| vie-explainer  | vie-mongodb    | MongoDB driver | Cache + chats                    |
-| vie-explainer  | LLM APIs       | HTTP           | LLM generation                   |
+| vie-assistant  | vie-mongodb    | MongoDB driver | Cache lookups                    |
+| vie-assistant  | vie-qdrant     | HTTP           | RAG vector search                |
+| vie-assistant  | LLM APIs       | HTTP           | LLM generation                   |
 
 ---
 
@@ -102,13 +103,13 @@ User clicks "Explain" on section
          │
          ▼
 ┌─────────────────────┐
-│ vie-api calls MCP   │
-│ explain_auto tool    │
+│ vie-api calls       │
+│ vie-assistant HTTP  │
 └──────────┬──────────┘
            │
            ▼
 ┌─────────────────────┐
-│ vie-explainer checks │
+│ vie-assistant checks│
 │ systemExpansionCache│
 └──────────┬──────────┘
            │
@@ -135,14 +136,14 @@ User sends message about video
          │
          ▼
 ┌─────────────────────┐
-│ vie-api calls MCP   │
-│ video_chat tool      │
+│ vie-api calls       │
+│ vie-assistant HTTP  │
 └──────────┬──────────┘
            │
            ▼
 ┌─────────────────────┐
-│ vie-explainer:       │
-│ 1. Load video summary│
+│ vie-assistant:       │
+│ 1. RAG vector search│
 │ 2. Build context    │
 │ 3. Call LLM         │
 └──────────┬──────────┘
@@ -296,7 +297,7 @@ For long videos (>30 min), extraction uses chunked batching (2-5 additional call
 │                        vie-network (Docker bridge)                           │
 │                                                                              │
 │  ┌───────────┐  ┌───────────┐  ┌──────────────┐  ┌─────────────┐           │
-│  │ vie-web   │  │ vie-api   │  │vie-summarizer│  │vie-explainer│           │
+│  │ vie-web   │  │ vie-api   │  │vie-summarizer│  │vie-assistant│           │
 │  │  :5173    │  │  :3000    │  │   :8000      │  │   :8001     │           │
 │  └─────┬─────┘  └─────┬─────┘  └──────┬───────┘  └──────┬──────┘           │
 │        │              │               │                  │                  │

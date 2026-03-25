@@ -74,7 +74,6 @@ See [docs/SECURITY.md](./SECURITY.md#rate-limiting) for implementation.
 | `NOT_FOUND`        | Resource not found | Generic 404                 |
 | `VIDEO_NOT_FOUND`  | Video not found    | userVideo doesn't exist     |
 | `FOLDER_NOT_FOUND` | Folder not found   | folder doesn't exist        |
-| `ITEM_NOT_FOUND`   | Item not found     | memorizedItem doesn't exist |
 
 ### Server Errors (500)
 

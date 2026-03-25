@@ -93,7 +93,7 @@ video-insight-engine/
 │   ├── FRONTEND.md                   # React/Vite, components, styling, state
 │   ├── SERVICE-API.md                # vie-api details
 │   ├── SERVICE-SUMMARIZER.md         # vie-summarizer details
-│   └── SERVICE-EXPLAINER.md          # vie-explainer details
+│   └── SERVICE-ASSISTANT.md          # vie-assistant details
 │
 ├── dev/                              # Development workspace (task planning)
 │   ├── README.md                     # How to use dev docs
@@ -120,7 +120,6 @@ video-insight-engine/
 │   │       ├── common.ts             # ProcessingStatus, TranscriptSource
 │   │       ├── user.ts               # User, Auth types
 │   │       ├── video.ts              # Video, Summary types
-│   │       ├── memorized.ts          # Memorized item types
 │   │       ├── playlist.ts           # Playlist types
 │   │       ├── share.ts              # Share types
 │   │       ├── api.ts                # API response types
@@ -152,7 +151,7 @@ video-insight-engine/
 │       │   ├── mongodb.ts
 │       │   ├── jwt.ts
 │       │   ├── websocket.ts
-│       │   ├── mcp.ts                # MCP client to explainer
+│       │   ├── mcp.ts                # MCP client (legacy, unused)
 │       │   ├── cors.ts
 │       │   └── rate-limit.ts
 │       ├── routes/
@@ -163,7 +162,6 @@ video-insight-engine/
 │       │   ├── stream.routes.ts      # SSE proxy to summarizer
 │       │   ├── ssr.routes.ts         # Server-rendered share pages
 │       │   ├── share.routes.ts       # Share link CRUD
-│       │   ├── memorize.routes.ts
 │       │   └── explain.routes.ts
 │       ├── services/
 │       │   ├── auth.service.ts
@@ -171,7 +169,6 @@ video-insight-engine/
 │       │   ├── video.service.ts
 │       │   ├── share.service.ts      # Share link service
 │       │   ├── og-image.service.ts   # OG image generation (SSRF-protected)
-│       │   ├── memorize.service.ts
 │       │   ├── cache.service.ts
 │       │   └── summarizer-client.ts  # HTTP client for summarizer
 │       ├── repositories/
@@ -231,23 +228,21 @@ video-insight-engine/
 │   │           ├── pipeline_types.py # Pipeline models
 │   │           └── vie_response_v2.py # TabEntry, CrossTabLink
 │   │
-│   └── explainer/                    # vie-explainer (Python + MCP)
+│   └── assistant/                    # vie-assistant (Python + FastAPI + Qdrant)
 │       ├── Dockerfile
 │       ├── pyproject.toml
 │       ├── requirements.txt
 │       └── src/
-│           ├── __init__.py
-│           ├── server.py             # MCP server entry
+│           ├── main.py               # FastAPI app entry
 │           ├── config.py             # Settings
-│           ├── tools/
-│           │   ├── __init__.py
-│           │   ├── explain_auto.py   # Cached expansion
-│           │   └── explain_chat.py   # Interactive chat
+│           ├── routes/
+│           │   ├── explain.py        # Cached expansion endpoint
+│           │   └── chat.py           # RAG video chat endpoint
 │           ├── services/
-│           │   ├── __init__.py
-│           │   ├── llm.py            # Claude API wrapper
-│           │   ├── cache.py          # Cache operations
-│           │   └── mongodb.py        # Database ops
+│           │   ├── llm.py            # LLM wrapper (LiteLLM)
+│           │   ├── rag.py            # RAG retrieval + generation
+│           │   ├── embeddings.py     # Embedding generation
+│           │   └── qdrant.py         # Vector DB operations
 │           └── prompts/
 │               ├── explain_section.txt
 │               ├── explain_concept.txt
@@ -346,7 +341,7 @@ video-insight-engine/
 | Folder      | Purpose                           | Contains                               |
 | ----------- | --------------------------------- | -------------------------------------- |
 | `api/`      | **Main gateway** - the front door | Node.js + Fastify REST API             |
-| `services/` | **Backend services**              | Python services (summarizer, explainer)|
+| `services/` | **Backend services**              | Python services (summarizer, assistant)|
 | `apps/`     | **User-facing apps**              | React frontend                         |
 | `packages/` | **Shared code**                   | Types, utilities, cross-lang config    |
 | `docs/`     | **Documentation**                 | All project docs                       |
@@ -434,8 +429,8 @@ services:
     build: ./services/summarizer
     ports: ["8000:8000"]
 
-  vie-explainer:
-    build: ./services/explainer
+  vie-assistant:
+    build: ./services/assistant
     ports: ["8001:8001"]
 
   vie-admin:
@@ -454,6 +449,6 @@ services:
 | Decision               | Reason                                     |
 | ---------------------- | ------------------------------------------ |
 | `api/` at root         | It's THE gateway - visually prominent      |
-| `services/` for Python | Backend services (summarizer, explainer)   |
+| `services/` for Python | Backend services (summarizer, assistant)   |
 | `apps/` for frontend   | Standard convention, room for mobile/admin |
 | `packages/` for shared | Explicit sharing between TS projects       |
