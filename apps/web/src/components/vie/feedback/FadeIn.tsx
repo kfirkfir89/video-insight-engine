@@ -9,8 +9,8 @@ interface FadeInProps {
 }
 
 /**
- * Entrance animation wrapper.
- * Replaces BlockWrapper's animate + index stagger props.
+ * Entrance animation wrapper with stagger support.
+ * Uses .entrance-fade class with prefers-reduced-motion fallback.
  */
 export const FadeIn = memo(function FadeIn({
   children,
@@ -19,7 +19,7 @@ export const FadeIn = memo(function FadeIn({
 }: FadeInProps) {
   return (
     <div
-      className={cn('block-entrance', className)}
+      className={cn('entrance-fade', className)}
       style={index !== undefined ? { animationDelay: `${index * 75}ms` } : undefined}
     >
       {children}

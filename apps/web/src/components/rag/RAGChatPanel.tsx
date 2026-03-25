@@ -3,7 +3,6 @@ import { MessageCircle, Send, Loader2, User, Bot, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollContainer } from '@/components/ui/scroll-container';
-import { ChatBlockRenderer } from './ChatBlockRenderer';
 import { RAGSourceCard } from './RAGSourceCard';
 
 interface RAGSource {
@@ -19,7 +18,6 @@ interface RAGMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  blocks?: Record<string, unknown>[];
   sources?: RAGSource[];
   isStreaming?: boolean;
   createdAt: string;
@@ -88,15 +86,6 @@ const MessageBubble = memo(function MessageBubble({
             <span className="inline-block ml-1 animate-pulse">▌</span>
           )}
         </div>
-
-        {/* Content Blocks (assistant only) */}
-        {!isUser && message.blocks && message.blocks.length > 0 && (
-          <div className="mt-2 space-y-2">
-            {message.blocks.map((block, i) => (
-              <ChatBlockRenderer key={(block.blockId as string) ?? i} block={block as { type: string; [key: string]: unknown }} onPlay={onSeek} />
-            ))}
-          </div>
-        )}
 
         {/* Sources (assistant only) */}
         {!isUser && message.sources && message.sources.length > 0 && (
