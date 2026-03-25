@@ -12,9 +12,6 @@ export * from './user.js';
 // Video (context, chapters, summary, response)
 export * from './video.js';
 
-// Memorized Items
-export * from './memorized.js';
-
 // Playlists
 export * from './playlist.js';
 

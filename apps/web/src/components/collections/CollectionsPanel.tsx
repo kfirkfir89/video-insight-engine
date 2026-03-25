@@ -59,7 +59,7 @@ export const CollectionsPanel = memo(function CollectionsPanel({
         <div className="text-center py-8 text-muted-foreground">
           <FolderOpen className="h-10 w-10 mx-auto mb-2 opacity-30" aria-hidden="true" />
           <p className="text-sm">No collections yet</p>
-          <p className="text-xs mt-1">Create a collection to organize your memorized items.</p>
+          <p className="text-xs mt-1">Create a collection to organize your videos.</p>
         </div>
       ) : (
         <div className="space-y-1">

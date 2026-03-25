@@ -39,7 +39,7 @@ export function SelectionToolbar() {
   const bulkMoveFolders = useBulkMoveFolders();
 
   // Get all folders for move target selection
-  const { data: foldersData } = useFolders("summarized");
+  const { data: foldersData } = useFolders();
   const allFolders = foldersData?.folders || [];
 
   if (!selectionMode || selectionCount === 0) {

@@ -53,7 +53,7 @@ export function AddVideoInput() {
   const navigate = useNavigate();
 
   // Fetch folders for the selector
-  const { data: foldersData } = useFolders("summarized");
+  const { data: foldersData } = useFolders();
 
   // Track user's explicit folder selection
   const [userSelection, setUserSelection] = useState<FolderSelection>(USE_SIDEBAR_SELECTION);

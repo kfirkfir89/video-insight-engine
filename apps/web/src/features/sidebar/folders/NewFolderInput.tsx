@@ -4,10 +4,9 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useCreateFolder } from "@/hooks/use-folders";
-import type { FolderType, Folder } from "@/types";
+import type { Folder } from "@/types";
 
 interface NewFolderInputProps {
-  type: FolderType;
   existingFolders: Folder[];
   onComplete: () => void;
 }
@@ -17,7 +16,6 @@ interface NewFolderInputProps {
  * Checks for duplicate names at root level.
  */
 export function NewFolderInput({
-  type,
   existingFolders,
   onComplete,
 }: NewFolderInputProps) {
@@ -50,7 +48,6 @@ export function NewFolderInput({
     try {
       await createFolder.mutateAsync({
         name: trimmedName,
-        type,
         parentId: null,
       });
       setName("");

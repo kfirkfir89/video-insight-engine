@@ -82,14 +82,6 @@ export class FolderNotFoundError extends AppError {
   }
 }
 
-// Memorize-specific errors
-export class MemorizedItemNotFoundError extends AppError {
-  constructor() {
-    super('MEMORIZED_ITEM_NOT_FOUND', 404, 'Memorized item not found');
-    this.name = 'MemorizedItemNotFoundError';
-  }
-}
-
 export class ParentFolderNotFoundError extends AppError {
   constructor() {
     super('PARENT_FOLDER_NOT_FOUND', 400, 'Parent folder not found');

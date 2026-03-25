@@ -94,7 +94,7 @@ export const CollectionDialog = memo(function CollectionDialog({
           </DialogTitle>
           <DialogDescription>
             {mode === 'create'
-              ? 'Create a new collection to organize your memorized items.'
+              ? 'Create a new collection to organize your videos.'
               : 'Update the collection details.'}
           </DialogDescription>
         </DialogHeader>

@@ -68,7 +68,6 @@ function createFolderResponse(overrides: Partial<FolderResponse> = {}): FolderRe
   return {
     id: new ObjectId().toHexString(),
     name: 'Test Folder',
-    type: 'summarized',
     parentId: null,
     path: '/Test Folder',
     level: 1,
@@ -269,8 +268,7 @@ describe('PlaylistService', () => {
       expect(mockFolderService.create).toHaveBeenCalledWith({
         userId,
         name: 'Test Playlist',
-        type: 'summarized',
-      });
+          });
       expect(mockVideoService.createVideo).toHaveBeenCalledTimes(2);
       expect(result.folder.id).toBe('folder123');
       expect(result.videos).toHaveLength(2);
@@ -433,8 +431,7 @@ describe('PlaylistService', () => {
       expect(mockFolderService.create).toHaveBeenCalledWith({
         userId,
         name: 'TestPlaylist Special Characters',
-        type: 'summarized',
-      });
+          });
     });
 
     it('should use "Playlist" as fallback name when title becomes empty', async () => {
@@ -461,8 +458,7 @@ describe('PlaylistService', () => {
       expect(mockFolderService.create).toHaveBeenCalledWith({
         userId,
         name: 'Playlist',
-        type: 'summarized',
-      });
+          });
     });
 
     it('should pass provider config to video service', async () => {

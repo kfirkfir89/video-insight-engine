@@ -10,15 +10,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCreateFolder } from "@/hooks/use-folders";
 import { useUIStore } from "@/stores/ui-store";
-import type { FolderType } from "@/types";
 import { cn } from "@/lib/utils";
 
 interface CreateFolderButtonProps {
-  type: FolderType;
   className?: string;
 }
 
-export function CreateFolderButton({ type, className }: CreateFolderButtonProps) {
+export function CreateFolderButton({ className }: CreateFolderButtonProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const createFolder = useCreateFolder();
@@ -30,7 +28,6 @@ export function CreateFolderButton({ type, className }: CreateFolderButtonProps)
     try {
       await createFolder.mutateAsync({
         name: name.trim(),
-        type,
         parentId: selectedFolderId,
       });
       setName("");

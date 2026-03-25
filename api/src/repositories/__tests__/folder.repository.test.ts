@@ -26,8 +26,6 @@ describe('FolderRepository', () => {
   beforeEach(async () => {
     await db.collection('folders').deleteMany({});
     await db.collection('userVideos').deleteMany({});
-    await db.collection('memorizedItems').deleteMany({});
-    await db.collection('userChats').deleteMany({});
   });
 
   // Test data factory
@@ -35,7 +33,6 @@ describe('FolderRepository', () => {
     return {
       userId: new ObjectId().toString(),
       name: 'Test Folder',
-      type: 'summarized',
       ...overrides,
     };
   }
@@ -50,7 +47,6 @@ describe('FolderRepository', () => {
       expect(folder._id).toBeDefined();
       expect(folder.userId.toString()).toBe(userId);
       expect(folder.name).toBe('My Folder');
-      expect(folder.type).toBe('summarized');
       expect(folder.path).toBe('/my-folder');
       expect(folder.level).toBe(0);
       expect(folder.order).toBe(0);
@@ -76,14 +72,6 @@ describe('FolderRepository', () => {
       expect(folder.icon).toBe('folder');
       expect(folder.level).toBe(1);
       expect(folder.order).toBe(2);
-    });
-
-    it('should create memorized folder type', async () => {
-      const data = createFolderData({ type: 'memorized' });
-
-      const folder = await repository.create(data, '/memorized', 0, 0);
-
-      expect(folder.type).toBe('memorized');
     });
   });
 
@@ -150,20 +138,6 @@ describe('FolderRepository', () => {
       const folders = await repository.list(userId);
 
       expect(folders).toHaveLength(2);
-    });
-
-    it('should filter by type', async () => {
-      const userId = new ObjectId().toString();
-      await repository.create(createFolderData({ userId, type: 'summarized' }), '/sum', 0, 0);
-      await repository.create(createFolderData({ userId, type: 'memorized' }), '/mem', 0, 1);
-
-      const summarized = await repository.list(userId, 'summarized');
-      const memorized = await repository.list(userId, 'memorized');
-
-      expect(summarized).toHaveLength(1);
-      expect(summarized[0].type).toBe('summarized');
-      expect(memorized).toHaveLength(1);
-      expect(memorized[0].type).toBe('memorized');
     });
 
     it('should not return folders from other users', async () => {
@@ -261,7 +235,7 @@ describe('FolderRepository', () => {
     it('should return 0 when no siblings exist', async () => {
       const userId = new ObjectId().toString();
 
-      const order = await repository.getMaxSiblingOrder(userId, 'summarized', null);
+      const order = await repository.getMaxSiblingOrder(userId, null);
 
       expect(order).toBe(0);
     });
@@ -271,7 +245,7 @@ describe('FolderRepository', () => {
       await repository.create(createFolderData({ userId }), '/folder1', 0, 0);
       await repository.create(createFolderData({ userId }), '/folder2', 0, 5);
 
-      const order = await repository.getMaxSiblingOrder(userId, 'summarized', null);
+      const order = await repository.getMaxSiblingOrder(userId, null);
 
       expect(order).toBe(6);
     });
@@ -286,12 +260,8 @@ describe('FolderRepository', () => {
         3
       );
 
-      const rootOrder = await repository.getMaxSiblingOrder(userId, 'summarized', null);
-      const childOrder = await repository.getMaxSiblingOrder(
-        userId,
-        'summarized',
-        parent._id.toString()
-      );
+      const rootOrder = await repository.getMaxSiblingOrder(userId, null);
+      const childOrder = await repository.getMaxSiblingOrder(userId, parent._id.toString());
 
       expect(rootOrder).toBe(1); // Only parent is at root
       expect(childOrder).toBe(4); // Child has order 3
@@ -440,41 +410,6 @@ describe('FolderRepository', () => {
       const videos = await db.collection('userVideos').find({ userId: new ObjectId(userId) }).toArray();
       expect(videos).toHaveLength(0);
     });
-
-    it('should delete memorizedItems and their chats', async () => {
-      const userId = new ObjectId().toString();
-      const folder = await repository.create(createFolderData({ userId }), '/folder', 0, 0);
-      const memorizedItemId = new ObjectId();
-
-      await db.collection('memorizedItems').insertOne({
-        _id: memorizedItemId,
-        userId: new ObjectId(userId),
-        folderId: folder._id,
-        title: 'Test Item',
-        sourceType: 'video_section',
-        source: {},
-        notes: null,
-        tags: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      await db.collection('userChats').insertOne({
-        userId: new ObjectId(userId),
-        memorizedItemId,
-        title: 'Test Chat',
-        messages: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      await repository.deleteContentInFolders([folder._id], userId);
-
-      const items = await db.collection('memorizedItems').find({ userId: new ObjectId(userId) }).toArray();
-      const chats = await db.collection('userChats').find({ userId: new ObjectId(userId) }).toArray();
-      expect(items).toHaveLength(0);
-      expect(chats).toHaveLength(0);
-    });
   });
 
   describe('moveContentToRoot', () => {
@@ -497,28 +432,6 @@ describe('FolderRepository', () => {
 
       const video = await db.collection('userVideos').findOne({ youtubeId: 'test123' });
       expect(video?.folderId).toBeNull();
-    });
-
-    it('should move memorizedItems to root', async () => {
-      const userId = new ObjectId().toString();
-      const folder = await repository.create(createFolderData({ userId }), '/folder', 0, 0);
-
-      await db.collection('memorizedItems').insertOne({
-        userId: new ObjectId(userId),
-        folderId: folder._id,
-        title: 'Test Item',
-        sourceType: 'video_section',
-        source: {},
-        notes: null,
-        tags: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      await repository.moveContentToRoot([folder._id], userId);
-
-      const item = await db.collection('memorizedItems').findOne({ title: 'Test Item' });
-      expect(item?.folderId).toBeNull();
     });
   });
 });

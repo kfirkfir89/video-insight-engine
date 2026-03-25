@@ -6,7 +6,6 @@ import { FolderNotFoundError, ParentFolderNotFoundError } from '../utils/errors.
 export interface FolderResponse {
   id: string;
   name: string;
-  type: 'summarized' | 'memorized';
   parentId: string | null;
   path: string;
   level: number;
@@ -28,7 +27,6 @@ function toFolderResponse(folder: FolderDocument): FolderResponse {
   return {
     id: folder._id.toHexString(),
     name: folder.name,
-    type: folder.type,
     parentId: folder.parentId?.toHexString() ?? null,
     path: folder.path,
     level: folder.level,
@@ -46,8 +44,8 @@ export class FolderService {
     private readonly logger: FastifyBaseLogger
   ) {}
 
-  async list(userId: string, type?: 'summarized' | 'memorized'): Promise<FolderResponse[]> {
-    const folders = await this.folderRepository.list(userId, type);
+  async list(userId: string): Promise<FolderResponse[]> {
+    const folders = await this.folderRepository.list(userId);
     return folders.map(toFolderResponse);
   }
 
@@ -76,7 +74,6 @@ export class FolderService {
     // Get max order for siblings
     const order = await this.folderRepository.getMaxSiblingOrder(
       input.userId,
-      input.type,
       input.parentId ?? null
     );
 

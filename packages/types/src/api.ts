@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════
 
 import type { User } from './user.js';
-import type { FolderType, ProcessingStatus, TargetType } from './common.js';
+import type { ProcessingStatus } from './common.js';
 
 // ─────────────────────────────────────────────────────
 // API Responses
@@ -18,12 +18,12 @@ export interface AuthResponse {
 export interface FolderResponse {
   id: string;
   name: string;
-  type: FolderType;
   parentId: string | null;
   path: string;
   level: number;
   color: string | null;
   icon: string | null;
+  order: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -60,7 +60,7 @@ export interface ExpansionStatusEvent {
   type: 'expansion.status';
   payload: {
     videoSummaryId: string;
-    targetType: TargetType;
+    targetType: 'section' | 'concept';
     targetId: string;
     status: ProcessingStatus;
     error?: string;

@@ -165,7 +165,6 @@ export class PlaylistService {
       const newFolder = await this.folderService.create({
         userId,
         name: folderName,
-        type: 'summarized',
       });
       folder = { id: newFolder.id, name: newFolder.name };
     }

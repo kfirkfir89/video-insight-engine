@@ -30,7 +30,7 @@ export function SidebarSection() {
   const exitSelectionMode = useUIStore((s) => s.exitSelectionMode);
 
   // Data fetching
-  const { data: foldersData, isLoading: foldersLoading } = useFolders("summarized");
+  const { data: foldersData, isLoading: foldersLoading } = useFolders();
   const { data: videosData, isLoading: videosLoading } = useAllVideos();
 
   const folders = foldersData?.folders ?? [];
@@ -148,7 +148,6 @@ export function SidebarSection() {
             <>
               <FolderTree
                 folders={filteredFolders}
-                type="summarized"
                 videos={filteredVideos}
                 allFolders={folders}
               />

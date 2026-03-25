@@ -4,7 +4,6 @@ export interface FolderDocument {
   _id: ObjectId;
   userId: ObjectId;
   name: string;
-  type: 'summarized' | 'memorized';
   parentId: ObjectId | null;
   path: string;
   level: number;
@@ -18,7 +17,6 @@ export interface FolderDocument {
 export interface CreateFolderData {
   userId: string;
   name: string;
-  type: 'summarized' | 'memorized';
   parentId?: string | null;
   color?: string | null;
   icon?: string | null;
@@ -36,14 +34,10 @@ export interface UpdateFolderData {
 export class FolderRepository {
   private readonly collection: Collection<FolderDocument>;
   private readonly userVideosCollection: Collection;
-  private readonly memorizedItemsCollection: Collection;
-  private readonly userChatsCollection: Collection;
 
   constructor(db: Db) {
     this.collection = db.collection('folders');
     this.userVideosCollection = db.collection('userVideos');
-    this.memorizedItemsCollection = db.collection('memorizedItems');
-    this.userChatsCollection = db.collection('userChats');
   }
 
   async findById(userId: string, folderId: string): Promise<FolderDocument | null> {
@@ -60,14 +54,9 @@ export class FolderRepository {
     });
   }
 
-  async list(userId: string, type?: 'summarized' | 'memorized'): Promise<FolderDocument[]> {
-    const query: Record<string, unknown> = { userId: new ObjectId(userId) };
-    if (type) {
-      query.type = type;
-    }
-
+  async list(userId: string): Promise<FolderDocument[]> {
     return this.collection
-      .find(query)
+      .find({ userId: new ObjectId(userId) })
       .sort({ path: 1, order: 1 })
       .toArray();
   }
@@ -77,7 +66,6 @@ export class FolderRepository {
     const doc: Omit<FolderDocument, '_id'> = {
       userId: new ObjectId(data.userId),
       name: data.name,
-      type: data.type,
       parentId: data.parentId ? new ObjectId(data.parentId) : null,
       path,
       level,
@@ -109,11 +97,10 @@ export class FolderRepository {
     );
   }
 
-  async getMaxSiblingOrder(userId: string, type: 'summarized' | 'memorized', parentId: string | null): Promise<number> {
+  async getMaxSiblingOrder(userId: string, parentId: string | null): Promise<number> {
     const siblings = await this.collection
       .find({
         userId: new ObjectId(userId),
-        type,
         parentId: parentId ? new ObjectId(parentId) : null,
       })
       .sort({ order: -1 })
@@ -181,33 +168,10 @@ export class FolderRepository {
   }
 
   async deleteContentInFolders(folderIds: ObjectId[], userId: string): Promise<void> {
-    const userObjectId = new ObjectId(userId);
-
-    // Delete userVideos
     await this.userVideosCollection.deleteMany({
-      userId: userObjectId,
+      userId: new ObjectId(userId),
       folderId: { $in: folderIds },
     });
-
-    // Get memorizedItems to delete associated chats
-    const memorizedItems = await this.memorizedItemsCollection.find({
-      userId: userObjectId,
-      folderId: { $in: folderIds },
-    }).toArray();
-
-    const memorizedItemIds = memorizedItems.map(item => item._id);
-
-    if (memorizedItemIds.length > 0) {
-      await this.userChatsCollection.deleteMany({
-        userId: userObjectId,
-        memorizedItemId: { $in: memorizedItemIds },
-      });
-
-      await this.memorizedItemsCollection.deleteMany({
-        userId: userObjectId,
-        folderId: { $in: folderIds },
-      });
-    }
   }
 
   async moveContentToRoot(folderIds: ObjectId[], userId: string): Promise<void> {
@@ -215,11 +179,6 @@ export class FolderRepository {
     const now = new Date();
 
     await this.userVideosCollection.updateMany(
-      { userId: userObjectId, folderId: { $in: folderIds } },
-      { $set: { folderId: null, updatedAt: now } }
-    );
-
-    await this.memorizedItemsCollection.updateMany(
       { userId: userObjectId, folderId: { $in: folderIds } },
       { $set: { folderId: null, updatedAt: now } }
     );

@@ -37,7 +37,6 @@ export const createMockVideoSummary = (overrides = {}) => ({
 export const createMockFolder = (overrides = {}) => ({
   id: "folder-1",
   name: "Test Folder",
-  type: "videos" as const,
   parentId: null,
   color: null,
   icon: null,
@@ -138,20 +137,13 @@ export const handlers = [
   }),
 
   // Folder endpoints
-  http.get(`${API_URL}/folders`, ({ request }) => {
-    const url = new URL(request.url);
-    const type = url.searchParams.get("type");
-
+  http.get(`${API_URL}/folders`, () => {
     const folders = [
       createMockFolder({ id: "folder-1", name: "Folder 1" }),
-      createMockFolder({ id: "folder-2", name: "Folder 2", type: "memorized" }),
+      createMockFolder({ id: "folder-2", name: "Folder 2" }),
     ];
 
-    const filtered = type
-      ? folders.filter((f) => f.type === type)
-      : folders;
-
-    return HttpResponse.json({ folders: filtered });
+    return HttpResponse.json({ folders });
   }),
 
   http.get(`${API_URL}/folders/:id`, ({ params }) => {
@@ -161,12 +153,9 @@ export const handlers = [
   }),
 
   http.post(`${API_URL}/folders`, async ({ request }) => {
-    const body = (await request.json()) as {
-      name: string;
-      type: string;
-    };
+    const body = (await request.json()) as { name: string };
     return HttpResponse.json(
-      createMockFolder({ name: body.name, type: body.type as "videos" | "memorized" })
+      createMockFolder({ name: body.name })
     );
   }),
 

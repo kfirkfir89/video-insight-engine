@@ -25,18 +25,17 @@ import { CreateSubfolderInput } from "./CreateSubfolderInput";
 import { FolderContextMenu } from "./FolderContextMenu";
 import { VideoItem } from "../videos/VideoItem";
 import type { FolderNode } from "@/features/sidebar/lib/folder-utils";
-import type { FolderType, Video, Folder as FolderData } from "@/types";
+import type { Video, Folder as FolderData } from "@/types";
 
 interface FolderItemProps {
   folder: FolderNode;
-  type: FolderType;
   level: number;
   videos: Video[];
   allFolders: FolderData[];
 }
 
 // Memoized to prevent cascading re-renders in sidebar tree
-export const FolderItem = memo(function FolderItem({ folder, type, level, videos, allFolders }: FolderItemProps) {
+export const FolderItem = memo(function FolderItem({ folder, level, videos, allFolders }: FolderItemProps) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -310,7 +309,6 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
       {showSubfolderInput && (
         <CreateSubfolderInput
           parentFolder={folder}
-          type={type}
           paddingLeft={paddingLeft}
           indentPerLevel={SIDEBAR_LAYOUT.INDENT_PER_LEVEL}
           open={showSubfolderInput}
@@ -326,7 +324,6 @@ export const FolderItem = memo(function FolderItem({ folder, type, level, videos
             <FolderItem
               key={child.id}
               folder={child}
-              type={type}
               level={level + 1}
               videos={videos}
               allFolders={allFolders}

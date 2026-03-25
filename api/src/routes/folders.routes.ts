@@ -2,15 +2,8 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { idParamSchema, objectIdSchema } from '../utils/validation.js';
 
-const folderTypeSchema = z.enum(['summarized', 'memorized']);
-
-const foldersQuerySchema = z.object({
-  type: folderTypeSchema.optional(),
-});
-
 const createFolderSchema = z.object({
   name: z.string().min(1).max(100),
-  type: folderTypeSchema,
   parentId: objectIdSchema.optional().nullable(),
   color: z.string().optional().nullable(),
   icon: z.string().optional().nullable(),
@@ -31,13 +24,10 @@ export async function foldersRoutes(fastify: FastifyInstance) {
   const { folderService } = fastify.container;
 
   // GET /api/folders
-  fastify.get<{
-    Querystring: z.infer<typeof foldersQuerySchema>;
-  }>('/', {
+  fastify.get('/', {
     preHandler: [fastify.authenticate],
   }, async (req) => {
-    const { type } = foldersQuerySchema.parse(req.query);
-    const folders = await folderService.list(req.user.userId, type);
+    const folders = await folderService.list(req.user.userId);
     return { folders };
   });
 

@@ -25,8 +25,8 @@ describe('folders routes', () => {
   describe('GET /api/folders', () => {
     it('should return all folders', async () => {
       const mockFolders = [
-        { id: 'f1', name: 'Work', type: 'summarized' },
-        { id: 'f2', name: 'Personal', type: 'memorized' },
+        { id: 'f1', name: 'Work' },
+        { id: 'f2', name: 'Personal' },
       ];
       mockContainer.folderService.list.mockResolvedValue(mockFolders);
 
@@ -37,21 +37,8 @@ describe('folders routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(mockContainer.folderService.list).toHaveBeenCalledWith('test-user-id', undefined);
+      expect(mockContainer.folderService.list).toHaveBeenCalledWith('test-user-id');
       expect(response.json()).toEqual({ folders: mockFolders });
-    });
-
-    it('should filter by type when provided', async () => {
-      mockContainer.folderService.list.mockResolvedValue([]);
-
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/folders?type=summarized',
-        headers: { authorization: authHeader },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(mockContainer.folderService.list).toHaveBeenCalledWith('test-user-id', 'summarized');
     });
 
     it('should return 401 without auth token', async () => {
@@ -66,7 +53,7 @@ describe('folders routes', () => {
 
   describe('GET /api/folders/:id', () => {
     it('should return a single folder', async () => {
-      const mockFolder = { id: 'f1', name: 'Work', type: 'summarized' };
+      const mockFolder = { id: 'f1', name: 'Work' };
       mockContainer.folderService.getById.mockResolvedValue(mockFolder);
 
       const response = await app.inject({
@@ -99,7 +86,7 @@ describe('folders routes', () => {
 
   describe('POST /api/folders', () => {
     it('should create a folder', async () => {
-      const mockFolder = { id: 'f1', name: 'New Folder', type: 'summarized' };
+      const mockFolder = { id: 'f1', name: 'New Folder' };
       mockContainer.folderService.create.mockResolvedValue(mockFolder);
 
       const response = await app.inject({
@@ -111,7 +98,6 @@ describe('folders routes', () => {
         },
         payload: {
           name: 'New Folder',
-          type: 'summarized',
         },
       });
 
@@ -119,13 +105,12 @@ describe('folders routes', () => {
       expect(mockContainer.folderService.create).toHaveBeenCalledWith({
         userId: 'test-user-id',
         name: 'New Folder',
-        type: 'summarized',
       });
       expect(response.json()).toEqual(mockFolder);
     });
 
     it('should accept optional parentId, color, and icon', async () => {
-      const mockFolder = { id: 'f1', name: 'Sub Folder', type: 'memorized' };
+      const mockFolder = { id: 'f1', name: 'Sub Folder' };
       mockContainer.folderService.create.mockResolvedValue(mockFolder);
 
       const response = await app.inject({
@@ -137,7 +122,6 @@ describe('folders routes', () => {
         },
         payload: {
           name: 'Sub Folder',
-          type: 'memorized',
           parentId: '507f1f77bcf86cd799439011',
           color: '#ff0000',
           icon: 'folder',
@@ -148,7 +132,6 @@ describe('folders routes', () => {
       expect(mockContainer.folderService.create).toHaveBeenCalledWith({
         userId: 'test-user-id',
         name: 'Sub Folder',
-        type: 'memorized',
         parentId: '507f1f77bcf86cd799439011',
         color: '#ff0000',
         icon: 'folder',
@@ -163,26 +146,7 @@ describe('folders routes', () => {
           authorization: authHeader,
           'content-type': 'application/json',
         },
-        payload: {
-          name: 'Folder Without Type',
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it('should return 400 for invalid type', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/folders',
-        headers: {
-          authorization: authHeader,
-          'content-type': 'application/json',
-        },
-        payload: {
-          name: 'Invalid Folder',
-          type: 'invalid',
-        },
+        payload: {},
       });
 
       expect(response.statusCode).toBe(400);
@@ -191,7 +155,7 @@ describe('folders routes', () => {
 
   describe('PATCH /api/folders/:id', () => {
     it('should update a folder', async () => {
-      const mockFolder = { id: 'f1', name: 'Updated Name', type: 'summarized' };
+      const mockFolder = { id: 'f1', name: 'Updated Name' };
       mockContainer.folderService.update.mockResolvedValue(mockFolder);
 
       const response = await app.inject({

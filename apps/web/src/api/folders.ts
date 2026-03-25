@@ -1,26 +1,13 @@
 import { request } from "./client";
 import type {
   Folder,
-  FolderType,
   CreateFolderInput,
   UpdateFolderInput,
 } from "@/types";
 
-export interface ListFoldersParams {
-  type?: FolderType;
-  limit?: number;
-  offset?: number;
-}
-
 export const foldersApi = {
-  async list(params: ListFoldersParams = {}): Promise<{ folders: Folder[] }> {
-    const searchParams = new URLSearchParams();
-    if (params.type) searchParams.set("type", params.type);
-    if (params.limit) searchParams.set("limit", String(params.limit));
-    if (params.offset) searchParams.set("offset", String(params.offset));
-
-    const query = searchParams.toString();
-    return request(`/folders${query ? `?${query}` : ""}`);
+  async list(): Promise<{ folders: Folder[] }> {
+    return request("/folders");
   },
 
   async get(id: string): Promise<Folder> {

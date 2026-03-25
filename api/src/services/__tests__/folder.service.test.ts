@@ -25,7 +25,6 @@ function createFolderDocument(overrides: Partial<FolderDocument> = {}): FolderDo
     _id: id,
     userId: new ObjectId(),
     name: 'Test Folder',
-    type: 'summarized',
     parentId: null,
     path: '/Test Folder',
     level: 1,
@@ -88,22 +87,10 @@ describe('FolderService', () => {
 
       const result = await folderService.list(userId);
 
-      expect(mockFolderRepository.list).toHaveBeenCalledWith(userId, undefined);
+      expect(mockFolderRepository.list).toHaveBeenCalledWith(userId);
       expect(result).toHaveLength(2);
       expect(result[0].name).toBe('Folder 1');
       expect(result[1].name).toBe('Folder 2');
-    });
-
-    it('should filter folders by type', async () => {
-      const userId = new ObjectId().toHexString();
-      const folders = [createFolderDocument({ type: 'memorized' })];
-      mockFolderRepository.list.mockResolvedValue(folders);
-
-      const result = await folderService.list(userId, 'memorized');
-
-      expect(mockFolderRepository.list).toHaveBeenCalledWith(userId, 'memorized');
-      expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('memorized');
     });
 
     it('should return empty array when no folders exist', async () => {
@@ -148,10 +135,9 @@ describe('FolderService', () => {
       const result = await folderService.create({
         userId,
         name: 'New Folder',
-        type: 'summarized',
       });
 
-      expect(mockFolderRepository.getMaxSiblingOrder).toHaveBeenCalledWith(userId, 'summarized', null);
+      expect(mockFolderRepository.getMaxSiblingOrder).toHaveBeenCalledWith(userId, null);
       expect(mockFolderRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'New Folder' }),
         '/New Folder',
@@ -185,7 +171,6 @@ describe('FolderService', () => {
       const result = await folderService.create({
         userId,
         name: 'Child',
-        type: 'summarized',
         parentId: parentId.toHexString(),
       });
 
@@ -208,7 +193,6 @@ describe('FolderService', () => {
         folderService.create({
           userId,
           name: 'Child',
-          type: 'summarized',
           parentId,
         })
       ).rejects.toThrow(ParentFolderNotFoundError);
@@ -223,7 +207,6 @@ describe('FolderService', () => {
       await folderService.create({
         userId,
         name: 'New Folder',
-        type: 'summarized',
       });
 
       expect(mockFolderRepository.create).toHaveBeenCalledWith(

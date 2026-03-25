@@ -50,7 +50,6 @@ describe('AuthService', () => {
       name: 'Test User',
       preferences: {
         defaultSummarizedFolder: null,
-        defaultMemorizedFolder: null,
         theme: 'system' as const,
       },
       usage: {

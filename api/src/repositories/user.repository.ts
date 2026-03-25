@@ -7,7 +7,6 @@ export interface UserDocument {
   name: string;
   preferences: {
     defaultSummarizedFolder: ObjectId | null;
-    defaultMemorizedFolder: ObjectId | null;
     theme: 'light' | 'dark' | 'system';
   };
   usage: {
@@ -61,7 +60,6 @@ export class UserRepository {
       name: data.name,
       preferences: {
         defaultSummarizedFolder: null,
-        defaultMemorizedFolder: null,
         theme: 'system',
       },
       usage: {

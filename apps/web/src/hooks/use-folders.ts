@@ -1,13 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { foldersApi } from "@/api/folders";
 import { queryKeys } from "@/lib/query-keys";
-import type { FolderType, CreateFolderInput, UpdateFolderInput } from "@/types";
+import type { CreateFolderInput, UpdateFolderInput } from "@/types";
 
 // Fetch folders list
-export function useFolders(type?: FolderType) {
+export function useFolders() {
   return useQuery({
-    queryKey: queryKeys.folders.list(type),
-    queryFn: () => foldersApi.list({ type }),
+    queryKey: queryKeys.folders.list(),
+    queryFn: () => foldersApi.list(),
   });
 }
 
