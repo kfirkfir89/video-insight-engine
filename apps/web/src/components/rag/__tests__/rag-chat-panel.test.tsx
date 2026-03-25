@@ -33,7 +33,7 @@ describe('RAGChatPanel', () => {
       render(<RAGChatPanel {...defaultProps} />);
 
       expect(screen.getByText('Start a conversation')).toBeInTheDocument();
-      expect(screen.getByText(/ask questions about your memorized/i)).toBeInTheDocument();
+      expect(screen.getByText(/ask questions about your videos/i)).toBeInTheDocument();
     });
 
     it('should render messages when provided', () => {

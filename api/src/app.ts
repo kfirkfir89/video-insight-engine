@@ -18,7 +18,6 @@ import { authRoutes } from './routes/auth.routes.js';
 import { foldersRoutes } from './routes/folders.routes.js';
 import { videosRoutes } from './routes/videos.routes.js';
 import { playlistsRoutes } from './routes/playlists.routes.js';
-import { memorizeRoutes } from './routes/memorize.routes.js';
 import { assistantRoutes } from './routes/assistant.routes.js';
 import { internalRoutes } from './routes/internal.routes.js';
 import { streamRoutes } from './routes/stream.routes.js';
@@ -147,7 +146,6 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   await fastify.register(streamRoutes, { prefix: '/api/videos' });  // Streaming SSE route
   await fastify.register(overrideRoutes, { prefix: '/api/videos' }); // Override category
   await fastify.register(playlistsRoutes, { prefix: '/api/playlists' });
-  await fastify.register(memorizeRoutes, { prefix: '/api/memorize' });
   await fastify.register(assistantRoutes, { prefix: '/api/videos' });
   await fastify.register(shareRoutes, { prefix: '/api/share' });
   await fastify.register(paymentRoutes, { prefix: '/api/payments' });

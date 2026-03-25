@@ -124,12 +124,6 @@ describe('MongoDB plugin', () => {
       expect(indexes.length).toBeGreaterThan(1);
     });
 
-    it('should create indexes for memorizedItems collection', async () => {
-      const indexes = await app.mongo.db.collection('memorizedItems').indexes();
-
-      expect(indexes.length).toBeGreaterThan(1);
-    });
-
     it('should create unique index for users email', async () => {
       const indexes = await app.mongo.db.collection('users').indexes();
 
@@ -140,11 +134,6 @@ describe('MongoDB plugin', () => {
       expect(emailIndex?.unique).toBe(true);
     });
 
-    it('should create indexes for userChats collection', async () => {
-      const indexes = await app.mongo.db.collection('userChats').indexes();
-
-      expect(indexes.length).toBeGreaterThan(1);
-    });
   });
 
   describe('connection cleanup', () => {

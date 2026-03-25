@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useCreateFolder, useFolders } from "@/hooks/use-folders";
-import type { FolderType } from "@/types";
 
 interface NewFolderPanelProps {
   onComplete: () => void;
@@ -13,9 +12,8 @@ interface NewFolderPanelProps {
 export function NewFolderPanel({ onComplete }: NewFolderPanelProps) {
   const [name, setName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const folderType: FolderType = "summarized";
   const createFolder = useCreateFolder();
-  const { data: foldersData } = useFolders(folderType);
+  const { data: foldersData } = useFolders();
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -40,7 +38,6 @@ export function NewFolderPanel({ onComplete }: NewFolderPanelProps) {
     try {
       await createFolder.mutateAsync({
         name: trimmed,
-        type: folderType,
         parentId: null,
       });
       setName("");

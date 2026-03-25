@@ -24,7 +24,6 @@ const createFolder = (
 ): Folder => ({
   id,
   name,
-  type: 'summarized',
   parentId,
   path: parentId ? `/${parentId}/${id}` : `/${id}`,
   level,

@@ -321,13 +321,6 @@ export const useUIStore = create<UIState>()(
         sidebarTextSize: state.sidebarTextSize,
         sidebarSortOption: state.sidebarSortOption,
       }),
-      // Migrate persisted "memorized" → "summarized" for users with old localStorage
-      // TODO: Remove after 2026-06-01 when all users have migrated
-      onRehydrateStorage: () => (state) => {
-        if (state && (state.activeSection as string) === "memorized") {
-          state.activeSection = "summarized";
-        }
-      },
     }
   )
 );

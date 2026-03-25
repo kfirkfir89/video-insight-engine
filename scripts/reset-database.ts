@@ -8,10 +8,7 @@
  *
  * Collections dropped:
  * - videoSummaryCache: Video summaries (will be regenerated)
- * - memorizedItems: User memorized content (references old section IDs)
  * - userVideos: User video associations
- * - systemExpansionCache: Explainer cache
- * - userChats: Chat history
  *
  * Collections preserved:
  * - users: User accounts and settings
@@ -30,10 +27,7 @@ const DATABASE_NAME = process.env.MONGODB_DATABASE || 'vie';
 // Collections to drop (video/content related)
 const COLLECTIONS_TO_DROP = [
   'videoSummaryCache',
-  'memorizedItems',
   'userVideos',
-  'systemExpansionCache',
-  'userChats',
 ];
 
 // Collections to preserve

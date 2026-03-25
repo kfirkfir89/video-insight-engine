@@ -44,15 +44,8 @@ async function mongodb(fastify: FastifyInstance) {
 
       // folders indexes
       await db.collection('folders').createIndexes([
-        { key: { userId: 1, type: 1, path: 1 } },
+        { key: { userId: 1, path: 1 } },
         { key: { userId: 1, parentId: 1 } },
-      ]);
-
-      // memorizedItems indexes
-      await db.collection('memorizedItems').createIndexes([
-        { key: { userId: 1, folderId: 1 } },
-        { key: { userId: 1, 'source.videoSummaryId': 1 } },
-        { key: { userId: 1, createdAt: -1 } },
       ]);
 
       // users indexes
@@ -69,12 +62,6 @@ async function mongodb(fastify: FastifyInstance) {
       // llm_usage indexes (auto-cleanup old records)
       await db.collection('llm_usage').createIndexes([
         { key: { createdAt: 1 }, expireAfterSeconds: 90 * 24 * 60 * 60 }, // 90-day TTL
-      ]);
-
-      // userChats indexes
-      await db.collection('userChats').createIndexes([
-        { key: { userId: 1, memorizedItemId: 1 } },
-        { key: { userId: 1, updatedAt: -1 } },
       ]);
 
       fastify.log.info('MongoDB indexes created');

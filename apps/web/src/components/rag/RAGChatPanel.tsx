@@ -111,7 +111,7 @@ const MessageBubble = memo(function MessageBubble({
 });
 
 /**
- * RAG Chat Panel for conversational Q&A over memorized content.
+ * RAG Chat Panel for conversational Q&A over video content.
  * Supports streaming responses and source attribution.
  */
 export const RAGChatPanel = memo(function RAGChatPanel({
@@ -209,7 +209,7 @@ export const RAGChatPanel = memo(function RAGChatPanel({
                 <Sparkles className="h-10 w-10 mx-auto opacity-30" aria-hidden="true" />
                 <p className="text-sm">Start a conversation</p>
                 <p className="text-xs max-w-[200px]">
-                  Ask questions about your memorized videos and saved content.
+                  Ask questions about your videos and saved content.
                 </p>
               </div>
             </div>

@@ -33,39 +33,6 @@ describe("foldersApi", () => {
       expect(result.folders[1].name).toBe("Folder 2");
     });
 
-    it("should filter by type when provided", async () => {
-      let capturedUrl = "";
-
-      server.use(
-        http.get(`${API_URL}/folders`, ({ request }) => {
-          capturedUrl = request.url;
-          return HttpResponse.json({
-            folders: [createMockFolder({ type: "videos" })],
-          });
-        })
-      );
-
-      await foldersApi.list({ type: "videos" });
-
-      expect(capturedUrl).toContain("type=videos");
-    });
-
-    it("should include pagination params when provided", async () => {
-      let capturedUrl = "";
-
-      server.use(
-        http.get(`${API_URL}/folders`, ({ request }) => {
-          capturedUrl = request.url;
-          return HttpResponse.json({ folders: [] });
-        })
-      );
-
-      await foldersApi.list({ limit: 5, offset: 10 });
-
-      expect(capturedUrl).toContain("limit=5");
-      expect(capturedUrl).toContain("offset=10");
-    });
-
     it("should return empty list when no folders exist", async () => {
       server.use(
         http.get(`${API_URL}/folders`, () => {
@@ -76,23 +43,6 @@ describe("foldersApi", () => {
       const result = await foldersApi.list();
 
       expect(result.folders).toHaveLength(0);
-    });
-
-    it("should filter by memorized type", async () => {
-      let capturedUrl = "";
-
-      server.use(
-        http.get(`${API_URL}/folders`, ({ request }) => {
-          capturedUrl = request.url;
-          return HttpResponse.json({
-            folders: [createMockFolder({ type: "memorized" })],
-          });
-        })
-      );
-
-      await foldersApi.list({ type: "memorized" });
-
-      expect(capturedUrl).toContain("type=memorized");
     });
 
     it("should throw on API error", async () => {
@@ -117,7 +67,6 @@ describe("foldersApi", () => {
             createMockFolder({
               id: params.id as string,
               name: "Fetched Folder",
-              type: "videos",
             })
           );
         })
@@ -127,7 +76,6 @@ describe("foldersApi", () => {
 
       expect(folder.id).toBe("folder-abc");
       expect(folder.name).toBe("Fetched Folder");
-      expect(folder.type).toBe("videos");
     });
 
     it("should throw on not found", async () => {
@@ -152,7 +100,6 @@ describe("foldersApi", () => {
             createMockFolder({
               id: "folder-full",
               name: "Full Folder",
-              type: "videos",
               parentId: "parent-folder",
               color: "#ff0000",
               icon: "folder-icon",
@@ -170,7 +117,7 @@ describe("foldersApi", () => {
   });
 
   describe("create", () => {
-    it("should create folder with name and type", async () => {
+    it("should create folder with name", async () => {
       let capturedBody: unknown = null;
 
       server.use(
@@ -180,7 +127,6 @@ describe("foldersApi", () => {
             createMockFolder({
               id: "new-folder",
               name: "New Folder",
-              type: "videos",
             })
           );
         })
@@ -188,16 +134,13 @@ describe("foldersApi", () => {
 
       const folder = await foldersApi.create({
         name: "New Folder",
-        type: "videos",
       });
 
       expect(capturedBody).toEqual({
         name: "New Folder",
-        type: "videos",
       });
       expect(folder.id).toBe("new-folder");
       expect(folder.name).toBe("New Folder");
-      expect(folder.type).toBe("videos");
     });
 
     it("should create folder with optional parentId", async () => {
@@ -216,7 +159,6 @@ describe("foldersApi", () => {
 
       await foldersApi.create({
         name: "Child Folder",
-        type: "videos",
         parentId: "parent-123",
       });
 
@@ -242,7 +184,6 @@ describe("foldersApi", () => {
 
       await foldersApi.create({
         name: "Styled Folder",
-        type: "memorized",
         color: "#00ff00",
         icon: "star",
       });
@@ -264,7 +205,7 @@ describe("foldersApi", () => {
       );
 
       await expect(
-        foldersApi.create({ name: "", type: "videos" })
+        foldersApi.create({ name: "" })
       ).rejects.toThrow("Name is required");
     });
 
@@ -279,7 +220,7 @@ describe("foldersApi", () => {
       );
 
       await expect(
-        foldersApi.create({ name: "Existing Folder", type: "videos" })
+        foldersApi.create({ name: "Existing Folder" })
       ).rejects.toThrow("Folder with this name already exists");
     });
   });

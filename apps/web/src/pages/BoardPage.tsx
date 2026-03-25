@@ -17,7 +17,7 @@ export function BoardPage() {
   const { data: filteredVideosData, isLoading: filteredLoading } = useVideos(
     selectedFolderId ?? undefined
   );
-  const { data: foldersData, isLoading: foldersLoading } = useFolders("summarized");
+  const { data: foldersData, isLoading: foldersLoading } = useFolders();
 
   // Determine which videos to show
   const isShowingAll = selectedFolderId === null;

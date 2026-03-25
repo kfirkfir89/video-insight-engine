@@ -5,12 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useCreateFolder } from "@/hooks/use-folders";
 import { cn } from "@/lib/utils";
-import type { FolderType } from "@/types";
 import type { FolderNode } from "@/features/sidebar/lib/folder-utils";
 
 interface CreateSubfolderInputProps {
   parentFolder: FolderNode;
-  type: FolderType;
   paddingLeft: number;
   indentPerLevel: number;
   open: boolean;
@@ -24,7 +22,6 @@ interface CreateSubfolderInputProps {
  */
 export function CreateSubfolderInput({
   parentFolder,
-  type,
   paddingLeft,
   indentPerLevel,
   open,
@@ -63,7 +60,6 @@ export function CreateSubfolderInput({
     try {
       await createFolder.mutateAsync({
         name: trimmed,
-        type,
         parentId: parentFolder.id,
       });
       setName("");

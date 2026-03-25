@@ -77,34 +77,6 @@ describe("useFolders", () => {
       expect(result.current.error).toBeDefined();
     });
 
-    it("should filter folders by type", async () => {
-      server.use(
-        http.get(`${API_URL}/folders`, ({ request }) => {
-          const url = new URL(request.url);
-          const type = url.searchParams.get("type");
-
-          if (type === "videos") {
-            return HttpResponse.json({
-              folders: [createMockFolder({ id: "folder-1", type: "videos" })],
-            });
-          }
-
-          return HttpResponse.json({ folders: [] });
-        })
-      );
-
-      const { result } = renderHook(() => useFolders("videos"), {
-        wrapper: createWrapper(),
-      });
-
-      await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
-      });
-
-      expect(result.current.data?.folders).toHaveLength(1);
-      expect(result.current.data?.folders[0].type).toBe("videos");
-    });
-
     it("should support refetch functionality", async () => {
       const { result } = renderHook(() => useFolders(), {
         wrapper: createWrapper(),
@@ -176,7 +148,6 @@ describe("useFolders", () => {
       await act(async () => {
         await result.current.mutateAsync({
           name: "New Folder",
-          type: "videos",
         });
       });
 
@@ -211,7 +182,6 @@ describe("useFolders", () => {
       await act(async () => {
         await result.current.mutateAsync({
           name: "Nested Folder",
-          type: "videos",
           parentId: "folder-1",
         });
       });
@@ -241,8 +211,7 @@ describe("useFolders", () => {
         try {
           await result.current.mutateAsync({
             name: "Duplicate",
-            type: "videos",
-          });
+            });
         } catch {
           // Expected error
         }

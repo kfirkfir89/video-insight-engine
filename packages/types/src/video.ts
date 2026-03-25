@@ -54,7 +54,6 @@ export interface SummaryChapter {
   generatedTitle?: string;
   isCreatorChapter: boolean;
   /** @deprecated Legacy block-based content. Use VIE composable output instead. */
-  content?: Record<string, unknown>[];
   view?: VideoCategory;
   transcript?: string;
 }

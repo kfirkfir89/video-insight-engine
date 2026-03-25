@@ -37,12 +37,3 @@ export interface GenerationMetadata {
   promptVersion: string;       // e.g., "v2.3"
   generatedAt: string;         // ISO date
 }
-
-export type FolderType = 'summarized' | 'memorized';
-
-export type SourceType =
-  | 'video_section'
-  | 'video_concept'
-  | 'system_expansion';
-
-export type TargetType = 'section' | 'concept';

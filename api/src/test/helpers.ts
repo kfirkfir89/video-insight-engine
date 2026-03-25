@@ -11,9 +11,6 @@ export interface MockContainer {
     findCacheById: ReturnType<typeof vi.fn>;
     updateCacheEntry: ReturnType<typeof vi.fn>;
   };
-  memorizeRepository: {
-    findById: ReturnType<typeof vi.fn>;
-  };
   videoService: {
     createVideo: ReturnType<typeof vi.fn>;
     getVideos: ReturnType<typeof vi.fn>;
@@ -35,14 +32,6 @@ export interface MockContainer {
     register: ReturnType<typeof vi.fn>;
     login: ReturnType<typeof vi.fn>;
     getUser: ReturnType<typeof vi.fn>;
-  };
-  memorizeService: {
-    list: ReturnType<typeof vi.fn>;
-    getById: ReturnType<typeof vi.fn>;
-    create: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
-    delete: ReturnType<typeof vi.fn>;
-    listChats: ReturnType<typeof vi.fn>;
   };
   playlistService: {
     preview: ReturnType<typeof vi.fn>;
@@ -94,9 +83,6 @@ export function createMockContainer(): MockContainer {
       findCacheById: vi.fn(),
       updateCacheEntry: vi.fn(),
     },
-    memorizeRepository: {
-      findById: vi.fn().mockResolvedValue({ id: 'item123', userId: 'test-user-id' }),
-    },
     videoService: {
       createVideo: vi.fn(),
       getVideos: vi.fn(),
@@ -118,14 +104,6 @@ export function createMockContainer(): MockContainer {
       register: vi.fn(),
       login: vi.fn(),
       getUser: vi.fn(),
-    },
-    memorizeService: {
-      list: vi.fn(),
-      getById: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
-      listChats: vi.fn(),
     },
     playlistService: {
       preview: vi.fn(),

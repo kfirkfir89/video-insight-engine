@@ -60,7 +60,6 @@ describe('UserRepository', () => {
 
       expect(user.preferences).toEqual({
         defaultSummarizedFolder: null,
-        defaultMemorizedFolder: null,
         theme: 'system',
       });
     });
@@ -172,8 +171,7 @@ describe('UserRepository', () => {
       await repository.update(created._id.toString(), {
         preferences: {
           defaultSummarizedFolder: folderId,
-          defaultMemorizedFolder: null,
-          theme: 'dark',
+            theme: 'dark',
         },
       });
 

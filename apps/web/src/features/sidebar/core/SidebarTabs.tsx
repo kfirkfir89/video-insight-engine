@@ -22,7 +22,7 @@ export function SidebarTabs() {
   const setActiveSection = useUIStore((s) => s.setActiveSection);
 
   const { data: videosData } = useAllVideos();
-  const { data: summarizedFolders } = useFolders("summarized");
+  const { data: summarizedFolders } = useFolders();
 
   const summarizedCount = useMemo(() => {
     const sumFolderIds = new Set(
