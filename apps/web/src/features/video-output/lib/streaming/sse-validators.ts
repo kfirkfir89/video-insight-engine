@@ -9,9 +9,6 @@ import { z } from 'zod';
 import { sseLogger } from './sse-logger';
 import {
   VIDEO_CATEGORY_VALUES,
-  type Chapter,
-  type SummaryChapter,
-  type Concept,
   type DescriptionLink,
   type Resource,
   type RelatedVideo,
@@ -22,39 +19,6 @@ import {
 // ─────────────────────────────────────────────────────
 // Zod Schemas
 // ─────────────────────────────────────────────────────
-
-export const chapterSchema = z.object({
-  startSeconds: z.number(),
-  endSeconds: z.number(),
-  title: z.string(),
-});
-
-export const summaryChapterSchema = z.object({
-  id: z.string(),
-  timestamp: z.string(),
-  startSeconds: z.number().optional(),
-  start_seconds: z.number().optional(),  // Backend compatibility
-  endSeconds: z.number().optional(),
-  end_seconds: z.number().optional(),    // Backend compatibility
-  title: z.string(),
-  originalTitle: z.string().optional(),
-  original_title: z.string().optional(), // Backend compatibility
-  generatedTitle: z.string().optional().nullable(),
-  generated_title: z.string().optional().nullable(), // Backend compatibility
-  isCreatorChapter: z.boolean().optional(),
-  is_creator_chapter: z.boolean().optional(), // Backend compatibility
-  // Legacy content blocks — pass through without validation
-  content: z.array(z.record(z.unknown())).optional(),
-  // Transcript slice for this chapter (RAG/display)
-  transcript: z.string().optional(),
-});
-
-export const conceptSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  definition: z.string().nullable().optional(),
-  timestamp: z.string().nullable().optional(),
-});
 
 export const descriptionLinkSchema = z.object({
   url: z.string(),
@@ -80,61 +44,6 @@ export const socialLinkSchema = z.object({
 // ─────────────────────────────────────────────────────
 // Validation Functions
 // ─────────────────────────────────────────────────────
-
-/**
- * Validate chapters array from SSE event.
- * Returns empty array if validation fails.
- */
-export function validateChapters(data: unknown): Chapter[] {
-  const result = z.array(chapterSchema).safeParse(data);
-  if (!result.success) {
-    sseLogger.warn('Invalid chapters data:', result.error.message);
-    return [];
-  }
-  return result.data as Chapter[];
-}
-
-/**
- * Validate chapter from SSE event.
- * Returns null if validation fails.
- * Normalizes snake_case to camelCase for backend compatibility.
- */
-export function validateChapter(data: unknown): SummaryChapter | null {
-  const result = summaryChapterSchema.safeParse(data);
-  if (!result.success) {
-    sseLogger.warn('Invalid chapter data:', result.error.message);
-    return null;
-  }
-  const d = result.data;
-  return {
-    id: d.id,
-    timestamp: d.timestamp,
-    startSeconds: d.startSeconds ?? d.start_seconds ?? 0,
-    endSeconds: d.endSeconds ?? d.end_seconds ?? 0,
-    title: d.title,
-    originalTitle: d.originalTitle ?? d.original_title,
-    generatedTitle: d.generatedTitle ?? d.generated_title ?? undefined,
-    isCreatorChapter: d.isCreatorChapter ?? d.is_creator_chapter ?? false,
-    content: d.content,
-  };
-}
-
-/**
- * Validate concepts array from SSE event.
- * Returns empty array if validation fails.
- */
-export function validateConcepts(data: unknown): Concept[] {
-  const result = z.array(conceptSchema).safeParse(data);
-  if (!result.success) {
-    sseLogger.warn('Invalid concepts data:', result.error.message);
-    return [];
-  }
-  return result.data.map(c => ({
-    ...c,
-    definition: c.definition ?? null,
-    timestamp: c.timestamp ?? null,
-  })) as Concept[];
-}
 
 /**
  * Validate description analysis from SSE event.
@@ -285,33 +194,6 @@ export function validateErrorEvent(data: unknown): ErrorEventResult {
   };
 }
 
-const chaptersEventSchema = z.object({
-  event: z.literal('chapters'),
-  chapters: z.array(chapterSchema),
-  isCreatorChapters: z.boolean().default(false),
-});
-
-interface ChaptersEventResult {
-  chapters: Chapter[];
-  isCreatorChapters: boolean;
-}
-
-/**
- * Validate chapters event from SSE.
- * Returns validated chapters with metadata or defaults.
- */
-export function validateChaptersEvent(data: unknown): ChaptersEventResult {
-  const result = chaptersEventSchema.safeParse(data);
-  if (!result.success) {
-    sseLogger.warn('Invalid chapters event:', result.error.message);
-    return { chapters: [], isCreatorChapters: false };
-  }
-  return {
-    chapters: result.data.chapters as Chapter[],
-    isCreatorChapters: result.data.isCreatorChapters,
-  };
-}
-
 // ─────────────────────────────────────────────────────
 // Phase Event Validation
 // ─────────────────────────────────────────────────────
@@ -323,12 +205,6 @@ export function validateChaptersEvent(data: unknown): ChaptersEventResult {
 const VALID_SSE_PHASES = [
   'metadata',
   'transcript',
-  'parallel_analysis',
-  'chapter_detect',
-  'chapter_summaries',
-  'concepts',
-  'master_summary',
-  // Triage pipeline phases
   'triage',
   'extraction',
   'enrichment',

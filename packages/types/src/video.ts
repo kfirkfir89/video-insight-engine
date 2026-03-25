@@ -2,7 +2,7 @@
 // Video Types — Context, Summary, Response
 // ═══════════════════════════════════════════════════
 
-import type { GenerationMetadata, ProcessingStatus } from './common.js';
+import type { ProcessingStatus } from './common.js';
 import type { OutputType } from './output-types.js';
 import type { PlaylistInfo } from './playlist.js';
 import type { ShareInfo } from './share.js';
@@ -38,44 +38,6 @@ export interface VideoContext {
   tags: string[];
   displayTags: string[];
   categoryConfidence?: number; // Detection confidence (0.0-1.0), used internally
-}
-
-// ─────────────────────────────────────────────────────
-// Chapter & Summary Types (used by MemorizedItem, share, etc.)
-// ─────────────────────────────────────────────────────
-
-export interface SummaryChapter {
-  id: string;
-  timestamp: string;
-  startSeconds: number;
-  endSeconds: number;
-  title: string;
-  originalTitle?: string;
-  generatedTitle?: string;
-  isCreatorChapter: boolean;
-  /** @deprecated Legacy block-based content. Use VIE composable output instead. */
-  view?: VideoCategory;
-  transcript?: string;
-}
-
-export interface Concept {
-  id: string;
-  name: string;
-  definition: string | null;
-  timestamp: string | null;
-  aliases?: string[];
-  chapterIndex?: number;
-}
-
-export interface VideoSummary {
-  tldr: string;
-  keyTakeaways: string[];
-  chapters: SummaryChapter[];
-  concepts: Concept[];
-  masterSummary?: string;
-  rawTranscriptRef?: string | null;
-  generation?: GenerationMetadata;
-  outputType?: OutputType;
 }
 
 // ─────────────────────────────────────────────────────
