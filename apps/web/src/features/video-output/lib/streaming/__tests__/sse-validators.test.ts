@@ -1,14 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
-  validateChapters,
-  validateChapter,
-  validateConcepts,
   validateDescriptionAnalysis,
   validateMetadataEvent,
   validateSynthesisComplete,
   validateDoneEvent,
   validateErrorEvent,
-  validateChaptersEvent,
   validatePhaseEvent,
 } from '../sse-validators';
 
@@ -24,209 +20,6 @@ vi.mock('../sse-logger', () => ({
 describe('sse-validators', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  // ─────────────────────────────────────────────────────
-  // validateChapters Tests
-  // ─────────────────────────────────────────────────────
-
-  describe('validateChapters', () => {
-    it('should validate valid chapters array', () => {
-      const chapters = [
-        { startSeconds: 0, endSeconds: 60, title: 'Intro' },
-        { startSeconds: 60, endSeconds: 120, title: 'Main Content' },
-      ];
-
-      const result = validateChapters(chapters);
-
-      expect(result).toEqual(chapters);
-    });
-
-    it('should return empty array for invalid data', () => {
-      const result = validateChapters('not an array');
-
-      expect(result).toEqual([]);
-    });
-
-    it('should return empty array for null', () => {
-      const result = validateChapters(null);
-
-      expect(result).toEqual([]);
-    });
-
-    it('should return empty array for chapters with missing fields', () => {
-      const result = validateChapters([{ startSeconds: 0 }]);
-
-      expect(result).toEqual([]);
-    });
-
-    it('should return empty array for chapters with wrong types', () => {
-      const result = validateChapters([
-        { startSeconds: '0', endSeconds: 60, title: 'Intro' },
-      ]);
-
-      expect(result).toEqual([]);
-    });
-  });
-
-  // ─────────────────────────────────────────────────────
-  // validateChapter Tests
-  // ─────────────────────────────────────────────────────
-
-  describe('validateChapter', () => {
-    it('should validate valid chapter', () => {
-      const chapter = {
-        id: 's1',
-        timestamp: '0:00',
-        startSeconds: 0,
-        endSeconds: 60,
-        title: 'Intro',
-        content: [{ blockId: 'b1', type: 'paragraph', text: 'Introduction to the topic' }],
-      };
-
-      const result = validateChapter(chapter);
-
-      expect(result).toMatchObject({
-        id: 's1',
-        timestamp: '0:00',
-        startSeconds: 0,
-        endSeconds: 60,
-        title: 'Intro',
-      });
-    });
-
-    it('should normalize snake_case to camelCase', () => {
-      const chapter = {
-        id: 's1',
-        timestamp: '0:00',
-        start_seconds: 0,
-        end_seconds: 60,
-        title: 'Intro',
-        original_title: 'Original',
-        generated_title: 'Generated',
-        is_creator_chapter: true,
-      };
-
-      const result = validateChapter(chapter);
-
-      expect(result).toMatchObject({
-        startSeconds: 0,
-        endSeconds: 60,
-        originalTitle: 'Original',
-        generatedTitle: 'Generated',
-        isCreatorChapter: true,
-      });
-    });
-
-    it('should prefer camelCase over snake_case when both present', () => {
-      const chapter = {
-        id: 's1',
-        timestamp: '0:00',
-        startSeconds: 100,
-        start_seconds: 50,
-        endSeconds: 200,
-        end_seconds: 150,
-        title: 'Test',
-      };
-
-      const result = validateChapter(chapter);
-
-      expect(result?.startSeconds).toBe(100);
-      expect(result?.endSeconds).toBe(200);
-    });
-
-    it('should return null for invalid chapter', () => {
-      const result = validateChapter({ id: 's1' }); // Missing required fields
-
-      expect(result).toBeNull();
-    });
-
-    it('should return null for null input', () => {
-      const result = validateChapter(null);
-
-      expect(result).toBeNull();
-    });
-
-    it('should validate chapter with content blocks', () => {
-      const chapter = {
-        id: 's1',
-        timestamp: '0:00',
-        startSeconds: 0,
-        endSeconds: 60,
-        title: 'Intro',
-        content: [
-          { blockId: 'block-1', type: 'paragraph', text: 'Hello world' },
-          { blockId: 'block-2', type: 'bullets', items: ['Item 1', 'Item 2'] },
-        ],
-      };
-
-      const result = validateChapter(chapter);
-
-      expect(result?.content).toHaveLength(2);
-      expect(result?.content?.[0]).toEqual({ blockId: 'block-1', type: 'paragraph', text: 'Hello world' });
-    });
-
-    it('should pass through content blocks without filtering', () => {
-      const chapter = {
-        id: 's1',
-        timestamp: '0:00',
-        startSeconds: 0,
-        endSeconds: 60,
-        title: 'Intro',
-        content: [
-          { blockId: 'block-1', type: 'paragraph', text: 'Valid' },
-          { blockId: 'block-2', type: 'unknown_type', data: 'Unknown' },
-          { blockId: 'block-3', type: 'bullets', items: ['Valid items'] },
-        ],
-      };
-
-      const result = validateChapter(chapter);
-
-      // Content blocks are passed through without per-block validation
-      expect(result?.content).toHaveLength(3);
-    });
-  });
-
-  // ─────────────────────────────────────────────────────
-  // validateConcepts Tests
-  // ─────────────────────────────────────────────────────
-
-  describe('validateConcepts', () => {
-    it('should validate valid concepts array', () => {
-      const concepts = [
-        { id: 'c1', name: 'React', definition: 'A JavaScript library', timestamp: '1:00' },
-        { id: 'c2', name: 'Vue', definition: null, timestamp: null },
-      ];
-
-      const result = validateConcepts(concepts);
-
-      expect(result).toHaveLength(2);
-      expect(result[0].name).toBe('React');
-      expect(result[0].definition).toBe('A JavaScript library');
-      expect(result[1].definition).toBeNull();
-    });
-
-    it('should handle missing optional fields', () => {
-      const concepts = [{ id: 'c1', name: 'Test' }];
-
-      const result = validateConcepts(concepts);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].definition).toBeNull();
-      expect(result[0].timestamp).toBeNull();
-    });
-
-    it('should return empty array for invalid input', () => {
-      const result = validateConcepts('not an array');
-
-      expect(result).toEqual([]);
-    });
-
-    it('should return empty array for concepts missing required fields', () => {
-      const result = validateConcepts([{ definition: 'No name field' }]);
-
-      expect(result).toEqual([]);
-    });
   });
 
   // ─────────────────────────────────────────────────────
@@ -463,45 +256,6 @@ describe('sse-validators', () => {
   });
 
   // ─────────────────────────────────────────────────────
-  // validateChaptersEvent Tests
-  // ─────────────────────────────────────────────────────
-
-  describe('validateChaptersEvent', () => {
-    it('should validate chapters event', () => {
-      const data = {
-        event: 'chapters',
-        chapters: [
-          { startSeconds: 0, endSeconds: 60, title: 'Intro' },
-          { startSeconds: 60, endSeconds: 120, title: 'Main' },
-        ],
-        isCreatorChapters: true,
-      };
-
-      const result = validateChaptersEvent(data);
-
-      expect(result.chapters).toHaveLength(2);
-      expect(result.isCreatorChapters).toBe(true);
-    });
-
-    it('should default isCreatorChapters to false', () => {
-      const data = {
-        event: 'chapters',
-        chapters: [],
-      };
-
-      const result = validateChaptersEvent(data);
-
-      expect(result.isCreatorChapters).toBe(false);
-    });
-
-    it('should return defaults for invalid event', () => {
-      const result = validateChaptersEvent({ event: 'wrong' });
-
-      expect(result).toEqual({ chapters: [], isCreatorChapters: false });
-    });
-  });
-
-  // ─────────────────────────────────────────────────────
   // validatePhaseEvent Tests
   // ─────────────────────────────────────────────────────
 
@@ -510,11 +264,10 @@ describe('sse-validators', () => {
       const validPhases = [
         'metadata',
         'transcript',
-        'parallel_analysis',
-        'chapter_detect',
-        'chapter_summaries',
-        'concepts',
-        'master_summary',
+        'triage',
+        'extraction',
+        'enrichment',
+        'synthesis',
       ];
 
       for (const phase of validPhases) {

@@ -1,9 +1,6 @@
 // Re-export types from shared package
 export type {
   ProcessingStatus,
-  SummaryChapter,
-  Concept,
-  VideoSummary,
   AuthResponse,
   VideoResponse,
   VideoContext,
