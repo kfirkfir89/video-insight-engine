@@ -1,5 +1,6 @@
 import { memo, useState, useMemo, useEffect } from 'react';
 import { Clock, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { FadeIn, Badge, GlassCard } from '@/components/vie';
 
@@ -141,21 +142,19 @@ export const ClipPlayerInteractive = memo(function ClipPlayerInteractive({
                       className="w-12 h-12 rounded object-cover shrink-0 border border-border/30"
                     />
                   )}
-                  {onSeek ? (
-                    <Button
-                      variant="ghost"
-                      size="bare"
-                      onClick={(e) => { e.stopPropagation(); onSeek(clip.startSeconds); }}
-                      className="text-xs font-bold tabular-nums text-primary bg-primary/10 px-2 py-0.5 rounded-md shrink-0"
-                    >
-                      <Clock className="h-3 w-3 mr-1" aria-hidden="true" />
-                      {clip.time}
-                    </Button>
-                  ) : (
-                    <span className="text-xs font-bold tabular-nums text-primary bg-primary/10 px-2 py-0.5 rounded-md shrink-0">
-                      {clip.time}
-                    </span>
-                  )}
+                  <span
+                    role={onSeek ? "button" : undefined}
+                    tabIndex={onSeek ? 0 : undefined}
+                    onClick={onSeek ? (e) => { e.stopPropagation(); onSeek(clip.startSeconds); } : undefined}
+                    onKeyDown={onSeek ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); onSeek(clip.startSeconds); } } : undefined}
+                    className={cn(
+                      "text-xs font-bold tabular-nums text-primary bg-primary/10 px-2 py-0.5 rounded-md shrink-0 inline-flex items-center gap-1",
+                      onSeek && "cursor-pointer hover:bg-primary/20 transition-colors"
+                    )}
+                  >
+                    <Clock className="h-3 w-3" aria-hidden="true" />
+                    {clip.time}
+                  </span>
                   <span className="flex-1 text-sm font-medium truncate">{clip.label}</span>
                   <div className="flex items-center gap-2 shrink-0">
                     {clip.mood && <Badge variant="muted" className="text-[10px] capitalize">{clip.mood}</Badge>}

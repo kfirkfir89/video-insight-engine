@@ -181,7 +181,7 @@ function AppRoutes() {
   );
 }
 
-function App() {
+export function App() {
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vie-theme">
       <BrowserRouter>
@@ -193,5 +193,3 @@ function App() {
     </ThemeProvider>
   );
 }
-
-export default App;

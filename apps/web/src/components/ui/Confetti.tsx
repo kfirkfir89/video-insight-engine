@@ -77,7 +77,7 @@ export const Confetti = memo(function Confetti({
 
   return (
     <div
-      className="fixed inset-0 pointer-events-none z-[100] overflow-hidden"
+      className="fixed inset-0 pointer-events-none z-confetti overflow-hidden"
       aria-hidden="true"
     >
       {particles.map((p) => (

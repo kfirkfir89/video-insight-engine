@@ -1,4 +1,5 @@
-import { Component, memo, type ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
 import {
   TextBlock,
   ListItems,
@@ -16,27 +17,12 @@ interface ChatBlock {
   [key: string]: unknown;
 }
 
-/** Error boundary that catches crashes in individual block renderers */
-class BlockErrorBoundary extends Component<
-  { type: string; children: ReactNode },
-  { hasError: boolean }
-> {
-  state = { hasError: false };
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="text-xs text-muted-foreground/50 py-1">
-          Failed to render {this.props.type} block
-        </div>
-      );
-    }
-    return this.props.children;
-  }
+function BlockErrorFallback({ type }: { type: string }) {
+  return (
+    <div className="text-xs text-muted-foreground/50 py-1">
+      Failed to render {type} block
+    </div>
+  );
 }
 
 interface ChatBlockRendererProps {
@@ -59,9 +45,9 @@ export const ChatBlockRenderer = memo(function ChatBlockRenderer({
   if (!rendered) return null;
 
   return (
-    <BlockErrorBoundary type={block.type}>
+    <ErrorBoundary fallbackRender={() => <BlockErrorFallback type={block.type} />}>
       {rendered}
-    </BlockErrorBoundary>
+    </ErrorBoundary>
   );
 });
 

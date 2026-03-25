@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect, lazy, Suspense } from "react";
 import type { ReactNode } from "react";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { useUIStore } from "@/stores/ui-store";
 import { AppHeader } from "./AppHeader";
 import { LeftSidebarIconStrip } from "./LeftSidebarIconStrip";
@@ -26,6 +27,22 @@ function SidebarSkeleton() {
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="h-8 bg-muted rounded-md" />
         ))}
+      </div>
+    </div>
+  );
+}
+
+function SidebarErrorFallback() {
+  return (
+    <div className="h-full bg-card border-r flex items-center justify-center p-4">
+      <div className="text-center space-y-2">
+        <p className="text-sm font-medium text-destructive">Sidebar failed to load</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-xs text-primary hover:underline"
+        >
+          Reload page
+        </button>
       </div>
     </div>
   );
@@ -100,13 +117,23 @@ export function Layout({ children, showSidebar = true }: LayoutProps) {
 
   return (
     <div className="h-screen flex bg-background overflow-hidden">
+      {/* Skip to main content — accessible keyboard navigation */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-modal focus:top-2 focus:left-2 focus:rounded-md focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+      >
+        Skip to main content
+      </a>
+
       {/* Left sidebar (full height) or icon strip */}
       {showSidebar && (
         sidebarOpen ? (
           <div className="relative flex shrink-0 h-screen" style={{ width: sidebarWidth }}>
-            <Suspense fallback={<SidebarSkeleton />}>
-              <Sidebar />
-            </Suspense>
+            <ErrorBoundary fallback={<SidebarErrorFallback />}>
+              <Suspense fallback={<SidebarSkeleton />}>
+                <Sidebar />
+              </Suspense>
+            </ErrorBoundary>
             <div
               role="separator"
               aria-orientation="vertical"
@@ -135,9 +162,11 @@ export function Layout({ children, showSidebar = true }: LayoutProps) {
       {/* Right column: header + content */}
       <div className="flex-1 flex flex-col min-w-0">
         <AppHeader />
-        <ScrollContainer wrapperClassName="flex-1 min-w-0 min-h-0">
-          {children}
-        </ScrollContainer>
+        <main id="main-content" className="flex-1 flex flex-col min-h-0">
+          <ScrollContainer wrapperClassName="flex-1 min-w-0 min-h-0">
+            {children}
+          </ScrollContainer>
+        </main>
       </div>
     </div>
   );

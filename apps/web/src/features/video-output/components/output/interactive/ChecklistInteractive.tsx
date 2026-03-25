@@ -111,10 +111,10 @@ export const ChecklistInteractive = memo(function ChecklistInteractive({
             style={{
               width: `${progress}%`,
               backgroundColor: progress <= 33
-                ? 'oklch(65% 0.2 25)'    // red
+                ? 'var(--destructive)'
                 : progress <= 66
-                  ? 'oklch(75% 0.16 85)' // amber
-                  : 'oklch(72% 0.19 145)', // green
+                  ? 'var(--warning)'
+                  : 'var(--success)',
             }}
           />
         </div>

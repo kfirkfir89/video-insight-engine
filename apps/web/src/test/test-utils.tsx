@@ -30,7 +30,7 @@ interface WrapperProps {
  * Creates a wrapper component with all necessary providers for testing.
  * Use this with renderHook when testing custom hooks.
  */
-export function createWrapper(): React.FC<WrapperProps> {
+export function createWrapper(): (props: WrapperProps) => ReactNode {
   const queryClient = createTestQueryClient();
 
   return function Wrapper({ children }: WrapperProps) {

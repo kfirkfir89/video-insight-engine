@@ -54,7 +54,7 @@ export function VideoContextMenu({
           <MoreVertical className={cn(textClasses.smallIconSize, "text-muted-foreground")} />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="right" sideOffset={8} className="w-48 z-[200]">
+      <DropdownMenuContent align="start" side="right" sideOffset={8} className="w-48 z-dropdown">
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <FolderInput className="h-4 w-4" />

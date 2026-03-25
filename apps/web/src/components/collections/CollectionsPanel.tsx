@@ -80,7 +80,7 @@ export const CollectionsPanel = memo(function CollectionsPanel({
               {/* Color indicator */}
               <div
                 className="w-2 h-2 rounded-full shrink-0"
-                style={{ backgroundColor: collection.color || '#888' }}
+                style={{ backgroundColor: collection.color || 'var(--muted-foreground)' }}
               />
 
               {/* Name and count */}
