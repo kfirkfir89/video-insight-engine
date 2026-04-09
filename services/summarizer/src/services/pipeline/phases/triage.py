@@ -54,6 +54,8 @@ async def run_phase_plan(ctx: PipelineContext) -> AsyncGenerator[str, None]:
 
     if classification is not None and not ctx.override:
         ctx.content_format = classification.format
+        if classification.traits:
+            ctx.content_traits = classification.traits
         if classification.confidence > CLASSIFIER_CONFIDENCE_THRESHOLD:
             ctx.category_hint = classification.domain
             logger.info("pipeline.classifier.override", extra={
@@ -71,6 +73,12 @@ async def run_phase_plan(ctx: PipelineContext) -> AsyncGenerator[str, None]:
                 "confidence": classification.confidence,
             })
 
+    # Build traits summary for plan prompt
+    traits_summary = None
+    if ctx.content_traits:
+        active = ctx.content_traits.active_traits()
+        traits_summary = ", ".join(active) if active else "none detected"
+
     # Run plan (single Sonnet call — replaces manifest + triage)
     llm_feature_var.set("summarize:plan")
     plan_result = await run_plan(
@@ -82,6 +90,7 @@ async def run_phase_plan(ctx: PipelineContext) -> AsyncGenerator[str, None]:
         content_format=ctx.content_format,
         transcript_preview=ctx.clean_text[:3000],
         llm_service=ctx.llm_service,
+        content_traits=traits_summary,
     )
 
     # Store plan result and populate backward-compat fields

@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from src.models.pipeline_types import PlanResult
     from src.repositories.mongodb_repository import MongoDBVideoRepository
     from src.services.llm import LLMService
+    from src.services.pipeline.classifier import ContentTraits
     from src.services.pipeline.pipeline_helpers import PipelineTimer, TranscriptData
     from src.services.pipeline.triage import TriageResult
     from src.services.video.description_analyzer import DescriptionAnalysis
@@ -58,6 +59,7 @@ class PipelineContext:
     override: dict | None = None
     category_hint: str | None = None
     content_format: str | None = None  # Presentation format from classifier (tutorial, commentary, etc.)
+    content_traits: ContentTraits | None = None  # Structural traits from classifier
     plan_result: PlanResult | None = None  # Merged plan result (replaces manifest + triage)
     description_analysis: DescriptionAnalysis | None = None
 

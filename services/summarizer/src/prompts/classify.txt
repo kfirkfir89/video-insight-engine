@@ -21,6 +21,8 @@ Pick exactly one — this decides what data to extract:
 - music: Song analysis, music production, theory, performances
 - review: Product reviews, comparisons, buying guides, unboxing
 - project: DIY builds, crafts, home improvement, woodworking
+- language: Language learning, pronunciation, grammar, vocabulary, speaking practice
+- science: Science explanations, experiments, physics, chemistry, biology, math
 </domains>
 
 <formats>
@@ -53,4 +55,16 @@ Pick exactly one — this decides presentation style:
 - "commentary" means opinions and analysis without hands-on demonstration
 </classification_guidance>
 
-Return JSON: {{"domain": "tech", "format": "tutorial", "confidence": 0.92, "reasoning": "..."}}
+<traits>
+For each boolean trait, output true if the video clearly has this characteristic:
+- has_steps: sequential step-by-step instructions the viewer follows
+- has_drills: repetitive practice exercises (pronunciation, coding katas, workout reps)
+- has_comparison: side-by-side evaluation of products, methods, or options
+- has_narrative: strong storytelling with a personal journey or arc
+- has_code: actual code, commands, or configs shown on screen
+- has_visual_demo: physical demonstrations (cooking, building, exercising)
+- is_opinionated: strong personal opinions, hot takes, rants
+- is_list: listicle format ("10 best...", "5 ways to...")
+</traits>
+
+Return JSON: {{"domain": "tech", "format": "tutorial", "confidence": 0.92, "reasoning": "...", "traits": {{"has_steps": true, "has_code": true, "has_drills": false, "has_comparison": false, "has_narrative": false, "has_visual_demo": false, "is_opinionated": false, "is_list": false}}}}

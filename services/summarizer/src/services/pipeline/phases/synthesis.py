@@ -48,6 +48,17 @@ async def run_phase_synthesis(ctx: PipelineContext) -> AsyncGenerator[str, None]
     assert ctx.video_data is not None
     assert ctx.triage is not None
 
+    # Skip if synthesis was already populated during extraction retry
+    if ctx.synthesis_dict:
+        logger.info("[pipeline] Synthesis already populated (from extraction retry), skipping")
+        yield sse_event("synthesis_complete", {
+            "tldr": ctx.synthesis_dict.get("tldr", ""),
+            "keyTakeaways": ctx.synthesis_dict.get("keyTakeaways", []),
+            "masterSummary": ctx.synthesis_dict.get("masterSummary", ""),
+            "seoDescription": ctx.synthesis_dict.get("seoDescription", ""),
+        })
+        return
+
     # Hierarchical mode for long videos with chapters
     if ctx.chapters and len(ctx.chapters) > 5:
         extraction_summary = _build_hierarchical_synthesis_input(ctx)

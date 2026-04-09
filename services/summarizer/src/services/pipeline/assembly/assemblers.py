@@ -26,11 +26,13 @@ _CATEGORY_FRONTS = frozenset({
 
 def _normalize_to_spot(item: dict) -> dict:
     """Normalize diverse dict shapes to spot format {name, description, emoji}."""
-    name = item.get("name") or item.get("title") or item.get("aspect") or item.get("label") or ""
+    name = (item.get("name") or item.get("title") or item.get("phrase")
+            or item.get("word") or item.get("aspect") or item.get("label") or "")
     desc = (item.get("description") or item.get("detail") or item.get("definition")
-            or item.get("explanation") or "")
+            or item.get("explanation") or item.get("translation") or item.get("context") or "")
     result = {"name": str(name), "description": str(desc)}
-    for passthrough in ("emoji", "cost", "duration", "mapQuery", "tips", "thumbnailUrl"):
+    for passthrough in ("emoji", "cost", "duration", "mapQuery", "tips", "thumbnailUrl",
+                        "pronunciation", "timestamp"):
         if passthrough in item:
             result[passthrough] = item[passthrough]
     return result
@@ -50,16 +52,26 @@ def _normalize_comparison(item: dict) -> dict:
 
 def _normalize_step(item: dict, index: int) -> dict:
     """Normalize a step item, converting timestamp-shaped data if needed."""
-    if "instruction" in item:
-        if "number" not in item:
-            item = {**item, "number": index + 1}
-        return item
+    instruction = (
+        item.get("instruction")
+        or item.get("title")
+        or item.get("label")
+        or item.get("name")
+        or item.get("text")
+        or item.get("description")
+        or item.get("detail")
+        or ""
+    )
+    tips = item.get("tips")
+    if not tips and item.get("detail") and item.get("detail") != instruction:
+        tips = item.get("detail")
     return {
-        "number": index + 1,
-        "instruction": item.get("label", ""),
-        "timestamp": item.get("seconds"),
+        "number": item.get("number", index + 1),
+        "instruction": instruction,
+        "timestamp": item.get("timestamp") or item.get("seconds"),
         "duration": item.get("duration"),
-        "tips": item.get("tips"),
+        "tips": tips,
+        **({"thumbnailUrl": item["thumbnailUrl"]} if item.get("thumbnailUrl") else {}),
     }
 
 
@@ -84,6 +96,13 @@ def _to_flash_card(item: dict) -> dict:
         return {"front": item["name"], "back": " | ".join(back_parts) or item.get("description", ""), "emoji": item.get("emoji")}
     if "name" in item:
         return {"front": item["name"], "back": item.get("description") or item.get("text") or "", "emoji": item.get("emoji")}
+    if "word" in item:
+        back_parts = [item.get("definition") or ""]
+        if item.get("pronunciation"):
+            back_parts.append(f"({item['pronunciation']})")
+        if item.get("example"):
+            back_parts.append(f"Example: {item['example']}")
+        return {"front": item["word"], "back": " ".join(filter(None, back_parts)), "emoji": item.get("emoji")}
     if "term" in item:
         return {"front": item["term"], "back": item.get("definition") or item.get("description") or "", "emoji": item.get("emoji")}
     if "title" in item:
@@ -284,9 +303,11 @@ def assemble_spot_explorer(
     normalized = []
     for item in data:
         if isinstance(item, dict):
-            normalized.append(_normalize_to_spot(item))
+            spot = _normalize_to_spot(item)
+            if spot["name"] or spot["description"]:
+                normalized.append(spot)
         elif isinstance(item, str) and item.strip():
-            normalized.append({"title": item.strip(), "detail": "", "emoji": ""})
+            normalized.append({"name": item.strip(), "description": "", "emoji": ""})
     return {"spots": normalized} if normalized else None
 
 
@@ -311,6 +332,17 @@ def assemble_code_explorer(
 def assemble_comparison(
     tab: dict, data: Any, extraction: dict, enrichment: dict | None,
 ) -> dict | None:
+    # Derive product label from review extraction or video title
+    review_data = extraction.get("review") if isinstance(extraction, dict) else None
+    product_name: str | None = None
+    if isinstance(review_data, dict):
+        product_name = review_data.get("product") or None
+    if not product_name:
+        video_meta = tab.get("_video_meta") or {}
+        title = video_meta.get("title", "")
+        if title:
+            product_name = title
+
     if isinstance(data, dict):
         pros = data.get("pros") or []
         cons = data.get("cons") or []
@@ -331,7 +363,10 @@ def assemble_comparison(
                         pass
                     elif c.get("thisProduct") and not c.get("competitor"):
                         pros.append(feature)
-            return {"pros": pros, "cons": cons, "comparisons": normalized}
+            result = {"pros": pros, "cons": cons, "comparisons": normalized}
+            if product_name:
+                result["leftLabel"] = product_name
+            return result
 
     if isinstance(data, list) and len(data) > 0:
         rows: list[dict] = []
@@ -365,7 +400,10 @@ def assemble_comparison(
                     "competitor": "",
                 })
         if rows:
-            return {"pros": [], "cons": [], "comparisons": rows}
+            result = {"pros": [], "cons": [], "comparisons": rows}
+            if product_name:
+                result["leftLabel"] = product_name
+            return result
 
     return None
 
@@ -387,10 +425,16 @@ def assemble_info_grid(
                     pairs.append({"key": item["label"], "value": item["description"]})
                 elif "name" in item and "description" in item:
                     pairs.append({"key": item["name"], "value": item["description"]})
+                elif "name" in item and "explanation" in item:
+                    pairs.append({"key": item["name"], "value": item["explanation"]})
                 elif "role" in item and "name" in item:
                     pairs.append({"key": item["role"], "value": item["name"]})
                 elif "type" in item and "text" in item:
                     pairs.append({"key": item["type"], "value": item["text"]})
+                elif "title" in item and "description" in item:
+                    pairs.append({"key": item["title"], "value": item["description"]})
+                elif "title" in item and "value" in item:
+                    pairs.append({"key": item["title"], "value": item["value"]})
                 else:
                     pairs.append(item)
             elif isinstance(item, str):
@@ -578,7 +622,7 @@ def assemble_overview(
     if video_meta.get("channel"):
         result["channel"] = video_meta["channel"]
 
-    domain_data = extraction.get(primary_tag)
+    domain_data = extraction.get(primary_tag) if extraction else None
     if isinstance(domain_data, dict):
         for key, value in domain_data.items():
             if value is None:
@@ -636,7 +680,7 @@ def assemble_lyrics_player(
     """Build lyrics player props from music structure + lyrics."""
     music = data if isinstance(data, dict) and ("structure" in data or "lyrics" in data) else None
     if music is None:
-        music = extraction.get("music", {})
+        music = extraction.get("music", {}) if extraction else {}
     if not isinstance(music, dict):
         return None
     structure = music.get("structure", [])

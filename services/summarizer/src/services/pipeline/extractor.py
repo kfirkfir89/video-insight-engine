@@ -106,6 +106,7 @@ async def extract(
     video_data: dict,
     chapters: list[ChapterChunk] | None = None,
     video_context: str = "",
+    extra_instruction: str = "",
 ) -> AsyncGenerator[dict, None]:
     """Adaptive extraction yielding progress events and final result.
 
@@ -146,6 +147,11 @@ async def extract(
         content_emphasis=content_emphasis,
         video_context=video_context,
     )
+
+    if extra_instruction:
+        # SECURITY: extra_instruction must only contain server-generated content
+        # (from build_synthesis_fed_retry_prompt). Never pass user input here.
+        prompt_template += f"\n<retry_guidance>\n{extra_instruction}\n</retry_guidance>"
 
     # Strategy selection: chunked for long videos with chapters
     use_chunked = (
@@ -376,7 +382,7 @@ async def _chunked_extraction(
 
             raw = await call_llm_with_retry(
                 llm_service, dynamic_prompt,
-                max_tokens=16384, timeout=180.0, max_retries=2,
+                max_tokens=16384, timeout=300.0, max_retries=2,
                 stage_name=f"extraction_batch{batch_idx + 1}",
                 json_mode=True, cache_static=cache_static or None,
             )

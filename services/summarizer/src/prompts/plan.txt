@@ -9,6 +9,7 @@ Channel: {channel}
 Duration: {duration_minutes} minutes
 Category: {category_hint}
 Format: {content_format}
+Content Traits: {content_traits}
 Description: {description}
 </video>
 
@@ -27,7 +28,7 @@ Step 1 — Understand the video:
 
 Step 2 — Classify the content:
 Pick 1-2 content tags (most specific first) and 0-2 modifiers.
-Content tags: learning, tech, fitness, food, music, travel, review, project
+Content tags: learning, tech, fitness, food, music, travel, review, project, language, science
 Modifiers: narrative (strong storytelling), finance (specific costs/budgets)
 
 Step 3 — Design the output:
@@ -148,6 +149,8 @@ Domain-required components — if the domain is present in contentTags, these co
 - fitness: MUST include `exercise_tracker`
 - travel: MUST include `spot_explorer` (itinerary)
 - music: MUST include `lyrics_player` when lyrics are available in the transcript
+- language: MUST include `spot_explorer` (phrases), SHOULD include `step_player` (drills) and `flash_deck` (vocabulary)
+- science: MUST include `spot_explorer` (concepts), SHOULD include `info_grid` (key facts)
 - ALL domains: SHOULD include `overview` as the first or second tab
 
 flash_deck restrictions:
@@ -176,11 +179,25 @@ Detect intent from video title and content structure:
 │ fitness  │ exercise_tracker         │ flash_deck (form cues)     │ comparison (programs)    │
 │ music    │ lyrics_player            │ info_grid (theory)         │ —                        │
 │ learning │ code_explorer / scenario │ flash_deck + quiz          │ comparison               │
+│ language │ step_player (drills)    │ flash_deck (vocabulary)    │ spot_explorer (phrases)  │
+│ science  │ step_player (labs)      │ flash_deck + quiz          │ comparison (theories)    │
 └──────────┴──────────────────────────┴────────────────────────────┴─────────────────────────┘
 
 Every video has ONE primary intent. Pick the column, use those components as required tabs.
 Overview is always the first tab regardless of intent.
 </routing_matrix>
+
+<format_routing>
+When content_traits are available, use them to override default component choices:
+- has_drills=true → prefer step_player, spot_explorer. AVOID flash_deck (drills are practice, not memorization). Exception: language domain vocabulary tab may use flash_deck.
+- has_narrative=true → prefer clip_player for key moments. AVOID flash_deck (stories aren't flashcard material).
+- is_list=true → prefer spot_explorer for browsable items. AVOID step_player (lists aren't sequential).
+- has_code=true → MUST include code_explorer tab.
+- has_comparison=true → MUST include comparison tab.
+- has_visual_demo=true → prefer clip_player to show demonstrations.
+- is_opinionated=true → prefer info_grid for arguments/points. AVOID quiz (opinions aren't testable).
+- has_steps=true → prefer step_player for sequential instructions.
+</format_routing>
 
 <tab_goal_guidance>
 tab.goal is shown to the user as an intro paragraph. Write it as a friendly, specific 1-sentence description — NOT developer documentation.

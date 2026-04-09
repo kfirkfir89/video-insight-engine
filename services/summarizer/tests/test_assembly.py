@@ -986,6 +986,31 @@ class TestFlexSpotExplorer:
         assert result["spots"][0]["mapQuery"] == "place+near+me"
 
 
+    def test_language_phrase_shape(self):
+        """Language phrases: {phrase, translation, pronunciation, context, timestamp}."""
+        data = [
+            {"phrase": "What attracted you?", "translation": "Interview question", "pronunciation": "wʌt əˈtræktɪd", "context": "Opening question", "timestamp": 85},
+            {"phrase": "To be honest", "translation": "Honesty marker", "context": "Transition phrase"},
+        ]
+        result = assemble_spot_explorer({}, data, {}, None)
+        assert result is not None
+        assert len(result["spots"]) == 2
+        assert result["spots"][0]["name"] == "What attracted you?"
+        assert result["spots"][0]["description"] == "Interview question"
+        assert result["spots"][0]["pronunciation"] == "wʌt əˈtræktɪd"
+        assert result["spots"][0]["timestamp"] == 85
+
+    def test_language_vocabulary_shape(self):
+        """Language vocabulary: {word, definition, pronunciation, partOfSpeech, example}."""
+        data = [
+            {"word": "ambitious", "definition": "Having a strong desire to succeed", "pronunciation": "æmˈbɪʃəs", "partOfSpeech": "adjective", "example": "ambitious goals"},
+        ]
+        result = assemble_spot_explorer({}, data, {}, None)
+        assert result is not None
+        assert result["spots"][0]["name"] == "ambitious"
+        assert result["spots"][0]["description"] == "Having a strong desire to succeed"
+
+
 class TestFlexChecklist:
     """Tests for cross-domain checklist input shapes."""
 
@@ -1071,6 +1096,114 @@ class TestFlexInfoGrid:
         assert result is not None
         assert result["items"][0]["key"] == "Vocals"
         assert result["items"][0]["value"] == "Freddie Mercury"
+
+    def test_title_description_shape(self):
+        data = [{"title": "Check for source maps", "description": "Verify no .map files"}]
+        result = assemble_info_grid({}, data, {}, None)
+        assert result is not None
+        assert result["items"][0]["key"] == "Check for source maps"
+        assert result["items"][0]["value"] == "Verify no .map files"
+
+    def test_title_value_shape(self):
+        data = [{"title": "Display", "value": "6.7-inch AMOLED"}]
+        result = assemble_info_grid({}, data, {}, None)
+        assert result is not None
+        assert result["items"][0]["key"] == "Display"
+        assert result["items"][0]["value"] == "6.7-inch AMOLED"
+
+    def test_title_code_description_shape(self):
+        """Items with {title, code, description} should normalize to {key=title, value=description}."""
+        data = [
+            {"title": "Enable extra usage", "code": "dashboard → settings", "description": "Allows filtered requests"},
+            {"title": "Switch to Codex", "code": "alias cc='codex'", "description": "Replace Claude alias"},
+        ]
+        result = assemble_info_grid({}, data, {}, None)
+        assert result is not None
+        assert len(result["items"]) == 2
+        assert result["items"][0]["key"] == "Enable extra usage"
+        assert result["items"][0]["value"] == "Allows filtered requests"
+        assert result["items"][1]["key"] == "Switch to Codex"
+
+    def test_name_explanation_shape(self):
+        """Items with {name, explanation} should normalize to {key=name, value=explanation}."""
+        data = [{"name": "Past perfect tense", "emoji": "⏰", "explanation": "Use had + past participle"}]
+        result = assemble_info_grid({}, data, {}, None)
+        assert result is not None
+        assert result["items"][0]["key"] == "Past perfect tense"
+        assert result["items"][0]["value"] == "Use had + past participle"
+
+
+class TestSpotExplorerEmptyFiltering:
+    """Tests for filtering empty spots in spot_explorer assembler."""
+
+    def test_empty_spots_are_dropped(self):
+        data = [
+            {"name": "", "description": ""},
+            {"name": "Valid Spot", "description": "Has content"},
+            {"name": "", "description": ""},
+        ]
+        result = assemble_spot_explorer({}, data, {}, None)
+        assert result is not None
+        assert len(result["spots"]) == 1
+        assert result["spots"][0]["name"] == "Valid Spot"
+
+    def test_all_empty_spots_returns_none(self):
+        data = [{"name": "", "description": ""}, {"name": "", "description": ""}]
+        result = assemble_spot_explorer({}, data, {}, None)
+        assert result is None
+
+    def test_spot_with_only_name_kept(self):
+        data = [{"name": "Has name only", "description": ""}]
+        result = assemble_spot_explorer({}, data, {}, None)
+        assert result is not None
+        assert len(result["spots"]) == 1
+
+    def test_spot_with_only_description_kept(self):
+        data = [{"name": "", "description": "Has description only"}]
+        result = assemble_spot_explorer({}, data, {}, None)
+        assert result is not None
+        assert len(result["spots"]) == 1
+
+
+class TestComparisonProductLabel:
+    """Tests for product name extraction in comparison assembler."""
+
+    def test_product_from_review_extraction(self):
+        data = {"pros": ["Fast"], "cons": [], "comparisons": []}
+        extraction = {"review": {"product": "Pixel 8 Pro", "pros": ["Fast"]}}
+        result = assemble_comparison({}, data, extraction, None)
+        assert result is not None
+        assert result["leftLabel"] == "Pixel 8 Pro"
+
+    def test_product_from_video_meta_fallback(self):
+        data = {"pros": ["Great"], "cons": [], "comparisons": []}
+        tab = {"_video_meta": {"title": "Claude Code is unusable now"}}
+        result = assemble_comparison(tab, data, {}, None)
+        assert result is not None
+        assert result["leftLabel"] == "Claude Code is unusable now"
+
+    def test_no_label_when_no_product(self):
+        data = {"pros": ["Good"], "cons": [], "comparisons": []}
+        result = assemble_comparison({}, data, {}, None)
+        assert result is not None
+        assert "leftLabel" not in result
+
+    def test_review_product_takes_priority_over_title(self):
+        data = {"pros": ["Fast"], "cons": [], "comparisons": []}
+        tab = {"_video_meta": {"title": "Is Pixel 8 Worth It?"}}
+        extraction = {"review": {"product": "Google Pixel 8 Pro"}}
+        result = assemble_comparison(tab, data, extraction, None)
+        assert result is not None
+        assert result["leftLabel"] == "Google Pixel 8 Pro"
+
+    def test_product_label_on_list_input(self):
+        data = [
+            {"title": "Battery", "description": "5000mAh", "code": "All day"},
+        ]
+        tab = {"_video_meta": {"title": "Phone Review"}}
+        result = assemble_comparison(tab, data, {}, None)
+        assert result is not None
+        assert result["leftLabel"] == "Phone Review"
 
 
 class TestNewCrossTabLinks:
