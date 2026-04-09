@@ -93,6 +93,8 @@ const COMPONENT_REGISTRY: Record<string, (props: Record<string, unknown>, nav: N
       pros={Array.isArray(props.pros) ? props.pros as string[] : undefined}
       cons={Array.isArray(props.cons) ? props.cons as string[] : undefined}
       type={typeof props.type === 'string' ? props.type as 'table' | 'pros_cons' | 'versus' : undefined}
+      leftLabel={typeof props.leftLabel === 'string' ? props.leftLabel : undefined}
+      rightLabel={typeof props.rightLabel === 'string' ? props.rightLabel : undefined}
       {...nav}
     />
   ),
@@ -193,6 +195,7 @@ const COMPONENT_REGISTRY: Record<string, (props: Record<string, unknown>, nav: N
     <InfoGridInteractive
       items={Array.isArray(props.items) ? props.items as Array<{ key: string; value: string }> : []}
       mode={typeof props.mode === 'string' ? props.mode as 'key_value' | 'table' | 'tag_cloud' : undefined}
+      sections={Array.isArray(props.sections) ? props.sections as Array<{ label: string; indices: number[] }> : undefined}
       {...nav}
     />
   ),

@@ -238,7 +238,7 @@ class TestClassifyDomainFormat:
 
         call_kwargs = mock_llm.call_args[1]
         assert call_kwargs.get("use_fast_model") is True
-        assert call_kwargs.get("max_tokens") == 150
+        assert call_kwargs.get("max_tokens") == 250
 
     @patch("src.services.pipeline.classifier.call_llm_with_retry")
     @patch("src.services.pipeline.classifier._load_classify_prompt")

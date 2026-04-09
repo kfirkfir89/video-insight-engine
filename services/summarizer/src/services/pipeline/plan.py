@@ -110,6 +110,7 @@ async def run_plan(
     content_format: str | None,
     transcript_preview: str,
     llm_service: LLMService,
+    content_traits: str | None = None,
 ) -> PlanResult:
     """Run the plan stage — single Sonnet call for video analysis + tab design.
 
@@ -162,6 +163,7 @@ async def run_plan(
         .replace("{content_format}", content_format or "unknown")
         .replace("{description}", sanitize_for_prompt(description[:1000] if description else "N/A", max_len=1000))
         .replace("{transcript_preview}", sanitize_for_prompt(transcript_preview[:3000], max_len=3000))
+        .replace("{content_traits}", content_traits or "Not available")
     )
 
     try:

@@ -99,6 +99,27 @@
         { "id": "materials", "component": "checklist", "dataSource": "project.materials", "label": "Materials", "emoji": "🛒" },
         { "id": "safety", "component": "overview", "dataSource": "project.safetyWarnings", "label": "Safety", "emoji": "⚠️" }
       ]
+    },
+    "language": {
+      "emoji": "🗣️",
+      "label": "Language",
+      "gradient": "linear-gradient(135deg, var(--vie-plum), var(--vie-coral))",
+      "defaultTabs": [
+        { "id": "phrases", "component": "spot_explorer", "dataSource": "language.phrases", "label": "Phrases", "emoji": "💬" },
+        { "id": "rules", "component": "info_grid", "dataSource": "language.rules", "label": "Grammar Rules", "emoji": "📝" },
+        { "id": "drills", "component": "step_player", "dataSource": "language.drills", "label": "Practice Drills", "emoji": "🎯" },
+        { "id": "vocabulary", "component": "flash_deck", "dataSource": "language.vocabulary", "label": "Vocabulary", "emoji": "📖" }
+      ]
+    },
+    "science": {
+      "emoji": "🔬",
+      "label": "Science",
+      "gradient": "linear-gradient(135deg, var(--vie-sky), var(--vie-forest))",
+      "defaultTabs": [
+        { "id": "concepts", "component": "spot_explorer", "dataSource": "science.concepts", "label": "Concepts", "emoji": "🧪" },
+        { "id": "key_facts", "component": "info_grid", "dataSource": "science.keyFacts", "label": "Key Facts", "emoji": "📊" },
+        { "id": "experiments", "component": "step_player", "dataSource": "science.experiments", "label": "Experiments", "emoji": "⚗️" }
+      ]
     }
   },
   "modifiers": {
@@ -120,7 +141,9 @@
     "music": "enrich/enrich_music.txt",
     "travel": "enrich/enrich_travel.txt",
     "review": "enrich/enrich_review.txt",
-    "project": "enrich/enrich_project.txt"
+    "project": "enrich/enrich_project.txt",
+    "language": "enrich/enrich_language.txt",
+    "science": "enrich/enrich_science.txt"
   },
   "categoryMap": {
     "cooking": "food",
@@ -148,6 +171,17 @@
     "tech": "tech",
     "food": "food",
     "learning": "learning",
-    "project": "project"
+    "project": "project",
+    "language": "language",
+    "languages": "language",
+    "pronunciation": "language",
+    "grammar": "language",
+    "vocabulary": "language",
+    "science": "science",
+    "physics": "science",
+    "chemistry": "science",
+    "biology": "science",
+    "math": "science",
+    "mathematics": "science"
   }
 }

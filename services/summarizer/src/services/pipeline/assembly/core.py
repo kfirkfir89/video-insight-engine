@@ -10,6 +10,8 @@ import logging
 import re
 from typing import Any
 
+from src.utils.data_helpers import is_empty_data
+
 from .assemblers import (
     ASSEMBLER_REGISTRY,
     _chapters_to_timeline,
@@ -28,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 def resolve_data_source(
     data_source: str,
-    extraction: dict,
+    extraction: dict | None,
     enrichment: dict | None = None,
 ) -> Any:
     """Resolve a dot-notation dataSource to actual data.
@@ -148,6 +150,8 @@ _DOMAIN_REQUIREMENTS: dict[str, dict] = {
     "travel":   {"required": ["spot_explorer"],            "max": {"flash_deck": 1}},
     "music":    {"required": ["lyrics_player"],            "max": {"flash_deck": 1}},
     "learning": {"required": [],                           "max": {"flash_deck": 1, "quiz": 1}},
+    "language": {"required": ["spot_explorer"],       "max": {"flash_deck": 1}},
+    "science":  {"required": ["spot_explorer"],       "max": {"flash_deck": 1, "quiz": 1}},
 }
 
 
@@ -295,21 +299,19 @@ _FIELD_EQUIVALENTS: dict[str, list[str]] = {
     "packingList": ["savingTips", "tips", "takeaways"],
     "itinerary": ["keyMoments", "spots", "costs"],
     "restaurants": ["spots", "keyMoments"],
+    "phrases": ["keyPoints", "vocabulary"],
+    "vocabulary": ["concepts", "phrases"],
+    "drills": ["steps", "exercises"],
+    "keyFacts": ["keyPoints", "concepts", "takeaways"],
+    "experiments": ["steps"],
+    "rules": ["concepts", "keyPoints", "tips"],
 }
 
-
-def _is_empty_data(data: Any) -> bool:
-    """Check if resolved data is effectively empty (None or empty collection)."""
-    if data is None:
-        return True
-    if isinstance(data, (list, dict)) and len(data) == 0:
-        return True
-    return False
 
 
 def _cross_domain_fallback(
     data_source: str,
-    extraction: dict,
+    extraction: dict | None,
     enrichment: dict | None = None,
 ) -> Any:
     """Try other extraction domains when primary domain field is empty.
@@ -317,6 +319,8 @@ def _cross_domain_fallback(
     Given "learning.concepts" with empty data, scans narrative, tech, etc.
     for the same field name or equivalent fields.
     """
+    if not extraction:
+        return None
     parts = data_source.split(".")
     if len(parts) != 2:
         return None
@@ -328,7 +332,7 @@ def _cross_domain_fallback(
         if domain == primary_domain or not isinstance(domain_data, dict):
             continue
         candidate = domain_data.get(field)
-        if not _is_empty_data(candidate):
+        if not is_empty_data(candidate):
             logger.info(
                 "Cross-domain fallback: %s.%s (empty) → %s.%s (%d items)",
                 primary_domain, field, domain, field,
@@ -343,7 +347,7 @@ def _cross_domain_fallback(
             continue
         for equiv_field in equivalents:
             candidate = domain_data.get(equiv_field)
-            if not _is_empty_data(candidate):
+            if not is_empty_data(candidate):
                 logger.info(
                     "Cross-domain fallback: %s.%s (empty) → %s.%s (%d items)",
                     primary_domain, field, domain, equiv_field,
@@ -355,13 +359,94 @@ def _cross_domain_fallback(
 
 
 # ─────────────────────────────────────────────────────
+# Fallback Tab Candidates
+# ─────────────────────────────────────────────────────
+
+
+def build_fallback_candidates(
+    synthesis: dict | None,
+    video_meta: dict | None,
+    existing_components: set[str],
+    existing_ids: set[str],
+) -> list[dict]:
+    """Build fallback tab candidates from synthesis and video metadata.
+
+    Priority: overview > info_grid > clip_player.
+    Skips candidates that duplicate existing components or IDs.
+    """
+    candidates: list[dict] = []
+    synthesis = synthesis or {}
+    video_meta = video_meta or {}
+
+    # Fallback 1: overview from synthesis
+    if "overview" not in existing_components and "overview" not in existing_ids:
+        master_summary = synthesis.get("masterSummary", "")
+        key_takeaways = synthesis.get("keyTakeaways", [])
+        if master_summary or key_takeaways:
+            candidates.append({
+                "id": "overview",
+                "label": "Overview",
+                "emoji": "📋",
+                "component": "overview",
+                "props": {
+                    "summary": master_summary,
+                    "keyTakeaways": key_takeaways,
+                    "tldr": synthesis.get("tldr", ""),
+                },
+                "goal": "Quick summary of what this video covers",
+                "crossTabLinks": [],
+            })
+
+    # Fallback 2: info_grid from synthesis keyTakeaways
+    if "info_grid" not in existing_components and "key_info" not in existing_ids:
+        key_takeaways = synthesis.get("keyTakeaways", [])
+        if len(key_takeaways) >= 2:
+            items = [{"key": f"Takeaway {i+1}", "value": t} for i, t in enumerate(key_takeaways)]
+            candidates.append({
+                "id": "key_info",
+                "label": "Key Info",
+                "emoji": "📊",
+                "component": "info_grid",
+                "props": {"items": items},
+                "goal": "Key takeaways from this video at a glance",
+                "crossTabLinks": [],
+            })
+
+    # Fallback 3: clip_player from video chapters
+    if "clip_player" not in existing_components and "key_moments" not in existing_ids:
+        chapters = video_meta.get("chapters", [])
+        if isinstance(chapters, list) and len(chapters) >= 2:
+            clips = []
+            for ch in chapters:
+                if isinstance(ch, dict):
+                    clips.append({
+                        "title": ch.get("title", ch.get("label", "Clip")),
+                        "startSeconds": ch.get("start_time", ch.get("startTime", ch.get("start", 0))),
+                        "endSeconds": ch.get("end_time", ch.get("endTime", ch.get("end", 0))),
+                        "mood": "informational",
+                    })
+            if len(clips) >= 2:
+                candidates.append({
+                    "id": "key_moments",
+                    "label": "Key Moments",
+                    "emoji": "🎬",
+                    "component": "clip_player",
+                    "props": {"clips": clips},
+                    "goal": "Watch the key moments from this video",
+                    "crossTabLinks": [],
+                })
+
+    return candidates
+
+
+# ─────────────────────────────────────────────────────
 # Main Assembly Orchestrator
 # ─────────────────────────────────────────────────────
 
 
 def assemble_response(
     triage: dict,
-    extraction: dict,
+    extraction: dict | None,
     enrichment: dict | None,
     synthesis: dict | None,
     video_meta: dict | None = None,
@@ -412,7 +497,7 @@ def assemble_response(
         data_resolved = data is not None
 
         # Treat empty collections as missing — lets fallback logic try other domains
-        if _is_empty_data(data):
+        if is_empty_data(data):
             data = None
             data_resolved = False
 
@@ -422,7 +507,7 @@ def assemble_response(
             if data is not None:
                 data_resolved = True
 
-        if data is None:
+        if data is None and extraction:
             if tab_id in ("exercises", "timer"):
                 data = extraction.get("fitness")
             elif tab_id == "pros_cons":
@@ -441,7 +526,7 @@ def assemble_response(
         # Components that build from synthesis/meta, not extraction data
         _SELF_SUFFICIENT = {"overview", "budget"}
         if not data_resolved and data is None and component not in _SELF_SUFFICIENT:
-            available = list(extraction.keys())
+            available = list(extraction.keys()) if extraction else []
             logger.warning(
                 "No data for tab id=%r, dataSource=%r — not in extraction/enrichment. "
                 "Available extraction keys: %s",
@@ -565,6 +650,31 @@ def assemble_response(
             })
 
     _post_process_tabs(assembled_tabs)
+
+    # Minimum 3-tab guarantee: add fallback tabs if needed
+    if len(assembled_tabs) < 3:
+        existing_components = {t.get("component", "") for t in assembled_tabs}
+        existing_ids = {t["id"] for t in assembled_tabs}
+        fallbacks = build_fallback_candidates(
+            synthesis, video_meta, existing_components, existing_ids,
+        )
+        for fb in fallbacks:
+            if len(assembled_tabs) >= 3:
+                break
+            component = fb.get("component", "")
+            if not _validate_assembled_props(component, fb.get("props", {})):
+                continue
+            assembled_tabs.append(fb)
+            logger.info(
+                "[assembly] Fallback tab added: id=%r, component=%r",
+                fb["id"], component,
+            )
+
+        if len(assembled_tabs) < 3:
+            logger.warning(
+                "[assembly] Could not reach 3 tabs even with fallbacks (got %d)",
+                len(assembled_tabs),
+            )
 
     # Assembly summary
     planned_ids = [t.get("id", "?") for t in raw_tabs if isinstance(t, dict)]

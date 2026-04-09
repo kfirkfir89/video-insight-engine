@@ -703,6 +703,129 @@ class FinanceData(BaseModel):
 
 
 # ─────────────────────────────────────────────────────
+# Language Domain
+# ─────────────────────────────────────────────────────
+
+class LanguagePhrase(BaseModel):
+    phrase: str
+    translation: str = ""
+    pronunciation: str | None = None
+    context: str | None = None
+    timestamp: int | None = None
+
+
+class LanguageRule(BaseModel):
+    name: str
+    emoji: str = ""
+    explanation: str = ""
+    examples: list[str] = []
+    exceptions: list[str] = []
+
+
+class LanguageDrill(BaseModel):
+    model_config = {"populate_by_name": True}
+
+    number: int = 1
+    instruction: str = ""
+    prompt: str = ""
+    answer: str = ""
+    tips: str | None = None
+    timestamp: int | None = None
+
+    @field_validator("number", mode="before")
+    @classmethod
+    def coerce_number(cls, v: Any) -> int:
+        if v is None:
+            return 1
+        return int(v)
+
+
+class LanguageVocab(BaseModel):
+    model_config = {"populate_by_name": True}
+
+    word: str
+    definition: str = ""
+    pronunciation: str | None = None
+    part_of_speech: str | None = Field(None, alias="partOfSpeech")
+    example: str | None = None
+
+
+class LanguageData(BaseModel):
+    model_config = {"populate_by_name": True}
+
+    target_language: str = Field("", alias="targetLanguage")
+    native_language: str | None = Field(None, alias="nativeLanguage")
+    level: str = "beginner"
+    phrases: list[LanguagePhrase] = []
+    rules: list[LanguageRule] = []
+    drills: list[LanguageDrill] = []
+    vocabulary: list[LanguageVocab] = []
+
+    @field_validator("level", mode="before")
+    @classmethod
+    def coerce_level(cls, v: Any) -> str:
+        valid = ("beginner", "intermediate", "advanced")
+        return v if v in valid else "beginner"
+
+
+# ─────────────────────────────────────────────────────
+# Science Domain
+# ─────────────────────────────────────────────────────
+
+class ScienceConcept(BaseModel):
+    model_config = {"populate_by_name": True}
+
+    name: str
+    emoji: str = ""
+    definition: str = ""
+    formula: str | None = None
+    real_world_example: str | None = Field(None, alias="realWorldExample")
+    connections: list[str] = []
+
+
+class ScienceKeyFact(BaseModel):
+    emoji: str = ""
+    title: str
+    detail: str = ""
+    source: str | None = None
+
+
+class ScienceExperiment(BaseModel):
+    model_config = {"populate_by_name": True}
+
+    number: int = 1
+    title: str = ""
+    instruction: str = ""
+    materials: list[str] = []
+    expected_result: str = Field("", alias="expectedResult")
+    safety_note: str | None = Field(None, alias="safetyNote")
+    timestamp: int | None = None
+
+    @field_validator("number", mode="before")
+    @classmethod
+    def coerce_number(cls, v: Any) -> int:
+        if v is None:
+            return 1
+        return int(v)
+
+
+class ScienceData(BaseModel):
+    model_config = {"populate_by_name": True}
+
+    field: str = ""
+    level: str = "intermediate"
+    concepts: list[ScienceConcept] = []
+    key_facts: list[ScienceKeyFact] = Field([], alias="keyFacts")
+    experiments: list[ScienceExperiment] = []
+
+    @field_validator("level", mode="before")
+    @classmethod
+    def coerce_level(cls, v: Any) -> str:
+        valid = ("beginner", "intermediate", "advanced")
+        return v if v in valid else "intermediate"
+
+
+# ─────────────────────────────────────────────────────
 # VIEResponse Envelope
 # ─────────────────────────────────────────────────────
 
@@ -748,6 +871,8 @@ class VIEResponse(BaseModel):
     learning: LearningData | None = None
     review: ReviewData | None = None
     project: ProjectData | None = None
+    language: LanguageData | None = None
+    science: ScienceData | None = None
 
     # Modifiers
     narrative: NarrativeData | None = None
@@ -772,6 +897,8 @@ DOMAIN_MODELS: dict[str, type[BaseModel]] = {
     "fitness": FitnessData,
     "music": MusicData,
     "project": ProjectData,
+    "language": LanguageData,
+    "science": ScienceData,
 }
 
 MODIFIER_MODELS: dict[str, type[BaseModel]] = {

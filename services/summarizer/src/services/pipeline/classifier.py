@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ...utils.json_parsing import parse_json_response
 from ...utils.llm_retry import call_llm_with_retry
@@ -27,6 +27,7 @@ CLASSIFIER_CONFIDENCE_THRESHOLD = 0.6
 
 VALID_DOMAINS: frozenset[str] = frozenset([
     "learning", "tech", "food", "travel", "fitness", "music", "review", "project",
+    "language", "science",
 ])
 
 VALID_FORMATS: frozenset[str] = frozenset([
@@ -38,6 +39,45 @@ VALID_FORMATS: frozenset[str] = frozenset([
 
 
 @dataclass
+class ContentTraits:
+    """Structural traits detected in video content."""
+    has_steps: bool = False
+    has_drills: bool = False
+    has_comparison: bool = False
+    has_narrative: bool = False
+    has_code: bool = False
+    has_visual_demo: bool = False
+    is_opinionated: bool = False
+    is_list: bool = False
+
+    @classmethod
+    def from_dict(cls, data: Any) -> ContentTraits:
+        """Parse traits from LLM JSON, with bool() coercion and defaults."""
+        if not data or not isinstance(data, dict):
+            return cls()
+        return cls(
+            has_steps=bool(data.get("has_steps", False)),
+            has_drills=bool(data.get("has_drills", False)),
+            has_comparison=bool(data.get("has_comparison", False)),
+            has_narrative=bool(data.get("has_narrative", False)),
+            has_code=bool(data.get("has_code", False)),
+            has_visual_demo=bool(data.get("has_visual_demo", False)),
+            is_opinionated=bool(data.get("is_opinionated", False)),
+            is_list=bool(data.get("is_list", False)),
+        )
+
+    def active_traits(self) -> list[str]:
+        """Return list of trait names that are True."""
+        return [
+            name for name in [
+                "has_steps", "has_drills", "has_comparison", "has_narrative",
+                "has_code", "has_visual_demo", "is_opinionated", "is_list",
+            ]
+            if getattr(self, name)
+        ]
+
+
+@dataclass
 class ClassificationResult:
     """Result of the LLM domain+format classifier."""
 
@@ -45,6 +85,7 @@ class ClassificationResult:
     format: str
     confidence: float
     reasoning: str
+    traits: ContentTraits | None = None
 
 
 @lru_cache(maxsize=1)
@@ -94,7 +135,7 @@ async def classify_domain_format(
 
     raw = await call_llm_with_retry(
         llm_service, prompt,
-        max_tokens=150, timeout=10.0, max_retries=1,
+        max_tokens=250, timeout=10.0, max_retries=1,
         stage_name="classifier", json_mode=True,
         use_fast_model=True,
     )
@@ -124,9 +165,14 @@ async def classify_domain_format(
         logger.info("Classifier returned invalid format '%s', defaulting to 'commentary'", fmt)
         fmt = "commentary"
 
+    # Parse traits
+    traits_data = data.get("traits", {})
+    traits = ContentTraits.from_dict(traits_data) if traits_data else None
+
     return ClassificationResult(
         domain=domain,
         format=fmt,
         confidence=confidence,
         reasoning=data.get("reasoning", ""),
+        traits=traits,
     )

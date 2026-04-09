@@ -124,6 +124,8 @@ travel: travel.itinerary, travel.budget, travel.packingList
 review: review.pros, review.cons, review.specs, review.comparisons, review.verdict
 fitness: fitness.exercises, fitness.warmup, fitness.cooldown, fitness.timer
 music: music.analysis, music.structure, music.lyrics, music.credits
+language: language.phrases, language.rules, language.drills, language.vocabulary
+science: science.concepts, science.keyFacts, science.experiments
 enrichment: enrichment.quiz, enrichment.flashcards, enrichment.scenarios
 
 Use only the paths listed here. If a path is not listed, it does not exist.

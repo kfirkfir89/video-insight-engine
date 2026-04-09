@@ -54,6 +54,14 @@ class ScenarioOption(BaseModel):
     correct: bool = False
     explanation: str = ""
 
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_string(cls, data: object) -> object:
+        """LLM sometimes returns plain strings instead of option dicts."""
+        if isinstance(data, str):
+            return {"text": data, "correct": False, "explanation": ""}
+        return data
+
 
 class ScenarioItem(BaseModel):
     question: str

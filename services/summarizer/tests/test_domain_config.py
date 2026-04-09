@@ -26,7 +26,7 @@ class TestDomainsJsonStructure:
         assert "enrichment" in config
 
     def test_has_expected_domains(self, config):
-        expected = {"learning", "tech", "fitness", "food", "music", "travel", "review", "project"}
+        expected = {"learning", "tech", "fitness", "food", "music", "travel", "review", "project", "language", "science"}
         assert set(config["domains"].keys()) == expected
 
     def test_has_expected_modifiers(self, config):
@@ -162,9 +162,9 @@ class TestDomainConfigModule:
         assert isinstance(result, dict)
         assert result == config["enrichment"]
         assert result["learning"] == "enrich/enrich_study.txt"
-        # 8 primary domains + "default" entry
-        assert len(result) == 9
-        for domain in ["learning", "tech", "fitness", "food", "music", "travel", "review", "project"]:
+        # 10 primary domains + "default" entry
+        assert len(result) == 11
+        for domain in ["learning", "tech", "fitness", "food", "music", "travel", "review", "project", "language", "science"]:
             assert domain in result
 
     def test_enrichment_tags_are_valid_domains(self, config):
