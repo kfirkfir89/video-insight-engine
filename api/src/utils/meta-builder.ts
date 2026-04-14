@@ -18,6 +18,8 @@ export interface NormalizedMeta {
   masterSummary?: string;
   keyTakeaways?: string[];
   descriptionAnalysis?: unknown;
+  language?: string;
+  isRTL?: boolean;
 }
 
 export function buildMetaFromDoc(doc: Record<string, unknown>): NormalizedMeta | null {
@@ -54,6 +56,14 @@ export function buildMetaFromDoc(doc: Record<string, unknown>): NormalizedMeta |
       meta.masterSummary = (synthesis.masterSummary ?? '') as string;
       meta.keyTakeaways = (Array.isArray(synthesis.keyTakeaways) ? synthesis.keyTakeaways : []) as string[];
     }
+  }
+
+  // Attach language/RTL info from top-level doc fields
+  if (doc.language && typeof doc.language === 'string') {
+    meta.language = doc.language;
+  }
+  if (typeof doc.isRTL === 'boolean') {
+    meta.isRTL = doc.isRTL;
   }
 
   return Object.keys(meta).length > 0 ? meta : null;

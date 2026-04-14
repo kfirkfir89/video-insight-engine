@@ -111,6 +111,8 @@ export function SharePage() {
               tabs={tabs}
               meta={meta}
               synthesis={synthesis}
+              language={meta?.language}
+              isRTL={meta?.isRTL}
             />
           ) : (
             <div className="max-w-3xl mx-auto w-full px-4 py-8">

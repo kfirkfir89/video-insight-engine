@@ -89,7 +89,7 @@ function GalleryLightbox({ images, index, onClose, onPrev, onNext }: {
       <Button
         variant="ghost"
         size="icon-sm"
-        className="absolute top-4 right-4 text-white hover:text-white/80 z-10"
+        className="absolute top-4 end-4 text-white hover:text-white/80 z-10"
         onClick={onClose}
         aria-label="Close lightbox"
       >
@@ -101,22 +101,22 @@ function GalleryLightbox({ images, index, onClose, onPrev, onNext }: {
           <Button
             variant="ghost"
             size="icon-sm"
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 z-10"
+            className="absolute start-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 z-10"
             onClick={(e) => { e.stopPropagation(); onPrev(); }}
             disabled={index === 0}
             aria-label="Previous image"
           >
-            <ChevronLeft className="h-6 w-6" />
+            <ChevronLeft className="h-6 w-6 rtl:rotate-180" />
           </Button>
           <Button
             variant="ghost"
             size="icon-sm"
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 z-10"
+            className="absolute end-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 z-10"
             onClick={(e) => { e.stopPropagation(); onNext(); }}
             disabled={index === images.length - 1}
             aria-label="Next image"
           >
-            <ChevronRight className="h-6 w-6" />
+            <ChevronRight className="h-6 w-6 rtl:rotate-180" />
           </Button>
         </>
       )}
@@ -188,7 +188,7 @@ export const GalleryInteractive = memo(function GalleryInteractive({
                 disabled={carouselIndex === 0}
                 className="gap-1 text-xs"
               >
-                <ChevronLeft className="h-3.5 w-3.5" />
+                <ChevronLeft className="h-3.5 w-3.5 rtl:rotate-180" />
                 Prev
               </Button>
               <span className="text-xs text-muted-foreground tabular-nums">{carouselIndex + 1} / {images.length}</span>
@@ -200,7 +200,7 @@ export const GalleryInteractive = memo(function GalleryInteractive({
                 className="gap-1 text-xs"
               >
                 Next
-                <ChevronRight className="h-3.5 w-3.5" />
+                <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" />
               </Button>
             </div>
           )}

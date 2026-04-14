@@ -446,10 +446,19 @@ def _build_yt_dlp_opts(use_proxy: bool = False) -> dict[str, Any]:
         'quiet': True,
         'no_warnings': True,
         'extract_flat': False,
-        # Subtitle options
+        # Subtitle options — request common languages (not 'all', which downloads 50+ tracks).
+        # The pipeline detects language from the subtitle content.
         'writesubtitles': True,
         'writeautomaticsub': True,
-        'subtitleslangs': ['en', 'en-US', 'en-GB'],
+        'subtitleslangs': [
+            'en', 'en-US', 'en-GB',
+            'he', 'ar', 'fa', 'ur',           # RTL
+            'es', 'fr', 'de', 'it', 'pt',     # Western European
+            'ru', 'uk', 'pl', 'cs',            # Slavic
+            'ja', 'ko', 'zh', 'zh-Hans', 'zh-Hant',  # East Asian
+            'hi', 'bn', 'ta', 'te',            # South Asian
+            'tr', 'th', 'vi', 'id',            # Other major
+        ],
         'subtitlesformat': 'json3',  # Best format for parsing
     }
 

@@ -70,6 +70,7 @@ class RAGService:
             sources = [
                 RAGSource(
                     text=r["text"],
+                    text_original=r.get("text_original"),
                     timestamp=r.get("timestamp"),
                     score=r.get("score", 0.0),
                     chunk_index=r.get("chunk_index", 0),

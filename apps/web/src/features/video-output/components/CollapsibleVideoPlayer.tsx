@@ -30,7 +30,7 @@ export function CollapsibleVideoPlayer({ youtubeId, title }: CollapsibleVideoPla
       <button
         type="button"
         onClick={togglePlayer}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/30"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-start transition-colors hover:bg-muted/30"
       >
         <div className="flex items-center gap-2 min-w-0">
           <Play className="h-4 w-4 shrink-0 text-primary" />

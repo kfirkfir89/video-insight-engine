@@ -118,7 +118,7 @@ export const RecipePlayer = memo(function RecipePlayer({
         </div>
 
         {/* Desktop: Left panel — Ingredients */}
-        <div className="hidden md:block w-[280px] border-r border-border/30 overflow-y-auto">
+        <div className="hidden md:block w-[280px] border-e border-border/30 overflow-y-auto">
           <RecipeIngredientPanel
             items={ingredients}
             tabLabel={tabLabel}

@@ -111,6 +111,7 @@ async def run_plan(
     transcript_preview: str,
     llm_service: LLMService,
     content_traits: str | None = None,
+    language_instruction: str = "",
 ) -> PlanResult:
     """Run the plan stage — single Sonnet call for video analysis + tab design.
 
@@ -141,7 +142,11 @@ async def run_plan(
     # Split prompt into static (cacheable) and dynamic parts.
     # Static: role + instructions + component_toolkit + output_schema + examples + rules
     # Dynamic: video details + transcript_preview
-    static_template = prompt_template.replace("{component_toolkit}", component_toolkit)
+    static_template = (
+        prompt_template
+        .replace("{component_toolkit}", component_toolkit)
+        .replace("{language_instruction}", language_instruction)
+    )
 
     # Find the split point at <video> tag — everything before it is static
     video_marker = "<video>"

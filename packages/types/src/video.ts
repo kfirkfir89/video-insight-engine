@@ -123,4 +123,8 @@ export interface VideoResponse {
   outputType?: OutputType;
   shareInfo?: ShareInfo;
   expiresAt?: string;
+  /** ISO 639-1 language code (e.g., "en", "he", "ar"). */
+  language?: string;
+  /** Whether the video content is in a right-to-left language. */
+  isRTL?: boolean;
 }

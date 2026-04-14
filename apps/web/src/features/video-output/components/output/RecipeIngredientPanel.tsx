@@ -119,7 +119,7 @@ export const RecipeIngredientPanel = memo(function RecipeIngredientPanel({
                 type="button"
                 onClick={() => toggle(index)}
                 className={cn(
-                  'w-full flex items-start gap-2 rounded-md px-2 py-1.5 text-left',
+                  'w-full flex items-start gap-2 rounded-md px-2 py-1.5 text-start',
                   'transition-all duration-150 active:scale-[0.98]',
                   'hover:bg-muted/30 min-h-[44px]',
                   isChecked && 'opacity-50',
@@ -130,7 +130,7 @@ export const RecipeIngredientPanel = memo(function RecipeIngredientPanel({
                   {isChecked ? <Check className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
                 </span>
                 <span className={cn('text-xs', isChecked && 'line-through')}>
-                  {item.emoji && <span className="mr-1" aria-hidden="true">{item.emoji}</span>}
+                  {item.emoji && <span className="me-1" aria-hidden="true">{item.emoji}</span>}
                   {displayLabel}
                 </span>
               </button>

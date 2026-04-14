@@ -40,7 +40,7 @@ export const CrossTabButton = memo(function CrossTabButton({
           <span className="text-xs font-normal text-muted-foreground">{description}</span>
         )}
       </div>
-      <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <ChevronRight className="h-4 w-4 shrink-0 rtl:rotate-180" aria-hidden="true" />
     </Button>
   );
 });

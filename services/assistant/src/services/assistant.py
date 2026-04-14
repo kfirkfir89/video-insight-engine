@@ -17,6 +17,7 @@ from src.services.llm_provider import LLMProvider
 from src.services.rag import RAGService
 from src.services.tool_router import ToolRouter
 from src.tools.base import BaseTool
+from src.utils.language_detect import detect_language
 
 logger = get_logger(__name__)
 
@@ -119,8 +120,27 @@ class AssistantService:
         video_ctx: VideoContext,
     ) -> AsyncGenerator[str, None]:
         """Default RAG + LLM streaming chat path."""
+        # Detect user language for query translation and response language
+        user_language = detect_language(message)
+
+        # Translate non-English queries to English for RAG search
+        search_query = message
+        if user_language != "en":
+            try:
+                translated_query = await self._llm.translate_to_english(message)
+                if translated_query:
+                    search_query = translated_query
+                    logger.info(
+                        "assistant_query_translated",
+                        user_language=user_language,
+                        original_len=len(message),
+                        translated_len=len(search_query),
+                    )
+            except Exception as e:
+                logger.warning("assistant_query_translation_failed", error=str(e))
+
         rag_sources = await self._rag.search(
-            query=message,
+            query=search_query,
             video_id=video_id,
             top_k=self._settings.MAX_CONTEXT_CHUNKS,
         )
@@ -133,6 +153,7 @@ class AssistantService:
         system_prompt = self._context_builder.build(
             video_ctx=video_ctx,
             rag_chunks=rag_sources,
+            user_language=user_language,
         )
         messages = self._build_messages(system_prompt, history, message)
 

@@ -9,6 +9,7 @@ import { ComposableOutput } from './output/ComposableOutput';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { VideoHero } from '@/components/vie';
 import { stripLeadingEmoji } from '@/lib/string-utils';
+import { DirectionProvider } from '@/contexts/DirectionContext';
 
 interface OutputRouterProps {
   /** Video title for display. */
@@ -33,6 +34,10 @@ interface OutputRouterProps {
   creator?: string;
   /** Video duration in seconds. */
   duration?: number | null;
+  /** ISO 639-1 language code (e.g., "en", "he"). */
+  language?: string;
+  /** Whether the video content is in a right-to-left language. */
+  isRTL?: boolean;
 }
 
 /**
@@ -51,6 +56,8 @@ export function OutputRouter({
   youtubeId,
   creator,
   duration,
+  language,
+  isRTL: isRTLProp,
 }: OutputRouterProps) {
   const tabLayoutRef = useRef<TabLayoutHandle>(null);
 
@@ -79,6 +86,7 @@ export function OutputRouter({
   if (!hasData && !isStreaming) return null;
 
   return (
+    <DirectionProvider language={language} isRTL={isRTLProp}>
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-4 md:p-6">
       {/* Interactive Hero */}
       <VideoHero
@@ -164,5 +172,6 @@ export function OutputRouter({
         AI-generated summary. Verify important details with the original video.
       </p>
     </div>
+    </DirectionProvider>
   );
 }

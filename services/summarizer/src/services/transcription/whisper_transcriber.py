@@ -34,6 +34,11 @@ TEMP_DIR = Path(tempfile.gettempdir()) / "vie-whisper"
 CHUNK_TARGET_SIZE_MB = 24
 
 
+def _cached_audio_path(video_id: str) -> Path:
+    """Deterministic cache path for audio reuse by translate step."""
+    return TEMP_DIR / f"{video_id}_cached.mp3"
+
+
 def _download_audio_sync(video_id: str) -> Path:
     """
     Download audio from YouTube using yt-dlp.
@@ -136,7 +141,12 @@ def _transcribe_sync(
                 )
             response = client.audio.transcriptions.create(**whisper_kwargs)
 
-        logger.info("Whisper transcription complete: %d chars", len(response.text))
+        # Capture detected language from Whisper response
+        detected_language = getattr(response, "language", None)
+        logger.info(
+            "Whisper transcription complete: %d chars, language=%s",
+            len(response.text), detected_language,
+        )
         # Convert Pydantic TranscriptionSegment objects to plain dicts
         # so downstream code can use .get() safely
         raw_segments = response.segments if hasattr(response, "segments") else []
@@ -151,6 +161,7 @@ def _transcribe_sync(
         return {
             "text": response.text,
             "segments": segments,
+            "language": detected_language,
         }
     except Exception as e:
         logger.error("Whisper transcription failed: %s", e)
@@ -275,6 +286,94 @@ def _create_estimated_segments(text: str) -> list[TranscriptSegment]:
     return segments
 
 
+def _translate_sync(audio_path: Path, client: OpenAI | None = None) -> dict:
+    """Translate audio to English using Whisper translate API (synchronous).
+
+    Uses client.audio.translations.create() which transcribes AND translates
+    non-English audio to English in a single step.
+
+    Returns:
+        Dict with 'text' and 'segments' keys.
+    """
+    if not settings.OPENAI_API_KEY:
+        raise TranscriptError("OpenAI API key not configured", ErrorCode.UNKNOWN_ERROR)
+
+    if client is None:
+        client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+    try:
+        with open(audio_path, "rb") as f:
+            response = client.audio.translations.create(
+                model="whisper-1",
+                file=f,
+                response_format="verbose_json",
+                timestamp_granularities=["segment"],
+            )
+        raw_segments = response.segments if hasattr(response, "segments") else []
+        segments = [
+            {
+                "text": getattr(seg, "text", ""),
+                "start": getattr(seg, "start", 0),
+                "end": getattr(seg, "end", 0),
+            }
+            for seg in (raw_segments or [])
+        ]
+        return {"text": response.text, "segments": segments}
+    except Exception as e:
+        logger.error("Whisper translation failed: %s", e)
+        raise TranscriptError(f"Whisper translation failed: {e}", ErrorCode.UNKNOWN_ERROR)
+
+
+async def translate_audio_to_english(
+    video_id: str,
+    cached_audio_path: Path | None = None,
+) -> str | None:
+    """Download audio and translate to English using Whisper translate API.
+
+    Args:
+        video_id: YouTube video ID.
+        cached_audio_path: Optional pre-downloaded audio file to reuse.
+
+    Returns English transcript text, or None on failure.
+    Designed for non-English videos that need English text for Qdrant embedding.
+    """
+    audio_path: Path | None = None
+    owns_audio = False
+    try:
+        # Check for cached audio from transcription phase first
+        whisper_cached = _cached_audio_path(video_id)
+        if cached_audio_path and cached_audio_path.exists():
+            audio_path = cached_audio_path
+        elif whisper_cached.exists():
+            audio_path = whisper_cached
+            owns_audio = True  # Clean up cache after use
+            logger.info("Reusing cached Whisper audio for translation: %s", whisper_cached)
+        else:
+            audio_path = await asyncio.to_thread(_download_audio_sync, video_id)
+            owns_audio = True
+
+        result = await asyncio.to_thread(_translate_sync, audio_path)
+
+        if not result.get("text"):
+            logger.warning("Whisper translate returned empty text for %s", video_id)
+            return None
+
+        logger.info(
+            "Whisper translate complete for %s: %d chars",
+            video_id, len(result["text"]),
+        )
+        return result["text"]
+    except Exception as e:
+        logger.warning("Whisper translate failed for %s: %s", video_id, e)
+        return None
+    finally:
+        if owns_audio and audio_path and audio_path.exists():
+            try:
+                audio_path.unlink()
+            except Exception:
+                pass
+
+
 async def transcribe_with_whisper(
     video_id: str,
     is_music: bool = False,
@@ -342,19 +441,32 @@ async def transcribe_with_whisper(
             logger.warning("Whisper didn't return segments, using estimates")
             segments = _create_estimated_segments(result["text"])
 
+        detected_language = result.get("language")
         logger.info(
-            "Whisper fallback complete: %d chars, %d segments",
-            len(result["text"]), len(segments),
+            "Whisper fallback complete: %d chars, %d segments, language=%s",
+            len(result["text"]), len(segments), detected_language,
         )
+
+        # Cache audio for non-English so translate_audio_to_english can reuse it
+        if detected_language and detected_language != "en" and audio_path and audio_path.exists():
+            cached = _cached_audio_path(video_id)
+            try:
+                import shutil
+                shutil.move(str(audio_path), str(cached))
+                audio_path = None  # Prevent finally cleanup
+                logger.debug("Cached audio for translation reuse: %s", cached)
+            except Exception:
+                pass  # Not critical — translate will re-download
 
         return NormalizedTranscript(
             text=result["text"],
             segments=segments,
             source="whisper",
+            language=detected_language,
         )
 
     finally:
-        # Cleanup original audio file
+        # Cleanup original audio file (skipped if moved to cache above)
         if audio_path and audio_path.exists():
             try:
                 audio_path.unlink()

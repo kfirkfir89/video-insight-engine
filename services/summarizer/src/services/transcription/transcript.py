@@ -49,12 +49,12 @@ def _log_retry(retry_state: tenacity.RetryCallState) -> None:
     before_sleep=_log_retry,
     reraise=True,
 )
-def _fetch_transcript_sync(video_id: str) -> tuple[list[dict], str, str]:
+def _fetch_transcript_sync(video_id: str) -> tuple[list[dict], str, str, str | None]:
     """
     Fetch transcript from YouTube (synchronous internal function).
 
     Returns:
-        (segments, full_text, transcript_type)
+        (segments, full_text, transcript_type, language_code)
     """
     # Configure proxy if credentials are available
     proxy_config = None
@@ -90,6 +90,9 @@ def _fetch_transcript_sync(video_id: str) -> tuple[list[dict], str, str]:
         if not transcript:
             raise TranscriptError("No transcript available", ErrorCode.NO_TRANSCRIPT)
 
+        # Capture language code from the transcript object
+        language_code = getattr(transcript, "language_code", None)
+
         # Fetch transcript and convert to dict format
         fetched = transcript.fetch()
         # New API returns FetchedTranscript object, convert to raw data
@@ -101,7 +104,7 @@ def _fetch_transcript_sync(video_id: str) -> tuple[list[dict], str, str]:
 
         full_text = " ".join([s["text"] for s in segments])
 
-        return segments, full_text, transcript_type
+        return segments, full_text, transcript_type, language_code
 
     except TranscriptsDisabled:
         raise TranscriptError("Captions are disabled for this video", ErrorCode.NO_TRANSCRIPT)
@@ -236,7 +239,7 @@ def normalize_segments(
     return normalized
 
 
-async def get_transcript(video_id: str) -> tuple[list[dict], str, str]:
+async def get_transcript(video_id: str) -> tuple[list[dict], str, str, str | None]:
     """
     Fetch transcript from YouTube (async wrapper).
 
@@ -247,7 +250,7 @@ async def get_transcript(video_id: str) -> tuple[list[dict], str, str]:
         video_id: YouTube video ID
 
     Returns:
-        (segments, full_text, transcript_type)
+        (segments, full_text, transcript_type, language_code)
 
     Raises:
         TranscriptError: If transcript cannot be fetched
@@ -271,7 +274,7 @@ async def get_normalized_transcript(video_id: str) -> NormalizedTranscript:
     Raises:
         TranscriptError: If transcript cannot be fetched
     """
-    segments, full_text, transcript_type = await get_transcript(video_id)
+    segments, full_text, transcript_type, language_code = await get_transcript(video_id)
 
     # Determine source based on transcript_type
     source: TranscriptSource = "api"
@@ -287,4 +290,5 @@ async def get_normalized_transcript(video_id: str) -> NormalizedTranscript:
         text=full_text,
         segments=normalized_segments,
         source=source,
+        language=language_code,
     )

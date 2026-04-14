@@ -107,6 +107,7 @@ async def extract(
     chapters: list[ChapterChunk] | None = None,
     video_context: str = "",
     extra_instruction: str = "",
+    language_instruction: str = "",
 ) -> AsyncGenerator[dict, None]:
     """Adaptive extraction yielding progress events and final result.
 
@@ -146,6 +147,7 @@ async def extract(
         detail_level=detail_level,
         content_emphasis=content_emphasis,
         video_context=video_context,
+        language_instruction=language_instruction,
     )
 
     if extra_instruction:

@@ -65,6 +65,7 @@ async def enrich(
     synthesis_data: dict | None = None,
     video_context: str = "",
     tab_goals: str = "",
+    language_instruction: str = "",
 ) -> EnrichmentData | None:
     """Generate enrichment content based on primary content tag.
 
@@ -113,6 +114,7 @@ async def enrich(
             .replace("{extraction_data}", context)
             .replace("{video_context}", video_context or "Not available")
             .replace("{tab_goals}", tab_goals or "Not specified")
+            .replace("{language_instruction}", language_instruction)
         )
 
         raw = await call_llm_with_retry(

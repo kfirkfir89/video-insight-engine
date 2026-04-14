@@ -265,7 +265,7 @@ class TestFetchTranscriptSync:
         mock_transcript_list.find_manually_created_transcript.return_value = mock_transcript
         mock_api.list.return_value = mock_transcript_list
 
-        segments, full_text, transcript_type = _fetch_transcript_sync("test_video_id")
+        segments, full_text, transcript_type, _lang = _fetch_transcript_sync("test_video_id")
 
         assert len(segments) == 2
         assert segments[0]["text"] == "Hello"
@@ -292,7 +292,7 @@ class TestFetchTranscriptSync:
         mock_transcript_list.find_generated_transcript.return_value = mock_transcript
         mock_api.list.return_value = mock_transcript_list
 
-        segments, full_text, transcript_type = _fetch_transcript_sync("test_video_id")
+        segments, full_text, transcript_type, _lang = _fetch_transcript_sync("test_video_id")
 
         assert transcript_type == "auto-generated"
         assert full_text == "Auto text"
@@ -348,9 +348,10 @@ class TestGetTranscriptAsync:
             [{"text": "Hello", "start": 0, "duration": 1}],
             "Hello",
             "manual",
+            "en",
         )
 
-        segments, text, transcript_type = await get_transcript("test123")
+        segments, text, transcript_type, _lang = await get_transcript("test123")
 
         assert segments[0]["text"] == "Hello"
         assert text == "Hello"
@@ -384,6 +385,7 @@ class TestGetNormalizedTranscript:
             ],
             "Hello World",
             "manual",
+            "en",
         )
 
         result = await get_normalized_transcript("test123")
@@ -402,6 +404,7 @@ class TestGetNormalizedTranscript:
             [{"text": "Test", "start": 0, "duration": 1}],
             "Test",
             "manual",
+            "en",
         )
 
         result = await get_normalized_transcript("test123")
@@ -415,6 +418,7 @@ class TestGetNormalizedTranscript:
             [{"text": "Test", "start": 0, "duration": 1}],
             "Test",
             "yt-dlp",
+            None,
         )
 
         result = await get_normalized_transcript("test123")

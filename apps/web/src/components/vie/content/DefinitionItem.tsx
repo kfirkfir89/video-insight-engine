@@ -34,7 +34,7 @@ export const DefinitionItem = memo(function DefinitionItem({
               onClick={() => setExpanded(true)}
               className="text-xs text-primary hover:underline"
             >
-              <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 rtl:rotate-180" aria-hidden="true" />
               <span>Show more</span>
             </Button>
           </div>

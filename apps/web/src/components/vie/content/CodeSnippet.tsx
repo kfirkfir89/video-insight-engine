@@ -42,7 +42,7 @@ export const CodeSnippet = memo(function CodeSnippet({
         <button
           onClick={handleCopy}
           className={cn(
-            'absolute top-2 right-2 z-10 flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors',
+            'absolute top-2 end-2 z-10 flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors',
             copied
               ? 'text-success'
               : 'text-[oklch(50%_0_0)] hover:text-[oklch(75%_0_0)]',
@@ -55,7 +55,7 @@ export const CodeSnippet = memo(function CodeSnippet({
             <Copy className="h-3 w-3" aria-hidden="true" />
           )}
         </button>
-        <pre className="overflow-x-auto p-4 pr-16 text-sm leading-relaxed">
+        <pre dir="ltr" className="overflow-x-auto p-4 pe-16 text-sm leading-relaxed">
           <code className="font-mono whitespace-pre-wrap">{code}</code>
         </pre>
       </div>

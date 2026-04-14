@@ -446,6 +446,10 @@ export interface VIEResponseMeta {
   keyTakeaways?: string[];
   masterSummary?: string;
   seoDescription?: string;
+  /** ISO 639-1 language code (e.g., "en", "he"). */
+  language?: string;
+  /** Whether the video content is in a right-to-left language. */
+  isRTL?: boolean;
 }
 
 // ─────────────────────────────────────────────────────

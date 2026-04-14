@@ -99,14 +99,17 @@ apps/web/src/
 │       ├── contexts/               # TabStateContext, VideoPlayerContext
 │       └── lib/                    # streaming/ (SSE pipeline), synthesis-utils, output-type-config
 │
+├── contexts/                       # App-level React contexts
+│   └── DirectionContext.tsx        # RTL/LTR direction + language provider
 ├── api/                            # API client modules
 ├── hooks/                          # SHARED hooks (8 files)
 │   ├── use-folders, use-videos, use-playlists   # Data hooks
 │   ├── use-share, use-websocket, use-theme      # Feature hooks
 │   └── use-media-query, use-drag-scrollbar      # UI utility hooks
-├── lib/                            # SHARED utilities (5 files)
+├── lib/                            # SHARED utilities (6 files)
 │   ├── utils.ts (cn()), query-client.ts, query-keys.ts
 │   ├── youtube-utils.ts, string-utils.ts
+│   ├── i18n.ts                     # UI label translations (en, he, ar)
 │   └── dev/                        # Dev mock data
 ├── stores/                         # GLOBAL stores (auth-store, ui-store)
 ├── styles/                         # Global CSS
@@ -161,6 +164,40 @@ Theme uses `data-theme` attribute on `<html>` with three modes:
 - **Body**: Inter (variable, Google Fonts)
 - **Code**: JetBrains Mono (subset, Google Fonts)
 - Loaded via `<link>` in `index.html` with `font-display: swap`
+
+---
+
+## Multi-Language & RTL Support
+
+Video output components support right-to-left (RTL) languages. Direction is determined per-video based on the detected transcript language.
+
+### Architecture
+
+```
+OutputRouter
+  └── DirectionProvider (language, isRTL)      ← wraps all output
+        ├── useDirection() → { language, isRTL, dir }
+        └── useLabels() → translated UI strings
+```
+
+### Key Files
+
+- **`contexts/DirectionContext.tsx`** — React context providing `language`, `isRTL`, `dir` ("ltr" | "rtl")
+- **`lib/i18n.ts`** — UI label translations (English, Hebrew, Arabic); `useLabels()` hook
+- **`OutputRouter.tsx`** — Wraps output tree in `<DirectionProvider language={language} isRTL={isRTL}>`
+
+### RTL Patterns
+
+| Pattern | LTR | RTL |
+|---------|-----|-----|
+| Text alignment | `text-left` | Use `text-start` (auto-flips) |
+| Directional icons | Normal | `rtl:rotate-180` on chevrons/arrows |
+| Margins/padding | `ml-2`, `mr-2` | Use `ms-2`, `me-2` (logical properties) |
+| Flex direction | Default | Tailwind `rtl:` variant auto-flips |
+
+### UI Labels
+
+Components use `useLabels()` for translatable strings (Next, Previous, Done, etc.) instead of hardcoded English. Currently supports: English, Hebrew, Arabic.
 
 ---
 

@@ -178,7 +178,7 @@ export const BudgetInteractive = memo(function BudgetInteractive({
                       style={{ backgroundColor: DONUT_COLORS[index % DONUT_COLORS.length] }}
                       aria-hidden="true"
                     />
-                    {item.emoji && <span className="mr-0.5" aria-hidden="true">{item.emoji}</span>}
+                    {item.emoji && <span className="me-0.5" aria-hidden="true">{item.emoji}</span>}
                     {item.category}
                   </span>
                   <div className="flex items-center gap-1.5">

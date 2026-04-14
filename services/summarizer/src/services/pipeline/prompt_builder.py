@@ -125,6 +125,7 @@ def _build_base_template(
     detail_level: str = "standard",
     content_emphasis: str = "",
     video_context: str = "",
+    language_instruction: str = "",
 ) -> str:
     """Build extraction prompt with domain schemas injected, {transcript} placeholder intact.
 
@@ -183,6 +184,7 @@ def _build_base_template(
         .replace("{video_context}", video_context or "Not available")
         .replace("{primary_tag}", primary_tag)
         .replace("{domain_example}", domain_example)
+        .replace("{language_instruction}", language_instruction)
     )
 
 
@@ -198,6 +200,7 @@ def build_extraction_prompt(
     detail_level: str = "standard",
     content_emphasis: str = "",
     video_context: str = "",
+    language_instruction: str = "",
 ) -> str:
     """Assemble a complete extraction prompt from base template + domain schemas.
 
@@ -219,6 +222,7 @@ def build_extraction_prompt(
     template = _build_base_template(
         content_tags, modifiers, quality_rules, title, duration_minutes,
         user_goal, tab_goals, detail_level, content_emphasis, video_context,
+        language_instruction,
     )
     return template.replace("{transcript}", transcript)
 
@@ -234,6 +238,7 @@ def build_extraction_template(
     detail_level: str = "standard",
     content_emphasis: str = "",
     video_context: str = "",
+    language_instruction: str = "",
 ) -> str:
     """Build extraction prompt template with {transcript} placeholder for extractor to fill.
 
@@ -257,4 +262,5 @@ def build_extraction_template(
     return _build_base_template(
         content_tags, modifiers, quality_rules, title, duration_minutes,
         user_goal, tab_goals, detail_level, content_emphasis, video_context,
+        language_instruction,
     )

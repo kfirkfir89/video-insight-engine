@@ -172,7 +172,7 @@ export const ChecklistInteractive = memo(function ChecklistInteractive({
                       type="button"
                       onClick={() => toggle(index)}
                       className={cn(
-                        'w-full flex items-start gap-3 rounded-lg px-3 py-2.5 text-left',
+                        'w-full flex items-start gap-3 rounded-lg px-3 py-2.5 text-start',
                         'transition-all duration-150 active:scale-[0.98]',
                         'hover:bg-muted/30',
                         isChecked && 'opacity-60',
@@ -187,11 +187,11 @@ export const ChecklistInteractive = memo(function ChecklistInteractive({
                           'text-sm font-medium',
                           isChecked && 'line-through text-muted-foreground',
                         )}>
-                          {item.emoji && <span className="mr-1.5 text-base" aria-hidden="true">{item.emoji}</span>}
+                          {item.emoji && <span className="me-1.5 text-base" aria-hidden="true">{item.emoji}</span>}
                           {displayLabel}
                         </span>
                         {item.essential && !isChecked && (
-                          <Badge variant="warning" className="ml-2 text-[10px]">essential</Badge>
+                          <Badge variant="warning" className="ms-2 text-[10px]">essential</Badge>
                         )}
                         {item.note && (
                           <p className={cn(

@@ -11,6 +11,7 @@ class RAGSource(BaseModel):
     """A retrieved transcript chunk used as context."""
 
     text: str
+    text_original: str | None = None  # Original-language text for non-English videos
     timestamp: str | None = None
     score: float = 0.0
     chunk_index: int = 0

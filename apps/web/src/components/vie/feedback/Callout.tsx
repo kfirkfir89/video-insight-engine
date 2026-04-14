@@ -77,7 +77,7 @@ export const Callout = memo(function Callout({ style, text, className }: Callout
   return (
     <div
       className={cn(
-        'rounded-lg border-l-2 px-3 py-2',
+        'rounded-lg border-s-2 px-3 py-2',
         config.borderColor,
         config.bgTint,
         className,

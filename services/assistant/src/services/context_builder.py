@@ -25,12 +25,14 @@ class ContextBuilder:
         self,
         video_ctx: VideoContext,
         rag_chunks: list[RAGSource] | None = None,
+        user_language: str = "en",
     ) -> str:
         """Build a system prompt string with video context and RAG sources.
 
         Args:
             video_ctx: Structured video metadata and content.
             rag_chunks: Optional transcript chunks retrieved via RAG.
+            user_language: Detected language of the user's message.
 
         Returns:
             System prompt string for the LLM.
@@ -40,13 +42,22 @@ class ContextBuilder:
             creator=video_ctx.creator or "Unknown",
         )
 
+        # Use English synthesis for non-English videos when user speaks English
         summary = video_ctx.summary
+        if user_language == "en" and video_ctx.language != "en" and video_ctx.synthesis_en:
+            summary = video_ctx.synthesis_en.get("masterSummary", summary)
+
         if len(summary) > _MAX_SUMMARY_CHARS:
             summary = summary[:_MAX_SUMMARY_CHARS] + "..."
 
         takeaways_section = self._build_takeaways_section(video_ctx.takeaways)
         tabs_section = self._build_tabs_section(video_ctx.tabs)
-        rag_section = self._build_rag_section(rag_chunks)
+        rag_section = self._build_rag_section(rag_chunks, user_language, video_ctx.language)
+
+        # Add language instruction for non-English responses
+        language_instruction = ""
+        if user_language != "en":
+            language_instruction = f"\n\nIMPORTANT: Respond in the user's language ({user_language})."
 
         context = CONTEXT_TEMPLATE.safe_substitute(
             summary=summary,
@@ -55,7 +66,7 @@ class ContextBuilder:
             rag_section=rag_section,
         )
 
-        return f"{base}\n\n{context}"
+        return f"{base}{language_instruction}\n\n{context}"
 
     def _build_takeaways_section(self, takeaways: list[str]) -> str:
         """Format takeaways as a bullet list."""
@@ -80,12 +91,22 @@ class ContextBuilder:
             return ""
         return f"{TABS_HEADER}" + "\n".join(lines) + "\n\n"
 
-    def _build_rag_section(self, chunks: list[RAGSource] | None) -> str:
-        """Format RAG chunks with optional timestamps."""
+    def _build_rag_section(
+        self,
+        chunks: list[RAGSource] | None,
+        user_language: str = "en",
+        video_language: str = "en",
+    ) -> str:
+        """Format RAG chunks with optional timestamps.
+
+        Uses text_original when user language matches video language (non-English).
+        """
         if not chunks:
             return ""
         lines: list[str] = []
+        use_original = user_language == video_language and video_language != "en"
         for chunk in chunks:
             prefix = f"[{chunk.timestamp}] " if chunk.timestamp else ""
-            lines.append(f"{prefix}{chunk.text}")
+            text = (chunk.text_original or chunk.text) if use_original else chunk.text
+            lines.append(f"{prefix}{text}")
         return f"{RAG_HEADER}" + "\n\n".join(lines) + "\n"

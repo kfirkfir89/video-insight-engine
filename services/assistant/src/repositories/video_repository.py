@@ -23,6 +23,8 @@ class VideoContext:
     takeaways: list[str] = field(default_factory=list)
     tabs: list[dict] = field(default_factory=list)
     output_data: dict | None = None
+    language: str = "en"
+    synthesis_en: dict | None = None
 
 
 class MongoVideoRepository:
@@ -83,6 +85,10 @@ class MongoVideoRepository:
         # Extract output data (full extraction result)
         output_data = doc.get("output")
 
+        # Language support
+        language = doc.get("language", "en") or "en"
+        synthesis_en = doc.get("synthesis_en")
+
         return VideoContext(
             id=str(doc.get("_id", "")),
             youtube_id=doc.get("youtubeId", ""),
@@ -92,4 +98,6 @@ class MongoVideoRepository:
             takeaways=takeaways,
             tabs=tabs,
             output_data=output_data,
+            language=language,
+            synthesis_en=synthesis_en,
         )

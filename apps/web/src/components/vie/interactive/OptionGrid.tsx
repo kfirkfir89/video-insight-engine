@@ -36,7 +36,7 @@ export const OptionGrid = memo(function OptionGrid({
             onClick={() => onSelect(i)}
             disabled={revealed}
             className={cn(
-              'rounded-lg border px-4 py-3 text-sm text-left transition-all duration-200',
+              'rounded-lg border px-4 py-3 text-sm text-start transition-all duration-200',
               !revealed && 'border-border/50 bg-muted/20 hover:bg-muted/40',
               showCorrect && 'border-success bg-success/10 text-success',
               showWrong && 'border-destructive bg-destructive/10 text-destructive',

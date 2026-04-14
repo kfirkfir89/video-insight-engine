@@ -150,8 +150,32 @@ class LLMProvider:
             raise LLMError(f"LLM stream failed: {exc}") from exc
         except AuthenticationError as exc:
             logger.error(
-                "llm_auth_error",
+                "llm_auth_error_stream",
                 provider=self._extract_provider(self._model),
                 error=str(exc),
             )
             raise LLMError(f"LLM authentication failed: {exc}") from exc
+
+    async def translate_to_english(self, text: str) -> str | None:
+        """Translate a short text to English for RAG search.
+
+        Args:
+            text: Non-English text to translate.
+
+        Returns:
+            English translation, or None on failure.
+        """
+        messages = [
+            {
+                "role": "system",
+                "content": "Translate the following text to English. "
+                           "Return only the translation, nothing else.",
+            },
+            {"role": "user", "content": text},
+        ]
+        try:
+            result = await self.complete_with_messages(messages, max_tokens=500)
+            return result.strip() if result else None
+        except LLMError:
+            # complete_with_messages already logs the detailed error
+            return None

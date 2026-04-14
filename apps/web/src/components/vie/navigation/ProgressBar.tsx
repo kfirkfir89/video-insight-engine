@@ -41,7 +41,7 @@ export const ProgressBar = memo(function ProgressBar({
           aria-label={label ?? `${percent}% complete`}
         />
       </div>
-      <span className="text-xs font-medium tabular-nums text-muted-foreground w-10 text-right">
+      <span className="text-xs font-medium tabular-nums text-muted-foreground w-10 text-end">
         {percent}%
       </span>
     </div>

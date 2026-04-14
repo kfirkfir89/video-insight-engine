@@ -3,6 +3,7 @@ import type { QuizItem } from '@vie/types';
 import { GlassCard, FadeIn, OptionGrid, InlineScore, Shake, BackForward, Stepper, ScoreRing, Badge } from '@/components/vie';
 import { Button } from '@/components/ui/button';
 import { Celebration } from '../Celebration';
+import { useLabels } from '@/lib/i18n';
 
 import { useTabState } from '@/features/video-output/contexts/TabStateContext';
 import { useTabCoordination } from '../TabCoordinationContext';
@@ -20,6 +21,7 @@ export const QuizInteractive = memo(function QuizInteractive({
   nextTab,
   onNavigateTab,
 }: QuizInteractiveProps) {
+  const t = useLabels();
   const tabState = useTabState();
   const tabCoord = useTabCoordination();
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -172,8 +174,8 @@ export const QuizInteractive = memo(function QuizInteractive({
           onForward={() => setCurrentIndex((p) => p + 1)}
           backDisabled={currentIndex === 0}
           forwardDisabled={currentIndex === questions.length - 1}
-          backLabel="Previous"
-          forwardLabel="Next"
+          backLabel={t.previous}
+          forwardLabel={t.next}
         />
       )}
 
@@ -190,7 +192,7 @@ export const QuizInteractive = memo(function QuizInteractive({
       {/* Completion */}
       {allAnswered && (
         <div className="flex flex-col items-center gap-4">
-          <ScoreRing score={score} total={questions.length} label="Correct" size="md" />
+          <ScoreRing score={score} total={questions.length} label={t.correct} size="md" />
 
           {/* Only celebrate on good scores */}
           {scorePercent >= 80 && (
@@ -209,7 +211,7 @@ export const QuizInteractive = memo(function QuizInteractive({
             <FadeIn>
               <GlassCard variant="outlined" className="space-y-3 w-full">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Review ({wrongAnswers.length} missed)
+                  {t.review} ({wrongAnswers.length} {t.missed})
                 </h4>
                 <ul className="space-y-2">
                   {wrongAnswers.map((w) => (
@@ -230,7 +232,7 @@ export const QuizInteractive = memo(function QuizInteractive({
                   className="w-full text-xs"
                   onClick={handleReset}
                 >
-                  Try Again
+                  {t.tryAgain}
                 </Button>
               </GlassCard>
             </FadeIn>
@@ -244,7 +246,7 @@ export const QuizInteractive = memo(function QuizInteractive({
               className="text-xs"
               onClick={handleReset}
             >
-              Try Again
+              {t.tryAgain}
             </Button>
           )}
         </div>

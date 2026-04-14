@@ -2,7 +2,7 @@
 
 Provides the async generator ``fetch_transcript`` which tries each
 transcript source in priority order:
-  S3 cache -> yt-dlp subtitles -> youtube-transcript-api -> Gemini -> Whisper -> metadata
+  S3 cache -> yt-dlp subtitles -> youtube-transcript-api -> Whisper -> Gemini -> metadata
 
 Extracted from ``src.routes.stream`` for maintainability.
 """
@@ -26,6 +26,7 @@ from src.services.transcription.transcript import get_transcript
 from src.services.transcription.transcript_store import transcript_store
 from src.services.transcription.whisper_transcriber import transcribe_with_whisper
 from src.services.video.youtube import VideoData
+from src.utils.language_utils import detect_language_from_text, detect_language_by_script, normalize_language_code
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +60,6 @@ async def fetch_transcript(
             if cached:
                 logger.info("Using S3 cached transcript: %d segments", len(cached.segments))
                 yield sse_event("phase", {"phase": "transcript_cached"})
-                # S3 stores normalized segments (startMs/endMs).
-                # Convert to start/duration (seconds) for pipeline compatibility
-                # (format_transcript_with_timestamps, sponsor filtering, etc.)
                 segments = []
                 for seg in cached.segments:
                     start_ms = seg.get("startMs", 0)
@@ -72,11 +70,22 @@ async def fetch_transcript(
                         "duration": (end_ms - start_ms) / 1000.0,
                     })
                 raw_text = " ".join(seg["text"] for seg in segments)
+
+                # Detect language from cached transcript if not stored
+                cached_language = cached.language
+                if not cached_language and raw_text:
+                    cached_language = detect_language_from_text(raw_text)
+                    if not cached_language:
+                        cached_language = detect_language_by_script(raw_text)
+                    if cached_language:
+                        logger.info("Detected language from S3 cache text: %s", cached_language)
+
                 yield TranscriptData(
                     segments=segments,
                     raw_text=raw_text,
                     transcript_type=f"cached-{cached.source}",
                     source="s3",
+                    language=cached_language,
                 )
                 return
         except Exception as e:
@@ -89,11 +98,20 @@ async def fetch_transcript(
             for seg in video_data.subtitles
         ]
         logger.info("Using yt-dlp subtitles: %d segments", len(segments))
+
+        # Detect language from yt-dlp video metadata or subtitle text
+        ytdlp_language = normalize_language_code(getattr(video_data, "language", None))
+        if not ytdlp_language and video_data.transcript_text:
+            ytdlp_language = detect_language_from_text(video_data.transcript_text)
+            if not ytdlp_language:
+                ytdlp_language = detect_language_by_script(video_data.transcript_text)
+
         yield TranscriptData(
             segments=segments,
             raw_text=video_data.transcript_text,
             transcript_type="yt-dlp",
             source="ytdlp",
+            language=ytdlp_language,
         )
         return
 
@@ -102,7 +120,7 @@ async def fetch_transcript(
     yield sse_event("phase", {"phase": "transcript"})
 
     try:
-        segments, raw_text, transcript_type = await asyncio.wait_for(
+        segments, raw_text, transcript_type, api_language = await asyncio.wait_for(
             get_transcript(youtube_id),
             timeout=settings.TRANSCRIPT_FETCH_TIMEOUT,
         )
@@ -112,6 +130,7 @@ async def fetch_transcript(
             raw_text=raw_text,
             transcript_type=transcript_type,
             source=source,
+            language=normalize_language_code(api_language),
         )
         return
     except asyncio.TimeoutError:
@@ -136,7 +155,8 @@ async def fetch_transcript(
             logger.warning("Video too long for Whisper (%d min)", duration // 60)
             raise
 
-    # Audio transcription fallback chain: Gemini (fast) -> Whisper (reliable)
+    # Audio transcription fallback chain: Whisper (detects language) -> Gemini (fast)
+    # Whisper comes first because it natively returns response.language for detection.
     duration_min = duration // 60
     if duration_min > 180:
         logger.warning(
@@ -147,17 +167,17 @@ async def fetch_transcript(
     logger.info("No captions for %s, trying audio transcription", youtube_id)
     yield sse_event("phase", {"phase": "audio_transcription"})
 
-    # Try Gemini first -- faster and cheaper than Whisper
-    gemini_data = await _try_gemini_transcription(youtube_id, duration, is_music)
-    if gemini_data is not None:
-        yield gemini_data
-        return
-
-    # Whisper fallback
+    # Try Whisper first -- detects language natively via response.language
     yield sse_event("phase", {"phase": "whisper_transcription"})
     whisper_data, whisper_error = await _try_whisper_transcription(youtube_id, duration, is_music)
     if whisper_data is not None:
         yield whisper_data
+        return
+
+    # Gemini fallback -- faster/cheaper but no language detection
+    gemini_data = await _try_gemini_transcription(youtube_id, duration, is_music)
+    if gemini_data is not None:
+        yield gemini_data
         return
 
     # Metadata fallback -- only for music videos when all transcript sources fail.
@@ -253,10 +273,11 @@ async def _try_whisper_transcription(
         )
 
     segments = normalized_segments_to_pipeline(whisper_result.segments)
-    logger.info("Whisper fallback successful: %d segments", len(segments))
+    logger.info("Whisper fallback successful: %d segments, language=%s", len(segments), whisper_result.language)
     return TranscriptData(
         segments=segments,
         raw_text=whisper_result.text,
         transcript_type="whisper",
         source="whisper",
+        language=normalize_language_code(whisper_result.language),
     ), None

@@ -97,7 +97,8 @@ services/assistant/
     │
     └── utils/
         ├── prompt_templates.py   # Prompt template strings
-        └── content_extractor.py  # Content extraction helpers
+        ├── content_extractor.py  # Content extraction helpers
+        └── language_detect.py    # User language detection for query translation
 ```
 
 ---
@@ -181,11 +182,16 @@ If no intent matches, the message falls through to the default RAG chat path (se
 
 ## RAG Pipeline
 
-1. **Encode** query via sentence-transformers (`all-MiniLM-L6-v2`, lazy-loaded at startup)
-2. **Search** Qdrant for top-k transcript chunks filtered by `video_id`
-3. **Deduplicate** near-identical chunks using cosine similarity (threshold: 0.95)
-4. **Build** system prompt with video metadata + RAG chunks + conversation history
-5. **Stream** LLM response token by token via SSE
+1. **Detect** user language (`language_detect.py`)
+2. **Translate** non-English queries to English for RAG search (LLM translation)
+3. **Encode** query via sentence-transformers (`all-MiniLM-L6-v2`, lazy-loaded at startup)
+4. **Search** Qdrant for top-k transcript chunks filtered by `video_id`
+5. **Deduplicate** near-identical chunks using cosine similarity (threshold: 0.95)
+6. **Build** system prompt with video metadata + RAG chunks + conversation history
+   - Uses `text_original` when user language matches video language (non-English)
+   - Uses `synthesis_en` for English users on non-English videos
+   - Appends language instruction for non-English responses
+7. **Stream** LLM response token by token via SSE
 
 ---
 

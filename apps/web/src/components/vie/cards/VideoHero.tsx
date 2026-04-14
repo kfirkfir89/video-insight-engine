@@ -67,7 +67,7 @@ function VideoModal({ youtubeId, onClose }: { youtubeId: string; onClose: () => 
         <button
           ref={closeRef}
           onClick={onClose}
-          className="absolute -top-10 right-0 flex items-center gap-1 text-white/80 hover:text-white text-sm transition-colors"
+          className="absolute -top-10 end-0 flex items-center gap-1 text-white/80 hover:text-white text-sm transition-colors"
           aria-label="Close video"
         >
           <X className="h-4 w-4" />
@@ -168,7 +168,7 @@ export const VideoHero = memo(function VideoHero({
         {/* Header — always visible, clickable to expand */}
         <button
           onClick={toggleExpand}
-          className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left hover:bg-muted/10 transition-colors rounded-2xl"
+          className="w-full flex items-center justify-between gap-3 px-5 py-4 text-start hover:bg-muted/10 transition-colors rounded-2xl"
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse hero' : 'Expand hero'}
         >
@@ -258,7 +258,7 @@ export const VideoHero = memo(function VideoHero({
             onClick={() => goToFace('front')}
             className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
           >
-            <ArrowLeft className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <ArrowLeft className="h-3.5 w-3.5 shrink-0 rtl:rotate-180" aria-hidden="true" />
             Back
           </button>
           {hasMasterSummary && (
@@ -291,7 +291,7 @@ export const VideoHero = memo(function VideoHero({
             onClick={() => goToFace('takeaways')}
             className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
           >
-            <ArrowLeft className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <ArrowLeft className="h-3.5 w-3.5 shrink-0 rtl:rotate-180" aria-hidden="true" />
             Back
           </button>
           <button

@@ -63,8 +63,18 @@ class VectorService:
         video_id: str,
         chunks: list[dict],
         embeddings: list[list[float]],
+        language: str = "en",
+        original_chunks: list[dict] | None = None,
     ) -> bool:
-        """Store transcript chunks with embeddings. Returns True on success."""
+        """Store transcript chunks with embeddings. Returns True on success.
+
+        Args:
+            video_id: YouTube video ID.
+            chunks: Text chunks (English for non-English videos, original for English).
+            embeddings: Embedding vectors for the chunks.
+            language: ISO 639-1 language code.
+            original_chunks: Original-language chunks (only for non-English videos).
+        """
         if not self._ensure_collection():
             return False
 
@@ -79,6 +89,12 @@ class VectorService:
                         "video_id": video_id,
                         "chunk_index": i,
                         "text": chunk["text"],
+                        "text_original": (
+                            original_chunks[i]["text"]
+                            if original_chunks and i < len(original_chunks)
+                            else None
+                        ),
+                        "language": language,
                         "start_char": chunk.get("start_char", 0),
                         "end_char": chunk.get("end_char", 0),
                     },
@@ -123,6 +139,8 @@ class VectorService:
             return [
                 {
                     "text": r.payload["text"],
+                    "text_original": r.payload.get("text_original"),
+                    "language": r.payload.get("language", "en"),
                     "video_id": r.payload["video_id"],
                     "score": r.score,
                     "chunk_index": r.payload["chunk_index"],

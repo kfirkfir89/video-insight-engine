@@ -115,9 +115,9 @@ export const TimelineExplorer = memo(function TimelineExplorer({
       )}
 
       {/* Timeline */}
-      <ol className="relative ml-2 space-y-3" aria-label="Timeline">
+      <ol className="relative ms-2 space-y-3" aria-label="Timeline">
         <div
-          className="absolute left-[5px] top-2 bottom-2 w-px bg-gradient-to-b from-primary/40 via-primary/20 to-transparent"
+          className="absolute start-[5px] top-2 bottom-2 w-px bg-gradient-to-b from-primary/40 via-primary/20 to-transparent"
           aria-hidden="true"
         />
 
@@ -129,14 +129,14 @@ export const TimelineExplorer = memo(function TimelineExplorer({
           return (
             <FadeIn key={index} index={index}>
               <li className={cn(
-                'relative ml-6 rounded-lg transition-colors',
-                isActive && 'border border-[var(--vie-accent)] bg-[var(--vie-accent)]/5 p-2 -ml-0 pl-8',
+                'relative ms-6 rounded-lg transition-colors',
+                isActive && 'border border-[var(--vie-accent)] bg-[var(--vie-accent)]/5 p-2 ms-0 ps-8',
               )}>
                 <div
                   className={cn(
                     'absolute w-3 h-3 bg-background border-2 rounded-full mt-1.5 z-10',
-                    isActive ? 'border-[var(--vie-accent)] -left-[29px]' : 'border-primary -left-[29px]',
-                    isActive && 'left-[3px]',
+                    isActive ? 'border-[var(--vie-accent)] -start-[29px]' : 'border-primary -start-[29px]',
+                    isActive && 'start-[3px]',
                   )}
                   aria-hidden="true"
                 />
@@ -150,7 +150,7 @@ export const TimelineExplorer = memo(function TimelineExplorer({
                         onClick={() => onSeek(entry.seconds)}
                         className="text-xs font-bold tabular-nums text-primary bg-primary/10 px-2 py-0.5 rounded-md hover:bg-primary/20"
                       >
-                        <Clock className="h-3 w-3 mr-1" aria-hidden="true" />
+                        <Clock className="h-3 w-3 me-1" aria-hidden="true" />
                         {entry.time}
                       </Button>
                     ) : (
@@ -190,7 +190,7 @@ export const TimelineExplorer = memo(function TimelineExplorer({
 
                   {isExpanded && entry.description && (
                     <FadeIn>
-                      <p className="text-sm text-muted-foreground pl-0.5">
+                      <p className="text-sm text-muted-foreground ps-0.5">
                         {entry.description}
                       </p>
                     </FadeIn>

@@ -205,6 +205,8 @@ export function VideoDetailPage() {
             youtubeId={video.youtubeId}
             creator={mergedVideo.creator ?? undefined}
             duration={mergedVideo.duration}
+            language={resolvedMeta?.language}
+            isRTL={resolvedMeta?.isRTL}
           />
         </Layout>
       </VideoPlayerProvider>
