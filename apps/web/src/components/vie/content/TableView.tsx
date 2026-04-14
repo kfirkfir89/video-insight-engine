@@ -17,9 +17,9 @@ interface TableViewProps {
 }
 
 const ALIGN_CLASS: Record<string, string> = {
-  left: 'text-left',
+  left: 'text-start',
   center: 'text-center',
-  right: 'text-right',
+  right: 'text-end',
 };
 
 /**

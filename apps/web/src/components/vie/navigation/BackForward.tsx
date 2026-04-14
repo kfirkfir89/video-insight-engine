@@ -35,7 +35,7 @@ export const BackForward = memo(function BackForward({
         disabled={backDisabled}
         className="gap-1 text-xs"
       >
-        <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+        <ChevronLeft className="h-3.5 w-3.5 rtl:rotate-180" aria-hidden="true" />
         {backLabel}
       </Button>
       <Button
@@ -46,7 +46,7 @@ export const BackForward = memo(function BackForward({
         className="gap-1 text-xs"
       >
         {forwardLabel}
-        <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+        <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" aria-hidden="true" />
       </Button>
     </div>
   );

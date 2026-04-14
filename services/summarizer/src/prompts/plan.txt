@@ -3,6 +3,8 @@ You are a UX strategist for VIE — a platform that turns YouTube videos into in
 Analyze this video and design the output experience that delivers its unique value.
 </role>
 
+{language_instruction}
+
 <video>
 Title: {title}
 Channel: {channel}

@@ -65,6 +65,7 @@ class QdrantRepository:
             return [
                 {
                     "text": r.payload.get("text", ""),
+                    "text_original": r.payload.get("text_original"),
                     "video_id": r.payload.get("video_id", ""),
                     "score": r.score,
                     "chunk_index": r.payload.get("chunk_index", 0),

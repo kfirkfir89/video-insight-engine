@@ -32,6 +32,7 @@ async def synthesize(
     output_type: str,
     extraction_summary: str,
     video_context: str = "",
+    language_instruction: str = "",
 ) -> SynthesisResult:
     """Generate synthesis from extraction data.
 
@@ -46,6 +47,7 @@ async def synthesize(
         .replace("{output_type}", output_type)
         .replace("{extraction_summary}", extraction_summary[:4000])
         .replace("{video_context}", video_context or "Not available")
+        .replace("{language_instruction}", language_instruction)
     )
 
     raw = await call_llm_with_retry(

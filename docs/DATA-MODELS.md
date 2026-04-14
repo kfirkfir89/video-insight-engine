@@ -33,7 +33,7 @@ The block-based content system was replaced by the composable output system (v2)
 
 The triage pipeline determines content tags from video metadata and transcript manifest. Tags drive schema selection, tab layout, and enrichment.
 
-### 8 Primary Content Tags + 2 Modifiers
+### 10 Primary Content Tags + 2 Modifiers
 
 | ContentTag | Domain Schema | Enrichment |
 |------------|---------------|------------|
@@ -45,6 +45,8 @@ The triage pipeline determines content tags from video metadata and transcript m
 | `travel` | `schemas/travel.txt` | - |
 | `review` | `schemas/review.txt` | - |
 | `project` | `schemas/project.txt` | - |
+| `language` | `schemas/language.txt` | - |
+| `science` | `schemas/science.txt` | - |
 | `narrative` | `schemas/narrative.txt` | Modifier only |
 | `finance` | `schemas/finance.txt` | Modifier only |
 
@@ -179,6 +181,16 @@ One entry per YouTube video. Shared across all users.
     seoDescription: string
   } | null,
 
+  // Multi-language support (non-English videos only)
+  language: string | null,              // ISO 639-1 code ("en", "he", "ar", etc.)
+  isRTL: boolean | null,               // Whether language is right-to-left
+  synthesis_en: {                       // English translation of synthesis (non-English only)
+    tldr: string,
+    keyTakeaways: string[],
+    masterSummary: string
+  } | null,
+  tabs_en: TabEntry[] | null,           // English-translated tabs (non-English only)
+
   // v2 Assembly output (component-addressed tabs)
   assembledMeta: {
     videoId: string,
@@ -191,7 +203,9 @@ One entry per YouTube video. Shared across all users.
     tldr: string,
     keyTakeaways: string[],
     masterSummary: string,
-    seoDescription: string
+    seoDescription: string,
+    language: string,           // ISO 639-1 code
+    isRTL: boolean              // Whether language is RTL
   } | null,
 
   assembledTabs: [{

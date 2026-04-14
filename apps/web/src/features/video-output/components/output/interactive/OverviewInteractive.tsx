@@ -2,6 +2,7 @@ import { memo, useState, useCallback, useEffect } from 'react';
 import { Star, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { HeroCard, FadeIn, GlassCard, StatPill, ExpandableCard, Badge, QuoteBlock } from '@/components/vie';
+import { useLabels } from '@/lib/i18n';
 
 
 interface OverviewStat {
@@ -59,6 +60,7 @@ export const OverviewInteractive = memo(function OverviewInteractive({
   nextTab: _nextTab,
   onNavigateTab: _onNavigateTab,
 }: OverviewInteractiveProps) {
+  const t = useLabels();
   const [starredHighlights, setStarredHighlights] = useState<Set<number>>(new Set());
 
   // Load bookmarks from localStorage
@@ -97,9 +99,9 @@ export const OverviewInteractive = memo(function OverviewInteractive({
 
   // Build metadata stat pills from flattened props
   const metaStats: OverviewStat[] = [];
-  if (duration) metaStats.push({ label: 'Duration', value: duration });
-  if (level) metaStats.push({ label: 'Level', value: level });
-  if (itemCount != null && itemCount > 0) metaStats.push({ label: 'Items', value: String(itemCount) });
+  if (duration) metaStats.push({ label: t.duration, value: duration });
+  if (level) metaStats.push({ label: t.level, value: level });
+  if (itemCount != null && itemCount > 0) metaStats.push({ label: t.items, value: String(itemCount) });
 
   const allStats = [...metaStats, ...(stats ?? [])];
 
@@ -158,7 +160,7 @@ export const OverviewInteractive = memo(function OverviewInteractive({
       {/* Quote */}
       {quote && (
         <FadeIn index={2}>
-          <GlassCard variant="outlined" className="border-l-2 border-primary/30">
+          <GlassCard variant="outlined" className="border-s-2 border-primary/30">
             <QuoteBlock text={quote} attribution={quoteAuthor} variant="speaker" />
           </GlassCard>
         </FadeIn>
@@ -241,7 +243,7 @@ export const OverviewInteractive = memo(function OverviewInteractive({
               className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-muted/10 px-4 py-2.5 text-sm font-medium transition-colors hover:bg-muted/20"
             >
               <span>{link.label}</span>
-              <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <ArrowRight className="h-4 w-4 text-muted-foreground rtl:rotate-180" aria-hidden="true" />
             </button>
           ))}
         </div>

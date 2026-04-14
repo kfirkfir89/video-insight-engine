@@ -31,6 +31,7 @@ async function mongodb(fastify: FastifyInstance) {
         { key: { outputType: 1 } },
         { key: { shareSlug: 1 }, unique: true, sparse: true },
         { key: { expiresAt: 1 }, expireAfterSeconds: 0 },
+        { key: { language: 1 }, sparse: true },
       ]);
 
       // userVideos indexes

@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import type { ScenarioItem } from '@vie/types';
 import { GlassCard, FadeIn, OptionGrid, InlineScore, Shake, BackForward, Stepper, ScoreRing } from '@/components/vie';
 import { Celebration } from '../Celebration';
+import { useLabels } from '@/lib/i18n';
 
 
 interface ScenarioInteractiveProps {
@@ -16,6 +17,7 @@ export const ScenarioInteractive = memo(function ScenarioInteractive({
   nextTab,
   onNavigateTab,
 }: ScenarioInteractiveProps) {
+  const t = useLabels();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [picks, setPicks] = useState<Map<number, number>>(new Map());
   const [shaking, setShaking] = useState(false);
@@ -108,7 +110,7 @@ export const ScenarioInteractive = memo(function ScenarioInteractive({
                     )}
                   >
                     <span className="font-medium text-xs block mb-0.5">
-                      {opt.correct ? 'Correct' : `Option: ${opt.text}`}
+                      {opt.correct ? t.correct : `Option: ${opt.text}`}
                     </span>
                     <p className="text-muted-foreground text-xs">{opt.explanation}</p>
                   </div>
@@ -126,6 +128,8 @@ export const ScenarioInteractive = memo(function ScenarioInteractive({
           onForward={() => setCurrentIndex((p) => p + 1)}
           backDisabled={currentIndex === 0}
           forwardDisabled={currentIndex === scenarios.length - 1}
+          backLabel={t.previous}
+          forwardLabel={t.next}
         />
       )}
 
@@ -142,7 +146,7 @@ export const ScenarioInteractive = memo(function ScenarioInteractive({
       {/* Completion */}
       {allDone && (
         <div className="flex flex-col items-center gap-4">
-          <ScoreRing score={score} total={scenarios.length} label="Correct" size="md" />
+          <ScoreRing score={score} total={scenarios.length} label={t.correct} size="md" />
           <Celebration
             emoji="🎯"
             title={score === scenarios.length ? 'Perfect!' : 'Scenarios complete!'}

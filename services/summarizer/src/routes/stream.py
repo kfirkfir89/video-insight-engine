@@ -203,6 +203,17 @@ async def stream_summarization(
                 yield event
             ctx.phase_times[phase.__name__.replace("run_phase_", "")] = round(time.monotonic() - phase_start, 1)
 
+        # Translation step — translate assembled output to English for non-English videos
+        if ctx.language != "en":
+            phase_start = time.monotonic()
+            try:
+                from src.services.pipeline.phases.translation import run_phase_translation
+                async for event in run_phase_translation(ctx, repository, video_summary_id):
+                    yield event
+            except Exception as e:
+                logger.warning("[pipeline] Translation failed (non-critical): %s", e)
+            ctx.phase_times["translation"] = round(time.monotonic() - phase_start, 1)
+
         # One-line pipeline summary with ALL phase timings
         pt = ctx.phase_times
         plan_ok = "ok" if ctx.plan_result is not None else "FAIL"

@@ -38,7 +38,7 @@ export const CheckItem = memo(function CheckItem({
       </Button>
       <div className={cn('flex-1', checked && 'line-through text-muted-foreground/50')}>
         <span className="font-medium">{label}</span>
-        {note && <span className="text-xs text-muted-foreground/70 ml-1">({note})</span>}
+        {note && <span className="text-xs text-muted-foreground/70 ms-1">({note})</span>}
       </div>
     </div>
   );

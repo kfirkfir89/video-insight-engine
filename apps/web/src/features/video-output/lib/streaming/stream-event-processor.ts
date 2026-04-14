@@ -169,6 +169,8 @@ function handleMetaEvent(event: Record<string, unknown>, setState: SetState): vo
     modifiers: Array.isArray(event.modifiers) ? event.modifiers.filter(isValidModifier) : [],
     primaryTag: (typeof event.primaryTag === "string" ? event.primaryTag : "learning") as ContentTag,
     userGoal: typeof event.userGoal === "string" ? event.userGoal : "",
+    language: typeof event.language === "string" ? event.language : undefined,
+    isRTL: typeof event.isRTL === "boolean" ? event.isRTL : undefined,
   };
   const tabCount = typeof event.tabCount === "number" ? event.tabCount : 0;
   const tabLabels = Array.isArray(event.tabLabels)

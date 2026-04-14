@@ -1,0 +1,181 @@
+"""Tests for language detection and utility functions."""
+
+from __future__ import annotations
+
+import pytest
+
+from src.utils.language_utils import (
+    RTL_LANGUAGES,
+    build_language_instruction,
+    detect_language_by_script,
+    get_language_name,
+    is_rtl,
+    normalize_language_code,
+)
+
+
+class TestIsRtl:
+    """Tests for is_rtl()."""
+
+    @pytest.mark.parametrize("code", ["he", "ar", "fa", "ur", "yi"])
+    def test_should_return_true_for_rtl_languages(self, code: str):
+        """RTL languages (Hebrew, Arabic, Persian, Urdu, Yiddish) return True."""
+        assert is_rtl(code) is True
+
+    @pytest.mark.parametrize("code", ["en", "es", "fr", "de", "zh", "ja", "ru"])
+    def test_should_return_false_for_ltr_languages(self, code: str):
+        """LTR languages return False."""
+        assert is_rtl(code) is False
+
+    def test_should_return_false_for_unknown_code(self):
+        """Unknown language code returns False."""
+        assert is_rtl("xx") is False
+
+    def test_rtl_languages_frozenset_has_expected_members(self):
+        """RTL_LANGUAGES contains exactly the expected codes."""
+        assert RTL_LANGUAGES == frozenset({"he", "ar", "fa", "ur", "yi"})
+
+
+class TestGetLanguageName:
+    """Tests for get_language_name()."""
+
+    @pytest.mark.parametrize(
+        ("code", "expected"),
+        [
+            ("en", "English"),
+            ("he", "Hebrew"),
+            ("ar", "Arabic"),
+            ("fa", "Persian"),
+            ("es", "Spanish"),
+            ("ja", "Japanese"),
+            ("zh", "Chinese"),
+        ],
+    )
+    def test_should_return_correct_name_for_known_codes(self, code: str, expected: str):
+        """Known ISO 639-1 codes return human-readable names."""
+        assert get_language_name(code) == expected
+
+    def test_should_return_uppercased_code_for_unknown(self):
+        """Unknown codes return the code uppercased."""
+        assert get_language_name("xx") == "XX"
+        assert get_language_name("zz") == "ZZ"
+
+
+class TestNormalizeLanguageCode:
+    """Tests for normalize_language_code()."""
+
+    def test_should_extract_two_letter_code_from_locale(self):
+        """Locale codes like 'en-US' normalize to 'en'."""
+        assert normalize_language_code("en-US") == "en"
+
+    def test_should_handle_zh_hans(self):
+        """Chinese variant 'zh-Hans' normalizes to 'zh'."""
+        assert normalize_language_code("zh-Hans") == "zh"
+
+    def test_should_handle_pt_br(self):
+        """Portuguese variant 'pt-BR' normalizes to 'pt'."""
+        assert normalize_language_code("pt-BR") == "pt"
+
+    def test_should_return_none_for_none_input(self):
+        """None input returns None."""
+        assert normalize_language_code(None) is None
+
+    def test_should_return_none_for_empty_string(self):
+        """Empty string returns None."""
+        assert normalize_language_code("") is None
+
+    def test_should_lowercase_the_code(self):
+        """Uppercase codes are lowercased."""
+        assert normalize_language_code("EN") == "en"
+        assert normalize_language_code("He") == "he"
+
+    def test_should_strip_whitespace(self):
+        """Leading/trailing whitespace is stripped."""
+        assert normalize_language_code("  fr  ") == "fr"
+
+    def test_should_return_none_for_single_char(self):
+        """Single character input returns None (not a valid 2-letter code)."""
+        assert normalize_language_code("e") is None
+
+    def test_should_return_none_for_numeric_input(self):
+        """Numeric input returns None."""
+        assert normalize_language_code("12") is None
+
+
+class TestDetectLanguageByScript:
+    """Tests for detect_language_by_script()."""
+
+    def test_should_detect_hebrew_script(self):
+        """Text with Hebrew characters detects as 'he'."""
+        hebrew_text = "שלום עולם, זהו טקסט בעברית שמכיל מספיק תווים כדי לעבור את הסף"
+        assert detect_language_by_script(hebrew_text) == "he"
+
+    def test_should_detect_arabic_script(self):
+        """Text with Arabic characters detects as 'ar'."""
+        arabic_text = "مرحبا بالعالم، هذا نص بالعربية يحتوي على عدد كافٍ من الأحرف"
+        assert detect_language_by_script(arabic_text) == "ar"
+
+    def test_should_detect_cjk_script(self):
+        """Text with CJK characters detects as 'zh'."""
+        chinese_text = "你好世界这是一段中文文本包含足够多的字符来通过检测阈值的要求"
+        assert detect_language_by_script(chinese_text) == "zh"
+
+    def test_should_detect_korean_script(self):
+        """Text with Hangul characters detects as 'ko'."""
+        korean_text = "안녕하세요 세계입니다 이것은 한국어 텍스트입니다 충분한 문자를 포함합니다"
+        assert detect_language_by_script(korean_text) == "ko"
+
+    def test_should_detect_cyrillic_script(self):
+        """Text with Cyrillic characters detects as 'ru'."""
+        russian_text = "Привет мир, это текст на русском языке с достаточным количеством символов"
+        assert detect_language_by_script(russian_text) == "ru"
+
+    def test_should_return_none_for_latin_text(self):
+        """Latin/English text returns None (no specific script detected)."""
+        english_text = "Hello world, this is a text in English with enough characters to pass the minimum length"
+        assert detect_language_by_script(english_text) is None
+
+    def test_should_return_none_for_short_text(self):
+        """Text shorter than 20 characters returns None."""
+        assert detect_language_by_script("שלום") is None
+
+    def test_should_return_none_for_empty_text(self):
+        """Empty text returns None."""
+        assert detect_language_by_script("") is None
+
+
+class TestBuildLanguageInstruction:
+    """Tests for build_language_instruction()."""
+
+    def test_should_return_empty_string_for_english(self):
+        """English requires no language instruction."""
+        assert build_language_instruction("en") == ""
+
+    def test_should_return_instruction_for_hebrew(self):
+        """Hebrew returns a non-empty instruction containing 'Hebrew'."""
+        result = build_language_instruction("he")
+        assert result != ""
+        assert "Hebrew" in result
+
+    def test_should_return_instruction_for_arabic(self):
+        """Arabic returns a non-empty instruction containing 'Arabic'."""
+        result = build_language_instruction("ar")
+        assert result != ""
+        assert "Arabic" in result
+
+    def test_should_include_language_name_in_instruction(self):
+        """Instruction includes the human-readable language name."""
+        result = build_language_instruction("es")
+        assert "Spanish" in result
+
+    def test_should_mention_json_fields_stay_english(self):
+        """Instruction tells the LLM to keep JSON keys in English."""
+        result = build_language_instruction("he")
+        assert "JSON" in result
+        assert "English" in result
+
+    def test_should_mention_not_translate_to_english(self):
+        """Instruction tells the LLM not to translate content to English."""
+        result = build_language_instruction("fr")
+        assert "NOT" in result or "not" in result.lower()
+        assert "French" in result

@@ -51,11 +51,12 @@ services/summarizer/
     │   ├── status_callback.py    # Status callback
     │   │
     │   ├── pipeline/             # Plan-based summarization pipeline
-    │   │   ├── classifier.py         # LLM domain+format classifier (fast model, concurrent)
+    │   │   ├── classifier.py         # LLM domain+format+traits classifier (fast model, concurrent)
     │   │   ├── plan.py               # Plan stage → merged manifest+triage in single Sonnet call
     │   │   ├── triage.py             # Triage validation/fallback (TriageResult model + tab validation)
     │   │   ├── prompt_builder.py     # Schema-injection prompt builder + video_context
     │   │   ├── extractor.py          # Adaptive extraction (single/overflow/chunked) + prompt caching
+    │   │   ├── extraction_quality.py # Extraction quality check + synthesis-fed retry
     │   │   ├── extraction_merger.py  # Per-domain merge + dedup for chunked extraction
     │   │   ├── enrichment.py         # Quiz/flashcards (all domains via enrichment map)
     │   │   ├── synthesis.py          # TLDR, takeaways (Sonnet, hierarchical for long)
@@ -97,7 +98,7 @@ services/summarizer/
     │   ├── triage.txt            # Triage prompt (fallback only, injects component_toolkit.txt)
     │   ├── component_toolkit.txt # Component descriptions + datasource paths (injected into plan/triage)
     │   ├── base_extraction.txt   # Schema-injection extraction template + video_context + prompt caching
-    │   ├── classify.txt          # Domain+format classifier prompt (fast model, 8 domains + 17 formats)
+    │   ├── classify.txt          # Domain+format classifier prompt (fast model, 10 domains + 17 formats)
     │   ├── chapter_detect.txt    # AI chapter detection prompt (fast model)
     │   ├── quality_rules.txt     # JSON extraction quality rules
     │   ├── enrich/               # Per-domain enrichment prompts (+ video_context + tab_goals)
@@ -111,6 +112,8 @@ services/summarizer/
     │       ├── travel.txt
     │       ├── review.txt
     │       ├── project.txt
+    │       ├── language.txt
+    │       ├── science.txt
     │       ├── narrative.txt     # Modifier
     │       └── finance.txt       # Modifier
     │
@@ -120,6 +123,7 @@ services/summarizer/
     │   ├── worker_pool.py        # ProcessPoolExecutor for CPU-bound tasks
     │   ├── content_extractor.py  # Summary/bullet extraction
     │   ├── transcript_slicer.py  # Time-range transcript slicing
+    │   ├── language_utils.py     # Language detection, RTL check, language instructions
     │   └── constants.py          # Constants
     │
     ├── shared_config/
@@ -219,10 +223,12 @@ The pipeline uses 3-6 LLM calls with a plan-first architecture:
     └─▶ Toggle: FRAME_VISION_ENABLED=false skips vision (OCR-only like before)
 
  4. CLASSIFIER + PLAN (1-2 LLM calls)
-    └─▶ Classifier (fast model): domain + format classification (8 domains, 17 formats)
+    └─▶ Classifier (fast model): domain + format + traits classification (10 domains, 17 formats)
     │   └─▶ 10s timeout, 1 retry, ~$0.001 per video, json_mode
     │   └─▶ Overrides rule-based category_hint when confidence > 0.6
     │   └─▶ Sets content_format on PipelineContext (tutorial, commentary, reaction, etc.)
+    │   └─▶ ContentTraits: 8 booleans (has_steps, has_drills, has_comparison, has_narrative,
+    │   │   has_code, has_visual_demo, is_opinionated, is_list) — drives component routing in Plan
     │   └─▶ Skipped when admin override is active
     └─▶ Plan (Sonnet, 30s timeout, 2 retries, json_mode + prompt caching)
         └─▶ Single call replaces old Manifest + Triage (2 calls → 1, saves ~30-50s)
@@ -230,7 +236,7 @@ The pipeline uses 3-6 LLM calls with a plan-first architecture:
         └─▶ Designs: contentTags, modifiers, tab layout with component toolkit
         └─▶ Item counts for extraction quality validation
         └─▶ video_context flows to all downstream phases (compact ~300 chars)
-        └─▶ 8 primary tags: learning, tech, fitness, food, music, travel, review, project
+        └─▶ 10 primary tags: learning, tech, fitness, food, music, travel, review, project, language, science
         └─▶ 2 modifier tags: narrative, finance
         └─▶ Fallback: category-based mapping if confidence < 0.6
         └─▶ SSE: triage_complete, meta events
@@ -251,10 +257,18 @@ The pipeline uses 3-6 LLM calls with a plan-first architecture:
     └─▶ Post-extraction: count validation against plan (advisory, logs warnings)
     └─▶ SSE: extraction_progress events, then extraction_complete
 
- 6b. EXTRACTION RETRY (advisory, 0-1 additional LLM calls)
-    └─▶ Compare manifest item counts vs extraction output (60% threshold)
-    └─▶ Max 1 retry; use best-effort result if retry doesn't improve
+ 5b. EXTRACTION QUALITY CHECK (0-1 additional LLM calls)
+    └─▶ Scores extraction coverage: populated tabs vs plan tabs (score 0.0-1.0)
+    └─▶ Skips tabs with meta/synthesis/enrichment dataSources
+    └─▶ If score < 0.6: synthesis-fed retry — runs synthesis early, builds retry prompt with evidence
+    └─▶ Re-extracts and keeps the better result (higher populated count)
+    └─▶ Max 1 retry, cost: ~$0.05-0.15 extra for ~10-30% of videos
     └─▶ Exception-safe: retry failure uses original extraction
+
+ 6b. EXTRACTION COUNT VALIDATION (advisory, no LLM calls)
+    └─▶ Compare plan item counts vs extraction output (60% threshold)
+    └─▶ Logs warnings only — does not retry
+    └─▶ Exception-safe: validation failure is non-blocking
 
  7. ENRICHMENT (0-1 LLM calls, 45s timeout, 2 retries)
     └─▶ All domains with enrichment mapping get quiz + flashcards + scenarios
@@ -280,6 +294,15 @@ The pipeline uses 3-6 LLM calls with a plan-first architecture:
     └─▶ Qdrant chunks (if enabled): transcript embeddings (background task)
     └─▶ SSE: complete event (tabCount, processingTimeMs)
     └─▶ SSE: done event + [DONE] signal
+
+10. TRANSLATION (non-English videos only, ~5-15s)
+    └─▶ Triggered when ctx.language != "en" (detected from transcript)
+    └─▶ Translates assembled tabs + synthesis to English via LLM
+    └─▶ Whisper translate: audio → English text for Qdrant embeddings
+    └─▶ Stores dual-language data: tabs_en, synthesis_en, meta_en
+    └─▶ Qdrant stores English text + text_original for cross-language RAG
+    └─▶ language_instruction injected into all LLM phases (plan, extraction, synthesis, enrichment)
+    └─▶ Non-blocking: translation failure keeps original-language output
 ```
 
 ---
@@ -361,7 +384,7 @@ MODEL_MAP = {
 
 The pipeline uses triage (LLM) to determine content tags from manifest + metadata. Each tag has a domain schema injected into a shared extraction template.
 
-### 8 Primary Content Tags + 2 Modifiers
+### 10 Primary Content Tags + 2 Modifiers
 
 | ContentTag | Category Fallback | Domain Schema | Enrichment |
 |------------|-------------------|---------------|------------|
@@ -373,6 +396,8 @@ The pipeline uses triage (LLM) to determine content tags from manifest + metadat
 | travel | travel | `schemas/travel.txt` | - |
 | review | reviews | `schemas/review.txt` | - |
 | project | diy, craft | `schemas/project.txt` | - |
+| language | — | `schemas/language.txt` | - |
+| science | — | `schemas/science.txt` | - |
 | narrative | podcast, interview | `schemas/narrative.txt` | Modifier only |
 | finance | — | `schemas/finance.txt` | Modifier only |
 

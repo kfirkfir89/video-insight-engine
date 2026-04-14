@@ -38,6 +38,15 @@ def _normalize_to_spot(item: dict) -> dict:
     return result
 
 
+def _first_competitor_name(comparisons: list[dict]) -> str:
+    """Extract the first non-empty competitorName from comparison rows."""
+    for c in comparisons:
+        name = c.get("competitorName", "")
+        if name:
+            return str(name)
+    return ""
+
+
 def _normalize_comparison(item: dict) -> dict:
     """Normalize a comparison item to {feature, thisProduct, competitor}."""
     if "thisProduct" in item:
@@ -326,7 +335,17 @@ def assemble_code_explorer(
     if not isinstance(data, list) or len(data) < 1:
         return None
     snippets = [s for s in (_normalize_code_snippet(item) for item in data) if s is not None]
-    return {"snippets": snippets} if snippets else None
+    if not snippets:
+        return None
+    return {
+        "snippets": snippets,
+        "showAllLabel": "Show all",
+        "stepThroughLabel": "Step through",
+        "copyLabel": "Copy code",
+        "copiedLabel": "Copied",
+        "nextLabel": "Next",
+        "previousLabel": "Previous",
+    }
 
 
 def assemble_comparison(
@@ -363,9 +382,15 @@ def assemble_comparison(
                         pass
                     elif c.get("thisProduct") and not c.get("competitor"):
                         pros.append(feature)
-            result = {"pros": pros, "cons": cons, "comparisons": normalized}
-            if product_name:
-                result["leftLabel"] = product_name
+            competitor_name = _first_competitor_name(normalized)
+            result = {
+                "pros": pros, "cons": cons, "comparisons": normalized,
+                "leftLabel": product_name or "",
+                "rightLabel": competitor_name,
+                "leftColumnLabel": "Description",
+                "rightColumnLabel": "Example",
+                "goForItLabel": "Go for it if...",
+            }
             return result
 
     if isinstance(data, list) and len(data) > 0:
@@ -400,9 +425,15 @@ def assemble_comparison(
                     "competitor": "",
                 })
         if rows:
-            result = {"pros": [], "cons": [], "comparisons": rows}
-            if product_name:
-                result["leftLabel"] = product_name
+            competitor_name = _first_competitor_name(rows)
+            result = {
+                "pros": [], "cons": [], "comparisons": rows,
+                "leftLabel": product_name or "",
+                "rightLabel": competitor_name,
+                "leftColumnLabel": "Description",
+                "rightColumnLabel": "Example",
+                "goForItLabel": "Go for it if...",
+            }
             return result
 
     return None
@@ -491,7 +522,7 @@ def assemble_checklist(
 
     _TAB_LABELS = {"ingredients": "Ingredients", "packing": "Pack List", "materials": "Materials", "tools": "Tools"}
     tab_label = _TAB_LABELS.get(tab.get("id", ""), tab.get("label", "Checklist"))
-    return {"items": items, "tabLabel": tab_label}
+    return {"items": items, "tabLabel": tab_label, "ingredientsLabel": tab_label}
 
 
 def assemble_step_player(
@@ -502,12 +533,28 @@ def assemble_step_player(
     steps = [_normalize_step(item, i) for i, item in enumerate(data) if isinstance(item, dict)]
     if not steps:
         return None
-    return {"steps": steps}
+    return {
+        "steps": steps,
+        "doneLabel": "Done",
+        "undoLabel": "Undo",
+        "nextLabel": "Next",
+        "previousLabel": "Previous",
+    }
 
 
 def assemble_exercise_tracker(
     tab: dict, data: Any, extraction: dict, enrichment: dict | None,
 ) -> dict | None:
+    _exercise_labels = {
+        "formCueLabel": "Form cue",
+        "hideFormCueLabel": "Hide form cue",
+        "durationLabel": "Duration",
+        "equipmentLabel": "Equipment",
+        "completeSetLabel": "Complete Set",
+        "doneLabel": "Done",
+        "celebrationTitle": "Workout complete!",
+        "celebrationSubtitle": "All sets finished. Great effort!",
+    }
     if isinstance(data, dict):
         raw_exercises = data.get("exercises") or []
         warmup = data.get("warmup") or []
@@ -515,7 +562,7 @@ def assemble_exercise_tracker(
         exercises = [e for e in (_normalize_exercise(item) for item in raw_exercises) if e is not None] if isinstance(raw_exercises, list) else []
         if not exercises and not warmup:
             return None
-        props: dict[str, Any] = {"exercises": exercises}
+        props: dict[str, Any] = {"exercises": exercises, **_exercise_labels}
         if warmup:
             props["warmup"] = warmup
         if cooldown:
@@ -523,7 +570,7 @@ def assemble_exercise_tracker(
         return props
     if isinstance(data, list) and len(data) > 0:
         exercises = [e for e in (_normalize_exercise(item) for item in data) if e is not None]
-        return {"exercises": exercises} if exercises else None
+        return {"exercises": exercises, **_exercise_labels} if exercises else None
     return None
 
 
@@ -533,7 +580,17 @@ def assemble_quiz(
     if not isinstance(data, list) or len(data) < 1:
         return None
     questions = [q for q in (_normalize_quiz_question(item) for item in data) if q is not None]
-    return {"questions": questions} if questions else None
+    if not questions:
+        return None
+    return {
+        "questions": questions,
+        "correctLabel": "Correct",
+        "tryAgainLabel": "Try Again",
+        "reviewLabel": "Review",
+        "missedLabel": "missed",
+        "nextLabel": "Next",
+        "previousLabel": "Previous",
+    }
 
 
 def assemble_flash_deck(
@@ -562,7 +619,14 @@ def assemble_flash_deck(
                         words = new_front.split()[:8]
                         new_front = " ".join(words)
                     card["front"] = new_front
-    return {"cards": cards}
+    return {
+        "cards": cards,
+        "gotItLabel": "Got it!",
+        "reviewAgainLabel": "Review again",
+        "cardsReviewedLabel": "Cards reviewed",
+        "nextLabel": "Next",
+        "previousLabel": "Previous",
+    }
 
 
 def assemble_scenario(
@@ -571,7 +635,14 @@ def assemble_scenario(
     if not isinstance(data, list) or len(data) < 1:
         return None
     scenarios = [s for s in (_normalize_scenario_item(item) for item in data) if s is not None]
-    return {"scenarios": scenarios} if scenarios else None
+    if not scenarios:
+        return None
+    return {
+        "scenarios": scenarios,
+        "correctLabel": "Correct",
+        "nextLabel": "Next",
+        "previousLabel": "Previous",
+    }
 
 
 def assemble_verdict(
@@ -584,6 +655,8 @@ def assemble_verdict(
         "bottomLine": data.get("bottomLine", ""),
         "bestFor": data.get("bestFor", []),
         "notFor": data.get("notFor", []),
+        "priceLabel": "Price",
+        "scoreLabel": "Score",
     }
 
 
@@ -636,7 +709,12 @@ def assemble_overview(
 
     if not result:
         return None
-    return {"data": result}
+    return {
+        "data": result,
+        "durationLabel": "Duration",
+        "levelLabel": "Level",
+        "itemsLabel": "Items",
+    }
 
 
 def assemble_gallery(

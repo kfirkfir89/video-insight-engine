@@ -84,7 +84,7 @@ Each stage is a separate async phase. The pipeline streams results to the fronte
 
 **Triage-driven:** A fast LLM call classifies the video (content tags like "food", "tech", "travel") and picks which tabs/components to generate. This means a 10-min recipe and a 10-min code tutorial produce completely different output — same pipeline, different components.
 
-**Domain-specific extraction:** 10 domain schemas (food, tech, learning, travel, fitness, finance, music, gaming, reviews, general) define exactly what data to extract per content type. A food video extracts ingredients, steps, tips. A tech video extracts code snippets, tools, concepts.
+**Domain-specific extraction:** 12 domain schemas (learning, tech, fitness, food, music, travel, review, project, language, science + narrative, finance modifiers) define exactly what data to extract per content type. A food video extracts ingredients, steps, tips. A tech video extracts code snippets, tools, concepts.
 
 **Component-addressed assembly:** Extraction output is transformed into props for specific React components. The frontend just does `INTERACTIVE_REGISTRY[tab.component]` — one lookup, one render.
 
@@ -229,7 +229,7 @@ Single source of truth: `packages/shared/src/config/domains.json`
 }
 ```
 
-10 domains: food, tech, learning, travel, fitness, finance, music, gaming, reviews, general. Each domain defines which extraction schemas to use and which components are available for triage to pick from.
+12 domains: learning, tech, fitness, food, music, travel, review, project, language, science (+ narrative, finance modifiers). Each domain defines which extraction schemas to use and which components are available for triage to pick from.
 
 Python reads this via `domain_config.py`. TypeScript reads via `@vie/shared/config`. One config, two runtimes.
 
@@ -382,7 +382,7 @@ video-insight-engine/
 │   └── summarizer/                   # Python AI pipeline
 │       └── src/
 │           ├── prompts/              # LLM prompts (triage, extraction, etc.)
-│           │   ├── schemas/          # 10 domain extraction schemas
+│           │   ├── schemas/          # 12 domain extraction schemas
 │           │   └── enrich/           # 8 enrichment prompt variants
 │           ├── services/
 │           │   ├── pipeline/         # Phase orchestration
@@ -432,10 +432,11 @@ video-insight-engine/
 | --------------------------------- | ------------- | ------ | ----------------- | ----------------------------- |
 | Interactive components from video | ❌            | ❌     | ❌                | 17 domain-aware components    |
 | Click timestamp → video seeks     | Chapters only | ❌     | ❌                | Every element is clickable    |
-| Domain-specific extraction        | ❌            | Manual | Generic summary   | 10 domain schemas             |
+| Domain-specific extraction        | ❌            | Manual | Generic summary   | 12 domain schemas             |
 | Quiz / flashcards / scenarios     | ❌            | Manual | On request        | Auto-generated per domain     |
 | Frame intelligence (OCR + vision) | ❌            | ❌     | ❌                | Scored frames with thumbnails |
 | Progressive streaming UI          | ❌            | ❌     | Token stream      | Tabs appear as assembled      |
+| Multi-language + RTL support      | Captions only | Manual | English-only      | Auto-detect, translate, RTL   |
 | Same video = instant ($0.00)      | N/A           | N/A    | Costs per request | Redis + S3 cache              |
 | Organize & share                  | Playlists     | Pages  | Chat history      | Folders + public links        |
 
@@ -450,7 +451,7 @@ video-insight-engine/
 ## Roadmap
 
 - [x] Triage-driven pipeline with 17 interactive components
-- [x] Domain-specific extraction (10 domains)
+- [x] Domain-specific extraction (12 domains)
 - [x] Frame extraction with smart scoring
 - [x] Collapsible video player with seekTo wiring
 - [x] SSE streaming with progressive tab rendering
@@ -458,11 +459,11 @@ video-insight-engine/
 - [x] Multi-provider LLM support (Anthropic / OpenAI / Google)
 - [x] SponsorBlock filtering
 - [x] Chunked extraction for long videos
+- [x] Multi-language support with RTL and translation
 - [ ] Whisper fallback for videos without captions
 - [ ] Playlist processing with cross-video connections
 - [ ] Assistant chat with RAG (Qdrant vector search)
 - [ ] Collections with drag-and-drop organization
-- [ ] Translation layer (multi-language output)
 - [ ] Speaker diarization
 - [ ] Browser extension
 - [ ] Mobile app

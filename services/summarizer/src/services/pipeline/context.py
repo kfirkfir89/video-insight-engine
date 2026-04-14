@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -74,6 +75,20 @@ class PipelineContext:
     extraction_data: dict[str, Any] | None = None
     synthesis_dict: dict[str, Any] = field(default_factory=dict)
     enrichment_data: dict[str, Any] | None = None
+
+    # Assembly outputs (populated by assembly phase)
+    assembled_tabs: list[dict] | None = None
+    assembled_meta: dict[str, Any] | None = None
+
+    # Language support
+    language: str = "en"  # ISO 639-1 code, defaults to English (the gate)
+    is_rtl: bool = False  # Whether language is right-to-left
+    audio_path: Path | None = None  # Cached audio file for reuse by translation
+
+    # Translation outputs (populated for non-English videos only)
+    tabs_en: list[dict] | None = None
+    meta_en: dict[str, Any] | None = None
+    synthesis_en: dict[str, Any] | None = None
 
     # Per-phase timing (phase_name → seconds)
     phase_times: dict[str, float] = field(default_factory=dict)

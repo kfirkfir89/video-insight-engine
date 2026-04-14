@@ -1182,11 +1182,12 @@ class TestComparisonProductLabel:
         assert result is not None
         assert result["leftLabel"] == "Claude Code is unusable now"
 
-    def test_no_label_when_no_product(self):
+    def test_empty_label_when_no_product(self):
         data = {"pros": ["Good"], "cons": [], "comparisons": []}
         result = assemble_comparison({}, data, {}, None)
         assert result is not None
-        assert "leftLabel" not in result
+        assert result["leftLabel"] == ""
+        assert result["rightLabel"] == ""
 
     def test_review_product_takes_priority_over_title(self):
         data = {"pros": ["Fast"], "cons": [], "comparisons": []}

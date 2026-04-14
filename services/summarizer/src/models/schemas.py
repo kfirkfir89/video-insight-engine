@@ -48,6 +48,7 @@ class NormalizedTranscript(BaseModel):
     text: str
     segments: list[TranscriptSegment]
     source: TranscriptSource
+    language: str | None = None  # ISO 639-1 code detected by transcriber
 
 
 class ProviderConfig(BaseModel):

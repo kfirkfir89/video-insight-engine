@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { GlassCard, FadeIn, Timer, BackForward, Stepper, Timestamp, TextBlock } from '@/components/vie';
 import { Celebration } from '../Celebration';
+import { useLabels } from '@/lib/i18n';
 
 import { useTabState } from '@/features/video-output/contexts/TabStateContext';
 import { useTabCoordination } from '../TabCoordinationContext';
@@ -46,6 +47,7 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
   onNavigateTab,
   onSeek,
 }: StepByStepInteractiveProps) {
+  const t = useLabels();
   const [currentStep, setCurrentStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const tabState = useTabState();
@@ -115,6 +117,8 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
           onForward={() => setCurrentStep((p) => p + 1)}
           backDisabled={currentStep === 0}
           forwardDisabled={currentStep === steps.length - 1}
+          backLabel={t.previous}
+          forwardLabel={t.next}
         />
       )}
 

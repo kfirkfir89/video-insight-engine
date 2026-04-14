@@ -131,7 +131,7 @@ export const ClipPlayerInteractive = memo(function ClipPlayerInteractive({
                 <button
                   type="button"
                   onClick={() => toggleExpand(index)}
-                  className="w-full text-left px-4 py-3 flex items-center gap-3 transition-colors hover:bg-muted/30"
+                  className="w-full text-start px-4 py-3 flex items-center gap-3 transition-colors hover:bg-muted/30"
                 >
                   {/* 48px thumbnail on left */}
                   {clip.thumbnailUrl && (

@@ -47,6 +47,14 @@ async def run_phase_transcript(ctx: PipelineContext) -> AsyncGenerator[str, None
         raise TranscriptError("Failed to fetch transcript", ErrorCode.NO_TRANSCRIPT)
 
     ctx.transcript_data = transcript_data
+
+    # Propagate detected language to pipeline context
+    if transcript_data.language:
+        from src.utils.language_utils import is_rtl
+        ctx.language = transcript_data.language
+        ctx.is_rtl = is_rtl(transcript_data.language)
+        logger.info("Pipeline language set: %s (RTL: %s)", ctx.language, ctx.is_rtl)
+
     yield sse_event("transcript_ready", {"duration": video_data.duration})
     ctx.clean_text = clean_transcript(transcript_data.raw_text)
 

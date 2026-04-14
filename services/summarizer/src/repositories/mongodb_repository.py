@@ -56,6 +56,8 @@ class MongoDBVideoRepository:
         "status", "title", "creator", "duration", "thumbnailUrl",
         "youtubeId", "rawTranscriptRef", "generation",
         "descriptionAnalysis", "channel", "processedAt", "processingTimeMs",
+        # Language support
+        "language", "isRTL", "tabs_en", "meta_en", "synthesis_en",
         # Backward compat: older pipeline shapes / Redis-cached docs may include these
         "output", "summary", "outputType", "context", "intent",
     })

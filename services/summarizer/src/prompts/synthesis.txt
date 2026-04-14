@@ -2,6 +2,8 @@
 Generate a synthesis summary for a video that has been fully analyzed and extracted.
 </role>
 
+{language_instruction}
+
 <video>
 Title: {title}
 Channel: {channel}

@@ -100,13 +100,13 @@ export const InfoGridInteractive = memo(function InfoGridInteractive({
         <div className="flex items-center gap-2">
           {showSearch && (
             <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Filter..."
-                className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-border/50 bg-muted/10 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                className="w-full ps-8 pe-3 py-1.5 text-sm rounded-lg border border-border/50 bg-muted/10 focus:outline-none focus:ring-1 focus:ring-primary/30"
               />
             </div>
           )}
@@ -157,8 +157,8 @@ export const InfoGridInteractive = memo(function InfoGridInteractive({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border/30">
-                    <th className="text-left px-4 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">Key</th>
-                    <th className="text-left px-4 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">Value</th>
+                    <th className="text-start px-4 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">Key</th>
+                    <th className="text-start px-4 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">Value</th>
                   </tr>
                 </thead>
                 <tbody>

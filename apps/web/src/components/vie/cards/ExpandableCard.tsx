@@ -32,7 +32,7 @@ export const ExpandableCard = memo(function ExpandableCard({
     >
       <button
         onClick={toggle}
-        className="w-full flex items-center justify-between gap-2 p-4 text-left hover:bg-muted/10 transition-colors"
+        className="w-full flex items-center justify-between gap-2 p-4 text-start hover:bg-muted/10 transition-colors"
         aria-expanded={expanded}
       >
         <div className="flex-1 min-w-0">{header}</div>

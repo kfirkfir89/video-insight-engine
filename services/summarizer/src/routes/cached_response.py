@@ -36,7 +36,7 @@ def build_frontend_response(doc: dict) -> dict:
     if not tabs:
         tabs = doc.get("assembledTabs", [])
 
-    return {
+    result: dict = {
         "youtubeId": doc.get("youtubeId", ""),
         "title": doc.get("title", ""),
         "creator": doc.get("creator") or doc.get("channel", ""),
@@ -46,6 +46,11 @@ def build_frontend_response(doc: dict) -> dict:
         "meta": meta or {},
         "tabs": tabs or [],
     }
+    if doc.get("language"):
+        result["language"] = doc["language"]
+    if doc.get("isRTL") is not None:
+        result["isRTL"] = doc["isRTL"]
+    return result
 
 
 def resolve_triage_event(entry: dict[str, Any]) -> dict[str, Any] | None:

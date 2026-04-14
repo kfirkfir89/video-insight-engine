@@ -3,6 +3,7 @@ import { FileCode, Copy, Check, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { GlassCard, FadeIn, BackForward, Stepper, Badge, Timestamp } from '@/components/vie';
+import { useLabels } from '@/lib/i18n';
 
 import type { TechSnippet } from '@vie/types';
 
@@ -21,6 +22,7 @@ export const CodeExplorer = memo(function CodeExplorer({
   nextTab: _nextTab,
   onNavigateTab: _onNavigateTab,
 }: CodeExplorerProps) {
+  const t = useLabels();
   const [currentSnippet, setCurrentSnippet] = useState(0);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'navigate' | 'showAll'>(initialMode);
@@ -49,7 +51,7 @@ export const CodeExplorer = memo(function CodeExplorer({
       <div className="flex items-center gap-1.5 px-4 pt-4 text-xs text-muted-foreground">
         <FileCode className="h-3.5 w-3.5" aria-hidden="true" />
         {snippet.filename && <span className="font-mono">{snippet.filename}</span>}
-        <span className="ml-auto">
+        <span className="ms-auto">
           <Badge variant="muted" className="text-[10px]">{snippet.language}</Badge>
         </span>
       </div>
@@ -67,20 +69,20 @@ export const CodeExplorer = memo(function CodeExplorer({
         <button
           onClick={() => handleCopy(snippet.code, index)}
           className={cn(
-            'absolute top-2 right-2 z-10 flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
+            'absolute top-2 end-2 z-10 flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
             copiedIndex === index
               ? 'bg-success/20 text-success'
               : 'bg-[oklch(20%_0_0)] text-[oklch(70%_0_0)] hover:bg-[oklch(25%_0_0)] hover:text-[oklch(85%_0_0)]',
           )}
-          aria-label={copiedIndex === index ? 'Copied' : 'Copy code'}
+          aria-label={copiedIndex === index ? t.copied : t.copy}
         >
           {copiedIndex === index ? (
-            <><Check className="h-3 w-3" aria-hidden="true" /> Copied</>
+            <><Check className="h-3 w-3" aria-hidden="true" /> {t.copied}</>
           ) : (
-            <><Copy className="h-3 w-3" aria-hidden="true" /> Copy</>
+            <><Copy className="h-3 w-3" aria-hidden="true" /> {t.copy}</>
           )}
         </button>
-        <pre className="overflow-x-auto p-4 pr-20 text-sm leading-relaxed">
+        <pre dir="ltr" className="overflow-x-auto p-4 pe-20 text-sm leading-relaxed">
           <code className="font-mono whitespace-pre-wrap">{snippet.code}</code>
         </pre>
       </div>
@@ -98,8 +100,8 @@ export const CodeExplorer = memo(function CodeExplorer({
               onForward={() => setCurrentSnippet((i) => Math.min(total - 1, i + 1))}
               backDisabled={currentSnippet === 0}
               forwardDisabled={currentSnippet === total - 1}
-              backLabel="Prev"
-              forwardLabel="Next"
+              backLabel={t.prev}
+              forwardLabel={t.next}
             />
           ) : (
             <span className="text-xs text-muted-foreground">{total} snippets</span>
@@ -111,7 +113,7 @@ export const CodeExplorer = memo(function CodeExplorer({
             className="text-xs gap-1.5"
           >
             <List className="h-3.5 w-3.5" aria-hidden="true" />
-            {viewMode === 'navigate' ? 'Show all' : 'Step through'}
+            {viewMode === 'navigate' ? t.showAll : t.stepThrough}
           </Button>
         </div>
       )}

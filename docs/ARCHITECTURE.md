@@ -25,7 +25,7 @@ System overview and data flows.
 │                    vie-summarizer (Python · FastAPI)                │
 │  Pipeline: metadata → [transcript + frames] parallel               │
 │           → plan (classifier + triage) → extraction                │
-│           → synthesis → enrichment → assembly                      │
+│           → synthesis → enrichment → assembly → [translation]      │
 │  Storage: MongoDB + Redis (cache) + S3 (frames/transcripts)       │
 │  Vector:  Qdrant (background embedding storage)                    │
 └───────────────────────────────────────────────────────────────────┘
@@ -178,15 +178,16 @@ Content type is determined by a **plan phase** that runs a classifier (fast mode
 │  3. CLASSIFIER + PLAN (concurrent, ~2-5s)                                  │
 │     ├── Classifier: fast model, domain + format detection (non-blocking)   │
 │     └── Plan: Sonnet call → contentTags, tab layout, extractionGuidance   │
-│     ├── 8 primary tags: learning, tech, fitness, food, music, travel,     │
-│     │   review, project                                                    │
+│     ├── 10 primary tags: learning, tech, fitness, food, music, travel,    │
+│     │   review, project, language, science                                 │
 │     ├── 2 modifier tags: narrative, finance                                │
 │     └── Classifier overrides category_hint when confidence > 0.6          │
 │                                                                             │
 │  4. EXTRACTION (1-5+ LLM calls, ~10-60s)                                  │
 │     ├── Schema-injected: base_extraction.txt + schemas/{tag}.txt           │
 │     ├── Short: single call; Long (>30min): chunked by chapters             │
-│     └── Pydantic validation + count check                                  │
+│     ├── Pydantic validation + count check                                  │
+│     └── Quality check: synthesis-fed retry if coverage < 0.6               │
 │                                                                             │
 │  5. SYNTHESIS (1 LLM call, ~5-10s)                                        │
 │     └── TLDR, takeaways, master summary (fast model)                       │
@@ -200,9 +201,14 @@ Content type is determined by a **plan phase** that runs a classifier (fast mode
 │     ├── Frame thumbnail injection                                          │
 │     └── Cross-tab link resolution                                          │
 │                                                                             │
-│  8. SAVE + STREAM COMPLETE                                                 │
+│  8. TRANSLATION (non-English only, 1-2 LLM calls)                         │
+│     ├── Translates assembled tabs + synthesis to English                   │
+│     ├── Stores dual-language data (original + English)                     │
+│     └── English Qdrant embeddings for cross-language RAG search            │
+│                                                                             │
+│  9. SAVE + STREAM COMPLETE                                                 │
 │     ├── SSE: tab_ready events (progressive rendering)                      │
-│     ├── Store to MongoDB (meta + tabs)                                     │
+│     ├── Store to MongoDB (meta + tabs + language + isRTL)                  │
 │     ├── Store to Redis (response cache)                                    │
 │     └── SSE: complete + done + [DONE]                                      │
 │                                                                             │
@@ -221,6 +227,8 @@ Content type is determined by a **plan phase** that runs a classifier (fast mode
 | `review` | `schemas/review.txt` | overview, verdict, pros_cons, specs |
 | `music` | `schemas/music.txt` | overview, analysis, structure, lyrics |
 | `project` | `schemas/project.txt` | overview, materials, tools, steps |
+| `language` | `schemas/language.txt` | phrases, rules, drills, vocabulary |
+| `science` | `schemas/science.txt` | concepts, key_facts, experiments |
 
 ---
 
@@ -261,9 +269,14 @@ The pipeline uses Server-Sent Events (SSE) to stream results progressively with 
 │    Events: meta, tab_ready[] (progressive)                                   │
 │    → Each tab_ready event renders one tab immediately                       │
 │                                                                             │
+│  PHASE 7.5: TRANSLATION (non-English only, ~5-15s)                         │
+│    → Translates tabs + synthesis to English for bilingual storage           │
+│    → Whisper translate for English Qdrant embeddings                        │
+│    → Stores language/isRTL metadata on document                             │
+│                                                                             │
 │  PHASE 8: SAVE + DONE                                                      │
 │    Events: complete (tabCount, processingTimeMs), done, [DONE]              │
-│    → MongoDB: meta + tabs saved                                             │
+│    → MongoDB: meta + tabs + language + isRTL saved                          │
 │    → Redis: full response cached for instant re-serve                      │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘

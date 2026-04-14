@@ -13,7 +13,9 @@ from src.services.media.s3_client import S3Client
 from src.services.pipeline.assembly import assemble_response
 from src.services.pipeline.pipeline_helpers import sse_event, normalize_segments
 from src.services.vector.store import store_transcript_chunks
+from src.services.transcription.whisper_transcriber import translate_audio_to_english
 from src.services.video.description_analyzer import DescriptionAnalysis
+from src.utils.language_utils import get_language_name
 
 if TYPE_CHECKING:
     from src.services.pipeline.context import PipelineContext
@@ -54,6 +56,10 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
         frame_descriptions=ctx.frame_descriptions or None,
     )
 
+    # Store assembled output on ctx for translation phase
+    ctx.assembled_tabs = assembled.get("tabs", [])
+    ctx.assembled_meta = assembled.get("meta", {})
+
     # Emit tab_ready events (progressive rendering)
     for tab in assembled.get("tabs", []):
         yield sse_event("tab_ready", tab)
@@ -74,7 +80,7 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
     })
 
     # Save result
-    result = {
+    result: dict = {
         "status": "completed",
         "youtubeId": ctx.youtube_id,
         "title": ctx.video_data.title,
@@ -83,6 +89,8 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
         "thumbnailUrl": ctx.video_data.thumbnail_url,
         "meta": assembled.get("meta", {}),
         "tabs": assembled.get("tabs", []),
+        "language": ctx.language,
+        "isRTL": ctx.is_rtl,
         "pipeline": {
             "triage": ctx.triage_dict,
             "extraction": ctx.extraction_data,
@@ -120,7 +128,32 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
             if exc:
                 logger.error("Qdrant store failed: %s", exc)
 
-        task = asyncio.create_task(store_transcript_chunks(ctx.youtube_id, ctx.clean_text))
+        # For non-English videos, get English transcript for embedding
+        english_text = ctx.clean_text
+        original_text = None
+        if ctx.language != "en":
+            # Try Whisper translate for English text
+            try:
+                translated = await translate_audio_to_english(ctx.youtube_id, cached_audio_path=ctx.audio_path)
+                if translated and len(translated) > len(ctx.clean_text) * 0.1:
+                    english_text = translated
+                    original_text = ctx.clean_text
+                    logger.info(
+                        "Using Whisper-translated English text for Qdrant (%d chars, original %s: %d chars)",
+                        len(english_text), get_language_name(ctx.language), len(original_text),
+                    )
+                else:
+                    # Whisper translate failed or produced garbage — use LLM fallback
+                    logger.warning("Whisper translate too short or failed, using original text for Qdrant")
+            except Exception as e:
+                logger.warning("Whisper translate for Qdrant failed: %s — using original text", e)
+
+        task = asyncio.create_task(
+            store_transcript_chunks(
+                ctx.youtube_id, english_text,
+                language=ctx.language, transcript_original=original_text,
+            )
+        )
         task.add_done_callback(_log_qdrant_error)
 
     # Store raw transcript to S3 (background, non-blocking, best-effort)
@@ -133,6 +166,7 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
                     youtube_id=ctx.youtube_id,
                     segments=normalized,
                     source=ctx.transcript_data.source,
+                    language=ctx.language if ctx.language != "en" else ctx.transcript_data.language,
                 )
                 await asyncio.to_thread(
                     ctx.repository._collection.update_one,

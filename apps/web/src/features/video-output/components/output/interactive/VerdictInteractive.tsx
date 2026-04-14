@@ -3,6 +3,7 @@ import { Check, X, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp } from 'lucide-r
 import { HeroCard, FadeIn, Badge, StatPill, ScoreRing } from '@/components/vie';
 import { GlassCard } from '../GlassCard';
 import { Button } from '@/components/ui/button';
+import { useLabels } from '@/lib/i18n';
 
 
 interface SubScore {
@@ -49,6 +50,7 @@ export const VerdictInteractive = memo(function VerdictInteractive({
   nextTab: _nextTab,
   onNavigateTab: _onNavigateTab,
 }: VerdictInteractiveProps) {
+  const t = useLabels();
   const [animatedScore, setAnimatedScore] = useState(0);
   const [userVote, setUserVote] = useState<Vote | null>(null);
   const [bestForExpanded, setBestForExpanded] = useState(true);
@@ -98,7 +100,7 @@ export const VerdictInteractive = memo(function VerdictInteractive({
           <Badge variant={BADGE_COLORS[badge] ?? 'muted'} className="capitalize">
             {badge.replace(/_/g, ' ')}
           </Badge>
-          {price && <StatPill value={price} label="Price" />}
+          {price && <StatPill value={price} label={t.price} />}
         </div>
       </HeroCard>
 
@@ -106,7 +108,7 @@ export const VerdictInteractive = memo(function VerdictInteractive({
       {score != null && (
         <FadeIn>
           <div className="flex justify-center py-2">
-            <ScoreRing score={animatedScore} total={maxScore} label="Score" size="lg" />
+            <ScoreRing score={animatedScore} total={maxScore} label={t.score} size="lg" />
           </div>
         </FadeIn>
       )}
@@ -145,7 +147,7 @@ export const VerdictInteractive = memo(function VerdictInteractive({
             </p>
           ) : (
             <>
-              <span className="text-xs text-muted-foreground mr-1">Do you agree?</span>
+              <span className="text-xs text-muted-foreground me-1">Do you agree?</span>
               <Button
                 variant="outline"
                 size="sm"

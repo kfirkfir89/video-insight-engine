@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import type { FlashcardItem } from '@vie/types';
 import { GlassCard, FadeIn, BackForward, Stepper, Badge, ProgressBar } from '@/components/vie';
 import { Celebration } from '../Celebration';
+import { useLabels } from '@/lib/i18n';
 
 import { useTabState } from '@/features/video-output/contexts/TabStateContext';
 import { useTabCoordination } from '../TabCoordinationContext';
@@ -24,6 +25,7 @@ export const FlashDeckInteractive = memo(function FlashDeckInteractive({
   nextTab,
   onNavigateTab,
 }: FlashDeckInteractiveProps) {
+  const t = useLabels();
   const tabState = useTabState();
   const tabCoord = useTabCoordination();
   const [shuffleIndices, setShuffleIndices] = useState<number[] | null>(null);
@@ -168,7 +170,7 @@ export const FlashDeckInteractive = memo(function FlashDeckInteractive({
       </div>
 
       {/* Progress bar showing reviewed/total */}
-      <ProgressBar value={reviewed.size} max={cards.length} label="Cards reviewed" />
+      <ProgressBar value={reviewed.size} max={cards.length} label={t.cardsReviewed} />
 
       {/* 3D flip card */}
       <FadeIn key={currentCard}>
@@ -238,10 +240,10 @@ export const FlashDeckInteractive = memo(function FlashDeckInteractive({
         <FadeIn>
           <div className="flex items-center gap-2 justify-center">
             <Button variant="outline" size="sm" onClick={markReview} className="text-xs gap-1.5">
-              Review again
+              {t.reviewAgain}
             </Button>
             <Button variant="default" size="sm" onClick={markKnown} className="text-xs gap-1.5">
-              Got it!
+              {t.gotIt}
             </Button>
           </div>
         </FadeIn>
@@ -254,6 +256,8 @@ export const FlashDeckInteractive = memo(function FlashDeckInteractive({
           onForward={() => goTo(currentCard + 1)}
           backDisabled={currentCard === 0}
           forwardDisabled={currentCard === cards.length - 1}
+          backLabel={t.previous}
+          forwardLabel={t.next}
         />
       )}
 

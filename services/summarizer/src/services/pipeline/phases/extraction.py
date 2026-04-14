@@ -15,6 +15,7 @@ from src.services.pipeline.extractor import extract
 from src.services.pipeline.pipeline_helpers import normalize_segments, sse_event, truncate_json_safely
 from src.services.pipeline.post_processor import validate_extraction_counts
 from src.services.pipeline.synthesis import synthesize
+from src.utils.language_utils import build_language_instruction
 
 if TYPE_CHECKING:
     from src.services.pipeline.context import PipelineContext
@@ -58,6 +59,7 @@ async def _attempt_synthesis_fed_retry(
         ctx.llm_service, ctx.triage, ctx.clean_text, video_info,
         chapters=chapters, video_context=ctx.video_dna_compact,
         extra_instruction=retry_prompt,
+        language_instruction=build_language_instruction(ctx.language),
     ):
         if evt["event"] == "extraction_complete":
             retry_data = evt.get("data")
@@ -125,8 +127,9 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
             logger.warning("Chapter splitting failed (non-critical): %s — falling back to standard extraction", e)
             chapters = None
 
+    lang_instruction = build_language_instruction(ctx.language)
     try:
-        async for evt in extract(ctx.llm_service, ctx.triage, ctx.clean_text, video_info, chapters=chapters, video_context=ctx.video_dna_compact):
+        async for evt in extract(ctx.llm_service, ctx.triage, ctx.clean_text, video_info, chapters=chapters, video_context=ctx.video_dna_compact, language_instruction=lang_instruction):
             event_name = evt["event"]
             yield sse_event(event_name, {k: v for k, v in evt.items() if k != "event"})
             if event_name == "extraction_complete":

@@ -71,7 +71,7 @@ export const SpotExplorer = memo(function SpotExplorer({
             type="button"
             onClick={() => hasExpandable && toggleExpand(spotIndex)}
             className={cn(
-              'w-full text-left px-4 py-3 flex items-start gap-3 transition-all duration-150',
+              'w-full text-start px-4 py-3 flex items-start gap-3 transition-all duration-150',
               hasExpandable && 'cursor-pointer active:scale-[0.98]',
               !hasExpandable && 'cursor-default',
             )}

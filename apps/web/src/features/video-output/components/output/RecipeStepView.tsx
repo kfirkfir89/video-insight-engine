@@ -3,6 +3,7 @@ import { Check, AlertTriangle, Lightbulb, Clock, ChevronLeft, ChevronRight, Play
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Timer, Badge } from '@/components/vie';
+import { useLabels } from '@/lib/i18n';
 import { useTabState } from '@/features/video-output/contexts/TabStateContext';
 import { buildStepIngredientMap } from '@/features/video-output/components/output/lib/ingredient-step-matcher';
 import type { StepItem } from '@vie/types';
@@ -36,6 +37,7 @@ export const RecipeStepView = memo(function RecipeStepView({
   onSeek,
   ingredients,
 }: RecipeStepViewProps) {
+  const t = useLabels();
   const tabState = useTabState();
   const step = steps[currentStep];
 
@@ -151,7 +153,7 @@ export const RecipeStepView = memo(function RecipeStepView({
           disabled={currentStep === 0}
           className="gap-1.5"
         >
-          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          <ChevronLeft className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
           Prev
         </Button>
 
@@ -162,7 +164,7 @@ export const RecipeStepView = memo(function RecipeStepView({
           className="gap-1.5 min-h-[44px]"
         >
           <Check className="h-4 w-4" aria-hidden="true" />
-          {isDone ? 'Undo' : 'Done'}
+          {isDone ? t.undo : t.done}
         </Button>
 
         <Button
@@ -173,7 +175,7 @@ export const RecipeStepView = memo(function RecipeStepView({
           className="gap-1.5"
         >
           Next
-          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          <ChevronRight className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
         </Button>
       </div>
     </div>

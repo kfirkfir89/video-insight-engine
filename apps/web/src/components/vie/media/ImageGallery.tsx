@@ -47,7 +47,7 @@ function ImageLightbox({
       <Button
         variant="ghost"
         size="icon-sm"
-        className="absolute top-4 right-4 text-white hover:text-white/80 z-10"
+        className="absolute top-4 end-4 text-white hover:text-white/80 z-10"
         onClick={onClose}
         aria-label="Close lightbox"
       >
@@ -59,22 +59,22 @@ function ImageLightbox({
           <Button
             variant="ghost"
             size="icon-sm"
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 z-10"
+            className="absolute start-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 z-10"
             onClick={(e) => { e.stopPropagation(); onPrev(); }}
             disabled={selected === 0}
             aria-label="Previous image"
           >
-            <ChevronLeft className="h-6 w-6" />
+            <ChevronLeft className="h-6 w-6 rtl:rotate-180" />
           </Button>
           <Button
             variant="ghost"
             size="icon-sm"
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 z-10"
+            className="absolute end-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 z-10"
             onClick={(e) => { e.stopPropagation(); onNext(); }}
             disabled={selected === images.length - 1}
             aria-label="Next image"
           >
-            <ChevronRight className="h-6 w-6" />
+            <ChevronRight className="h-6 w-6 rtl:rotate-180" />
           </Button>
         </>
       )}

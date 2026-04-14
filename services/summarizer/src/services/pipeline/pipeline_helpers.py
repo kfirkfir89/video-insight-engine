@@ -98,6 +98,7 @@ class TranscriptData:
     raw_text: str
     transcript_type: str
     source: str  # ytdlp, api, proxy, whisper, gemini, metadata
+    language: str | None = None  # ISO 639-1 code (e.g., "en", "he")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

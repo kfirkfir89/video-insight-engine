@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { GlassCard, FadeIn, SectionNav, HeroCard, Badge, StatPill } from '@/components/vie';
 import { Celebration } from '../Celebration';
+import { useLabels } from '@/lib/i18n';
 
 import type { FitnessExercise } from '@vie/types';
 
@@ -52,6 +53,7 @@ function SimpleList({ title, items, color }: { title: string; items: string[]; c
 }
 
 function FormCueCallout({ cue }: { cue: string }) {
+  const t = useLabels();
   const [open, setOpen] = useState(false);
   return (
     <div className="text-xs">
@@ -60,7 +62,7 @@ function FormCueCallout({ cue }: { cue: string }) {
         onClick={() => setOpen(!open)}
         className="text-info font-medium hover:underline"
       >
-        {open ? 'Hide form cue' : 'Form cue'}
+        {open ? t.hideFormCue : t.formCue}
       </button>
       {open && (
         <p className="text-muted-foreground bg-info/5 rounded-md px-2.5 py-1.5 mt-1">
@@ -74,6 +76,7 @@ function FormCueCallout({ cue }: { cue: string }) {
 export const ExerciseInteractive = memo(function ExerciseInteractive({
   exercises, warmup, cooldown, meta, nextTab, onNavigateTab,
 }: ExerciseInteractiveProps) {
+  const t = useLabels();
   const [completedSets, setCompletedSets] = useState<Map<number, number>>(new Map());
   const [restTimer, setRestTimer] = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState('exercises');
@@ -136,9 +139,9 @@ export const ExerciseInteractive = memo(function ExerciseInteractive({
       {meta && (
         <HeroCard emoji="💪" title={meta.type ?? 'Workout'} subtitle={meta.difficulty}>
           <div className="flex flex-wrap gap-2 mt-2">
-            {meta.duration && <StatPill value={`${meta.duration}m`} label="Duration" />}
+            {meta.duration && <StatPill value={`${meta.duration}m`} label={t.duration} />}
             {meta.equipment && meta.equipment.length > 0 && (
-              <StatPill value={meta.equipment.join(', ')} label="Equipment" />
+              <StatPill value={meta.equipment.join(', ')} label={t.equipment} />
             )}
           </div>
         </HeroCard>
@@ -185,7 +188,7 @@ export const ExerciseInteractive = memo(function ExerciseInteractive({
                 <div className="flex-1 min-w-0 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <h4 className="text-sm font-semibold">
-                      <span className="mr-1.5">{exercise.emoji}</span>{exercise.name}
+                      <span className="me-1.5">{exercise.emoji}</span>{exercise.name}
                     </h4>
                     {exercise.difficulty && (
                       <Badge variant={DIFFICULTY_BADGE[exercise.difficulty] ?? 'muted'} className="text-[10px]">
@@ -207,7 +210,7 @@ export const ExerciseInteractive = memo(function ExerciseInteractive({
                   <div className="flex items-center justify-between pt-1">
                     <span className="text-xs text-muted-foreground tabular-nums">{done}/{target} sets done</span>
                     <Button variant={exerciseDone ? 'ghost' : 'outline'} size="sm" onClick={() => completeSet(index, exercise)} disabled={exerciseDone} className="gap-1.5 text-xs">
-                      {exerciseDone ? <><Check className="h-3.5 w-3.5" aria-hidden="true" /> Done</> : <><Plus className="h-3.5 w-3.5" aria-hidden="true" /> Complete Set</>}
+                      {exerciseDone ? <><Check className="h-3.5 w-3.5" aria-hidden="true" /> {t.done}</> : <><Plus className="h-3.5 w-3.5" aria-hidden="true" /> {t.completeSet}</>}
                     </Button>
                   </div>
                 </div>
@@ -232,7 +235,7 @@ export const ExerciseInteractive = memo(function ExerciseInteractive({
       )}
 
       {allDone && (
-        <Celebration emoji="💪" title="Workout complete!" subtitle="All sets finished. Great effort!" nextTabId={nextTab} nextLabel={nextTab ? 'Continue' : undefined} onNavigateTab={onNavigateTab} />
+        <Celebration emoji="💪" title={t.workoutComplete} subtitle={t.allSetsFinished} nextTabId={nextTab} nextLabel={nextTab ? 'Continue' : undefined} onNavigateTab={onNavigateTab} />
       )}
     </div>
   );
