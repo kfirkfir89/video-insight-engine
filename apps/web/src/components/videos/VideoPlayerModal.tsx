@@ -18,7 +18,7 @@ export function VideoPlayerModal({ video, open, onClose }: VideoPlayerModalProps
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="max-w-4xl p-0 overflow-hidden">
         <DialogTitle className="sr-only">{video.title}</DialogTitle>
-        <div className="aspect-video w-full bg-black">
+        <div className="aspect-video w-full bg-[var(--overlay-bg)]">
           <iframe
             src={`https://www.youtube.com/embed/${video.youtubeId}?autoplay=1`}
             title={video.title || "Video"}

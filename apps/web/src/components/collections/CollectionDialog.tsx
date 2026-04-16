@@ -26,16 +26,15 @@ interface CollectionDialogProps {
   onSave: (values: { name: string; description?: string; color?: string }) => void;
 }
 
-const PRESET_COLORS = [
-  '#EF4444', // red
-  '#F97316', // orange
-  '#EAB308', // yellow
-  '#22C55E', // green
-  '#06B6D4', // cyan
-  '#3B82F6', // blue
-  '#8B5CF6', // violet
-  '#EC4899', // pink
-  '#6B7280', // gray
+const PRESET_COLORS: { value: string; label: string }[] = [
+  { value: 'var(--vie-coral)', label: 'Coral' },
+  { value: 'var(--vie-plum)', label: 'Plum' },
+  { value: 'var(--vie-sky)', label: 'Sky' },
+  { value: 'var(--vie-mint)', label: 'Mint' },
+  { value: 'var(--vie-honey)', label: 'Honey' },
+  { value: 'var(--vie-rose)', label: 'Rose' },
+  { value: 'var(--vie-forest)', label: 'Forest' },
+  { value: 'var(--vie-peach)', label: 'Peach' },
 ];
 
 /**
@@ -50,7 +49,7 @@ export const CollectionDialog = memo(function CollectionDialog({
 }: CollectionDialogProps) {
   const [name, setName] = useState(initialValues?.name ?? '');
   const [description, setDescription] = useState(initialValues?.description ?? '');
-  const [color, setColor] = useState(initialValues?.color ?? PRESET_COLORS[5]);
+  const [color, setColor] = useState(initialValues?.color ?? PRESET_COLORS[2].value);
   const [isSaving, setIsSaving] = useState(false);
 
   // Sync state when dialog opens with new initialValues
@@ -58,7 +57,7 @@ export const CollectionDialog = memo(function CollectionDialog({
     if (open) {
       setName(initialValues?.name ?? '');
       setDescription(initialValues?.description ?? '');
-      setColor(initialValues?.color ?? PRESET_COLORS[5]);
+      setColor(initialValues?.color ?? PRESET_COLORS[2].value);
     }
   }, [open, initialValues]);
 
@@ -79,7 +78,7 @@ export const CollectionDialog = memo(function CollectionDialog({
       // Reset form when closing
       setName(initialValues?.name ?? '');
       setDescription(initialValues?.description ?? '');
-      setColor(initialValues?.color ?? PRESET_COLORS[5]);
+      setColor(initialValues?.color ?? PRESET_COLORS[2].value);
     }
     onOpenChange(newOpen);
   }, [initialValues, onOpenChange]);
@@ -128,18 +127,18 @@ export const CollectionDialog = memo(function CollectionDialog({
           <div className="space-y-2">
             <Label>Color</Label>
             <div className="flex gap-2 flex-wrap">
-              {PRESET_COLORS.map((presetColor) => (
+              {PRESET_COLORS.map((preset) => (
                 <Button
-                  key={presetColor}
+                  key={preset.value}
                   variant="ghost"
                   size="icon-bare"
-                  onClick={() => setColor(presetColor)}
+                  onClick={() => setColor(preset.value)}
                   className={cn(
                     'w-6 h-6 rounded-full transition-transform',
-                    color === presetColor && 'ring-2 ring-primary ring-offset-2 scale-110'
+                    color === preset.value && 'ring-2 ring-primary ring-offset-2 scale-110'
                   )}
-                  style={{ backgroundColor: presetColor }}
-                  aria-label={`Select color ${presetColor}`}
+                  style={{ backgroundColor: preset.value }}
+                  aria-label={`Select ${preset.label} color`}
                 />
               ))}
             </div>

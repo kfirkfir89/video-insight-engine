@@ -152,17 +152,17 @@ export const FlashDeckInteractive = memo(function FlashDeckInteractive({
     <GlassCard className="space-y-4">
       {/* Header with counter + shuffle */}
       <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground/70">
+        <span className="text-xs font-medium tabular-nums tracking-wide text-muted-foreground/70">
           {currentCard + 1} of {cards.length}
         </span>
         <div className="flex items-center gap-2">
           {reviewed.size > 0 && (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs font-medium tabular-nums text-muted-foreground">
               {known.size} known / {reviewed.size - known.size} review
             </span>
           )}
           {shuffleable && (
-            <Button variant="ghost" size="icon-sm" onClick={handleShuffle} aria-label="Shuffle cards">
+            <Button variant="ghost" size="icon" onClick={handleShuffle} aria-label="Shuffle cards">
               <Shuffle className="h-3.5 w-3.5" />
             </Button>
           )}
@@ -172,24 +172,35 @@ export const FlashDeckInteractive = memo(function FlashDeckInteractive({
       {/* Progress bar showing reviewed/total */}
       <ProgressBar value={reviewed.size} max={cards.length} label={t.cardsReviewed} />
 
-      {/* 3D flip card */}
+      {/* 3D flip card — physical deck feel with 2 background cards */}
       <FadeIn key={currentCard}>
-        <div
-          className="relative cursor-pointer"
-          style={{ perspective: '1000px' }}
-          onClick={handleFlip}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          role="button"
-          tabIndex={0}
-          aria-label={flipped ? card.back : card.front}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              handleFlip();
-            }
-          }}
-        >
+        <div className="relative" style={{ minHeight: '180px' }}>
+          {/* Behind card 2 (furthest) */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 rounded-2xl border border-border/40 bg-muted/10 scale-[0.92] translate-y-4 opacity-30 -z-20"
+          />
+          {/* Behind card 1 */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 rounded-2xl border border-border/50 bg-muted/15 scale-[0.96] translate-y-2 opacity-60 -z-10"
+          />
+          <div
+            className="relative cursor-pointer transition-transform duration-200 hover:rotate-[0.5deg]"
+            style={{ perspective: '1000px' }}
+            onClick={handleFlip}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            role="button"
+            tabIndex={0}
+            aria-label={flipped ? card.back : card.front}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleFlip();
+              }
+            }}
+          >
           <div
             className="relative w-full transition-transform duration-500"
             style={{
@@ -202,35 +213,36 @@ export const FlashDeckInteractive = memo(function FlashDeckInteractive({
             <div
               className={cn(
                 'absolute inset-0 flex flex-col items-center justify-center',
-                'rounded-lg border border-border/50 bg-muted/20 p-6 text-center',
+                'rounded-2xl border border-border/50 bg-muted/20 p-6 text-center shadow-2xl',
               )}
               style={{ backfaceVisibility: 'hidden' }}
             >
               {card.category && (
-                <Badge variant="muted" className="mb-2 text-[10px] uppercase tracking-wide">
+                <Badge variant="muted" className="mb-2 text-xs font-semibold uppercase tracking-wider">
                   {card.category}
                 </Badge>
               )}
               {card.emoji && <span className="text-3xl mb-3" aria-hidden="true">{card.emoji}</span>}
-              <p className="font-medium text-sm">{card.front}</p>
+              <p className="font-semibold text-base leading-snug tracking-tight">{card.front}</p>
               {cardNeedsReview.has(currentCard) && (
-                <Badge variant="warning" className="mt-2 text-[10px]">
+                <Badge variant="warning" className="mt-2 text-xs font-medium">
                   {'🔄'} Missed in quiz
                 </Badge>
               )}
-              <span className="text-xs text-muted-foreground/50 mt-3">Tap to flip</span>
+              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground/50 mt-3">Tap to flip</span>
             </div>
 
             {/* Back */}
             <div
               className={cn(
                 'absolute inset-0 flex flex-col items-center justify-center',
-                'rounded-lg border border-primary/30 bg-primary/5 p-6 text-center',
+                'rounded-2xl border border-primary/30 bg-primary/5 p-6 text-center shadow-2xl',
               )}
               style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
             >
-              <p className="text-sm text-muted-foreground">{card.back}</p>
+              <p className="text-sm leading-relaxed text-muted-foreground">{card.back}</p>
             </div>
+          </div>
           </div>
         </div>
       </FadeIn>
@@ -239,10 +251,10 @@ export const FlashDeckInteractive = memo(function FlashDeckInteractive({
       {flipped && !known.has(currentCard) && (
         <FadeIn>
           <div className="flex items-center gap-2 justify-center">
-            <Button variant="outline" size="sm" onClick={markReview} className="text-xs gap-1.5">
+            <Button variant="outline" size="sm" onClick={markReview} className="text-xs font-medium gap-1.5">
               {t.reviewAgain}
             </Button>
-            <Button variant="default" size="sm" onClick={markKnown} className="text-xs gap-1.5">
+            <Button variant="default" size="sm" onClick={markKnown} className="text-xs font-semibold gap-1.5">
               {t.gotIt}
             </Button>
           </div>

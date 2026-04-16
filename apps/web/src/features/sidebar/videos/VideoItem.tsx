@@ -133,14 +133,14 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
             data-sidebar-item="video"
             style={{ ...style, paddingLeft: `${paddingLeft}px`, paddingRight: "8px" }}
             className={cn(
-              "group flex items-center rounded-sm transition-colors hover:bg-primary/8",
+              "group flex items-center rounded-md transition-all hover:bg-[var(--glass-bg)]",
               // Keep row highlighted when dropdown menu is open
               "has-[[data-state=open]]:bg-accent/50",
               textClasses.rowHeight,
               isDragging && "opacity-50 z-50",
               isSelected && "bg-primary/6",
-              // Highlight the currently viewed video
-              isActiveVideo && !isSelected && "bg-primary/8 font-medium"
+              // Highlight the currently viewed video — premium glow
+              isActiveVideo && !isSelected && "bg-primary/10 font-medium ring-1 ring-primary/20 text-foreground"
             )}
             onPointerDown={longPress.onPointerDown}
             onPointerUp={longPress.onPointerUp}
@@ -162,7 +162,7 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
             )}
 
             {/* Video Icon */}
-            <Film className={cn(textClasses.iconSize, "shrink-0 text-primary fill-warning/50 ml-1")} />
+            <Film className={cn(textClasses.iconSize, "shrink-0 text-primary/80 fill-warning/50 ml-1 transition-colors group-hover:text-primary")} />
 
             {/* Video link */}
             <Link

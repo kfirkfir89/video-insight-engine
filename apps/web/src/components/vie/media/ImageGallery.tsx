@@ -37,7 +37,7 @@ function ImageLightbox({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-bg)] p-4"
       onClick={onClose}
       onKeyDown={handleKeyDown}
       role="dialog"
@@ -46,8 +46,8 @@ function ImageLightbox({
     >
       <Button
         variant="ghost"
-        size="icon-sm"
-        className="absolute top-4 end-4 text-white hover:text-white/80 z-10"
+        size="icon"
+        className="absolute top-4 end-4 text-[var(--overlay-text)] hover:text-[var(--overlay-text-muted)] z-10"
         onClick={onClose}
         aria-label="Close lightbox"
       >
@@ -58,8 +58,8 @@ function ImageLightbox({
         <>
           <Button
             variant="ghost"
-            size="icon-sm"
-            className="absolute start-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 z-10"
+            size="icon"
+            className="absolute start-4 top-1/2 -translate-y-1/2 text-[var(--overlay-text)] hover:text-[var(--overlay-text-muted)] z-10"
             onClick={(e) => { e.stopPropagation(); onPrev(); }}
             disabled={selected === 0}
             aria-label="Previous image"
@@ -68,8 +68,8 @@ function ImageLightbox({
           </Button>
           <Button
             variant="ghost"
-            size="icon-sm"
-            className="absolute end-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 z-10"
+            size="icon"
+            className="absolute end-4 top-1/2 -translate-y-1/2 text-[var(--overlay-text)] hover:text-[var(--overlay-text-muted)] z-10"
             onClick={(e) => { e.stopPropagation(); onNext(); }}
             disabled={selected === images.length - 1}
             aria-label="Next image"
@@ -84,9 +84,14 @@ function ImageLightbox({
           src={images[selected].src}
           alt={images[selected].alt}
           className="max-w-full max-h-full object-contain rounded-lg"
+          loading="eager"
+          decoding="async"
+          width={1280}
+          height={720}
+          style={{ aspectRatio: '16 / 9' }}
         />
         {images[selected].caption && (
-          <p className="text-center text-sm text-white/80 mt-3 bg-black/50 px-4 py-2 rounded">
+          <p className="text-center text-sm leading-relaxed text-[var(--overlay-text)] mt-3 bg-[var(--overlay-surface)] px-4 py-2 rounded max-w-prose mx-auto">
             {images[selected].caption}
           </p>
         )}
@@ -123,6 +128,9 @@ export const ImageGallery = memo(function ImageGallery({
               alt={img.alt}
               className="absolute inset-0 w-full h-full object-cover"
               loading="lazy"
+              decoding="async"
+              width={320}
+              height={180}
             />
           </button>
         ))}

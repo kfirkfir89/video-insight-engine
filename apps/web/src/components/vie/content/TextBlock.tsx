@@ -48,7 +48,7 @@ export const TextBlock = memo(function TextBlock({
           {icon}
         </span>
       )}
-      <p className="text-xs text-muted-foreground">{children}</p>
+      <p className="text-xs leading-relaxed text-muted-foreground">{children}</p>
     </div>
   );
 });

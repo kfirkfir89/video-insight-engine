@@ -79,7 +79,7 @@ export function AddVideoInput() {
 
     // Only allow adding videos in summarized section
     if (activeSection !== "summarized") {
-      setError("Switch to Summaries to add videos");
+      setError("You can only add videos from the Collection tab.");
       return;
     }
 
@@ -89,9 +89,9 @@ export function AddVideoInput() {
       // Validate URL has video ID
       if (!hasVideoId(trimmedUrl)) {
         if (hasPlaylistId(trimmedUrl)) {
-          setError("This is a playlist URL. Click the toggle to switch to Playlist mode.");
+          setError("That's a playlist link. Switch to Playlist mode to import it.");
         } else {
-          setError("No video ID found in URL");
+          setError("That doesn't look like a YouTube video URL. Paste the full link from YouTube.");
         }
         return;
       }
@@ -109,15 +109,15 @@ export function AddVideoInput() {
           navigate(`/video/${result.video.id}`);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to add video");
+        setError(err instanceof Error ? err.message : "Couldn't start processing. Try again in a moment.");
       }
     } else {
       // Playlist mode - validate URL has playlist ID
       if (!hasPlaylistId(trimmedUrl)) {
         if (hasVideoId(trimmedUrl) && !isPlaylistPage(trimmedUrl)) {
-          setError("This is a video URL. Click the toggle to switch to Video mode.");
+          setError("That's a single video link. Switch to Video mode to process it.");
         } else {
-          setError("No playlist ID found in URL");
+          setError("That doesn't look like a YouTube playlist URL.");
         }
         return;
       }
@@ -129,7 +129,7 @@ export function AddVideoInput() {
         setPlaylistPreview(preview);
         setShowPreviewDialog(true);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load playlist");
+        setError(err instanceof Error ? err.message : "Couldn't read that playlist. It may be private, or the link is wrong.");
       }
     }
   };
@@ -147,7 +147,7 @@ export function AddVideoInput() {
       setUrl("");
       setUserSelection(USE_SIDEBAR_SELECTION);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to import playlist");
+      setError(err instanceof Error ? err.message : "Couldn't start the playlist import. Try again.");
     }
   };
 

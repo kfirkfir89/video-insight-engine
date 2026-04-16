@@ -119,16 +119,16 @@ export const QuizInteractive = memo(function QuizInteractive({
   const isAnswered = selectedOption !== undefined;
 
   return (
-    <GlassCard className="space-y-4">
+    <GlassCard variant="elevated" className="space-y-4 shadow-2xl shadow-primary/10">
       {/* Score + progress + streak */}
       <div className="flex items-center justify-between">
-        <div className="text-xs text-muted-foreground/70">
+        <div className="text-xs font-medium tabular-nums tracking-wide text-muted-foreground/70">
           Q {currentIndex + 1} of {questions.length}
         </div>
         <div className="flex items-center gap-2">
           {streak >= 2 && (
-            <Badge variant="warning" className="text-xs animate-[fadeUp_0.2s_ease_both]">
-              {'\uD83D\uDD25'} {streak} streak!
+            <Badge variant="warning" className="text-xs font-semibold tabular-nums animate-[fadeUp_0.2s_ease_both]">
+              <span aria-hidden="true">{'\uD83D\uDD25'}</span> {streak} streak!
             </Badge>
           )}
           {answers.size > 0 && <InlineScore correct={score} total={answers.size} />}
@@ -138,10 +138,10 @@ export const QuizInteractive = memo(function QuizInteractive({
       {/* Question */}
       <FadeIn key={currentIndex}>
         <div className="text-center px-2">
-          <p className="font-medium text-sm">{question.question}</p>
+          <p className="font-semibold text-base leading-snug tracking-tight">{question.question}</p>
           {masteredQuestions.has(currentIndex) && (
-            <Badge variant="info" className="mt-1.5 text-[10px]">
-              {'📚'} You studied this
+            <Badge variant="info" className="mt-1.5 text-xs font-medium">
+              <span aria-hidden="true">{'📚'}</span> You studied this
             </Badge>
           )}
         </div>
@@ -160,9 +160,9 @@ export const QuizInteractive = memo(function QuizInteractive({
       {/* Explanation */}
       {isAnswered && (
         <FadeIn>
-          <div className="bg-muted/20 rounded-lg p-3 text-sm">
-            <span className="font-medium text-xs text-muted-foreground block mb-1">Explanation</span>
-            <p className="text-muted-foreground">{question.explanation}</p>
+          <div className="bg-muted/20 rounded-lg p-3">
+            <span className="font-semibold text-xs uppercase tracking-wider text-muted-foreground block mb-1">Explanation</span>
+            <p className="text-sm leading-relaxed text-muted-foreground">{question.explanation}</p>
           </div>
         </FadeIn>
       )}
@@ -210,17 +210,17 @@ export const QuizInteractive = memo(function QuizInteractive({
           {wrongAnswers.length > 0 && (
             <FadeIn>
               <GlassCard variant="outlined" className="space-y-3 w-full">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  {t.review} ({wrongAnswers.length} {t.missed})
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {t.review} <span className="tabular-nums">({wrongAnswers.length}</span> {t.missed})
                 </h4>
                 <ul className="space-y-2">
                   {wrongAnswers.map((w) => (
-                    <li key={w.index} className="text-sm space-y-0.5">
-                      <p className="font-medium">{w.question}</p>
-                      <p className="text-destructive text-xs">
+                    <li key={w.index} className="space-y-1">
+                      <p className="font-semibold text-sm leading-snug">{w.question}</p>
+                      <p className="text-destructive text-xs leading-relaxed">
                         Your answer: {w.picked}
                       </p>
-                      <p className="text-success text-xs">
+                      <p className="text-success text-xs leading-relaxed">
                         Correct: {w.correct}
                       </p>
                     </li>
@@ -229,7 +229,7 @@ export const QuizInteractive = memo(function QuizInteractive({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full text-xs"
+                  className="w-full text-xs font-medium"
                   onClick={handleReset}
                 >
                   {t.tryAgain}
@@ -243,7 +243,7 @@ export const QuizInteractive = memo(function QuizInteractive({
             <Button
               variant="ghost"
               size="sm"
-              className="text-xs"
+              className="text-xs font-medium"
               onClick={handleReset}
             >
               {t.tryAgain}

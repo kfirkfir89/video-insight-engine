@@ -1,10 +1,33 @@
-import { memo, useMemo } from "react";
-import type { Video, Folder } from "@/types";
-import { Loader2, Folder as FolderIcon, Play } from "lucide-react";
+import { memo, useCallback, useMemo } from "react";
+import { Link } from "react-router-dom";
+import { Loader2, Folder as FolderIcon, Play, Sparkles } from "lucide-react";
+
+/** Stable-per-session rotation of empty-state copy — returning users see variety
+ *  without the message ever feeling jumpy within a session. */
+const EMPTY_ROOT_VARIANTS: readonly string[] = [
+  "Paste a YouTube URL to turn any video into an interactive study guide in seconds.",
+  "Drop in a link — walkthroughs, recipes, tutorials, lectures. All become searchable.",
+  "Add your first video. We'll break it down into summary, key points, and what to remember.",
+];
+const EMPTY_FOLDER_VARIANTS: readonly string[] = [
+  "Drop a YouTube URL above to add videos, or create subfolders to organize.",
+  "Fill this folder with videos — or nest subfolders to group them by topic.",
+];
+
+/** Deterministic-per-day variant pick. Fresh copy every day without jitter within a session. */
+function pickStableVariant<T>(variants: readonly T[]): T {
+  const daySeed = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
+  return variants[daySeed % variants.length];
+}
 import { FolderCard } from "./FolderCard";
 import { VideoCard } from "./VideoCard";
+import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/stores/ui-store";
 import { getFolderColorStyle } from "@/features/sidebar/lib/style-utils";
+import type { Video, Folder } from "@/types";
+
+const EMPTY_FOLDERS: Folder[] = [];
+const EMPTY_VIDEOS: Video[] = [];
 
 /**
  * Context object for folder-related display options.
@@ -40,11 +63,19 @@ export const VideoGrid = memo(function VideoGrid({
 }: VideoGridProps) {
   // Extract folder context with defaults
   const currentFolderId = folderContext?.currentFolderId ?? null;
-  const subfolders = folderContext?.subfolders ?? [];
-  const folders = folderContext?.allFolders ?? [];
-  const allVideos = folderContext?.allVideos ?? [];
+  const subfolders = folderContext?.subfolders ?? EMPTY_FOLDERS;
+  const folders = folderContext?.allFolders ?? EMPTY_FOLDERS;
+  const allVideos = folderContext?.allVideos ?? EMPTY_VIDEOS;
   const setSelectedFolder = useUIStore((s) => s.setSelectedFolder);
   const setActiveSection = useUIStore((s) => s.setActiveSection);
+
+  const handleFolderClick = useCallback(
+    (folderId: string) => {
+      setSelectedFolder(folderId);
+      setActiveSection("summarized");
+    },
+    [setSelectedFolder, setActiveSection]
+  );
 
   // Memoize grouping logic - must be called unconditionally to respect Rules of Hooks
   // Even if groupByFolder is false, we still compute this (but don't use it)
@@ -81,33 +112,46 @@ export const VideoGrid = memo(function VideoGrid({
 
   if (isLoading) {
     return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex flex-col items-center justify-center gap-3 py-16">
+        <Loader2 className="h-7 w-7 animate-spin text-primary" aria-hidden="true" />
+        <p className="text-sm text-muted-foreground">Loading your collection...</p>
       </div>
     );
   }
-
-  // Handler for clicking on a folder card
-  const handleFolderClick = (folderId: string) => {
-    setSelectedFolder(folderId);
-    setActiveSection("summarized");
-  };
 
   // Check if we have any content (videos or subfolders)
   const hasContent = videos.length > 0 || subfolders.length > 0;
 
   if (!hasContent) {
+    // Pick a stable variant per render cycle — fresh at reload, consistent during the session.
+    const rootCopy = pickStableVariant(EMPTY_ROOT_VARIANTS);
+    const folderCopy = pickStableVariant(EMPTY_FOLDER_VARIANTS);
     return (
-      <div className="rounded-lg border border-dashed border-border p-12 text-center">
-        <FolderIcon size={48} className="mx-auto mb-4 text-muted-foreground" />
-        <h3 className="text-lg font-medium">
-          {currentFolderId ? "This folder is empty" : "No videos yet"}
-        </h3>
-        <p className="text-muted-foreground">
-          {currentFolderId
-            ? "Add videos or create subfolders to organize your content"
-            : "Add your first YouTube video to get started"}
-        </p>
+      <div className="mx-auto max-w-md rounded-2xl border border-dashed border-border/70 p-10 text-center stack-lg">
+        <div className="icon-glow relative mx-auto w-14 h-14 flex items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <Sparkles className="h-6 w-6 icon-float" aria-hidden="true" />
+        </div>
+        <div className="stack-xs">
+          <h3 className="type-h3 text-balance">
+            {currentFolderId ? "This folder is empty" : "Your library starts here"}
+          </h3>
+          <p className="type-caption text-pretty">
+            {currentFolderId ? folderCopy : rootCopy}
+          </p>
+        </div>
+        {!currentFolderId && (
+          <div className="flex flex-col sm:flex-row gap-2 justify-center pt-1">
+            <Button asChild size="sm" className="gap-1.5">
+              <Link to="/generate">
+                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                Create your first VIE
+              </Link>
+            </Button>
+            <p className="text-[11px] text-muted-foreground/70 self-center">
+              Tip: press <kbd className="px-1 py-0.5 rounded bg-muted text-foreground font-mono text-[10px]">⌘K</kbd> anywhere to jump around
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -115,18 +159,18 @@ export const VideoGrid = memo(function VideoGrid({
   // If viewing a specific folder (not grouped mode), show subfolders + videos
   if (!groupByFolder && currentFolderId !== null) {
     return (
-      <div className="space-y-6">
+      <div className="stack-xl">
         {/* Subfolders section */}
         {subfolders.length > 0 && (
-          <section>
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <FolderIcon className="h-5 w-5 text-muted-foreground" />
+          <section className="stack-md">
+            <h2 className="type-h3 flex items-center gap-2">
+              <FolderIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
               Folders
-              <span className="text-sm text-muted-foreground font-normal">
+              <span className="type-caption font-normal tabular-nums">
                 ({subfolders.length})
               </span>
             </h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="auto-grid">
               {subfolders.map((folder) => (
                 <FolderCard
                   key={folder.id}
@@ -142,17 +186,17 @@ export const VideoGrid = memo(function VideoGrid({
 
         {/* Videos section */}
         {videos.length > 0 && (
-          <section>
+          <section className="stack-md">
             {subfolders.length > 0 && (
-              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Play className="h-5 w-5 text-muted-foreground" />
+              <h2 className="type-h3 flex items-center gap-2">
+                <Play className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                 Videos
-                <span className="text-sm text-muted-foreground font-normal">
+                <span className="type-caption font-normal tabular-nums">
                   ({videos.length})
                 </span>
               </h2>
             )}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="auto-grid">
               {videos.map((video) => (
                 <VideoCard key={video.id} video={video} />
               ))}
@@ -166,7 +210,7 @@ export const VideoGrid = memo(function VideoGrid({
   // If not grouping by folder (flat view without folder context)
   if (!groupByFolder) {
     return (
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="auto-grid">
         {videos.map((video) => (
           <VideoCard key={video.id} video={video} />
         ))}
@@ -176,16 +220,16 @@ export const VideoGrid = memo(function VideoGrid({
 
   // Grouped by folder view - use pre-computed sortedGroups and folderMap
   return (
-    <div className="space-y-8">
+    <div className="stack-2xl">
       {sortedGroups.map(([folderId, folderVideos]) => {
         const folder = folderId ? folderMap.get(folderId) : null;
         const folderName = folder?.name || "Uncategorized";
 
         return (
-          <section key={folderId || "uncategorized"}>
+          <section key={folderId || "uncategorized"} className="stack-md">
             {/* Folder Header - clickable to navigate to folder view */}
             <div
-              className="flex items-center gap-2 cursor-pointer hover:bg-accent/20 -mx-2 px-2 py-2 rounded-lg transition-colors"
+              className="flex items-center gap-2 cursor-pointer hover:bg-accent/20 -mx-2 px-2 py-2 rounded-lg transition-colors border-b border-border/20"
               onClick={() => {
                 if (folder) {
                   setSelectedFolder(folder.id);
@@ -196,17 +240,16 @@ export const VideoGrid = memo(function VideoGrid({
               <FolderIcon
                 className="h-5 w-5 shrink-0"
                 style={getFolderColorStyle(folder?.color)}
+                aria-hidden="true"
               />
-              <h2 className="text-lg font-semibold">{folderName}</h2>
-              <span className="text-sm text-muted-foreground">
+              <h2 className="type-h3">{folderName}</h2>
+              <span className="type-caption tabular-nums">
                 ({folderVideos.length})
               </span>
             </div>
-            {/* Subtle separator */}
-            <div className="border-b border-border/20 -mx-2 mb-4" />
 
             {/* Videos Grid */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="auto-grid">
               {folderVideos.map((video) => (
                 <VideoCard key={video.id} video={video} />
               ))}

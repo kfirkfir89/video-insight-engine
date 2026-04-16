@@ -5,6 +5,8 @@ import { useUIStore } from "@/stores/ui-store";
 import { AppHeader } from "./AppHeader";
 import { LeftSidebarIconStrip } from "./LeftSidebarIconStrip";
 import { ScrollContainer } from "@/components/ui/scroll-container";
+import { CommandPalette } from "@/components/CommandPalette";
+import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { cn } from "@/lib/utils";
 
 // Lazy load Sidebar - it includes DnD Kit context (~100KB)
@@ -57,6 +59,19 @@ export function Layout({ children, showSidebar = true }: LayoutProps) {
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const sidebarWidth = useUIStore((s) => s.sidebarWidth);
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
+
+  // Lock body scroll when the mobile drawer is open so the page behind doesn't move.
+  // Desktop ignores this — the sidebar is in-flow above 768px.
+  useEffect(() => {
+    if (!showSidebar || !sidebarOpen) return;
+    const mql = window.matchMedia("(max-width: 767px)");
+    if (!mql.matches) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [showSidebar, sidebarOpen]);
 
   // Resize state — all kept in refs to avoid re-renders during drag
   const startXRef = useRef(0);
@@ -125,37 +140,55 @@ export function Layout({ children, showSidebar = true }: LayoutProps) {
         Skip to main content
       </a>
 
-      {/* Left sidebar (full height) or icon strip */}
+      {/* Left sidebar
+          Desktop (md+): in-flow column, user-resizable between 300–440px.
+          Mobile (<md):  overlay drawer slides over content with a tap-to-close backdrop.
+          The icon strip is desktop-only chrome — mobile users toggle from AppHeader. */}
       {showSidebar && (
         sidebarOpen ? (
-          <div className="relative flex shrink-0 h-screen" style={{ width: sidebarWidth }}>
-            <ErrorBoundary fallback={<SidebarErrorFallback />}>
-              <Suspense fallback={<SidebarSkeleton />}>
-                <Sidebar />
-              </Suspense>
-            </ErrorBoundary>
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize sidebar"
-              tabIndex={0}
-              className={cn(
-                "absolute right-0 w-1 bg-transparent h-full cursor-col-resize shrink-0 transition-colors hover:bg-primary/20 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:bg-primary/20"
-              )}
-              onMouseDown={handleMouseDown}
-              onKeyDown={(e) => {
-                if (e.key === "ArrowLeft") {
-                  e.preventDefault();
-                  setSidebarWidth(Math.max(300, sidebarWidth - 20));
-                } else if (e.key === "ArrowRight") {
-                  e.preventDefault();
-                  setSidebarWidth(Math.min(440, sidebarWidth + 20));
-                }
-              }}
+          <>
+            {/* Mobile backdrop — tap to close */}
+            <button
+              type="button"
+              aria-label="Close sidebar"
+              onClick={() => useUIStore.setState({ sidebarOpen: false })}
+              className="md:hidden fixed inset-0 z-modal bg-background/70 backdrop-blur-sm animate-in fade-in duration-150"
             />
-          </div>
+            <div
+              className="fixed inset-y-0 left-0 z-modal flex shrink-0 h-screen w-[min(85vw,22rem)] shadow-xl md:relative md:inset-auto md:z-auto md:w-[var(--sb-w)] md:shadow-none"
+              style={{ ['--sb-w' as string]: `${sidebarWidth}px` } as React.CSSProperties}
+            >
+              <ErrorBoundary fallback={<SidebarErrorFallback />}>
+                <Suspense fallback={<SidebarSkeleton />}>
+                  <Sidebar />
+                </Suspense>
+              </ErrorBoundary>
+              {/* Resize handle — desktop only */}
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize sidebar"
+                tabIndex={0}
+                className={cn(
+                  "hidden md:block absolute right-0 w-1 bg-transparent h-full cursor-col-resize shrink-0 transition-colors hover:bg-primary/20 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:bg-primary/20"
+                )}
+                onMouseDown={handleMouseDown}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowLeft") {
+                    e.preventDefault();
+                    setSidebarWidth(Math.max(300, sidebarWidth - 20));
+                  } else if (e.key === "ArrowRight") {
+                    e.preventDefault();
+                    setSidebarWidth(Math.min(440, sidebarWidth + 20));
+                  }
+                }}
+              />
+            </div>
+          </>
         ) : (
-          <LeftSidebarIconStrip />
+          <div className="hidden md:block">
+            <LeftSidebarIconStrip />
+          </div>
         )
       )}
 
@@ -168,6 +201,10 @@ export function Layout({ children, showSidebar = true }: LayoutProps) {
           </ScrollContainer>
         </main>
       </div>
+
+      {/* Global overlays — always mounted, self-managing visibility */}
+      <CommandPalette />
+      <KeyboardShortcutsModal />
     </div>
   );
 }

@@ -43,16 +43,20 @@ export const Sidebar = memo(function Sidebar() {
   const isAssistant = activeSection === "assistant";
 
   return (
-    <aside className="h-screen w-full flex flex-col bg-muted border-r overflow-hidden relative">
+    <aside
+      id="app-sidebar"
+      aria-label="Navigation sidebar"
+      className="h-screen w-full flex flex-col bg-[var(--vie-nav-bg)] backdrop-blur-xl border-r border-[var(--glass-border-strong)] overflow-hidden relative"
+    >
       {/* Branded header with logo */}
       <SidebarHeader />
 
-      {/* New button */}
+      {/* New button — primary CTA, magnetic treatment */}
       <div className="px-2 py-1 shrink-0">
         <Button
           variant="default"
           size="sm"
-          className="w-full gap-1.5"
+          className="cta-magnetic w-full gap-1.5 text-primary-foreground"
           onClick={() => navigate("/generate")}
         >
           <Plus className="h-3.5 w-3.5" />
@@ -66,23 +70,26 @@ export const Sidebar = memo(function Sidebar() {
       {/* Toolbar for sidebar controls (hidden when assistant active) */}
       {!isAssistant && <SidebarToolbar />}
 
-      {/* Content area */}
-      {isAssistant ? (
-        <div className="flex-1 min-h-0">
+      {/* Content area — keyed container gives each section a brief fade-in on switch */}
+      <div
+        key={isAssistant ? "assistant" : "collection"}
+        className="flex-1 min-h-0 flex flex-col animate-in fade-in duration-200 ease-out"
+      >
+        {isAssistant ? (
           <RAGChatPanel
             messages={chatMessages}
             status={chatStatus}
             onSendMessage={handleSendMessage}
             placeholder="Ask about your videos..."
           />
-        </div>
-      ) : (
-        <DndProvider>
-          <div className="flex-1 flex flex-col min-h-0">
-            <SidebarSection />
-          </div>
-        </DndProvider>
-      )}
+        ) : (
+          <DndProvider>
+            <div className="flex-1 flex flex-col min-h-0">
+              <SidebarSection />
+            </div>
+          </DndProvider>
+        )}
+      </div>
 
       {/* Dev tools panel below header (only in development) */}
       {DevToolPanel && (

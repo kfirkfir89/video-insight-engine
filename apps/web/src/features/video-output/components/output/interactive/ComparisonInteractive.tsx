@@ -68,9 +68,9 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/50">
-                  <th className="text-start text-xs font-bold uppercase tracking-wider text-muted-foreground px-4 py-2.5">Feature</th>
-                  <th className="text-start text-xs font-bold uppercase tracking-wider text-primary px-4 py-2.5">{colLeft}</th>
-                  <th className="text-start text-xs font-bold uppercase tracking-wider text-muted-foreground px-4 py-2.5">{colRight}</th>
+                  <th className="text-start text-xs font-semibold uppercase tracking-wider text-muted-foreground px-4 py-2.5">Feature</th>
+                  <th className="text-start text-xs font-semibold uppercase tracking-wider text-primary px-4 py-2.5">{colLeft}</th>
+                  <th className="text-start text-xs font-semibold uppercase tracking-wider text-muted-foreground px-4 py-2.5">{colRight}</th>
                 </tr>
               </thead>
               <tbody>
@@ -86,21 +86,21 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
                       )}
                       onClick={() => setActiveRow(index)}
                     >
-                      <td className="px-4 py-2.5 font-medium">
+                      <td className="px-4 py-2.5 text-sm font-semibold leading-snug">
                         {item.feature}
                         {item.winner === 'tie' && (
-                          <Badge variant="muted" className="ms-2 text-[10px]">Tie</Badge>
+                          <Badge variant="muted" className="ms-2 text-xs font-medium">Tie</Badge>
                         )}
                       </td>
                       <td className={cn(
-                        'px-4 py-2.5',
+                        'px-4 py-2.5 text-sm leading-relaxed',
                         isLeftWinner ? 'text-success font-semibold' : 'text-muted-foreground',
                       )}>
                         {item.thisProduct}
                         {isLeftWinner && <Check className="inline h-3.5 w-3.5 ms-1 text-success" aria-hidden="true" />}
                       </td>
                       <td className={cn(
-                        'px-4 py-2.5',
+                        'px-4 py-2.5 text-sm leading-relaxed',
                         isRightWinner ? 'text-success font-semibold' : 'text-muted-foreground',
                       )}>
                         {item.competitor}
@@ -122,36 +122,36 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
             <FadeIn key={index} index={index}>
               <GlassCard variant="outlined" className="p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{item.feature}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{item.feature}</p>
                   {item.winner && item.winner !== 'tie' && (
-                    <Badge variant="success" className="text-[10px]">
+                    <Badge variant="success" className="text-xs font-semibold">
                       {item.winner === 'left' ? colLeft : colRight} wins
                     </Badge>
                   )}
-                  {item.winner === 'tie' && <Badge variant="muted" className="text-[10px]">Tie</Badge>}
+                  {item.winner === 'tie' && <Badge variant="muted" className="text-xs font-medium">Tie</Badge>}
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                   <div className={cn(
-                    'rounded-md p-2 text-sm relative',
+                    'rounded-md p-2 relative',
                     item.winner === 'left' ? 'bg-success/10 border border-success/20' : 'bg-muted/20',
                     item.winner === 'right' && 'opacity-60',
                   )}>
                     {item.winner === 'left' && (
                       <span className="absolute -top-2 -end-1 text-sm" aria-label="Winner">{'🏆'}</span>
                     )}
-                    <span className="text-xs font-medium text-primary">{colLeft}</span>
-                    <p className="text-muted-foreground text-xs mt-1">{item.thisProduct}</p>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-primary">{colLeft}</span>
+                    <p className="text-sm leading-relaxed text-muted-foreground mt-1">{item.thisProduct}</p>
                   </div>
                   <div className={cn(
-                    'rounded-md p-2 text-sm relative',
+                    'rounded-md p-2 relative',
                     item.winner === 'right' ? 'bg-success/10 border border-success/20' : 'bg-muted/20',
                     item.winner === 'left' && 'opacity-60',
                   )}>
                     {item.winner === 'right' && (
                       <span className="absolute -top-2 -end-1 text-sm" aria-label="Winner">{'🏆'}</span>
                     )}
-                    <span className="text-xs font-medium">{colRight}</span>
-                    <p className="text-muted-foreground text-xs mt-1">{item.competitor}</p>
+                    <span className="text-xs font-semibold uppercase tracking-wider">{colRight}</span>
+                    <p className="text-sm leading-relaxed text-muted-foreground mt-1">{item.competitor}</p>
                   </div>
                 </div>
               </GlassCard>
@@ -170,13 +170,13 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
               label={colLeft}
               size="sm"
             />
-            <div className="flex-1 text-sm space-y-1">
-              <p className="font-medium">
-                {colLeft} wins {verdictSummary.leftWins} of {verdictSummary.total} categories
+            <div className="flex-1 space-y-1">
+              <p className="text-sm font-semibold leading-snug">
+                {colLeft} wins <span className="tabular-nums">{verdictSummary.leftWins}</span> of <span className="tabular-nums">{verdictSummary.total}</span> categories
               </p>
               {verdictSummary.ties > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  {verdictSummary.ties} {verdictSummary.ties === 1 ? 'tie' : 'ties'}
+                <p className="text-xs font-medium text-muted-foreground">
+                  <span className="tabular-nums">{verdictSummary.ties}</span> {verdictSummary.ties === 1 ? 'tie' : 'ties'}
                 </p>
               )}
             </div>
@@ -194,10 +194,10 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
                   onClick={() => setProsExpanded((p) => !p)}
                   className="w-full flex items-center justify-between"
                 >
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-success flex items-center gap-1.5">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-success flex items-center gap-1.5">
                     <Check className="h-3.5 w-3.5" aria-hidden="true" />
                     {t.goForIt}
-                    <Badge variant="success" className="text-[10px]">{pros.length}</Badge>
+                    <Badge variant="success" className="text-xs font-semibold tabular-nums">{pros.length}</Badge>
                   </h4>
                   {prosExpanded
                     ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
@@ -207,7 +207,7 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
                 {prosExpanded && (
                   <ul className="space-y-1.5">
                     {pros.map((pro, i) => (
-                      <li key={i} className="flex items-baseline gap-2 text-sm text-muted-foreground">
+                      <li key={i} className="flex items-baseline gap-2 text-sm leading-relaxed text-muted-foreground">
                         <span className="w-1 h-1 rounded-full bg-success/70 shrink-0 translate-y-1.5" />
                         {pro}
                       </li>
@@ -224,10 +224,10 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
                   onClick={() => setConsExpanded((p) => !p)}
                   className="w-full flex items-center justify-between"
                 >
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-destructive flex items-center gap-1.5">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-destructive flex items-center gap-1.5">
                     <X className="h-3.5 w-3.5" aria-hidden="true" />
                     Skip it if...
-                    <Badge variant="destructive" className="text-[10px]">{cons.length}</Badge>
+                    <Badge variant="destructive" className="text-xs font-semibold tabular-nums">{cons.length}</Badge>
                   </h4>
                   {consExpanded
                     ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
@@ -237,7 +237,7 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
                 {consExpanded && (
                   <ul className="space-y-1.5">
                     {cons.map((con, i) => (
-                      <li key={i} className="flex items-baseline gap-2 text-sm text-muted-foreground">
+                      <li key={i} className="flex items-baseline gap-2 text-sm leading-relaxed text-muted-foreground">
                         <span className="w-1 h-1 rounded-full bg-destructive/70 shrink-0 translate-y-1.5" />
                         {con}
                       </li>

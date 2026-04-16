@@ -97,7 +97,7 @@ export const VerdictInteractive = memo(function VerdictInteractive({
       {/* Hero */}
       <HeroCard emoji="⚖️" title={product} subtitle="Verdict">
         <div className="flex items-center gap-3 mt-2">
-          <Badge variant={BADGE_COLORS[badge] ?? 'muted'} className="capitalize">
+          <Badge variant={BADGE_COLORS[badge] ?? 'muted'} className="text-xs font-semibold uppercase tracking-wider">
             {badge.replace(/_/g, ' ')}
           </Badge>
           {price && <StatPill value={price} label={t.price} />}
@@ -121,7 +121,7 @@ export const VerdictInteractive = memo(function VerdictInteractive({
               {subScores.map((sub, i) => (
                 <div key={i} className="flex flex-col items-center gap-1">
                   <ScoreRing score={sub.score} total={maxScore} size="sm" />
-                  <span className="text-[10px] text-muted-foreground text-center max-w-[64px] truncate">
+                  <span className="text-xs font-medium text-muted-foreground text-center max-w-[64px] truncate">
                     {sub.category}
                   </span>
                 </div>
@@ -134,7 +134,7 @@ export const VerdictInteractive = memo(function VerdictInteractive({
       {/* Bottom line */}
       <FadeIn index={2}>
         <GlassCard variant="outlined">
-          <p className="text-sm font-medium">{bottomLine}</p>
+          <p className="text-sm font-semibold leading-relaxed">{bottomLine}</p>
         </GlassCard>
       </FadeIn>
 
@@ -142,16 +142,16 @@ export const VerdictInteractive = memo(function VerdictInteractive({
       <FadeIn index={3}>
         <GlassCard variant="subtle" className="flex items-center justify-center gap-3">
           {userVote ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm font-medium text-muted-foreground">
               Thanks for your feedback!
             </p>
           ) : (
             <>
-              <span className="text-xs text-muted-foreground me-1">Do you agree?</span>
+              <span className="text-xs font-medium text-muted-foreground me-1">Do you agree?</span>
               <Button
                 variant="outline"
                 size="sm"
-                className="text-xs gap-1.5"
+                className="text-xs font-medium gap-1.5"
                 onClick={() => handleVote('agree')}
               >
                 <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />
@@ -160,7 +160,7 @@ export const VerdictInteractive = memo(function VerdictInteractive({
               <Button
                 variant="outline"
                 size="sm"
-                className="text-xs gap-1.5"
+                className="text-xs font-medium gap-1.5"
                 onClick={() => handleVote('disagree')}
               >
                 <ThumbsDown className="h-3.5 w-3.5" aria-hidden="true" />
@@ -181,10 +181,10 @@ export const VerdictInteractive = memo(function VerdictInteractive({
                   onClick={() => setBestForExpanded((p) => !p)}
                   className="w-full flex items-center justify-between"
                 >
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-success flex items-center gap-1.5">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-success flex items-center gap-1.5">
                     <Check className="h-3.5 w-3.5" aria-hidden="true" />
                     Best For
-                    <Badge variant="success" className="text-[10px]">{bestFor.length}</Badge>
+                    <Badge variant="success" className="text-xs font-semibold tabular-nums">{bestFor.length}</Badge>
                   </h4>
                   {bestForExpanded
                     ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
@@ -194,7 +194,7 @@ export const VerdictInteractive = memo(function VerdictInteractive({
                 {bestForExpanded && (
                   <ul className="space-y-1.5">
                     {bestFor.map((item, i) => (
-                      <li key={i} className="flex items-baseline gap-2 text-sm text-muted-foreground">
+                      <li key={i} className="flex items-baseline gap-2 text-sm leading-relaxed text-muted-foreground">
                         <span className="w-1 h-1 rounded-full bg-success/70 shrink-0 translate-y-1.5" />
                         {item}
                       </li>
@@ -211,10 +211,10 @@ export const VerdictInteractive = memo(function VerdictInteractive({
                   onClick={() => setNotForExpanded((p) => !p)}
                   className="w-full flex items-center justify-between"
                 >
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-destructive flex items-center gap-1.5">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-destructive flex items-center gap-1.5">
                     <X className="h-3.5 w-3.5" aria-hidden="true" />
                     Not For
-                    <Badge variant="destructive" className="text-[10px]">{notFor.length}</Badge>
+                    <Badge variant="destructive" className="text-xs font-semibold tabular-nums">{notFor.length}</Badge>
                   </h4>
                   {notForExpanded
                     ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
@@ -224,7 +224,7 @@ export const VerdictInteractive = memo(function VerdictInteractive({
                 {notForExpanded && (
                   <ul className="space-y-1.5">
                     {notFor.map((item, i) => (
-                      <li key={i} className="flex items-baseline gap-2 text-sm text-muted-foreground">
+                      <li key={i} className="flex items-baseline gap-2 text-sm leading-relaxed text-muted-foreground">
                         <span className="w-1 h-1 rounded-full bg-destructive/70 shrink-0 translate-y-1.5" />
                         {item}
                       </li>

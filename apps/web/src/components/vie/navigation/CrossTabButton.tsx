@@ -35,9 +35,9 @@ export const CrossTabButton = memo(function CrossTabButton({
       )}
     >
       <div className="flex flex-col items-start gap-0.5">
-        <span>Next: {label} →</span>
+        <span className="font-semibold tracking-tight">Next: {label} →</span>
         {description && (
-          <span className="text-xs font-normal text-muted-foreground">{description}</span>
+          <span className="text-xs font-normal leading-relaxed text-muted-foreground">{description}</span>
         )}
       </div>
       <ChevronRight className="h-4 w-4 shrink-0 rtl:rotate-180" aria-hidden="true" />

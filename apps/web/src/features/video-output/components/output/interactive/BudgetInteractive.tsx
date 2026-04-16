@@ -158,7 +158,7 @@ export const BudgetInteractive = memo(function BudgetInteractive({
 
       {/* Breakdown */}
       <GlassCard className="space-y-3">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Breakdown</h4>
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Breakdown</h4>
         {currentBreakdown.map((item, index) => {
           const percent = currentTotal > 0 ? (item.amount / currentTotal) * 100 : 0;
           const isHighlighted = highlightedCategory === index;
@@ -172,7 +172,7 @@ export const BudgetInteractive = memo(function BudgetInteractive({
                 onClick={() => setHighlightedCategory(isHighlighted ? null : index)}
               >
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium flex items-center gap-1.5">
+                  <span className="font-semibold leading-snug flex items-center gap-1.5">
                     <span
                       className="w-2.5 h-2.5 rounded-full shrink-0"
                       style={{ backgroundColor: DONUT_COLORS[index % DONUT_COLORS.length] }}
@@ -186,7 +186,7 @@ export const BudgetInteractive = memo(function BudgetInteractive({
                       <>
                         <Button
                           variant="ghost"
-                          size="icon-sm"
+                          size="icon"
                           onClick={(e) => { e.stopPropagation(); adjustAmount(index, -10); }}
                           aria-label={`Decrease ${item.category}`}
                         >
@@ -194,7 +194,7 @@ export const BudgetInteractive = memo(function BudgetInteractive({
                         </Button>
                         <Button
                           variant="ghost"
-                          size="icon-sm"
+                          size="icon"
                           onClick={(e) => { e.stopPropagation(); adjustAmount(index, 10); }}
                           aria-label={`Increase ${item.category}`}
                         >
@@ -202,7 +202,7 @@ export const BudgetInteractive = memo(function BudgetInteractive({
                         </Button>
                       </>
                     )}
-                    <span className="text-muted-foreground tabular-nums">{formatCurrency(item.amount, currency)}</span>
+                    <span className="text-sm font-semibold tabular-nums tracking-tight text-muted-foreground">{formatCurrency(item.amount, currency)}</span>
                   </div>
                 </div>
                 <div className="h-2 rounded-full bg-muted/30 overflow-hidden">
@@ -215,8 +215,8 @@ export const BudgetInteractive = memo(function BudgetInteractive({
                   />
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground/60 tabular-nums">{Math.round(percent)}%</span>
-                  {item.notes && <span className="text-xs text-muted-foreground/70">{item.notes}</span>}
+                  <span className="text-xs font-medium text-muted-foreground/60 tabular-nums">{Math.round(percent)}%</span>
+                  {item.notes && <span className="text-xs leading-relaxed text-muted-foreground/70">{item.notes}</span>}
                 </div>
               </div>
             </FadeIn>
@@ -228,10 +228,10 @@ export const BudgetInteractive = memo(function BudgetInteractive({
       {savingTips && savingTips.length > 0 && (
         <FadeIn index={currentBreakdown.length}>
           <GlassCard variant="outlined" className="space-y-2">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-success">Saving Tips</h4>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-success">Saving Tips</h4>
             <ul className="space-y-1.5">
               {savingTips.map((tip, i) => (
-                <li key={i} className="flex items-baseline gap-2 text-sm text-muted-foreground">
+                <li key={i} className="flex items-baseline gap-2 text-sm leading-relaxed text-muted-foreground">
                   <span className="w-1 h-1 rounded-full bg-success/70 shrink-0 translate-y-1.5" />
                   {tip}
                 </li>

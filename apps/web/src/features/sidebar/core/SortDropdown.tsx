@@ -61,7 +61,7 @@ export function SortDropdown({ value, onChange }: SortDropdownProps) {
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-44">
-        <div className="px-2 py-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
           Sort by
         </div>
         {SORT_OPTIONS.map((option) => {

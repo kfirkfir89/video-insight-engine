@@ -47,7 +47,6 @@ export function DevToolPanel() {
           providers,
         });
       } else {
-        // Playlist mode - preview then import
         await previewPlaylist.mutateAsync({ url: url.trim() });
         await importPlaylist.mutateAsync({
           url: url.trim(),
@@ -66,10 +65,10 @@ export function DevToolPanel() {
   const errorMessage = addVideo.error?.message || previewPlaylist.error?.message || importPlaylist.error?.message;
 
   return (
-    <div className="border-t border-yellow-500/30 bg-yellow-500/5">
+    <div className="border-t border-warning/30 bg-warning/5">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center gap-2 w-full px-3 py-2 text-xs text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/10 transition-colors"
+        className="flex items-center gap-2 w-full px-3 py-2 text-xs text-warning hover:bg-warning/10 transition-colors"
       >
         {isExpanded ? (
           <ChevronDown className="h-3 w-3" />
@@ -78,7 +77,7 @@ export function DevToolPanel() {
         )}
         <Wrench className="h-3 w-3" />
         <span className="font-medium">Dev Tools</span>
-        <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-600 dark:text-yellow-400">
+        <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-warning/20 text-warning">
           DEV
         </span>
       </button>
@@ -86,15 +85,15 @@ export function DevToolPanel() {
       {isExpanded && (
         <form onSubmit={handleSubmit} className="px-3 pb-3 space-y-3">
           {/* Mode Toggle */}
-          <div className="flex gap-1 p-0.5 bg-yellow-500/10 rounded">
+          <div className="flex gap-1 p-0.5 bg-warning/10 rounded">
             <button
               type="button"
               onClick={() => setMode("video")}
               className={cn(
                 "flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[10px] rounded transition-colors",
                 mode === "video"
-                  ? "bg-yellow-500/30 text-yellow-700 dark:text-yellow-300"
-                  : "text-muted-foreground hover:text-yellow-600"
+                  ? "bg-warning/30 text-warning-foreground"
+                  : "text-muted-foreground hover:text-warning"
               )}
             >
               <Video className="h-3 w-3" />
@@ -106,8 +105,8 @@ export function DevToolPanel() {
               className={cn(
                 "flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[10px] rounded transition-colors",
                 mode === "playlist"
-                  ? "bg-yellow-500/30 text-yellow-700 dark:text-yellow-300"
-                  : "text-muted-foreground hover:text-yellow-600"
+                  ? "bg-warning/30 text-warning-foreground"
+                  : "text-muted-foreground hover:text-warning"
               )}
             >
               <ListVideo className="h-3 w-3" />
@@ -117,10 +116,11 @@ export function DevToolPanel() {
 
           {/* Video URL Input */}
           <div>
-            <label className="block text-[10px] text-muted-foreground mb-1">
+            <label htmlFor="dev-url-input" className="block text-[10px] text-muted-foreground mb-1">
               {mode === "video" ? "Video URL" : "Playlist URL"}
             </label>
             <input
+              id="dev-url-input"
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
@@ -129,7 +129,7 @@ export function DevToolPanel() {
                   ? "https://youtube.com/watch?v=..."
                   : "https://youtube.com/playlist?list=..."
               }
-              className="w-full px-2 py-1.5 text-xs rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-yellow-500/50"
+              className="w-full px-2 py-1.5 text-xs rounded border border-border bg-background focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring"
             />
           </div>
 
@@ -157,7 +157,7 @@ export function DevToolPanel() {
             />
           </div>
 
-          {/* Bypass Cache Toggle (only for video mode) */}
+          {/* Bypass Cache Toggle */}
           {mode === "video" && (
             <div className="flex items-center gap-2">
               <input
@@ -165,7 +165,7 @@ export function DevToolPanel() {
                 id="dev-bypass-cache"
                 checked={bypassCache}
                 onChange={(e) => setBypassCache(e.target.checked)}
-                className="h-3 w-3 rounded border-border accent-yellow-500"
+                className="h-3 w-3 rounded border-border accent-warning"
               />
               <label
                 htmlFor="dev-bypass-cache"
@@ -177,7 +177,7 @@ export function DevToolPanel() {
           )}
 
           {/* Dev Pages Links */}
-          <div className="border-t border-yellow-500/20 pt-3">
+          <div className="border-t border-warning/20 pt-3">
             <label className="block text-[10px] text-muted-foreground mb-2">
               Dev Pages
             </label>
@@ -186,8 +186,8 @@ export function DevToolPanel() {
                 to="/dev/design-system"
                 className={cn(
                   "flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-[10px] rounded",
-                  "bg-yellow-500/10 text-yellow-700 dark:text-yellow-300",
-                  "hover:bg-yellow-500/20 transition-colors"
+                  "bg-warning/10 text-warning",
+                  "hover:bg-warning/20 transition-colors"
                 )}
               >
                 <Palette className="h-3 w-3" />
@@ -202,8 +202,8 @@ export function DevToolPanel() {
             disabled={!url.trim() || isLoading}
             className={cn(
               "w-full flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium rounded",
-              "bg-yellow-500/20 text-yellow-700 dark:text-yellow-300",
-              "hover:bg-yellow-500/30 transition-colors",
+              "bg-warning/20 text-warning",
+              "hover:bg-warning/30 transition-colors",
               "disabled:opacity-50 disabled:cursor-not-allowed"
             )}
           >
@@ -222,12 +222,12 @@ export function DevToolPanel() {
 
           {/* Status */}
           {isError && (
-            <p className="text-[10px] text-red-500">
+            <p className="text-[10px] text-destructive">
               Error: {errorMessage || "Failed to process"}
             </p>
           )}
           {isSuccess && (
-            <p className="text-[10px] text-green-500">
+            <p className="text-[10px] text-success">
               {mode === "video" ? "Summarization started!" : "Playlist imported!"}
             </p>
           )}

@@ -27,10 +27,10 @@ export const CostDisplay = memo(function CostDisplay({
 }: CostDisplayProps) {
   return (
     <div className={cn('text-center', className)}>
-      <span className={cn('font-bold tabular-nums text-foreground', SIZE_CLASSES[size])}>
+      <span className={cn('font-semibold tabular-nums tracking-tight text-primary', SIZE_CLASSES[size])}>
         {currency} {amount.toLocaleString()}
       </span>
-      {label && <p className="text-xs text-muted-foreground mt-1">{label}</p>}
+      {label && <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mt-1.5">{label}</p>}
     </div>
   );
 });

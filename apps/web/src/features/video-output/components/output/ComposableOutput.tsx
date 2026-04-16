@@ -48,6 +48,7 @@ interface NavProps {
   onSeek?: (seconds: number) => void;
   tabId?: string;
   currentTime?: number;
+  contentTag?: string;
 }
 
 interface ExerciseMeta {

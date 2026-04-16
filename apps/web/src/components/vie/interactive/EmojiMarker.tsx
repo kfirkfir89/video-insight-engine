@@ -23,7 +23,7 @@ export const EmojiMarker = memo(function EmojiMarker({
 }: EmojiMarkerProps) {
   return (
     <span
-      className={cn('inline-block', SIZE_CLASSES[size], className)}
+      className={cn('inline-block leading-none', SIZE_CLASSES[size], className)}
       role="img"
       aria-hidden="true"
     >

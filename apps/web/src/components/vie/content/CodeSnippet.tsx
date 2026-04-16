@@ -38,14 +38,14 @@ export const CodeSnippet = memo(function CodeSnippet({
 
   return (
     <div className={className}>
-      <div className="relative overflow-hidden rounded-lg bg-[oklch(12%_0_0)] text-[oklch(90%_0_0)]">
+      <div className="relative overflow-hidden rounded-lg bg-code-bg text-code-text">
         <button
           onClick={handleCopy}
           className={cn(
             'absolute top-2 end-2 z-10 flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors',
             copied
               ? 'text-success'
-              : 'text-[oklch(50%_0_0)] hover:text-[oklch(75%_0_0)]',
+              : 'text-code-text-dim hover:text-code-text-bright',
           )}
           aria-label={copied ? 'Copied' : 'Copy code'}
         >
@@ -55,12 +55,12 @@ export const CodeSnippet = memo(function CodeSnippet({
             <Copy className="h-3 w-3" aria-hidden="true" />
           )}
         </button>
-        <pre dir="ltr" className="overflow-x-auto p-4 pe-16 text-sm leading-relaxed">
-          <code className="font-mono whitespace-pre-wrap">{code}</code>
+        <pre dir="ltr" className="overflow-x-auto p-3 pe-10 sm:p-4 sm:pe-16 text-sm leading-7">
+          <code className="font-mono whitespace-pre-wrap" style={{ fontVariantLigatures: 'none' }}>{code}</code>
         </pre>
       </div>
       {explanation && (
-        <p className="mt-2 text-sm text-muted-foreground">{explanation}</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{explanation}</p>
       )}
     </div>
   );

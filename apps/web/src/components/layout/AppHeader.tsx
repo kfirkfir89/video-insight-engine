@@ -51,9 +51,11 @@ export function AppHeader() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 shrink-0"
+            className="h-11 w-11 shrink-0"
             onClick={toggleSidebar}
             aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+            aria-expanded={sidebarOpen}
+            aria-controls="app-sidebar"
           >
             {sidebarOpen ? (
               <PanelLeftClose className="h-4 w-4" />
@@ -62,7 +64,12 @@ export function AppHeader() {
             )}
           </Button>
           {!sidebarOpen && (
-            <span className="text-sm font-bold text-gradient-primary hidden sm:inline">VIE</span>
+            <span
+              className="hidden sm:inline text-base font-extrabold tracking-tight text-gradient-primary"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              VIE
+            </span>
           )}
         </div>
 
@@ -80,7 +87,7 @@ export function AppHeader() {
                   variant="ghost"
                   size="icon-bare"
                   aria-label={user.name ?? "Profile"}
-                  className="h-8 w-8 rounded-full bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20"
+                  className="h-11 w-11 rounded-full bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20"
                 >
                   {user.name ? getInitials(user.name) : <User className="h-4 w-4" />}
                 </Button>
@@ -108,7 +115,7 @@ export function AppHeader() {
           <AlertDialogHeader>
             <AlertDialogTitle>Log out?</AlertDialogTitle>
             <AlertDialogDescription>
-              You will be signed out of your account.
+              You&apos;ll be signed out. Your library stays right where you left it — sign back in any time.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

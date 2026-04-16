@@ -5,6 +5,23 @@ import { queryClient } from "@/lib/query-client";
 import { App } from "./App";
 import "./index.css";
 
+// Dev-console greeting — prints once per session in production only, so repeated
+// DevTools opens during triage don't bury real errors.
+if (!import.meta.env.DEV && typeof window !== "undefined") {
+  try {
+    const KEY = "vie:console-greeted";
+    if (!window.sessionStorage.getItem(KEY)) {
+      const brand = "color: white; background: linear-gradient(135deg, oklch(58% 0.24 292), oklch(72% 0.18 25)); padding: 6px 14px; border-radius: 6px; font-weight: 700; font-size: 14px;";
+      const subtle = "color: oklch(58% 0.04 280); font-size: 12px; line-height: 1.5;";
+      console.log("%c VIE ", brand);
+      console.log("%cPoking around? You can paste a YouTube URL to turn it into a structured knowledge app.\nCurious about the build? Check the sources — this app is pipeline-first.", subtle);
+      window.sessionStorage.setItem(KEY, "1");
+    }
+  } catch {
+    // sessionStorage unavailable (private mode, sandbox) — skip the banner.
+  }
+}
+
 // Hide loading overlay after React mounts
 const hideLoadingOverlay = () => {
   const overlay = document.getElementById("loading-overlay");

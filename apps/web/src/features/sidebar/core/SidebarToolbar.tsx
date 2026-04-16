@@ -49,6 +49,16 @@ export function SidebarToolbar() {
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
 
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
+  const pendingSidebarSearch = useUIStore((s) => s.pendingSidebarSearch);
+  const consumePendingSidebarSearch = useUIStore((s) => s.consumePendingSidebarSearch);
+
+  // Open the search panel when external code (icon strip, Cmd+K, etc.) requests it
+  useEffect(() => {
+    if (pendingSidebarSearch) {
+      setActivePanel("search");
+      consumePendingSidebarSearch();
+    }
+  }, [pendingSidebarSearch, consumePendingSidebarSearch]);
   const currentSize = useUIStore((s) => s.sidebarTextSize);
   const setSidebarTextSize = useUIStore((s) => s.setSidebarTextSize);
   const collapseAllFolders = useUIStore((s) => s.collapseAllFolders);

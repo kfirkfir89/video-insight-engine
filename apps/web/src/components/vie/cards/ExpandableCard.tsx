@@ -26,13 +26,13 @@ export const ExpandableCard = memo(function ExpandableCard({
   return (
     <div
       className={cn(
-        'rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] backdrop-blur-[var(--glass-blur,20px)] overflow-hidden',
+        'rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-bg)] backdrop-blur-[var(--glass-blur,20px)] overflow-hidden',
         className,
       )}
     >
       <button
         onClick={toggle}
-        className="w-full flex items-center justify-between gap-2 p-4 text-start hover:bg-muted/10 transition-colors"
+        className="w-full flex items-center justify-between gap-2 p-5 text-start hover:bg-muted/10 transition-colors"
         aria-expanded={expanded}
       >
         <div className="flex-1 min-w-0">{header}</div>
@@ -45,7 +45,7 @@ export const ExpandableCard = memo(function ExpandableCard({
         />
       </button>
       {expanded && (
-        <div className="px-4 pb-4 animate-[fadeUp_0.2s_ease_both]">
+        <div className="px-5 pb-5 animate-[fadeUp_0.2s_ease_both]">
           {children}
         </div>
       )}

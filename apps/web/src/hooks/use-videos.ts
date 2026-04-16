@@ -3,18 +3,20 @@ import { videosApi, type ProviderConfig } from "@/api/videos";
 import { queryKeys } from "@/lib/query-keys";
 
 // Fetch all videos (no folder filter)
-export function useAllVideos() {
+export function useAllVideos(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.videos.list(),
     queryFn: () => videosApi.list(),
+    enabled: options?.enabled ?? true,
   });
 }
 
 // Fetch videos list (optionally filtered by folder)
-export function useVideos(folderId?: string) {
+export function useVideos(folderId?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.videos.list(folderId),
     queryFn: () => videosApi.list({ folderId }),
+    enabled: options?.enabled ?? true,
   });
 }
 

@@ -77,7 +77,7 @@ export const InfoGridInteractive = memo(function InfoGridInteractive({
   const renderGridCell = (item: { key: string; value: string; originalIndex: number }, displayIndex: number) => (
     <FadeIn key={item.originalIndex} index={displayIndex}>
       <GlassCard variant="outlined" className="h-full p-3 space-y-1">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 block">
+        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/70 block">
           {item.key}
         </span>
         <p className="text-sm font-medium leading-snug break-words">
@@ -106,14 +106,15 @@ export const InfoGridInteractive = memo(function InfoGridInteractive({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Filter..."
-                className="w-full ps-8 pe-3 py-1.5 text-sm rounded-lg border border-border/50 bg-muted/10 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                aria-label="Filter results"
+                className="w-full ps-8 pe-3 py-1.5 text-sm rounded-lg border border-border/50 bg-muted/10 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring"
               />
             </div>
           )}
-          <Button variant="ghost" size="icon-sm" onClick={toggleSort} aria-label="Sort alphabetically">
+          <Button variant="ghost" size="icon" onClick={toggleSort} aria-label="Sort alphabetically">
             <ArrowUpDown className={cn('h-3.5 w-3.5', sortDir && 'text-primary')} />
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={handleBulkCopy} aria-label="Copy all">
+          <Button variant="ghost" size="icon" onClick={handleBulkCopy} aria-label="Copy all">
             {copiedAll
               ? <Check className="h-3.5 w-3.5 text-success" />
               : <Copy className="h-3.5 w-3.5 text-muted-foreground" />
@@ -163,9 +164,12 @@ export const InfoGridInteractive = memo(function InfoGridInteractive({
                 </thead>
                 <tbody>
                   {sorted.map((item) => (
-                    <tr key={item.originalIndex} className="border-b border-border/20 last:border-0">
-                      <td className="px-4 py-2 font-medium">{item.key}</td>
-                      <td className="px-4 py-2 text-muted-foreground">{item.value}</td>
+                    <tr
+                      key={item.originalIndex}
+                      className="border-b border-border/20 last:border-0 even:bg-muted/10 hover:bg-primary/5 transition-colors"
+                    >
+                      <td className="px-4 py-1.5 font-medium">{item.key}</td>
+                      <td className="px-4 py-1.5 text-muted-foreground">{item.value}</td>
                     </tr>
                   ))}
                 </tbody>

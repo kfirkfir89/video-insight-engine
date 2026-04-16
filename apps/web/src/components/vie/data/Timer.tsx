@@ -54,15 +54,27 @@ export const Timer = memo(function Timer({
   }, [duration]);
 
   const percent = duration > 0 ? ((duration - remaining) / duration) * 100 : 0;
+  const urgency: 'critical' | 'warning' | 'normal' =
+    remaining > 0 && remaining <= 3 ? 'critical' : remaining > 0 && remaining <= 10 ? 'warning' : 'normal';
+  const digitColor =
+    urgency === 'critical' ? 'text-destructive' : urgency === 'warning' ? 'text-warning' : 'text-foreground';
+  const barColor =
+    urgency === 'critical' ? 'bg-destructive' : urgency === 'warning' ? 'bg-warning' : 'bg-primary';
 
   return (
     <div className={cn('flex flex-col items-center gap-3', className)}>
-      <span className="text-4xl font-mono font-bold tabular-nums" aria-live="polite">
+      <span
+        className={cn(
+          'text-4xl font-mono font-bold tabular-nums tracking-tight transition-colors',
+          digitColor,
+        )}
+        aria-live="polite"
+      >
         {formatTime(remaining)}
       </span>
       <div className="w-full h-1.5 rounded-full bg-muted/30 overflow-hidden">
         <div
-          className="h-full rounded-full bg-primary transition-all duration-1000 linear"
+          className={cn('h-full rounded-full transition-all duration-1000 linear', barColor)}
           style={{ width: `${percent}%` }}
         />
       </div>

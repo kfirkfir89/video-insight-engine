@@ -47,17 +47,17 @@ export const KeyValue = memo(function KeyValue({
   return (
     <div className={cn('space-y-1.5', className)}>
       {(icon || label) && (
-        <div className="flex items-center gap-1.5 mb-1">
+        <div className="flex items-center gap-1.5 mb-2">
           {icon && <span className="text-muted-foreground/70 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:shrink-0" aria-hidden="true">{icon}</span>}
-          {label && <span className="text-xs text-muted-foreground/70">{label}</span>}
+          {label && <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">{label}</span>}
         </div>
       )}
       <dl className="space-y-0">
         {items.map((item, index) => (
           <div key={index}>
             <div className="flex items-baseline justify-between gap-3 py-1.5 text-sm even:bg-muted/[0.04]">
-              <dt className="text-xs font-bold uppercase text-muted-foreground/70 tracking-wide">{item.key}</dt>
-              <dd className="text-sm font-medium text-muted-foreground">{item.value}</dd>
+              <dt className="text-xs font-semibold uppercase text-muted-foreground/70 tracking-wider">{item.key}</dt>
+              <dd className="text-sm font-medium tabular-nums text-foreground">{item.value}</dd>
             </div>
             {index < items.length - 1 && (
               <div className="fade-divider" aria-hidden="true" />

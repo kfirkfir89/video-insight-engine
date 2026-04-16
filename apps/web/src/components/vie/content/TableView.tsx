@@ -45,7 +45,7 @@ export const TableView = memo(function TableView({
             {columns.map((col) => (
               <th
                 key={col.key}
-                className={cn('px-4 py-2.5 font-medium text-foreground', ALIGN_CLASS[col.align ?? 'left'])}
+                className={cn('px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground', ALIGN_CLASS[col.align ?? 'left'])}
               >
                 {col.label}
               </th>
@@ -67,7 +67,7 @@ export const TableView = memo(function TableView({
                   <td
                     key={col.key}
                     className={cn(
-                      'px-4 py-2',
+                      'px-4 py-2 text-sm leading-relaxed',
                       ALIGN_CLASS[col.align ?? 'left'],
                       typeof row[col.key] === 'number' && 'tabular-nums font-medium',
                     )}

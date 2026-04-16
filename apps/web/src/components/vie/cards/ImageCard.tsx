@@ -28,7 +28,7 @@ export const ImageCard = memo(function ImageCard({
   return (
     <div
       className={cn(
-        'rounded-xl overflow-hidden border border-[var(--glass-border)] bg-[var(--glass-bg)]',
+        'rounded-2xl overflow-hidden border border-[var(--glass-border)] bg-[var(--glass-bg)]',
         className,
       )}
     >
@@ -40,7 +40,7 @@ export const ImageCard = memo(function ImageCard({
           loading="lazy"
         />
       </div>
-      {children && <div className="p-4">{children}</div>}
+      {children && <div className="p-5">{children}</div>}
     </div>
   );
 });

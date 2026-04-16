@@ -29,9 +29,9 @@ export const Celebration = memo(function Celebration({
       role="alert"
     >
       <span className="text-4xl block mb-2" aria-hidden="true">{emoji}</span>
-      <h3 className="font-bold text-lg">{title}</h3>
+      <h3 className="font-semibold text-lg tracking-tight leading-snug">{title}</h3>
       {subtitle && (
-        <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+        <p className="text-sm leading-relaxed text-muted-foreground mt-1.5">{subtitle}</p>
       )}
       {action && <div className="mt-4">{action}</div>}
     </div>
@@ -51,7 +51,7 @@ export const CelebrationNextButton = memo(function CelebrationNextButton({
       variant="ghost"
       size="sm"
       onClick={onClick}
-      className="gap-1.5 text-xs text-[var(--vie-accent)]"
+      className="gap-1.5 text-xs font-medium text-[var(--vie-accent)]"
     >
       {label}
       <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" aria-hidden="true" />

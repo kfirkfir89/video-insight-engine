@@ -89,16 +89,16 @@ export const SpotExplorer = memo(function SpotExplorer({
               {/* Metadata badges */}
               <div className="flex flex-wrap items-center gap-2 mt-1.5">
                 {spot.cost && (
-                  <Badge variant="info" className="text-[10px]">{spot.cost}</Badge>
+                  <Badge variant="info" className="text-xs">{spot.cost}</Badge>
                 )}
                 {spot.duration && (
-                  <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                  <span className="text-xs text-muted-foreground flex items-center gap-0.5">
                     <Clock className="h-2.5 w-2.5" aria-hidden="true" />
                     {spot.duration}
                   </span>
                 )}
                 {spot.rating != null && spot.rating > 0 && (
-                  <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                  <span className="text-xs text-muted-foreground flex items-center gap-0.5">
                     <Star className="h-2.5 w-2.5 text-warning fill-warning" aria-hidden="true" />
                     {spot.rating}
                   </span>

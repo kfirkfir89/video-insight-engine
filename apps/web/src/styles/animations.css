@@ -124,6 +124,76 @@
       opacity: 0;
     }
   }
+
+  @keyframes emoji-breathe {
+    0%,
+    100% {
+      opacity: 0.3;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.5;
+      transform: scale(1.06);
+    }
+  }
+
+  @keyframes stagger-rise {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   VIGNETTE: infinite landing-page demo loop
+   Loops every 4s to show paste URL → tabs → content
+   ═══════════════════════════════════════════════════ */
+
+@keyframes vignette-typing-cycle {
+  0% { content: ""; }
+  5% { content: "h"; }
+  10% { content: "ht"; }
+  15% { content: "htt"; }
+  20% { content: "https"; }
+  25% { content: "https://"; }
+  30% { content: "https://yo"; }
+  35% { content: "https://yout"; }
+  40% { content: "https://youtu.be/dQw..."; }
+  95% { content: "https://youtu.be/dQw..."; }
+  100% { content: ""; }
+}
+
+.vignette-typing::after {
+  content: "";
+  animation: vignette-typing-cycle 4s infinite;
+}
+
+@keyframes vignette-tab-cascade {
+  0%, 40% { opacity: 0; transform: translateY(8px) scale(0.9); }
+  50%, 90% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(4px) scale(0.95); }
+}
+
+.vignette-tab {
+  animation: vignette-tab-cascade 4s infinite var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1));
+  opacity: 0;
+}
+
+@keyframes vignette-line-fill {
+  0%, 65% { opacity: 0; transform: scaleX(0); transform-origin: left; }
+  75%, 95% { opacity: 1; transform: scaleX(1); }
+  100% { opacity: 0; transform: scaleX(0.95); }
+}
+
+.vignette-line {
+  animation: vignette-line-fill 4s infinite ease-out;
+  opacity: 0;
+  transform-origin: left;
 }
 
 /* Reduced motion: kill animation duration so elements appear instantly */
@@ -134,5 +204,22 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .vignette-typing::after,
+  .vignette-tab,
+  .vignette-line {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .vignette-typing::after {
+    content: "https://youtu.be/dQw...";
+  }
+
+  /* Explicit override for gentle infinite glow */
+  .animate-\[emoji-breathe_3s_ease-in-out_infinite\],
+  [style*="emoji-breathe"] {
+    animation: none !important;
   }
 }
