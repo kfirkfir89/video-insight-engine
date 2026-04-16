@@ -10,6 +10,8 @@ import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { VideoHero } from '@/components/vie';
 import { stripLeadingEmoji } from '@/lib/string-utils';
 import { DirectionProvider } from '@/contexts/DirectionContext';
+import type { StreamPhase } from '@/features/video-output/hooks/use-summary-stream';
+import { STREAM_PHASE_LABELS } from '@/features/video-output/hooks/use-summary-stream';
 
 interface OutputRouterProps {
   /** Video title for display. */
@@ -38,6 +40,8 @@ interface OutputRouterProps {
   language?: string;
   /** Whether the video content is in a right-to-left language. */
   isRTL?: boolean;
+  /** Current streaming phase (for skeleton label). */
+  streamPhase?: StreamPhase;
 }
 
 /**
@@ -58,6 +62,7 @@ export function OutputRouter({
   duration,
   language,
   isRTL: isRTLProp,
+  streamPhase,
 }: OutputRouterProps) {
   const tabLayoutRef = useRef<TabLayoutHandle>(null);
 
@@ -87,7 +92,7 @@ export function OutputRouter({
 
   return (
     <DirectionProvider language={language} isRTL={isRTLProp}>
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-4 md:p-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 md:gap-8 px-4 pt-6 pb-8 md:px-6 md:pt-10 md:pb-12">
       {/* Interactive Hero */}
       <VideoHero
         title={title}
@@ -110,6 +115,9 @@ export function OutputRouter({
               ref={tabLayoutRef}
               tabs={tabDefs}
               primaryTag={primaryTag}
+              isStreaming={isStreaming}
+              totalCount={tabCount}
+              phaseLabel={streamPhase ? STREAM_PHASE_LABELS[streamPhase] : undefined}
             >
               {(activeTabId, onNavigateTab) => (
                 <ErrorBoundary
@@ -134,13 +142,14 @@ export function OutputRouter({
           </TabStateProvider>
         </TabCoordinationProvider>
       ) : isStreaming ? (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-6">
           {tabLabels.length > 0 ? (
-            <div className="flex gap-1.5 overflow-x-auto px-1 py-2">
-              {tabLabels.map((t) => (
+            <div className="flex gap-2 overflow-x-auto px-1 py-2">
+              {tabLabels.map((t, i) => (
                 <div
                   key={t.id}
-                  className="flex items-center gap-1 whitespace-nowrap rounded-full bg-muted/30 px-2.5 py-1 text-xs text-muted-foreground/60"
+                  className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border/30 bg-muted/20 px-3.5 py-1.5 text-sm text-muted-foreground/70 animate-[fadeUp_0.5s_var(--ease-spring)_both]"
+                  style={{ animationDelay: `${i * 60}ms` }}
                 >
                   <span>{t.emoji}</span>
                   <span>{t.label}</span>
@@ -148,9 +157,43 @@ export function OutputRouter({
               ))}
             </div>
           ) : (
-            <div className="h-8 rounded-xl bg-muted/30 animate-pulse" />
+            <div className="h-10 rounded-xl bg-muted/30 animate-pulse" />
           )}
-          <div className="h-48 rounded-2xl bg-muted/20 animate-pulse" />
+          {/* Phase-aware streaming skeleton — scene-setting, not placeholder */}
+          <div className="relative flex flex-col items-center justify-center gap-5 rounded-3xl border border-[var(--glass-border-strong)] bg-[var(--glass-bg)] backdrop-blur-[var(--glass-blur)] py-20 overflow-hidden"
+               style={{ boxShadow: 'var(--glass-shadow-elevated)' }}>
+            {/* Radial gradient backdrop */}
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--primary)/6%,transparent_60%)] pointer-events-none" />
+            {/* Phase emoji — scales with easing on phase change, with breathing glow */}
+            <div className="relative">
+              <span
+                className="absolute inset-[-20%] rounded-full bg-primary/20 blur-2xl animate-[emoji-breathe_3s_ease-in-out_infinite]"
+                aria-hidden="true"
+              />
+              <div key={streamPhase} className="relative text-5xl animate-[popIn_0.5s_var(--ease-spring)_both]" aria-hidden="true">
+                {streamPhase === 'metadata' && '🎬'}
+                {streamPhase === 'triage' && '🔍'}
+                {streamPhase === 'extraction' && '🧩'}
+                {streamPhase === 'enrichment' && '✨'}
+                {streamPhase === 'synthesis' && '📝'}
+                {(!streamPhase || streamPhase === 'idle' || streamPhase === 'connecting') && '⚡'}
+              </div>
+            </div>
+            {/* Phase label */}
+            <p className="relative text-base md:text-lg font-semibold text-foreground">
+              {streamPhase ? STREAM_PHASE_LABELS[streamPhase] : 'Preparing...'}
+            </p>
+            {/* Animated progress dots — staggered */}
+            <div className="relative flex gap-1.5">
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-pulse"
+                  style={{ animationDelay: `${i * 200}ms`, animationDuration: '1.2s' }}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       ) : (
         <GlassCard>
@@ -158,13 +201,6 @@ export function OutputRouter({
             Content extraction was incomplete for this video.
           </p>
         </GlassCard>
-      )}
-
-      {/* Progressive loading indicator for remaining tabs */}
-      {isStreaming && tabs && tabCount > 0 && tabs.length < tabCount && (
-        <div className="text-center py-3 text-sm text-muted-foreground animate-pulse">
-          Loading tabs... ({tabs.length}/{tabCount})
-        </div>
       )}
 
       {/* Footer */}

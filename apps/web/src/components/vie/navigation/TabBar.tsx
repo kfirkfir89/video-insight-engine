@@ -33,13 +33,14 @@ export const TabBar = memo(function TabBar({
   className,
 }: TabBarProps) {
   return (
-    <div className={cn('flex gap-2 overflow-x-auto pb-1 scrollbar-none', className)} role="tablist">
+    <div className={cn('flex gap-2 overflow-x-auto pb-1 scrollbar-none scroll-fade-x', className)} role="tablist">
       {tabs.map((tab) => {
         const isActive = tab.id === activeId;
         const isCompleted = completedIds?.has(tab.id);
         return (
           <button
             key={tab.id}
+            id={`tab-${tab.id}`}
             role="tab"
             aria-selected={isActive}
             aria-controls={`panel-${tab.id}`}
@@ -47,7 +48,7 @@ export const TabBar = memo(function TabBar({
             className={cn(
               'flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200',
               isActive
-                ? 'text-white shadow-md'
+                ? 'text-primary-foreground shadow-md'
                 : 'bg-muted/50 text-muted-foreground hover:bg-muted',
             )}
             style={isActive && activeGradient ? { background: activeGradient } : undefined}

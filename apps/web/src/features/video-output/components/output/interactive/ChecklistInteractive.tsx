@@ -125,7 +125,7 @@ export const ChecklistInteractive = memo(function ChecklistInteractive({
         <div className="flex items-center justify-center gap-3 py-1">
           <Button
             variant="outline"
-            size="icon-sm"
+            size="icon"
             onClick={() => setServings((s) => Math.max(1, s - 1))}
             disabled={servings <= 1}
             aria-label="Decrease servings"
@@ -137,7 +137,7 @@ export const ChecklistInteractive = memo(function ChecklistInteractive({
           </span>
           <Button
             variant="outline"
-            size="icon-sm"
+            size="icon"
             onClick={() => setServings((s) => s + 1)}
             aria-label="Increase servings"
           >
@@ -191,7 +191,7 @@ export const ChecklistInteractive = memo(function ChecklistInteractive({
                           {displayLabel}
                         </span>
                         {item.essential && !isChecked && (
-                          <Badge variant="warning" className="ms-2 text-[10px]">essential</Badge>
+                          <Badge variant="warning" className="ms-2 text-xs">essential</Badge>
                         )}
                         {item.note && (
                           <p className={cn(

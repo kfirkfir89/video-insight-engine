@@ -26,6 +26,10 @@ export function PlaylistPreview({
           <img
             src={playlist.thumbnailUrl}
             alt={playlist.title}
+            width={128}
+            height={80}
+            loading="lazy"
+            decoding="async"
             className="h-20 w-32 rounded-md object-cover"
           />
         )}
@@ -64,6 +68,10 @@ export function PlaylistPreview({
                 <img
                   src={video.thumbnailUrl}
                   alt={video.title}
+                  width={64}
+                  height={36}
+                  loading="lazy"
+                  decoding="async"
                   className="h-9 w-16 rounded object-cover"
                 />
               )}

@@ -52,7 +52,7 @@ function VideoModal({ youtubeId, onClose }: { youtubeId: string; onClose: () => 
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease_both]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm animate-[fadeIn_0.2s_ease_both]"
       onClick={onClose}
       onKeyDown={handleKeyDown}
       role="dialog"
@@ -67,7 +67,7 @@ function VideoModal({ youtubeId, onClose }: { youtubeId: string; onClose: () => 
         <button
           ref={closeRef}
           onClick={onClose}
-          className="absolute -top-10 end-0 flex items-center gap-1 text-white/80 hover:text-white text-sm transition-colors"
+          className="absolute -top-10 end-0 flex items-center gap-1 text-[var(--overlay-text-muted)] hover:text-[var(--overlay-text)] text-sm transition-colors"
           aria-label="Close video"
         >
           <X className="h-4 w-4" />
@@ -168,21 +168,21 @@ export const VideoHero = memo(function VideoHero({
         {/* Header — always visible, clickable to expand */}
         <button
           onClick={toggleExpand}
-          className="w-full flex items-center justify-between gap-3 px-5 py-4 text-start hover:bg-muted/10 transition-colors rounded-2xl"
+          className="w-full flex items-center justify-between gap-4 px-7 py-6 text-start hover:bg-muted/5 transition-colors rounded-3xl"
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse hero' : 'Expand hero'}
         >
           <div className="flex-1 min-w-0">
-            <h2 className="font-bold text-base truncate">{title || 'Processing...'}</h2>
-            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-              {creator && <span className="truncate">{creator}</span>}
-              {creator && durationStr && <span aria-hidden="true">&middot;</span>}
-              {durationStr && <span className="shrink-0">{durationStr}</span>}
+            <h2 className="font-bold text-2xl md:text-3xl tracking-tight leading-tight line-clamp-2">{title || 'Processing...'}</h2>
+            <div className="flex items-center gap-2.5 mt-2.5 text-sm text-muted-foreground">
+              {creator && <span className="truncate font-medium">{creator}</span>}
+              {creator && durationStr && <span aria-hidden="true" className="text-muted-foreground/40">•</span>}
+              {durationStr && <span className="shrink-0 tabular-nums">{durationStr}</span>}
             </div>
           </div>
           <ChevronDown
             className={cn(
-              'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200',
+              'h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200',
               expanded && 'rotate-180',
             )}
             aria-hidden="true"
@@ -195,23 +195,23 @@ export const VideoHero = memo(function VideoHero({
           style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}
         >
           <div className="overflow-hidden">
-            <div className="px-5 pb-4">
+            <div className="px-7 pb-6">
               {tldr ? (
-                <p className="text-sm text-muted-foreground leading-relaxed mb-4">{tldr}</p>
+                <p className="text-base text-muted-foreground leading-relaxed mb-6">{tldr}</p>
               ) : (
-                <div className="h-10 rounded-lg bg-muted/30 animate-pulse mb-4" />
+                <div className="h-12 rounded-lg bg-muted/30 animate-pulse mb-6" />
               )}
 
-              <div className="flex items-center justify-end gap-2">
+              <div className="flex items-center justify-end gap-2.5">
                 {youtubeId && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowVideo(true);
                     }}
-                    className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                    className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm"
                   >
-                    <Play className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <Play className="h-4 w-4 shrink-0" aria-hidden="true" />
                     Watch Video
                   </button>
                 )}
@@ -221,9 +221,9 @@ export const VideoHero = memo(function VideoHero({
                       e.stopPropagation();
                       goToFace('takeaways');
                     }}
-                    className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                    className="flex items-center gap-2 rounded-xl bg-muted/50 px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
                   >
-                    <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <Sparkles className="h-4 w-4 shrink-0" aria-hidden="true" />
                     Key Takeaways
                   </button>
                 )}
@@ -237,36 +237,39 @@ export const VideoHero = memo(function VideoHero({
 
   function renderTakeaways(): ReactNode {
     return (
-      <div className="px-5 py-4">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4 flex items-center gap-1.5">
-          <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          Key Takeaways
-        </h3>
-        <div className="flex flex-col gap-3 mb-4">
+      <div className="px-7 py-6">
+        <div className="flex items-center gap-2.5 mb-5">
+          <span className="h-1 w-8 rounded-full bg-primary" aria-hidden="true" />
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+            <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            Key Takeaways
+          </h3>
+        </div>
+        <div className="flex flex-col gap-4 mb-6">
           {keyTakeaways.map((t, i) => (
-            <div key={i} className="flex gap-3 items-start">
-              <span className="text-lg shrink-0 leading-none mt-0.5" aria-hidden="true">
+            <div key={i} className="flex gap-4 items-start group">
+              <span className="text-2xl shrink-0 leading-none mt-0.5 transition-transform group-hover:scale-110 group-hover:drop-shadow-[0_0_8px_var(--vie-coral)]" aria-hidden="true">
                 {TAKEAWAY_EMOJIS[i % TAKEAWAY_EMOJIS.length]}
               </span>
-              <span className="text-sm font-medium leading-snug">{t}</span>
+              <span className="text-base font-medium leading-relaxed">{t}</span>
             </div>
           ))}
         </div>
 
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-2.5">
           <button
             onClick={() => goToFace('front')}
-            className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+            className="flex items-center gap-2 rounded-xl bg-muted/50 px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
           >
-            <ArrowLeft className="h-3.5 w-3.5 shrink-0 rtl:rotate-180" aria-hidden="true" />
+            <ArrowLeft className="h-4 w-4 shrink-0 rtl:rotate-180" aria-hidden="true" />
             Back
           </button>
           {hasMasterSummary && (
             <button
               onClick={() => goToFace('overview')}
-              className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm"
             >
-              <BookOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <BookOpen className="h-4 w-4 shrink-0" aria-hidden="true" />
               Overview
             </button>
           )}
@@ -277,28 +280,31 @@ export const VideoHero = memo(function VideoHero({
 
   function renderOverview(): ReactNode {
     return (
-      <div className="px-5 py-4">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5">
-          <BookOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          Overview
-        </h3>
-        <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line mb-4">
+      <div className="px-7 py-6">
+        <div className="flex items-center gap-2.5 mb-5">
+          <span className="h-1 w-8 rounded-full bg-primary" aria-hidden="true" />
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+            <BookOpen className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            Overview
+          </h3>
+        </div>
+        <p className="text-base text-muted-foreground leading-relaxed whitespace-pre-line mb-6">
           {masterSummary}
         </p>
 
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-2.5">
           <button
             onClick={() => goToFace('takeaways')}
-            className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+            className="flex items-center gap-2 rounded-xl bg-muted/50 px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
           >
-            <ArrowLeft className="h-3.5 w-3.5 shrink-0 rtl:rotate-180" aria-hidden="true" />
+            <ArrowLeft className="h-4 w-4 shrink-0 rtl:rotate-180" aria-hidden="true" />
             Back
           </button>
           <button
             onClick={handleClose}
-            className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+            className="flex items-center gap-2 rounded-xl bg-muted/50 px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
           >
-            <X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <X className="h-4 w-4 shrink-0" aria-hidden="true" />
             Close
           </button>
         </div>
@@ -327,10 +333,13 @@ export const VideoHero = memo(function VideoHero({
       >
         <div
           className={cn(
-            'w-full rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-bg)] backdrop-blur-[var(--glass-blur,20px)] shadow-[var(--glass-shadow)]',
+            'relative w-full rounded-3xl border border-[var(--glass-border-strong)] bg-[var(--glass-bg)] backdrop-blur-[var(--glass-blur,20px)] overflow-hidden',
             flipClass,
           )}
-          style={{ transformStyle: 'preserve-3d' }}
+          style={{
+            transformStyle: 'preserve-3d',
+            boxShadow: 'var(--glass-shadow)',
+          }}
         >
           {FACE_RENDERERS[displayFace]()}
         </div>

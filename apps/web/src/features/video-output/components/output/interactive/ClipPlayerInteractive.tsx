@@ -157,7 +157,7 @@ export const ClipPlayerInteractive = memo(function ClipPlayerInteractive({
                   </span>
                   <span className="flex-1 text-sm font-medium truncate">{clip.label}</span>
                   <div className="flex items-center gap-2 shrink-0">
-                    {clip.mood && <Badge variant="muted" className="text-[10px] capitalize">{clip.mood}</Badge>}
+                    {clip.mood && <Badge variant="muted" className="text-xs capitalize">{clip.mood}</Badge>}
                     {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                   </div>
                 </button>
@@ -171,7 +171,7 @@ export const ClipPlayerInteractive = memo(function ClipPlayerInteractive({
                       {clip.tags && clip.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {clip.tags.map((tag, i) => (
-                            <Badge key={i} variant="muted" className="text-[10px]">{tag}</Badge>
+                            <Badge key={i} variant="muted" className="text-xs">{tag}</Badge>
                           ))}
                         </div>
                       )}

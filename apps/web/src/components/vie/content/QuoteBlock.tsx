@@ -26,13 +26,13 @@ export const QuoteBlock = memo(function QuoteBlock({
         <span className="quote-decorative-mark" aria-hidden="true">"</span>
       )}
       <blockquote className={isHighlight ? 'font-medium text-sm' : 'italic text-base'}>
-        <p className="text-foreground leading-relaxed font-serif">{text}</p>
+        <p className="text-foreground leading-relaxed font-serif max-w-prose">{text}</p>
       </blockquote>
       {attribution && (
         <>
           <div className="fade-divider my-2" aria-hidden="true" />
           <footer>
-            <cite className="text-sm text-muted-foreground not-italic">— {attribution}</cite>
+            <cite className="text-xs font-medium tracking-wide text-muted-foreground not-italic">— {attribution}</cite>
           </footer>
         </>
       )}

@@ -28,7 +28,7 @@ export const Timestamp = memo(function Timestamp({
       <button
         onClick={onClick}
         className={cn(
-          'inline-flex items-center gap-1 text-xs font-mono text-primary hover:underline transition-colors',
+          'inline-flex items-center gap-1 text-xs font-mono tabular-nums text-primary hover:underline transition-colors',
           className,
         )}
         aria-label={`Jump to ${formatTimestamp(seconds)}`}

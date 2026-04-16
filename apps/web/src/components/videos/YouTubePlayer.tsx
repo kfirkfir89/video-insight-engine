@@ -232,7 +232,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
     }
 
     return (
-      <div className={cn("aspect-video w-full overflow-hidden rounded-lg bg-black", className)}>
+      <div className={cn("aspect-video w-full overflow-hidden rounded-lg bg-[var(--overlay-bg)]", className)}>
         <div ref={containerRef} className="h-full w-full" />
       </div>
     );

@@ -88,7 +88,7 @@ export const TimelineExplorer = memo(function TimelineExplorer({
             variant={moodFilter === null ? 'default' : 'outline'}
             size="sm"
             onClick={() => setMoodFilter(null)}
-            className="text-xs rounded-full"
+            className="text-xs font-medium rounded-full"
           >
             All
           </Button>
@@ -98,7 +98,7 @@ export const TimelineExplorer = memo(function TimelineExplorer({
               variant={moodFilter === mood ? 'default' : 'outline'}
               size="sm"
               onClick={() => setMoodFilter(moodFilter === mood ? null : mood)}
-              className="text-xs rounded-full capitalize"
+              className="text-xs font-medium rounded-full capitalize"
             >
               {mood}
             </Button>
@@ -108,9 +108,9 @@ export const TimelineExplorer = memo(function TimelineExplorer({
 
       {/* Cross-tab step completion summary */}
       {completedStepCount > 0 && (
-        <div className="flex items-center gap-2 px-1 text-xs text-success">
+        <div className="flex items-center gap-2 px-1 text-xs font-medium text-success">
           <Check className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>{completedStepCount} step{completedStepCount !== 1 ? 's' : ''} completed</span>
+          <span><span className="tabular-nums font-semibold">{completedStepCount}</span> step{completedStepCount !== 1 ? 's' : ''} completed</span>
         </div>
       )}
 
@@ -148,20 +148,20 @@ export const TimelineExplorer = memo(function TimelineExplorer({
                         variant="ghost"
                         size="bare"
                         onClick={() => onSeek(entry.seconds)}
-                        className="text-xs font-bold tabular-nums text-primary bg-primary/10 px-2 py-0.5 rounded-md hover:bg-primary/20"
+                        className="text-xs font-semibold tabular-nums tracking-tight text-primary bg-primary/10 px-2 py-0.5 rounded-md hover:bg-primary/20"
                       >
                         <Clock className="h-3 w-3 me-1" aria-hidden="true" />
                         {entry.time}
                       </Button>
                     ) : (
-                      <span className="text-xs font-bold tabular-nums text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                      <span className="text-xs font-semibold tabular-nums tracking-tight text-primary bg-primary/10 px-2 py-0.5 rounded-md">
                         {entry.time}
                       </span>
                     )}
                     {entry.emoji && <span aria-hidden="true">{entry.emoji}</span>}
-                    {entry.mood && <Badge variant="muted" className="text-[10px] capitalize">{entry.mood}</Badge>}
+                    {entry.mood && <Badge variant="muted" className="text-xs font-medium capitalize">{entry.mood}</Badge>}
                     {entry.speaker && (
-                      <span className="text-xs text-muted-foreground/70 italic">{entry.speaker}</span>
+                      <span className="text-xs font-medium text-muted-foreground/70 italic">{entry.speaker}</span>
                     )}
                   </div>
 
@@ -180,7 +180,7 @@ export const TimelineExplorer = memo(function TimelineExplorer({
                         className="w-16 h-10 rounded object-cover shrink-0 border border-border/30"
                       />
                     )}
-                    <span className="text-sm font-medium flex-1">{entry.label}</span>
+                    <span className="text-sm font-semibold leading-snug flex-1">{entry.label}</span>
                     {hasDetail && (
                       isExpanded
                         ? <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -190,7 +190,7 @@ export const TimelineExplorer = memo(function TimelineExplorer({
 
                   {isExpanded && entry.description && (
                     <FadeIn>
-                      <p className="text-sm text-muted-foreground ps-0.5">
+                      <p className="text-sm leading-relaxed text-muted-foreground ps-0.5">
                         {entry.description}
                       </p>
                     </FadeIn>

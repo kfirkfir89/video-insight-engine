@@ -162,7 +162,14 @@ export const ExerciseInteractive = memo(function ExerciseInteractive({
         <span>{doneSets}/{totalSets} sets</span>
       </div>
       <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
-        <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${totalSets > 0 ? (doneSets / totalSets) * 100 : 0}%` }} />
+        <div
+          className="h-full w-full rounded-full bg-primary origin-left transition-transform duration-500 ease-out motion-reduce:transition-none rtl:origin-right"
+          style={{ transform: `scaleX(${totalSets > 0 ? doneSets / totalSets : 0})` }}
+          role="progressbar"
+          aria-valuenow={doneSets}
+          aria-valuemin={0}
+          aria-valuemax={totalSets}
+        />
       </div>
 
       {/* Section nav */}
@@ -191,7 +198,7 @@ export const ExerciseInteractive = memo(function ExerciseInteractive({
                       <span className="me-1.5">{exercise.emoji}</span>{exercise.name}
                     </h4>
                     {exercise.difficulty && (
-                      <Badge variant={DIFFICULTY_BADGE[exercise.difficulty] ?? 'muted'} className="text-[10px]">
+                      <Badge variant={DIFFICULTY_BADGE[exercise.difficulty] ?? 'muted'} className="text-xs">
                         {exercise.difficulty}
                       </Badge>
                     )}

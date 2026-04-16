@@ -23,11 +23,11 @@ export const DefinitionItem = memo(function DefinitionItem({
 
   return (
     <dl className={cn('hover:bg-muted/10 rounded-sm transition-colors', className)}>
-      <dt className="text-sm font-semibold text-primary">{term}</dt>
-      <dd className="mt-1">
+      <dt className="text-sm font-semibold tracking-tight text-primary">{term}</dt>
+      <dd className="mt-1.5">
         {isLong && !expanded ? (
-          <div className="space-y-1">
-            <p className="text-sm text-muted-foreground line-clamp-3">{meaning}</p>
+          <div className="space-y-1.5">
+            <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">{meaning}</p>
             <Button
               variant="ghost"
               size="bare"
@@ -39,8 +39,8 @@ export const DefinitionItem = memo(function DefinitionItem({
             </Button>
           </div>
         ) : (
-          <div className="space-y-1">
-            <p className="text-sm text-muted-foreground">{meaning}</p>
+          <div className="space-y-1.5">
+            <p className="text-sm text-muted-foreground leading-relaxed">{meaning}</p>
             {isLong && (
               <Button
                 variant="ghost"

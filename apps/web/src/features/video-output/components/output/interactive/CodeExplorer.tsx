@@ -47,12 +47,11 @@ export const CodeExplorer = memo(function CodeExplorer({
 
   const renderSnippet = (snippet: TechSnippet, index: number) => (
     <GlassCard key={index} variant="default" className="space-y-3 p-0 overflow-hidden">
-      {/* Filename + language + tags */}
+      {/* Language badge — filename lives in terminal chrome below */}
       <div className="flex items-center gap-1.5 px-4 pt-4 text-xs text-muted-foreground">
         <FileCode className="h-3.5 w-3.5" aria-hidden="true" />
-        {snippet.filename && <span className="font-mono">{snippet.filename}</span>}
         <span className="ms-auto">
-          <Badge variant="muted" className="text-[10px]">{snippet.language}</Badge>
+          <Badge variant="muted" className="text-xs">{snippet.language}</Badge>
         </span>
       </div>
 
@@ -64,15 +63,27 @@ export const CodeExplorer = memo(function CodeExplorer({
         )}
       </div>
 
-      {/* Code block */}
-      <div className="relative rounded-lg mx-3 mb-3 bg-[oklch(12%_0_0)] text-[oklch(90%_0_0)] overflow-hidden">
+      {/* Code block — terminal window */}
+      <div className="relative rounded-lg mx-3 mb-3 bg-code-bg text-code-text overflow-hidden">
+        {/* macOS traffic-light chrome */}
+        <div
+          className="flex items-center gap-1.5 px-3 py-2 border-b border-code-border bg-code-chrome"
+          aria-hidden="true"
+        >
+          <span className="block w-3 h-3 rounded-full bg-[oklch(70%_0.2_25)]" />
+          <span className="block w-3 h-3 rounded-full bg-[oklch(78%_0.18_85)]" />
+          <span className="block w-3 h-3 rounded-full bg-[oklch(68%_0.17_145)]" />
+          {snippet.filename && (
+            <span className="ms-auto text-xs font-mono text-code-text-muted">{snippet.filename}</span>
+          )}
+        </div>
         <button
           onClick={() => handleCopy(snippet.code, index)}
           className={cn(
             'absolute top-2 end-2 z-10 flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
             copiedIndex === index
               ? 'bg-success/20 text-success'
-              : 'bg-[oklch(20%_0_0)] text-[oklch(70%_0_0)] hover:bg-[oklch(25%_0_0)] hover:text-[oklch(85%_0_0)]',
+              : 'bg-code-border text-code-text-muted hover:bg-code-focus hover:text-code-text-bright',
           )}
           aria-label={copiedIndex === index ? t.copied : t.copy}
         >
@@ -82,7 +93,7 @@ export const CodeExplorer = memo(function CodeExplorer({
             <><Copy className="h-3 w-3" aria-hidden="true" /> {t.copy}</>
           )}
         </button>
-        <pre dir="ltr" className="overflow-x-auto p-4 pe-20 text-sm leading-relaxed">
+        <pre dir="ltr" className="overflow-x-auto p-3 pe-10 sm:p-4 sm:pe-20 text-sm leading-relaxed">
           <code className="font-mono whitespace-pre-wrap">{snippet.code}</code>
         </pre>
       </div>

@@ -88,7 +88,7 @@ export const LyricsPlayerInteractive = memo(function LyricsPlayerInteractive({
                     variant="ghost"
                     size="bare"
                     onClick={() => onSeek(line.timestamp!)}
-                    className="text-[10px] tabular-nums text-muted-foreground/50 shrink-0 mt-0.5"
+                    className="text-xs tabular-nums text-muted-foreground/50 shrink-0 mt-0.5"
                   >
                     {formatTime(line.timestamp)}
                   </Button>

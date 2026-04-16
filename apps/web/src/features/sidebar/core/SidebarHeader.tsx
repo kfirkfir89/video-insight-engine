@@ -9,7 +9,7 @@ export const SidebarHeader = memo(function SidebarHeader() {
         <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 shrink-0">
           <Sparkles className="h-4 w-4 text-primary" />
         </div>
-        <span className="font-semibold text-sm truncate text-gradient-primary">VIE</span>
+        <span className="text-lg font-black tracking-tight truncate text-gradient-primary">VIE</span>
       </Link>
     </div>
   );

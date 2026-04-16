@@ -52,12 +52,12 @@ export const FlipCard = memo(function FlipCard({
           className="absolute inset-0 flex flex-col items-center justify-center rounded-lg border border-border/50 bg-muted/20 p-6 text-center"
           style={{ backfaceVisibility: 'hidden' }}
         >
-          {emoji && <span className="text-3xl mb-3" aria-hidden="true">{emoji}</span>}
+          {emoji && <span className="text-3xl mb-3 leading-none" aria-hidden="true">{emoji}</span>}
           {category && (
-            <span className="text-xs text-muted-foreground/70 mb-2 uppercase tracking-wide">{category}</span>
+            <span className="text-[0.6875rem] font-semibold text-muted-foreground/80 mb-2 uppercase tracking-[0.12em] leading-none">{category}</span>
           )}
-          <p className="font-medium text-sm">{front}</p>
-          <span className="text-xs text-muted-foreground/50 mt-3">Tap to flip</span>
+          <p className="text-[0.9375rem] font-semibold leading-tight text-balance">{front}</p>
+          <span className="text-[0.6875rem] font-medium uppercase tracking-[0.1em] text-muted-foreground/70 mt-3 leading-none">Tap to flip</span>
         </div>
 
         {/* Back */}
@@ -65,7 +65,7 @@ export const FlipCard = memo(function FlipCard({
           className="absolute inset-0 flex flex-col items-center justify-center rounded-lg border border-primary/30 bg-primary/5 p-6 text-center"
           style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
         >
-          <p className="text-sm text-muted-foreground">{back}</p>
+          <p className="text-[0.9375rem] leading-relaxed text-pretty text-muted-foreground">{back}</p>
         </div>
       </div>
     </div>

@@ -19,7 +19,7 @@ export const SectionNav = memo(function SectionNav({
   className,
 }: SectionNavProps) {
   return (
-    <nav className={cn('flex gap-1 overflow-x-auto scrollbar-none', className)} aria-label="Sections">
+    <nav className={cn('flex gap-1 overflow-x-auto scrollbar-none scroll-fade-x', className)} aria-label="Sections">
       {sections.map((section) => {
         const isActive = section.id === activeId;
         return (

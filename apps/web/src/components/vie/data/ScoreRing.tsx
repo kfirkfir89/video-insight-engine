@@ -12,7 +12,7 @@ interface ScoreRingProps {
 }
 
 const SIZE_CONFIG = {
-  sm: { px: 64, stroke: 5, fontSize: 'text-sm', labelSize: 'text-[10px]' },
+  sm: { px: 64, stroke: 5, fontSize: 'text-sm', labelSize: 'text-xs' },
   md: { px: 96, stroke: 6, fontSize: 'text-xl', labelSize: 'text-xs' },
   lg: { px: 128, stroke: 7, fontSize: 'text-2xl', labelSize: 'text-sm' },
 } as const;
@@ -39,7 +39,12 @@ export const ScoreRing = memo(function ScoreRing({
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  const strokeColor = color || 'var(--primary)';
+  const resolvedColor = color ?? (() => {
+    if (percentage >= 0.75) return 'var(--success)';
+    if (percentage >= 0.5) return 'var(--warning)';
+    return 'var(--destructive)';
+  })();
+  const strokeColor = resolvedColor;
 
   const displayValue = (() => {
     if (total === 100) return `${Math.round(clampedScore)}%`;
@@ -88,13 +93,16 @@ export const ScoreRing = memo(function ScoreRing({
         className="flex items-center justify-center"
         style={{ width: config.px, height: config.px, marginTop: -config.px }}
       >
-        <span className={cn('font-bold tabular-nums', config.fontSize)}>
+        <span
+          className={cn('font-semibold tabular-nums tracking-tight', config.fontSize)}
+          style={{ color: resolvedColor }}
+        >
           {displayValue}
         </span>
       </div>
 
       {label && (
-        <span className={cn('text-muted-foreground', config.labelSize)}>
+        <span className={cn('font-medium uppercase tracking-wider text-muted-foreground', config.labelSize)}>
           {label}
         </span>
       )}

@@ -20,7 +20,7 @@ export const InlineScore = memo(function InlineScore({
   const colorClass = ratio >= 0.8 ? 'text-success' : ratio >= 0.5 ? 'text-warning' : 'text-destructive';
 
   return (
-    <span className={cn('font-bold tabular-nums', colorClass, className)}>
+    <span className={cn('font-semibold tabular-nums tracking-tight', colorClass, className)}>
       {correct}/{total}
     </span>
   );

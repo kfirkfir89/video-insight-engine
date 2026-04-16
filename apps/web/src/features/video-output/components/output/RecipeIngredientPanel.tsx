@@ -82,7 +82,7 @@ export const RecipeIngredientPanel = memo(function RecipeIngredientPanel({
         <div className="flex items-center justify-center gap-2 py-2 border-b border-border/30">
           <Button
             variant="outline"
-            size="icon-sm"
+            size="icon"
             onClick={() => setServings(s => Math.max(1, s - 1))}
             disabled={servings <= 1}
             aria-label="Decrease servings"
@@ -94,7 +94,7 @@ export const RecipeIngredientPanel = memo(function RecipeIngredientPanel({
           </span>
           <Button
             variant="outline"
-            size="icon-sm"
+            size="icon"
             onClick={() => setServings(s => s + 1)}
             aria-label="Increase servings"
           >

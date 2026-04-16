@@ -10,6 +10,7 @@ import { Loader2, ArrowLeft, RefreshCw, AlertCircle } from "lucide-react";
 import { OutputRouter } from "@/features/video-output/components/OutputRouter";
 import { VideoPlayerProvider } from "@/features/video-output/contexts/VideoPlayerContext";
 import { CollapsibleVideoPlayer } from "@/features/video-output/components/CollapsibleVideoPlayer";
+import { Confetti } from "@/components/ui/Confetti";
 import { buildSynthesisFromMeta } from "@/features/video-output/lib/synthesis-utils";
 import type { TabEntry } from "@vie/types";
 
@@ -66,6 +67,7 @@ export function VideoDetailPage() {
     tabCount,
     tabLabels,
     phase,
+    confettiCount,
   } = useSummaryStream({
     videoSummaryId,
     enabled: isProcessing && !!videoSummaryId,
@@ -118,11 +120,14 @@ export function VideoDetailPage() {
   if (error || !video || !mergedVideo) {
     return (
       <Layout>
-        <div className="text-center p-4 md:p-6 py-12">
-          <p className="text-red-500">Failed to load video</p>
+        <div className="text-center p-4 md:p-6 py-12 space-y-2">
+          <p className="type-h3">We couldn&apos;t load this video</p>
+          <p className="type-caption max-w-sm mx-auto">
+            It may have been deleted, or you might not have access. Try going back to your library.
+          </p>
           <Link to="/board">
             <Button variant="outline" className="mt-4">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back to library
             </Button>
           </Link>
         </div>
@@ -130,16 +135,51 @@ export function VideoDetailPage() {
     );
   }
 
-  // Failed state - show retry button
+  // Failed state - show retry button + structured reasons
   if (video?.status === "failed") {
+    const possibleCauses = [
+      {
+        title: "The video is private or unlisted",
+        remedy: "Only public YouTube videos can be processed. Ask the creator to make it public, or try a different video.",
+      },
+      {
+        title: "The video is age-restricted",
+        remedy: "VIE can't access age-restricted content without signed-in cookies. Try an unrestricted alternative.",
+      },
+      {
+        title: "The transcript language isn't supported yet",
+        remedy: "We support most major languages. If the video has no captions or auto-captions, processing will fail.",
+      },
+      {
+        title: "The video is very long",
+        remedy: "Videos over 3 hours may time out. Try a shorter clip or a single section.",
+      },
+      {
+        title: "Temporary network or AI service issue",
+        remedy: "This is usually transient. Click Retry — it often works on the second attempt.",
+      },
+    ];
+
     return (
       <Layout>
-        <div className="text-center p-4 md:p-6 py-12">
-          <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-          <h2 className="text-lg font-semibold mb-2">Summarization Failed</h2>
-          <p className="text-muted-foreground mb-6">
-            Something went wrong while processing this video.
-          </p>
+        <div className="mx-auto max-w-xl p-4 md:p-6 py-12">
+          <div className="flex flex-col items-center text-center">
+            <AlertCircle className="h-12 w-12 text-destructive mb-4" aria-hidden="true" />
+            <h2 className="text-xl font-semibold mb-2">We couldn't summarize this video</h2>
+            <p className="text-muted-foreground mb-6">
+              Something went wrong while processing. Here are the most likely reasons:
+            </p>
+          </div>
+
+          <ul className="space-y-3 mb-8 text-sm">
+            {possibleCauses.map((cause) => (
+              <li key={cause.title} className="rounded-lg border border-border/50 bg-muted/20 p-3">
+                <p className="font-medium text-foreground">{cause.title}</p>
+                <p className="text-muted-foreground mt-1">{cause.remedy}</p>
+              </li>
+            ))}
+          </ul>
+
           <div className="flex gap-3 justify-center">
             <Link to="/board">
               <Button variant="outline">
@@ -169,7 +209,7 @@ export function VideoDetailPage() {
   const errorFallback = (
     <Layout>
       <div className="text-center p-4 md:p-6 py-12">
-        <p className="text-red-500">Failed to render video content</p>
+        <p className="type-h3 text-destructive">Something broke while rendering this video</p>
         <Button
           variant="outline"
           className="mt-4"
@@ -207,7 +247,9 @@ export function VideoDetailPage() {
             duration={mergedVideo.duration}
             language={resolvedMeta?.language}
             isRTL={resolvedMeta?.isRTL}
+            streamPhase={phase}
           />
+          <Confetti trigger={confettiCount} />
         </Layout>
       </VideoPlayerProvider>
     </ErrorBoundary>

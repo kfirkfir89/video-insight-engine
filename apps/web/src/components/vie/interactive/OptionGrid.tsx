@@ -36,10 +36,10 @@ export const OptionGrid = memo(function OptionGrid({
             onClick={() => onSelect(i)}
             disabled={revealed}
             className={cn(
-              'rounded-lg border px-4 py-3 text-sm text-start transition-all duration-200',
-              !revealed && 'border-border/50 bg-muted/20 hover:bg-muted/40',
-              showCorrect && 'border-success bg-success/10 text-success',
-              showWrong && 'border-destructive bg-destructive/10 text-destructive',
+              'rounded-xl border px-4 py-3.5 text-[0.9375rem] font-medium leading-snug tracking-[-0.005em] text-balance text-start transition-all duration-200',
+              !revealed && 'border-border/50 bg-muted/20 hover:bg-muted/40 hover:-translate-y-0.5 hover:shadow-md hover:border-border',
+              showCorrect && 'border-success bg-success/10 text-success ring-2 ring-success shadow-[0_0_20px_-4px_var(--success)]',
+              showWrong && 'border-destructive bg-destructive/10 text-destructive ring-2 ring-destructive',
               revealed && !showCorrect && !showWrong && 'opacity-50',
             )}
           >

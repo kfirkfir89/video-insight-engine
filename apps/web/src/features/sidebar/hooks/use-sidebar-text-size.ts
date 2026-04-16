@@ -33,7 +33,7 @@ export function useSidebarTextClasses(): SidebarSizeClasses {
   const classes: Record<SidebarTextSize, Omit<SidebarSizeClasses, "size">> = {
     small: {
       mainText: "text-xs",
-      badgeText: "text-[10px]",
+      badgeText: "text-xs",
       headerText: "text-xs",
       iconSize: "h-4 w-4",
       smallIconSize: "h-3.5 w-3.5",

@@ -167,10 +167,10 @@ export const FolderItem = memo(function FolderItem({ folder, level, videos, allF
     "group flex items-center cursor-pointer hover:bg-primary/8 rounded-sm transition-colors",
     "has-[[data-state=open]]:bg-accent/50",
     textClasses.rowHeight,
-    isSelected && !isFolderSelectionSelected && "bg-primary/8 font-medium",
+    isSelected && !isFolderSelectionSelected && "bg-primary/8 font-medium ring-1 ring-primary/20",
     isOver && !isDragging && "ring-1 ring-primary/50",
     isDragging && "opacity-50",
-    isFolderSelectionSelected && "bg-primary/8"
+    isFolderSelectionSelected && "bg-primary/8 ring-1 ring-primary/20"
   );
 
   const rowStyle = { paddingLeft: `${paddingLeft}px`, paddingRight: "8px" };
@@ -216,7 +216,11 @@ export const FolderItem = memo(function FolderItem({ folder, level, videos, allF
         <span className="w-4 shrink-0" />
       )}
       <Folder
-        className={cn(textClasses.iconSize, "shrink-0 text-primary ml-1")}
+        className={cn(
+          textClasses.iconSize,
+          "shrink-0 text-primary ml-1 transition-[filter]",
+          folder.color && (isSelected || isFolderSelectionSelected) && "drop-shadow-[0_0_6px_currentColor]"
+        )}
         style={getFolderColorStyle(folder.color)}
       />
     </>

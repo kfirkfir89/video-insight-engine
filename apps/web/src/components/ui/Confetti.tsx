@@ -6,15 +6,20 @@ interface ConfettiProps {
   onComplete?: () => void;
 }
 
-const PARTICLE_COUNT = 30;
+const PARTICLE_COUNT = 50;
 const COLORS = [
   "var(--vie-coral, #f97066)",
   "var(--vie-plum, #a78bfa)",
-  "var(--vie-sky, #38bdf8)",
   "var(--vie-mint, #34d399)",
   "var(--vie-honey, #fbbf24)",
   "var(--vie-rose, #fb7185)",
+  "var(--vie-sky, #38bdf8)",
+  "var(--vie-peach, #fdba74)",
+  "var(--vie-forest, #22c55e)",
 ];
+
+type ParticleShape = "circle" | "square" | "triangle";
+const SHAPES: ParticleShape[] = ["circle", "square", "triangle"];
 
 interface Particle {
   id: number;
@@ -23,7 +28,7 @@ interface Particle {
   color: string;
   size: number;
   rotation: number;
-  shape: "circle" | "square";
+  shape: ParticleShape;
 }
 
 function generateParticles(): Particle[] {
@@ -34,7 +39,7 @@ function generateParticles(): Particle[] {
     color: COLORS[Math.floor(Math.random() * COLORS.length)],
     size: 4 + Math.random() * 6,
     rotation: Math.random() * 360,
-    shape: Math.random() > 0.5 ? "circle" : "square",
+    shape: SHAPES[Math.floor(Math.random() * SHAPES.length)],
   }));
 }
 
@@ -91,7 +96,12 @@ export const Confetti = memo(function Confetti({
             width: p.size,
             height: p.size,
             backgroundColor: p.color,
-            borderRadius: p.shape === "circle" ? "50%" : "2px",
+            borderRadius:
+              p.shape === "circle" ? "50%" : p.shape === "square" ? "2px" : "0",
+            clipPath:
+              p.shape === "triangle"
+                ? "polygon(50% 0%, 0% 100%, 100% 100%)"
+                : undefined,
             transform: `rotate(${p.rotation}deg)`,
           }}
         />

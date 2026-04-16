@@ -37,7 +37,7 @@ function ImagePlaceholder({ image, className, onClick, onSeek }: { image: Galler
       onClick={handleClick}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && handleClick()}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), handleClick())}
     >
       <img
         src={src}
@@ -47,7 +47,7 @@ function ImagePlaceholder({ image, className, onClick, onSeek }: { image: Galler
       />
       {image.caption && (
         <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-3">
-          <p className="text-xs text-white/90">{image.caption}</p>
+          <p className="text-xs text-[var(--overlay-text)]">{image.caption}</p>
         </div>
       )}
     </div>
@@ -78,7 +78,7 @@ function GalleryLightbox({ images, index, onClose, onPrev, onNext }: {
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-bg)] p-4"
       onClick={onClose}
       onKeyDown={handleKeyDown}
       role="dialog"
@@ -88,8 +88,8 @@ function GalleryLightbox({ images, index, onClose, onPrev, onNext }: {
     >
       <Button
         variant="ghost"
-        size="icon-sm"
-        className="absolute top-4 end-4 text-white hover:text-white/80 z-10"
+        size="icon"
+        className="absolute top-4 end-4 text-[var(--overlay-text)] hover:text-[var(--overlay-text-muted)] z-10"
         onClick={onClose}
         aria-label="Close lightbox"
       >
@@ -100,8 +100,8 @@ function GalleryLightbox({ images, index, onClose, onPrev, onNext }: {
         <>
           <Button
             variant="ghost"
-            size="icon-sm"
-            className="absolute start-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 z-10"
+            size="icon"
+            className="absolute start-4 top-1/2 -translate-y-1/2 text-[var(--overlay-text)] hover:text-[var(--overlay-text-muted)] z-10"
             onClick={(e) => { e.stopPropagation(); onPrev(); }}
             disabled={index === 0}
             aria-label="Previous image"
@@ -110,8 +110,8 @@ function GalleryLightbox({ images, index, onClose, onPrev, onNext }: {
           </Button>
           <Button
             variant="ghost"
-            size="icon-sm"
-            className="absolute end-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 z-10"
+            size="icon"
+            className="absolute end-4 top-1/2 -translate-y-1/2 text-[var(--overlay-text)] hover:text-[var(--overlay-text-muted)] z-10"
             onClick={(e) => { e.stopPropagation(); onNext(); }}
             disabled={index === images.length - 1}
             aria-label="Next image"
@@ -128,10 +128,10 @@ function GalleryLightbox({ images, index, onClose, onPrev, onNext }: {
           className="max-w-full max-h-[80vh] object-contain rounded-lg"
         />
         {img.caption && (
-          <p className="text-center text-sm text-white/80 mt-3">{img.caption}</p>
+          <p className="text-center text-sm text-[var(--overlay-text)] mt-3">{img.caption}</p>
         )}
         {images.length > 1 && (
-          <p className="text-center text-xs text-white/60 mt-2 tabular-nums">{index + 1} / {images.length}</p>
+          <p className="text-center text-xs text-[var(--overlay-text-muted)] mt-2 tabular-nums">{index + 1} / {images.length}</p>
         )}
       </div>
     </div>
@@ -219,7 +219,7 @@ export const GalleryInteractive = memo(function GalleryInteractive({
             />
           </FadeIn>
           {images.length > 1 && (
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
               {images.slice(1).map((img, i) => (
                 <FadeIn key={i + 1} index={i}>
                   <ImagePlaceholder

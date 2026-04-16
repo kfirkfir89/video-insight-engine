@@ -22,7 +22,7 @@ export const CheckItem = memo(function CheckItem({
   className,
 }: CheckItemProps) {
   return (
-    <div className={cn('flex items-start gap-2.5 text-sm py-1.5 transition-colors', checked && 'opacity-60', className)}>
+    <div className={cn('flex items-start gap-2 text-[0.9375rem] py-1.5 transition-colors', checked && 'opacity-70', className)}>
       <Button
         variant="ghost"
         size="icon-bare"
@@ -33,12 +33,16 @@ export const CheckItem = memo(function CheckItem({
         {checked ? (
           <Check className="h-4 w-4 text-success" aria-hidden="true" />
         ) : (
-          <Square className="h-4 w-4 text-muted-foreground/50" aria-hidden="true" />
+          <Square className="h-4 w-4 text-muted-foreground/60" aria-hidden="true" />
         )}
       </Button>
-      <div className={cn('flex-1', checked && 'line-through text-muted-foreground/50')}>
+      <div className={cn('flex-1 leading-snug tracking-[-0.005em]', checked && 'line-through text-muted-foreground')}>
         <span className="font-medium">{label}</span>
-        {note && <span className="text-xs text-muted-foreground/70 ms-1">({note})</span>}
+        {note && (
+          <span className="text-[0.8125rem] font-normal text-muted-foreground ms-2" aria-hidden="true">
+            · {note}
+          </span>
+        )}
       </div>
     </div>
   );

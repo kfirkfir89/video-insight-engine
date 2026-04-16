@@ -1,4 +1,4 @@
-import { memo, useState, useMemo } from 'react';
+import { memo, useState } from 'react';
 import { Check, AlertTriangle, Lightbulb, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -53,11 +53,6 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
   const tabState = useTabState();
   const tabCoord = useTabCoordination();
 
-  const progress = useMemo(
-    () => (steps.length > 0 ? (completedSteps.size / steps.length) * 100 : 0),
-    [completedSteps.size, steps.length],
-  );
-
   const allDone = completedSteps.size === steps.length && steps.length > 0;
 
   const toggleComplete = (index: number) => {
@@ -96,17 +91,45 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
         </div>
       )}
 
-      {/* Progress bar */}
-      <div className="space-y-1.5">
+      {/* Progress track with milestones */}
+      <div className="space-y-2">
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>Progress</span>
           <span>{completedSteps.size}/{steps.length} steps</span>
         </div>
-        <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
-          <div
-            className="h-full rounded-full bg-primary transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          />
+        <div className="relative">
+          {/* Track */}
+          <div className="relative h-2 w-full rounded-full bg-muted/30 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-primary to-primary/60 transition-all duration-500"
+              style={{ width: `${steps.length > 0 ? ((currentStep + 1) / steps.length) * 100 : 0}%` }}
+            />
+          </div>
+          {/* Milestone dots */}
+          {steps.length > 1 && steps.length <= 20 && (
+            <div className="absolute inset-x-0 -top-1 h-4 pointer-events-none">
+              {steps.map((_, i) => {
+                const leftPercent = steps.length === 1 ? 50 : (i / (steps.length - 1)) * 100;
+                const isDone = completedSteps.has(i);
+                const isCurrent = i === currentStep;
+                return (
+                  <span
+                    key={i}
+                    className={cn(
+                      'absolute top-0 -translate-x-1/2 w-2 h-2 rounded-full border transition-all duration-200',
+                      isDone
+                        ? 'bg-primary border-primary scale-110'
+                        : isCurrent
+                          ? 'bg-background border-primary ring-2 ring-primary/30'
+                          : 'bg-background border-muted-foreground/30',
+                    )}
+                    style={{ left: `${leftPercent}%` }}
+                    aria-hidden="true"
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -146,13 +169,18 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
                   onClick={() => setCurrentStep(index)}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e) => e.key === 'Enter' && setCurrentStep(index)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setCurrentStep(index);
+                    }
+                  }}
                 >
                   {/* Number circle / check */}
                   <div
                     className={cn(
                       'shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-all',
-                      isDone ? 'bg-success border-success text-white' : colorClass,
+                      isDone ? 'bg-success border-success text-success-foreground' : colorClass,
                     )}
                   >
                     {isDone ? <Check className="h-4 w-4" /> : step.number}
@@ -224,7 +252,7 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
                   {/* Complete button */}
                   <Button
                     variant="ghost"
-                    size="icon-sm"
+                    size="icon"
                     onClick={(e) => { e.stopPropagation(); toggleComplete(index); }}
                     className={cn('shrink-0 rounded-full', isDone && 'text-success hover:text-success')}
                     aria-label={isDone ? `Mark step ${step.number} incomplete` : `Mark step ${step.number} complete`}

@@ -83,7 +83,7 @@ export const Lightbox = memo(function Lightbox({
       aria-modal="true"
       aria-label="Image lightbox"
       tabIndex={-1}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm animate-in fade-in duration-200 outline-none"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm animate-in fade-in duration-200 outline-none"
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
     >
       {/* Close button */}
@@ -91,15 +91,20 @@ export const Lightbox = memo(function Lightbox({
         type="button"
         onClick={onClose}
         aria-label="Close lightbox"
-        className="absolute top-4 right-4 z-10 rounded-full bg-white/10 p-2 text-white/80 hover:bg-white/20 hover:text-white transition-colors"
+        className="absolute top-4 right-4 z-10 rounded-full bg-[var(--overlay-surface)] p-2 text-[var(--overlay-text-muted)] hover:bg-[var(--overlay-surface)] hover:text-[var(--overlay-text)] transition-colors"
       >
         <X className="h-5 w-5" />
       </button>
 
       {/* Counter badge */}
       {hasMultiple && (
-        <div className="absolute top-4 left-4 z-10 rounded-full bg-white/10 px-3 py-1 text-sm text-white/80">
-          {activeIndex + 1} / {frames.length}
+        <div
+          className="absolute top-4 left-4 z-10 rounded-full bg-[var(--overlay-surface)] px-3 py-1 text-sm text-[var(--overlay-text-muted)]"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <span className="sr-only">Image </span>
+          {activeIndex + 1} <span className="sr-only">of</span><span aria-hidden="true">/</span> {frames.length}
         </div>
       )}
 
@@ -109,7 +114,7 @@ export const Lightbox = memo(function Lightbox({
           type="button"
           onClick={handlePrev}
           aria-label="Previous image"
-          className="absolute left-4 top-1/2 -translate-y-1/2 z-10 rounded-full bg-white/10 p-2 text-white/80 hover:bg-white/20 hover:text-white transition-colors"
+          className="absolute left-4 top-1/2 -translate-y-1/2 z-10 rounded-full bg-[var(--overlay-surface)] p-2 text-[var(--overlay-text-muted)] hover:bg-[var(--overlay-surface)] hover:text-[var(--overlay-text)] transition-colors"
         >
           <ChevronLeft className="h-6 w-6" />
         </button>
@@ -119,7 +124,7 @@ export const Lightbox = memo(function Lightbox({
           type="button"
           onClick={handleNext}
           aria-label="Next image"
-          className="absolute right-4 top-1/2 -translate-y-1/2 z-10 rounded-full bg-white/10 p-2 text-white/80 hover:bg-white/20 hover:text-white transition-colors"
+          className="absolute right-4 top-1/2 -translate-y-1/2 z-10 rounded-full bg-[var(--overlay-surface)] p-2 text-[var(--overlay-text-muted)] hover:bg-[var(--overlay-surface)] hover:text-[var(--overlay-text)] transition-colors"
         >
           <ChevronRight className="h-6 w-6" />
         </button>
@@ -127,7 +132,7 @@ export const Lightbox = memo(function Lightbox({
 
       {/* Main image */}
       {imgError ? (
-        <div className="flex flex-col items-center gap-2 text-white/60">
+        <div className="flex flex-col items-center gap-2 text-[var(--overlay-text-muted)]">
           <ImageOff className="h-12 w-12" />
           <p className="text-sm">Image unavailable</p>
         </div>
@@ -135,6 +140,8 @@ export const Lightbox = memo(function Lightbox({
         <img
           src={current.imageUrl}
           alt={current.caption ?? ''}
+          loading="eager"
+          decoding="async"
           className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg select-none"
           draggable={false}
           referrerPolicy="no-referrer"
@@ -144,7 +151,7 @@ export const Lightbox = memo(function Lightbox({
 
       {/* Caption */}
       {current.caption && (
-        <p className="mt-3 text-sm text-white/70 text-center max-w-xl px-4">
+        <p className="mt-3 text-sm text-[var(--overlay-text-muted)] text-center max-w-xl px-4">
           {current.caption}
         </p>
       )}

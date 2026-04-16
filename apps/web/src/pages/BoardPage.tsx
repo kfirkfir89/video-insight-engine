@@ -12,15 +12,19 @@ export function BoardPage() {
   const selectedFolderId = useUIStore((s) => s.selectedFolderId);
   const setSelectedFolder = useUIStore((s) => s.setSelectedFolder);
 
-  // Fetch all videos and folders for the summarized section
+  // Determine which videos to show
+  const isShowingAll = selectedFolderId === null;
+
+  // Fetch all videos and folders for the summarized section.
+  // Only enable the query that matches the current view to avoid duplicate /api/videos calls.
+  // allVideos is also needed (regardless of view) so FolderCard counts include videos in subfolders.
   const { data: allVideosData, isLoading: allVideosLoading } = useAllVideos();
   const { data: filteredVideosData, isLoading: filteredLoading } = useVideos(
-    selectedFolderId ?? undefined
+    selectedFolderId ?? undefined,
+    { enabled: !isShowingAll }
   );
   const { data: foldersData, isLoading: foldersLoading } = useFolders();
 
-  // Determine which videos to show
-  const isShowingAll = selectedFolderId === null;
   const videos = isShowingAll
     ? allVideosData?.videos || []
     : filteredVideosData?.videos || [];

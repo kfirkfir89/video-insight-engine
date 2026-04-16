@@ -81,7 +81,7 @@ export const RecipePlayer = memo(function RecipePlayer({
             {completedCount}/{steps.length} steps
           </span>
         </div>
-        <Button variant="ghost" size="icon-sm" onClick={onExit} aria-label="Exit cooking mode">
+        <Button variant="ghost" size="icon" onClick={onExit} aria-label="Exit cooking mode">
           <X className="h-4 w-4" />
         </Button>
       </div>

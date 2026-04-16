@@ -27,7 +27,7 @@
   --secondary: oklch(94% 0.012 290);
   --secondary-foreground: oklch(25% 0.03 285);
   --muted: oklch(95% 0.008 285);
-  --muted-foreground: oklch(45% 0.025 280);
+  --muted-foreground: oklch(38% 0.025 280);
   --accent: oklch(95% 0.02 310);
   --accent-foreground: oklch(25% 0.03 285);
   --destructive: oklch(55% 0.22 18);
@@ -75,6 +75,16 @@
   --info: oklch(62% 0.16 255);
   --info-foreground: oklch(98% 0.01 255);
   --info-soft: oklch(96% 0.04 255);
+
+  /* Code/terminal surface (semantic) */
+  --code-bg: oklch(12% 0 0);
+  --code-chrome: oklch(15% 0 0);
+  --code-border: oklch(20% 0 0);
+  --code-text: oklch(90% 0 0);
+  --code-text-muted: oklch(60% 0 0);
+  --code-text-dim: oklch(50% 0 0);
+  --code-text-bright: oklch(75% 0 0);
+  --code-focus: oklch(25% 0 0);
 }
 
 [data-theme="dark"] {
@@ -90,7 +100,7 @@
   --secondary: oklch(22% 0.025 280);
   --secondary-foreground: oklch(90% 0.008 285);
   --muted: oklch(20% 0.02 280);
-  --muted-foreground: oklch(65% 0.015 280);
+  --muted-foreground: oklch(72% 0.015 280);
   --accent: oklch(22% 0.03 310);
   --accent-foreground: oklch(90% 0.008 285);
   --destructive: oklch(65% 0.22 18);
@@ -136,6 +146,16 @@
   --info: oklch(68% 0.14 255);
   --info-foreground: oklch(15% 0.05 255);
   --info-soft: oklch(20% 0.04 255);
+
+  /* Code/terminal surface (dark mode — slightly lifted) */
+  --code-bg: oklch(14% 0 0);
+  --code-chrome: oklch(17% 0 0);
+  --code-border: oklch(22% 0 0);
+  --code-text: oklch(93% 0 0);
+  --code-text-muted: oklch(64% 0 0);
+  --code-text-dim: oklch(54% 0 0);
+  --code-text-bright: oklch(80% 0 0);
+  --code-focus: oklch(28% 0 0);
 }
 
 /* System mode: Not needed — both index.html inline script and theme-provider.tsx
@@ -158,13 +178,52 @@
   --vie-forest: oklch(55% 0.12 145);
   --vie-peach: oklch(82% 0.1 55);
 
+  /* Overlay tokens — for lightbox, modals, hover overlays */
+  --overlay-bg: oklch(10% 0.01 280 / 0.85);
+  --overlay-text: oklch(94% 0.008 285);
+  --overlay-text-muted: oklch(78% 0.01 280);
+  --overlay-surface: oklch(30% 0.015 280 / 0.3);
+
   /* Glass surface tokens */
   --vie-glass: oklch(from var(--card) l c h / 0.6);
   --vie-glass-border: oklch(from var(--border) l c h / 0.3);
+  --vie-glass-border-strong: oklch(from var(--border) l c h / 0.6);
   --vie-nav-bg: oklch(from var(--card) l c h / 0.85);
 
-  /* Spring easing */
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Easing tokens */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* reserved for celebration moments only */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+
+  /* Hero background gradient (landing/marketing) */
+  --gradient-hero-bg: radial-gradient(
+    ellipse at center top,
+    oklch(from var(--primary) l c h / 0.04),
+    transparent 60%
+  );
+
+  /* Ambient auth/generate background — dual-blob: primary halo + coral warmth.
+     Keeps the page from feeling like a blank neutral void without shouting. */
+  --gradient-auth-bg:
+    radial-gradient(ellipse 60rem 40rem at 15% -10%, oklch(from var(--primary) l c h / 0.08), transparent 55%),
+    radial-gradient(ellipse 50rem 35rem at 110% 110%, oklch(from var(--vie-coral) l c h / 0.06), transparent 55%);
+
+  /* Ambient empty-state glow — soft primary radiance behind a hero icon */
+  --gradient-empty-glow: radial-gradient(
+    circle at center,
+    oklch(from var(--primary) l c h / 0.18),
+    transparent 70%
+  );
+
+  /* Chromatic accent rule — used across palette/modal top-edges for identity.
+     Peaks softened from 0.6 → 0.4 for a more whispered signature. */
+  --gradient-accent-rule: linear-gradient(
+    90deg,
+    oklch(from var(--primary) l c h / 0) 0%,
+    oklch(from var(--primary) l c h / 0.4) 30%,
+    oklch(from var(--vie-coral) l c h / 0.4) 70%,
+    oklch(from var(--vie-coral) l c h / 0) 100%
+  );
 
   /* ── Output Type Gradients ── */
   --gradient-smart-summary: linear-gradient(
@@ -221,16 +280,90 @@
   /* ── Glass Card Tokens ── */
   --glass-bg: oklch(99% 0.003 285 / 0.7);
   --glass-border: oklch(90% 0.01 285 / 0.3);
+  --glass-border-strong: oklch(80% 0.015 285 / 0.55);
   --glass-shadow: 0 8px 32px oklch(20% 0.02 285 / 0.08);
+  --glass-shadow-elevated: inset 0 1px 0 oklch(100% 0 0 / 0.4), 0 12px 40px -12px oklch(20% 0.02 285 / 0.15);
   --glass-blur: 20px;
 
-  /* ── Typography Tokens ── */
-  --text-hero: 700 2rem/1.2 "Inter Variable", Inter, sans-serif;
-  --text-section: 600 1.25rem/1.4 "Inter Variable", Inter, sans-serif;
-  --text-card-title: 600 1rem/1.4 "Inter Variable", Inter, sans-serif;
-  --text-body: 400 0.9375rem/1.6 "Inter Variable", Inter, sans-serif;
-  --text-caption: 400 0.8125rem/1.5 "Inter Variable", Inter, sans-serif;
-  --text-micro: 500 0.6875rem/1.4 "Inter Variable", Inter, sans-serif;
+  /* ─────────────────────────────────────────────
+     TYPOGRAPHY SYSTEM
+     Families:
+       --font-display  Bricolage Grotesque — H1, hero, marketing
+       --font-sans     Inter              — H2-H4, body, UI
+       --font-mono     JetBrains Mono     — code, numerics
+     Scale ratio: 1.25 (major third) — steps at 0.6875 / 0.8125 / 0.875 / 0.9375 / 1 / 1.125 / 1.25 / 1.5 / 1.875 / 2.25rem
+     ───────────────────────────────────────────── */
+  --font-display: "Bricolage Grotesque", Inter, system-ui, sans-serif;
+  --font-sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-body: var(--font-sans); /* alias for backwards compat */
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", "Fira Code", monospace;
+
+  /* Tracking tokens — tighter as size grows */
+  --tracking-display: -0.025em;
+  --tracking-heading: -0.015em;
+  --tracking-title: -0.01em;
+  --tracking-body: 0;
+  --tracking-eyebrow: 0.08em;
+
+  /* Leading tokens */
+  --leading-display: 0.98;
+  --leading-heading: 1.15;
+  --leading-title: 1.35;
+  --leading-body: 1.6;
+  --leading-prose: 1.7;
+
+  /* Size tokens (rem-based for accessibility zoom) */
+  --text-xs: 0.6875rem;   /* 11 — micro labels, kbd */
+  --text-sm: 0.8125rem;   /* 13 — captions, metadata */
+  --text-base: 0.9375rem; /* 15 — body default (UI-dense) */
+  --text-md: 1rem;        /* 16 — card titles, prose body */
+  --text-lg: 1.125rem;    /* 18 — H4 / subtle lead */
+  --text-xl: 1.25rem;     /* 20 — H3 */
+  --text-2xl: 1.5rem;     /* 24 — H2 */
+  --text-3xl: 1.875rem;   /* 30 — page title */
+  --text-4xl: 2.25rem;    /* 36 — H1 */
+  --text-5xl: clamp(2.5rem, 5.5vw, 3.75rem);    /* marketing hero (fluid) */
+  --text-6xl: clamp(3rem, 6.5vw, 4.5rem);        /* display billboard */
+  --text-7xl: clamp(3.25rem, 8vw, 5.5rem);       /* landing headline drama */
+
+  /* ─────────────────────────────────────────────
+     SPATIAL SYSTEM
+     Base unit: 0.25rem (4px). Most scales are multiples of this.
+     Semantic tokens carry intent; Tailwind `spacing.*` stays the
+     primitive scale for ad-hoc needs.
+     ───────────────────────────────────────────── */
+  --space-3xs: 0.125rem;   /* 2  — hairline, icon offset */
+  --space-2xs: 0.25rem;    /* 4  — tight cluster (inside a chip) */
+  --space-xs: 0.5rem;      /* 8  — sibling inline gap */
+  --space-sm: 0.75rem;     /* 12 — form row, list item */
+  --space-md: 1rem;        /* 16 — standard block gap */
+  --space-lg: 1.5rem;      /* 24 — between related groups */
+  --space-xl: 2rem;        /* 32 — between distinct groups */
+  --space-2xl: 3rem;       /* 48 — section boundaries */
+  --space-3xl: 4rem;       /* 64 — page sections */
+  --space-4xl: 6rem;       /* 96 — marketing breathing */
+
+  /* Fluid page-level rhythm (clamps to viewport width) */
+  --space-section: clamp(2rem, 5vw, 4rem);
+  --space-page-gutter: clamp(1rem, 3vw, 2rem);
+  --space-hero: clamp(3rem, 8vw, 6rem);
+
+  /* Content width tokens */
+  --width-prose: 65ch;
+  --width-narrow: 32rem;
+  --width-content: 48rem;
+  --width-page: 80rem;
+
+  /* ─────────────────────────────────────────────
+     ELEVATION — subtle OKLCH-tinted shadow scale
+     Use for hierarchy reinforcement, not decoration.
+     ───────────────────────────────────────────── */
+  --shadow-xs: 0 1px 2px oklch(20% 0.02 285 / 0.06);
+  --shadow-sm: 0 2px 4px oklch(20% 0.02 285 / 0.06), 0 1px 2px oklch(20% 0.02 285 / 0.04);
+  --shadow-md: 0 4px 8px -2px oklch(20% 0.02 285 / 0.08), 0 2px 4px -1px oklch(20% 0.02 285 / 0.04);
+  --shadow-lg: 0 12px 24px -6px oklch(20% 0.02 285 / 0.12), 0 4px 8px -2px oklch(20% 0.02 285 / 0.06);
+  --shadow-xl: 0 24px 48px -12px oklch(20% 0.02 285 / 0.18);
+  --shadow-popover: 0 8px 24px -6px oklch(20% 0.02 285 / 0.14), 0 2px 6px -1px oklch(20% 0.02 285 / 0.06);
 }
 
 [data-theme="dark"] {
@@ -302,16 +435,20 @@
   /* ── Glass Card Tokens — dark overrides ── */
   --glass-bg: oklch(16% 0.02 280 / 0.6);
   --glass-border: oklch(30% 0.02 280 / 0.2);
+  --glass-border-strong: oklch(45% 0.04 280 / 0.5);
   --glass-shadow: 0 8px 32px oklch(0% 0 0 / 0.3);
+  --glass-shadow-elevated: inset 0 1px 0 oklch(100% 0 0 / 0.06), 0 12px 40px -12px oklch(0% 0 0 / 0.5);
   --glass-blur: 20px;
 
-  /* ── Typography Tokens — same in dark ── */
-  --text-hero: 700 2rem/1.2 "Inter Variable", Inter, sans-serif;
-  --text-section: 600 1.25rem/1.4 "Inter Variable", Inter, sans-serif;
-  --text-card-title: 600 1rem/1.4 "Inter Variable", Inter, sans-serif;
-  --text-body: 400 0.9375rem/1.6 "Inter Variable", Inter, sans-serif;
-  --text-caption: 400 0.8125rem/1.5 "Inter Variable", Inter, sans-serif;
-  --text-micro: 500 0.6875rem/1.4 "Inter Variable", Inter, sans-serif;
+  /* Typography is theme-agnostic — see :root */
+
+  /* Elevation in dark mode — deeper, no tint (pure black for contrast) */
+  --shadow-xs: 0 1px 2px oklch(0% 0 0 / 0.3);
+  --shadow-sm: 0 2px 4px oklch(0% 0 0 / 0.3), 0 1px 2px oklch(0% 0 0 / 0.2);
+  --shadow-md: 0 4px 8px -2px oklch(0% 0 0 / 0.35), 0 2px 4px -1px oklch(0% 0 0 / 0.2);
+  --shadow-lg: 0 12px 24px -6px oklch(0% 0 0 / 0.45), 0 4px 8px -2px oklch(0% 0 0 / 0.25);
+  --shadow-xl: 0 24px 48px -12px oklch(0% 0 0 / 0.55);
+  --shadow-popover: 0 8px 24px -6px oklch(0% 0 0 / 0.5), 0 2px 6px -1px oklch(0% 0 0 / 0.3);
 }
 
 @theme inline {
@@ -353,6 +490,86 @@
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
   --color-info-soft: var(--info-soft);
+
+  /* Typography — families (for Tailwind `font-*` utilities) */
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+
+  /* Typography — sizes (for Tailwind `text-*` utilities; keeps numeric scale intact) */
+  --text-xs: var(--text-xs);
+  --text-sm: var(--text-sm);
+  --text-base: var(--text-base);
+  --text-md: var(--text-md);
+  --text-lg: var(--text-lg);
+  --text-xl: var(--text-xl);
+  --text-2xl: var(--text-2xl);
+  --text-3xl: var(--text-3xl);
+  --text-4xl: var(--text-4xl);
+  --text-5xl: var(--text-5xl);
+  --text-6xl: var(--text-6xl);
+  --text-7xl: var(--text-7xl);
+
+  /* Typography — tracking (for Tailwind `tracking-*` utilities) */
+  --tracking-display: var(--tracking-display);
+  --tracking-heading: var(--tracking-heading);
+  --tracking-title: var(--tracking-title);
+  --tracking-body: var(--tracking-body);
+  --tracking-eyebrow: var(--tracking-eyebrow);
+
+  /* Typography — leading (for Tailwind `leading-*` utilities) */
+  --leading-display: var(--leading-display);
+  --leading-heading: var(--leading-heading);
+  --leading-title: var(--leading-title);
+  --leading-body: var(--leading-body);
+  --leading-prose: var(--leading-prose);
+
+  /* Semantic spacing — access via `var(--space-*)` directly in custom CSS.
+     Intentionally NOT registered as `--spacing-{xs,sm,md,...}` in @theme, because
+     those names collide with Tailwind v4's size scale and silently override
+     `max-w-{xs..4xl}`, `min-w-*`, `w-*`, and `h-*` utilities, producing
+     catastrophic card-width regressions. Keep them on :root only. */
+
+  /* Content widths — semantic */
+  --container-prose: var(--width-prose);
+  --container-narrow: var(--width-narrow);
+  --container-content: var(--width-content);
+  --container-page: var(--width-page);
+
+  /* Content widths — Tailwind v4 size scale.
+     Declared explicitly because the custom --spacing-{xs..4xl} scale above
+     would otherwise hijack max-w-{xs..4xl} via Tailwind v4's fallback chain. */
+  --container-3xs: 16rem;
+  --container-2xs: 18rem;
+  --container-xs: 20rem;
+  --container-sm: 24rem;
+  --container-md: 28rem;
+  --container-lg: 32rem;
+  --container-xl: 36rem;
+  --container-2xl: 42rem;
+  --container-3xl: 48rem;
+  --container-4xl: 56rem;
+  --container-5xl: 64rem;
+  --container-6xl: 72rem;
+  --container-7xl: 80rem;
+
+  /* Elevation — Tailwind `shadow-*` utilities */
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-popover: var(--shadow-popover);
+
+  /* Code/terminal surface tokens */
+  --color-code-bg: var(--code-bg);
+  --color-code-chrome: var(--code-chrome);
+  --color-code-border: var(--code-border);
+  --color-code-text: var(--code-text);
+  --color-code-text-muted: var(--code-text-muted);
+  --color-code-text-dim: var(--code-text-dim);
+  --color-code-text-bright: var(--code-text-bright);
+  --color-code-focus: var(--code-focus);
 
   /* VIE accent colors */
   --color-vie-coral: var(--vie-coral);
@@ -403,23 +620,101 @@
     @apply border-border;
   }
 
+  html {
+    /* Respect user zoom + OS font-size preferences */
+    font-size: 100%;
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-background text-foreground;
-    font-family:
-      "Inter",
-      system-ui,
-      -apple-system,
-      sans-serif;
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--leading-body);
+    letter-spacing: var(--tracking-body);
+    font-synthesis-weight: none;
+    /* Crisper glyph rendering — matches the refined aesthetic */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /* OpenType: required ligatures, contextual alternates, kerning */
     font-feature-settings:
       "rlig" 1,
-      "calt" 1;
+      "calt" 1,
+      "kern" 1;
+    font-kerning: normal;
+  }
+
+  /* Default heading styles — component-level overrides welcome */
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: var(--text-4xl);
+    line-height: var(--leading-heading);
+    letter-spacing: var(--tracking-display);
+  }
+
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: var(--text-2xl);
+    line-height: var(--leading-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
+  h3 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: var(--text-xl);
+    line-height: var(--leading-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  h4 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: var(--text-lg);
+    line-height: var(--leading-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  small {
+    font-size: var(--text-sm);
+    line-height: var(--leading-title);
+  }
+
+  kbd {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
   }
 
   .code-font,
   code,
   pre {
-    font-family:
-      "JetBrains Mono", ui-monospace, "Cascadia Code", "Fira Code", monospace;
+    font-family: var(--font-mono);
+    font-feature-settings: "calt" 0; /* disable contextual alts in code */
+  }
+
+  /* Numbers in tables/data — tabular figures align vertically */
+  .tabular-nums,
+  [data-tabular] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─── Motion safety net ───
+     Universal override for users who prefer reduced motion.
+     Per-component `motion-reduce:*` classes remain as the fine-grained escape.
+     This catches library-provided animations we don't control. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   /* Smooth theme switching via View Transitions API.
@@ -446,6 +741,187 @@
    UTILITY CLASSES
    ═══════════════════════════════════════════════════ */
 @layer utilities {
+  /* ─── Typography utility classes ───
+     Semantic names that bundle size + weight + family + leading + tracking.
+     Prefer these over individual `text-*` + `font-*` combos for consistency. */
+
+  .type-hero {
+    font: 800 var(--text-5xl)/var(--leading-heading) var(--font-display);
+    letter-spacing: var(--tracking-display);
+  }
+  /* Landing headline — deliberately dramatic. Use once per surface. */
+  .type-hero-xl {
+    font: 800 var(--text-7xl)/0.94 var(--font-display);
+    letter-spacing: -0.025em;
+  }
+  .type-page-title {
+    font: 700 var(--text-3xl)/var(--leading-heading) var(--font-display);
+    letter-spacing: var(--tracking-heading);
+  }
+  .type-h3 {
+    font: 600 var(--text-xl)/var(--leading-title) var(--font-sans);
+    letter-spacing: var(--tracking-title);
+  }
+  .type-lead {
+    font: 400 var(--text-lg)/var(--leading-body) var(--font-sans);
+    color: var(--muted-foreground);
+  }
+  .type-caption {
+    font: 400 var(--text-sm)/var(--leading-title) var(--font-sans);
+    color: var(--muted-foreground);
+  }
+  .type-eyebrow {
+    font: 600 var(--text-xs)/1 var(--font-sans);
+    letter-spacing: var(--tracking-eyebrow);
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  /* Balanced wrapping for headings (Chromium + recent Safari/Firefox) */
+  .text-balance { text-wrap: balance; }
+  .text-pretty  { text-wrap: pretty; }
+
+  /* ─── Layout primitives ───
+     `.stack-*` for 1D vertical flow with a semantic gap token. */
+
+  .stack-xs  { display: flex; flex-direction: column; gap: var(--space-xs); }
+  .stack-sm  { display: flex; flex-direction: column; gap: var(--space-sm); }
+  .stack-md  { display: flex; flex-direction: column; gap: var(--space-md); }
+  .stack-lg  { display: flex; flex-direction: column; gap: var(--space-lg); }
+  .stack-xl  { display: flex; flex-direction: column; gap: var(--space-xl); }
+  .stack-2xl { display: flex; flex-direction: column; gap: var(--space-2xl); }
+
+  /* Marketing / landing page vertical rhythm — fluid */
+  .hero-rhythm > * + * { margin-top: var(--space-hero); }
+
+  /* Page gutter — horizontal + vertical inset that breathes on wider viewports */
+  .page-gutter   { padding-inline: var(--space-page-gutter); }
+  .page-gutter-y { padding-block:  var(--space-section); }
+
+  /* Chromatic top-rule — adds subtle primary→coral identity to popovers/modals */
+  .accent-rule {
+    position: relative;
+  }
+  .accent-rule::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 2px;
+    background: var(--gradient-accent-rule);
+    pointer-events: none;
+  }
+
+  /* Ambient page background for auth/generate */
+  .surface-ambient {
+    background:
+      var(--gradient-auth-bg),
+      var(--background);
+  }
+
+  /* Radial glow behind a centered hero icon */
+  .icon-glow {
+    position: relative;
+    isolation: isolate;
+  }
+  .icon-glow::before {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background: var(--gradient-empty-glow);
+    z-index: -1;
+    filter: blur(8px);
+  }
+
+  /* Magnetic CTA — subtle primary→coral gradient + warm hover glow.
+     Use on the single most-important call-to-action per surface. */
+  .cta-magnetic {
+    background: linear-gradient(
+      135deg,
+      var(--primary) 0%,
+      oklch(from var(--primary) calc(l + 0.04) calc(c + 0.01) calc(h - 10)) 100%
+    );
+    box-shadow:
+      0 1px 0 oklch(100% 0 0 / 0.15) inset,
+      var(--shadow-sm);
+    transition: box-shadow 180ms var(--ease-out-expo), transform 180ms var(--ease-out-expo);
+  }
+  .cta-magnetic:hover {
+    box-shadow:
+      0 1px 0 oklch(100% 0 0 / 0.16) inset,
+      var(--shadow-md),
+      0 0 0 3px oklch(from var(--primary) l c h / 0.1);
+    transform: translateY(-1px);
+  }
+  .cta-magnetic:active {
+    transform: translateY(0);
+  }
+
+  /* Subtle icon float — use on hero icons that invite first action.
+     3s cycle, 3px vertical travel, respects reduced-motion. */
+  @keyframes icon-hover-float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-3px); }
+  }
+  .icon-float {
+    animation: icon-hover-float 5s var(--ease-out-expo) infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .icon-float { animation: none; }
+  }
+
+  /* Scale-pulse on success — brief attention-grab for completion moments.
+     One-shot, reduced-motion safe. */
+  @keyframes scale-pulse-once {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.08); }
+    100% { transform: scale(1); }
+  }
+  .scale-pulse-once {
+    animation: scale-pulse-once 0.5s var(--ease-out-expo) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .scale-pulse-once { animation: none; }
+  }
+
+  /* Multi-domain ambient orbs — hints at the chromatic range the product produces.
+     Place behind landing-page decorative surfaces; pointer-events disabled. */
+  .orbs-ambient {
+    position: relative;
+    isolation: isolate;
+  }
+  .orbs-ambient::before,
+  .orbs-ambient::after {
+    content: "";
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(56px);
+    opacity: 0.22;
+    z-index: -1;
+    pointer-events: none;
+  }
+  .orbs-ambient::before {
+    /* Coral/honey warm orb — upper-right */
+    inset: -20% -10% auto auto;
+    width: 12rem;
+    height: 12rem;
+    background: radial-gradient(circle, var(--vie-coral), transparent 70%);
+  }
+  .orbs-ambient::after {
+    /* Mint/sky cool orb — lower-left */
+    inset: auto auto -20% -10%;
+    width: 14rem;
+    height: 14rem;
+    background: radial-gradient(circle, var(--vie-mint), transparent 70%);
+  }
+
+  /* Auto-fit responsive grid — no breakpoints, content-aware */
+  .auto-grid {
+    display: grid;
+    gap: var(--space-md);
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  }
+
   /* Hide scrollbar while keeping scroll functionality */
   .scrollbar-hide {
     -ms-overflow-style: none;
@@ -453,6 +929,24 @@
   }
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Scroll fade — horizontal scroll indicator for hidden scrollbar areas */
+  .scroll-fade-x {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 24px,
+      black calc(100% - 24px),
+      transparent
+    );
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 24px,
+      black calc(100% - 24px),
+      transparent
+    );
   }
 
   /* Thin scrollbar — native hidden, custom overlay via JS */

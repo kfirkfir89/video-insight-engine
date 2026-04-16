@@ -32,8 +32,8 @@ export const HeroCard = memo(function HeroCard({
       style={gradient ? { background: gradient } : undefined}
     >
       {emoji && <span className="text-4xl block mb-2" aria-hidden="true">{emoji}</span>}
-      <h3 className="font-bold text-lg">{title}</h3>
-      {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
+      <h3 className="font-semibold text-lg tracking-tight leading-snug">{title}</h3>
+      {subtitle && <p className="text-sm text-muted-foreground leading-relaxed mt-1.5">{subtitle}</p>}
       {children && <div className="mt-3">{children}</div>}
     </div>
   );

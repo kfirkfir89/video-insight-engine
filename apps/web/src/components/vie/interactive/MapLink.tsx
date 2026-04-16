@@ -26,14 +26,14 @@ export const MapLink = memo(function MapLink({
       target="_blank"
       rel="noopener noreferrer"
       className={cn(
-        'inline-flex items-center gap-1.5 text-xs text-primary hover:underline transition-colors',
+        'inline-flex items-center gap-1.5 text-[0.8125rem] font-medium leading-snug text-primary hover:underline underline-offset-[3px] decoration-primary/40 hover:decoration-primary transition-colors',
         className,
       )}
       aria-label={`View ${name} on Google Maps`}
     >
       <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       <span>{name}</span>
-      <ExternalLink className="h-3 w-3 shrink-0 opacity-50" aria-hidden="true" />
+      <ExternalLink className="h-3 w-3 shrink-0 opacity-60" aria-hidden="true" />
     </a>
   );
 });

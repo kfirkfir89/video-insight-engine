@@ -45,11 +45,14 @@ export const RAGSourceCard = memo(function RAGSourceCard({
         <img
           src={effectiveThumbnail}
           alt=""
-          className="w-full h-full object-cover"
+          width={64}
+          height={40}
           loading="lazy"
+          decoding="async"
+          className="w-full h-full object-cover"
         />
         {timestamp && (
-          <span className="absolute bottom-0 right-0 px-0.5 text-[9px] bg-black/80 text-white rounded-tl">
+          <span className="absolute bottom-0 right-0 px-0.5 text-[9px] bg-[var(--overlay-bg)] text-[var(--overlay-text)] rounded-tl">
             {timestamp}
           </span>
         )}
@@ -65,7 +68,7 @@ export const RAGSourceCard = memo(function RAGSourceCard({
               variant="ghost"
               size="sm"
               onClick={() => onSeek(timestampSeconds)}
-              className="h-5 px-1.5 text-[10px] gap-1 text-primary"
+              className="h-5 px-1.5 text-xs gap-1 text-primary"
             >
               <Play className="h-3 w-3" aria-hidden="true" />
               Jump to
@@ -75,7 +78,7 @@ export const RAGSourceCard = memo(function RAGSourceCard({
             variant="ghost"
             size="sm"
             asChild
-            className="h-5 px-1.5 text-[10px] gap-1"
+            className="h-5 px-1.5 text-xs gap-1"
           >
             <a href={youtubeUrl} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="h-3 w-3" aria-hidden="true" />
@@ -84,7 +87,7 @@ export const RAGSourceCard = memo(function RAGSourceCard({
           </Button>
 
           {relevanceScore !== undefined && (
-            <span className="text-[10px] text-muted-foreground ml-auto">
+            <span className="text-xs text-muted-foreground ml-auto">
               {Math.round(relevanceScore * 100)}% match
             </span>
           )}

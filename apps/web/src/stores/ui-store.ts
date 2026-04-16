@@ -82,6 +82,9 @@ interface UIState {
   // Search query (not persisted, cleared on reload)
   sidebarSearchQuery: string;
 
+  // Signal to open the sidebar search panel after sidebar opens (consumed once)
+  pendingSidebarSearch: boolean;
+
   // New folder input visibility (triggered from SidebarTabs, consumed by SidebarSection)
   showNewFolderInput: boolean;
 
@@ -113,6 +116,8 @@ interface UIState {
   setSidebarSortOption: (option: SortOption) => void;
   setSidebarSearchQuery: (query: string) => void;
   clearSidebarSearch: () => void;
+  openSidebarSearch: () => void;
+  consumePendingSidebarSearch: () => void;
 
   // Selection mode actions
   enterSelectionMode: (initialVideoId?: string, initialFolderId?: string) => void;
@@ -207,6 +212,7 @@ export const useUIStore = create<UIState>()(
       sidebarTextSize: "medium",
       sidebarSortOption: "name-asc",
       sidebarSearchQuery: "",
+      pendingSidebarSearch: false,
       showNewFolderInput: false,
 
       // Selection mode state
@@ -261,6 +267,8 @@ export const useUIStore = create<UIState>()(
       setSidebarSortOption: (option) => set({ sidebarSortOption: option }),
       setSidebarSearchQuery: (query) => set({ sidebarSearchQuery: query }),
       clearSidebarSearch: () => set({ sidebarSearchQuery: "" }),
+      openSidebarSearch: () => set({ sidebarOpen: true, activeSection: "summarized", pendingSidebarSearch: true }),
+      consumePendingSidebarSearch: () => set({ pendingSidebarSearch: false }),
 
       // Selection mode actions
       enterSelectionMode: (initialVideoId, initialFolderId) =>

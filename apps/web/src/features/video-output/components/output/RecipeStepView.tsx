@@ -69,13 +69,13 @@ export const RecipeStepView = memo(function RecipeStepView({
             Step {step.number} of {steps.length}
           </span>
           {isDone && (
-            <Badge variant="success" className="text-[10px]">Done</Badge>
+            <Badge variant="success" className="text-xs">Done</Badge>
           )}
         </div>
         {/* Readiness pill */}
         {stepReadiness && (
           <span className={cn(
-            'text-[10px] px-2 py-0.5 rounded-full transition-colors',
+            'text-xs px-2 py-0.5 rounded-full transition-colors',
             stepReadiness.allReady
               ? 'bg-success/10 text-success'
               : 'bg-warning/10 text-warning',

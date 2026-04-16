@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Sparkles, FolderOpen, Search, Library, MessageCircle } from "lucide-react";
+import { Sparkles, Search, Library, MessageCircle, Command } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   Tooltip,
@@ -12,12 +12,17 @@ import { cn } from "@/lib/utils";
 
 export const LeftSidebarIconStrip = memo(function LeftSidebarIconStrip() {
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
+  const openSidebarSearch = useUIStore((s) => s.openSidebarSearch);
   const activeSection = useActiveSection();
   const setActiveSection = useUIStore((s) => s.setActiveSection);
 
   const handleTabClick = (section: "summarized" | "assistant") => {
     setActiveSection(section);
     toggleSidebar();
+  };
+
+  const openCommandPalette = () => {
+    window.dispatchEvent(new CustomEvent("vie:open-command-palette"));
   };
 
   return (
@@ -29,7 +34,7 @@ export const LeftSidebarIconStrip = memo(function LeftSidebarIconStrip() {
             <Link
               to="/board"
               aria-label="Home"
-              className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted transition-colors"
+              className="h-11 w-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors"
             >
               <Sparkles className="h-4.5 w-4.5 text-primary" />
             </Link>
@@ -38,78 +43,77 @@ export const LeftSidebarIconStrip = memo(function LeftSidebarIconStrip() {
         </Tooltip>
 
         {/* Divider */}
-        <div className="w-6 h-px bg-border/50 my-1" />
+        <div className="w-6 h-px bg-border/50 my-1" aria-hidden="true" />
 
-        {/* Collection tab */}
+        {/* Collection tab — jumps into summarized section */}
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               onClick={() => handleTabClick("summarized")}
-              aria-label="Collection"
+              aria-label="Open collection"
               className={cn(
-                "h-9 w-9 flex items-center justify-center rounded-lg transition-colors",
+                "h-11 w-11 flex items-center justify-center rounded-lg transition-all",
                 activeSection === "summarized"
-                  ? "bg-primary/10 text-primary"
+                  ? "bg-primary/10 text-primary ring-1 ring-primary/20"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
-              <Library className="h-4 w-4" />
+              <Library className="h-4.5 w-4.5" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">Collection</TooltipContent>
+          <TooltipContent side="right" className="text-xs">Open collection</TooltipContent>
         </Tooltip>
 
-        {/* Assistant tab */}
+        {/* Assistant tab — coral accent for wayfinding contrast with Collection */}
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               onClick={() => handleTabClick("assistant")}
-              aria-label="Assistant"
+              aria-label="Open assistant"
               className={cn(
-                "h-9 w-9 flex items-center justify-center rounded-lg transition-colors",
+                "h-11 w-11 flex items-center justify-center rounded-lg transition-all",
                 activeSection === "assistant"
-                  ? "bg-primary/10 text-primary"
+                  ? "bg-[oklch(from_var(--vie-coral)_l_c_h_/_0.12)] text-[var(--vie-coral)] ring-1 ring-[oklch(from_var(--vie-coral)_l_c_h_/_0.22)]"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
-              <MessageCircle className="h-4 w-4" />
+              <MessageCircle className="h-4.5 w-4.5" />
             </button>
           </TooltipTrigger>
           <TooltipContent side="right" className="text-xs">Assistant</TooltipContent>
         </Tooltip>
 
         {/* Divider */}
-        <div className="w-6 h-px bg-border/50 my-1" />
+        <div className="w-6 h-px bg-border/50 my-1" aria-hidden="true" />
 
-        {/* Open sidebar — folders */}
+        {/* Search — opens sidebar + focuses search panel */}
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              onClick={toggleSidebar}
-              aria-label="Library"
-              className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-            >
-              <FolderOpen className="h-4 w-4" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">Library</TooltipContent>
-        </Tooltip>
-
-        {/* Search — opens sidebar with search */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={toggleSidebar}
-              aria-label="Search"
-              className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              onClick={openSidebarSearch}
+              aria-label="Search videos"
+              className="h-11 w-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
             >
               <Search className="h-4 w-4" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">Search</TooltipContent>
+          <TooltipContent side="right" className="text-xs">Search videos</TooltipContent>
+        </Tooltip>
+
+        {/* Command palette — global jump */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={openCommandPalette}
+              aria-label="Open command palette"
+              className="h-11 w-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+            >
+              <Command className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="text-xs">Command palette <span className="opacity-60 ms-1">⌘K</span></TooltipContent>
         </Tooltip>
       </div>
     </TooltipProvider>
   );
 });
-
