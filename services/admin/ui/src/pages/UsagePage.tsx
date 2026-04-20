@@ -3,14 +3,18 @@ import { FeatureBreakdown } from '../components/FeatureBreakdown';
 import { ModelBreakdown } from '../components/ModelBreakdown';
 import { RecentCalls } from '../components/RecentCalls';
 
-export function UsagePage() {
+interface UsagePageProps {
+  days?: number;
+}
+
+export function UsagePage({ days = 30 }: UsagePageProps = {}) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <CostChart />
-        <ModelBreakdown />
+        <CostChart days={days} />
+        <ModelBreakdown days={days} />
       </div>
-      <FeatureBreakdown />
+      <FeatureBreakdown days={days} />
       <RecentCalls />
     </div>
   );

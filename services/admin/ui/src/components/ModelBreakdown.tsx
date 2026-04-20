@@ -1,5 +1,8 @@
 import { PieChart, Pie, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useUsageByModel } from '../hooks/use-admin-api';
+import { Panel } from './Panel';
+import { SkeletonPanel } from './SkeletonPanel';
+import { ErrorState } from './ErrorState';
 
 const COLORS = [
   'var(--chart-1)',
@@ -12,17 +15,20 @@ const COLORS = [
 ];
 
 export function ModelBreakdown({ days = 30 }: { days?: number }) {
-  const { data, isLoading } = useUsageByModel(days);
+  const { data, isLoading, isError, error, refetch } = useUsageByModel(days);
+
+  if (isError) {
+    return <ErrorState error={error} onRetry={() => refetch()} title="Failed to load model breakdown" />;
+  }
 
   if (isLoading || !data) {
-    return <div className="h-72 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)] animate-pulse" />;
+    return <SkeletonPanel size="xl" />;
   }
 
   const colored = data.map((d, i) => ({ ...d, fill: COLORS[i % COLORS.length] }));
 
   return (
-    <div className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)]">
-      <h3 className="text-sm font-medium text-[var(--color-text-muted)] mb-3">Cost by Model</h3>
+    <Panel title="Cost by Model" tone="raised" padding="md">
       <ResponsiveContainer width="100%" height={280}>
         <PieChart>
           <Pie
@@ -34,7 +40,7 @@ export function ModelBreakdown({ days = 30 }: { days?: number }) {
             outerRadius={90}
             innerRadius={40}
             paddingAngle={2}
-            label={({ name }: { name?: string }) => name?.split('/').pop()?.split('-').slice(0, 2).join('-') ?? ''}
+            label={({ name }: { name?: string }) => name?.split('/').pop() ?? ''}
             labelLine={{ stroke: 'var(--color-text-faint)', strokeWidth: 1 }}
           />
           <Tooltip
@@ -47,6 +53,6 @@ export function ModelBreakdown({ days = 30 }: { days?: number }) {
           />
         </PieChart>
       </ResponsiveContainer>
-    </div>
+    </Panel>
   );
 }

@@ -1,5 +1,11 @@
+import type { ReactNode } from 'react';
 import { useUsageStats } from '../hooks/use-admin-api';
 import { DollarIcon, ZapIcon, ClockIcon, CheckCircleIcon, CoinsIcon } from './icons';
+import { StatCard } from './StatCard';
+import type { StatTone } from './StatCard';
+import { SkeletonPanel } from './SkeletonPanel';
+import { ErrorState } from './ErrorState';
+import { InfoTip } from './InfoTip';
 
 const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 const fmtUsd = (n: number) => `$${n.toFixed(4)}`;
@@ -10,33 +16,83 @@ function fmtTokens(n: number): string {
   return n.toLocaleString();
 }
 
-const CARD_CONFIG = [
-  { key: 'cost', icon: DollarIcon, color: 'var(--color-primary)', soft: 'var(--color-primary-soft)' },
-  { key: 'calls', icon: ZapIcon, color: 'var(--color-success)', soft: 'var(--color-success-soft)' },
-  { key: 'duration', icon: ClockIcon, color: 'var(--color-warning)', soft: 'var(--color-warning-soft)' },
-  { key: 'success', icon: CheckCircleIcon, color: 'var(--color-success)', soft: 'var(--color-success-soft)' },
-  { key: 'tokens', icon: CoinsIcon, color: 'var(--color-primary)', soft: 'var(--color-primary-soft)' },
-];
+function LabelWithTip({ label, tip }: { label: string; tip?: ReactNode }) {
+  if (tip === undefined) return <>{label}</>;
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span>{label}</span>
+      <InfoTip label={`${label} explanation`}>{tip}</InfoTip>
+    </span>
+  );
+}
+
+interface CardDef {
+  label: string;
+  value: string;
+  icon: typeof DollarIcon;
+  tone: StatTone;
+  tip?: ReactNode;
+}
 
 export function StatsCards({ days = 30 }: { days?: number }) {
-  const { data, isLoading } = useUsageStats(days);
+  const { data, isLoading, isError, error, refetch } = useUsageStats(days);
+
+  if (isError) {
+    return (
+      <div data-testid="stats-cards">
+        <ErrorState error={error} onRetry={() => refetch()} title="Failed to load summary stats" />
+      </div>
+    );
+  }
 
   if (isLoading || !data) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4" data-testid="stats-cards">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-24 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)] animate-pulse" />
+          <SkeletonPanel key={i} size="md" />
         ))}
       </div>
     );
   }
 
-  const cards = [
-    { label: 'Total Cost', value: fmtUsd(data.total_cost_usd ?? 0), ...CARD_CONFIG[0] },
-    { label: 'Total Calls', value: fmt(data.total_calls ?? 0), ...CARD_CONFIG[1] },
-    { label: 'Avg Duration', value: `${fmt(data.avg_duration_ms ?? 0)}ms`, ...CARD_CONFIG[2] },
-    { label: 'Success Rate', value: data.total_calls ? `${((data.success_count / data.total_calls) * 100).toFixed(1)}%` : 'N/A', ...CARD_CONFIG[3] },
-    { label: 'Total Tokens', value: fmtTokens(data.total_tokens ?? 0), ...CARD_CONFIG[4] },
+  const successRate = data.total_calls
+    ? `${((data.success_count / data.total_calls) * 100).toFixed(1)}%`
+    : 'N/A';
+
+  const cards: CardDef[] = [
+    {
+      label: 'Total Cost',
+      value: fmtUsd(data.total_cost_usd ?? 0),
+      icon: DollarIcon,
+      tone: 'primary',
+    },
+    {
+      label: 'Total Calls',
+      value: fmt(data.total_calls ?? 0),
+      icon: ZapIcon,
+      tone: 'success',
+    },
+    {
+      label: 'Avg Duration',
+      value: `${fmt(data.avg_duration_ms ?? 0)}ms`,
+      icon: ClockIcon,
+      tone: 'warning',
+      tip: 'Wall-clock time per LLM call from request start to response complete.',
+    },
+    {
+      label: 'Success Rate',
+      value: successRate,
+      icon: CheckCircleIcon,
+      tone: 'success',
+      tip: 'Successful calls / total calls. A call is successful when the LLM returned a response without error.',
+    },
+    {
+      label: 'Total Tokens',
+      value: fmtTokens(data.total_tokens ?? 0),
+      icon: CoinsIcon,
+      tone: 'accent',
+      tip: 'Sum of input + output tokens across all calls in the selected window.',
+    },
   ];
 
   return (
@@ -44,17 +100,13 @@ export function StatsCards({ days = 30 }: { days?: number }) {
       {cards.map((c) => {
         const Icon = c.icon;
         return (
-          <div
+          <StatCard
             key={c.label}
-            className="relative overflow-hidden p-4 rounded-xl border border-[var(--color-border)]"
-            style={{ background: c.soft, borderLeft: `4px solid ${c.color}` }}
-          >
-            <div className="flex items-center gap-1.5 mb-2">
-              <span style={{ color: c.color }}><Icon /></span>
-              <p className="text-xs font-medium text-[var(--color-text-muted)]">{c.label}</p>
-            </div>
-            <p className="text-3xl font-bold tracking-tight" style={{ color: c.color }}>{c.value}</p>
-          </div>
+            label={<LabelWithTip label={c.label} tip={c.tip} />}
+            value={c.value}
+            tone={c.tone}
+            icon={<Icon />}
+          />
         );
       })}
     </div>

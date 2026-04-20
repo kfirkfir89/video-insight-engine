@@ -1,28 +1,34 @@
 import { useSharesTop } from '../hooks/use-admin-api';
 import { getOutputTypeLabel } from '../lib/constants';
 import { EyeIcon, HeartIcon } from './icons';
+import { Panel } from './Panel';
+import { SkeletonPanel } from './SkeletonPanel';
+import { ErrorState } from './ErrorState';
 
 export function SharesTable({ days = 30 }: { days?: number }) {
-  const { data, isLoading } = useSharesTop(days);
+  const { data, isLoading, isError, error, refetch } = useSharesTop(days);
+
+  if (isError) {
+    return <ErrorState error={error} onRetry={() => refetch()} title="Failed to load shares" />;
+  }
 
   if (isLoading || !data) {
-    return <div className="h-64 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)] animate-pulse" />;
+    return <SkeletonPanel size="xl" />;
   }
 
   if (data.length === 0) {
     return (
-      <div className="h-64 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] flex items-center justify-center">
-        <p className="text-sm text-[var(--color-text-faint)]">No shared outputs yet</p>
-      </div>
+      <Panel title="Top Shared Outputs" tone="raised" padding="md">
+        <div className="h-40 flex items-center justify-center">
+          <p className="text-sm text-[var(--color-text-faint)]">No shared outputs yet</p>
+        </div>
+      </Panel>
     );
   }
 
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] overflow-hidden" data-testid="shares-table">
-      <div className="px-4 py-3 border-b border-[var(--color-border)]">
-        <h3 className="text-sm font-medium text-[var(--color-text-muted)]">Top Shared Outputs</h3>
-      </div>
-      <div className="overflow-x-auto">
+    <Panel title="Top Shared Outputs" tone="raised" padding="none">
+      <div className="overflow-x-auto" data-testid="shares-table">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-[var(--color-border)] text-[var(--color-text-faint)]">
@@ -58,6 +64,6 @@ export function SharesTable({ days = 30 }: { days?: number }) {
           </tbody>
         </table>
       </div>
-    </div>
+    </Panel>
   );
 }

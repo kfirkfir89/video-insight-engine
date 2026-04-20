@@ -1,9 +1,15 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useUsageByVideo, useVideoDetail } from '../hooks/use-admin-api';
 import type { VideoSummaryItem } from '../lib/api';
 import { formatCost, formatDuration, timeAgo, formatNumber } from '../lib/format';
 import { DollarIcon, ZapIcon, VideoPlayIcon, ChevronRightIcon } from '../components/icons';
+import { Panel } from '../components/Panel';
+import { SkeletonPanel } from '../components/SkeletonPanel';
+import { ErrorState } from '../components/ErrorState';
+import { StatCard } from '../components/StatCard';
+import { SortableHeader } from '../components/SortableHeader';
+import { useUrlSort } from '../hooks/use-sort';
 
 function ChevronIcon({ open }: { open: boolean }) {
   return (
@@ -36,37 +42,41 @@ function SummaryStats({ data }: { data: Array<{ calls: number; cost_usd: number 
   const totalCost = data.reduce((sum, v) => sum + v.cost_usd, 0);
   const totalCalls = data.reduce((sum, v) => sum + v.calls, 0);
 
-  const stats = [
-    { label: 'Videos', value: formatNumber(totalVideos), icon: VideoPlayIcon, color: 'var(--color-accent)', soft: 'var(--color-accent-soft)' },
-    { label: 'Total Spend', value: formatCost(totalCost), icon: DollarIcon, color: 'var(--color-primary)', soft: 'var(--color-primary-soft)' },
-    { label: 'Total Calls', value: formatNumber(totalCalls), icon: ZapIcon, color: 'var(--color-success)', soft: 'var(--color-success-soft)' },
-  ];
-
   return (
     <div className="grid grid-cols-3 gap-3">
-      {stats.map((s) => {
-        const Icon = s.icon;
-        return (
-          <div
-            key={s.label}
-            className="p-3 rounded-xl border border-[var(--color-border)]"
-            style={{ background: s.soft, borderLeft: `3px solid ${s.color}` }}
-          >
-            <div className="flex items-center gap-1.5 mb-1">
-              <span style={{ color: s.color }}><Icon /></span>
-              <span className="text-[10px] font-medium text-[var(--color-text-muted)]">{s.label}</span>
-            </div>
-            <p className="text-xl font-bold" style={{ color: s.color }}>{s.value}</p>
-          </div>
-        );
-      })}
+      <StatCard
+        label="Videos"
+        value={formatNumber(totalVideos)}
+        tone="accent"
+        icon={<VideoPlayIcon />}
+      />
+      <StatCard
+        label="Total Spend"
+        value={formatCost(totalCost)}
+        tone="primary"
+        icon={<DollarIcon />}
+      />
+      <StatCard
+        label="Total Calls"
+        value={formatNumber(totalCalls)}
+        tone="success"
+        icon={<ZapIcon />}
+      />
     </div>
   );
 }
 
 /** Inline expanded call details fetched on demand */
 function VideoCallsPanel({ videoId }: { videoId: string }) {
-  const { data, isLoading } = useVideoDetail(videoId);
+  const { data, isLoading, isError, error, refetch } = useVideoDetail(videoId);
+
+  if (isError) {
+    return (
+      <div className="px-4 py-3">
+        <ErrorState error={error} onRetry={() => refetch()} title="Failed to load call details" compact />
+      </div>
+    );
+  }
 
   if (isLoading || !data) {
     return (
@@ -156,8 +166,43 @@ function VideoCallsPanel({ videoId }: { videoId: string }) {
   );
 }
 
-export function VideosPage() {
-  const { data, isLoading } = useUsageByVideo(30, 50);
+type SortKey = 'title' | 'cost_usd' | 'calls' | 'tokens' | 'last_call';
+
+function compareVideos(a: VideoSummaryItem, b: VideoSummaryItem, key: SortKey): number {
+  switch (key) {
+    case 'title': {
+      const at = (a.title ?? a.video_id ?? '').toLowerCase();
+      const bt = (b.title ?? b.video_id ?? '').toLowerCase();
+      return at.localeCompare(bt);
+    }
+    case 'cost_usd':
+      return (a.cost_usd ?? 0) - (b.cost_usd ?? 0);
+    case 'calls':
+      return (a.calls ?? 0) - (b.calls ?? 0);
+    case 'tokens':
+      return (a.tokens_in + a.tokens_out) - (b.tokens_in + b.tokens_out);
+    case 'last_call': {
+      const ad = a.last_call ? new Date(a.last_call).getTime() : 0;
+      const bd = b.last_call ? new Date(b.last_call).getTime() : 0;
+      return ad - bd;
+    }
+    default:
+      return 0;
+  }
+}
+
+function isSortKey(value: string | null): value is SortKey {
+  return value === 'title' || value === 'cost_usd' || value === 'calls' || value === 'tokens' || value === 'last_call';
+}
+
+interface VideosPageProps {
+  days?: number;
+}
+
+export function VideosPage({ days = 30 }: VideosPageProps) {
+  const { data, isLoading, isError, error, refetch } = useUsageByVideo(days, 50);
+  const { sort, toggleSort } = useUrlSort({ key: 'cost_usd', direction: 'desc' });
+  const [filter, setFilter] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const toggle = (videoId: string) => {
@@ -169,13 +214,32 @@ export function VideosPage() {
     });
   };
 
+  const visible = useMemo(() => {
+    if (!data) return [];
+    const needle = filter.trim().toLowerCase();
+    const filtered = needle
+      ? data.filter((v) => (v.title ?? v.video_id).toLowerCase().includes(needle))
+      : data;
+    const key: SortKey = isSortKey(sort.key) ? sort.key : 'cost_usd';
+    const sign = sort.direction === 'desc' ? -1 : 1;
+    const sorted = [...filtered].sort((a, b) => compareVideos(a, b, key) * sign);
+    return sorted;
+  }, [data, filter, sort.key, sort.direction]);
+
+  if (isError) {
+    return (
+      <div className="space-y-4">
+        <h2 className="text-lg font-bold">Videos</h2>
+        <ErrorState error={error} onRetry={() => refetch()} title="Failed to load videos" />
+      </div>
+    );
+  }
+
   if (isLoading || !data) {
     return (
       <div className="space-y-3">
         <h2 className="text-lg font-bold">Videos</h2>
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-16 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)] animate-pulse" />
-        ))}
+        <SkeletonPanel size="sm" count={6} />
       </div>
     );
   }
@@ -184,15 +248,17 @@ export function VideosPage() {
     return (
       <div className="space-y-4">
         <h2 className="text-lg font-bold">Videos</h2>
-        <div className="flex flex-col items-center justify-center py-16 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
-          <div className="w-12 h-12 rounded-full bg-[var(--color-primary-soft)] flex items-center justify-center mb-3">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-            </svg>
+        <Panel tone="dim" padding="lg">
+          <div className="flex flex-col items-center justify-center py-8">
+            <div className="w-12 h-12 rounded-full bg-[var(--color-primary-soft)] flex items-center justify-center mb-3">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+              </svg>
+            </div>
+            <p className="text-sm font-medium text-[var(--color-text)]">No videos processed yet</p>
+            <p className="text-xs text-[var(--color-text-muted)] mt-1">Videos will appear here once they are summarized or explained.</p>
           </div>
-          <p className="text-sm font-medium text-[var(--color-text)]">No videos processed yet</p>
-          <p className="text-xs text-[var(--color-text-muted)] mt-1">Videos will appear here once they are summarized or explained.</p>
-        </div>
+        </Panel>
       </div>
     );
   }
@@ -201,41 +267,112 @@ export function VideosPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold">Videos</h2>
-        <span className="text-xs text-[var(--color-text-muted)]">{data.length} videos (last 30 days)</span>
+        <span className="text-xs text-[var(--color-text-muted)]">
+          {visible.length} of {data.length} videos (last {days} days)
+        </span>
       </div>
 
       <SummaryStats data={data} />
 
-      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] overflow-hidden">
+      <div className="flex items-center gap-2">
+        <input
+          type="search"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter by title..."
+          aria-label="Filter videos by title"
+          data-testid="videos-filter"
+          className="flex-1 px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-faint)] outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+        />
+      </div>
+
+      <Panel tone="raised" padding="none">
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-[var(--color-border)] bg-[var(--color-surface-dim)]">
                 <th className="w-8 p-3" />
-                <th className="text-left p-3 font-medium text-[var(--color-text-muted)]">Video</th>
-                <th className="text-right p-3 font-medium text-[var(--color-text-muted)]">Calls</th>
-                <th className="text-right p-3 font-medium text-[var(--color-text-muted)]">Cost</th>
-                <th className="text-right p-3 font-medium text-[var(--color-text-muted)] hidden md:table-cell">Tokens</th>
+                <th className="text-left p-3">
+                  <SortableHeader
+                    sortKey="title"
+                    currentKey={sort.key}
+                    direction={sort.direction}
+                    onToggle={toggleSort}
+                  >
+                    Video
+                  </SortableHeader>
+                </th>
+                <th className="text-right p-3">
+                  <SortableHeader
+                    sortKey="calls"
+                    currentKey={sort.key}
+                    direction={sort.direction}
+                    onToggle={toggleSort}
+                    align="right"
+                  >
+                    Calls
+                  </SortableHeader>
+                </th>
+                <th className="text-right p-3">
+                  <SortableHeader
+                    sortKey="cost_usd"
+                    currentKey={sort.key}
+                    direction={sort.direction}
+                    onToggle={toggleSort}
+                    align="right"
+                  >
+                    Cost
+                  </SortableHeader>
+                </th>
+                <th className="text-right p-3 hidden md:table-cell">
+                  <SortableHeader
+                    sortKey="tokens"
+                    currentKey={sort.key}
+                    direction={sort.direction}
+                    onToggle={toggleSort}
+                    align="right"
+                  >
+                    Tokens
+                  </SortableHeader>
+                </th>
                 <th className="text-center p-3 font-medium text-[var(--color-text-muted)] hidden sm:table-cell">Status</th>
-                <th className="text-right p-3 pr-4 font-medium text-[var(--color-text-muted)] hidden lg:table-cell">Last Active</th>
+                <th className="text-right p-3 pr-4 hidden lg:table-cell">
+                  <SortableHeader
+                    sortKey="last_call"
+                    currentKey={sort.key}
+                    direction={sort.direction}
+                    onToggle={toggleSort}
+                    align="right"
+                  >
+                    Last Active
+                  </SortableHeader>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {data.map((v) => {
-                const isOpen = expanded.has(v.video_id);
-                return (
-                  <VideoRow
-                    key={v.video_id}
-                    video={v}
-                    isOpen={isOpen}
-                    onToggle={() => toggle(v.video_id)}
-                  />
-                );
-              })}
+              {visible.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-6 text-center text-xs text-[var(--color-text-muted)]">
+                    No videos match &ldquo;{filter}&rdquo;.
+                  </td>
+                </tr>
+              ) : (
+                visible.map((v) => {
+                  const isOpen = expanded.has(v.video_id);
+                  return (
+                    <VideoRow
+                      key={v.video_id}
+                      video={v}
+                      isOpen={isOpen}
+                      onToggle={() => toggle(v.video_id)}
+                    />
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
-      </div>
+      </Panel>
     </div>
   );
 }
