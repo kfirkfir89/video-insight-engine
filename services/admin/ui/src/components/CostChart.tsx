@@ -1,16 +1,22 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useUsageDaily } from '../hooks/use-admin-api';
+import { Panel } from './Panel';
+import { SkeletonPanel } from './SkeletonPanel';
+import { ErrorState } from './ErrorState';
 
 export function CostChart({ days = 30 }: { days?: number }) {
-  const { data, isLoading } = useUsageDaily(days);
+  const { data, isLoading, isError, error, refetch } = useUsageDaily(days);
+
+  if (isError) {
+    return <ErrorState error={error} onRetry={() => refetch()} title="Failed to load cost trend" />;
+  }
 
   if (isLoading || !data) {
-    return <div className="h-72 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)] animate-pulse" />;
+    return <SkeletonPanel size="xl" />;
   }
 
   return (
-    <div className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)]">
-      <h3 className="text-sm font-medium text-[var(--color-text-muted)] mb-3">Daily Cost Trend</h3>
+    <Panel title="Daily Cost Trend" tone="raised" padding="md">
       <ResponsiveContainer width="100%" height={280}>
         <AreaChart data={data}>
           <defs>
@@ -48,6 +54,6 @@ export function CostChart({ days = 30 }: { days?: number }) {
           />
         </AreaChart>
       </ResponsiveContainer>
-    </div>
+    </Panel>
   );
 }

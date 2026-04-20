@@ -1,9 +1,7 @@
 import { Link } from 'react-router-dom';
 import { AlertsBanner } from '../components/AlertsBanner';
 import { CostChart } from '../components/CostChart';
-import { FeatureBreakdown } from '../components/FeatureBreakdown';
-import { ModelBreakdown } from '../components/ModelBreakdown';
-import { OutputTypeChart } from '../components/OutputTypeChart';
+import { CostBreakdownSwitcher } from '../components/CostBreakdownSwitcher';
 import { ServiceHealth } from '../components/ServiceHealth';
 import { SharesTable } from '../components/SharesTable';
 import { StatsCards } from '../components/StatsCards';
@@ -12,6 +10,8 @@ import { useUsageByVideo } from '../hooks/use-admin-api';
 import type { VideoSummaryItem } from '../lib/api';
 import { formatCost, formatNumber, formatDuration, timeAgo } from '../lib/format';
 import { VideoIcon, VideoPlayIcon, ArrowRightIcon } from '../components/icons';
+import { SkeletonPanel } from '../components/SkeletonPanel';
+import { ErrorState } from '../components/ErrorState';
 
 function VideoCard({ video: v }: { video: VideoSummaryItem }) {
   return (
@@ -50,8 +50,12 @@ function VideoCard({ video: v }: { video: VideoSummaryItem }) {
   );
 }
 
-function RecentVideosStrip() {
-  const { data: videos, isLoading } = useUsageByVideo(30, 5);
+function RecentVideosStrip({ days }: { days: number }) {
+  const { data: videos, isLoading, isError, error, refetch } = useUsageByVideo(days, 5);
+
+  if (isError) {
+    return <ErrorState error={error} onRetry={() => refetch()} title="Failed to load recent videos" />;
+  }
 
   if (isLoading) {
     return (
@@ -59,7 +63,7 @@ function RecentVideosStrip() {
         <div className="h-5 w-40 rounded bg-[var(--color-surface-dim)] animate-pulse" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-28 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)] animate-pulse" />
+            <SkeletonPanel key={i} size="md" />
           ))}
         </div>
       </div>
@@ -108,34 +112,32 @@ function SectionDivider({ label }: { label: string }) {
   );
 }
 
-export function DashboardPage() {
+interface DashboardPageProps {
+  days?: number;
+}
+
+export function DashboardPage({ days = 30 }: DashboardPageProps) {
   return (
     <div className="space-y-6">
       <AlertsBanner />
 
       {/* Hero stats */}
-      <StatsCards />
+      <StatsCards days={days} />
 
       {/* Recent videos — the visual centerpiece */}
-      <RecentVideosStrip />
+      <RecentVideosStrip days={days} />
 
       {/* Charts section */}
       <SectionDivider label="Analytics" />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <CostChart />
-        <ModelBreakdown />
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <FeatureBreakdown />
-        <OutputTypeChart />
-      </div>
-
-      {/* Share + Tier analytics */}
-      <SectionDivider label="Community" />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SharesTable />
+        <CostChart days={days} />
         <TierDistribution />
       </div>
+      <CostBreakdownSwitcher days={days} />
+
+      {/* Share analytics */}
+      <SectionDivider label="Community" />
+      <SharesTable days={days} />
 
       {/* Service health — compact at bottom */}
       <SectionDivider label="Services" />

@@ -1,5 +1,14 @@
 const API_BASE = '';
 
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 function getApiKey(): string | null {
   return localStorage.getItem('admin_api_key');
 }
@@ -14,6 +23,11 @@ export function clearApiKey() {
 
 export function hasApiKey(): boolean {
   return !!getApiKey();
+}
+
+export function logout() {
+  clearApiKey();
+  window.location.reload();
 }
 
 /** Build a query string from key-value pairs, omitting undefined values. */
@@ -38,10 +52,10 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   if (res.status === 401) {
     clearApiKey();
     window.location.reload();
-    throw new Error('Unauthorized');
+    throw new ApiError(401, 'Unauthorized');
   }
   if (!res.ok) {
-    throw new Error(`API error: ${res.status} ${res.statusText}`);
+    throw new ApiError(res.status, `API error: ${res.status} ${res.statusText}`);
   }
   return res.json();
 }
@@ -171,7 +185,11 @@ export const api = {
     recent: (limit = 20) => apiFetch<Array<Record<string, unknown>>>(`/alerts/recent${qs({ limit })}`),
     config: () => apiFetch<Record<string, number>>('/alerts/config'),
     updateConfig: (config: Record<string, number>) =>
-      apiFetch<Record<string, unknown>>(`/alerts/config${qs(config)}`, { method: 'POST' }),
+      apiFetch<Record<string, unknown>>('/alerts/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      }),
   },
   admin: {
     aggregateDaily: (date?: string) =>

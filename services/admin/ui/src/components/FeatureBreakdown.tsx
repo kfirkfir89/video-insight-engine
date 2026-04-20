@@ -1,16 +1,22 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
 import { useUsageByFeature } from '../hooks/use-admin-api';
+import { Panel } from './Panel';
+import { SkeletonPanel } from './SkeletonPanel';
+import { ErrorState } from './ErrorState';
 
 export function FeatureBreakdown({ days = 30 }: { days?: number }) {
-  const { data, isLoading } = useUsageByFeature(days);
+  const { data, isLoading, isError, error, refetch } = useUsageByFeature(days);
+
+  if (isError) {
+    return <ErrorState error={error} onRetry={() => refetch()} title="Failed to load feature breakdown" />;
+  }
 
   if (isLoading || !data) {
-    return <div className="h-72 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)] animate-pulse" />;
+    return <SkeletonPanel size="xl" />;
   }
 
   return (
-    <div className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)]">
-      <h3 className="text-sm font-medium text-[var(--color-text-muted)] mb-3">Cost by Feature</h3>
+    <Panel title="Cost by Feature" tone="raised" padding="md">
       <ResponsiveContainer width="100%" height={280}>
         <BarChart data={data} layout="vertical" margin={{ right: 50 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
@@ -43,6 +49,6 @@ export function FeatureBreakdown({ days = 30 }: { days?: number }) {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </Panel>
   );
 }

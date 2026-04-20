@@ -9,12 +9,24 @@ export function useUsageDaily(days = 30) {
   return useQuery({ queryKey: ['usage-daily', days], queryFn: () => api.usage.daily(days), refetchInterval: 30_000 });
 }
 
-export function useUsageByFeature(days = 30) {
-  return useQuery({ queryKey: ['usage-by-feature', days], queryFn: () => api.usage.byFeature(days) });
+interface EnabledOption {
+  enabled?: boolean;
 }
 
-export function useUsageByModel(days = 30) {
-  return useQuery({ queryKey: ['usage-by-model', days], queryFn: () => api.usage.byModel(days) });
+export function useUsageByFeature(days = 30, options?: EnabledOption) {
+  return useQuery({
+    queryKey: ['usage-by-feature', days],
+    queryFn: () => api.usage.byFeature(days),
+    enabled: options?.enabled ?? true,
+  });
+}
+
+export function useUsageByModel(days = 30, options?: EnabledOption) {
+  return useQuery({
+    queryKey: ['usage-by-model', days],
+    queryFn: () => api.usage.byModel(days),
+    enabled: options?.enabled ?? true,
+  });
 }
 
 export function useUsageByService(days = 30) {
@@ -62,8 +74,12 @@ export function useAlertConfig() {
   return useQuery({ queryKey: ['alert-config'], queryFn: () => api.alerts.config() });
 }
 
-export function useUsageByOutputType(days = 30) {
-  return useQuery({ queryKey: ['usage-by-output-type', days], queryFn: () => api.usage.byOutputType(days) });
+export function useUsageByOutputType(days = 30, options?: EnabledOption) {
+  return useQuery({
+    queryKey: ['usage-by-output-type', days],
+    queryFn: () => api.usage.byOutputType(days),
+    enabled: options?.enabled ?? true,
+  });
 }
 
 export function useSharesTop(days = 30, limit = 10) {

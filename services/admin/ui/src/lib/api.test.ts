@@ -45,15 +45,53 @@ describe('api client', () => {
       expect(result).toEqual({ total_calls: 10, total_cost_usd: 1.5 });
     });
 
-    it('should throw on 401 and clear key', async () => {
-      const { api, setApiKey, hasApiKey } = await import('./api');
+    it('should throw ApiError on 401 and clear key', async () => {
+      const { api, setApiKey, hasApiKey, ApiError } = await import('./api');
       setApiKey('bad-key');
       const reloadMock = vi.fn();
       Object.defineProperty(window, 'location', { value: { reload: reloadMock }, writable: true });
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, statusText: 'Unauthorized' }));
 
-      await expect(api.usage.stats()).rejects.toThrow('Unauthorized');
+      await expect(api.usage.stats()).rejects.toBeInstanceOf(ApiError);
       expect(hasApiKey()).toBe(false);
+    });
+
+    it('should throw ApiError with status on non-401 failure', async () => {
+      const { api, setApiKey, ApiError } = await import('./api');
+      setApiKey('k');
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500, statusText: 'Server Error' }));
+
+      try {
+        await api.usage.stats();
+        throw new Error('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ApiError);
+        expect((err as InstanceType<typeof ApiError>).status).toBe(500);
+      }
+    });
+  });
+
+  describe('logout', () => {
+    it('should clear key and reload', async () => {
+      const { setApiKey, hasApiKey, logout } = await import('./api');
+      setApiKey('k');
+      const reloadMock = vi.fn();
+      Object.defineProperty(window, 'location', { value: { reload: reloadMock }, writable: true });
+
+      logout();
+      expect(hasApiKey()).toBe(false);
+      expect(reloadMock).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('ApiError', () => {
+    it('should have name ApiError and status field', async () => {
+      const { ApiError } = await import('./api');
+      const err = new ApiError(404, 'not found');
+      expect(err.name).toBe('ApiError');
+      expect(err.status).toBe(404);
+      expect(err.message).toBe('not found');
+      expect(err).toBeInstanceOf(Error);
     });
   });
 
@@ -68,6 +106,35 @@ describe('api client', () => {
 
       const result = await api.health.services();
       expect(result).toHaveProperty('vie-api');
+    });
+  });
+
+  describe('api.alerts.updateConfig', () => {
+    it('should POST config as JSON body, not query string', async () => {
+      const { api, setApiKey } = await import('./api');
+      setApiKey('key');
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ updated: true }),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const config = {
+        cost_threshold_usd: 1.23,
+        daily_spike_multiplier: 2.5,
+        failure_rate_threshold: 0.3,
+      };
+      await api.alerts.updateConfig(config);
+
+      expect(fetchMock).toHaveBeenCalledOnce();
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      // URL must have no query string
+      expect(url).toBe('/alerts/config');
+      expect(init.method).toBe('POST');
+      const headers = init.headers as Record<string, string>;
+      expect(headers['Content-Type']).toBe('application/json');
+      expect(init.body).toBe(JSON.stringify(config));
     });
   });
 });

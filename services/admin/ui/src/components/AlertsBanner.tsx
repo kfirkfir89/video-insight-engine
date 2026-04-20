@@ -1,7 +1,16 @@
 import { useAlertsRecent } from '../hooks/use-admin-api';
+import { ErrorState } from './ErrorState';
 
 export function AlertsBanner() {
-  const { data } = useAlertsRecent(5);
+  const { data, isError, error, refetch } = useAlertsRecent(5);
+
+  if (isError) {
+    return (
+      <div data-testid="alerts-banner">
+        <ErrorState error={error} onRetry={() => refetch()} title="Failed to load alerts" compact />
+      </div>
+    );
+  }
 
   if (!data || data.length === 0) return null;
 
