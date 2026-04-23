@@ -1,12 +1,12 @@
 import { useState, useMemo, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Loader2, AlertCircle, Check } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, AlertCircle, Check } from "lucide-react";
+import { AuthShell } from "@/components/auth/AuthShell";
 import { cn } from "@/lib/utils";
 import {
   registerSchema,
@@ -23,6 +23,12 @@ interface PasswordChecks {
   digit: boolean;
 }
 
+interface PasswordStrength {
+  score: number;
+  label: string;
+  tone: "weak" | "ok" | "strong";
+}
+
 function passwordChecks(pw: string): PasswordChecks {
   return {
     length: pw.length >= 8,
@@ -32,7 +38,7 @@ function passwordChecks(pw: string): PasswordChecks {
   };
 }
 
-function passwordStrength(checks: PasswordChecks): { score: number; label: string; tone: "weak" | "ok" | "strong" } {
+function passwordStrength(checks: PasswordChecks): PasswordStrength {
   const score = Object.values(checks).filter(Boolean).length;
   if (score <= 2) return { score, label: "Weak", tone: "weak" };
   if (score === 3) return { score, label: "Getting there", tone: "ok" };
@@ -66,7 +72,7 @@ export function RegisterPage() {
 
   const canSubmit = Object.keys(errors).length === 0 && !loading;
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
     setTouched({ name: true, email: true, password: true });
     if (Object.keys(errors).length > 0) return;
@@ -83,155 +89,161 @@ export function RegisterPage() {
   };
 
   return (
-    <div className="surface-ambient flex min-h-screen items-center justify-center page-gutter page-gutter-y">
-      <Card className="w-full max-w-md shadow-lg accent-rule overflow-hidden">
-        <CardHeader>
-          <CardTitle className="type-page-title text-center text-balance">Create your account</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            {submitError && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{submitError}</AlertDescription>
-              </Alert>
-            )}
+    <AuthShell
+      title="Create your account"
+      subtitle="Turn every video you watch into an interactive study guide."
+      footer={
+        <>
+          Already have an account?{" "}
+          <Link to="/login" className="font-medium text-primary hover:underline">
+            Sign in
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        {submitError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{submitError}</AlertDescription>
+          </Alert>
+        )}
 
-            <div className="space-y-1.5">
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                type="text"
-                value={values.name}
-                onChange={handleChange("name")}
-                onBlur={handleBlur("name")}
-                placeholder="John Doe"
-                aria-invalid={touched.name && !!errors.name}
-                autoComplete="name"
-                required
-              />
-              {touched.name && errors.name && (
-                <p className="text-xs text-destructive">{errors.name}</p>
-              )}
+        <div className="space-y-1.5">
+          <Label htmlFor="name">Name</Label>
+          <Input
+            id="name"
+            type="text"
+            value={values.name}
+            onChange={handleChange("name")}
+            onBlur={handleBlur("name")}
+            placeholder="John Doe"
+            aria-invalid={touched.name && !!errors.name}
+            autoComplete="name"
+            required
+          />
+          {touched.name && errors.name && (
+            <p className="text-xs text-destructive">{errors.name}</p>
+          )}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            value={values.email}
+            onChange={handleChange("email")}
+            onBlur={handleBlur("email")}
+            placeholder="you@example.com"
+            aria-invalid={touched.email && !!errors.email}
+            autoComplete="email"
+            required
+          />
+          {touched.email && errors.email && (
+            <p className="text-xs text-destructive">{errors.email}</p>
+          )}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            type="password"
+            value={values.password}
+            onChange={handleChange("password")}
+            onBlur={handleBlur("password")}
+            placeholder="Create a password"
+            aria-invalid={touched.password && !!errors.password}
+            aria-describedby="password-strength password-requirements"
+            autoComplete="new-password"
+            required
+          />
+
+          {/* Strength meter — bars fill progressively as each requirement is met. */}
+          {values.password && (
+            <div id="password-strength" className="space-y-1">
+              <div
+                className="flex gap-1"
+                role="progressbar"
+                aria-valuenow={strength.score}
+                aria-valuemin={0}
+                aria-valuemax={4}
+                aria-label={`Password strength: ${strength.label}`}
+              >
+                {[0, 1, 2, 3].map((i) => {
+                  const filled = i < strength.score;
+                  return (
+                    <div
+                      key={i}
+                      className={cn(
+                        "h-1 flex-1 rounded-full origin-left transition-[background-color,transform] ease-out",
+                        filled
+                          ? strength.tone === "strong"
+                            ? "bg-success"
+                            : strength.tone === "ok"
+                              ? "bg-warning"
+                              : "bg-destructive/70"
+                          : "bg-muted",
+                      )}
+                      style={{
+                        transform: filled ? "scaleX(1)" : "scaleX(0.15)",
+                        transitionDuration: "320ms",
+                        transitionDelay: filled ? `${i * 60}ms` : "0ms",
+                      }}
+                    />
+                  );
+                })}
+              </div>
+              <p
+                key={strength.tone}
+                className={cn(
+                  "text-xs font-medium transition-colors",
+                  strength.tone === "strong" && "text-success",
+                  strength.tone === "ok" && "text-warning",
+                  strength.tone === "weak" && "text-destructive",
+                )}
+              >
+                {strength.label}
+              </p>
             </div>
+          )}
 
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={values.email}
-                onChange={handleChange("email")}
-                onBlur={handleBlur("email")}
-                placeholder="you@example.com"
-                aria-invalid={touched.email && !!errors.email}
-                autoComplete="email"
-                required
-              />
-              {touched.email && errors.email && (
-                <p className="text-xs text-destructive">{errors.email}</p>
-              )}
-            </div>
+          {/* Requirements — inline chip row preserves the single-column form
+              rhythm while staying compact on one line at this width. */}
+          <ul
+            id="password-requirements"
+            className="flex flex-wrap gap-x-3 gap-y-1 pt-1 text-xs text-muted-foreground"
+          >
+            <Requirement met={checks.length} label="8+ characters" />
+            <Requirement met={checks.upper} label="Uppercase" />
+            <Requirement met={checks.lower} label="Lowercase" />
+            <Requirement met={checks.digit} label="Number" />
+          </ul>
+        </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={values.password}
-                onChange={handleChange("password")}
-                onBlur={handleBlur("password")}
-                placeholder="Create a password"
-                aria-invalid={touched.password && !!errors.password}
-                aria-describedby="password-requirements"
-                autoComplete="new-password"
-                required
-              />
-
-              {/* Strength meter — bars fill progressively as each requirement is met */}
-              {values.password && (
-                <div className="space-y-1">
-                  <div
-                    className="flex gap-1"
-                    role="progressbar"
-                    aria-valuenow={strength.score}
-                    aria-valuemin={0}
-                    aria-valuemax={4}
-                    aria-label="Password strength"
-                  >
-                    {[0, 1, 2, 3].map((i) => {
-                      const filled = i < strength.score;
-                      return (
-                        <div
-                          key={i}
-                          className={cn(
-                            "h-1 flex-1 rounded-full origin-left transition-[background-color,transform] ease-out",
-                            filled
-                              ? strength.tone === "strong"
-                                ? "bg-success"
-                                : strength.tone === "ok"
-                                  ? "bg-warning"
-                                  : "bg-destructive/70"
-                              : "bg-muted",
-                          )}
-                          style={{
-                            transform: filled ? "scaleX(1)" : "scaleX(0.15)",
-                            transitionDuration: "320ms",
-                            transitionDelay: filled ? `${i * 60}ms` : "0ms",
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                  <p
-                    key={strength.tone}
-                    className={cn(
-                      "text-xs font-medium transition-colors",
-                      strength.tone === "strong" && "text-success",
-                      strength.tone === "ok" && "text-warning",
-                      strength.tone === "weak" && "text-destructive",
-                    )}
-                  >
-                    {strength.label}
-                  </p>
-                </div>
-              )}
-
-              {/* Requirements checklist */}
-              <ul id="password-requirements" className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-muted-foreground pt-1">
-                <Requirement met={checks.length} label="8+ characters" />
-                <Requirement met={checks.upper} label="Uppercase letter" />
-                <Requirement met={checks.lower} label="Lowercase letter" />
-                <Requirement met={checks.digit} label="Number" />
-              </ul>
-            </div>
-
-            <Button type="submit" className="w-full" disabled={!canSubmit}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {loading ? "Creating..." : "Create Account"}
-            </Button>
-
-            <p className="text-center text-sm text-muted-foreground">
-              Already have an account?{" "}
-              <Link to="/login" className="text-primary hover:underline">
-                Sign in
-              </Link>
-            </p>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+        <Button type="submit" className="w-full" disabled={!canSubmit}>
+          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {loading ? "Creating..." : "Create Account"}
+        </Button>
+      </form>
+    </AuthShell>
   );
 }
 
-function Requirement({ met, label }: { met: boolean; label: string }) {
+interface RequirementProps {
+  met: boolean;
+  label: string;
+}
+
+function Requirement({ met, label }: RequirementProps) {
   return (
     <li className={cn("flex items-center gap-1.5 transition-colors", met && "text-success")}>
       <Check
         key={met ? "met" : "unmet"}
         className={cn(
           "h-3 w-3 shrink-0 transition-opacity",
-          met ? "opacity-100 scale-pulse-once" : "opacity-30"
+          met ? "opacity-100 scale-pulse-once" : "opacity-30",
         )}
         aria-hidden="true"
       />

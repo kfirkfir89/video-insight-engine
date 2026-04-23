@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Loader2, Folder, Link2, ListVideo } from "lucide-react";
+import { withTransitionName } from "@/lib/view-transitions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,6 +45,9 @@ export function AddVideoInput() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [playlistPreview, setPlaylistPreview] = useState<PlaylistPreviewType | null>(null);
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+  /** Form is the morph source for the "Crystallization" navigation transition —
+   *  the input shape becomes the streaming detail page's spine. */
+  const formRef = useRef<HTMLFormElement>(null);
 
   const selectedFolderId = useUIStore((s) => s.selectedFolderId);
   const activeSection = useUIStore((s) => s.activeSection);
@@ -106,7 +110,13 @@ export function AddVideoInput() {
         setUserSelection(USE_SIDEBAR_SELECTION);
 
         if (result?.video?.id) {
-          navigate(`/video/${result.video.id}`);
+          const videoId = result.video.id;
+          withTransitionName(
+            formRef.current,
+            "vie-input-spine",
+            () => navigate(`/video/${videoId}`),
+            { type: "stream-input-spine" },
+          );
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Couldn't start processing. Try again in a moment.");
@@ -159,7 +169,7 @@ export function AddVideoInput() {
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="relative">
+      <form ref={formRef} onSubmit={handleSubmit} className="relative">
         <div className="relative flex items-center">
           {/* Mode toggle button */}
           <TooltipProvider delayDuration={400}>
@@ -169,9 +179,10 @@ export function AddVideoInput() {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="absolute left-1 h-7 w-7 z-10"
+                  className="absolute start-1 h-7 w-7 z-10"
                   onClick={toggleMode}
                   disabled={isLoading}
+                  aria-label={mode === "video" ? "Switch to playlist mode" : "Switch to single video mode"}
                 >
                   {mode === "video" ? (
                     <Link2 className="h-4 w-4 text-muted-foreground" />
@@ -188,18 +199,22 @@ export function AddVideoInput() {
 
           {/* URL input */}
           <Input
+            type="url"
+            aria-label={mode === "video" ? "Paste a YouTube video URL" : "Paste a YouTube playlist URL"}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? "add-video-error" : undefined}
             placeholder={mode === "video" ? "Paste YouTube URL..." : "Paste playlist URL..."}
             value={url}
             onChange={(e) => {
               setUrl(e.target.value);
               if (error) setError(null);
             }}
-            className="h-8 pl-9 pr-[70px] text-xs bg-muted border-border"
+            className="h-8 ps-9 pe-[70px] text-xs bg-muted border-border"
             disabled={isLoading}
           />
 
           {/* Right side: folder + add buttons */}
-          <div className="absolute right-1 flex items-center gap-0.5">
+          <div className="absolute end-1 flex items-center gap-0.5">
             {/* Folder dropdown trigger with tooltip */}
             <TooltipProvider delayDuration={400}>
               <Tooltip>
@@ -212,6 +227,7 @@ export function AddVideoInput() {
                         className="group h-7 w-7 hover:bg-accent hover:scale-110 transition-[background-color,transform]"
                         type="button"
                         disabled={isLoading}
+                        aria-label={`Pick target folder (currently ${folderTooltip})`}
                       >
                         <Folder
                           className={cn(
@@ -247,6 +263,7 @@ export function AddVideoInput() {
               size="icon"
               className="h-7 w-7"
               disabled={!url.trim() || isLoading}
+              aria-label={mode === "video" ? "Add video" : "Preview playlist"}
             >
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -258,7 +275,15 @@ export function AddVideoInput() {
         </div>
 
         {/* Error message — absolute to avoid pushing header height */}
-        {error && <p className="absolute top-full left-0 right-0 text-xs text-destructive mt-1 px-1 z-50">{error}</p>}
+        {error && (
+          <p
+            id="add-video-error"
+            role="alert"
+            className="absolute top-full inset-x-0 text-xs text-destructive mt-1 px-1 z-50"
+          >
+            {error}
+          </p>
+        )}
       </form>
 
       {/* Playlist Preview Dialog */}

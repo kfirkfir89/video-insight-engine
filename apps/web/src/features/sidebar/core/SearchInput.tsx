@@ -62,18 +62,18 @@ export function SearchInput({
 
   return (
     <div className={cn("relative", className)}>
-      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+      <Search className="absolute start-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
       <Input
         value={localValue}
         onChange={(e) => handleChange(e.target.value)}
         placeholder={placeholder}
-        className="h-7 pl-7 pr-7 text-xs bg-muted/20 border-border/50"
+        className="h-7 ps-7 pe-7 text-xs bg-muted/20 border-border/50"
         aria-label="Search folders and videos"
       />
       {localValue && (
         <button
           onClick={handleClear}
-          className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-sm hover:bg-accent transition-colors"
+          className="absolute end-2 top-1/2 -translate-y-1/2 p-0.5 rounded-sm hover:bg-accent transition-colors"
           type="button"
           aria-label="Clear search"
         >

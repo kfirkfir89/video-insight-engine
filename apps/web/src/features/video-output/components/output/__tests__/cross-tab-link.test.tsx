@@ -6,7 +6,8 @@ describe('CrossTabLink', () => {
   it('should render label text', () => {
     render(<CrossTabLink tabId="quiz" label="Take the quiz" onNavigate={vi.fn()} />);
 
-    expect(screen.getByText('Next: Take the quiz →')).toBeInTheDocument();
+    // Arrow char dropped in favour of a ChevronRight icon rendered alongside.
+    expect(screen.getByText('Next: Take the quiz')).toBeInTheDocument();
   });
 
   it('should call onNavigate with tabId when clicked', () => {

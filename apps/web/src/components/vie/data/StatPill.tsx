@@ -1,6 +1,6 @@
 import { memo } from 'react';
-import { cn } from '@/lib/utils';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface StatPillProps {
   value: string;
@@ -11,20 +11,26 @@ interface StatPillProps {
   className?: string;
 }
 
-function TrendIcon({ trend }: { trend: 'up' | 'down' | 'neutral' }) {
+interface TrendIconProps {
+  trend: 'up' | 'down' | 'neutral';
+}
+
+function TrendIcon({ trend }: TrendIconProps) {
   switch (trend) {
     case 'up':
-      return <TrendingUp className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />;
+      return <TrendingUp className="h-3 w-3 shrink-0 text-success" aria-hidden="true" />;
     case 'down':
-      return <TrendingDown className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />;
+      return <TrendingDown className="h-3 w-3 shrink-0 text-destructive" aria-hidden="true" />;
     case 'neutral':
-      return <Minus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />;
+      return <Minus className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />;
   }
 }
 
 /**
- * Single statistic display with optional trend indicator.
- * Domain-free replacement for StatBlock.
+ * StatPill — eyebrow label, then a left-aligned value. The hierarchy is
+ * flipped from the AI-stock hero-metric layout (big-number-centered, tiny
+ * uppercase caption). Trend sign renders inline next to the value rather
+ * than as a standalone arrow.
  */
 export const StatPill = memo(function StatPill({
   value,
@@ -39,20 +45,24 @@ export const StatPill = memo(function StatPill({
     <Wrapper
       onClick={onClick}
       className={cn(
-        'flex-col items-center text-center px-4 py-2 rounded-md transition-colors',
-        onClick && 'cursor-pointer hover:bg-muted/20',
+        'flex flex-col items-start text-start px-3.5 py-2.5 rounded-md transition-colors animate-fade-up',
+        onClick && 'cursor-pointer hover:bg-muted/20 hover:-translate-y-0.5 transition-transform duration-200 ease-[var(--ease-out-expo)] motion-reduce:hover:translate-y-0 motion-reduce:transition-none',
         className,
       )}
     >
-      <div className="flex items-baseline gap-1.5">
-        <span className="text-3xl font-black tabular-nums text-gradient-primary">{value}</span>
-        {trend && <TrendIcon trend={trend} />}
-      </div>
-      <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground mt-1">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80 leading-none">
         {label}
       </span>
+      <div className="mt-1.5 flex items-baseline gap-1.5">
+        <span className="text-2xl font-bold tabular-nums text-foreground leading-none animate-counter-pop">
+          {value}
+        </span>
+        {trend && <TrendIcon trend={trend} />}
+      </div>
       {context && (
-        <span className="text-xs text-muted-foreground/70 mt-0.5">{context}</span>
+        <span className="mt-1 text-xs text-muted-foreground/70 leading-snug">
+          {context}
+        </span>
       )}
     </Wrapper>
   );

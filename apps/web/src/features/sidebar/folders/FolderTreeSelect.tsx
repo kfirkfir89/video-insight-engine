@@ -56,9 +56,9 @@ function FolderTreeItem({
       <DropdownMenuItem
         className={cn(
           "flex items-center gap-2 cursor-pointer",
-          level > 0 && "ml-4"
+          level > 0 && "ms-4"
         )}
-        style={{ paddingLeft: `${8 + level * 12}px` }}
+        style={{ paddingInlineStart: `${8 + level * 12}px` }}
         onClick={(e) => {
           if (hasChildren && visibleChildren.length > 0) {
             e.preventDefault();

@@ -1,49 +1,25 @@
 import { useState, useRef, useEffect } from "react";
-import {
-  ALargeSmall,
-  ChevronsDownUp,
-  CheckSquare,
-  Search,
-  FolderPlus,
-  ArrowDownAZ,
-  ArrowUpZA,
-  CalendarArrowDown,
-  CalendarArrowUp,
-} from "lucide-react";
+import { CheckSquare, Search, FolderPlus } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  useUIStore,
-  useSelectionMode,
-  type SidebarTextSize,
-  type SortOption,
-} from "@/stores/ui-store";
+import { useUIStore, useSelectionMode } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
 import { SearchInput } from "./SearchInput";
+import { SidebarMoreMenu } from "./SidebarMoreMenu";
 import { NewFolderPanel } from "../folders/NewFolderPanel";
 
-type ActivePanel = "search" | "sort" | "textSize" | "newFolder" | null;
-
-const SORT_OPTIONS: { value: SortOption; label: string; icon: typeof ArrowDownAZ }[] = [
-  { value: "name-asc", label: "A-Z", icon: ArrowDownAZ },
-  { value: "name-desc", label: "Z-A", icon: ArrowUpZA },
-  { value: "created-desc", label: "Newest", icon: CalendarArrowDown },
-  { value: "created-asc", label: "Oldest", icon: CalendarArrowUp },
-];
-
-const SIZE_OPTIONS: { value: SidebarTextSize; label: string }[] = [
-  { value: "small", label: "S" },
-  { value: "medium", label: "M" },
-  { value: "large", label: "L" },
-];
+type ActivePanel = "search" | "newFolder" | null;
 
 /**
- * Toolbar with evenly-spaced icon buttons.
- * Search, Sort, Text Size, and New Folder each toggle a collapsible panel below.
+ * Sidebar toolbar: Search, New Folder, Select, and a "More" overflow menu.
+ *
+ * Sort / Text size / Collapse all live in SidebarMoreMenu, keeping this row
+ * focused on the three most-used actions. See /critique report for the
+ * recognition-recall rationale.
  */
 export function SidebarToolbar() {
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
@@ -59,12 +35,7 @@ export function SidebarToolbar() {
       consumePendingSidebarSearch();
     }
   }, [pendingSidebarSearch, consumePendingSidebarSearch]);
-  const currentSize = useUIStore((s) => s.sidebarTextSize);
-  const setSidebarTextSize = useUIStore((s) => s.setSidebarTextSize);
-  const collapseAllFolders = useUIStore((s) => s.collapseAllFolders);
-  const expandedFolderIds = useUIStore((s) => s.expandedFolderIds);
-  const sortOption = useUIStore((s) => s.sidebarSortOption);
-  const setSortOption = useUIStore((s) => s.setSidebarSortOption);
+
   const searchQuery = useUIStore((s) => s.sidebarSearchQuery);
   const setSearchQuery = useUIStore((s) => s.setSidebarSearchQuery);
   const clearSearch = useUIStore((s) => s.clearSidebarSearch);
@@ -82,8 +53,6 @@ export function SidebarToolbar() {
   const selectionMode = useSelectionMode();
   const enterSelectionMode = useUIStore((s) => s.enterSelectionMode);
   const exitSelectionMode = useUIStore((s) => s.exitSelectionMode);
-
-  const hasExpandedFolders = expandedFolderIds.length > 0;
 
   const togglePanel = (panel: ActivePanel) => {
     setActivePanel((prev) => {
@@ -104,60 +73,35 @@ export function SidebarToolbar() {
 
   return (
     <div className="border-b border-border/50 shrink-0">
-      {/* Button row — evenly spaced */}
+      {/* Button row — evenly spaced. Labels are visible below icons in the
+          expanded sidebar so first-time users don't have to hover each one
+          to learn it. Tooltips remain as a fast-delay fallback. */}
       <div className="flex items-stretch">
-        <TooltipProvider delayDuration={400}>
-          {/* Search */}
+        <TooltipProvider delayDuration={150}>
           <ToolbarButton
             icon={Search}
             label="Search"
             active={activePanel === "search" || !!searchQuery}
             onClick={() => togglePanel("search")}
           />
-
-          {/* Sort */}
-          <ToolbarButton
-            icon={SORT_OPTIONS.find((o) => o.value === sortOption)?.icon ?? ArrowDownAZ}
-            label="Sort"
-            active={activePanel === "sort"}
-            onClick={() => togglePanel("sort")}
-          />
-
-          {/* Text size */}
-          <ToolbarButton
-            icon={ALargeSmall}
-            label="Text size"
-            active={activePanel === "textSize"}
-            onClick={() => togglePanel("textSize")}
-          />
-
-          {/* Collapse all */}
-          <ToolbarButton
-            icon={ChevronsDownUp}
-            label="Collapse all"
-            disabled={!hasExpandedFolders}
-            onClick={collapseAllFolders}
-          />
-
-          {/* Multi-select */}
-          <ToolbarButton
-            icon={CheckSquare}
-            label={selectionMode ? "Exit selection" : "Select items"}
-            active={selectionMode}
-            onClick={handleSelectionToggle}
-          />
-
-          {/* New folder */}
           <ToolbarButton
             icon={FolderPlus}
             label="New folder"
             active={activePanel === "newFolder"}
             onClick={() => togglePanel("newFolder")}
           />
+          <ToolbarButton
+            icon={CheckSquare}
+            label={selectionMode ? "Exit" : "Select"}
+            tooltip={selectionMode ? "Exit selection" : "Select items"}
+            active={selectionMode}
+            onClick={handleSelectionToggle}
+          />
+          <SidebarMoreMenu />
         </TooltipProvider>
       </div>
 
-      {/* ── Collapsible panels ────────────────────────────── */}
+      {/* Collapsible panels — search + new folder only (sort/size moved to menu) */}
       <CollapsiblePanel open={isPanelOpen}>
         {activePanel === "search" && (
           <div className="px-3 py-2">
@@ -173,52 +117,6 @@ export function SidebarToolbar() {
           </div>
         )}
 
-        {activePanel === "sort" && (
-          <div className="px-3 py-2 flex gap-1">
-            {SORT_OPTIONS.map((option) => {
-              const Icon = option.icon;
-              const isActive = sortOption === option.value;
-              return (
-                <button
-                  key={option.value}
-                  onClick={() => setSortOption(option.value)}
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors",
-                    isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
-                  )}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  <span>{option.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {activePanel === "textSize" && (
-          <div className="px-3 py-2 flex gap-1">
-            {SIZE_OPTIONS.map((option) => {
-              const isActive = currentSize === option.value;
-              return (
-                <button
-                  key={option.value}
-                  onClick={() => setSidebarTextSize(option.value)}
-                  className={cn(
-                    "flex-1 flex items-center justify-center py-1.5 rounded-md text-xs font-medium transition-colors",
-                    isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
-                  )}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
         {activePanel === "newFolder" && (
           <NewFolderPanel onComplete={() => setActivePanel(null)} />
         )}
@@ -227,14 +125,12 @@ export function SidebarToolbar() {
   );
 }
 
-/* ── Collapsible Panel ──────────────────────────────────── */
-
 function CollapsiblePanel({ open, children }: { open: boolean; children: React.ReactNode }) {
   return (
     <div
       className={cn(
         "grid transition-[grid-template-rows,opacity] duration-200 ease-out",
-        open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
       )}
     >
       <div className="overflow-hidden">{children}</div>
@@ -242,17 +138,18 @@ function CollapsiblePanel({ open, children }: { open: boolean; children: React.R
   );
 }
 
-/* ── Toolbar Button ─────────────────────────────────────── */
-
 interface ToolbarButtonProps {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
+  /** Optional longer tooltip copy when the visible label is abbreviated. */
+  tooltip?: string;
   active?: boolean;
   disabled?: boolean;
   onClick: () => void;
 }
 
-function ToolbarButton({ icon: Icon, label, active, disabled, onClick }: ToolbarButtonProps) {
+function ToolbarButton({ icon: Icon, label, tooltip, active, disabled, onClick }: ToolbarButtonProps) {
+  const tip = tooltip ?? label;
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -260,23 +157,31 @@ function ToolbarButton({ icon: Icon, label, active, disabled, onClick }: Toolbar
           onClick={onClick}
           disabled={disabled}
           className={cn(
-            "flex-1 flex items-center justify-center py-2.5 transition-colors",
+            "group flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 transition-colors",
             "hover:bg-accent/70",
             active && "text-primary bg-primary/8",
-            disabled && "opacity-35 cursor-not-allowed hover:bg-transparent"
+            disabled && "opacity-35 cursor-not-allowed hover:bg-transparent",
           )}
-          aria-label={label}
+          aria-label={tip}
         >
           <Icon
             className={cn(
               "h-4 w-4",
-              active ? "text-primary" : "text-muted-foreground"
+              active ? "text-primary" : "text-muted-foreground",
             )}
           />
+          <span
+            className={cn(
+              "text-[10px] font-medium leading-none tracking-wide",
+              active ? "text-primary" : "text-muted-foreground/80",
+            )}
+          >
+            {label}
+          </span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" className="text-xs">
-        {label}
+        {tip}
       </TooltipContent>
     </Tooltip>
   );

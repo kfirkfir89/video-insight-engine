@@ -9,6 +9,7 @@ import { INTERACTIVE_TABS, renderInteractive } from './ComposableOutputV1';
 import { useVideoPlayer } from '@/features/video-output/contexts/VideoPlayerContext';
 import { RecipePlayer } from './RecipePlayer';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
+import { EmojiMarker } from '@/components/vie';
 import {
   ChecklistInteractive,
   QuizInteractive,
@@ -288,7 +289,7 @@ export const ComposableOutput = memo(function ComposableOutput({
             onClick={() => setCookingMode(true)}
             className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-primary/30 bg-primary/5 px-4 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
           >
-            <span aria-hidden="true">{'🍳'}</span>
+            <EmojiMarker emoji="🍳" size="sm" animated={false} />
             Enter Cooking Mode
           </button>
         )}

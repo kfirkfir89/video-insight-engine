@@ -33,10 +33,15 @@ function ImagePlaceholder({ image, className, onClick, onSeek }: { image: Galler
   };
   return (
     <div
-      className={cn('relative overflow-hidden rounded-lg bg-muted/30 cursor-pointer group', className)}
+      className={cn(
+        'relative overflow-hidden rounded-lg bg-muted/30 cursor-pointer group outline-none',
+        'focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        className,
+      )}
       onClick={handleClick}
       role="button"
       tabIndex={0}
+      aria-label={image.alt ?? image.caption ?? 'Open image'}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), handleClick())}
     >
       <img
@@ -78,13 +83,13 @@ function GalleryLightbox({ images, index, onClose, onPrev, onNext }: {
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-bg)] p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-bg)] p-4 outline-none"
       onClick={onClose}
       onKeyDown={handleKeyDown}
       role="dialog"
       aria-modal="true"
-      aria-label="Image lightbox"
-      tabIndex={-1}
+      aria-label={img.alt ?? img.caption ?? 'Image lightbox'}
+      tabIndex={0}
     >
       <Button
         variant="ghost"

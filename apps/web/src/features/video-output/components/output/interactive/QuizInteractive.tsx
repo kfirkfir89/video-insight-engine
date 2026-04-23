@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { QuizItem } from '@vie/types';
-import { GlassCard, FadeIn, OptionGrid, InlineScore, Shake, BackForward, Stepper, ScoreRing, Badge } from '@/components/vie';
+import { GlassCard, FadeIn, OptionGrid, InlineScore, Shake, BackForward, Stepper, ScoreRing, Badge, EmojiMarker } from '@/components/vie';
 import { Button } from '@/components/ui/button';
 import { Celebration } from '../Celebration';
 import { useLabels } from '@/lib/i18n';
@@ -119,7 +119,7 @@ export const QuizInteractive = memo(function QuizInteractive({
   const isAnswered = selectedOption !== undefined;
 
   return (
-    <GlassCard variant="elevated" className="space-y-4 shadow-2xl shadow-primary/10">
+    <GlassCard variant="elevated" className="space-y-4">
       {/* Score + progress + streak */}
       <div className="flex items-center justify-between">
         <div className="text-xs font-medium tabular-nums tracking-wide text-muted-foreground/70">
@@ -127,8 +127,9 @@ export const QuizInteractive = memo(function QuizInteractive({
         </div>
         <div className="flex items-center gap-2">
           {streak >= 2 && (
-            <Badge variant="warning" className="text-xs font-semibold tabular-nums animate-[fadeUp_0.2s_ease_both]">
-              <span aria-hidden="true">{'\uD83D\uDD25'}</span> {streak} streak!
+            <Badge variant="warning" className="text-xs font-semibold tabular-nums animate-[fadeUp_0.2s_ease_both] inline-flex items-center gap-1">
+              <EmojiMarker emoji="🔥" size="sm" animated={false} />
+              {streak} streak!
             </Badge>
           )}
           {answers.size > 0 && <InlineScore correct={score} total={answers.size} />}
@@ -140,8 +141,9 @@ export const QuizInteractive = memo(function QuizInteractive({
         <div className="text-center px-2">
           <p className="font-semibold text-base leading-snug tracking-tight">{question.question}</p>
           {masteredQuestions.has(currentIndex) && (
-            <Badge variant="info" className="mt-1.5 text-xs font-medium">
-              <span aria-hidden="true">{'📚'}</span> You studied this
+            <Badge variant="info" className="mt-1.5 text-xs font-medium inline-flex items-center gap-1">
+              <EmojiMarker emoji="📚" size="sm" animated={false} />
+              You studied this
             </Badge>
           )}
         </div>

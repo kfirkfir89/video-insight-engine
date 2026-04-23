@@ -53,3 +53,12 @@ export { TabBar } from './navigation/TabBar';
 export { SectionNav } from './navigation/SectionNav';
 export { Stepper } from './navigation/Stepper';
 export { BackForward } from './navigation/BackForward';
+export { AccentLane, type AccentLaneState } from './navigation/AccentLane';
+export {
+  VieMenu,
+  VieMenuItem,
+  VieMenuSeparator,
+  VieMenuDestructiveDivider,
+  VieMenuHeader,
+  VieMenuSub,
+} from './navigation/VieMenu';

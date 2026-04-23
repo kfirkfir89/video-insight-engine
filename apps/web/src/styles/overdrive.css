@@ -1,0 +1,294 @@
+/* ═══════════════════════════════════════════════════
+   OVERDRIVE FX LAYER
+   Cross-component visual effects: cursor glow, draw-on checks,
+   shimmer sweeps, ripple, particle backdrops, @property animations.
+   All gated by prefers-reduced-motion.
+   ═══════════════════════════════════════════════════ */
+
+/* ───── Animatable custom properties for interactive values ───── */
+@property --glow-x { syntax: "<percentage>"; inherits: false; initial-value: 50%; }
+@property --glow-y { syntax: "<percentage>"; inherits: false; initial-value: 50%; }
+@property --glow-on { syntax: "<number>"; inherits: false; initial-value: 0; }
+@property --ring-hue { syntax: "<number>"; inherits: false; initial-value: 292; }
+@property --shimmer-pos { syntax: "<percentage>"; inherits: false; initial-value: -50%; }
+
+/* ═══════════════════════════════════════════════════
+   POINTER GLOW — cursor-tracked radial highlight
+   Apply `.vie-pointer-glow` to any surface; it reads
+   --glow-x / --glow-y / --glow-on written by usePointerGlow().
+   ═══════════════════════════════════════════════════ */
+.vie-pointer-glow {
+  position: relative;
+  isolation: isolate;
+}
+.vie-pointer-glow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: calc(var(--glow-on, 0) * 0.9);
+  background: radial-gradient(
+    240px circle at var(--glow-x, 50%) var(--glow-y, 50%),
+    oklch(from var(--primary) l c h / 0.22),
+    transparent 65%
+  );
+  z-index: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .vie-pointer-glow::before {
+    transition: opacity 280ms var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1));
+  }
+}
+.vie-pointer-glow > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Stronger variant — used on hero surfaces */
+.vie-pointer-glow--strong::before {
+  background: radial-gradient(
+    320px circle at var(--glow-x, 50%) var(--glow-y, 50%),
+    oklch(from var(--primary) l c h / 0.3),
+    oklch(from var(--vie-coral) l c h / 0.12) 40%,
+    transparent 70%
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   SHIMMER SWEEP — one-shot light bar traveling across
+   Use on mount of badges, progress fills, CTAs.
+   ═══════════════════════════════════════════════════ */
+@keyframes vie-shimmer-sweep {
+  from { --shimmer-pos: -60%; }
+  to   { --shimmer-pos: 160%; }
+}
+.vie-shimmer {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.vie-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent calc(var(--shimmer-pos, -50%) - 20%),
+    oklch(100% 0 0 / 0.18) var(--shimmer-pos, -50%),
+    transparent calc(var(--shimmer-pos, -50%) + 20%)
+  );
+  mix-blend-mode: overlay;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .vie-shimmer::after {
+    animation: vie-shimmer-sweep 1.4s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)) 0.2s both;
+  }
+}
+
+/* Shimmer on hover — for CTAs */
+.vie-shimmer-hover::after {
+  opacity: 0;
+  transition: opacity 200ms;
+}
+.vie-shimmer-hover:hover::after {
+  opacity: 1;
+  animation: vie-shimmer-sweep 0.9s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)) forwards;
+}
+
+/* ═══════════════════════════════════════════════════
+   RIPPLE — touch / click feedback circle
+   Applied via JS: pass --ripple-x / --ripple-y and add .vie-rippling
+   ═══════════════════════════════════════════════════ */
+@property --ripple-x { syntax: "<percentage>"; inherits: false; initial-value: 50%; }
+@property --ripple-y { syntax: "<percentage>"; inherits: false; initial-value: 50%; }
+
+.vie-ripple {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.vie-ripple::after {
+  content: "";
+  position: absolute;
+  left: var(--ripple-x, 50%);
+  top: var(--ripple-y, 50%);
+  width: 0;
+  height: 0;
+  border-radius: 9999px;
+  background: oklch(from currentColor l c h / 0.25);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .vie-ripple.vie-rippling::after {
+    animation: vie-ripple-grow 540ms var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)) forwards;
+  }
+}
+@keyframes vie-ripple-grow {
+  0%   { width: 0;   height: 0;   opacity: 0.6; }
+  100% { width: 180%; height: 180%; opacity: 0; }
+}
+
+/* ═══════════════════════════════════════════════════
+   DRAW-ON CHECK — SVG path-length reveal
+   Use on check icons that morph from unchecked state.
+   ═══════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: no-preference) {
+  .vie-draw-check path {
+    stroke-dasharray: 24;
+    stroke-dashoffset: 24;
+    animation: vie-draw-check 420ms var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)) forwards;
+  }
+}
+@keyframes vie-draw-check {
+  to { stroke-dashoffset: 0; }
+}
+
+/* ═══════════════════════════════════════════════════
+   SCORE RING GRADIENT — @property-animated hue shift
+   ═══════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: no-preference) {
+  .vie-score-ring-animate {
+    animation: vie-score-hue 2.8s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)) infinite alternate;
+  }
+  /* Disable infinite hue shift on small screens — saves composites on low-end mobile GPUs. */
+  @media (max-width: 768px) {
+    .vie-score-ring-animate { animation: none; }
+  }
+}
+@keyframes vie-score-hue {
+  from { --ring-hue: 280; }
+  to   { --ring-hue: 310; }
+}
+
+/* ═══════════════════════════════════════════════════
+   PROGRESS BEAM — moving highlight over a progress fill
+   ═══════════════════════════════════════════════════ */
+.vie-progress-beam {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+.vie-progress-beam::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(100% 0 0 / 0.35) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .vie-progress-beam::after {
+    animation: vie-progress-beam-travel 2.4s var(--ease-out-quart, cubic-bezier(0.25, 1, 0.5, 1)) infinite;
+  }
+  /* Skip the travelling shimmer on mobile — used on list rows that can accumulate. */
+  @media (max-width: 768px) {
+    .vie-progress-beam::after { animation: none; }
+  }
+}
+@keyframes vie-progress-beam-travel {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+
+/* ═══════════════════════════════════════════════════
+   TILT — mouse-aware 3D perspective wrapper
+   Consumers set --tilt-x / --tilt-y via useMotionValue.
+   ═══════════════════════════════════════════════════ */
+.vie-tilt {
+  transform-style: preserve-3d;
+  transform: perspective(1200px)
+    rotateX(var(--tilt-x, 0deg))
+    rotateY(var(--tilt-y, 0deg));
+  transition: transform 220ms var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1));
+  will-change: transform;
+}
+
+/* ═══════════════════════════════════════════════════
+   FLOATING ACCENT — soft chroma orb behind content
+   Sized via --orb-size. Respects reduced motion.
+   ═══════════════════════════════════════════════════ */
+.vie-accent-orb {
+  position: absolute;
+  inset: auto;
+  width: var(--orb-size, 320px);
+  height: var(--orb-size, 320px);
+  border-radius: 9999px;
+  filter: blur(60px);
+  opacity: 0.45;
+  pointer-events: none;
+  z-index: -1;
+  contain: paint style;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .vie-accent-orb {
+    animation: vie-orb-drift 14s ease-in-out infinite alternate;
+  }
+}
+/* Disable blur + animation on mobile — GPU + battery budget > decorative bloom. */
+@media (max-width: 768px) {
+  .vie-accent-orb { animation: none; filter: blur(20px); opacity: 0.3; }
+}
+@keyframes vie-orb-drift {
+  from { transform: translate3d(-4%, -2%, 0) scale(1); }
+  to   { transform: translate3d(4%, 3%, 0) scale(1.08); }
+}
+
+/* ═══════════════════════════════════════════════════
+   MAGNETIC HOVER — element follows cursor subtly
+   Consumers write --magnet-x / --magnet-y.
+   ═══════════════════════════════════════════════════ */
+.vie-magnetic {
+  transform: translate3d(var(--magnet-x, 0), var(--magnet-y, 0), 0);
+  transition: transform 300ms var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1));
+  will-change: transform;
+}
+
+/* ═══════════════════════════════════════════════════
+   SHARE GLOW — the viral badge animation on share page
+   Single-use but powerful: the "wow, share this" moment.
+   ═══════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: no-preference) {
+  .vie-share-glow {
+    position: relative;
+  }
+  .vie-share-glow::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    padding: 2px;
+    background: conic-gradient(
+      from var(--ring-hue, 292) * 1deg,
+      oklch(from var(--primary) l c h / 0.8),
+      oklch(from var(--vie-coral) l c h / 0.8),
+      oklch(from var(--vie-mint) l c h / 0.8),
+      oklch(from var(--primary) l c h / 0.8)
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    animation: vie-share-glow-spin 4s linear infinite;
+    z-index: -1;
+  }
+}
+@keyframes vie-share-glow-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ═══════════════════════════════════════════════════
+   COUNT-UP NUMERIC — enforce consistent width during animation
+   ═══════════════════════════════════════════════════ */
+.vie-count-up {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}

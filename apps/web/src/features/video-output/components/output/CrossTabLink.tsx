@@ -1,6 +1,6 @@
 // Backward-compatible adapter for old CrossTabLink API.
 // New code should import { CrossTabButton } from '@/components/vie'.
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { CrossTabButton } from '@/components/vie';
 
 interface CrossTabLinkProps {
@@ -17,5 +17,9 @@ export const CrossTabLink = memo(function CrossTabLink({
   description,
   onNavigate,
 }: CrossTabLinkProps) {
-  return <CrossTabButton label={label} description={description} onClick={() => onNavigate(tabId)} />;
+  const handleClick = useCallback(() => {
+    onNavigate(tabId);
+  }, [tabId, onNavigate]);
+
+  return <CrossTabButton label={label} description={description} onClick={handleClick} />;
 });

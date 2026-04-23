@@ -1,155 +1,224 @@
 import { useState } from "react";
-import { useNavigate, Link, Navigate } from "react-router-dom";
-import { Sparkles, ArrowRight, Play, Wand2, BookOpen, Target, HelpCircle } from "lucide-react";
+import type { FormEvent, ReactElement } from "react";
+import { useNavigate, Navigate } from "react-router-dom";
+import { ArrowRight, Play } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/stores/auth-store";
 import { isYouTubeUrl } from "@/lib/youtube-utils";
+import { cn } from "@/lib/utils";
+
+import { LandingHeader } from "@/components/landing/LandingHeader";
+import { StreamingDemoLoop } from "@/components/landing/StreamingDemoLoop";
+import { PreviewTimeline } from "@/components/landing/PreviewTimeline";
+import { PreviewQuiz } from "@/components/landing/PreviewQuiz";
+import { PreviewTakeaways } from "@/components/landing/PreviewTakeaways";
+
+import "@/styles/landing.css";
 
 /** A short, popular video with high-quality summary output — good first impression. */
-const SAMPLE_VIDEO_URL = "https://www.youtube.com/watch?v=8jPQjjsBbIc";
+const SAMPLE_VIDEO_URL =
+  import.meta.env.VITE_SAMPLE_VIDEO_URL ??
+  "https://www.youtube.com/watch?v=8jPQjjsBbIc";
 
-function DemoVignette() {
-  return (
-    <div
-      className="orbs-ambient relative mx-auto max-w-xl mt-8 rounded-2xl border border-[var(--glass-border-strong)] bg-[var(--glass-bg)] backdrop-blur-xl p-4"
-      style={{ boxShadow: "var(--glass-shadow-elevated)" }}
-      aria-hidden="true"
-    >
-      {/* Mock URL bar */}
-      <div className="flex items-center gap-2 h-8 rounded-lg bg-muted/30 px-3 text-xs text-muted-foreground mb-3">
-        <Play className="h-3 w-3 opacity-50" />
-        <span className="vignette-typing font-mono" />
-      </div>
-
-      {/* Mock tab pills */}
-      <div className="flex gap-1.5 mb-3">
-        <div
-          className="vignette-tab h-6 rounded-full bg-primary/20 px-3 flex items-center gap-1.5 text-xs font-semibold"
-          style={{ animationDelay: "1.8s" }}
-        >
-          <BookOpen className="h-3 w-3" /> Summary
-        </div>
-        <div
-          className="vignette-tab h-6 rounded-full bg-muted/40 px-3 flex items-center gap-1.5 text-xs"
-          style={{ animationDelay: "2.0s" }}
-        >
-          <Target className="h-3 w-3" /> Key Points
-        </div>
-        <div
-          className="vignette-tab h-6 rounded-full bg-muted/40 px-3 flex items-center gap-1.5 text-xs"
-          style={{ animationDelay: "2.2s" }}
-        >
-          <HelpCircle className="h-3 w-3" /> Quiz
-        </div>
-      </div>
-
-      {/* Mock content lines */}
-      <div className="space-y-2">
-        <div className="vignette-line h-3 rounded bg-muted/30" style={{ animationDelay: "2.8s" }} />
-        <div className="vignette-line h-3 rounded bg-muted/30 w-4/5" style={{ animationDelay: "3.0s" }} />
-        <div className="vignette-line h-3 rounded bg-muted/30 w-3/5" style={{ animationDelay: "3.2s" }} />
-      </div>
-    </div>
-  );
-}
-
-function LandingHeader() {
-  return (
-    <header className="flex items-center justify-between px-6 py-4">
-      <div className="flex items-center gap-2">
-        <Sparkles className="h-5 w-5 text-primary" />
-        <span className="font-bold text-foreground">VIE</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/login">Log in</Link>
-        </Button>
-        <Button size="sm" asChild>
-          <Link to="/register">Sign up</Link>
-        </Button>
-      </div>
-    </header>
-  );
-}
-
-export function LandingPage() {
-  const [url, setUrl] = useState("");
+export function LandingPage(): ReactElement {
+  const [url, setUrl] = useState<string>("");
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  // Auto-redirect authenticated users to their board
+  // Authenticated users skip the funnel — straight to board.
   if (isAuthenticated) {
     return <Navigate to="/board" replace />;
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const trimmed = url.trim();
+  const isInvalid = trimmed.length > 0 && !isYouTubeUrl(trimmed);
+
+  function handleSubmit(e: FormEvent): void {
     e.preventDefault();
-    const trimmed = url.trim();
-    if (!trimmed || !isYouTubeUrl(trimmed)) return;
-    navigate("/login", { state: { returnUrl: `/generate?url=${encodeURIComponent(trimmed)}` } });
-  };
+    if (!trimmed || isInvalid) return;
+    navigate("/login", {
+      state: { returnUrl: `/generate?url=${encodeURIComponent(trimmed)}` },
+    });
+  }
+
+  function handleSample(): void {
+    navigate("/login", {
+      state: {
+        returnUrl: `/generate?url=${encodeURIComponent(SAMPLE_VIDEO_URL)}`,
+      },
+    });
+  }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background bg-[var(--gradient-hero-bg)]">
-      <LandingHeader />
+    <div className="landing-shell landing-grid-paper min-h-dvh flex flex-col bg-background text-foreground">
+      <div
+        className="w-full mx-auto"
+        style={{ maxWidth: "var(--landing-max)", paddingInline: "var(--landing-gutter)" }}
+      >
+        <LandingHeader />
+      </div>
 
-      <main className="flex-1 flex flex-col items-center justify-center page-gutter pb-20">
-        <div className="max-w-2xl w-full hero-rhythm">
-          <div className="stack-md text-start sm:text-center">
-            <h1 className="type-hero-xl text-foreground text-balance">
-              Watch less. Learn everything.
-            </h1>
-            <p className="type-lead max-w-md sm:mx-auto text-pretty">
-              Paste a YouTube URL. Get interactive study guides, flashcards,
-              recipes, and more — in seconds.
+      <main
+        className="flex-1 w-full mx-auto pb-24"
+        style={{ maxWidth: "var(--landing-max)", paddingInline: "var(--landing-gutter)" }}
+      >
+        {/* ── Editorial hero: headline left, live demo right ── */}
+        <section
+          aria-labelledby="landing-headline"
+          className="pt-8 sm:pt-12 lg:pt-20"
+        >
+          <div className="landing-hero-grid">
+            <div className="flex flex-col justify-center gap-8">
+              <div>
+                <div className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.15em] text-muted-foreground mb-6">
+                  <span className="h-1 w-1 rounded-full bg-primary" aria-hidden="true" />
+                  Watch less · Learn everything
+                </div>
+                <h1 id="landing-headline" className="landing-display text-balance">
+                  Any YouTube video,
+                  <br />
+                  turned into an app you can use.
+                </h1>
+                <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground text-pretty">
+                  Paste a link. VIE extracts the lecture, the recipe, the code,
+                  the chapters — as structured, interactive surfaces. Not a
+                  transcript. Not a summary. A thing you can study from.
+                </p>
+              </div>
+
+              <form
+                onSubmit={handleSubmit}
+                className="flex flex-col gap-3 max-w-xl"
+                noValidate
+              >
+                <div className="landing-input" data-invalid={isInvalid ? "true" : "false"}>
+                  <Play
+                    className="h-4 w-4 text-muted-foreground shrink-0"
+                    aria-hidden="true"
+                  />
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    placeholder="youtube.com/watch?v=…"
+                    aria-label="YouTube video URL"
+                    aria-invalid={isInvalid || undefined}
+                    aria-describedby={isInvalid ? "landing-url-error" : undefined}
+                  />
+                  <Button
+                    type="submit"
+                    size="default"
+                    className={cn("cta-magnetic rounded-[10px] px-5 font-semibold shrink-0")}
+                    disabled={!trimmed || isInvalid}
+                  >
+                    Summarize
+                    <ArrowRight className="h-4 w-4 ms-1" aria-hidden="true" />
+                  </Button>
+                </div>
+
+                {isInvalid && (
+                  <p
+                    id="landing-url-error"
+                    className="text-xs text-destructive"
+                    role="alert"
+                  >
+                    That doesn&apos;t look like a YouTube link. Try a watch URL
+                    like <span className="font-mono">youtube.com/watch?v=…</span>
+                  </p>
+                )}
+
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="text-muted-foreground">No URL handy?</span>
+                  <button
+                    type="button"
+                    onClick={handleSample}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-muted/70 hover:bg-muted px-3 py-1 text-foreground font-medium transition-colors"
+                  >
+                    <Play
+                      className="h-3 w-3 text-primary shrink-0"
+                      aria-hidden="true"
+                    />
+                    Try a sample video
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Right column — the live streaming demo (hero asset) */}
+            <div className="relative flex items-stretch">
+              <div className="w-full self-stretch">
+                <StreamingDemoLoop tabPortalId="hero-tab-strip" />
+              </div>
+            </div>
+          </div>
+
+          {/* Tab strip — portaled here from StreamingDemoLoop */}
+          <div id="hero-tab-strip" className="mt-6" />
+        </section>
+
+        {/* ── Proof section: 12-col bento ── */}
+        <section
+          aria-labelledby="showcase-heading"
+          className="pt-20 sm:pt-28"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
+            <div className="max-w-xl">
+              <div className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.15em] text-muted-foreground mb-3">
+                <span className="h-1 w-1 rounded-full bg-primary" aria-hidden="true" />
+                What actually comes out
+              </div>
+              <h2 className="font-display font-bold text-4xl md:text-5xl leading-[1.02] tracking-[-0.025em] text-foreground text-balance">
+                Three tabs from one talk.
+                <br />
+                Real interactions, not screenshots.
+              </h2>
+            </div>
+            <p className="max-w-sm text-sm text-muted-foreground text-pretty">
+              Try the quiz. Scrub the timeline. These are the real components
+              your processed videos render with — wired up, below, right now.
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="relative max-w-xl mx-auto">
-            <div className="glass rounded-2xl p-1.5 flex items-center gap-2 ring-1 ring-[var(--glass-border)] focus-within:ring-1 focus-within:ring-primary/25 focus-within:shadow-[0_0_20px_-8px_var(--primary)] transition-shadow duration-300">
-              <div className="flex items-center gap-2 flex-1 min-w-0 pl-4">
-                <Play className="h-4 w-4 text-muted-foreground shrink-0" />
-                <input
-                  type="url"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="Paste a YouTube URL..."
-                  className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground/60 py-2.5"
-                  aria-label="YouTube video URL"
-                />
-              </div>
-              <Button
-                type="submit"
-                size="default"
-                className="cta-magnetic rounded-xl px-6 font-bold shrink-0"
-                disabled={!url.trim() || !isYouTubeUrl(url.trim())}
-              >
-                Summarize
-                <ArrowRight className="h-4 w-4 ml-1" />
+          <div className="landing-bento">
+            <div className="landing-bento__timeline">
+              <PreviewTimeline />
+            </div>
+            <div className="landing-bento__quiz">
+              <PreviewQuiz />
+            </div>
+            <div className="landing-bento__takeaways">
+              <PreviewTakeaways />
+            </div>
+          </div>
+        </section>
+
+        {/* ── Final CTA line ── */}
+        <section className="pt-20 sm:pt-28">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 py-10 border-t border-border/60">
+            <div>
+              <h2 className="font-display font-bold text-3xl md:text-4xl leading-tight tracking-[-0.02em] text-foreground">
+                Paste a link. Get the app.
+              </h2>
+              <p className="text-muted-foreground mt-1.5">
+                Free to try. Sign in takes a keystroke.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="lg" variant="ghost" onClick={handleSample}>
+                <Play className="h-4 w-4 me-1 text-primary" aria-hidden="true" />
+                Try sample
               </Button>
             </div>
-          </form>
-
-          <div className="flex items-center justify-center gap-2 max-w-xl mx-auto text-sm">
-            <span className="text-muted-foreground">or</span>
-            <button
-              type="button"
-              onClick={() => {
-                navigate("/login", { state: { returnUrl: `/generate?url=${encodeURIComponent(SAMPLE_VIDEO_URL)}` } });
-              }}
-              className="inline-flex items-center gap-1.5 rounded-full bg-muted/40 hover:bg-muted px-3 py-1.5 text-foreground font-medium transition-colors"
-            >
-              <Wand2 className="h-3.5 w-3.5 text-primary" />
-              Try with a sample video
-            </button>
           </div>
-
-          <DemoVignette />
-        </div>
+        </section>
       </main>
 
-      <footer className="text-center text-xs text-muted-foreground/50 py-4">
-        Video Insight Engine
+      <footer
+        className="w-full mx-auto py-8 flex items-center justify-between text-xs text-muted-foreground/70"
+        style={{ maxWidth: "var(--landing-max)", paddingInline: "var(--landing-gutter)" }}
+      >
+        <span className="font-mono uppercase tracking-[0.15em]">Video Insight Engine</span>
       </footer>
     </div>
   );

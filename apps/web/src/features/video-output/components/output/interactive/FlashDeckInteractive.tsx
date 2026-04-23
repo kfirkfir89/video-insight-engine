@@ -3,7 +3,7 @@ import { Shuffle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import type { FlashcardItem } from '@vie/types';
-import { GlassCard, FadeIn, BackForward, Stepper, Badge, ProgressBar } from '@/components/vie';
+import { GlassCard, FadeIn, BackForward, Stepper, Badge, ProgressBar, EmojiMarker } from '@/components/vie';
 import { Celebration } from '../Celebration';
 import { useLabels } from '@/lib/i18n';
 
@@ -225,11 +225,16 @@ export const FlashDeckInteractive = memo(function FlashDeckInteractive({
               {card.emoji && <span className="text-3xl mb-3" aria-hidden="true">{card.emoji}</span>}
               <p className="font-semibold text-base leading-snug tracking-tight">{card.front}</p>
               {cardNeedsReview.has(currentCard) && (
-                <Badge variant="warning" className="mt-2 text-xs font-medium">
-                  {'🔄'} Missed in quiz
+                <Badge variant="warning" className="mt-2 text-xs font-medium inline-flex items-center gap-1">
+                  <EmojiMarker emoji="🔄" size="sm" animated={false} />
+                  Missed in quiz
                 </Badge>
               )}
-              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground/50 mt-3">Tap to flip</span>
+              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground/50 mt-3 inline-flex items-center gap-1.5">
+                Tap
+                <kbd className="px-1.5 py-0.5 rounded bg-muted/60 border border-border/60 text-[10px] normal-case tracking-normal">Space</kbd>
+                to flip
+              </span>
             </div>
 
             {/* Back */}

@@ -7,9 +7,16 @@ import { cn } from '@/lib/utils';
 interface CollapsibleVideoPlayerProps {
   youtubeId: string;
   title?: string;
+  /** Per-instance Video Router id — opts the title into a View Transition morph
+   *  with the originating board card. Optional; omit for non-board entry points. */
+  videoId?: string;
+  /** When true, this wrapper participates in the "Crystallization" morph from
+   *  AddVideoInput on submit. Should only be true while the video is actively
+   *  streaming so the morph fires on the first paint of a fresh navigation. */
+  streamSpine?: boolean;
 }
 
-export function CollapsibleVideoPlayer({ youtubeId, title }: CollapsibleVideoPlayerProps) {
+export function CollapsibleVideoPlayer({ youtubeId, title, videoId, streamSpine }: CollapsibleVideoPlayerProps) {
   const { isPlayerOpen, togglePlayer, closePlayer, playerRef } = useVideoPlayer();
 
   // Escape to collapse
@@ -25,7 +32,10 @@ export function CollapsibleVideoPlayer({ youtubeId, title }: CollapsibleVideoPla
   }, [handleKeyDown]);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border/40 bg-card/50 backdrop-blur-sm">
+    <div
+      className="overflow-hidden rounded-xl border border-border/40 bg-card/50 backdrop-blur-sm"
+      style={streamSpine ? ({ viewTransitionName: 'vie-input-spine' } as React.CSSProperties) : undefined}
+    >
       {/* Clickable header bar */}
       <button
         type="button"
@@ -34,7 +44,14 @@ export function CollapsibleVideoPlayer({ youtubeId, title }: CollapsibleVideoPla
       >
         <div className="flex items-center gap-2 min-w-0">
           <Play className="h-4 w-4 shrink-0 text-primary" />
-          <span className="truncate text-sm font-medium">
+          <span
+            className="truncate text-sm font-medium"
+            style={
+              videoId
+                ? ({ viewTransitionName: `vie-video-title-${videoId}` } as React.CSSProperties)
+                : undefined
+            }
+          >
             {title || 'Watch Video'}
           </span>
         </div>
@@ -45,19 +62,23 @@ export function CollapsibleVideoPlayer({ youtubeId, title }: CollapsibleVideoPla
         )}
       </button>
 
-      {/* Player container — CSS-hidden when collapsed, NOT unmounted */}
+      {/* Player container — CSS-hidden when collapsed, NOT unmounted.
+          Animate grid-template-rows (0fr → 1fr) instead of max-height so
+          the transition is composited on GPU and self-sizes to content. */}
       <div
         className={cn(
-          'transition-[max-height,opacity] duration-300 ease-in-out',
-          isPlayerOpen ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'
+          'grid transition-[grid-template-rows,opacity] duration-300 ease-in-out',
+          isPlayerOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
         )}
       >
-        <div className="px-4 pb-4">
-          <YouTubePlayer
-            ref={playerRef}
-            youtubeId={youtubeId}
-            className="rounded-lg"
-          />
+        <div className="overflow-hidden">
+          <div className="px-4 pb-4">
+            <YouTubePlayer
+              ref={playerRef}
+              youtubeId={youtubeId}
+              className="rounded-lg"
+            />
+          </div>
         </div>
       </div>
     </div>

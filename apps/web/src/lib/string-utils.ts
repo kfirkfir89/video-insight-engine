@@ -1,12 +1,26 @@
 /**
- * Extract initials from a name string.
- * Returns up to 2 uppercase characters (first letter of first and last name).
+ * Extract initials for an avatar. Tries `name` first (2 chars if two words,
+ * otherwise 1), then falls back to the first letter of `email`, then "U".
+ *
+ * The email fallback exists because newly registered users often have a
+ * blank display name until they edit their profile — a faceless generic
+ * icon at the first login moment reads as "your account isn't ready."
  */
-export function getInitials(name: string | undefined): string {
-  if (!name) return "U";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return parts[0][0]?.toUpperCase() ?? "U";
+export function getInitials(
+  name: string | null | undefined,
+  email?: string | null,
+): string {
+  const trimmedName = name?.trim();
+  if (trimmedName) {
+    const parts = trimmedName.split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return parts[0][0].toUpperCase();
+  }
+  const trimmedEmail = email?.trim();
+  if (trimmedEmail) {
+    return trimmedEmail[0].toUpperCase();
+  }
+  return "U";
 }
 
 /** Format seconds into h:mm:ss or m:ss timestamp string. */

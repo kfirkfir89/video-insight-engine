@@ -66,18 +66,13 @@ const CALLOUT_CONFIG: Record<CalloutStyle, CalloutConfig> = {
   },
 };
 
-/**
- * Domain-free callout display.
- * Renders a callout with full border + background tint based on style.
- * Styles: tip, warning, note, security, chef_tip
- */
 export const Callout = memo(function Callout({ style, text, className }: CalloutProps) {
   const config = CALLOUT_CONFIG[style] ?? CALLOUT_CONFIG.note;
 
   return (
     <div
       className={cn(
-        'rounded-lg border px-3 py-2',
+        'rounded-lg border px-3 py-2 animate-fade-up',
         config.borderColor,
         config.bgTint,
         className,
@@ -86,7 +81,14 @@ export const Callout = memo(function Callout({ style, text, className }: Callout
       aria-label={config.label}
     >
       <div className="flex items-start gap-1.5">
-        <span className={cn('mt-0.5', ACCENT_TEXT_COLOR[config.accentColor])}>{config.icon}</span>
+        <span
+          className={cn(
+            'mt-0.5 inline-flex',
+            ACCENT_TEXT_COLOR[config.accentColor],
+          )}
+        >
+          {config.icon}
+        </span>
         <p className="text-xs leading-relaxed text-muted-foreground">{text}</p>
       </div>
     </div>

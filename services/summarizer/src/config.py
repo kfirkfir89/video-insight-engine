@@ -124,10 +124,13 @@ class Settings(BaseSettings):
     SCENE_THRESHOLD: float = 0.3
     SCENE_MAX_FRAMES: int = 100
 
-    # Vision LLM analysis on top-scored frames
+    # Vision LLM analysis on top-scored frames.
+    # Sending 8 base64 frames to Sonnet legitimately takes 30-50s under load;
+    # a 60s budget is the right line between "catches real stalls" and "loses
+    # context to premature timeout."
     FRAME_VISION_ENABLED: bool = True
     FRAME_VISION_MAX_FRAMES: int = 8
-    FRAME_VISION_TIMEOUT: float = 30.0
+    FRAME_VISION_TIMEOUT: float = 60.0
 
     # Frame extraction (visual blocks)
     # Default False for local dev (yt-dlp/ffmpeg may not be installed).

@@ -19,18 +19,12 @@ const VARIANT_CONFIG: Record<KeyValueVariant, { icon: typeof Info; label: string
 
 interface KeyValueProps {
   items: KeyValueItem[];
-  /** Predefined icon + label variant */
   variant?: KeyValueVariant;
-  /** Optional header icon + label (overrides variant) */
   icon?: ReactNode;
   label?: string;
   className?: string;
 }
 
-/**
- * Domain-free key-value display.
- * Renders a definition list with fade dividers.
- */
 export const KeyValue = memo(function KeyValue({
   items,
   variant,
@@ -38,7 +32,6 @@ export const KeyValue = memo(function KeyValue({
   label: labelProp,
   className,
 }: KeyValueProps) {
-  // Resolve icon/label from variant if not explicitly provided
   const variantConfig = variant ? VARIANT_CONFIG[variant] ?? VARIANT_CONFIG.info : null;
   const icon = iconProp ?? (variantConfig ? <variantConfig.icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : null);
   const label = labelProp ?? (variantConfig ? variantConfig.label : undefined);
@@ -47,21 +40,25 @@ export const KeyValue = memo(function KeyValue({
   return (
     <div className={cn('space-y-1.5', className)}>
       {(icon || label) && (
-        <div className="flex items-center gap-1.5 mb-2">
-          {icon && <span className="text-muted-foreground/70 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:shrink-0" aria-hidden="true">{icon}</span>}
-          {label && <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">{label}</span>}
+        <div className="flex items-center gap-1.5 mb-2 animate-fade-up">
+          {icon && (
+            <span className="text-muted-foreground/70 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:shrink-0" aria-hidden="true">
+              {icon}
+            </span>
+          )}
+          {label && (
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">{label}</span>
+          )}
         </div>
       )}
       <dl className="space-y-0">
         {items.map((item, index) => (
-          <div key={index}>
+          <div key={index} className="animate-fade-up" style={{ animationDelay: `${index * 50 + 60}ms` }}>
             <div className="flex items-baseline justify-between gap-3 py-1.5 text-sm even:bg-muted/[0.04]">
               <dt className="text-xs font-semibold uppercase text-muted-foreground/70 tracking-wider">{item.key}</dt>
               <dd className="text-sm font-medium tabular-nums text-foreground">{item.value}</dd>
             </div>
-            {index < items.length - 1 && (
-              <div className="fade-divider" aria-hidden="true" />
-            )}
+            {index < items.length - 1 && <div className="fade-divider" aria-hidden="true" />}
           </div>
         ))}
       </dl>

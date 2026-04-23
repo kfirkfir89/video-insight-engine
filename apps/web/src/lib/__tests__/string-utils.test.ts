@@ -1,7 +1,39 @@
 import { describe, it, expect } from "vitest";
-import { formatDuration, formatDurationHuman, timeAgo } from "../string-utils";
+import { formatDuration, formatDurationHuman, getInitials, timeAgo } from "../string-utils";
 
 describe("string-utils", () => {
+  describe("getInitials", () => {
+    it("should return two initials for a two-word name", () => {
+      expect(getInitials("Ada Lovelace")).toBe("AL");
+    });
+
+    it("should return one initial for a single-word name", () => {
+      expect(getInitials("Ada")).toBe("A");
+    });
+
+    it("should fall back to the first letter of the email when name is blank", () => {
+      expect(getInitials("", "kfir@example.com")).toBe("K");
+      expect(getInitials(undefined, "kfir@example.com")).toBe("K");
+      expect(getInitials("   ", "kfir@example.com")).toBe("K");
+    });
+
+    it("should prefer name over email when both are present", () => {
+      expect(getInitials("Ada Lovelace", "zeta@example.com")).toBe("AL");
+    });
+
+    it("should return 'U' when both name and email are blank", () => {
+      expect(getInitials(undefined)).toBe("U");
+      expect(getInitials("", "")).toBe("U");
+      expect(getInitials(null, null)).toBe("U");
+    });
+
+    it("should always uppercase the result", () => {
+      expect(getInitials("ada")).toBe("A");
+      expect(getInitials("", "zeta@example.com")).toBe("Z");
+    });
+  });
+
+
   describe("formatDuration", () => {
     it("should format seconds into m:ss", () => {
       expect(formatDuration(0)).toBe("0:00");

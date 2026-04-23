@@ -24,19 +24,25 @@ interface ClipPlayerInteractiveProps {
   onNavigateTab?: (id: string) => void;
 }
 
-/** Mood-to-OKLCH color mapping for left border */
 const MOOD_COLORS: Record<string, string> = {
-  highlight: 'oklch(85% 0.15 85)',  // warm yellow
-  info: 'oklch(70% 0.12 240)',      // blue
-  demo: 'oklch(75% 0.15 145)',      // green
-  warning: 'oklch(65% 0.18 25)',    // red
+  highlight: 'oklch(85% 0.15 85)',
+  info: 'oklch(70% 0.12 240)',
+  demo: 'oklch(75% 0.15 145)',
+  warning: 'oklch(65% 0.18 25)',
 };
 
-const DEFAULT_MOOD_COLOR = 'oklch(70% 0.05 250)'; // neutral
+const DEFAULT_MOOD_COLOR = 'oklch(70% 0.05 250)';
 
 function getMoodColor(mood?: string): string {
   if (!mood) return DEFAULT_MOOD_COLOR;
   return MOOD_COLORS[mood.toLowerCase()] ?? DEFAULT_MOOD_COLOR;
+}
+
+function resolveClipLabel(clip: ClipEntry): string {
+  const label = clip.label?.trim();
+  if (label && label.toLowerCase() !== 'clip') return label;
+  if (clip.description) return clip.description.slice(0, 60) + (clip.description.length > 60 ? '…' : '');
+  return `Moment at ${clip.time}`;
 }
 
 export const ClipPlayerInteractive = memo(function ClipPlayerInteractive({
@@ -99,20 +105,28 @@ export const ClipPlayerInteractive = memo(function ClipPlayerInteractive({
           >
             All
           </button>
-          {uniqueMoods.map((mood) => (
-            <button
-              key={mood}
-              onClick={() => setMoodFilter(moodFilter === mood ? null : mood)}
-              className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors capitalize ${
-                moodFilter === mood
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-muted/20 text-muted-foreground border-border/50 hover:bg-muted/40'
-              }`}
-              style={moodFilter !== mood ? { borderLeftColor: getMoodColor(mood), borderLeftWidth: 'calc(var(--border-width) * 3)' } : undefined}
-            >
-              {mood}
-            </button>
-          ))}
+          {uniqueMoods.map((mood) => {
+            const isActive = moodFilter === mood;
+            return (
+              <button
+                key={mood}
+                onClick={() => setMoodFilter(isActive ? null : mood)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border transition-colors capitalize',
+                  isActive
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-muted/20 text-muted-foreground border-border/50 hover:bg-muted/40',
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className="inline-block size-1.5 rounded-full shrink-0"
+                  style={{ background: isActive ? 'currentColor' : getMoodColor(mood) }}
+                />
+                {mood}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -126,13 +140,19 @@ export const ClipPlayerInteractive = memo(function ClipPlayerInteractive({
               <GlassCard
                 variant="outlined"
                 className="p-0 overflow-hidden"
-                style={{ borderLeftWidth: 'calc(var(--border-width) * 4)', borderLeftColor: moodColor }}
               >
                 <button
                   type="button"
                   onClick={() => toggleExpand(index)}
                   className="w-full text-start px-4 py-3 flex items-center gap-3 transition-colors hover:bg-muted/30"
                 >
+                  {clip.mood && (
+                    <span
+                      aria-hidden="true"
+                      className="size-2 rounded-full shrink-0"
+                      style={{ background: moodColor }}
+                    />
+                  )}
                   {/* 48px thumbnail on left */}
                   {clip.thumbnailUrl && (
                     <img
@@ -155,7 +175,7 @@ export const ClipPlayerInteractive = memo(function ClipPlayerInteractive({
                     <Clock className="h-3 w-3" aria-hidden="true" />
                     {clip.time}
                   </span>
-                  <span className="flex-1 text-sm font-medium truncate">{clip.label}</span>
+                  <span className="flex-1 text-sm font-medium truncate">{resolveClipLabel(clip)}</span>
                   <div className="flex items-center gap-2 shrink-0">
                     {clip.mood && <Badge variant="muted" className="text-xs capitalize">{clip.mood}</Badge>}
                     {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}

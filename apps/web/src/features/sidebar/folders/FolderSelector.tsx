@@ -58,10 +58,10 @@ export function FolderSelector({
           <DropdownMenuItem
             key={folder.id}
             onClick={() => onSelect(folder.id)}
-            style={{ paddingLeft: `${8 + folder.level * 12}px` }}
+            style={{ paddingInlineStart: `${8 + folder.level * 12}px` }}
           >
             <Folder
-              className="h-4 w-4 shrink-0 mr-2"
+              className="h-4 w-4 shrink-0 me-2"
               style={getFolderColorStyle(folder.color)}
             />
             <span className="truncate">{folder.name}</span>

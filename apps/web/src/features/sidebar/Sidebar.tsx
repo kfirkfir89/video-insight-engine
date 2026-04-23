@@ -9,6 +9,7 @@ import { SelectionToolbar } from "./core/SelectionToolbar";
 import { DndProvider } from "./core/DndProvider";
 import { RAGChatPanel } from "@/components/rag/RAGChatPanel";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useSidebarChat } from "@/features/sidebar/hooks/use-sidebar-chat";
 import { useUIStore, useSelectionMode, useActiveSection } from "@/stores/ui-store";
 
@@ -46,20 +47,25 @@ export const Sidebar = memo(function Sidebar() {
     <aside
       id="app-sidebar"
       aria-label="Navigation sidebar"
-      className="h-screen w-full flex flex-col bg-[var(--vie-nav-bg)] backdrop-blur-xl border-r border-[var(--glass-border-strong)] overflow-hidden relative"
+      className="h-full w-full flex flex-col bg-card overflow-hidden relative"
     >
       {/* Branded header with logo */}
       <SidebarHeader />
 
-      {/* New button — primary CTA, magnetic treatment */}
-      <div className="px-2 py-1 shrink-0">
+      {/* New button — hero CTA with gradient glow */}
+      <div className="px-2 py-1.5 shrink-0">
         <Button
           variant="default"
           size="sm"
-          className="cta-magnetic w-full gap-1.5 text-primary-foreground"
+          className={cn(
+            "cta-magnetic w-full gap-1.5 font-semibold",
+            "shadow-[0_6px_20px_-8px_oklch(from_var(--primary)_l_c_h_/_0.5)]",
+            "hover:shadow-[0_8px_28px_-6px_oklch(from_var(--primary)_l_c_h_/_0.6)]",
+            "active:scale-[0.98] transition-all motion-reduce:active:scale-100 motion-reduce:transition-none",
+          )}
           onClick={() => navigate("/generate")}
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           New
         </Button>
       </div>
@@ -70,10 +76,11 @@ export const Sidebar = memo(function Sidebar() {
       {/* Toolbar for sidebar controls (hidden when assistant active) */}
       {!isAssistant && <SidebarToolbar />}
 
-      {/* Content area — keyed container gives each section a brief fade-in on switch */}
+      {/* Content area — keyed so Collection↔Assistant swap cleanly. No entrance
+           animation: Layout remounts on route change, and a fade would flash. */}
       <div
         key={isAssistant ? "assistant" : "collection"}
-        className="flex-1 min-h-0 flex flex-col animate-in fade-in duration-200 ease-out"
+        className="flex-1 min-h-0 flex flex-col"
       >
         {isAssistant ? (
           <RAGChatPanel

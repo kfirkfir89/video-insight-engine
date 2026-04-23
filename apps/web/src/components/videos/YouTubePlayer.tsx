@@ -148,24 +148,35 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
       },
     }), [isReady]);
 
-    // Initialize YouTube player
+    // Initialize YouTube player.
+    // YT.Player REPLACES its target element with an iframe, so we create
+    // a disposable child div inside our wrapper — React never sees it in
+    // the VDOM, avoiding the removeChild crash on unmount.
     useEffect(() => {
       if (!YOUTUBE_ID_REGEX.test(youtubeId)) {
         return;
       }
 
+      const wrapper = containerRef.current;
+      if (!wrapper) return;
+
       let mounted = true;
       let player: YTPlayer | null = null;
 
+      // Create a throw-away target div for YT.Player to replace
+      const target = document.createElement("div");
+      target.style.width = "100%";
+      target.style.height = "100%";
+      wrapper.appendChild(target);
+
       loadYouTubeAPI()
         .then(() => {
-          if (!mounted || !containerRef.current) return;
+          if (!mounted) {
+            target.remove();
+            return;
+          }
 
-          // Create unique ID for the container
-          const containerId = `yt-player-${youtubeId}-${Date.now()}`;
-          containerRef.current.id = containerId;
-
-          player = new window.YT.Player(containerId, {
+          player = new window.YT.Player(target, {
             videoId: youtubeId,
             playerVars: {
               autoplay: autoplay ? 1 : 0,
@@ -202,13 +213,12 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
         if (player) {
           try {
             player.destroy();
-          } catch (error) {
-            // Player may already be destroyed - log in dev for debugging
-            if (import.meta.env.DEV) {
-              console.debug("YouTube player cleanup:", error);
-            }
+          } catch {
+            // Player may already be destroyed
           }
         }
+        // Clear any remaining iframe/elements the API inserted
+        wrapper.innerHTML = "";
         playerRef.current = null;
         setIsReady(false);
       };

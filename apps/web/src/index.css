@@ -4,6 +4,8 @@
 @import "./styles/categories.css";
 @import "./styles/flow-grid.css";
 @import "./styles/dark-effects.css";
+@import "./styles/transitions.css";
+@import "./styles/overdrive.css";
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
@@ -14,6 +16,11 @@
 :root {
   /* Layout tokens */
   --app-header-height: 3.25rem;
+  --app-chrome-gap: 0.5rem;
+  --app-chrome-radius: 1rem;
+
+  /* Canvas — recessed surface behind floating panels */
+  --app-canvas: oklch(96% 0.008 285);
 
   /* Light mode — Vibrant, colorful, modern (violet-indigo primary, hue ~290) */
   --background: oklch(98.5% 0.006 285);
@@ -24,10 +31,17 @@
   --popover-foreground: oklch(16% 0.03 280);
   --primary: oklch(58% 0.24 292);
   --primary-foreground: oklch(99% 0 0);
+  /* CTA — plum/berry for primary actions.
+     Separates identity (violet --primary, hue 292) from action (plum --cta, hue 340)
+     while staying in the violet family. Hue 340 sits between pure violet and rose —
+     warmer than --primary without drifting into red/coral territory. */
+  --cta: oklch(55% 0.17 340);
+  --cta-foreground: oklch(99% 0 0);
   --secondary: oklch(94% 0.012 290);
   --secondary-foreground: oklch(25% 0.03 285);
   --muted: oklch(95% 0.008 285);
-  --muted-foreground: oklch(38% 0.025 280);
+  /* Darkened from 38% to 32% to reach WCAG AA ≥4.5:1 on --background (98.5%). */
+  --muted-foreground: oklch(32% 0.025 280);
   --accent: oklch(95% 0.02 310);
   --accent-foreground: oklch(25% 0.03 285);
   --destructive: oklch(55% 0.22 18);
@@ -97,6 +111,9 @@
   --popover-foreground: oklch(94% 0.008 285);
   --primary: oklch(68% 0.26 292);
   --primary-foreground: oklch(99% 0 0);
+  /* CTA — brighter plum/berry in dark for luminous warmth on deep canvas. */
+  --cta: oklch(66% 0.18 340);
+  --cta-foreground: oklch(99% 0 0);
   --secondary: oklch(22% 0.025 280);
   --secondary-foreground: oklch(90% 0.008 285);
   --muted: oklch(20% 0.02 280);
@@ -108,6 +125,9 @@
   --border: oklch(25% 0.02 280);
   --input: oklch(20% 0.02 280);
   --ring: oklch(68% 0.26 292);
+
+  /* Canvas (dark) */
+  --app-canvas: oklch(8.5% 0.02 280);
 
   /* Premium effect tokens (dark mode - stronger glow) */
   --glow-strength: 0.35;
@@ -190,10 +210,13 @@
   --vie-glass-border-strong: oklch(from var(--border) l c h / 0.6);
   --vie-nav-bg: oklch(from var(--card) l c h / 0.85);
 
-  /* Easing tokens */
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* reserved for celebration moments only */
+  /* Easing tokens. Name kept for legacy callers (heart-pop, fade-up-spring,
+     pop-in) but the curve is now ease-out-quint — decelerates smoothly with
+     no overshoot. Bounce/elastic reads as AI-generated motion. */
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
 
   /* Hero background gradient (landing/marketing) */
   --gradient-hero-bg: radial-gradient(
@@ -215,15 +238,42 @@
     transparent 70%
   );
 
-  /* Chromatic accent rule — used across palette/modal top-edges for identity.
-     Peaks softened from 0.6 → 0.4 for a more whispered signature. */
-  --gradient-accent-rule: linear-gradient(
+  /* ── Rule gradients — three named chromatic signals ──
+     These are different intents, not stylistic variations. Components MUST
+     reference the token whose *signal* matches their purpose, not the one
+     whose color happens to look right.
+
+       --rule-identity  brand signature (primary → coral blend).
+                        Used on popover/modal top-edges. Declares "this
+                        surface belongs to VIE." Most elaborate; rarest.
+       --rule-active    single-primary fade at full strength.
+                        Used on active nav state (MobileBottomNav).
+                        Declares "this is the current route."
+       --rule-domain    single-primary fade at 0.4 opacity.
+                        Used as a quiet underline under app chrome
+                        (AppHeader) or domain section dividers.
+                        Declares "this is our territory," quietly.
+     --gradient-accent-rule is kept as a legacy alias of --rule-identity. */
+  --rule-identity: linear-gradient(
     90deg,
     oklch(from var(--primary) l c h / 0) 0%,
     oklch(from var(--primary) l c h / 0.4) 30%,
     oklch(from var(--vie-coral) l c h / 0.4) 70%,
     oklch(from var(--vie-coral) l c h / 0) 100%
   );
+  --rule-active: linear-gradient(
+    90deg,
+    transparent,
+    var(--primary),
+    transparent
+  );
+  --rule-domain: linear-gradient(
+    90deg,
+    transparent,
+    oklch(from var(--primary) l c h / 0.4),
+    transparent
+  );
+  --gradient-accent-rule: var(--rule-identity);
 
   /* ── Output Type Gradients ── */
   --gradient-smart-summary: linear-gradient(
@@ -283,18 +333,29 @@
   --glass-border-strong: oklch(80% 0.015 285 / 0.55);
   --glass-shadow: 0 8px 32px oklch(20% 0.02 285 / 0.08);
   --glass-shadow-elevated: inset 0 1px 0 oklch(100% 0 0 / 0.4), 0 12px 40px -12px oklch(20% 0.02 285 / 0.15);
+  /* 20px is the desktop baseline; mobile reduces via the override below. */
   --glass-blur: 20px;
+
+  /* ── VIE domain accent fallbacks ──
+     Components use `var(--vie-accent)` and expect a parent wrapper to set
+     a domain-specific value (see output/lib/content-accent.ts). Without a
+     parent, resolve to primary so borders/icons still render visibly. */
+  --vie-accent: var(--primary);
+  --vie-accent-muted: oklch(from var(--primary) l c h / 0.1);
+  --vie-accent-border: oklch(from var(--primary) l c h / 0.25);
 
   /* ─────────────────────────────────────────────
      TYPOGRAPHY SYSTEM
      Families:
        --font-display  Bricolage Grotesque — H1, hero, marketing
-       --font-sans     Inter              — H2-H4, body, UI
+       --font-sans     Hanken Grotesk     — H2-H4, body, UI
        --font-mono     JetBrains Mono     — code, numerics
+     Hanken Grotesk pairs with Bricolage's organic curves while staying
+     outside the AI-trained-default reflex set (Inter/DM/Plus Jakarta).
      Scale ratio: 1.25 (major third) — steps at 0.6875 / 0.8125 / 0.875 / 0.9375 / 1 / 1.125 / 1.25 / 1.5 / 1.875 / 2.25rem
      ───────────────────────────────────────────── */
-  --font-display: "Bricolage Grotesque", Inter, system-ui, sans-serif;
-  --font-sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Bricolage Grotesque", "Hanken Grotesk", system-ui, sans-serif;
+  --font-sans: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-body: var(--font-sans); /* alias for backwards compat */
   --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", "Fira Code", monospace;
 
@@ -451,6 +512,17 @@
   --shadow-popover: 0 8px 24px -6px oklch(0% 0 0 / 0.5), 0 2px 6px -1px oklch(0% 0 0 / 0.3);
 }
 
+/* ── Mobile perf tuning ──────────────────────────────
+   Backdrop-filter with 20px blur is expensive on low-end mobile GPUs.
+   Halving to 10px still reads as glass but cuts composite cost in half.
+   Applies to both light and dark themes. */
+@media (max-width: 768px) {
+  :root,
+  [data-theme="dark"] {
+    --glass-blur: 10px;
+  }
+}
+
 @theme inline {
   /* Reference CSS custom properties */
   --color-background: var(--background);
@@ -461,6 +533,8 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-cta: var(--cta);
+  --color-cta-foreground: var(--cta-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -833,14 +907,19 @@
     filter: blur(8px);
   }
 
-  /* Magnetic CTA — subtle primary→coral gradient + warm hover glow.
-     Use on the single most-important call-to-action per surface. */
+  /* Magnetic CTA — plum → violet brand gradient with restrained hover.
+     Runs from --cta (plum, hue 340) into --primary (violet, hue 292) so the
+     motion reads as purpose-built for the VIE identity, not generic.
+     RESERVED for the single hero submit per surface (landing Summarize,
+     sidebar "New summary", VideoHero primary action). Default buttons
+     should NOT use this class — they use the Button component default. */
   .cta-magnetic {
     background: linear-gradient(
       135deg,
-      var(--primary) 0%,
-      oklch(from var(--primary) calc(l + 0.04) calc(c + 0.01) calc(h - 10)) 100%
+      var(--cta) 0%,
+      var(--primary) 100%
     );
+    color: var(--cta-foreground);
     box-shadow:
       0 1px 0 oklch(100% 0 0 / 0.15) inset,
       var(--shadow-sm);
@@ -849,8 +928,7 @@
   .cta-magnetic:hover {
     box-shadow:
       0 1px 0 oklch(100% 0 0 / 0.16) inset,
-      var(--shadow-md),
-      0 0 0 3px oklch(from var(--primary) l c h / 0.1);
+      var(--shadow-md);
     transform: translateY(-1px);
   }
   .cta-magnetic:active {
@@ -915,11 +993,14 @@
     background: radial-gradient(circle, var(--vie-mint), transparent 70%);
   }
 
-  /* Auto-fit responsive grid — no breakpoints, content-aware */
+  /* Auto-fill responsive grid — no breakpoints, content-aware.
+     auto-fill (not auto-fit) keeps empty tracks, so a single card stays
+     at its min width instead of stretching to fill the viewport. */
   .auto-grid {
     display: grid;
     gap: var(--space-md);
-    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 360px));
+    justify-content: start;
   }
 
   /* Hide scrollbar while keeping scroll functionality */
@@ -1008,27 +1089,70 @@
   }
 }
 
-@keyframes heroFlipForward {
-  0% {
-    transform: rotateX(0deg);
+/* ═══════════════════════════════════════════════════
+   BRAND MARK — distillate reveal
+   The top face falls in first, the flanks rotate open
+   from the inflection vertex, the coral vertex lights up
+   last. The sequence echoes the product: wide video input
+   distilling down to a single coral insight.
+   Disabled under reduced motion.
+   ═══════════════════════════════════════════════════ */
+@keyframes vie-mark-face-top {
+  from {
+    opacity: 0;
+    transform: translateY(-8%);
   }
-  50% {
-    transform: rotateX(-90deg);
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
-  100% {
-    transform: rotateX(0deg);
+}
+@keyframes vie-mark-face-flank {
+  from {
+    opacity: 0;
+    transform: scaleY(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+@keyframes vie-mark-vertex {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
-@keyframes heroFlipBackward {
-  0% {
-    transform: rotateX(0deg);
-  }
-  50% {
-    transform: rotateX(90deg);
-  }
-  100% {
-    transform: rotateX(0deg);
+.vie-mark--animated .vie-mark__face,
+.vie-mark--animated .vie-mark__vertex {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.vie-mark--animated .vie-mark__face--top {
+  animation: vie-mark-face-top 520ms cubic-bezier(0.22, 1, 0.36, 1) 0ms both;
+}
+.vie-mark--animated .vie-mark__face--left {
+  transform-origin: top;
+  animation: vie-mark-face-flank 560ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+}
+.vie-mark--animated .vie-mark__face--right {
+  transform-origin: top;
+  animation: vie-mark-face-flank 560ms cubic-bezier(0.22, 1, 0.36, 1) 200ms both;
+}
+.vie-mark--animated .vie-mark__vertex {
+  animation: vie-mark-vertex 400ms var(--ease-spring-soft) 360ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vie-mark--animated .vie-mark__face,
+  .vie-mark--animated .vie-mark__vertex {
+    animation: none;
   }
 }
 

@@ -1,7 +1,7 @@
 import { memo, useState, useMemo } from 'react';
 import { Check, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { GlassCard, FadeIn, Badge, ScoreRing } from '@/components/vie';
+import { GlassCard, FadeIn, Badge, ScoreRing, EmojiMarker } from '@/components/vie';
 
 import { useLabels } from '@/lib/i18n';
 
@@ -137,7 +137,7 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
                     item.winner === 'right' && 'opacity-60',
                   )}>
                     {item.winner === 'left' && (
-                      <span className="absolute -top-2 -end-1 text-sm" aria-label="Winner">{'🏆'}</span>
+                      <EmojiMarker emoji="🏆" size="sm" animated={false} className="absolute -top-2 -end-1" />
                     )}
                     <span className="text-xs font-semibold uppercase tracking-wider text-primary">{colLeft}</span>
                     <p className="text-sm leading-relaxed text-muted-foreground mt-1">{item.thisProduct}</p>
@@ -148,7 +148,7 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
                     item.winner === 'left' && 'opacity-60',
                   )}>
                     {item.winner === 'right' && (
-                      <span className="absolute -top-2 -end-1 text-sm" aria-label="Winner">{'🏆'}</span>
+                      <EmojiMarker emoji="🏆" size="sm" animated={false} className="absolute -top-2 -end-1" />
                     )}
                     <span className="text-xs font-semibold uppercase tracking-wider">{colRight}</span>
                     <p className="text-sm leading-relaxed text-muted-foreground mt-1">{item.competitor}</p>

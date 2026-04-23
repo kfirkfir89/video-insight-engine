@@ -91,8 +91,8 @@ export function CreateSubfolderInput({
         <div
           className="flex items-center gap-2 py-1.5"
           style={{
-            paddingLeft: `${paddingLeft + indentPerLevel}px`,
-            paddingRight: "8px",
+            paddingInlineStart: `${paddingLeft + indentPerLevel}px`,
+            paddingInlineEnd: "8px",
           }}
         >
           <Input

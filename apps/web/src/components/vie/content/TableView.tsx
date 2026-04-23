@@ -10,7 +10,6 @@ interface TableColumn {
 interface TableViewProps {
   columns: TableColumn[];
   rows: Array<Record<string, unknown>>;
-  /** Row indices to visually highlight */
   highlightRows?: number[];
   caption?: string;
   className?: string;
@@ -22,9 +21,6 @@ const ALIGN_CLASS: Record<string, string> = {
   right: 'text-end',
 };
 
-/**
- * Domain-free data table with column alignment and row highlighting.
- */
 export const TableView = memo(function TableView({
   columns,
   rows,
@@ -45,21 +41,25 @@ export const TableView = memo(function TableView({
             {columns.map((col) => (
               <th
                 key={col.key}
-                className={cn('px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground', ALIGN_CLASS[col.align ?? 'left'])}
+                className={cn(
+                  'px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground',
+                  ALIGN_CLASS[col.align ?? 'left'],
+                )}
               >
                 {col.label}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="stagger-children">
+        <tbody>
           {rows.map((row, rowIndex) => {
             const isHighlighted = highlightSet.has(rowIndex);
             return (
               <tr
                 key={rowIndex}
+                style={{ animationDelay: `${rowIndex * 30}ms` }}
                 className={cn(
-                  'even:bg-muted/[0.08] hover:bg-muted/20 transition-colors',
+                  'even:bg-muted/[0.08] hover:bg-muted/20 transition-colors animate-fade-up',
                   isHighlighted && 'bg-primary/[0.06] shadow-[inset_3px_0_0_var(--primary)]',
                 )}
               >

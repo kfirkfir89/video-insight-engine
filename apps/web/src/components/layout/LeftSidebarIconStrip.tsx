@@ -1,119 +1,191 @@
 import { memo } from "react";
-import { Sparkles, Search, Library, MessageCircle, Command } from "lucide-react";
-import { Link } from "react-router-dom";
+import {
+  LayoutGrid,
+  Search,
+  Library,
+  MessageCircle,
+  Command,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useUIStore, useActiveSection } from "@/stores/ui-store";
+import {
+  useUIStore,
+  useActiveSection,
+  useIconStripCollapsed,
+} from "@/stores/ui-store";
+import { useSidebarToggle } from "@/hooks/use-sidebar-toggle";
 import { cn } from "@/lib/utils";
+import { SidebarNavItem } from "./SidebarNavItem";
 
+/**
+ * Left nav rail shown on desktop when the main sidebar is closed.
+ *
+ * Default: labels visible under every icon (Arc-style wayfinding) —
+ * first-time users should never have to probe icons to learn the app.
+ *
+ * Opt-in collapsed: a chevron toggle at the foot of the strip collapses
+ * the rail to icon-only. In that mode tooltips switch from the provider's
+ * hover probe to a near-instant ~120ms delay so discovery still works on
+ * first contact, but power users get the density back.
+ *
+ * Collapsed preference persists via `useUIStore` (Zustand persist →
+ * localStorage key `vie-ui-store`, field `iconStripCollapsed`).
+ */
 export const LeftSidebarIconStrip = memo(function LeftSidebarIconStrip() {
-  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
+  const { toggle: toggleSidebar } = useSidebarToggle();
   const openSidebarSearch = useUIStore((s) => s.openSidebarSearch);
   const activeSection = useActiveSection();
   const setActiveSection = useUIStore((s) => s.setActiveSection);
+  const collapsed = useIconStripCollapsed();
+  const toggleCollapsed = useUIStore((s) => s.toggleIconStripCollapsed);
 
   const handleTabClick = (section: "summarized" | "assistant") => {
     setActiveSection(section);
     toggleSidebar();
   };
 
-  const openCommandPalette = () => {
+  const handleOpenCommandPalette = () => {
     window.dispatchEvent(new CustomEvent("vie:open-command-palette"));
   };
 
+  // Tooltip delay: instant-ish when labels are hidden; suppressed when expanded
+  // (SidebarNavItem skips rendering tooltips in expanded mode).
+  const tooltipDelay = 120;
+
   return (
-    <TooltipProvider delayDuration={400}>
-      <div className="h-full w-12 bg-card border-r flex flex-col items-center py-2 gap-1 shrink-0">
-        {/* Logo — links to board */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Link
-              to="/board"
-              aria-label="Home"
-              className="h-11 w-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors"
-            >
-              <Sparkles className="h-4.5 w-4.5 text-primary" />
-            </Link>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">Home</TooltipContent>
-        </Tooltip>
+    <TooltipProvider delayDuration={tooltipDelay} skipDelayDuration={0}>
+      <nav
+        aria-label="Primary navigation"
+        className={cn(
+          "h-full bg-card rounded-(--app-chrome-radius) flex flex-col items-center shrink-0",
+          "transition-[width] duration-200 ease-out motion-reduce:transition-none",
+          collapsed ? "w-12 py-2 gap-1" : "w-[72px] py-2 gap-1",
+        )}
+      >
+        {/* Board — matches mobile bottom nav icon for cross-device consistency */}
+        <SidebarNavItem
+          as="link"
+          to="/board"
+          icon={LayoutGrid}
+          label="Board"
+          ariaLabel="Go to your board"
+          collapsed={collapsed}
+        />
+
+        {/* New summary — primary CTA, always reachable */}
+        <div className={cn("mt-1", collapsed ? undefined : "mt-0.5")}>
+          <SidebarNavItem
+            as="link"
+            to="/generate"
+            icon={Plus}
+            label="New"
+            ariaLabel="Create a new video summary"
+            variant="solid"
+            collapsed={collapsed}
+          />
+        </div>
 
         {/* Divider */}
         <div className="w-6 h-px bg-border/50 my-1" aria-hidden="true" />
 
-        {/* Collection tab — jumps into summarized section */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => handleTabClick("summarized")}
-              aria-label="Open collection"
-              className={cn(
-                "h-11 w-11 flex items-center justify-center rounded-lg transition-all",
-                activeSection === "summarized"
-                  ? "bg-primary/10 text-primary ring-1 ring-primary/20"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <Library className="h-4.5 w-4.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">Open collection</TooltipContent>
-        </Tooltip>
+        {/* Collection */}
+        <SidebarNavItem
+          as="button"
+          onClick={() => handleTabClick("summarized")}
+          icon={Library}
+          label="Library"
+          ariaLabel="Open your library"
+          collapsed={collapsed}
+          active={activeSection === "summarized"}
+          accent="primary"
+        />
 
-        {/* Assistant tab — coral accent for wayfinding contrast with Collection */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => handleTabClick("assistant")}
-              aria-label="Open assistant"
-              className={cn(
-                "h-11 w-11 flex items-center justify-center rounded-lg transition-all",
-                activeSection === "assistant"
-                  ? "bg-[oklch(from_var(--vie-coral)_l_c_h_/_0.12)] text-[var(--vie-coral)] ring-1 ring-[oklch(from_var(--vie-coral)_l_c_h_/_0.22)]"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <MessageCircle className="h-4.5 w-4.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">Assistant</TooltipContent>
-        </Tooltip>
+        {/* Assistant — coral accent for clear wayfinding vs. Library */}
+        <SidebarNavItem
+          as="button"
+          onClick={() => handleTabClick("assistant")}
+          icon={MessageCircle}
+          label="Assistant"
+          ariaLabel="Open assistant"
+          collapsed={collapsed}
+          active={activeSection === "assistant"}
+          accent="coral"
+        />
 
         {/* Divider */}
         <div className="w-6 h-px bg-border/50 my-1" aria-hidden="true" />
 
-        {/* Search — opens sidebar + focuses search panel */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={openSidebarSearch}
-              aria-label="Search videos"
-              className="h-11 w-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-            >
-              <Search className="h-4 w-4" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">Search videos</TooltipContent>
-        </Tooltip>
+        {/* Search */}
+        <SidebarNavItem
+          as="button"
+          onClick={openSidebarSearch}
+          icon={Search}
+          label="Search"
+          ariaLabel="Search videos"
+          collapsed={collapsed}
+        />
 
-        {/* Command palette — global jump */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={openCommandPalette}
-              aria-label="Open command palette"
-              className="h-11 w-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-            >
-              <Command className="h-4 w-4" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">Command palette <span className="opacity-60 ms-1">⌘K</span></TooltipContent>
-        </Tooltip>
-      </div>
+        {/* Command palette */}
+        <SidebarNavItem
+          as="button"
+          onClick={handleOpenCommandPalette}
+          icon={Command}
+          label="Command"
+          ariaLabel="Open command palette"
+          collapsed={collapsed}
+          tooltipHint={<>⌘K</>}
+        />
+
+        {/* Spacer pushes collapse toggle to the bottom */}
+        <div className="flex-1" aria-hidden="true" />
+
+        {/* Collapse toggle — Arc-style chevron at the foot of the rail */}
+        <CollapseToggle collapsed={collapsed} onToggle={toggleCollapsed} />
+      </nav>
     </TooltipProvider>
   );
 });
+
+interface CollapseToggleProps {
+  collapsed: boolean;
+  onToggle: () => void;
+}
+
+function CollapseToggle({ collapsed, onToggle }: CollapseToggleProps) {
+  const label = collapsed ? "Expand sidebar" : "Collapse sidebar";
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={label}
+          aria-pressed={collapsed}
+          className={cn(
+            "flex items-center justify-center rounded-md text-muted-foreground",
+            "hover:bg-muted hover:text-foreground transition-colors",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-card",
+            "motion-reduce:transition-none",
+            collapsed ? "h-7 w-7" : "h-7 w-14",
+          )}
+        >
+          {collapsed ? (
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+          ) : (
+            <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="text-xs">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}

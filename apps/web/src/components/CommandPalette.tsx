@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import { useAllVideos } from "@/hooks/use-videos";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
+import { withViewTransition } from "@/lib/view-transitions";
+import { parsePaletteQuery } from "@/components/command-palette/parse-query";
 import type { Video } from "@/types";
 
 interface PaletteAction {
@@ -30,6 +32,7 @@ export const CommandPalette = memo(function CommandPalette() {
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const openSidebarSearch = useUIStore((s) => s.openSidebarSearch);
+  const openShortcutsModal = useUIStore((s) => s.openShortcutsModal);
   const { data: videosData } = useAllVideos({ enabled: isAuthenticated });
   const videos = videosData?.videos ?? [];
 
@@ -120,8 +123,10 @@ export const CommandPalette = memo(function CommandPalette() {
       hint: "Navigate",
       icon: MessageCircle,
       run: () => {
-        useUIStore.getState().setActiveSection("assistant");
-        useUIStore.setState({ sidebarOpen: true });
+        withViewTransition(() => {
+          useUIStore.getState().setActiveSection("assistant");
+          useUIStore.setState({ sidebarOpen: true });
+        }, { type: "sidebar-collapse" });
       },
     },
     {
@@ -136,28 +141,38 @@ export const CommandPalette = memo(function CommandPalette() {
       label: "Keyboard shortcuts",
       hint: "Help",
       icon: Keyboard,
-      run: () => window.dispatchEvent(new CustomEvent("vie:open-shortcuts")),
+      run: () => openShortcutsModal(),
     },
-  ], [navigate, openSidebarSearch]);
+  ], [navigate, openSidebarSearch, openShortcutsModal]);
 
+  const parsed = useMemo(() => parsePaletteQuery(query), [query]);
+
+  // Actions are free-text only. A query that is purely a status operator
+  // (e.g. "is:done") hides all actions so the results list is video-only.
   const filteredActions = useMemo(() => {
-    if (!query.trim()) return actions;
-    const q = query.toLowerCase();
+    if (parsed.statusFilter) return [];
+    const q = parsed.textQuery.toLowerCase();
+    if (!q) return actions;
     return actions.filter((a) => a.label.toLowerCase().includes(q));
-  }, [actions, query]);
+  }, [actions, parsed]);
 
   const filteredVideos = useMemo<Video[]>(() => {
     if (!videos.length) return [];
-    const q = query.trim().toLowerCase();
-    if (!q) return videos.slice(0, MAX_RESULTS);
+    const q = parsed.textQuery.toLowerCase();
+    const hasAnyFilter = q.length > 0 || parsed.statusFilter !== null;
+    if (!hasAnyFilter) return videos.slice(0, MAX_RESULTS);
     return videos
       .filter((v) => {
+        if (parsed.statusFilter && !parsed.statusFilter.includes(v.status)) {
+          return false;
+        }
+        if (!q) return true;
         const title = (v.title || "").toLowerCase();
         const channel = (v.channel || "").toLowerCase();
         return title.includes(q) || channel.includes(q);
       })
       .slice(0, MAX_RESULTS);
-  }, [videos, query]);
+  }, [videos, parsed]);
 
   // Flat list for keyboard navigation
   const flatItems = useMemo(() => {
@@ -204,13 +219,14 @@ export const CommandPalette = memo(function CommandPalette() {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-modal flex items-start justify-center pt-[12vh] px-4 bg-[var(--overlay-bg,rgb(0,0,0,0.45))] backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-modal flex items-start justify-center pt-[8vh] sm:pt-[12vh] px-3 sm:px-4 pb-[calc(4rem+env(safe-area-inset-bottom)+1rem)] md:pb-4 bg-[var(--overlay-bg,rgb(0,0,0,0.45))] backdrop-blur-sm animate-in fade-in duration-150"
       role="dialog"
       aria-modal="true"
-      aria-label="Command palette"
+      aria-labelledby="command-palette-label"
       onClick={() => setOpen(false)}
       onKeyDown={handleKeyDown}
     >
+      <span id="command-palette-label" className="sr-only">Command palette</span>
       <div
         ref={dialogRef}
         className="accent-rule w-full max-w-xl rounded-2xl bg-popover text-popover-foreground ring-1 ring-border/50 overflow-hidden animate-in zoom-in-95 duration-150"
@@ -230,19 +246,40 @@ export const CommandPalette = memo(function CommandPalette() {
             }}
             placeholder="Search videos, jump anywhere..."
             aria-label="Command palette search"
+            role="combobox"
+            aria-expanded={flatItems.length > 0}
+            aria-autocomplete="list"
+            aria-controls="command-palette-results"
+            aria-activedescendant={
+              flatItems[activeIndex]
+                ? flatItems[activeIndex].type === "action"
+                  ? `cmd-action-${flatItems[activeIndex].action.id}`
+                  : `cmd-video-${flatItems[activeIndex].video.id}`
+                : undefined
+            }
             className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground/60"
           />
-          <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono text-muted-foreground">
+          <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-muted text-[10px] text-muted-foreground">
             Esc
           </kbd>
         </div>
 
         {/* Results */}
-        <div className="max-h-[60vh] overflow-y-auto p-1" role="listbox">
+        <div
+          id="command-palette-results"
+          className="max-h-[60vh] overflow-y-auto p-1"
+          role="listbox"
+          aria-label="Command palette results"
+        >
           {flatItems.length === 0 && (
             <div className="px-4 py-8 text-center text-sm text-muted-foreground space-y-1">
               <p>No matches for &ldquo;{query}&rdquo;</p>
-              <p className="type-caption">Try a video title, channel name, or an action like &ldquo;board&rdquo;.</p>
+              <p className="type-caption">
+                Try a title, channel, or a status filter:{" "}
+                <kbd className="px-1 py-0.5 rounded bg-muted">is:processing</kbd>{" "}
+                <kbd className="px-1 py-0.5 rounded bg-muted">is:done</kbd>{" "}
+                <kbd className="px-1 py-0.5 rounded bg-muted">is:failed</kbd>
+              </p>
             </div>
           )}
 
@@ -255,6 +292,7 @@ export const CommandPalette = memo(function CommandPalette() {
             return (
               <PaletteRow
                 key={a.id}
+                id={`cmd-action-${a.id}`}
                 active={activeIndex === globalIndex}
                 onMouseEnter={() => setActiveIndex(globalIndex)}
                 onClick={() => runItem(globalIndex)}
@@ -273,6 +311,7 @@ export const CommandPalette = memo(function CommandPalette() {
             return (
               <PaletteRow
                 key={v.id}
+                id={`cmd-video-${v.id}`}
                 active={activeIndex === globalIndex}
                 onMouseEnter={() => setActiveIndex(globalIndex)}
                 onClick={() => runItem(globalIndex)}
@@ -314,7 +353,7 @@ export const CommandPalette = memo(function CommandPalette() {
             type="button"
             onClick={() => {
               setOpen(false);
-              window.dispatchEvent(new CustomEvent("vie:open-shortcuts"));
+              openShortcutsModal();
             }}
             className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
           >
@@ -337,6 +376,7 @@ function SectionHeader({ label }: { label: string }) {
 }
 
 function PaletteRow({
+  id,
   active,
   onClick,
   onMouseEnter,
@@ -344,6 +384,7 @@ function PaletteRow({
   label,
   hint,
 }: {
+  id: string;
   active: boolean;
   onClick: () => void;
   onMouseEnter: () => void;
@@ -353,6 +394,7 @@ function PaletteRow({
 }) {
   return (
     <button
+      id={id}
       type="button"
       role="option"
       aria-selected={active}

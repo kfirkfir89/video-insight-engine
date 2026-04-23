@@ -4,8 +4,11 @@ import pytest
 
 from src.utils.data_helpers import is_empty_data
 from src.services.pipeline.extraction_quality import (
-    check_extraction_quality,
+    ExtractionQuality,
     build_synthesis_fed_retry_prompt,
+    check_extraction_quality,
+    decide_extraction_retry,
+    merge_retry_fields,
     _resolve_dot_path,
 )
 
@@ -220,3 +223,131 @@ class TestBuildSynthesisFedRetryPrompt:
         # Should only include first 500 chars
         assert "x" * 500 in prompt
         assert "x" * 501 not in prompt
+
+
+class TestDecideExtractionRetry:
+    def test_low_score_triggers_retry(self):
+        quality = ExtractionQuality(score=0.3, populated=1, total=3, empty_fields=["a", "b"])
+        decision = decide_extraction_retry(quality, count_warnings={})
+        assert decision.should_retry is True
+        assert "low score" in decision.reason
+        assert decision.hard_miss_fields == []
+
+    def test_high_score_no_misses_no_retry(self):
+        quality = ExtractionQuality(score=0.9, populated=9, total=10, empty_fields=[])
+        decision = decide_extraction_retry(quality, count_warnings={})
+        assert decision.should_retry is False
+        assert decision.reason == ""
+
+    def test_hard_miss_triggers_retry_despite_high_score(self):
+        """Regression: plan said 6 tips, extraction got 0, but other fields populated.
+
+        Overall score 5/6 = 0.83, above the 0.6 threshold — prior behavior
+        skipped the retry. This test guards the fix that makes a hard miss
+        trigger a retry regardless of overall score.
+        """
+        quality = ExtractionQuality(
+            score=5 / 6, populated=5, total=6, empty_fields=["food.tips"],
+        )
+        count_warnings = {
+            "tips": {"manifest": 6, "extracted": 0, "ratio": 0.0},
+        }
+        decision = decide_extraction_retry(quality, count_warnings)
+        assert decision.should_retry is True
+        assert "hard miss" in decision.reason
+        assert "tips" in decision.reason
+        assert decision.hard_miss_fields == ["tips"]
+
+    def test_partial_count_warning_no_retry(self):
+        """A partial undercount (extracted > 0 but below 60%) is not a hard miss."""
+        quality = ExtractionQuality(score=0.9, populated=9, total=10, empty_fields=[])
+        count_warnings = {
+            "tips": {"manifest": 6, "extracted": 3, "ratio": 0.5},
+        }
+        decision = decide_extraction_retry(quality, count_warnings)
+        assert decision.should_retry is False
+        assert decision.hard_miss_fields == []
+
+    def test_zero_total_no_retry_even_with_zero_score(self):
+        quality = ExtractionQuality(score=0.0, populated=0, total=0, empty_fields=[])
+        decision = decide_extraction_retry(quality, count_warnings={})
+        assert decision.should_retry is False
+
+    def test_multiple_hard_misses(self):
+        quality = ExtractionQuality(score=0.8, populated=4, total=5, empty_fields=["food.tips"])
+        count_warnings = {
+            "tips": {"manifest": 6, "extracted": 0, "ratio": 0.0},
+            "ingredients": {"manifest": 8, "extracted": 0, "ratio": 0.0},
+        }
+        decision = decide_extraction_retry(quality, count_warnings)
+        assert decision.should_retry is True
+        assert set(decision.hard_miss_fields) == {"tips", "ingredients"}
+
+    def test_combines_reasons_when_both_conditions_met(self):
+        """When both triggers fire, the reason string preserves BOTH signals
+        so the retry log captures the full context (not just the first match).
+        """
+        quality = ExtractionQuality(score=0.3, populated=1, total=4, empty_fields=["a"])
+        count_warnings = {"tips": {"manifest": 6, "extracted": 0, "ratio": 0.0}}
+        decision = decide_extraction_retry(quality, count_warnings)
+        assert decision.should_retry is True
+        assert "low score" in decision.reason
+        assert "hard miss" in decision.reason
+        assert "tips" in decision.reason
+        assert decision.hard_miss_fields == ["tips"]
+
+
+class TestMergeRetryFields:
+    def test_passes_through_empty_fields_unchanged(self):
+        result = merge_retry_fields(
+            empty_fields=["food.tips", "food.steps"],
+            hard_miss_fields=[],
+            count_warnings={},
+        )
+        assert result == ["food.tips", "food.steps"]
+
+    def test_annotates_hard_miss_with_planned_count(self):
+        result = merge_retry_fields(
+            empty_fields=[],
+            hard_miss_fields=["tips"],
+            count_warnings={"tips": {"manifest": 6, "extracted": 0, "ratio": 0.0}},
+        )
+        assert len(result) == 1
+        assert "tips" in result[0]
+        assert "6" in result[0]
+        assert "extraction returned 0" in result[0]
+
+    def test_annotates_matching_dot_path_in_place(self):
+        """When empty_fields contains a dot-path whose final segment matches
+        a hard-miss field, the annotation is applied in-place rather than
+        listing the same schema field twice in the retry prompt."""
+        result = merge_retry_fields(
+            empty_fields=["food.tips"],
+            hard_miss_fields=["tips"],
+            count_warnings={"tips": {"manifest": 6, "extracted": 0}},
+        )
+        assert len(result) == 1
+        assert result[0].startswith("food.tips")
+        assert "plan expected 6" in result[0]
+        assert "extraction returned 0" in result[0]
+
+    def test_appends_standalone_when_no_matching_path(self):
+        """A hard-miss field with no matching dot-path is appended as a new
+        annotated entry, preserving the count-validation signal."""
+        result = merge_retry_fields(
+            empty_fields=["food.steps"],
+            hard_miss_fields=["tips"],
+            count_warnings={"tips": {"manifest": 6, "extracted": 0}},
+        )
+        assert "food.steps" in result
+        assert any(r.startswith("tips ") and "6" in r for r in result)
+        assert len(result) == 2
+
+    def test_missing_warning_metadata_falls_back_to_zero(self):
+        result = merge_retry_fields(
+            empty_fields=[],
+            hard_miss_fields=["tips"],
+            count_warnings={},
+        )
+        assert len(result) == 1
+        assert "plan expected 0" in result[0]

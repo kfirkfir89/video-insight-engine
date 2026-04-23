@@ -17,7 +17,9 @@ describe('FlashDeckInteractive', () => {
     render(<FlashDeckInteractive cards={cards} />);
     expect(screen.getByText('What is React?')).toBeInTheDocument();
     expect(screen.getByText('1 of 2')).toBeInTheDocument();
-    expect(screen.getByText('Tap to flip')).toBeInTheDocument();
+    // The flip hint is "Tap <kbd>Space</kbd> to flip" — verify the kbd renders
+    const spaceHint = screen.getByText('Space');
+    expect(spaceHint.tagName).toBe('KBD');
   });
 
   it('should return null for empty cards', () => {

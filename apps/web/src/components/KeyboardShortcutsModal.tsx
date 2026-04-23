@@ -1,7 +1,8 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useUIStore, useShortcutsModalOpen } from "@/stores/ui-store";
 
 interface Shortcut {
   keys: string[];
@@ -23,7 +24,8 @@ const SHORTCUTS: { section: string; items: Shortcut[] }[] = [
     items: [
       { keys: ["↑", "↓"], label: "Move through results in the palette" },
       { keys: ["↵"], label: "Open the highlighted item" },
-      { keys: ["←", "→"], label: "Resize sidebar (when the divider is focused)" },
+      { keys: ["←", "→"], label: "Resize sidebar by 20px (when the divider is focused)" },
+      { keys: ["Home", "End"], label: "Snap sidebar to min / max width" },
     ],
   },
   {
@@ -31,6 +33,14 @@ const SHORTCUTS: { section: string; items: Shortcut[] }[] = [
     items: [
       { keys: ["Shift", "Click"], label: "Select a range of videos and folders" },
       { keys: ["⌘", "Click"], label: "Add or remove a single item" },
+    ],
+  },
+  {
+    section: "Study tabs",
+    items: [
+      { keys: ["Space"], label: "Flip the current flashcard" },
+      { keys: ["→"], label: "Mark flashcard known (after flip)" },
+      { keys: ["←"], label: "Mark flashcard for review (after flip)" },
     ],
   },
 ];
@@ -45,7 +55,9 @@ function translateKey(key: string): string {
 }
 
 export const KeyboardShortcutsModal = memo(function KeyboardShortcutsModal() {
-  const [open, setOpen] = useState(false);
+  const open = useShortcutsModalOpen();
+  const toggleShortcutsModal = useUIStore((s) => s.toggleShortcutsModal);
+  const closeShortcutsModal = useUIStore((s) => s.closeShortcutsModal);
   const returnFocusRef = useRef<HTMLElement | null>(null);
 
   // Capture focus on open, restore on close
@@ -69,20 +81,17 @@ export const KeyboardShortcutsModal = memo(function KeyboardShortcutsModal() {
 
       if (e.key === "?" && !isEditable && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
-        setOpen((v) => !v);
+        toggleShortcutsModal();
       } else if (open && e.key === "Escape") {
         e.preventDefault();
-        setOpen(false);
+        closeShortcutsModal();
       }
     };
-    const openByEvent = () => setOpen(true);
     window.addEventListener("keydown", handler);
-    window.addEventListener("vie:open-shortcuts", openByEvent);
     return () => {
       window.removeEventListener("keydown", handler);
-      window.removeEventListener("vie:open-shortcuts", openByEvent);
     };
-  }, [open]);
+  }, [open, toggleShortcutsModal, closeShortcutsModal]);
 
   if (!open) return null;
 
@@ -91,8 +100,8 @@ export const KeyboardShortcutsModal = memo(function KeyboardShortcutsModal() {
       className="fixed inset-0 z-modal flex items-center justify-center p-4 bg-[var(--overlay-bg,rgb(0,0,0,0.45))] backdrop-blur-sm animate-in fade-in duration-150"
       role="dialog"
       aria-modal="true"
-      aria-label="Keyboard shortcuts"
-      onClick={() => setOpen(false)}
+      aria-labelledby="keyboard-shortcuts-title"
+      onClick={closeShortcutsModal}
     >
       <div
         className="accent-rule w-full max-w-lg rounded-2xl bg-popover text-popover-foreground ring-1 ring-border/50 overflow-hidden animate-in zoom-in-95 duration-150"
@@ -100,10 +109,10 @@ export const KeyboardShortcutsModal = memo(function KeyboardShortcutsModal() {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border/50">
-          <h2 className="type-h3">Keyboard shortcuts</h2>
+          <h2 id="keyboard-shortcuts-title" className="type-h3">Keyboard shortcuts</h2>
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={closeShortcutsModal}
             aria-label="Close shortcuts"
             className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
@@ -125,7 +134,7 @@ export const KeyboardShortcutsModal = memo(function KeyboardShortcutsModal() {
                       {s.keys.map((k, i) => (
                         <kbd
                           key={i}
-                          className="px-2 py-0.5 rounded-md bg-muted border border-border/60 text-[11px] font-mono text-foreground/90"
+                          className="px-2 py-0.5 rounded-md bg-muted border border-border/60 text-[11px] text-foreground/90"
                         >
                           {translateKey(k)}
                         </kbd>
@@ -139,7 +148,7 @@ export const KeyboardShortcutsModal = memo(function KeyboardShortcutsModal() {
         </div>
 
         <div className="px-5 py-3 border-t border-border/50 text-[11px] text-muted-foreground">
-          Press <kbd className="px-1.5 py-0.5 rounded bg-muted font-mono">?</kbd> anywhere to open this panel.
+          Press <kbd className="px-1.5 py-0.5 rounded bg-muted">?</kbd> anywhere to open this panel.
         </div>
       </div>
     </div>,

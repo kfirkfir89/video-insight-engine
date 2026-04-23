@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
-import { PanelLeft, PanelLeftClose, LogOut, User } from "lucide-react";
+import { PanelLeft, PanelLeftClose, LogOut, Keyboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { VieLogotype } from "@/components/brand/VieMark";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  VieMenu,
+  VieMenuItem,
+  VieMenuHeader,
+  VieMenuSeparator,
+  VieMenuDestructiveDivider,
+} from "@/components/vie";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,11 +22,13 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { useSidebarToggle } from "@/hooks/use-sidebar-toggle";
 import { getInitials } from "@/lib/string-utils";
+import { cn } from "@/lib/utils";
 
 export function AppHeader() {
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
-  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
+  const { toggle: toggleSidebar } = useSidebarToggle();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -43,9 +46,20 @@ export function AppHeader() {
     return () => window.removeEventListener("keydown", handler);
   }, [toggleSidebar]);
 
+  const openShortcuts = useUIStore((s) => s.openShortcutsModal);
+
   return (
     <>
-      <header className="h-(--app-header-height) shrink-0 border-b bg-card flex items-center px-3 gap-3">
+      <header
+        className={cn(
+          "h-(--app-header-height) shrink-0 relative",
+          "border-b border-border/40 bg-background/80 backdrop-blur-[12px]",
+          "flex items-center px-3 gap-3",
+          // Quiet 1px domain underline — see --rule-domain in index.css
+          "after:absolute after:inset-x-0 after:-bottom-px after:h-px after:opacity-60",
+          "after:[background:var(--rule-domain)]",
+        )}
+      >
         {/* Left: sidebar toggle + branding */}
         <div className="flex items-center gap-2 shrink-0">
           <Button
@@ -63,49 +77,60 @@ export function AppHeader() {
               <PanelLeft className="h-4 w-4" />
             )}
           </Button>
-          {!sidebarOpen && (
-            <span
-              className="hidden sm:inline text-base font-extrabold tracking-tight text-gradient-primary"
-              style={{ fontFamily: "var(--font-display)" }}
-            >
-              VIE
-            </span>
-          )}
+          {!sidebarOpen && <VieLogotype size="md" className="hidden sm:inline-flex" />}
         </div>
 
-        {/* Spacer */}
         <div className="flex-1" />
 
         {/* Right: theme + user */}
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <ThemeToggle />
 
           {isAuthenticated && user && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            <VieMenu
+              align="end"
+              className="w-64"
+              trigger={
                 <Button
                   variant="ghost"
                   size="icon-bare"
                   aria-label={user.name ?? "Profile"}
-                  className="h-11 w-11 rounded-full bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20"
-                >
-                  {user.name ? getInitials(user.name) : <User className="h-4 w-4" />}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <div className="px-2 py-1.5">
-                  <p className="text-sm font-medium truncate">{user.name || "User"}</p>
-                  {user.email && (
-                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                  className={cn(
+                    "h-10 w-10 rounded-full text-xs font-semibold",
+                    "bg-primary/10 text-primary",
+                    "hover:bg-primary/15 transition-colors",
                   )}
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setShowLogoutConfirm(true)}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Log out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                >
+                  {getInitials(user.name, user.email)}
+                </Button>
+              }
+            >
+              <VieMenuHeader>
+                <p className="type-eyebrow text-xs text-muted-foreground/80">
+                  Signed in as
+                </p>
+                <p className="text-sm font-semibold truncate mt-0.5">{user.name || "User"}</p>
+                {user.email && (
+                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                )}
+              </VieMenuHeader>
+              <VieMenuSeparator />
+              <VieMenuItem
+                icon={<Keyboard className="h-4 w-4" />}
+                hint="?"
+                onSelect={openShortcuts}
+              >
+                Keyboard shortcuts
+              </VieMenuItem>
+              <VieMenuDestructiveDivider />
+              <VieMenuItem
+                icon={<LogOut className="h-4 w-4" />}
+                destructive
+                onSelect={() => setShowLogoutConfirm(true)}
+              >
+                Sign out
+              </VieMenuItem>
+            </VieMenu>
           )}
         </div>
       </header>

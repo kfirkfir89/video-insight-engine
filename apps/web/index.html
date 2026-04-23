@@ -2,22 +2,27 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%237c3aed'/><path d='M10 8l12 8-12 8z' fill='white'/></svg>" />
+    <!-- Favicon mirrors the VIE mark: violet rounded tile, white play triangle body,
+         coral signal dot past the apex. The coral dot is the brand signature and
+         must survive the 16px render — any smaller and it fuses into the triangle,
+         which is still distinctive but loses its narrative punch. -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237c3aed'/><path d='M9 7 L22.5 16 L9 25 Z' fill='white'/><circle cx='27' cy='16' r='2.6' fill='%23ff7a6b'/></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Video Insight Engine</title>
     <meta name="description" content="Transform YouTube videos into structured knowledge — summaries, explanations, and personal collections." />
     <meta property="og:title" content="Video Insight Engine" />
     <meta property="og:description" content="Transform YouTube videos into structured knowledge." />
     <meta property="og:type" content="website" />
-    <!-- Google Fonts: Inter (body) + Bricolage Grotesque (display) + JetBrains Mono (code) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <!-- Fonts (Hanken Grotesk, Bricolage Grotesque, JetBrains Mono) are
+         self-hosted via @fontsource and imported in src/main.tsx.
+         Body face sits outside the AI-trained-default reflex set
+         (Inter, DM Sans, Plus Jakarta, Outfit etc.) — self-hosting prevents
+         region-based CDN failures from silently reverting to system-ui. -->
     <!-- Critical CSS - minimal styles for loading overlay only -->
     <style>
       *,::before,::after{box-sizing:border-box;border-style:solid}
       html,body{margin:0;padding:0;width:100%;height:100%}
-      body{font-family:'Inter',system-ui,-apple-system,sans-serif;line-height:1.5}
+      body{font-family:'Hanken Grotesk',system-ui,-apple-system,sans-serif;line-height:1.5}
       #root{width:100%;min-height:100vh}
       /* Loading overlay only - Tailwind handles all other colors */
       .loading-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background-color:#fafafa;z-index:9999}
