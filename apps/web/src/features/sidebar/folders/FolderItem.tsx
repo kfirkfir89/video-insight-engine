@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, memo } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronRight, Folder, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -34,10 +34,14 @@ interface FolderItemProps {
   allFolders: FolderData[];
 }
 
+// Recursion safety net — deeper than this is almost certainly a data cycle,
+// not a real folder tree. Bail out so a bad API payload can't stack-overflow.
+const MAX_FOLDER_DEPTH = 20;
+
 // Memoized to prevent cascading re-renders in sidebar tree
 export const FolderItem = memo(function FolderItem({ folder, level, videos, allFolders }: FolderItemProps) {
   const navigate = useNavigate();
-  const location = useLocation();
+  const { pathname } = useLocation();
 
   // Zustand state
   const expandedFolderIds = useUIStore((s) => s.expandedFolderIds);
@@ -94,8 +98,13 @@ export const FolderItem = memo(function FolderItem({ folder, level, videos, allF
   // Computed values
   const isExpanded = expandedFolderIds.includes(folder.id);
   const isSelected = selectedFolderId === folder.id;
-  const folderVideos = videos.filter((v) => v.folderId === folder.id);
+  const folderVideos = useMemo(() => videos.filter((v) => v.folderId === folder.id), [videos, folder.id]);
   const hasChildren = folder.children.length > 0 || folderVideos.length > 0;
+
+  // Track expand transitions so stagger animation only plays on open, not on re-renders
+  const wasExpandedRef = useRef(isExpanded);
+  const justExpanded = isExpanded && !wasExpandedRef.current;
+  if (wasExpandedRef.current !== isExpanded) wasExpandedRef.current = isExpanded;
 
   const originalFolder = useMemo(
     () => allFolders.find((f) => f.id === folder.id),
@@ -121,7 +130,7 @@ export const FolderItem = memo(function FolderItem({ folder, level, videos, allF
     setSelectedFolder(folder.id);
     setActiveSection("summarized");
 
-    if (location.pathname !== "/board") {
+    if (pathname !== "/board") {
       navigate("/board");
       if (!isExpanded && hasChildren) {
         toggleFolderExpansion(folder.id);
@@ -162,18 +171,31 @@ export const FolderItem = memo(function FolderItem({ folder, level, videos, allF
     }
   }, [isExpanded, toggleFolderExpansion, folder.id]);
 
-  // Shared row classes
+  // Selected folder bg tint derived from folder color
+  const selectedBgStyle: React.CSSProperties | undefined =
+    (isSelected || isFolderSelectionSelected) && folder.color
+      ? { backgroundColor: `oklch(from ${folder.color} l c h / 0.12)` }
+      : undefined;
+
   const rowClassName = cn(
-    "group flex items-center cursor-pointer hover:bg-primary/8 rounded-sm transition-colors",
+    "group flex items-center cursor-pointer rounded-sm",
+    "transition-[background-color,box-shadow,transform] duration-150 ease-[var(--ease-out-expo)]",
+    "hover:bg-[var(--glass-bg)] hover:shadow-[var(--glass-shadow)] hover:-translate-y-px",
+    "motion-reduce:hover:translate-y-0 motion-reduce:transition-none",
     "has-[[data-state=open]]:bg-accent/50",
     textClasses.rowHeight,
-    isSelected && !isFolderSelectionSelected && "bg-primary/8 font-medium ring-1 ring-primary/20",
+    isSelected && !isFolderSelectionSelected && !folder.color && "bg-primary/8 font-medium ring-1 ring-primary/20",
+    isSelected && !isFolderSelectionSelected && folder.color && "font-medium ring-1 ring-primary/20",
     isOver && !isDragging && "ring-1 ring-primary/50",
     isDragging && "opacity-50",
-    isFolderSelectionSelected && "bg-primary/8 ring-1 ring-primary/20"
+    isFolderSelectionSelected && !folder.color && "bg-primary/8 ring-1 ring-primary/20",
+    isFolderSelectionSelected && folder.color && "ring-1 ring-primary/20",
   );
 
-  const rowStyle = { paddingLeft: `${paddingLeft}px`, paddingRight: "8px" };
+  const rowStyle = useMemo<React.CSSProperties>(
+    () => ({ paddingInlineStart: `${paddingLeft}px`, paddingInlineEnd: "8px", ...selectedBgStyle }),
+    [paddingLeft, selectedBgStyle],
+  );
 
   const rowProps = {
     "data-sidebar-item": "folder" as const,
@@ -218,7 +240,7 @@ export const FolderItem = memo(function FolderItem({ folder, level, videos, allF
       <Folder
         className={cn(
           textClasses.iconSize,
-          "shrink-0 text-primary ml-1 transition-[filter]",
+          "shrink-0 text-primary ms-1 transition-[filter]",
           folder.color && (isSelected || isFolderSelectionSelected) && "drop-shadow-[0_0_6px_currentColor]"
         )}
         style={getFolderColorStyle(folder.color)}
@@ -266,7 +288,7 @@ export const FolderItem = memo(function FolderItem({ folder, level, videos, allF
   // Video count badge
   const countBadge = folderVideos.length > 0 ? (
     <span className={cn(
-      "shrink-0 ml-1 px-1.5 py-0.5 rounded-full text-muted-foreground bg-muted/70 tabular-nums leading-none",
+      "shrink-0 ms-1 px-1.5 py-0.5 rounded-full text-muted-foreground bg-muted/70 tabular-nums leading-none",
       textClasses.badgeText
     )}>
       {folderVideos.length}
@@ -295,7 +317,7 @@ export const FolderItem = memo(function FolderItem({ folder, level, videos, allF
             <TooltipTrigger asChild>
               <div {...rowProps}>
                 {leftContent}
-                <span ref={nameRef} className={cn("ml-2 truncate flex-1", textClasses.mainText)}>
+                <span ref={nameRef} className={cn("ms-2 truncate flex-1", textClasses.mainText)}>
                   {folder.name}
                 </span>
                 {actionButtons}
@@ -321,25 +343,29 @@ export const FolderItem = memo(function FolderItem({ folder, level, videos, allF
         />
       )}
 
-      {/* Expanded children */}
-      {isExpanded && (hasChildren || showSubfolderInput) && (
-        <div>
-          {folder.children.map((child) => (
-            <FolderItem
-              key={child.id}
-              folder={child}
-              level={level + 1}
-              videos={videos}
-              allFolders={allFolders}
-            />
+      {/* Expanded children — stagger only on fresh expand, not re-renders.
+          Depth-capped at MAX_FOLDER_DEPTH so a cyclic parent/child payload
+          can't stack-overflow; a real tree should never approach that depth. */}
+      {isExpanded && (hasChildren || showSubfolderInput) && level < MAX_FOLDER_DEPTH && (
+        <div {...(justExpanded ? { 'data-sidebar-stagger': '' } : {})}>
+          {folder.children.map((child, i) => (
+            <div key={child.id} style={{ animationDelay: `${i * 40}ms` }}>
+              <FolderItem
+                folder={child}
+                level={level + 1}
+                videos={videos}
+                allFolders={allFolders}
+              />
+            </div>
           ))}
-          {folderVideos.map((video) => (
-            <VideoItem
-              key={video.id}
-              video={video}
-              level={level + 1}
-              folders={allFolders}
-            />
+          {folderVideos.map((video, i) => (
+            <div key={video.id} style={{ animationDelay: `${(folder.children.length + i) * 40}ms` }}>
+              <VideoItem
+                video={video}
+                level={level + 1}
+                folders={allFolders}
+              />
+            </div>
           ))}
         </div>
       )}

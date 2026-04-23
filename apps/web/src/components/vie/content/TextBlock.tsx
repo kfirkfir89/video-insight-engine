@@ -1,8 +1,8 @@
 import { memo, type ReactNode } from 'react';
-import { cn } from '@/lib/utils';
 import { cva, type VariantProps } from 'class-variance-authority';
+import { cn } from '@/lib/utils';
 
-const textBlockVariants = cva('flex items-start gap-1.5', {
+const textBlockVariants = cva('flex items-start gap-1.5 animate-fade-up', {
   variants: {
     intent: {
       tip: 'callout-gradient-tip',
@@ -26,10 +26,6 @@ type TextBlockProps = VariantProps<typeof textBlockVariants> & {
   className?: string;
 };
 
-/**
- * Accent-bordered text block (replaces CalloutBlock).
- * Domain-free: pass icon and intent, no style config objects.
- */
 export const TextBlock = memo(function TextBlock({
   intent,
   icon,
@@ -37,14 +33,16 @@ export const TextBlock = memo(function TextBlock({
   className,
 }: TextBlockProps) {
   return (
-    <div
-      className={cn(
-        textBlockVariants({ intent }),
-        className,
-      )}
-    >
+    <div className={cn(textBlockVariants({ intent }), className)}>
       {icon && (
-        <span className={cn('mt-0.5 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:shrink-0', intent ? ACCENT_TEXT[intent] : 'text-muted-foreground')} aria-hidden="true">
+        <span
+          className={cn(
+            'mt-0.5 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:shrink-0 inline-flex animate-pop-in',
+            intent ? ACCENT_TEXT[intent] : 'text-muted-foreground',
+          )}
+          style={{ animationDelay: '80ms' }}
+          aria-hidden="true"
+        >
           {icon}
         </span>
       )}

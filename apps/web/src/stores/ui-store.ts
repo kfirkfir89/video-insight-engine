@@ -66,6 +66,13 @@ interface UIState {
   isRightPanelMinimized: boolean;
   sidebarWidth: number;
 
+  // Icon strip (desktop-only nav rail) — labels visible by default;
+  // user can opt into icon-only (Arc-style) via a chevron toggle.
+  iconStripCollapsed: boolean;
+
+  // Keyboard shortcuts modal — opened from menu, hotkey, or CommandPalette.
+  shortcutsModalOpen: boolean;
+
   // Content context
   activeSection: ActiveSection;
   selectedFolderId: string | null;
@@ -99,11 +106,17 @@ interface UIState {
 
   // Actions
   toggleSidebar: () => void;
+  setSidebarOpen: (open: boolean) => void;
   setActiveRightPanel: (panel: RightPanelId) => void;
   toggleRightPanel: (panel: RightPanelId) => void;
   toggleRightPanelMinimized: () => void;
   expandRightPanelToTab: (panel: RightPanelId) => void;
   setSidebarWidth: (width: number) => void;
+  setIconStripCollapsed: (collapsed: boolean) => void;
+  toggleIconStripCollapsed: () => void;
+  openShortcutsModal: () => void;
+  closeShortcutsModal: () => void;
+  toggleShortcutsModal: () => void;
   setActiveSection: (section: ActiveSection) => void;
   setSelectedFolder: (id: string | null) => void;
   toggleFolderExpansion: (folderId: string) => void;
@@ -206,6 +219,8 @@ export const useUIStore = create<UIState>()(
       activeRightPanel: "chapters" as RightPanelId,
       isRightPanelMinimized: false,
       sidebarWidth: 360,
+      iconStripCollapsed: false,
+      shortcutsModalOpen: false,
       activeSection: "summarized",
       selectedFolderId: null,
       expandedFolderIds: [],
@@ -226,6 +241,7 @@ export const useUIStore = create<UIState>()(
 
       // Actions
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+      setSidebarOpen: (open) => set({ sidebarOpen: open }),
       setActiveRightPanel: (panel) => set({ activeRightPanel: panel }),
       toggleRightPanel: (panel) => set((s) => ({
         activeRightPanel: s.activeRightPanel === panel ? "none" : panel,
@@ -238,6 +254,13 @@ export const useUIStore = create<UIState>()(
         isRightPanelMinimized: false,
       }),
       setSidebarWidth: (width) => set({ sidebarWidth: width }),
+      setIconStripCollapsed: (collapsed) => set({ iconStripCollapsed: collapsed }),
+      toggleIconStripCollapsed: () =>
+        set((s) => ({ iconStripCollapsed: !s.iconStripCollapsed })),
+      openShortcutsModal: () => set({ shortcutsModalOpen: true }),
+      closeShortcutsModal: () => set({ shortcutsModalOpen: false }),
+      toggleShortcutsModal: () =>
+        set((s) => ({ shortcutsModalOpen: !s.shortcutsModalOpen })),
       setActiveSection: (section) => set({ activeSection: section, showNewFolderInput: false }),
       setSelectedFolder: (id) => set({ selectedFolderId: id }),
       toggleFolderExpansion: (folderId) =>
@@ -324,6 +347,7 @@ export const useUIStore = create<UIState>()(
         activeRightPanel: state.activeRightPanel,
         isRightPanelMinimized: state.isRightPanelMinimized,
         sidebarWidth: state.sidebarWidth,
+        iconStripCollapsed: state.iconStripCollapsed,
         activeSection: state.activeSection,
         expandedFolderIds: state.expandedFolderIds,
         sidebarTextSize: state.sidebarTextSize,
@@ -340,6 +364,8 @@ export const useIsRightPanelOpen = () => useUIStore((s) => s.activeRightPanel !=
 export const useIsRightPanelMinimized = () => useUIStore((s) => s.isRightPanelMinimized);
 export const useSelectedFolder = () => useUIStore((s) => s.selectedFolderId);
 export const useActiveSection = () => useUIStore((s) => s.activeSection);
+export const useIconStripCollapsed = () => useUIStore((s) => s.iconStripCollapsed);
+export const useShortcutsModalOpen = () => useUIStore((s) => s.shortcutsModalOpen);
 export const useSidebarTextSize = () => useUIStore((s) => s.sidebarTextSize);
 export const useSidebarSortOption = () => useUIStore((s) => s.sidebarSortOption);
 export const useSidebarSearchQuery = () => useUIStore((s) => s.sidebarSearchQuery);

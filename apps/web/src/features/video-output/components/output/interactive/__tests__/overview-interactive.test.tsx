@@ -1,5 +1,6 @@
+/// <reference types="@testing-library/jest-dom" />
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 
 
 import { OverviewInteractive } from '../OverviewInteractive';
@@ -29,7 +30,7 @@ describe('OverviewInteractive', () => {
     expect(screen.getByText('$3000')).toBeInTheDocument();
   });
 
-  it('should render highlights', () => {
+  it('should render highlights (collapsed by default; expand to view)', () => {
     render(
       <OverviewInteractive
         title="Test"
@@ -40,11 +41,15 @@ describe('OverviewInteractive', () => {
       />,
     );
     expect(screen.getByText('Highlights')).toBeInTheDocument();
+    // Highlights start collapsed for a calmer overview — click to reveal
+    fireEvent.click(screen.getByText('Highlights'));
     expect(screen.getByText('Mount Fuji')).toBeInTheDocument();
   });
 
-  it('should render tips', () => {
+  it('should render tips (collapsed by default; expand to view)', () => {
     render(<OverviewInteractive title="Test" tips={['Book early', 'Learn basic phrases']} />);
+    expect(screen.getByText('Tips')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Tips'));
     expect(screen.getByText('Book early')).toBeInTheDocument();
   });
 

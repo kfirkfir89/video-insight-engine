@@ -1,11 +1,16 @@
-import { memo, useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
+import { memo } from 'react';
+import { motion } from 'motion/react';
+import { Play, X, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ChevronDown, Play, Sparkles, BookOpen, ArrowLeft, X } from 'lucide-react';
+import { springs } from '@/lib/motion';
+import { useVideoPlayer } from '@/features/video-output/contexts/VideoPlayerContext';
+import { YouTubePlayer } from '@/components/videos/YouTubePlayer';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import type { TabDefinition } from '@vie/types';
 
-/** Rotating highlight emojis for takeaway items (no data emojis available). */
-const TAKEAWAY_EMOJIS = ['🔥', '🧩', '📊', '🪝', '💡', '⚡', '🎯', '🛡️'];
-
-type HeroFace = 'front' | 'takeaways' | 'overview';
+interface VideoHeroTab extends TabDefinition {
+  preview?: string;
+}
 
 interface VideoHeroProps {
   title: string;
@@ -15,6 +20,11 @@ interface VideoHeroProps {
   keyTakeaways?: string[];
   masterSummary?: string;
   youtubeId?: string;
+  tabs?: VideoHeroTab[];
+  activeTabId?: string;
+  onTabSelect?: (id: string) => void;
+  completedTabs?: Set<string>;
+  domainGradient?: string;
   className?: string;
 }
 
@@ -27,328 +37,182 @@ function formatDuration(seconds: number | null | undefined): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-const YOUTUBE_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
-
-function VideoModal({ youtubeId, onClose }: { youtubeId: string; onClose: () => void }) {
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const closeRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    closeRef.current?.focus();
-  }, []);
-
-  // Focus trap: cycle focus within the modal
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') onClose();
-    if (e.key === 'Tab') {
-      // Only one focusable element (close button), trap focus on it
-      e.preventDefault();
-      closeRef.current?.focus();
-    }
-  };
-
-  if (!YOUTUBE_ID_REGEX.test(youtubeId)) return null;
-
-  return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm animate-[fadeIn_0.2s_ease_both]"
-      onClick={onClose}
-      onKeyDown={handleKeyDown}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Video player"
-      tabIndex={-1}
-    >
-      <div
-        className="relative w-full max-w-3xl mx-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          ref={closeRef}
-          onClick={onClose}
-          className="absolute -top-10 end-0 flex items-center gap-1 text-[var(--overlay-text-muted)] hover:text-[var(--overlay-text)] text-sm transition-colors"
-          aria-label="Close video"
-        >
-          <X className="h-4 w-4" />
-          Close
-        </button>
-        <div className="relative w-full rounded-xl overflow-hidden" style={{ paddingBottom: '56.25%' }}>
-          <iframe
-            className="absolute inset-0 w-full h-full"
-            src={`https://www.youtube.com/embed/${encodeURIComponent(youtubeId)}?autoplay=1&rel=0`}
-            title="Video player"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
-      </div>
-    </div>
-  );
+function stripDuplicatedEmoji(label: string, emoji?: string): string {
+  if (!emoji || !label) return label;
+  if (label.startsWith(emoji)) return label.slice(emoji.length).trimStart();
+  return label;
 }
 
-/**
- * Interactive hero card with horizontal flip animation between 3 logical faces.
- *
- * Uses a 2-panel flip (front/back) with content swapping at the midpoint
- * of the animation — avoids the CSS `rotateY(360deg) === 0deg` problem.
- *
- * Face 1 (front): title, creator, duration + expandable TLDR + action buttons
- * Face 2 (takeaways): key takeaways list
- * Face 3 (overview): master summary
- */
 export const VideoHero = memo(function VideoHero({
   title,
   creator,
   duration,
   tldr,
-  keyTakeaways = [],
-  masterSummary,
   youtubeId,
+  tabs,
+  activeTabId,
+  onTabSelect,
+  completedTabs,
+  domainGradient,
   className,
 }: VideoHeroProps) {
-  const [face, setFace] = useState<HeroFace>('front');
-  const [expanded, setExpanded] = useState(false);
-  const [showVideo, setShowVideo] = useState(false);
-
-  // Flip animation state: content swaps at the midpoint (card edge-on)
-  const [isFlipping, setIsFlipping] = useState(false);
-  const [flipDirection, setFlipDirection] = useState<'forward' | 'backward'>('forward');
-  const [displayFace, setDisplayFace] = useState<HeroFace>('front');
-  const pendingFace = useRef<HeroFace>('front');
-
+  const { togglePlayer, isPlayerOpen, playerRef } = useVideoPlayer();
   const durationStr = formatDuration(duration);
-  const hasTakeaways = keyTakeaways.length > 0;
-  const hasMasterSummary = !!masterSummary;
-
-  const goToFace = useCallback((next: HeroFace) => {
-    if (isFlipping || next === face) return;
-
-    // Determine flip direction based on face order
-    const order: HeroFace[] = ['front', 'takeaways', 'overview'];
-    const fromIdx = order.indexOf(face);
-    const toIdx = order.indexOf(next);
-    setFlipDirection(toIdx > fromIdx ? 'forward' : 'backward');
-
-    pendingFace.current = next;
-    setFace(next);
-    setIsFlipping(true);
-
-    if (next === 'front') {
-      setExpanded(false);
-    }
-  }, [face, isFlipping]);
-
-  // At animation midpoint (250ms of 500ms), swap the displayed content
-  useEffect(() => {
-    if (!isFlipping) return;
-    const midTimer = setTimeout(() => {
-      setDisplayFace(pendingFace.current);
-    }, 200);
-    const endTimer = setTimeout(() => {
-      setIsFlipping(false);
-    }, 500);
-    return () => {
-      clearTimeout(midTimer);
-      clearTimeout(endTimer);
-    };
-  }, [isFlipping]);
-
-  const toggleExpand = useCallback(() => setExpanded((p) => !p), []);
-
-  const handleClose = useCallback(() => {
-    goToFace('front');
-  }, [goToFace]);
-
-  // ─── Face content renderers ───
-
-  function renderFront(): ReactNode {
-    return (
-      <>
-        {/* Header — always visible, clickable to expand */}
-        <button
-          onClick={toggleExpand}
-          className="w-full flex items-center justify-between gap-4 px-7 py-6 text-start hover:bg-muted/5 transition-colors rounded-3xl"
-          aria-expanded={expanded}
-          aria-label={expanded ? 'Collapse hero' : 'Expand hero'}
-        >
-          <div className="flex-1 min-w-0">
-            <h2 className="font-bold text-2xl md:text-3xl tracking-tight leading-tight line-clamp-2">{title || 'Processing...'}</h2>
-            <div className="flex items-center gap-2.5 mt-2.5 text-sm text-muted-foreground">
-              {creator && <span className="truncate font-medium">{creator}</span>}
-              {creator && durationStr && <span aria-hidden="true" className="text-muted-foreground/40">•</span>}
-              {durationStr && <span className="shrink-0 tabular-nums">{durationStr}</span>}
-            </div>
-          </div>
-          <ChevronDown
-            className={cn(
-              'h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200',
-              expanded && 'rotate-180',
-            )}
-            aria-hidden="true"
-          />
-        </button>
-
-        {/* Expandable body */}
-        <div
-          className="grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
-          style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}
-        >
-          <div className="overflow-hidden">
-            <div className="px-7 pb-6">
-              {tldr ? (
-                <p className="text-base text-muted-foreground leading-relaxed mb-6">{tldr}</p>
-              ) : (
-                <div className="h-12 rounded-lg bg-muted/30 animate-pulse mb-6" />
-              )}
-
-              <div className="flex items-center justify-end gap-2.5">
-                {youtubeId && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowVideo(true);
-                    }}
-                    className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm"
-                  >
-                    <Play className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    Watch Video
-                  </button>
-                )}
-                {hasTakeaways && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      goToFace('takeaways');
-                    }}
-                    className="flex items-center gap-2 rounded-xl bg-muted/50 px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
-                  >
-                    <Sparkles className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    Key Takeaways
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  function renderTakeaways(): ReactNode {
-    return (
-      <div className="px-7 py-6">
-        <div className="flex items-center gap-2.5 mb-5">
-          <span className="h-1 w-8 rounded-full bg-primary" aria-hidden="true" />
-          <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-            <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-            Key Takeaways
-          </h3>
-        </div>
-        <div className="flex flex-col gap-4 mb-6">
-          {keyTakeaways.map((t, i) => (
-            <div key={i} className="flex gap-4 items-start group">
-              <span className="text-2xl shrink-0 leading-none mt-0.5 transition-transform group-hover:scale-110 group-hover:drop-shadow-[0_0_8px_var(--vie-coral)]" aria-hidden="true">
-                {TAKEAWAY_EMOJIS[i % TAKEAWAY_EMOJIS.length]}
-              </span>
-              <span className="text-base font-medium leading-relaxed">{t}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex items-center justify-end gap-2.5">
-          <button
-            onClick={() => goToFace('front')}
-            className="flex items-center gap-2 rounded-xl bg-muted/50 px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4 shrink-0 rtl:rotate-180" aria-hidden="true" />
-            Back
-          </button>
-          {hasMasterSummary && (
-            <button
-              onClick={() => goToFace('overview')}
-              className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm"
-            >
-              <BookOpen className="h-4 w-4 shrink-0" aria-hidden="true" />
-              Overview
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  function renderOverview(): ReactNode {
-    return (
-      <div className="px-7 py-6">
-        <div className="flex items-center gap-2.5 mb-5">
-          <span className="h-1 w-8 rounded-full bg-primary" aria-hidden="true" />
-          <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-            <BookOpen className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-            Overview
-          </h3>
-        </div>
-        <p className="text-base text-muted-foreground leading-relaxed whitespace-pre-line mb-6">
-          {masterSummary}
-        </p>
-
-        <div className="flex items-center justify-end gap-2.5">
-          <button
-            onClick={() => goToFace('takeaways')}
-            className="flex items-center gap-2 rounded-xl bg-muted/50 px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4 shrink-0 rtl:rotate-180" aria-hidden="true" />
-            Back
-          </button>
-          <button
-            onClick={handleClose}
-            className="flex items-center gap-2 rounded-xl bg-muted/50 px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
-          >
-            <X className="h-4 w-4 shrink-0" aria-hidden="true" />
-            Close
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const FACE_RENDERERS: Record<HeroFace, () => ReactNode> = {
-    front: renderFront,
-    takeaways: renderTakeaways,
-    overview: renderOverview,
-  };
-
-  // Flip animation CSS class
-  const flipClass = isFlipping
-    ? flipDirection === 'forward'
-      ? 'animate-[heroFlipForward_500ms_ease-in-out_both]'
-      : 'animate-[heroFlipBackward_500ms_ease-in-out_both]'
-    : '';
+  const safeTabs: VideoHeroTab[] = tabs ?? [];
+  const hasTabs = safeTabs.length > 0;
 
   return (
-    <>
-      <div
-        className={cn('relative w-full', className)}
-        style={{ perspective: '1200px' }}
-      >
+    <motion.section
+      className={cn(
+        'relative w-full rounded-2xl border border-border bg-card',
+        className,
+      )}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ ...springs.soft, delay: 0.04 }}
+      aria-labelledby="vie-hero-title"
+    >
+      <div className="px-6 pt-5 md:px-7 md:pt-6">
+        <h2
+          id="vie-hero-title"
+          className="font-semibold text-2xl md:text-[1.7rem] tracking-tight leading-tight line-clamp-2 text-balance"
+        >
+          {title || 'Processing…'}
+        </h2>
+        <div className="flex items-center gap-2.5 mt-2 text-sm text-muted-foreground">
+          {creator && <span className="truncate font-medium">{creator}</span>}
+          {creator && durationStr && (
+            <span aria-hidden="true" className="text-muted-foreground/40">•</span>
+          )}
+          {durationStr && <span className="shrink-0 tabular-nums">{durationStr}</span>}
+        </div>
+
+        {youtubeId && (
+          <div className="flex items-center gap-2 mt-4">
+            <button
+              type="button"
+              onClick={togglePlayer}
+              className="cta-magnetic cursor-pointer inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-primary-foreground"
+              aria-expanded={isPlayerOpen}
+            >
+              {isPlayerOpen ? (
+                <>
+                  <X className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  Hide
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  Watch
+                </>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {youtubeId && (
         <div
           className={cn(
-            'relative w-full rounded-3xl border border-[var(--glass-border-strong)] bg-[var(--glass-bg)] backdrop-blur-[var(--glass-blur,20px)] overflow-hidden',
-            flipClass,
+            'grid transition-[grid-template-rows,opacity] duration-300 ease-[var(--ease-out-expo)]',
+            isPlayerOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
           )}
-          style={{
-            transformStyle: 'preserve-3d',
-            boxShadow: 'var(--glass-shadow)',
-          }}
         >
-          {FACE_RENDERERS[displayFace]()}
+          <div className="overflow-hidden">
+            <div className="px-6 pb-4 md:px-7">
+              <YouTubePlayer
+                ref={playerRef}
+                youtubeId={youtubeId}
+                className="rounded-lg"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div
+        className={cn(
+          'grid transition-[grid-template-rows,opacity] duration-300 ease-[var(--ease-out-expo)]',
+          isPlayerOpen ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100',
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="px-6 pb-5 md:px-7 md:pb-6">
+            {tldr ? (
+              <p className="text-[0.95rem] text-muted-foreground leading-relaxed max-w-prose text-pretty">
+                {tldr}
+              </p>
+            ) : (
+              <div className="h-12 rounded-lg bg-muted/30 animate-pulse" aria-hidden="true" />
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Video Modal Overlay */}
-      {showVideo && youtubeId && (
-        <VideoModal youtubeId={youtubeId} onClose={() => setShowVideo(false)} />
+      {hasTabs && (
+        <TooltipProvider delayDuration={300}>
+          <div
+            role="tablist"
+            aria-label="Video insight sections"
+            className={cn(
+              'sticky top-0 z-20 flex items-center gap-1.5 overflow-x-auto scroll-smooth',
+              'border-t border-border/60 bg-card/85 backdrop-blur-md',
+              'rounded-b-2xl px-3 py-2.5 md:px-4',
+              '[mask-image:linear-gradient(to_right,transparent,black_16px,black_calc(100%-16px),transparent)]',
+              '[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]',
+            )}
+          >
+            {safeTabs.map((tab) => {
+              const isActive = tab.id === activeTabId;
+              const isCompleted = completedTabs?.has(tab.id) ?? false;
+              const label = stripDuplicatedEmoji(tab.label, tab.emoji);
+              const button = (
+                <button
+                  key={tab.id}
+                  type="button"
+                  id={`tab-${tab.id}`}
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={`panel-${tab.id}`}
+                  onClick={() => onTabSelect?.(tab.id)}
+                  className={cn(
+                    'group relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap',
+                    'rounded-xl px-3.5 py-2 text-sm transition-all duration-200',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    isActive
+                      ? 'font-semibold text-primary-foreground shadow-md shadow-primary/15'
+                      : 'font-medium border border-border/60 bg-muted/30 text-foreground/80 hover:bg-muted/60 hover:text-foreground',
+                  )}
+                  style={
+                    isActive && domainGradient
+                      ? { background: domainGradient }
+                      : undefined
+                  }
+                >
+                  {tab.emoji && (
+                    <span aria-hidden="true" className="text-[0.95rem] leading-none">
+                      {tab.emoji}
+                    </span>
+                  )}
+                  <span>{label}</span>
+                  {isCompleted && !isActive && (
+                    <Check className="h-3.5 w-3.5 shrink-0 text-success" aria-label="Completed" />
+                  )}
+                </button>
+              );
+              if (!tab.preview) return button;
+              return (
+                <Tooltip key={tab.id}>
+                  <TooltipTrigger asChild>{button}</TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs max-w-[220px]">
+                    {tab.preview}
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })}
+          </div>
+        </TooltipProvider>
       )}
-    </>
+    </motion.section>
   );
 });

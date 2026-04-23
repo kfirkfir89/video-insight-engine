@@ -8,10 +8,6 @@ interface QuoteBlockProps {
   className?: string;
 }
 
-/**
- * Domain-free quote display.
- * No timestamp, no copy, no @vie/types — pure presentation.
- */
 export const QuoteBlock = memo(function QuoteBlock({
   text,
   attribution,
@@ -21,18 +17,40 @@ export const QuoteBlock = memo(function QuoteBlock({
   const isHighlight = variant === 'highlight';
 
   return (
-    <div className={cn('relative overflow-hidden', isHighlight && 'bg-info-soft/20 px-3 py-2 rounded', className)}>
+    <div
+      className={cn(
+        'relative overflow-hidden animate-fade-up',
+        isHighlight && 'bg-info-soft/20 px-3 py-2 rounded',
+        className,
+      )}
+    >
       {!isHighlight && (
-        <span className="quote-decorative-mark" aria-hidden="true">"</span>
+        <span
+          className="quote-decorative-mark animate-pop-in"
+          style={{ animationDelay: '80ms' }}
+          aria-hidden="true"
+        >
+          "
+        </span>
       )}
       <blockquote className={isHighlight ? 'font-medium text-sm' : 'italic text-base'}>
-        <p className="text-foreground leading-relaxed font-serif max-w-prose">{text}</p>
+        {/* Use font-display (Bricolage Grotesque) for editorial voice without
+            falling back to Times New Roman via the generic `font-serif` stack.
+            Italic Bricolage reads as quoted speech while staying on-brand. */}
+        <p
+          className="text-foreground leading-relaxed max-w-prose text-pretty"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          {text}
+        </p>
       </blockquote>
       {attribution && (
         <>
           <div className="fade-divider my-2" aria-hidden="true" />
           <footer>
-            <cite className="text-xs font-medium tracking-wide text-muted-foreground not-italic">— {attribution}</cite>
+            <cite className="text-xs font-medium tracking-wide text-muted-foreground not-italic">
+              — {attribution}
+            </cite>
           </footer>
         </>
       )}

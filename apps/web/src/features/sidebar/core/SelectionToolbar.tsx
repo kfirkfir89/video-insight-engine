@@ -113,7 +113,7 @@ export function SelectionToolbar() {
 
   return (
     <>
-      <div className="absolute bottom-0 left-0 right-0 bg-card border-t p-2 flex items-center gap-2 shadow-xl rounded-t-lg z-10">
+      <div className="absolute bottom-0 inset-x-0 bg-card border-t p-2 flex items-center gap-2 shadow-xl rounded-t-lg z-10">
         {/* Selection count */}
         <span className="text-sm text-muted-foreground flex-1">
           {selectionCount} selected
@@ -123,7 +123,7 @@ export function SelectionToolbar() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" disabled={isPending}>
-              <FolderInput className="h-4 w-4 mr-1" />
+              <FolderInput className="h-4 w-4 me-1" />
               Move
             </Button>
           </DropdownMenuTrigger>
@@ -145,7 +145,7 @@ export function SelectionToolbar() {
           onClick={() => setShowDeleteDialog(true)}
           disabled={isPending}
         >
-          <Trash2 className="h-4 w-4 mr-1" />
+          <Trash2 className="h-4 w-4 me-1" />
           Delete
         </Button>
 

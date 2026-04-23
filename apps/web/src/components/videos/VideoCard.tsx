@@ -1,10 +1,13 @@
 import { useState, memo, useCallback, useMemo, lazy, Suspense } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import type { Video } from "@/types";
 import type { ProcessingStatus } from "@/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { withViewTransition } from "@/lib/view-transitions";
+import { getDomainGradient } from "@vie/shared/config";
+import { isContentTag } from "@vie/types";
 import { Play } from "lucide-react";
 
 const STATUS_DOT_MAP: Record<ProcessingStatus, string> = {
@@ -21,13 +24,14 @@ const STATUS_TEXT_MAP: Record<ProcessingStatus, string> = {
   failed: "text-destructive",
 };
 
-/** Active-state ring on the card so processing/failed videos are identifiable
- *  at a glance — completed cards stay quiet. */
+/** Ring is reserved for `failed` only — completed/pending/processing already
+ *  carry a colored dot + label. Three signals on every card produced a disco
+ *  of rings on the grid; one signal where the user must act keeps it quiet. */
 const STATUS_RING_MAP: Record<ProcessingStatus, string> = {
-  pending: "ring-1 ring-[oklch(from_var(--status-pending)_l_c_h_/_0.3)]",
-  processing: "ring-1 ring-[oklch(from_var(--status-processing)_l_c_h_/_0.35)]",
+  pending: "",
+  processing: "",
   completed: "",
-  failed: "ring-1 ring-destructive/35",
+  failed: "ring-1 ring-destructive/40",
 };
 
 const STATUS_LABEL_MAP: Record<ProcessingStatus, string> = {
@@ -66,10 +70,20 @@ interface VideoCardProps {
 
 export const VideoCard = memo(function VideoCard({ video }: VideoCardProps) {
   const [showPlayer, setShowPlayer] = useState(false);
+  const navigate = useNavigate();
   const relativeTime = useMemo(
     () => formatRelativeTime(video.createdAt),
     [video.createdAt]
   );
+
+  /** Domain spine — a 3px inline-start bar using the video's content-tag gradient.
+   *  Gives the grid chromatic identity without shouting: a fitness video reads
+   *  coral, a code video reads mint, etc. Null while processing (no tag yet). */
+  const domainGradient = useMemo(() => {
+    const tag = video.outputType;
+    if (!tag || !isContentTag(tag)) return null;
+    return getDomainGradient(tag);
+  }, [video.outputType]);
 
   const handlePlayClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -81,13 +95,40 @@ export const VideoCard = memo(function VideoCard({ video }: VideoCardProps) {
     setShowPlayer(false);
   }, []);
 
+  /** Navigate inside a typed View Transition so the title morphs from card to
+   *  detail-page header. Modifier-key clicks fall through to default browser
+   *  behaviour (open in new tab, etc.). */
+  const handleNavigate = useCallback((e: React.MouseEvent) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    withViewTransition(
+      () => navigate(`/video/${video.id}`),
+      { type: "navigate-to-detail" },
+    );
+  }, [navigate, video.id]);
+
+  /** Per-instance VT name so navigation morphs only the clicked card. */
+  const titleVTName = `vie-video-title-${video.id}`;
+  const posterVTName = `vie-video-poster-${video.id}`;
+
   return (
     <>
       <Link
         to={`/video/${video.id}`}
+        onClick={handleNavigate}
         className="block [content-visibility:auto] [contain-intrinsic-size:auto_260px]"
       >
-        <Card className={cn("overflow-hidden transition-[box-shadow,transform] duration-200 ease-out hover:shadow-lg hover:-translate-y-0.5 motion-reduce:hover:translate-y-0", STATUS_RING_MAP[video.status])}>
+        <Card className={cn("relative overflow-hidden transition-[box-shadow,transform] duration-200 ease-out hover:shadow-lg hover:-translate-y-0.5 motion-reduce:hover:translate-y-0", STATUS_RING_MAP[video.status])}>
+          {/* Domain-colored spine — absolute inline-start strip. Renders only
+              once the pipeline has assigned a content tag, so processing cards
+              stay neutral until they're ready. */}
+          {domainGradient && (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 start-0 w-[3px] z-10"
+              style={{ backgroundImage: domainGradient }}
+            />
+          )}
           {/* Thumbnail with Play Button Overlay */}
           <div className="aspect-video bg-muted relative group">
             {video.thumbnailUrl ? (
@@ -99,6 +140,7 @@ export const VideoCard = memo(function VideoCard({ video }: VideoCardProps) {
                 decoding="async"
                 width={320}
                 height={180}
+                style={{ viewTransitionName: posterVTName } as React.CSSProperties}
               />
             ) : (
               <div className="flex h-full items-center justify-center text-4xl">
@@ -115,8 +157,8 @@ export const VideoCard = memo(function VideoCard({ video }: VideoCardProps) {
                 className="absolute inset-0 flex items-center justify-center bg-[var(--overlay-bg)] opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 rounded-none"
                 aria-label={`Play ${video.title}`}
               >
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/90 text-primary-foreground hover:bg-primary transition-colors">
-                  <Play className="h-8 w-8 ml-1" fill="currentColor" />
+                <div className="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-full bg-primary/90 text-primary-foreground hover:bg-primary transition-colors">
+                  <Play className="h-7 w-7 sm:h-8 sm:w-8 ml-1" fill="currentColor" />
                 </div>
               </Button>
             )}
@@ -136,7 +178,10 @@ export const VideoCard = memo(function VideoCard({ video }: VideoCardProps) {
                 {relativeTime}
               </span>
             </div>
-            <h3 className="line-clamp-2 font-medium break-words [overflow-wrap:anywhere]">
+            <h3
+              className="line-clamp-2 font-medium break-words [overflow-wrap:anywhere]"
+              style={{ viewTransitionName: titleVTName } as React.CSSProperties}
+            >
               {video.title || "Loading..."}
             </h3>
             {video.channel && (

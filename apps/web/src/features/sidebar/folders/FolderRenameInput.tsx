@@ -71,7 +71,7 @@ export function FolderRenameInput({
       onChange={(e) => setValue(e.target.value)}
       onBlur={handleSave}
       onKeyDown={handleKeyDown}
-      className={cn("ml-2 h-5 py-0 px-1 flex-1", textClasses.mainText)}
+      className={cn("ms-2 h-5 py-0 px-1 flex-1", textClasses.mainText)}
       onClick={(e) => e.stopPropagation()}
       disabled={updateFolder.isPending}
     />

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { GlassCard } from './GlassCard';
 import { RecipeIngredientPanel } from './RecipeIngredientPanel';
 import { RecipeStepView } from './RecipeStepView';
+import { EmojiMarker } from '@/components/vie';
 import { useTabState } from '@/features/video-output/contexts/TabStateContext';
 import type { StepItem } from '@vie/types';
 
@@ -75,7 +76,7 @@ export const RecipePlayer = memo(function RecipePlayer({
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-primary/5 border-b border-border/30">
         <div className="flex items-center gap-2">
-          <span aria-hidden="true">{'🍳'}</span>
+          <EmojiMarker emoji="🍳" size="sm" animated={false} />
           <span className="text-sm font-semibold">Cooking Mode</span>
           <span className="text-xs text-muted-foreground">
             {completedCount}/{steps.length} steps
@@ -117,8 +118,10 @@ export const RecipePlayer = memo(function RecipePlayer({
           )}
         </div>
 
-        {/* Desktop: Left panel — Ingredients */}
-        <div className="hidden md:block w-[280px] border-e border-border/30 overflow-y-auto">
+        {/* Desktop: Left panel — Ingredients
+            max-w caps the panel on ~768px tablets so the step panel keeps
+            enough room for comfortable reading; 280px retained as the target. */}
+        <div className="hidden md:block w-[280px] max-w-[min(280px,38vw)] border-e border-border/30 overflow-y-auto">
           <RecipeIngredientPanel
             items={ingredients}
             tabLabel={tabLabel}
@@ -161,9 +164,10 @@ export const RecipePlayer = memo(function RecipePlayer({
 
       {/* All done celebration */}
       {allDone && (
-        <div className="text-center py-4 bg-success/5 border-t border-border/30">
+        <div className="flex items-center justify-center gap-2 py-4 bg-success/5 border-t border-border/30">
+          <EmojiMarker emoji="🎉" size="sm" />
           <p className="text-sm font-medium text-success">
-            {'🎉'} All steps complete! Enjoy your meal!
+            All steps complete! Enjoy your meal!
           </p>
         </div>
       )}

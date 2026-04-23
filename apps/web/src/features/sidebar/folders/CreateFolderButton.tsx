@@ -55,6 +55,7 @@ export function CreateFolderButton({ className }: CreateFolderButtonProps) {
           size="icon"
           className={cn("h-6 w-6 hover:bg-accent transition-colors", className)}
           onClick={(e) => e.stopPropagation()}
+          aria-label="Create new folder"
         >
           <Plus className="h-4 w-4 text-muted-foreground" />
         </Button>
@@ -75,7 +76,7 @@ export function CreateFolderButton({ className }: CreateFolderButtonProps) {
           disabled={!name.trim() || createFolder.isPending}
         >
           {createFolder.isPending ? (
-            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+            <Loader2 className="h-3 w-3 animate-spin me-1" />
           ) : null}
           Create Folder
         </Button>

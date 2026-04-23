@@ -10,6 +10,9 @@ from src.utils.data_helpers import is_empty_data
 
 logger = logging.getLogger(__name__)
 
+# A quality score below this triggers an unconditional retry.
+RETRY_SCORE_THRESHOLD = 0.6
+
 
 @dataclass
 class ExtractionQuality:
@@ -86,6 +89,91 @@ def check_extraction_quality(
         total=total,
         empty_fields=empty_fields,
     )
+
+
+@dataclass
+class RetryDecision:
+    """Outcome of combining quality + count signals into a retry verdict."""
+    should_retry: bool
+    reason: str
+    hard_miss_fields: list[str] = field(default_factory=list)
+
+
+def decide_extraction_retry(
+    quality: ExtractionQuality,
+    count_warnings: dict[str, dict[str, Any]],
+    score_threshold: float = RETRY_SCORE_THRESHOLD,
+) -> RetryDecision:
+    """Combine overall quality score with per-field count validation.
+
+    Two independent retry triggers:
+
+    1. Overall score below threshold — existing behavior.
+    2. A "hard miss" on any manifest-planned field: the plan specified
+       ``itemCount > 0`` but extraction returned zero items. This fires
+       regardless of the overall score, since a high score on other
+       fields should not mask a completely missed section (e.g., plan
+       said ``tips: 6`` and extraction returned ``[]``).
+    """
+    hard_miss_fields = [
+        field_name
+        for field_name, warning in count_warnings.items()
+        if warning.get("extracted", 0) == 0 and warning.get("manifest", 0) > 0
+    ]
+
+    low_score = quality.score < score_threshold and quality.total > 0
+
+    if low_score:
+        reason = f"low score ({quality.score:.2f})"
+        if hard_miss_fields:
+            reason = f"{reason}; hard miss on {', '.join(hard_miss_fields)}"
+        return RetryDecision(
+            should_retry=True,
+            reason=reason,
+            hard_miss_fields=hard_miss_fields,
+        )
+    if hard_miss_fields:
+        return RetryDecision(
+            should_retry=True,
+            reason=f"hard miss on {', '.join(hard_miss_fields)}",
+            hard_miss_fields=hard_miss_fields,
+        )
+    return RetryDecision(
+        should_retry=False,
+        reason="",
+        hard_miss_fields=hard_miss_fields,
+    )
+
+
+def merge_retry_fields(
+    empty_fields: list[str],
+    hard_miss_fields: list[str],
+    count_warnings: dict[str, dict[str, Any]],
+) -> list[str]:
+    """Combine quality-check empty_fields with annotated count-miss descriptions.
+
+    Hard-miss fields get a "plan expected N, extraction returned 0" annotation.
+    If a dot-path in ``empty_fields`` already ends with the hard-miss field
+    name (e.g. ``"food.tips"`` + hard miss ``"tips"``), the annotation is
+    applied in-place on the existing path entry to avoid listing the same
+    schema field twice in the retry prompt.
+    """
+    descriptions = list(empty_fields)
+    for field_name in hard_miss_fields:
+        manifest_count = count_warnings.get(field_name, {}).get("manifest", 0)
+        suffix = f" (plan expected {manifest_count}, extraction returned 0)"
+        matched_in_place = False
+        for i, existing in enumerate(descriptions):
+            if existing == field_name or existing.endswith(f".{field_name}"):
+                if suffix not in existing:
+                    descriptions[i] = existing + suffix
+                matched_in_place = True
+                break
+        if not matched_in_place:
+            annotated = field_name + suffix
+            if annotated not in descriptions:
+                descriptions.append(annotated)
+    return descriptions
 
 
 def build_synthesis_fed_retry_prompt(

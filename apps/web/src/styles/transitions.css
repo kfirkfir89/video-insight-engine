@@ -1,0 +1,243 @@
+/* ═══════════════════════════════════════════════════
+   View Transitions + entrance choreography
+   ═══════════════════════════════════════════════════
+   Browser default for ::view-transition-* is a 250ms cross-fade. We tighten
+   the timing, add a typed slide for navigation, and define `@starting-style`
+   entrances for streamed UI (tabs arriving over SSE).
+
+   All effects are gated by `@media (prefers-reduced-motion: no-preference)`.
+   With reduced motion, fades collapse to instant swaps and entrances are flat.
+*/
+
+/* ───── Animatable custom properties (registered for keyframe interpolation) ───── */
+@property --vie-stream-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@property --vie-stream-hue {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 290;
+}
+@property --vie-stream-pulse {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+/* ───── Easing tokens (Apple-feel decelerations) ───── */
+:root {
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Was a soft overshoot; retuned to pure ease-out-quint so motion decelerates
+     without the recognisable AI "spring" bounce. Name preserved for callers. */
+  --ease-spring-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --vie-vt-fast: 220ms;
+  --vie-vt-base: 360ms;
+  --vie-vt-slow: 540ms;
+}
+
+/* ───── Default View Transition: faster, less jarring ───── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--vie-vt-fast);
+  animation-timing-function: var(--vie-out-expo, var(--ease-out-expo));
+}
+
+/* ───── Typed transitions ───── */
+
+/* Navigate forward (Board → VideoDetail). Old slides out left + fades, new slides in right + fades. */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-vt-type="navigate-to-detail"]::view-transition-old(root) {
+    animation: vie-vt-out-left var(--vie-vt-base) var(--ease-out-expo) both;
+  }
+  html[data-vt-type="navigate-to-detail"]::view-transition-new(root) {
+    animation: vie-vt-in-right var(--vie-vt-base) var(--ease-out-expo) both;
+  }
+  html[data-vt-type="navigate-to-board"]::view-transition-old(root) {
+    animation: vie-vt-out-right var(--vie-vt-base) var(--ease-out-expo) both;
+  }
+  html[data-vt-type="navigate-to-board"]::view-transition-new(root) {
+    animation: vie-vt-in-left var(--vie-vt-base) var(--ease-out-expo) both;
+  }
+
+  /* Tab switch — the active panel does a brief fade+lift. Shared concept
+     elements (with view-transition-name) morph between positions. */
+  html[data-vt-type="tab-switch"]::view-transition-old(root),
+  html[data-vt-type="tab-switch"]::view-transition-new(root) {
+    animation-duration: var(--vie-vt-fast);
+  }
+
+  /* Sidebar collapse — short cross-fade so the layout reflow doesn't snap. */
+  html[data-vt-type="sidebar-collapse"]::view-transition-old(root),
+  html[data-vt-type="sidebar-collapse"]::view-transition-new(root) {
+    animation-duration: 280ms;
+    animation-timing-function: var(--ease-out-expo);
+  }
+
+  /* Stream input spine — the URL input "becomes" the hero. Slow + intentional. */
+  html[data-vt-type="stream-input-spine"]::view-transition-old(root) {
+    animation: vie-vt-fade-out 200ms var(--ease-out-quart) both;
+  }
+  html[data-vt-type="stream-input-spine"]::view-transition-new(root) {
+    animation: vie-vt-fade-in 320ms 80ms var(--ease-out-expo) both;
+  }
+  /* The shared spine element gets a longer, more expressive morph. */
+  html[data-vt-type="stream-input-spine"]::view-transition-group(vie-input-spine) {
+    animation-duration: var(--vie-vt-slow);
+    animation-timing-function: var(--ease-spring-soft);
+  }
+  html[data-vt-type="stream-input-spine"]::view-transition-image-pair(vie-input-spine) {
+    isolation: isolate;
+  }
+}
+
+/* Shared morph elements get longer animation than the root cross-fade. */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-group(.vie-shared) {
+    animation-duration: var(--vie-vt-base);
+    animation-timing-function: var(--ease-out-expo);
+  }
+}
+
+/* ───── Reduced-motion: collapse all VT animations to instant swap ───── */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   Streaming backdrop — phase-aware "thinking field"
+   ═══════════════════════════════════════════════════ */
+.vie-stream-backdrop {
+  --vie-stream-hue: 290;
+  --vie-stream-intensity: 0.5;
+  background-image:
+    conic-gradient(
+      from var(--vie-stream-angle) at 50% 28%,
+      oklch(70% 0.16 var(--vie-stream-hue) / calc(0.10 * var(--vie-stream-intensity))),
+      transparent 22%,
+      oklch(72% 0.18 calc(var(--vie-stream-hue) + 40) / calc(0.07 * var(--vie-stream-intensity))),
+      transparent 56%,
+      oklch(70% 0.16 var(--vie-stream-hue) / calc(0.10 * var(--vie-stream-intensity)))
+    ),
+    radial-gradient(
+      ellipse 70vw 50vh at 50% 0%,
+      oklch(72% 0.18 var(--vie-stream-hue) / calc(0.14 * var(--vie-stream-intensity))),
+      transparent 70%
+    );
+  background-blend-mode: screen, normal;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .vie-stream-backdrop {
+    animation: vie-stream-rotate 18s linear infinite, vie-stream-breathe 5s ease-in-out infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vie-stream-backdrop {
+    /* Static halo — same hue, no motion. */
+    background-image: radial-gradient(
+      ellipse 70vw 50vh at 50% 0%,
+      oklch(72% 0.18 var(--vie-stream-hue) / calc(0.08 * var(--vie-stream-intensity))),
+      transparent 70%
+    );
+  }
+}
+
+@keyframes vie-stream-rotate {
+  from { --vie-stream-angle: 0deg; }
+  to { --vie-stream-angle: 360deg; }
+}
+@keyframes vie-stream-breathe {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+
+/* ───── Keyframes ───── */
+@keyframes vie-vt-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes vie-vt-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes vie-vt-out-left {
+  from { opacity: 1; transform: translate3d(0, 0, 0); }
+  to { opacity: 0; transform: translate3d(-3%, 0, 0); }
+}
+@keyframes vie-vt-in-right {
+  from { opacity: 0; transform: translate3d(3%, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes vie-vt-out-right {
+  from { opacity: 1; transform: translate3d(0, 0, 0); }
+  to { opacity: 0; transform: translate3d(3%, 0, 0); }
+}
+@keyframes vie-vt-in-left {
+  from { opacity: 0; transform: translate3d(-3%, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+/* ═══════════════════════════════════════════════════
+   @starting-style entrances — for elements that mount
+   into the DOM (e.g., tabs arriving over SSE).
+   ═══════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: no-preference) {
+  /* Streamed tab card entrance. Apply data-stream-entry on the wrapper. */
+  [data-stream-entry] {
+    transition:
+      opacity 380ms var(--ease-out-expo),
+      transform 480ms var(--ease-spring-soft);
+  }
+  @starting-style {
+    [data-stream-entry] {
+      opacity: 0;
+      transform: translateY(10px) scale(0.97);
+    }
+  }
+
+  /* Tab-bar pill arrival — scale + translate with stagger delay.
+     Each pill uses --stagger-i (set inline) for cascade timing. */
+  [data-stream-tab-pill] {
+    transition:
+      opacity 360ms var(--ease-out-expo),
+      transform 520ms var(--ease-spring-soft);
+    transition-delay: calc(var(--stagger-i, 0) * 80ms);
+  }
+  @starting-style {
+    [data-stream-tab-pill] {
+      opacity: 0;
+      transform: translateY(-12px) scale(0.6);
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   Sidebar — staggered folder-expand entrance
+   ═══════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: no-preference) {
+  [data-sidebar-stagger] > * {
+    animation: sidebar-item-in 200ms var(--ease-out-expo) both;
+  }
+}
+@keyframes sidebar-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   Sidebar — processing video shimmer
+   ═══════════════════════════════════════════════════ */
+@keyframes shimmer-travel {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

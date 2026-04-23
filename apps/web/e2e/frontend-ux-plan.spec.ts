@@ -333,6 +333,21 @@ test.describe("Phase 3: Routing & Pages", () => {
         page.getByText(/VIE|not found|loading|error/i).first()
       ).toBeVisible();
     });
+
+    // Legacy path — older share links used /share/:slug. App.tsx mounts
+    // SharePage at both paths so an expired link surfaces the coded
+    // not-found state instead of silently redirecting to landing.
+    test("legacy /share/:slug mounts the same SharePage, not landing", async ({
+      page,
+    }) => {
+      await page.goto("/share/test-slug-nonexistent");
+      // Stay on /share/* (no redirect to /) and show share-page chrome, not
+      // the landing funnel.
+      expect(page.url()).toContain("/share/");
+      await expect(
+        page.getByText(/VIE|not found|loading|error/i).first()
+      ).toBeVisible();
+    });
   });
 
   test.describe("3b — Route Behavior", () => {

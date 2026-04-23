@@ -47,7 +47,11 @@ describe('GlassCard', () => {
 
   it('should apply variant class', () => {
     const { container } = render(<GlassCard variant="elevated">Test</GlassCard>);
-    expect(container.firstChild).toHaveClass('shadow-lg');
+    // Elevated uses the `--glass-shadow-elevated` token (falls back to
+    // `--glass-shadow`) instead of the raw `shadow-lg` utility.
+    expect(container.firstChild).toHaveClass(
+      'shadow-[var(--glass-shadow-elevated,var(--glass-shadow))]',
+    );
   });
 
   it('should accept className', () => {
@@ -65,9 +69,14 @@ describe('ExpandableCard', () => {
       </ExpandableCard>,
     );
 
-    expect(screen.queryByText('Content')).not.toBeInTheDocument();
-    await user.click(screen.getByText('Header'));
+    // Content is always mounted (animated via grid-template-rows 0fr → 1fr).
+    // Use aria-expanded on the header button to assert collapsed/expanded.
+    const trigger = screen.getByRole('button', { expanded: false });
+    expect(trigger).toBeInTheDocument();
     expect(screen.getByText('Content')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Header'));
+    expect(screen.getByRole('button', { expanded: true })).toBeInTheDocument();
   });
 
   it('should start expanded when defaultExpanded', () => {
@@ -86,6 +95,23 @@ describe('HeroCard', () => {
     expect(screen.getByText('Title')).toBeInTheDocument();
     expect(screen.getByText('Subtitle')).toBeInTheDocument();
     expect(screen.getByText('🎉')).toBeInTheDocument();
+  });
+
+  it('should render default variant as left-aligned with inline emoji', () => {
+    const { container } = render(<HeroCard title="Title" emoji="🎉" />);
+    const card = container.firstElementChild as HTMLElement;
+    expect(card.className).toContain('text-left');
+    // Default emoji is small (text-xl), not large (text-4xl)
+    expect(screen.getByText('🎉').className).toContain('text-xl');
+  });
+
+  it('should render marketing variant as centered with large emoji', () => {
+    const { container } = render(
+      <HeroCard variant="marketing" title="Title" emoji="🎉" />,
+    );
+    const card = container.firstElementChild as HTMLElement;
+    expect(card.className).toContain('text-center');
+    expect(screen.getByText('🎉').className).toContain('text-4xl');
   });
 });
 
@@ -158,7 +184,10 @@ describe('KeyValue', () => {
 describe('CostDisplay', () => {
   it('should render amount with currency', () => {
     render(<CostDisplay amount={1500} currency="€" label="Total" />);
-    expect(screen.getByText('€ 1,500')).toBeInTheDocument();
+    // Currency and amount render in the same span separated by whitespace
+    // (the count-up renders as "€ 1,500" with a non-breaking-width space).
+    const amount = screen.getByText((_, el) => el?.textContent === '€ 1,500');
+    expect(amount).toBeInTheDocument();
     expect(screen.getByText('Total')).toBeInTheDocument();
   });
 });
@@ -221,8 +250,9 @@ describe('FadeIn', () => {
   });
 
   it('should apply stagger delay', () => {
+    // Stagger step is 60ms per index (was 75ms — tightened in the UX pass).
     const { container } = render(<FadeIn index={2}>Content</FadeIn>);
-    expect(container.firstChild).toHaveStyle({ animationDelay: '150ms' });
+    expect(container.firstChild).toHaveStyle({ animationDelay: '120ms' });
   });
 });
 
@@ -259,7 +289,9 @@ describe('CrossTabButton', () => {
     const user = userEvent.setup();
     const onClick = vi.fn();
     render(<CrossTabButton label="See more" onClick={onClick} />);
-    await user.click(screen.getByText('Next: See more →'));
+    // Label no longer carries an inline arrow char — a ChevronRight icon
+    // sits beside it now.
+    await user.click(screen.getByText('Next: See more'));
     expect(onClick).toHaveBeenCalled();
   });
 });

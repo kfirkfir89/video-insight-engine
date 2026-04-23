@@ -36,11 +36,19 @@ export function SidebarSection() {
   const folders = foldersData?.folders ?? [];
   const allVideos = videosData?.videos ?? [];
 
-  // Computed values with sorting and filtering
-  const folderTree = buildFolderTree(folders, sortOption);
-  const sorted = sortVideos(allVideos, sortOption);
-  const { folders: filteredFolders, videos: filteredVideos } = filterBySearch(folderTree, sorted, searchQuery);
-  const unassignedVideos = filteredVideos.filter((v) => !v.folderId);
+  // Memoize derived data — without this, every parent re-render creates new
+  // arrays that bust memo() on FolderTree/VideoItem, causing the entire
+  // sidebar to visually "refresh" on every route navigation.
+  const folderTree = useMemo(() => buildFolderTree(folders, sortOption), [folders, sortOption]);
+  const sorted = useMemo(() => sortVideos(allVideos, sortOption), [allVideos, sortOption]);
+  const { folders: filteredFolders, videos: filteredVideos } = useMemo(
+    () => filterBySearch(folderTree, sorted, searchQuery),
+    [folderTree, sorted, searchQuery],
+  );
+  const unassignedVideos = useMemo(
+    () => filteredVideos.filter((v) => !v.folderId),
+    [filteredVideos],
+  );
 
   const isSearching = searchQuery.trim().length > 0;
 
@@ -124,9 +132,20 @@ export function SidebarSection() {
         >
           {isLoading ? (
             <div className="px-4 py-2 space-y-2">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-7 w-full rounded-md" />
+              <Skeleton className="h-7 w-full rounded-md" />
+              <Skeleton className="h-7 w-4/5 rounded-md" />
+              <Skeleton className="h-7 w-full rounded-md" />
+              <Skeleton className="h-7 w-3/4 rounded-md" />
+              <Skeleton className="h-7 w-full rounded-md" />
             </div>
+          ) : allVideos.length === 0 && folders.length === 0 && !isSearching ? (
+            /* Quiet placeholder — the main board already shows a full empty
+               state, so the sidebar doesn't need to repeat the pitch. A
+               single muted line keeps the rail visually calm. */
+            <p className="px-4 py-6 text-xs text-muted-foreground/70">
+              No videos yet.
+            </p>
           ) : isSearching ? (
             filteredVideos.length > 0 ? (
               <>
@@ -140,8 +159,8 @@ export function SidebarSection() {
                 ))}
               </>
             ) : (
-              <div className="px-4 py-2 text-xs text-muted-foreground">
-                No videos found
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                No matches for &ldquo;{searchQuery}&rdquo;
               </div>
             )
           ) : (

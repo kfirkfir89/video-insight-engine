@@ -102,8 +102,10 @@ export const OverviewInteractive = memo(function OverviewInteractive({
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [videoId, starredHighlights]);
 
-  // Build metadata stat pills from flattened props (memoized)
-  const metaStats = useMemo<OverviewStat[]>(() => {
+  // Metadata chips (duration, level, items) — rendered as a compact inline row
+  // *under* the hero title, not as prominent StatPills. Keeps the overview
+  // from reading as a hero-metric template.
+  const metaChips = useMemo<OverviewStat[]>(() => {
     const out: OverviewStat[] = [];
     if (duration) out.push({ label: t.duration, value: duration });
     if (level) out.push({ label: t.level, value: level });
@@ -111,7 +113,8 @@ export const OverviewInteractive = memo(function OverviewInteractive({
     return out;
   }, [duration, level, itemCount, t.duration, t.level, t.items]);
 
-  const allStats = useMemo(() => [...metaStats, ...(stats ?? [])], [metaStats, stats]);
+  // Only user-provided stats get the StatPill treatment. Metadata gets chips.
+  const userStats = stats ?? [];
 
   // Use masterSummary (2-3 sentences) or fall back to summary
   const displaySummary = masterSummary || summary;
@@ -121,11 +124,23 @@ export const OverviewInteractive = memo(function OverviewInteractive({
 
   return (
     <div className="space-y-4">
-      {/* Hero */}
+      {/* Hero — metadata rendered as inline chips (not StatPills) so duration
+          never reads as the primary content of the tab. */}
       <HeroCard emoji={emoji} title={title} subtitle={subtitle}>
-        {allStats.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-2">
-            {allStats.map((stat, i) => (
+        {metaChips.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            {metaChips.map((chip, i) => (
+              <span key={chip.label} className="inline-flex items-center gap-1">
+                {i > 0 && <span aria-hidden="true" className="text-muted-foreground/40">·</span>}
+                <span className="font-medium text-foreground/80 tabular-nums">{chip.value}</span>
+                <span className="text-muted-foreground/70">{chip.label}</span>
+              </span>
+            ))}
+          </div>
+        )}
+        {userStats.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {userStats.map((stat, i) => (
               <StatPill
                 key={i}
                 value={stat.value}
@@ -174,10 +189,11 @@ export const OverviewInteractive = memo(function OverviewInteractive({
         </FadeIn>
       )}
 
-      {/* Highlights — collapsible */}
+      {/* Highlights — collapsed by default so Overview stays scannable;
+          users opt-in rather than facing a wall of content. */}
       {highlights && highlights.length > 0 && (
         <ExpandableCard
-          defaultExpanded
+          defaultExpanded={false}
           header={
             <div className="flex items-center gap-2 w-full">
               <span className="type-eyebrow">Highlights</span>
@@ -247,10 +263,10 @@ export const OverviewInteractive = memo(function OverviewInteractive({
         </ExpandableCard>
       )}
 
-      {/* Tips — collapsible */}
+      {/* Tips — collapsed by default (see Highlights rationale above). */}
       {tips && tips.length > 0 && (
         <ExpandableCard
-          defaultExpanded
+          defaultExpanded={false}
           header={
             <div className="flex items-center gap-2">
               <span className="type-eyebrow text-info">Tips</span>

@@ -1,6 +1,6 @@
 import { memo } from 'react';
-import { cn } from '@/lib/utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
 interface BackForwardProps {
@@ -13,10 +13,6 @@ interface BackForwardProps {
   className?: string;
 }
 
-/**
- * Back/forward navigation pair.
- * Used in carousels, flashcard decks, step-by-step flows.
- */
 export const BackForward = memo(function BackForward({
   onBack,
   onForward,
@@ -33,9 +29,12 @@ export const BackForward = memo(function BackForward({
         size="sm"
         onClick={onBack}
         disabled={backDisabled}
-        className="gap-1 text-xs font-medium"
+        className="group gap-1 text-xs font-medium"
       >
-        <ChevronLeft className="h-3.5 w-3.5 rtl:rotate-180" aria-hidden="true" />
+        <ChevronLeft
+          className="h-3.5 w-3.5 rtl:rotate-180 transition-transform duration-150 ease-[var(--ease-out-expo)] group-hover:-translate-x-0.5"
+          aria-hidden="true"
+        />
         {backLabel}
       </Button>
       <Button
@@ -43,10 +42,13 @@ export const BackForward = memo(function BackForward({
         size="sm"
         onClick={onForward}
         disabled={forwardDisabled}
-        className="gap-1 text-xs font-medium"
+        className="group gap-1 text-xs font-medium"
       >
         {forwardLabel}
-        <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" aria-hidden="true" />
+        <ChevronRight
+          className="h-3.5 w-3.5 rtl:rotate-180 transition-transform duration-150 ease-[var(--ease-out-expo)] group-hover:translate-x-0.5"
+          aria-hidden="true"
+        />
       </Button>
     </div>
   );

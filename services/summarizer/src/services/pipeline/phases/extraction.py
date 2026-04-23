@@ -10,7 +10,12 @@ from llm_common.context import llm_feature_var
 
 from src.config import settings
 from src.models.schemas import ProcessingStatus, ErrorCode
-from src.services.pipeline.extraction_quality import check_extraction_quality, build_synthesis_fed_retry_prompt
+from src.services.pipeline.extraction_quality import (
+    build_synthesis_fed_retry_prompt,
+    check_extraction_quality,
+    decide_extraction_retry,
+    merge_retry_fields,
+)
 from src.services.pipeline.extractor import extract
 from src.services.pipeline.pipeline_helpers import normalize_segments, sse_event, truncate_json_safely
 from src.services.pipeline.post_processor import validate_extraction_counts
@@ -29,10 +34,14 @@ async def _attempt_synthesis_fed_retry(
     quality: Any,
     video_info: dict,
     chapters: Any,
+    retry_fields: list[str] | None = None,
 ) -> None:
     """Run synthesis early, then re-extract with evidence-based guidance.
 
     Mutates ctx.extraction_data (if retry improves quality) and ctx.synthesis_dict.
+    When ``retry_fields`` is provided, it replaces ``quality.empty_fields`` in
+    the retry prompt — useful when the caller has merged in hard-miss
+    annotations from count validation.
     """
     if ctx.video_data is None or ctx.triage is None:
         logger.warning("[pipeline] Cannot retry extraction: missing video_data or triage")
@@ -50,8 +59,9 @@ async def _attempt_synthesis_fed_retry(
     )
     ctx.synthesis_dict = synthesis_result.model_dump(by_alias=True)
 
+    fields_for_prompt = retry_fields if retry_fields else quality.empty_fields
     retry_prompt = build_synthesis_fed_retry_prompt(
-        quality.empty_fields, ctx.synthesis_dict,
+        fields_for_prompt, ctx.synthesis_dict,
     )
 
     retry_data = None
@@ -152,10 +162,16 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
         } if isinstance(ctx.extraction_data, dict) else {},
     })
 
-    # Quality check + conditional synthesis-fed retry
+    # Quality check + conditional synthesis-fed retry.
+    # Count validation runs alongside the quality check so that a hard miss
+    # on a manifest-planned field (e.g. plan said 6 tips, extraction returned 0)
+    # can trigger a retry even when the overall score is above threshold.
     if ctx.extraction_data and ctx.triage is not None and ctx.plan_result is not None:
         plan_tabs = ctx.plan_result.tabs
         quality = check_extraction_quality(plan_tabs, ctx.extraction_data)
+        count_warnings = validate_extraction_counts(ctx.plan_result, ctx.extraction_data)
+        retry_decision = decide_extraction_retry(quality, count_warnings)
+
         logger.info(
             "pipeline.extraction_quality",
             extra={
@@ -164,24 +180,30 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
                 "populated": quality.populated,
                 "total": quality.total,
                 "empty_fields": quality.empty_fields,
+                "count_warnings": count_warnings,
+                "hard_miss_fields": retry_decision.hard_miss_fields,
             },
         )
 
-        if quality.score < 0.6 and quality.total > 0:
+        if retry_decision.should_retry:
             logger.warning(
-                "[pipeline] Low extraction quality (%.2f) for video_id=%s — attempting synthesis-fed retry",
-                quality.score, ctx.video_summary_id,
+                "[pipeline] Extraction retry triggered (%s) for video_id=%s — attempting synthesis-fed retry",
+                retry_decision.reason, ctx.video_summary_id,
+            )
+            retry_fields = merge_retry_fields(
+                quality.empty_fields,
+                retry_decision.hard_miss_fields,
+                count_warnings,
             )
             try:
-                await _attempt_synthesis_fed_retry(ctx, plan_tabs, quality, video_info, chapters)
+                await _attempt_synthesis_fed_retry(
+                    ctx, plan_tabs, quality, video_info, chapters,
+                    retry_fields=retry_fields,
+                )
             except Exception as e:
                 logger.warning("[pipeline] Extraction retry failed (non-critical): %s", e)
-
-    # Count validation (advisory logging only — no retry)
-    if ctx.extraction_data and ctx.plan_result is not None:
-        count_warnings = validate_extraction_counts(ctx.plan_result, ctx.extraction_data)
-        if count_warnings:
+        elif count_warnings:
             logger.warning(
-                "[pipeline] Extraction count mismatch for video_id=%s: %s",
+                "[pipeline] Extraction count mismatch (not retried) for video_id=%s: %s",
                 ctx.video_summary_id, count_warnings,
             )

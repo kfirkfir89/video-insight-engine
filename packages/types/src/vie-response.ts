@@ -27,6 +27,10 @@ export interface TabDefinition {
   emoji: string;
   dataSource: string;
   goal?: string;
+  /** When true, the tab is activatable programmatically (e.g. via a hero button)
+   *  but is not rendered in the tab bar. Used for overview tabs that have been
+   *  promoted to a hero-level quick-nav control. */
+  hidden?: boolean;
 }
 
 // ─────────────────────────────────────────────────────

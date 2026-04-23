@@ -1,22 +1,22 @@
 import { memo } from 'react';
+import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
+import { springs } from '@/lib/motion';
 
 interface SectionNavProps {
   sections: Array<{ id: string; label: string }>;
   activeId: string;
   onSelect: (id: string) => void;
   className?: string;
+  layoutGroup?: string;
 }
 
-/**
- * Vertical or horizontal section navigator.
- * Used for grouping content (e.g. days in itinerary, muscle groups).
- */
 export const SectionNav = memo(function SectionNav({
   sections,
   activeId,
   onSelect,
   className,
+  layoutGroup = 'section-nav-default',
 }: SectionNavProps) {
   return (
     <nav className={cn('flex gap-1 overflow-x-auto scrollbar-none scroll-fade-x', className)} aria-label="Sections">
@@ -27,14 +27,23 @@ export const SectionNav = memo(function SectionNav({
             key={section.id}
             onClick={() => onSelect(section.id)}
             className={cn(
-              'shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-              isActive
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted/30 text-muted-foreground hover:bg-muted/60',
+              'relative shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+              isActive ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
             aria-current={isActive ? 'true' : undefined}
           >
-            {section.label}
+            {isActive && (
+              <motion.span
+                layoutId={layoutGroup}
+                className="absolute inset-0 rounded-md bg-primary shadow-[0_4px_12px_-4px_oklch(from_var(--primary)_l_c_h_/_0.45)]"
+                transition={springs.soft}
+                aria-hidden="true"
+              />
+            )}
+            {!isActive && (
+              <span className="absolute inset-0 rounded-md bg-muted/30 opacity-0 hover:opacity-100 transition-opacity" aria-hidden="true" />
+            )}
+            <span className="relative">{section.label}</span>
           </button>
         );
       })}

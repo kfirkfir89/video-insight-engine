@@ -2,6 +2,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo } from "react";
 import { useVideo, useRetryVideo } from "@/hooks/use-videos";
 import { useSummaryStream } from "@/features/video-output/hooks/use-summary-stream";
+import { useCelebrationTrigger } from "@/features/video-output/hooks/use-celebration-trigger";
 import { useProcessingStore } from "@/features/video-output/stores/processing-store";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,7 @@ import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { Loader2, ArrowLeft, RefreshCw, AlertCircle } from "lucide-react";
 import { OutputRouter } from "@/features/video-output/components/OutputRouter";
 import { VideoPlayerProvider } from "@/features/video-output/contexts/VideoPlayerContext";
-import { CollapsibleVideoPlayer } from "@/features/video-output/components/CollapsibleVideoPlayer";
+
 import { Confetti } from "@/components/ui/Confetti";
 import { buildSynthesisFromMeta } from "@/features/video-output/lib/synthesis-utils";
 import type { TabEntry } from "@vie/types";
@@ -73,6 +74,10 @@ export function VideoDetailPage() {
     enabled: isProcessing && !!videoSummaryId,
     onComplete: handleStreamComplete,
   });
+
+  // Confetti: fires exactly once per video per session via the shared hook.
+  // See use-celebration-trigger for the atomic per-id gating logic.
+  const confettiTrigger = useCelebrationTrigger(videoSummaryId, confettiCount);
 
   // Merge streamed metadata into video object
   const mergedVideo = useMemo(() => {
@@ -225,14 +230,6 @@ export function VideoDetailPage() {
     <ErrorBoundary key={id} fallback={errorFallback}>
       <VideoPlayerProvider>
         <Layout>
-          <div className="mx-auto w-full max-w-4xl px-4 pt-4 md:px-6 md:pt-6">
-            {video.youtubeId && (
-              <CollapsibleVideoPlayer
-                youtubeId={video.youtubeId}
-                title={mergedVideo.title}
-              />
-            )}
-          </div>
           <OutputRouter
             title={mergedVideo.title}
             videoSummaryId={videoSummaryId}
@@ -249,7 +246,7 @@ export function VideoDetailPage() {
             isRTL={resolvedMeta?.isRTL}
             streamPhase={phase}
           />
-          <Confetti trigger={confettiCount} />
+          <Confetti trigger={confettiTrigger} />
         </Layout>
       </VideoPlayerProvider>
     </ErrorBoundary>

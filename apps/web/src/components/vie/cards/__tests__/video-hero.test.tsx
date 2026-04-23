@@ -1,7 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
+import type { ReactNode } from 'react';
 import { VideoHero } from '../VideoHero';
+import { VideoPlayerProvider } from '@/features/video-output/contexts/VideoPlayerContext';
 
 const DEFAULT_PROPS = {
   title: 'Test Video Title',
@@ -13,187 +15,130 @@ const DEFAULT_PROPS = {
   youtubeId: 'dQw4w9WgXcQ',
 };
 
-// The component uses setTimeout for flip animation (200ms midpoint, 500ms total).
-// We use fake timers to control the animation timing in tests.
-beforeEach(() => { vi.useFakeTimers({ shouldAdvanceTime: true }); });
-afterEach(() => { vi.useRealTimers(); });
+const SAMPLE_TABS = [
+  { id: 'overview', label: 'Overview', emoji: '📚', dataSource: '' },
+  { id: 'key_points', label: 'Key Points', emoji: '🎯', dataSource: '' },
+  { id: 'quizzes', label: 'Quizzes', emoji: '✅', dataSource: '' },
+];
+
+function renderWithPlayer(ui: ReactNode): ReturnType<typeof render> {
+  return render(<VideoPlayerProvider>{ui}</VideoPlayerProvider>);
+}
 
 describe('VideoHero', () => {
   it('should render title, creator, and duration', () => {
-    render(<VideoHero {...DEFAULT_PROPS} />);
+    renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
 
     expect(screen.getByText('Test Video Title')).toBeInTheDocument();
     expect(screen.getByText('Test Channel')).toBeInTheDocument();
     expect(screen.getByText('12:34')).toBeInTheDocument();
   });
 
-  it('should start collapsed and expand on click', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    render(<VideoHero {...DEFAULT_PROPS} />);
+  it('should render the TLDR inline (no expand step)', () => {
+    renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
 
-    const expandBtn = screen.getByRole('button', { name: /expand hero/i });
-    expect(expandBtn).toHaveAttribute('aria-expanded', 'false');
-
-    await user.click(expandBtn);
-    expect(expandBtn).toHaveAttribute('aria-expanded', 'true');
-  });
-
-  it('should show TLDR text when expanded', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    render(<VideoHero {...DEFAULT_PROPS} />);
-
-    await user.click(screen.getByRole('button', { name: /expand hero/i }));
     expect(screen.getByText(DEFAULT_PROPS.tldr)).toBeInTheDocument();
   });
 
-  it('should show Watch Video and Key Takeaways buttons when expanded', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    render(<VideoHero {...DEFAULT_PROPS} />);
+  it('should render a Watch button when youtubeId is provided', () => {
+    renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
 
-    await user.click(screen.getByRole('button', { name: /expand hero/i }));
-    expect(screen.getByText('Watch Video')).toBeInTheDocument();
-    expect(screen.getByText('Key Takeaways')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /watch/i })).toBeInTheDocument();
   });
 
-  it('should flip to takeaways face when Key Takeaways button is clicked', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    render(<VideoHero {...DEFAULT_PROPS} />);
+  it('should toggle Watch → Hide and flip aria-expanded when clicked', async () => {
+    const user = userEvent.setup();
+    renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
 
-    await user.click(screen.getByRole('button', { name: /expand hero/i }));
-    await user.click(screen.getByText('Key Takeaways'));
+    const watchBtn = screen.getByRole('button', { name: /watch/i });
+    expect(watchBtn).toHaveAttribute('aria-expanded', 'false');
 
-    // Advance past the midpoint (200ms) so the content swaps
-    vi.advanceTimersByTime(250);
+    await user.click(watchBtn);
 
-    await waitFor(() => {
-      expect(screen.getByText('Takeaway one')).toBeInTheDocument();
-      expect(screen.getByText('Takeaway two')).toBeInTheDocument();
-    });
-    expect(screen.getByText('Back')).toBeInTheDocument();
-    expect(screen.getByText('Overview')).toBeInTheDocument();
+    const hideBtn = screen.getByRole('button', { name: /hide/i });
+    expect(hideBtn).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('should flip to overview face when Overview button is clicked', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    render(<VideoHero {...DEFAULT_PROPS} />);
+  it('should render a tab bar when tabs are provided', () => {
+    renderWithPlayer(
+      <VideoHero {...DEFAULT_PROPS} tabs={SAMPLE_TABS} activeTabId="overview" onTabSelect={() => {}} />,
+    );
 
-    // Expand → Takeaways → Overview
-    await user.click(screen.getByRole('button', { name: /expand hero/i }));
-    await user.click(screen.getByText('Key Takeaways'));
-    vi.advanceTimersByTime(600);
-
-    await waitFor(() => {
-      expect(screen.getByText('Overview')).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByText('Overview'));
-    vi.advanceTimersByTime(600);
-
-    await waitFor(() => {
-      expect(screen.getByText(DEFAULT_PROPS.masterSummary)).toBeInTheDocument();
-      expect(screen.getByText('Close')).toBeInTheDocument();
-    });
+    expect(screen.getByRole('tablist', { name: /video insight sections/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('tab')).toHaveLength(SAMPLE_TABS.length);
   });
 
-  it('should return to front face and collapse when Close is clicked', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    render(<VideoHero {...DEFAULT_PROPS} />);
+  it('should mark the active tab with aria-selected=true', () => {
+    renderWithPlayer(
+      <VideoHero {...DEFAULT_PROPS} tabs={SAMPLE_TABS} activeTabId="key_points" onTabSelect={() => {}} />,
+    );
 
-    // Expand → Takeaways → Overview → Close
-    await user.click(screen.getByRole('button', { name: /expand hero/i }));
-    await user.click(screen.getByText('Key Takeaways'));
-    vi.advanceTimersByTime(600);
-
-    await waitFor(() => expect(screen.getByText('Overview')).toBeInTheDocument());
-    await user.click(screen.getByText('Overview'));
-    vi.advanceTimersByTime(600);
-
-    await waitFor(() => expect(screen.getByText('Close')).toBeInTheDocument());
-    await user.click(screen.getByText('Close'));
-    vi.advanceTimersByTime(600);
-
-    // Should be back to collapsed front
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /expand hero/i })).toHaveAttribute('aria-expanded', 'false');
-    });
+    const active = screen.getByRole('tab', { selected: true });
+    expect(active).toHaveTextContent('Key Points');
   });
 
-  it('should open video modal when Watch Video is clicked', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    render(<VideoHero {...DEFAULT_PROPS} />);
+  it('should fire onTabSelect with the tab id when a tab is clicked', async () => {
+    const onTabSelect = vi.fn();
+    const user = userEvent.setup();
+    renderWithPlayer(
+      <VideoHero {...DEFAULT_PROPS} tabs={SAMPLE_TABS} activeTabId="overview" onTabSelect={onTabSelect} />,
+    );
 
-    await user.click(screen.getByRole('button', { name: /expand hero/i }));
-    await user.click(screen.getByText('Watch Video'));
+    await user.click(screen.getByRole('tab', { name: /quizzes/i }));
 
-    expect(screen.getByRole('dialog', { name: /video player/i })).toBeInTheDocument();
+    expect(onTabSelect).toHaveBeenCalledWith('quizzes');
   });
 
-  it('should close video modal when Close button is clicked', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    render(<VideoHero {...DEFAULT_PROPS} />);
+  it('should not render a tab bar when no tabs are provided', () => {
+    renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
 
-    await user.click(screen.getByRole('button', { name: /expand hero/i }));
-    await user.click(screen.getByText('Watch Video'));
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('tab')).toHaveLength(0);
+  });
 
-    await user.click(screen.getByRole('button', { name: /close video/i }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  it('should apply the domain gradient to the active tab', () => {
+    const gradient = 'linear-gradient(135deg, oklch(70% 0.2 280), oklch(60% 0.2 320))';
+    renderWithPlayer(
+      <VideoHero
+        {...DEFAULT_PROPS}
+        tabs={SAMPLE_TABS}
+        activeTabId="overview"
+        onTabSelect={() => {}}
+        domainGradient={gradient}
+      />,
+    );
+
+    const active = screen.getByRole('tab', { selected: true });
+    expect(active.getAttribute('style') ?? '').toContain('linear-gradient');
   });
 
   it('should handle missing optional props gracefully', () => {
-    render(<VideoHero title="Minimal Video" />);
+    renderWithPlayer(<VideoHero title="Minimal Video" />);
     expect(screen.getByText('Minimal Video')).toBeInTheDocument();
   });
 
   it('should format hours correctly', () => {
-    render(<VideoHero title="Long Video" duration={7265} />);
+    renderWithPlayer(<VideoHero title="Long Video" duration={7265} />);
     expect(screen.getByText('2:01:05')).toBeInTheDocument();
   });
 
-  it('should not show Watch Video button without youtubeId', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    render(<VideoHero {...DEFAULT_PROPS} youtubeId={undefined} />);
+  it('should not render the Watch button without youtubeId', () => {
+    renderWithPlayer(<VideoHero {...DEFAULT_PROPS} youtubeId={undefined} />);
 
-    await user.click(screen.getByRole('button', { name: /expand hero/i }));
-    expect(screen.queryByText('Watch Video')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /watch/i })).not.toBeInTheDocument();
   });
 
-  it('should not show Key Takeaways button without takeaways', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    render(<VideoHero {...DEFAULT_PROPS} keyTakeaways={[]} />);
+  it('should show a placeholder while TLDR is loading', () => {
+    const { container } = renderWithPlayer(<VideoHero title="Loading test" />);
 
-    await user.click(screen.getByRole('button', { name: /expand hero/i }));
-    expect(screen.queryByText('Key Takeaways')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading test')).toBeInTheDocument();
+    expect(container.querySelector('[aria-hidden="true"].animate-pulse')).toBeInTheDocument();
   });
 
-  it('should not show Overview button without masterSummary', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    render(<VideoHero {...DEFAULT_PROPS} masterSummary={undefined} />);
+  it('should expose the title with an aria-labelledby section', () => {
+    renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
 
-    await user.click(screen.getByRole('button', { name: /expand hero/i }));
-    await user.click(screen.getByText('Key Takeaways'));
-    vi.advanceTimersByTime(600);
-
-    await waitFor(() => {
-      expect(screen.getByText('Back')).toBeInTheDocument();
-    });
-    expect(screen.queryByText('Overview')).not.toBeInTheDocument();
-  });
-
-  it('should flip back from takeaways to front when Back is clicked', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    render(<VideoHero {...DEFAULT_PROPS} />);
-
-    await user.click(screen.getByRole('button', { name: /expand hero/i }));
-    await user.click(screen.getByText('Key Takeaways'));
-    vi.advanceTimersByTime(600);
-
-    await waitFor(() => expect(screen.getByText('Back')).toBeInTheDocument());
-    await user.click(screen.getByText('Back'));
-    vi.advanceTimersByTime(600);
-
-    // Should be back at collapsed front
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /expand hero/i })).toHaveAttribute('aria-expanded', 'false');
-    });
+    const section = screen.getByRole('region', { name: /test video title/i });
+    expect(section).toBeInTheDocument();
   });
 });

@@ -13,6 +13,7 @@ import base64
 import json
 import logging
 import os
+import time
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -78,7 +79,7 @@ async def analyze_frames_with_vision(
     frames: list[dict],
     llm_provider: LLMProvider,
     max_frames: int = 8,
-    timeout: float = 30.0,
+    timeout: float = 60.0,
 ) -> list[dict]:
     """Send top-scored frames to vision LLM for scene analysis.
 
@@ -125,17 +126,39 @@ async def analyze_frames_with_vision(
 
     messages = [{"role": "user", "content": content}]
 
+    started = time.monotonic()
     try:
         raw = await asyncio.wait_for(
             llm_provider.complete_with_messages(messages, max_tokens=2000, timeout=timeout),
             timeout=timeout + 5,  # outer safety net
         )
+        logger.info(
+            "frame_vision.complete",
+            extra={
+                "elapsed_ms": int((time.monotonic() - started) * 1000),
+                "frames": len(frame_metadata),
+                "timeout_s": timeout,
+            },
+        )
         return parse_vision_response(raw, frame_metadata)
     except asyncio.TimeoutError:
-        logger.warning("Vision analysis timed out after %.0fs", timeout)
+        logger.warning(
+            "Vision analysis timed out",
+            extra={
+                "elapsed_ms": int((time.monotonic() - started) * 1000),
+                "timeout_s": timeout,
+                "frames": len(frame_metadata),
+            },
+        )
         return []
     except Exception as e:
-        logger.warning("Vision analysis failed (non-critical): %s", e)
+        logger.warning(
+            "Vision analysis failed (non-critical): %s", e,
+            extra={
+                "elapsed_ms": int((time.monotonic() - started) * 1000),
+                "frames": len(frame_metadata),
+            },
+        )
         return []
 
 

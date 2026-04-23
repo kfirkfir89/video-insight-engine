@@ -24,11 +24,9 @@ function ImageLightbox({
 }) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    overlayRef.current?.focus();
-  }, []);
+  useEffect(() => { overlayRef.current?.focus(); }, []);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent): void => {
     if (e.key === 'Escape') onClose();
     else if (e.key === 'ArrowLeft') onPrev();
     else if (e.key === 'ArrowRight') onNext();
@@ -37,7 +35,7 @@ function ImageLightbox({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-bg)] p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-md p-4 animate-[fadeIn_0.2s_ease_both]"
       onClick={onClose}
       onKeyDown={handleKeyDown}
       role="dialog"
@@ -79,11 +77,16 @@ function ImageLightbox({
         </>
       )}
 
-      <div onClick={(e) => e.stopPropagation()}>
+      {/* Keyed on `selected` so each index transition restarts the CSS mount animation. */}
+      <div
+        key={selected}
+        className="animate-[scale-in_0.32s_cubic-bezier(0.16,1,0.3,1)_both]"
+        onClick={(e) => e.stopPropagation()}
+      >
         <img
           src={images[selected].src}
           alt={images[selected].alt}
-          className="max-w-full max-h-full object-contain rounded-lg"
+          className="max-w-full max-h-full object-contain rounded-xl shadow-[0_20px_60px_-20px_oklch(0%_0_0_/_0.45)]"
           loading="eager"
           decoding="async"
           width={1280}
@@ -100,9 +103,6 @@ function ImageLightbox({
   );
 }
 
-/**
- * Grid gallery of images with lightbox on click.
- */
 export const ImageGallery = memo(function ImageGallery({
   images,
   columns = 3,
@@ -112,7 +112,12 @@ export const ImageGallery = memo(function ImageGallery({
 
   if (images.length === 0) return null;
 
-  const colClass = columns === 2 ? 'grid-cols-2' : columns === 3 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-4';
+  const colClass =
+    columns === 2
+      ? 'grid-cols-1 sm:grid-cols-2'
+      : columns === 3
+        ? 'grid-cols-2 sm:grid-cols-3'
+        : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4';
 
   return (
     <>
@@ -121,29 +126,34 @@ export const ImageGallery = memo(function ImageGallery({
           <button
             key={i}
             onClick={() => setSelected(i)}
-            className="relative aspect-video overflow-hidden rounded-lg border border-[var(--glass-border)] hover:opacity-90 transition-opacity"
+            style={{ animationDelay: `${i * 40}ms` }}
+            className="group relative aspect-video overflow-hidden rounded-lg border border-[var(--glass-border)] animate-fade-up hover:scale-[1.02] active:scale-[0.98] transition-transform duration-200 ease-[var(--ease-out-expo)]"
+            aria-label={`Open ${img.alt}`}
           >
             <img
               src={img.src}
               alt={img.alt}
-              className="absolute inset-0 w-full h-full object-cover"
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-[600ms] ease-[var(--ease-out-expo)] group-hover:scale-[1.08]"
               loading="lazy"
               decoding="async"
               width={320}
               height={180}
             />
+            <span
+              className="absolute inset-0 bg-gradient-to-t from-[oklch(0%_0_0_/_0.4)] via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+              aria-hidden="true"
+            />
           </button>
         ))}
       </div>
 
-      {/* Lightbox with keyboard nav and close button */}
       {selected !== null && (
         <ImageLightbox
           images={images}
           selected={selected}
           onClose={() => setSelected(null)}
-          onPrev={() => setSelected((i) => i !== null && i > 0 ? i - 1 : i)}
-          onNext={() => setSelected((i) => i !== null && i < images.length - 1 ? i + 1 : i)}
+          onPrev={() => setSelected((i) => (i !== null && i > 0 ? i - 1 : i))}
+          onNext={() => setSelected((i) => (i !== null && i < images.length - 1 ? i + 1 : i))}
         />
       )}
     </>

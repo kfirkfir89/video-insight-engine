@@ -136,6 +136,10 @@ function AppRoutes() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/s/:slug" element={<SharePage />} />
+          {/* Legacy path — older share links used /share/:slug. Mount the
+              same page so expired or wrong-path links surface the coded
+              not-found state instead of silently redirecting to landing. */}
+          <Route path="/share/:slug" element={<SharePage />} />
 
           {/* Protected routes */}
           <Route

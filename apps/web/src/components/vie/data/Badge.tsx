@@ -1,6 +1,6 @@
 import { memo, type ReactNode } from 'react';
-import { cn } from '@/lib/utils';
 import { cva, type VariantProps } from 'class-variance-authority';
+import { cn } from '@/lib/utils';
 import { detectBadgeVariant } from './badge-colors';
 
 const badgeVariants = cva(
@@ -16,26 +16,42 @@ const badgeVariants = cva(
         muted: 'bg-muted/50 text-muted-foreground',
       },
     },
-    defaultVariants: {
-      variant: 'default',
-    },
+    defaultVariants: { variant: 'default' },
   },
 );
 
 type BadgeProps = VariantProps<typeof badgeVariants> & {
   children: ReactNode;
   className?: string;
-  /** When true, auto-detect variant from children text content. Ignored if variant is explicitly set. */
   autoColor?: boolean;
+  /** Enable subtle shimmer on mount (once). Good for "new" / reveal contexts. */
+  shimmer?: boolean;
+  /** Opt-in scale-in entrance animation on mount. Off by default so lists
+   *  of badges don't animate en masse. */
+  entrance?: boolean;
 };
 
-export const Badge = memo(function Badge({ variant, children, className, autoColor }: BadgeProps) {
+export const Badge = memo(function Badge({
+  variant,
+  children,
+  className,
+  autoColor,
+  shimmer,
+  entrance,
+}: BadgeProps) {
   const resolvedVariant = autoColor && !variant
     ? detectBadgeVariant(typeof children === 'string' ? children : '')
     : variant;
 
   return (
-    <span className={cn(badgeVariants({ variant: resolvedVariant }), className)}>
+    <span
+      className={cn(
+        badgeVariants({ variant: resolvedVariant }),
+        entrance && 'animate-scale-in',
+        shimmer && 'vie-shimmer',
+        className,
+      )}
+    >
       {children}
     </span>
   );

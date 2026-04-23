@@ -37,19 +37,19 @@ export type StreamPhase =
   | "cancelled"
   | "error";
 
-/** Human-readable labels for each streaming phase. */
+/** User-facing labels for each streaming phase. Plain verbs, no service jargon. */
 export const STREAM_PHASE_LABELS: Record<StreamPhase, string> = {
-  idle: "Preparing...",
-  connecting: "Connecting to AI...",
-  metadata: "Fetching video info...",
+  idle: "Getting ready…",
+  connecting: "Connecting…",
+  metadata: "Reading the video…",
   // Pipeline output phases
-  triage: "Analyzing content type...",
-  extraction: "Extracting structured data...",
-  enrichment: "Generating study aids...",
-  synthesis: "Generating summary...",
-  done: "Complete!",
-  cancelled: "Summarization cancelled",
-  error: "Error occurred",
+  triage: "Understanding the topic…",
+  extraction: "Pulling out the key info…",
+  enrichment: "Building study tools…",
+  synthesis: "Writing your summary…",
+  done: "Done.",
+  cancelled: "Cancelled.",
+  error: "Something went wrong.",
 };
 
 export interface FrameInfo {

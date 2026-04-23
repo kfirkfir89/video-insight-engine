@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { VideoGrid, type FolderContext } from "@/components/videos/VideoGrid";
+import { BoardInlinePaste } from "@/components/videos/BoardInlinePaste";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { useAllVideos, useVideos } from "@/hooks/use-videos";
 import { useFolders } from "@/hooks/use-folders";
@@ -61,12 +62,18 @@ export function BoardPage() {
     <Layout showSidebar>
       <div className="p-4 md:p-6">
         {/* Header with Breadcrumb */}
-        <div className="mb-6 flex items-center gap-3">
+        <div className="mb-4 flex items-center gap-3">
           <FolderOpen className="h-6 w-6 text-muted-foreground shrink-0" />
           <Breadcrumb
             items={breadcrumbItems}
             onNavigate={setSelectedFolder}
           />
+        </div>
+
+        {/* Inline paste — one-step add from wherever the user is. Falls
+            through to the currently-selected folder. */}
+        <div className="mb-6 max-w-3xl">
+          <BoardInlinePaste folderId={selectedFolderId} />
         </div>
 
         {/* Video Grid - grouped by folder when showing all, with subfolder support */}

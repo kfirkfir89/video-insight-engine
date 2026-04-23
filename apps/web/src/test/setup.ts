@@ -42,11 +42,25 @@ Object.defineProperty(window, "localStorage", {
   value: localStorageMock,
 });
 
-// Mock matchMedia
+// Mock matchMedia. Default `prefers-reduced-motion: reduce` to true so
+// useCountUp/animated components jump to their final state immediately —
+// most assertions target post-animation values. A test that needs to
+// exercise the animating path can call `setPrefersReducedMotionForTest(false)`
+// in a beforeEach; the value resets to true after every test.
+const matchMediaState: { prefersReducedMotion: boolean } = {
+  prefersReducedMotion: true,
+};
+
+export function setPrefersReducedMotionForTest(value: boolean): void {
+  matchMediaState.prefersReducedMotion = value;
+}
+
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({
-    matches: false,
+    matches: /prefers-reduced-motion/.test(query)
+      ? matchMediaState.prefersReducedMotion
+      : false,
     media: query,
     onchange: null,
     addListener: vi.fn(), // deprecated
@@ -88,8 +102,9 @@ Object.defineProperty(window, "scrollTo", {
   value: vi.fn(),
 });
 
-// Reset localStorage mock before each test
+// Reset localStorage mock and matchMedia override before each test
 afterEach(() => {
   localStorageMock.clear();
+  matchMediaState.prefersReducedMotion = true;
   vi.clearAllMocks();
 });

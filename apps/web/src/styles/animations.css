@@ -147,6 +147,51 @@
       transform: translateY(0);
     }
   }
+
+  /* ─── VIE brand mark — signal prism entrance ───────────────
+     Body prism planes unfold from the left, then the coral
+     signal tip sparks in. Opt-in via `animated` prop, gated
+     here on prefers-reduced-motion. */
+  @keyframes vie-mark-plane-in {
+    from {
+      opacity: 0;
+      transform: translateX(-14%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes vie-mark-tip-spark {
+    from {
+      opacity: 0;
+      transform: translateX(35%) scale(0.35);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
+  }
+
+  .vie-mark--animated .vie-mark__top,
+  .vie-mark--animated .vie-mark__bottom,
+  .vie-mark--animated .vie-mark__tip {
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .vie-mark--animated .vie-mark__top {
+    animation: vie-mark-plane-in 640ms
+      var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)) backwards;
+  }
+  .vie-mark--animated .vie-mark__bottom {
+    animation: vie-mark-plane-in 640ms
+      var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)) 90ms backwards;
+  }
+  .vie-mark--animated .vie-mark__tip {
+    animation: vie-mark-tip-spark 520ms
+      var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)) 280ms backwards;
+  }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -221,5 +266,14 @@
   .animate-\[emoji-breathe_3s_ease-in-out_infinite\],
   [style*="emoji-breathe"] {
     animation: none !important;
+  }
+
+  /* VIE mark: snap straight to the resting state */
+  .vie-mark--animated .vie-mark__top,
+  .vie-mark--animated .vie-mark__bottom,
+  .vie-mark--animated .vie-mark__tip {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
   }
 }

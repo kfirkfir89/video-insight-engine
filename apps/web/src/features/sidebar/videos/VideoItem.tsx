@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, memo } from "react";
+import { useState, useCallback, useMemo, useRef, memo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
@@ -31,7 +31,6 @@ interface VideoItemProps {
 }
 
 export const VideoItem = memo(function VideoItem({ video, level, folders = [] }: VideoItemProps) {
-  const location = useLocation();
   const moveVideo = useMoveVideo();
   const deleteVideo = useDeleteVideo();
   const retryVideo = useRetryVideo();
@@ -41,8 +40,10 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
   const isTruncated = useIsTruncated(titleRef);
   const [tooltipOpen, setTooltipOpen] = useState(false);
 
-  // Check if this video is currently being viewed (active)
-  const isActiveVideo = location.pathname === `/video/${video.id}`;
+  // Router-aware active check — component is memoized, so only items whose
+  // pathname match flips actually re-render.
+  const { pathname } = useLocation();
+  const isActiveVideo = pathname === `/video/${video.id}`;
 
   // Selection mode state
   const selectionMode = useSelectionMode();
@@ -76,14 +77,22 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
     disabled: selectionMode && !isSelected,
   });
 
-  const style = transform
-    ? {
-      transform: CSS.Translate.toString(transform),
-    }
-    : undefined;
+  const transformString = transform ? CSS.Translate.toString(transform) : undefined;
 
   // Use consistent padding with FolderItem (level already includes +1 from parent)
   const paddingLeft = SIDEBAR_LAYOUT.BASE_PADDING + level * SIDEBAR_LAYOUT.INDENT_PER_LEVEL;
+
+
+  // Memoized so the object identity is stable across re-renders triggered by
+  // unrelated state (hover, tooltip), preserving memo() benefits.
+  const rowStyle = useMemo<React.CSSProperties>(
+    () => ({
+      transform: transformString,
+      paddingInlineStart: `${paddingLeft}px`,
+      paddingInlineEnd: "8px",
+    }),
+    [transformString, paddingLeft],
+  );
 
   const handleMoveToFolder = (folderId: string | null) => {
     moveVideo.mutate({ id: video.id, folderId });
@@ -131,15 +140,16 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
           <div
             ref={setNodeRef}
             data-sidebar-item="video"
-            style={{ ...style, paddingLeft: `${paddingLeft}px`, paddingRight: "8px" }}
+            style={rowStyle}
             className={cn(
-              "group flex items-center rounded-md transition-all hover:bg-[var(--glass-bg)]",
-              // Keep row highlighted when dropdown menu is open
+              "group relative flex items-center rounded-md",
+              "transition-[background-color,box-shadow,transform] duration-150 ease-[var(--ease-out-expo)]",
+              "hover:bg-[var(--glass-bg)] hover:shadow-[var(--glass-shadow)] hover:-translate-y-px",
+              "motion-reduce:hover:translate-y-0 motion-reduce:transition-none",
               "has-[[data-state=open]]:bg-accent/50",
               textClasses.rowHeight,
               isDragging && "opacity-50 z-50",
               isSelected && "bg-primary/6",
-              // Highlight the currently viewed video — premium glow
               isActiveVideo && !isSelected && "bg-primary/10 font-medium ring-1 ring-primary/20 text-foreground"
             )}
             onPointerDown={longPress.onPointerDown}
@@ -162,13 +172,13 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
             )}
 
             {/* Video Icon */}
-            <Film className={cn(textClasses.iconSize, "shrink-0 text-primary/80 fill-warning/50 ml-1 transition-colors group-hover:text-primary")} />
+            <Film className={cn(textClasses.iconSize, "shrink-0 text-primary/80 fill-warning/50 ms-1 transition-colors group-hover:text-primary")} />
 
             {/* Video link */}
             <Link
               ref={titleRef}
               to={`/video/${video.id}`}
-              className={cn("ml-2 truncate flex-1 cursor-pointer", textClasses.mainText)}
+              className={cn("ms-2 truncate flex-1 cursor-pointer", textClasses.mainText)}
               onClick={(e) => {
                 if (isDragging || selectionMode) {
                   e.preventDefault();
@@ -217,6 +227,22 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
                 isRetrying={retryVideo.isPending}
               />
             </div>
+
+            {/* Processing shimmer bar */}
+            {video.status === "processing" && (
+              <span
+                aria-hidden="true"
+                className="absolute inset-x-0 bottom-0 h-[2px] rounded-full overflow-hidden"
+              >
+                <span className="block h-full w-full animate-[shimmer-travel_1.5s_infinite] bg-[length:200%_100%] bg-[linear-gradient(90deg,transparent_0%,var(--primary)_50%,transparent_100%)]" />
+              </span>
+            )}
+            {video.status === "failed" && (
+              <span
+                aria-hidden="true"
+                className="absolute inset-x-0 bottom-0 h-[2px] rounded-full bg-destructive/60"
+              />
+            )}
           </div>
         </TooltipTrigger>
         <TooltipContent
