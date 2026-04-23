@@ -135,7 +135,7 @@ Video: "React Server Components Explained" (25 min, tech tutorial)
   "confidence": 0.93,
   "tabs": [
     {{"id": "overview", "label": "📋 Overview", "emoji": "📋", "component": "overview", "dataSource": "meta", "goal": "What RSC changes and why it matters for your Next.js app."}},
-    {{"id": "build_steps", "label": "🔨 6 Build Steps", "emoji": "🔨", "component": "step_player", "dataSource": "project.steps", "goal": "Let's build it together — each step adds one RSC pattern to your app."}},
+    {{"id": "build_steps", "label": "🔨 6 Build Steps", "emoji": "🔨", "component": "step_player", "dataSource": "tech.snippets", "goal": "Let's build it together — each snippet adds one RSC pattern to your app."}},
     {{"id": "code", "label": "💻 8 Code Snippets", "emoji": "💻", "component": "code_explorer", "dataSource": "tech.snippets", "goal": "Grab these and paste into your editor. Each builds on the last."}},
     {{"id": "concepts", "label": "🧠 Key Concepts", "emoji": "🧠", "component": "flash_deck", "dataSource": "learning.concepts", "goal": "Flip through RSC concepts until they stick."}}
   ]

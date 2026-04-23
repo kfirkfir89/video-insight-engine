@@ -296,6 +296,71 @@ class TestDecideExtractionRetry:
         assert "tips" in decision.reason
         assert decision.hard_miss_fields == ["tips"]
 
+    def test_skips_hard_miss_for_field_not_in_active_schemas(self):
+        """Regression for the dropped-tab bug on tech tutorials.
+
+        For a `tech + learning` video, neither schema defines `steps[]` or
+        `tips[]`. The plan stage may still predict counts for these fields,
+        but a retry can't possibly populate them — it would just waste 3+
+        minutes. The `content_tags` argument lets the decision filter out
+        such impossible fields.
+        """
+        quality = ExtractionQuality(
+            score=0.8, populated=4, total=5, empty_fields=[],
+        )
+        count_warnings = {
+            "steps": {"manifest": 8, "extracted": 0, "ratio": 0.0},
+            "tips": {"manifest": 6, "extracted": 0, "ratio": 0.0},
+        }
+        decision = decide_extraction_retry(
+            quality, count_warnings, content_tags=["tech", "learning"],
+        )
+        assert decision.should_retry is False
+        assert decision.hard_miss_fields == []
+
+    def test_keeps_hard_miss_when_field_is_in_active_schema(self):
+        """If at least one active contentTag schema owns the field, retry."""
+        quality = ExtractionQuality(score=0.8, populated=5, total=6, empty_fields=["food.tips"])
+        count_warnings = {"tips": {"manifest": 6, "extracted": 0, "ratio": 0.0}}
+        decision = decide_extraction_retry(
+            quality, count_warnings, content_tags=["food"],
+        )
+        assert decision.should_retry is True
+        assert decision.hard_miss_fields == ["tips"]
+
+    def test_partial_schema_match_keeps_only_relevant_field(self):
+        """A mixed set: keep fields owned by active domains, drop the rest."""
+        quality = ExtractionQuality(score=0.8, populated=4, total=5, empty_fields=[])
+        count_warnings = {
+            "steps": {"manifest": 8, "extracted": 0, "ratio": 0.0},  # food/project — kept (food active)
+            "spots": {"manifest": 5, "extracted": 0, "ratio": 0.0},  # travel only — dropped
+        }
+        decision = decide_extraction_retry(
+            quality, count_warnings, content_tags=["food", "learning"],
+        )
+        assert decision.should_retry is True
+        assert decision.hard_miss_fields == ["steps"]
+
+    def test_unknown_field_in_count_warnings_is_kept(self):
+        """A field not in the schema map (no domain mapping) should be kept —
+        we don't have evidence it's unfulfillable."""
+        quality = ExtractionQuality(score=0.8, populated=4, total=5, empty_fields=[])
+        count_warnings = {"unknown_field": {"manifest": 3, "extracted": 0, "ratio": 0.0}}
+        decision = decide_extraction_retry(
+            quality, count_warnings, content_tags=["tech"],
+        )
+        assert decision.should_retry is True
+        assert decision.hard_miss_fields == ["unknown_field"]
+
+    def test_omitting_content_tags_preserves_legacy_behavior(self):
+        """When the caller passes no content_tags, the schema gating is
+        skipped entirely so we don't break callers that haven't migrated."""
+        quality = ExtractionQuality(score=0.8, populated=5, total=6, empty_fields=[])
+        count_warnings = {"steps": {"manifest": 8, "extracted": 0, "ratio": 0.0}}
+        decision = decide_extraction_retry(quality, count_warnings)  # no content_tags
+        assert decision.should_retry is True
+        assert decision.hard_miss_fields == ["steps"]
+
 
 class TestMergeRetryFields:
     def test_passes_through_empty_fields_unchanged(self):

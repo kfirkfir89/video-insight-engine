@@ -170,7 +170,11 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
         plan_tabs = ctx.plan_result.tabs
         quality = check_extraction_quality(plan_tabs, ctx.extraction_data)
         count_warnings = validate_extraction_counts(ctx.plan_result, ctx.extraction_data)
-        retry_decision = decide_extraction_retry(quality, count_warnings)
+        retry_decision = decide_extraction_retry(
+            quality,
+            count_warnings,
+            content_tags=ctx.plan_result.content_tags,
+        )
 
         logger.info(
             "pipeline.extraction_quality",

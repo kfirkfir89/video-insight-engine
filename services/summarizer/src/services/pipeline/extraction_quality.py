@@ -103,6 +103,7 @@ def decide_extraction_retry(
     quality: ExtractionQuality,
     count_warnings: dict[str, dict[str, Any]],
     score_threshold: float = RETRY_SCORE_THRESHOLD,
+    content_tags: list[str] | None = None,
 ) -> RetryDecision:
     """Combine overall quality score with per-field count validation.
 
@@ -114,12 +115,36 @@ def decide_extraction_retry(
        regardless of the overall score, since a high score on other
        fields should not mask a completely missed section (e.g., plan
        said ``tips: 6`` and extraction returned ``[]``).
+
+    When ``content_tags`` is provided, hard-miss fields whose domains are
+    not in any active contentTag schema are skipped — the manifest may
+    predict ``steps: 6`` for a tech tutorial, but neither the ``tech`` nor
+    ``learning`` schemas define a ``steps[]`` array, so retrying is wasteful.
     """
     hard_miss_fields = [
         field_name
         for field_name, warning in count_warnings.items()
         if warning.get("extracted", 0) == 0 and warning.get("manifest", 0) > 0
     ]
+
+    if content_tags is not None:
+        # Local import avoids a circular dep — extraction_quality is imported
+        # by extractor.py which is imported transitively by post_processor.
+        from src.services.pipeline.post_processor import FIELD_TO_DOMAINS
+
+        active = set(content_tags)
+        retained = [
+            f for f in hard_miss_fields
+            if not FIELD_TO_DOMAINS.get(f) or FIELD_TO_DOMAINS[f] & active
+        ]
+        if len(retained) != len(hard_miss_fields):
+            skipped = [f for f in hard_miss_fields if f not in retained]
+            logger.info(
+                "Skipping hard-miss retry for fields not in active schemas: %s "
+                "(active contentTags: %s)",
+                skipped, sorted(active),
+            )
+        hard_miss_fields = retained
 
     low_score = quality.score < score_threshold and quality.total > 0
 

@@ -4,6 +4,7 @@ Tests streaming endpoint, SSE event format, error handling, and cancellation.
 Uses httpx TestClient for async route testing.
 """
 
+import asyncio
 import json
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
@@ -27,6 +28,80 @@ def _reset_response_cache():
     response_cache._client = None
     yield
     response_cache._client = None
+
+
+@pytest.fixture(autouse=True)
+def _stub_pipeline_broker(monkeypatch):
+    """Stub the Redis broker so stream-route tests don't need a real Redis.
+
+    The broker class itself is exercised by the in-memory-FakeRedis tests in
+    ``test_pipeline_event_stream.py``; here we model only the surface the
+    route handler exercises. Each video has a history list and a "done"
+    flag — every subscriber tracks its own cursor through the history,
+    which matches Redis Streams' fan-out semantics (each consumer reads
+    independently from id="0"). A simple ``asyncio.Queue`` would NOT work
+    here because it pops a message for a single waiter.
+    """
+    from src.services.cache import pipeline_event_stream as broker_mod
+
+    history: dict[str, list[str]] = {}
+    locks: dict[str, str] = {}
+    done_marks: set[str] = set()
+
+    async def fake_acquire(video_summary_id: str, owner: str) -> bool:
+        if video_summary_id in locks:
+            return False
+        locks[video_summary_id] = owner
+        history.setdefault(video_summary_id, [])
+        return True
+
+    async def fake_release(video_summary_id: str, owner: str) -> None:
+        if locks.get(video_summary_id) == owner:
+            locks.pop(video_summary_id, None)
+
+    async def fake_refresh(video_summary_id: str, owner: str) -> bool:
+        return locks.get(video_summary_id) == owner
+
+    async def fake_lock_held(video_summary_id: str) -> bool:
+        return video_summary_id in locks
+
+    async def fake_publish(video_summary_id: str, event: str) -> None:
+        history.setdefault(video_summary_id, []).append(event)
+
+    async def fake_mark_done(video_summary_id: str) -> None:
+        done_marks.add(video_summary_id)
+
+    async def fake_subscribe(video_summary_id: str, block_ms: int = 30_000):
+        # Each subscriber owns its cursor through the shared history — that's
+        # what gives us fan-out to multiple consumers.
+        cursor = 0
+        # Cap polling to keep tests fast even when nothing publishes.
+        deadline = asyncio.get_event_loop().time() + max(block_ms / 1000, 10)
+        while True:
+            buf = history.get(video_summary_id, [])
+            while cursor < len(buf):
+                yield buf[cursor]
+                cursor += 1
+            if video_summary_id in done_marks:
+                return
+            if not await fake_lock_held(video_summary_id) and cursor >= len(buf):
+                return
+            if asyncio.get_event_loop().time() > deadline:
+                return
+            await asyncio.sleep(0.01)
+
+    broker = broker_mod.pipeline_event_stream
+    monkeypatch.setattr(broker, "acquire_lock", fake_acquire)
+    monkeypatch.setattr(broker, "release_lock", fake_release)
+    monkeypatch.setattr(broker, "refresh_lock", fake_refresh)
+    monkeypatch.setattr(broker, "lock_held", fake_lock_held)
+    monkeypatch.setattr(broker, "publish", fake_publish)
+    monkeypatch.setattr(broker, "mark_done", fake_mark_done)
+    monkeypatch.setattr(broker, "subscribe", fake_subscribe)
+    yield
+    history.clear()
+    locks.clear()
+    done_marks.clear()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -511,6 +586,46 @@ class TestStreamErrorHandling:
         error_event = next((e for e in events if e.get("event") == "error"), None)
         assert error_event is not None
         assert error_event["code"] == ErrorCode.NO_TRANSCRIPT.value
+
+    @patch("src.services.video.youtube.extract_video_data")
+    async def test_concurrent_requests_run_pipeline_only_once(
+        self,
+        mock_extract,
+        client,
+        mock_repository,
+        sample_video_entry,
+        valid_object_id,
+    ):
+        """Two simultaneous SSE requests for the same video must produce one
+        pipeline run — the dropped-tab/duplicate-run regression we shipped
+        the broker to fix.
+
+        The first connection wins the lock and runs the pipeline (which
+        calls ``extract_video_data`` once). The second connection finds the
+        lock already held and just consumes the shared event stream — no
+        second invocation of the pipeline entrypoint.
+        """
+        mock_repository.get_video_summary.return_value = sample_video_entry
+        mock_extract.side_effect = TranscriptError("No transcript", ErrorCode.NO_TRANSCRIPT)
+
+        url = f"/summarize/stream/{valid_object_id}"
+        first, second = await asyncio.gather(client.get(url), client.get(url))
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+
+        # Both connections receive the same error event from the shared stream.
+        for response in (first, second):
+            events = parse_sse_events(response.text)
+            error = next((e for e in events if e.get("event") == "error"), None)
+            assert error is not None, f"missing error event in {events}"
+            assert error["code"] == ErrorCode.NO_TRANSCRIPT.value
+
+        # The pipeline ran exactly once even though the route was hit twice.
+        assert mock_extract.call_count == 1, (
+            f"expected one pipeline run, got {mock_extract.call_count} — "
+            "the broker is not deduplicating concurrent requests"
+        )
 
     @patch("src.services.video.youtube.extract_video_data")
     async def test_handles_video_too_long_error(

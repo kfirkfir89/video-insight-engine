@@ -136,6 +136,25 @@ _COUNT_EXTRACTORS: dict[str, list[str]] = {
     "products": ["review.comparisons"],
 }
 
+
+def _derive_field_to_domains(extractors: dict[str, list[str]]) -> dict[str, frozenset[str]]:
+    """Derive {field → {domain, …}} from the path map.
+
+    The first segment of each dot-path is the domain that owns the field.
+    Used to skip retry attempts for fields that no active contentTag schema defines.
+    """
+    return {
+        field: frozenset(path.split(".", 1)[0] for path in paths)
+        for field, paths in extractors.items()
+    }
+
+
+# Maps each manifest itemCount field to the set of domains whose schemas
+# actually define it. A `tech + learning` video should not retry for
+# "steps" or "tips" — those fields exist only in food/project/fitness/travel.
+FIELD_TO_DOMAINS: dict[str, frozenset[str]] = _derive_field_to_domains(_COUNT_EXTRACTORS)
+
+
 COMPLETENESS_THRESHOLD = 0.6
 
 

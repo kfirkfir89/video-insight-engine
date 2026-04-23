@@ -13,6 +13,7 @@ Phases:
 
 import asyncio
 import logging
+import os
 import time
 import uuid
 from typing import Annotated, Any, AsyncGenerator
@@ -35,6 +36,7 @@ from src.services.llm import LLMService
 from src.exceptions import TranscriptError
 from src.services.media.s3_client import s3_client
 from src.services.cache.response_cache import response_cache
+from src.services.cache.pipeline_event_stream import pipeline_event_stream
 from src.services.override_state import clear_override
 from src.services.pipeline.context import PipelineContext
 from src.services.pipeline.pipeline_helpers import sse_event, PipelineTimer, run_parallel_phases
@@ -55,43 +57,6 @@ from src.services.pipeline.phases import (
 
 logger = logging.getLogger(__name__)
 
-# In-memory lock to prevent duplicate pipeline runs for the same video.
-# IMPORTANT: Only safe for single-process asyncio deployments.  All dict
-# mutations happen on the main event-loop thread, so no external lock is
-# needed.  Multi-process/multi-worker deployments require Redis-based locking.
-# TODO: Migrate to Redis-based locking when scaling to multiple workers.
-_processing_locks: dict[str, tuple[asyncio.Event, float]] = {}
-_LOCK_TTL_SECONDS = 360  # 60s buffer beyond wait_for timeout to prevent cleanup/wait race
-_LOCK_MAX_SIZE = 500  # Hard cap to prevent unbounded growth between cleanups
-_last_lock_cleanup: float = 0.0
-
-
-def _cleanup_stale_locks() -> None:
-    """Remove locks older than TTL to prevent memory leaks from abandoned connections.
-
-    Throttled to run at most once per 60 seconds to avoid O(n) scan per request.
-    Also enforces a hard cap on dict size for burst protection.
-
-    Re-validates staleness at pop time to avoid removing a freshly-inserted
-    lock that replaced the stale one between scan and pop (TOCTOU).
-    """
-    global _last_lock_cleanup
-    now = time.monotonic()
-    if now - _last_lock_cleanup < 60 and len(_processing_locks) <= _LOCK_MAX_SIZE:
-        return
-    _last_lock_cleanup = now
-    if len(_processing_locks) > _LOCK_MAX_SIZE:
-        logger.warning("Processing lock dict exceeded max size (%d > %d), forcing cleanup", len(_processing_locks), _LOCK_MAX_SIZE)
-    stale_keys = [k for k, (_, created) in _processing_locks.items() if now - created > _LOCK_TTL_SECONDS]
-    for k in stale_keys:
-        entry = _processing_locks.get(k)
-        # Re-check: only pop if the entry is still the same stale one
-        if entry and now - entry[1] > _LOCK_TTL_SECONDS:
-            popped = _processing_locks.pop(k, None)
-            # Only signal the event if we popped the exact same stale entry
-            # (prevents signaling a freshly-inserted lock from a new pipeline run)
-            if popped is entry:
-                entry[0].set()  # Unblock any waiters
 
 router = APIRouter()
 
@@ -106,8 +71,15 @@ async def stream_summarization(
     entry: dict[str, Any],
     repository: MongoDBVideoRepository,
     llm_service: LLMService,
+    force_refresh: bool = False,
 ) -> AsyncGenerator[str, None]:
-    """Triage-driven pipeline: Triage -> Extract -> Enrich -> Synthesize (4-7 LLM calls)."""
+    """Triage-driven pipeline: Triage -> Extract -> Enrich -> Synthesize (4-7 LLM calls).
+
+    ``force_refresh=True`` skips the response_cache fast path so a fresh run
+    always executes — used by the dev-tools override flow that wants to
+    test alternate provider configs against a video that was previously
+    cached under the default provider.
+    """
     timer = PipelineTimer()
 
     try:
@@ -117,7 +89,7 @@ async def stream_summarization(
             return
 
         # Check Redis cache first (same YouTube video = instant serve)
-        if settings.REDIS_ENABLED:
+        if settings.REDIS_ENABLED and not force_refresh:
             try:
                 cached = await response_cache.get_response(youtube_id)
                 cached_meta = cached.get("meta", {}) if isinstance(cached, dict) else {}
@@ -268,6 +240,153 @@ async def stream_summarization(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+_SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+}
+
+
+# Strong references for fire-and-forget producer tasks. The asyncio event loop
+# only keeps WEAK refs to tasks created via create_task, so a local variable
+# in the route handler is not enough — once the handler returns, the task can
+# be garbage-collected mid-run. Holding it in a module-level set fixes that.
+_PRODUCER_TASKS: set[asyncio.Task[None]] = set()
+
+
+async def _heartbeat_lock(video_summary_id: str, owner: str, stop: asyncio.Event) -> None:
+    """Periodically extend the producer lock so long pipelines don't lose it.
+
+    The lock TTL is sized for crash recovery (10 min default); without a
+    heartbeat, a >10-min pipeline (chunked extraction on a long video, plus
+    translation) would lose the lock and a parallel producer could spin up.
+    Heartbeat interval is one-third of the TTL — gives two retries before
+    expiry if Redis is briefly unreachable.
+    """
+    interval = max(30, settings.PIPELINE_LOCK_TTL_SECONDS // 3)
+    while not stop.is_set():
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval)
+            return  # stop_event set — pipeline finished
+        except asyncio.TimeoutError:
+            pass
+        extended = await pipeline_event_stream.refresh_lock(video_summary_id, owner)
+        if not extended:
+            logger.warning(
+                "Lock refresh for %s reported not-owned; another worker may "
+                "have re-claimed it. Continuing to publish but dedup is at risk.",
+                video_summary_id,
+            )
+
+
+async def _produce_to_broker(
+    video_summary_id: str,
+    entry: dict[str, Any],
+    repository: MongoDBVideoRepository,
+    llm_service: LLMService,
+    owner: str,
+) -> None:
+    """Run the pipeline and republish each SSE chunk through the broker.
+
+    Lifetime is detached from any single SSE connection — clients can
+    abort and reconnect without killing the pipeline. The finally block
+    always sends DONE and releases the lock so consumers exit cleanly
+    even on producer failure.
+
+    ``stream_summarization`` already catches every pipeline-level error and
+    yields a structured error event, so the only exception classes that
+    can escape into this function are infrastructure failures (Mongo /
+    Redis) and ``CancelledError`` (BaseException, not caught here).
+    """
+    stop_heartbeat = asyncio.Event()
+    heartbeat = asyncio.create_task(
+        _heartbeat_lock(video_summary_id, owner, stop_heartbeat),
+        name=f"pipeline-lock-heartbeat:{video_summary_id}",
+    )
+    try:
+        # Re-fetch entry for fresh state (the handler's snapshot may be stale).
+        try:
+            fresh = await asyncio.to_thread(repository.get_video_summary, video_summary_id)
+        except OSError as e:
+            logger.exception(
+                "MongoDB fetch failed for %s during producer startup: %s",
+                video_summary_id, e,
+            )
+            fresh = None
+        current_entry = fresh if fresh is not None else entry
+
+        async for chunk in stream_summarization(
+            video_summary_id, current_entry, repository, llm_service,
+        ):
+            try:
+                await pipeline_event_stream.publish(video_summary_id, chunk)
+            except (OSError, redis_exceptions.RedisError) as e:
+                logger.warning(
+                    "Broker publish failed for %s (event dropped): %s",
+                    video_summary_id, e,
+                )
+    except (OSError, redis_exceptions.RedisError) as e:
+        logger.exception(
+            "Pipeline producer infra failure for %s: %s", video_summary_id, e,
+        )
+        try:
+            err_chunk = sse_event("error", {
+                "message": "An unexpected error occurred during processing.",
+                "code": ErrorCode.UNKNOWN_ERROR.value,
+            })
+            await pipeline_event_stream.publish(video_summary_id, err_chunk)
+        except (OSError, redis_exceptions.RedisError):
+            pass
+    finally:
+        stop_heartbeat.set()
+        try:
+            await heartbeat
+        except asyncio.CancelledError:
+            pass
+        try:
+            await pipeline_event_stream.mark_done(video_summary_id)
+        finally:
+            await pipeline_event_stream.release_lock(video_summary_id, owner)
+
+
+async def _consume_from_broker(video_summary_id: str) -> AsyncGenerator[str, None]:
+    """Subscribe to the per-video stream and yield SSE chunks until DONE."""
+    async for event in pipeline_event_stream.subscribe(video_summary_id):
+        yield event
+    yield "data: [DONE]\n\n"
+
+
+async def _direct_stream_fallback(
+    video_summary_id: str,
+    entry: dict[str, Any],
+    repository: MongoDBVideoRepository,
+    llm_service: LLMService,
+) -> AsyncGenerator[str, None]:
+    """Run the pipeline straight to this connection — no broker, no dedup.
+
+    Reserved for the dev-tools "regenerate with custom provider" path: the
+    operator wants to re-run the pipeline against the live LLM provider
+    override and overwrite whatever's currently stored. Bypassing the broker
+    avoids dedup against a previous (default-provider) run, and bypassing
+    the response_cache (``force_refresh=True``) avoids serving the stale
+    cached output that was generated under the default provider.
+    """
+    logger.info(
+        "Dev-tools direct stream for %s — broker bypassed, response_cache bypassed",
+        video_summary_id,
+    )
+    async for chunk in stream_summarization(
+        video_summary_id, entry, repository, llm_service, force_refresh=True,
+    ):
+        yield chunk
+    yield "data: [DONE]\n\n"
+
+
+def _is_dev_override(entry: dict[str, Any]) -> bool:
+    """A non-empty providerConfig is the dev-tools "regenerate with override" signal."""
+    return bool(entry.get("providerConfig"))
+
+
 @router.get("/summarize/stream/{video_summary_id}")
 async def stream_summary(
     video_summary_id: str,
@@ -284,6 +403,17 @@ async def stream_summary(
     4. EXTRACTION: Adaptive structured extraction (1-3 calls)
     5. ENRICHMENT: Quiz/flashcards/cheat sheet (conditional)
     6. SYNTHESIS: TLDR, takeaways, master summary
+
+    Concurrency model: a Redis lock makes the first connection the
+    pipeline producer; every subsequent connection (StrictMode reconnect,
+    additional tab, processing-manager hook) attaches as a consumer of
+    the shared event stream. There is at most one pipeline run per
+    ``video_summary_id`` no matter how many SSE clients are open.
+
+    Dev-tools override: when the entry carries a ``providerConfig`` (set by
+    the admin UI's "Generate with custom provider" flow), the broker and
+    response cache are both bypassed so the new run completely overwrites
+    whatever the default-provider run produced.
     """
     # Validate ObjectId format
     try:
@@ -295,9 +425,10 @@ async def stream_summary(
     if not entry:
         raise HTTPException(status_code=404, detail="Video summary not found")
 
-    # Check for provider config override (dev tools)
-    provider_config = entry.get("providerConfig")
-    if provider_config:
+    # Apply provider config override (dev tools) by swapping in a custom LLM service.
+    is_dev_override = _is_dev_override(entry)
+    if is_dev_override:
+        provider_config = entry["providerConfig"]
         logger.info("Using custom provider config: %s", provider_config)
         providers = ProviderConfig(
             default=provider_config.get("default", "anthropic"),
@@ -307,70 +438,69 @@ async def stream_summary(
         custom_provider = create_llm_provider(providers)
         llm_service = LLMService(custom_provider)
 
-    # Return cached result if already completed
-    if entry.get("status") == ProcessingStatus.COMPLETED.value:
+    # Return cached result if already completed — but only for normal users.
+    # Dev-tools override deliberately re-runs to validate the new provider.
+    if not is_dev_override and entry.get("status") == ProcessingStatus.COMPLETED.value:
         return StreamingResponse(
             _stream_cached_structured(video_summary_id, entry),
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+            headers=_SSE_HEADERS,
         )
 
-    # Prevent duplicate pipeline runs: if another connection is already processing
-    # this video, wait for it to finish and serve the cached result.
-    _cleanup_stale_locks()  # Periodic cleanup to prevent memory leaks from abandoned connections
+    # Dev-tools override path: skip broker + response_cache so the fresh run
+    # with the custom provider completely overwrites the existing record.
+    if is_dev_override:
+        return StreamingResponse(
+            _direct_stream_fallback(video_summary_id, entry, repository, llm_service),
+            media_type="text/event-stream",
+            headers=_SSE_HEADERS,
+        )
 
-    # Atomic check-and-register: setdefault returns existing lock if present,
-    # otherwise inserts new_lock. This avoids TOCTOU race between check and set.
-    new_lock = (asyncio.Event(), time.monotonic())
-    existing_lock = _processing_locks.setdefault(video_summary_id, new_lock)
+    # Normal flow: claim producer ownership via the broker. Whoever wins runs
+    # the pipeline once; everyone else (including this same client on a
+    # StrictMode reconnect) just consumes the shared event stream.
+    owner = f"{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    try:
+        lock_acquired = await pipeline_event_stream.acquire_lock(video_summary_id, owner)
+    except (OSError, redis_exceptions.RedisError) as e:
+        # Redis unreachable in normal flow is a real outage, not a dev path.
+        # Surface 503 so the client knows to retry instead of silently producing
+        # duplicate runs (which the broker exists to prevent).
+        logger.error(
+            "Redis lock acquisition failed for %s: %s", video_summary_id, e,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Streaming service temporarily unavailable. Please retry.",
+        )
 
-    if existing_lock is not new_lock:
-        # Another request is already processing this video — wait for it
-        logger.info("Duplicate stream request for %s — waiting for existing pipeline", video_summary_id)
-        try:
-            await asyncio.wait_for(existing_lock[0].wait(), timeout=300)
-        except asyncio.TimeoutError:
-            raise HTTPException(status_code=504, detail="Pipeline timed out waiting for existing run")
-        entry = await asyncio.to_thread(repository.get_video_summary, video_summary_id)
-        if entry and entry.get("status") == ProcessingStatus.COMPLETED.value:
-            # Clean up any stale lock before returning — prevents memory leak
-            _processing_locks.pop(video_summary_id, None)
-            return StreamingResponse(
-                _stream_cached_structured(video_summary_id, entry),
-                media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    if lock_acquired:
+        producer_task = asyncio.create_task(
+            _produce_to_broker(video_summary_id, entry, repository, llm_service, owner),
+            name=f"pipeline-producer:{video_summary_id}",
+        )
+        # Hold a strong reference until the task finishes — the event loop only
+        # keeps weak refs, so without this the GC could cancel a fire-and-forget
+        # producer mid-run.
+        _PRODUCER_TASKS.add(producer_task)
+        producer_task.add_done_callback(_PRODUCER_TASKS.discard)
+        producer_task.add_done_callback(
+            lambda t, vid=video_summary_id: (
+                logger.error("Producer task for %s ended with exception: %s",
+                             vid, t.exception(), exc_info=t.exception())
+                if not t.cancelled() and t.exception() is not None else None
             )
-        if entry and entry.get("status") == ProcessingStatus.FAILED.value:
-            _processing_locks.pop(video_summary_id, None)
-            raise HTTPException(status_code=502, detail="Previous pipeline run failed. Please retry.")
-        # Status is stuck PROCESSING — try to atomically claim ownership.
-        # Use setdefault so only one concurrent waiter-fallthrough wins the race.
-        new_lock = (asyncio.Event(), time.monotonic())
-        actual = _processing_locks.setdefault(video_summary_id, new_lock)
-        if actual is not new_lock:
-            # Another waiter already claimed it — reject this request
-            raise HTTPException(status_code=409, detail="Pipeline already running. Please retry.")
-
-    # Capture entry as fallback — but re-fetch inside the stream for freshness
-    fallback_entry: dict[str, Any] = entry  # type: ignore[assignment]  # guaranteed non-None at this point
-
-    async def _locked_stream() -> AsyncGenerator[str, None]:
-        try:
-            # Re-fetch entry for fresh state (outer entry may be stale
-            # after waiting for a lock or when the lock-wait path falls through).
-            fresh = await asyncio.to_thread(repository.get_video_summary, video_summary_id)
-            current_entry: dict[str, Any] = fresh if fresh is not None else fallback_entry
-            async for chunk in stream_summarization(video_summary_id, current_entry, repository, llm_service):
-                yield chunk
-        finally:
-            lock = _processing_locks.pop(video_summary_id, None)
-            if lock:
-                lock[0].set()
+        )
+    else:
+        logger.info(
+            "Attaching as additional consumer for %s — pipeline already in progress",
+            video_summary_id,
+        )
 
     return StreamingResponse(
-        _locked_stream(),
+        _consume_from_broker(video_summary_id),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        headers=_SSE_HEADERS,
     )
 
 

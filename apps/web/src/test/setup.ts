@@ -103,8 +103,15 @@ Object.defineProperty(window, "scrollTo", {
 });
 
 // Reset localStorage mock and matchMedia override before each test
-afterEach(() => {
+afterEach(async () => {
   localStorageMock.clear();
   matchMediaState.prefersReducedMotion = true;
   vi.clearAllMocks();
+  // Clear the SSE stream registry between tests so a stream from one test
+  // (which would otherwise persist as a module-level singleton) doesn't
+  // bleed into the next.
+  const { abortAllStreams } = await import(
+    "../features/video-output/lib/streaming/stream-registry"
+  );
+  abortAllStreams();
 });
