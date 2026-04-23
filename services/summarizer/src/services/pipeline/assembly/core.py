@@ -359,6 +359,90 @@ def _cross_domain_fallback(
 
 
 # ─────────────────────────────────────────────────────
+# Overview Ordering Guarantee
+# ─────────────────────────────────────────────────────
+
+
+def _ensure_overview_first(
+    tabs: list[dict],
+    synthesis: dict | None,
+    video_meta: dict | None,
+    extraction: dict | None,
+    enrichment: dict | None,
+    primary_tag: str,
+) -> None:
+    """Guarantee an overview tab exists and sits at index 0.
+
+    Finds any tab flagged as overview (id or component) and moves it to the
+    front; if none exists, synthesizes one from synthesis/video_meta/extraction
+    via the overview assembler and prepends it. Mutates `tabs` in place.
+    """
+    from .assemblers import assemble_overview
+
+    overview_idx = next(
+        (i for i, t in enumerate(tabs)
+         if t.get("id") == "overview" or t.get("component") == "overview"),
+        -1,
+    )
+
+    if overview_idx >= 0:
+        if overview_idx != 0:
+            tabs.insert(0, tabs.pop(overview_idx))
+        # Normalize so the frontend always routes to OverviewInteractive.
+        tabs[0]["component"] = "overview"
+        return
+
+    tab_stub = {
+        "id": "overview",
+        "label": "Overview",
+        "emoji": "📋",
+        "_primary_tag": primary_tag,
+        "_synthesis": synthesis,
+        "_video_meta": video_meta,
+    }
+    props = assemble_overview(tab_stub, None, extraction or {}, enrichment)
+    if props is None:
+        return
+    tabs.insert(0, {
+        "id": "overview",
+        "label": "Overview",
+        "emoji": "📋",
+        "component": "overview",
+        "props": props,
+        "goal": "Quick summary of what this video covers",
+        "crossTabLinks": [],
+    })
+
+
+def _annotate_overview_item_count(tabs: list[dict]) -> None:
+    """Inject the content-tab count into the overview's data + stats pills.
+
+    Must run AFTER all tab additions (cross-tab link resolution, gallery
+    auto-append, fallback candidates) so `len(tabs) - 1` reflects what the
+    user will actually see. Surfaces as both `data.itemCount` and an "Items"
+    stat chip on the hero.
+    """
+    if not tabs or tabs[0].get("component") != "overview":
+        return
+    item_count = max(0, len(tabs) - 1)
+    if item_count == 0:
+        return
+    props = tabs[0].get("props")
+    if not isinstance(props, dict):
+        return
+    data = props.setdefault("data", {})
+    if not isinstance(data, dict):
+        return
+    data["itemCount"] = item_count
+
+    existing_stats = data.get("stats")
+    stats: list[Any] = existing_stats if isinstance(existing_stats, list) else []
+    if not any(isinstance(s, dict) and s.get("label") == "Items" for s in stats):
+        stats.append({"label": "Items", "value": str(item_count), "emoji": "📚"})
+        data["stats"] = stats
+
+
+# ─────────────────────────────────────────────────────
 # Fallback Tab Candidates
 # ─────────────────────────────────────────────────────
 
@@ -493,6 +577,12 @@ def assemble_response(
         data_source = raw_tab.get("dataSource", "")
         component = raw_tab.get("component") or infer_component(tab_id)
 
+        # Guarantee id="overview" tabs always render the OverviewInteractive —
+        # triage sometimes mis-tags them as display_section, which would skip
+        # the interactive renderer on the frontend.
+        if tab_id == "overview":
+            component = "overview"
+
         data = resolve_data_source(data_source, extraction, enrichment)
         data_resolved = data is not None
 
@@ -581,6 +671,12 @@ def assemble_response(
             "goal": raw_tab.get("goal", ""),
             "crossTabLinks": [],
         })
+
+    # Guarantee overview is present and first — must run before cross-tab link
+    # resolution so the overview participates in link rules (overview → X).
+    _ensure_overview_first(
+        assembled_tabs, synthesis, video_meta, extraction, enrichment, primary_tag,
+    )
 
     # Resolve cross-tab links
     all_assembled_tab_ids = {t["id"] for t in assembled_tabs}
@@ -675,6 +771,11 @@ def assemble_response(
                 "[assembly] Could not reach 3 tabs even with fallbacks (got %d)",
                 len(assembled_tabs),
             )
+
+    # Annotate the overview with the final tab count — must run after all
+    # additions (cross-tab links, gallery auto-append, fallback candidates)
+    # so the "Items" stat reflects what the user actually sees.
+    _annotate_overview_item_count(assembled_tabs)
 
     # Assembly summary
     planned_ids = [t.get("id", "?") for t in raw_tabs if isinstance(t, dict)]

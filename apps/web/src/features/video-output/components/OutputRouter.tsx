@@ -67,18 +67,28 @@ export function OutputRouter({
   // don't regress to hardcoded strings. getLabels() is pure, safe to call
   // here above DirectionProvider (it takes the language prop directly).
   const tabPreviews = useMemo(() => getLabels(language ?? 'en').tabPreviews, [language]);
+
+  // Defensive: backend guarantees overview at index 0, but reorder here too
+  // so the UX is correct even if a stale cache or older payload drifts.
+  const orderedTabs = useMemo(() => {
+    if (!tabs || tabs.length === 0) return tabs;
+    const idx = tabs.findIndex(t => t.id === 'overview' || t.component === 'overview');
+    if (idx <= 0) return tabs;
+    return [tabs[idx], ...tabs.slice(0, idx), ...tabs.slice(idx + 1)];
+  }, [tabs]);
+
   const tabDefs = useMemo(() => {
-    if (!tabs || tabs.length === 0) return [];
-    return tabs.map(t => ({
+    if (!orderedTabs || orderedTabs.length === 0) return [];
+    return orderedTabs.map(t => ({
       id: t.id,
       label: t.emoji ? stripLeadingEmoji(t.label) : t.label,
       emoji: t.emoji,
       dataSource: '',
       preview: tabPreviews[t.id],
     }));
-  }, [tabs, tabPreviews]);
+  }, [orderedTabs, tabPreviews]);
 
-  const hasData = tabs != null && tabs.length > 0;
+  const hasData = orderedTabs != null && orderedTabs.length > 0;
   const domainGradient = useMemo(() => getDomainGradient(primaryTag), [primaryTag]);
   const initialTab = tabDefs[0]?.id ?? '';
 
@@ -103,7 +113,7 @@ export function OutputRouter({
               />
               <TabPanel
                 tabDefs={tabDefs}
-                tabs={tabs}
+                tabs={orderedTabs}
                 primaryTag={primaryTag}
                 isStreaming={isStreaming}
                 tabCount={tabCount}
