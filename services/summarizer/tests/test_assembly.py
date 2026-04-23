@@ -404,13 +404,15 @@ class TestAssembleResponse:
         }
         result = assemble_response(triage, extraction, None, None)
 
-        assert len(result["tabs"]) == 3
-        assert result["tabs"][0]["component"] == "spot_explorer"
-        assert len(result["tabs"][0]["props"]["spots"]) == 2
-        assert result["tabs"][1]["component"] == "budget"
-        assert result["tabs"][1]["props"]["total"] == 2000
-        assert result["tabs"][1]["props"]["currency"] == "USD"
-        assert result["tabs"][2]["component"] == "checklist"
+        # Overview is auto-prepended when domain data has primitives (budget total/currency here).
+        assert len(result["tabs"]) == 4
+        assert result["tabs"][0]["component"] == "overview"
+        assert result["tabs"][1]["component"] == "spot_explorer"
+        assert len(result["tabs"][1]["props"]["spots"]) == 2
+        assert result["tabs"][2]["component"] == "budget"
+        assert result["tabs"][2]["props"]["total"] == 2000
+        assert result["tabs"][2]["props"]["currency"] == "USD"
+        assert result["tabs"][3]["component"] == "checklist"
 
     def test_cross_tab_links_resolved(self):
         triage = self._make_triage(tabs=[
@@ -1755,3 +1757,194 @@ class TestAssemblyValidation:
         result = assemble_response(triage, {}, enrichment, None)
         tab_ids = [t["id"] for t in result["tabs"]]
         assert "quizzes" not in tab_ids
+
+
+# ─── Overview-First Guarantee ───
+
+
+class TestOverviewFirst:
+    """Overview tab must always sit at index 0 and route to OverviewInteractive."""
+
+    def test_existing_overview_moved_to_front(self):
+        """Overview emitted at non-zero position gets moved to index 0."""
+        triage = {
+            "contentTags": ["learning"],
+            "primaryTag": "learning",
+            "tabs": [
+                {"id": "concepts", "label": "Concepts", "emoji": "📚",
+                 "dataSource": "learning.concepts", "component": "flash_deck"},
+                {"id": "overview", "label": "Overview", "emoji": "📋",
+                 "dataSource": "meta", "component": "overview"},
+            ],
+        }
+        extraction = {"learning": {"concepts": [{"name": "C", "definition": "D"}]}}
+        synthesis = {"masterSummary": "A great video", "keyTakeaways": ["t1"]}
+        result = assemble_response(triage, extraction, None, synthesis)
+
+        assert result["tabs"][0]["id"] == "overview"
+        assert result["tabs"][0]["component"] == "overview"
+
+    def test_overview_synthesized_when_missing(self):
+        """No overview in triage → one gets prepended from synthesis."""
+        triage = {
+            "contentTags": ["learning"],
+            "primaryTag": "learning",
+            "tabs": [
+                {"id": "concepts", "label": "Concepts", "emoji": "📚",
+                 "dataSource": "learning.concepts", "component": "flash_deck"},
+            ],
+        }
+        extraction = {"learning": {"concepts": [{"name": "C", "definition": "D"}]}}
+        synthesis = {"masterSummary": "A great video", "keyTakeaways": ["t1", "t2"]}
+        result = assemble_response(triage, extraction, None, synthesis)
+
+        assert result["tabs"][0]["id"] == "overview"
+        assert result["tabs"][0]["component"] == "overview"
+        assert result["tabs"][0]["props"]["data"]["masterSummary"] == "A great video"
+
+    def test_display_section_overview_gets_normalized(self):
+        """id=overview with mis-tagged component=display_section becomes overview."""
+        triage = {
+            "contentTags": ["learning"],
+            "primaryTag": "learning",
+            "tabs": [
+                {"id": "overview", "label": "Overview", "emoji": "📋",
+                 "dataSource": "learning", "component": "display_section"},
+                {"id": "concepts", "label": "Concepts", "emoji": "📚",
+                 "dataSource": "learning.concepts", "component": "flash_deck"},
+            ],
+        }
+        extraction = {
+            "learning": {
+                "summary": "x",
+                "concepts": [{"name": "C", "definition": "D"}],
+            },
+        }
+        synthesis = {"masterSummary": "A great video", "keyTakeaways": ["t1"]}
+        result = assemble_response(triage, extraction, None, synthesis)
+
+        assert result["tabs"][0]["id"] == "overview"
+        assert result["tabs"][0]["component"] == "overview"
+
+    def test_no_overview_when_no_data_available(self):
+        """With no synthesis and no primitive domain data, no overview is injected."""
+        triage = {
+            "contentTags": ["learning"],
+            "primaryTag": "learning",
+            "tabs": [
+                {"id": "concepts", "label": "Concepts", "emoji": "📚",
+                 "dataSource": "learning.concepts", "component": "flash_deck"},
+            ],
+        }
+        extraction = {"learning": {"concepts": [{"name": "C", "definition": "D"}]}}
+        result = assemble_response(triage, extraction, None, None)
+
+        components = [t["component"] for t in result["tabs"]]
+        assert "overview" not in components
+
+    def test_overview_emits_rich_hero_fields(self):
+        """Overview data should include title, emoji, subtitle, stats for the hero."""
+        triage = {
+            "contentTags": ["tech"],
+            "primaryTag": "tech",
+            "tabs": [
+                {"id": "code", "label": "Code", "emoji": "💻",
+                 "dataSource": "tech.snippets", "component": "code_explorer"},
+            ],
+        }
+        extraction = {
+            "tech": {
+                "snippets": [{"code": "print(1)", "language": "python"}],
+                "meta": {"difficulty": "advanced"},
+                "tips": ["Cache aggressively"],
+            },
+        }
+        synthesis = {
+            "tldr": "Short one-liner description",
+            "masterSummary": "Full master summary of the video",
+            "keyTakeaways": ["t1", "t2"],
+        }
+        video_meta = {"title": "Real Video Title", "duration": 2700, "channel": "Creator"}
+        result = assemble_response(triage, extraction, None, synthesis, video_meta=video_meta)
+
+        data = result["tabs"][0]["props"]["data"]
+        assert data["title"] == "Real Video Title"
+        assert data["emoji"] == "💻"  # tech domain
+        assert data["subtitle"] == "Short one-liner description"
+        assert data["masterSummary"] == "Full master summary of the video"
+        assert data["level"] == "Advanced"
+        assert data["tips"] == ["Cache aggressively"]
+        stat_labels = {s["label"] for s in data["stats"]}
+        assert {"Duration", "Level", "Items"}.issubset(stat_labels)
+
+    def test_overview_item_count_reflects_other_tabs(self):
+        """`itemCount` counts non-overview tabs."""
+        triage = {
+            "contentTags": ["learning"],
+            "primaryTag": "learning",
+            "tabs": [
+                {"id": "concepts", "label": "Concepts", "emoji": "📚",
+                 "dataSource": "learning.concepts", "component": "flash_deck"},
+                {"id": "takeaways", "label": "Takeaways", "emoji": "✅",
+                 "dataSource": "learning.takeaways", "component": "checklist"},
+            ],
+        }
+        extraction = {
+            "learning": {
+                "concepts": [{"name": "C", "definition": "D"}],
+                "takeaways": ["t1"],
+            },
+        }
+        synthesis = {"masterSummary": "ms", "keyTakeaways": ["k1"]}
+        result = assemble_response(triage, extraction, None, synthesis)
+
+        data = result["tabs"][0]["props"]["data"]
+        assert data["itemCount"] == 2
+
+    def test_overview_deduped_when_already_first(self):
+        """Overview already at index 0 is not duplicated."""
+        triage = {
+            "contentTags": ["learning"],
+            "primaryTag": "learning",
+            "tabs": [
+                {"id": "overview", "label": "Overview", "emoji": "📋",
+                 "dataSource": "meta", "component": "overview"},
+                {"id": "concepts", "label": "Concepts", "emoji": "📚",
+                 "dataSource": "learning.concepts", "component": "flash_deck"},
+            ],
+        }
+        extraction = {"learning": {"concepts": [{"name": "C", "definition": "D"}]}}
+        synthesis = {"masterSummary": "A great video", "keyTakeaways": ["t1"]}
+        result = assemble_response(triage, extraction, None, synthesis)
+
+        overview_count = sum(1 for t in result["tabs"] if t["component"] == "overview")
+        assert overview_count == 1
+        assert result["tabs"][0]["id"] == "overview"
+
+    def test_overview_item_count_reflects_post_fallback_tab_count(self):
+        """itemCount must be annotated AFTER the 3-tab fallback minimum kicks in.
+
+        Regression: previously the annotation ran inside _ensure_overview_first,
+        before fallback tabs were appended, so the "Items" hero chip under-
+        reported the real tab count.
+        """
+        triage = {
+            "contentTags": ["learning"],
+            "primaryTag": "learning",
+            "tabs": [
+                {"id": "concepts", "label": "Concepts", "emoji": "📚",
+                 "dataSource": "learning.concepts", "component": "flash_deck"},
+            ],
+        }
+        extraction = {"learning": {"concepts": [{"name": "C", "definition": "D"}]}}
+        synthesis = {
+            "masterSummary": "Full summary",
+            "keyTakeaways": ["k1", "k2", "k3"],
+            "tldr": "Short line",
+        }
+        result = assemble_response(triage, extraction, None, synthesis)
+
+        # After the 3-tab minimum kicks in, we should have overview + content tabs.
+        assert result["tabs"][0]["component"] == "overview"
+        data = result["tabs"][0]["props"]["data"]
+        assert data["itemCount"] == len(result["tabs"]) - 1

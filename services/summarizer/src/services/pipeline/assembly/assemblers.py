@@ -19,6 +19,29 @@ _CATEGORY_FRONTS = frozenset({
 })
 
 
+# Domain emoji for the overview hero — matches domain identity at a glance.
+_DOMAIN_EMOJI: dict[str, str] = {
+    "learning":  "🧠",
+    "tech":      "💻",
+    "food":      "🍳",
+    "fitness":   "💪",
+    "music":     "🎵",
+    "travel":    "✈️",
+    "review":    "⭐",
+    "project":   "🔨",
+    "language":  "🗣️",
+    "science":   "🔬",
+    "narrative": "🎬",
+    "finance":   "💰",
+}
+
+# Fields across domains that can contribute to the overview "Tips" section.
+_TIP_FIELDS: tuple[str, ...] = (
+    "tips", "savingTips", "transportationTips", "accommodationTips",
+    "formTips", "safetyTips", "proTips", "studyTips",
+)
+
+
 # ─────────────────────────────────────────────────────
 # Normaliser helpers
 # ─────────────────────────────────────────────────────
@@ -673,42 +696,117 @@ def assemble_budget(
     return None
 
 
+def _extract_level(extraction: dict | None, primary_tag: str) -> str | None:
+    """Pull a level/difficulty string from extraction (meta.difficulty, difficulty, level)."""
+    if not extraction:
+        return None
+    domain = extraction.get(primary_tag)
+    if not isinstance(domain, dict):
+        return None
+    meta = domain.get("meta") if isinstance(domain.get("meta"), dict) else None
+    for source in (meta, domain):
+        if not isinstance(source, dict):
+            continue
+        for key in ("difficulty", "level"):
+            val = source.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip().title()
+    return None
+
+
+def _collect_tips(extraction: dict | None, primary_tag: str, cap: int = 5) -> list[str]:
+    """Collect tip-shaped strings from the primary domain across known fields."""
+    if not extraction:
+        return []
+    domain = extraction.get(primary_tag)
+    if not isinstance(domain, dict):
+        return []
+    out: list[str] = []
+    for field in _TIP_FIELDS:
+        val = domain.get(field)
+        if not isinstance(val, list):
+            continue
+        for item in val:
+            if isinstance(item, str) and item.strip():
+                out.append(item.strip())
+            elif isinstance(item, dict):
+                text = item.get("tip") or item.get("text") or item.get("description")
+                if isinstance(text, str) and text.strip():
+                    out.append(text.strip())
+            if len(out) >= cap:
+                return out
+    return out
+
+
 def assemble_overview(
     tab: dict, data: Any, extraction: dict, enrichment: dict | None,
 ) -> dict | None:
-    """Build composite overview from synthesis + domain metadata."""
+    """Build composite overview from synthesis + video metadata + domain data.
+
+    Emits rich fields (title, emoji, subtitle, stats, tips, level) so
+    OverviewInteractive renders the hero, stat pills, and collapsible tips —
+    not just a bare summary.
+    """
     synthesis = tab.get("_synthesis") or {}
     video_meta = tab.get("_video_meta") or {}
     primary_tag = tab.get("_primary_tag", "learning")
 
     result: dict[str, Any] = {}
 
+    if video_meta.get("title"):
+        result["title"] = video_meta["title"]
+
+    result["emoji"] = _DOMAIN_EMOJI.get(primary_tag, "📋")
+
+    if synthesis.get("tldr"):
+        result["subtitle"] = synthesis["tldr"]
+        result["tldr"] = synthesis["tldr"]
+
     if synthesis.get("masterSummary"):
         result["masterSummary"] = synthesis["masterSummary"]
     if synthesis.get("keyTakeaways"):
         result["keyTakeaways"] = synthesis["keyTakeaways"]
-    if synthesis.get("tldr"):
-        result["tldr"] = synthesis["tldr"]
 
-    if video_meta.get("duration"):
-        result["duration"] = video_meta["duration"]
+    stats: list[dict[str, str]] = []
+    duration_seconds = video_meta.get("duration")
+    if isinstance(duration_seconds, (int, float)) and duration_seconds > 0:
+        duration_min = round(duration_seconds / 60)
+        stats.append({"label": "Duration", "value": f"{duration_min} min", "emoji": "⏱️"})
+
+    level = _extract_level(extraction, primary_tag)
+    if level:
+        stats.append({"label": "Level", "value": level, "emoji": "🎯"})
+        result["level"] = level
+
+    if stats:
+        result["stats"] = stats
+
+    if duration_seconds is not None:
+        result["duration"] = duration_seconds
     if video_meta.get("channel"):
         result["channel"] = video_meta["channel"]
+
+    tips = _collect_tips(extraction, primary_tag)
+    if tips:
+        result["tips"] = tips
 
     domain_data = extraction.get(primary_tag) if extraction else None
     if isinstance(domain_data, dict):
         for key, value in domain_data.items():
-            if value is None:
+            if value is None or key in result:
                 continue
             if isinstance(value, (str, int, float, bool)):
                 result[key] = value
             elif isinstance(value, dict):
                 for k, v in value.items():
-                    if isinstance(v, (str, int, float, bool)) and v is not None:
+                    if (isinstance(v, (str, int, float, bool)) and v is not None
+                            and k not in result):
                         result[k] = v
 
-    if not result:
+    # Only the domain emoji was set — no real content to show.
+    if set(result.keys()) <= {"emoji"}:
         return None
+
     return {
         "data": result,
         "durationLabel": "Duration",
