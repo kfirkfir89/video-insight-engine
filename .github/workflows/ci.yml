@@ -45,6 +45,14 @@ jobs:
         run: pnpm --filter @vie/types --filter @vie/shared build
         working-directory: .
 
+      # Cache the mongodb-memory-server binary across runs so the global setup
+      # downloads it once per cache lifetime instead of on every CI run.
+      - name: Cache mongodb-memory-server binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-7.0.24-${{ runner.os }}
+
       - run: pnpm test
 
   web:
