@@ -116,6 +116,13 @@ class Settings(BaseSettings):
     REDIS_ENABLED: bool = True
     REDIS_CACHE_TTL: int = 60 * 60 * 24 * 30  # 30 days
 
+    # Pipeline event broker (Redis Streams).
+    # Lock TTL must outlive the longest realistic pipeline run; stream TTL
+    # gives late joiners a chance to drain after the producer finishes.
+    PIPELINE_LOCK_TTL_SECONDS: int = 600  # 10 min — auto-expire if producer crashes
+    PIPELINE_STREAM_TTL_SECONDS: int = 120  # 2 min retention after DONE
+    PIPELINE_STREAM_MAXLEN: int = 2000  # MAXLEN ~ for XADD ring-buffer
+
     # Advanced transcript cleaning (spaCy + TF-IDF)
     TRANSCRIPT_CLEANING_ENABLED: bool = True
 
