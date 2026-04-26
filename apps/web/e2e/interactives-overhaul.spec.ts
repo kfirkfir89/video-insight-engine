@@ -1,15 +1,14 @@
 /**
  * E2E Tests for Interactive Components Overhaul
  *
- * Tests the 17 interactive output components rendered on the design system page.
+ * Tests the 16 interactive output components rendered on the design system page.
  * Covers layout hierarchy, responsive behavior, and component-specific interactions.
  *
  * Components under test:
  *   ChecklistInteractive, QuizInteractive, FlashDeckInteractive, ScenarioInteractive,
- *   SpotExplorer, StepByStepInteractive, ExerciseInteractive, TimelineExplorer,
+ *   SpotExplorer, StepByStepInteractive, ExerciseInteractive, MomentTrack,
  *   CodeExplorer, ComparisonInteractive, VerdictInteractive, BudgetInteractive,
- *   OverviewInteractive, InfoGridInteractive, GalleryInteractive, ClipPlayerInteractive,
- *   LyricsPlayerInteractive
+ *   OverviewInteractive, InfoGridInteractive, GalleryInteractive, LyricsPlayerInteractive
  */
 import { test, expect, type Page } from '@playwright/test';
 
@@ -71,10 +70,10 @@ test.describe('Interactive Components - Layout & Rendering', () => {
     await goToInteractiveTab(page);
   });
 
-  test('all 17 interactive output components render without errors', async ({ page }) => {
+  test('all 16 interactive output components render without errors', async ({ page }) => {
     const errors = collectCriticalErrors(page);
 
-    // Ensure "All" category is selected (shows all 18 items: 2 core + 17 interactives via 16 OUTPUT_DEMOS)
+    // Ensure "All" category is selected
     await page.getByRole('button', { name: /^All \(/ }).click();
     await page.waitForTimeout(300);
 
@@ -83,7 +82,7 @@ test.describe('Interactive Components - Layout & Rendering', () => {
     // Verify interactive output section
     await expect(page.getByRole('heading', { name: 'Interactive Output Components' })).toBeVisible();
 
-    // Check that all 17 interactive component type labels appear in showcase cards
+    // Check that all 16 interactive component type labels appear in showcase cards
     const expectedComponentTypes = [
       'ChecklistInteractive',
       'QuizInteractive',
@@ -92,7 +91,7 @@ test.describe('Interactive Components - Layout & Rendering', () => {
       'SpotExplorer',
       'StepByStepInteractive',
       'ExerciseInteractive',
-      'TimelineExplorer',
+      'MomentTrack',
       'CodeExplorer',
       'ComparisonInteractive',
       'VerdictInteractive',
@@ -100,7 +99,6 @@ test.describe('Interactive Components - Layout & Rendering', () => {
       'OverviewInteractive',
       'InfoGridInteractive',
       'GalleryInteractive',
-      'ClipPlayerInteractive',
       'LyricsPlayerInteractive',
     ];
 
@@ -430,39 +428,46 @@ test.describe('Interactive Components - Timeline', () => {
     await page.waitForTimeout(300);
   });
 
-  test('timeline entries render with labels', async ({ page }) => {
-    const timelineCard = page.locator('code:text("TimelineExplorer")').locator('..').locator('..');
-    await timelineCard.scrollIntoViewIfNeeded();
+  test('moment track items render with labels', async ({ page }) => {
+    const card = page.locator('code:text("MomentTrack")').first().locator('..').locator('..');
+    await card.scrollIntoViewIfNeeded();
     await page.waitForTimeout(300);
 
-    // Timeline should have multiple entry elements
-    const hasEntries = await timelineCard.evaluate((el) => {
-      // Check for multiple child elements indicating timeline entries
-      const items = el.querySelectorAll('[data-entry], [role="listitem"], li, article');
+    // Should render multiple items (li elements) on the spine
+    const hasItems = await card.evaluate((el) => {
+      const items = el.querySelectorAll('li, [data-kind]');
       return items.length > 0 || (el.textContent?.length ?? 0) > 50;
     });
-    expect(hasEntries).toBe(true);
+    expect(hasItems).toBe(true);
   });
 
-  test('timeline entry expand/collapse works', async ({ page }) => {
-    const timelineCard = page.locator('code:text("TimelineExplorer")').locator('..').locator('..');
-    await timelineCard.scrollIntoViewIfNeeded();
+  test('moment track item expand/collapse works', async ({ page }) => {
+    const card = page.locator('code:text("MomentTrack")').first().locator('..').locator('..');
+    await card.scrollIntoViewIfNeeded();
     await page.waitForTimeout(300);
 
-    // Find clickable timeline entries (buttons or expandable elements)
-    const clickableEntries = timelineCard.locator('button, [role="button"], [data-entry]');
-    const entryCount = await clickableEntries.count();
+    const clickable = card.locator('button, [role="button"], [data-kind]');
+    const count = await clickable.count();
 
-    if (entryCount > 0) {
-      // Click first entry to expand
-      const firstEntry = clickableEntries.first();
-      await firstEntry.click();
+    if (count > 0) {
+      const first = clickable.first();
+      await first.click();
       await page.waitForTimeout(300);
 
-      // After click, the timeline card content should still be valid
-      const contentAfterClick = await timelineCard.innerText();
+      const contentAfterClick = await card.innerText();
       expect(contentAfterClick.length).toBeGreaterThan(0);
     }
+  });
+
+  test('moment track renders mixed points and clips', async ({ page }) => {
+    const card = page.locator('code:text("MomentTrack")').first().locator('..').locator('..');
+    await card.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+
+    // The general MomentTrack demo mixes timeline entries and clips
+    const moments = await card.locator('[data-kind="moment"]').count();
+    const clips = await card.locator('[data-kind="clip"]').count();
+    expect(moments + clips).toBeGreaterThan(0);
   });
 });
 
@@ -631,20 +636,6 @@ test.describe('Interactive Components - Remaining Components', () => {
       return imgs.length > 0 || gridItems.length > 0;
     });
     expect(hasImages).toBe(true);
-  });
-
-  test('ClipPlayerInteractive renders clip list', async ({ page }) => {
-    await page.getByRole('button', { name: /^Media\b/ }).click();
-    await page.waitForTimeout(300);
-
-    const clipCard = page.locator('code:text("ClipPlayerInteractive")').locator('..').locator('..');
-    await clipCard.scrollIntoViewIfNeeded();
-    await page.waitForTimeout(300);
-
-    const hasClips = await clipCard.evaluate((el) => {
-      return (el.textContent?.length ?? 0) > 30;
-    });
-    expect(hasClips).toBe(true);
   });
 
   test('LyricsPlayerInteractive renders lyrics sections', async ({ page }) => {

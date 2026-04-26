@@ -25,11 +25,12 @@ Extract structured music analysis content.
     {
       "name": "Intro | Verse 1 | Chorus | Bridge | Outro | etc.",
       "timestamp": null,
+      "endTimestamp": null,
       "duration": null,
       "description": "What happens in this section — instrumentation, mood, key changes"
     }
   ],
-> UI: Structure sections → TimelineExplorer or LyricsPlayer section nav. Fill timestamp for playback navigation.
+> UI: Structure sections → MomentTrack items or LyricsPlayer section nav. Fill timestamp for playback. Song sections are spans — set endTimestamp to the next section's start minus 1.
   "lyrics": [
     {
       "timestamp": null,

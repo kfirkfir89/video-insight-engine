@@ -30,7 +30,7 @@ class TestBuildFallbackCandidates:
         assert len(grid_candidates) == 1
         assert len(grid_candidates[0]["props"]["items"]) == 3
 
-    def test_clip_player_from_chapters(self):
+    def test_moment_track_from_chapters(self):
         candidates = build_fallback_candidates(
             synthesis={},
             video_meta={"chapters": [
@@ -40,9 +40,9 @@ class TestBuildFallbackCandidates:
             existing_components={"overview", "info_grid"},
             existing_ids={"overview", "key_info"},
         )
-        clip_candidates = [c for c in candidates if c["component"] == "clip_player"]
-        assert len(clip_candidates) == 1
-        assert len(clip_candidates[0]["props"]["clips"]) == 2
+        moment_candidates = [c for c in candidates if c["component"] == "moment_track"]
+        assert len(moment_candidates) == 1
+        assert len(moment_candidates[0]["props"]["items"]) == 2
 
     def test_skips_existing_components(self):
         candidates = build_fallback_candidates(
@@ -80,14 +80,14 @@ class TestBuildFallbackCandidates:
         )
         assert all(c["component"] != "info_grid" for c in candidates)
 
-    def test_single_chapter_no_clip_player(self):
+    def test_single_chapter_no_moment_track(self):
         candidates = build_fallback_candidates(
             synthesis={},
             video_meta={"chapters": [{"title": "Solo", "start_time": 0, "end_time": 60}]},
             existing_components=set(),
             existing_ids=set(),
         )
-        assert all(c["component"] != "clip_player" for c in candidates)
+        assert all(c["component"] != "moment_track" for c in candidates)
 
     def test_fallbacks_pass_validation(self):
         candidates = build_fallback_candidates(
@@ -164,8 +164,8 @@ class TestAssembleResponseMinTabs:
         result = assemble_response(triage, extraction, None, synthesis)
         assert len(result["tabs"]) >= 3
 
-    def test_0_tabs_with_chapters_gets_clip_player(self):
-        """0 assembled tabs + no synthesis + chapters should get clip_player."""
+    def test_0_tabs_with_chapters_gets_moment_track(self):
+        """0 assembled tabs + no synthesis + chapters should get moment_track."""
         triage = self._base_triage([
             {"id": "empty", "label": "Empty", "dataSource": "learning.nonexistent", "component": "info_grid"},
         ])
@@ -177,7 +177,7 @@ class TestAssembleResponseMinTabs:
         ]}
         result = assemble_response(triage, extraction, None, None, video_meta=video_meta)
         tab_components = [t["component"] for t in result["tabs"]]
-        assert "clip_player" in tab_components
+        assert "moment_track" in tab_components
 
     def test_no_duplicate_components_in_fallbacks(self):
         """Fallbacks should not duplicate existing component types."""

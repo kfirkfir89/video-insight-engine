@@ -8,11 +8,13 @@ import {
   SpotExplorer,
   StepByStepInteractive,
   ExerciseInteractive,
-  TimelineExplorer,
+  MomentTrack,
+  type MomentItem,
   CodeExplorer,
   ComparisonInteractive,
   VerdictInteractive,
 } from './interactive';
+import { formatTimestamp } from './display-type-guards';
 
 /** Set of tab IDs that have interactive components (v1 fallback). */
 export const INTERACTIVE_TABS = new Set([
@@ -21,11 +23,43 @@ export const INTERACTIVE_TABS = new Set([
   'itinerary', 'spots',
   'steps',
   'exercises', 'timer',
-  'key_moments', 'timestamps',
+  'key_moments', 'timestamps', 'highlights', 'moment_track',
   'code', 'cheat_sheet',
   'pros_cons',
   'verdict',
 ]);
+
+function normalizeMomentItems(data: unknown): MomentItem[] {
+  if (!Array.isArray(data)) return [];
+  return data
+    .filter((item): item is Record<string, unknown> => item != null && typeof item === 'object')
+    .map((item, i) => {
+      const secondsRaw = item.seconds ?? item.startSeconds ?? item.timestamp ?? 0;
+      const endRaw = item.endSeconds ?? item.endTimestamp ?? item.end_time;
+      const seconds = typeof secondsRaw === 'number' ? secondsRaw : parseInt(String(secondsRaw), 10) || 0;
+      const endSeconds = endRaw != null ? (typeof endRaw === 'number' ? endRaw : parseInt(String(endRaw), 10)) : undefined;
+      // Mirror the Python normalizer in services/summarizer/.../assemblers.py:
+      // explicit label > description-derived (capped at 60 chars) > generic placeholder.
+      // Without the cap, a multi-sentence description renders as the moment title.
+      const explicitLabel = item.label ?? item.title ?? item.name;
+      const description = typeof item.description === 'string' ? item.description : '';
+      const descriptionFallback = description.length > 0
+        ? description.slice(0, 60) + (description.length > 60 ? '…' : '')
+        : null;
+      const label = (typeof explicitLabel === 'string' && explicitLabel.length > 0)
+        ? explicitLabel
+        : descriptionFallback ?? `Moment ${i + 1}`;
+      const rawTime = item.time;
+      const time = typeof rawTime === 'string' && rawTime.length > 0 ? rawTime : formatTimestamp(seconds);
+      return {
+        ...(item as object),
+        seconds,
+        endSeconds: endSeconds != null && Number.isFinite(endSeconds) && endSeconds > seconds + 1 ? endSeconds : undefined,
+        time,
+        label,
+      } as MomentItem;
+    });
+}
 
 // ── Data normalizers ──
 
@@ -139,7 +173,9 @@ export function renderInteractive(
     }
     case 'key_moments':
     case 'timestamps':
-      return <TimelineExplorer entries={arr} {...nav} />;
+    case 'highlights':
+    case 'moment_track':
+      return <MomentTrack items={normalizeMomentItems(data)} {...nav} />;
     case 'code':
     case 'cheat_sheet':
       return <CodeExplorer snippets={arr} {...nav} />;

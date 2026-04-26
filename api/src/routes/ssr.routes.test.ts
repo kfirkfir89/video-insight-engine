@@ -11,7 +11,7 @@ const mockPublicSummary = {
   duration: 300,
   status: 'completed',
   meta: { contentTags: ['learning'], primaryTag: 'learning', tldr: 'Test summary' },
-  tabs: [{ id: 'key_points', label: 'Key Points', emoji: '💡', component: 'timeline', props: {} }],
+  tabs: [{ id: 'key_points', label: 'Key Points', emoji: '💡', component: 'moment_track', props: {} }],
   shareSlug: 'aBcDeFgHiJ',
   viewsCount: 10,
   likesCount: 5,

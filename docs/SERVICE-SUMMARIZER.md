@@ -284,7 +284,7 @@ The pipeline uses 3-6 LLM calls with a plan-first architecture:
 
  9. ASSEMBLY + SAVE + COMPLETE
     └─▶ Assembly: pure code (<10ms) — transforms extraction → component-addressed TabEntry[]
-    └─▶ 18 assemblers in ASSEMBLER_REGISTRY (spot_explorer, timeline, code_explorer, etc.)
+    └─▶ 17 assemblers in ASSEMBLER_REGISTRY (spot_explorer, moment_track, code_explorer, etc.)
     └─▶ Frame thumbnail injection: items with timestamps get thumbnailUrl from nearest S3 frame
     └─▶ Gallery tab: ~12 curated frames from gallery_frames (not all uploaded frames)
     └─▶ Cross-tab links resolved from static LINK_RULES
@@ -372,7 +372,7 @@ def validate_extraction_counts(manifest: ManifestResult, extraction: dict) -> li
 **Model mapping (config.py):**
 ```python
 MODEL_MAP = {
-    "anthropic": {"default": "anthropic/claude-sonnet-4-20250514", "fast": "anthropic/claude-3-5-haiku-20241022"},
+    "anthropic": {"default": "anthropic/claude-sonnet-4-6", "fast": "anthropic/claude-haiku-4-5-20251001"},
     "openai": {"default": "openai/gpt-4o", "fast": "openai/gpt-4o-mini"},
     "gemini": {"default": "gemini/gemini-2.5-flash", "fast": "gemini/gemini-2.5-flash-lite"},
 }
@@ -847,7 +847,7 @@ Trigger regeneration of an existing video summary.
   "message": "Video summary ready for regeneration. Connect to streaming endpoint to process.",
   "has_raw_transcript": true,
   "generation": {
-    "model": "anthropic/claude-sonnet-4-20250514",
+    "model": "anthropic/claude-sonnet-4-6",
     "promptVersion": "v1.0",
     "generatedAt": "2026-02-05T10:30:00Z"
   }
@@ -892,7 +892,7 @@ Health check endpoint.
 {
   "status": "healthy",
   "service": "summarizer",
-  "model": "anthropic/claude-sonnet-4-20250514",
+  "model": "anthropic/claude-sonnet-4-6",
   "database": "connected",
   "s3": "healthy"
 }

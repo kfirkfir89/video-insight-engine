@@ -8,12 +8,13 @@ Merge this INTO the main domain data.
   "keyMoments": [
     {
       "timestamp": null,
+      "endTimestamp": null,
       "description": "What happened at this moment",
       "mood": "Emotional tone (e.g., 'triumphant', 'tense', 'humorous')",
       "emoji": "matching emoji"
     }
   ],
-> UI: Key moments → TimelineExplorer entries. Fill mood for filterable pills, emoji for timeline markers.
+> UI: Key moments → MomentTrack items. Fill mood for filterable pills, emoji for markers. Set endTimestamp ONLY for replayable highlight spans worth re-watching (15s–3min — performances, demos, pivotal arguments, punchlines). OMIT endTimestamp for pure navigation points (chapter markers, topic transitions).
   "quotes": [
     {
       "text": "Exact verbatim quote",
@@ -31,7 +32,7 @@ Merge this INTO the main domain data.
 {
   "keyMoments": [
     {"timestamp": 340, "description": "Founder reveals the company nearly went bankrupt in 2019 — had $800 left in the account", "mood": "tense", "emoji": "😰"},
-    {"timestamp": 720, "description": "Product launch day — first 1000 units sell out in 47 minutes", "mood": "triumphant", "emoji": "🎉"}
+    {"timestamp": 720, "endTimestamp": 812, "description": "Product launch day — first 1000 units sell out in 47 minutes (replayable highlight span)", "mood": "triumphant", "emoji": "🎉"}
   ],
   "quotes": [
     {"text": "We had eight hundred dollars and a dream. That's it.", "speaker": "Alex Chen", "timestamp": 345, "context": "Describing the lowest point before their breakthrough"}

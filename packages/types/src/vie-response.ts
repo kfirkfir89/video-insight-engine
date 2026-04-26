@@ -117,10 +117,27 @@ export interface KeyPointItem {
   timestamp?: number;
 }
 
-export interface TimestampItem {
+export interface MomentItem {
   time: string;
   seconds: number;
+  /** Present ⇒ clip (span worth re-watching). Absent ⇒ moment (navigation point). */
+  endSeconds?: number;
   label: string;
+  description?: string;
+  mood?: string;
+  emoji?: string;
+  speaker?: string;
+  tags?: string[];
+  thumbnailUrl?: string;
+}
+
+export interface MomentTrackProps {
+  items: MomentItem[];
+  filters?: boolean;
+  onSeek?: (seconds: number) => void;
+  currentTime?: number;
+  nextTab?: string;
+  onNavigateTab?: (id: string) => void;
 }
 
 export interface QuizQuestion {
@@ -336,7 +353,7 @@ export interface LearningData {
   keyPoints: KeyPointItem[];
   concepts: ConceptItem[];
   takeaways: string[];
-  timestamps: TimestampItem[];
+  timestamps: MomentItem[];
   summary?: string;
 }
 

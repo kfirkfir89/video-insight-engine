@@ -47,17 +47,42 @@ _TIP_FIELDS: tuple[str, ...] = (
 # ─────────────────────────────────────────────────────
 
 
-def _normalize_to_spot(item: dict) -> dict:
-    """Normalize diverse dict shapes to spot format {name, description, emoji}."""
-    name = (item.get("name") or item.get("title") or item.get("phrase")
-            or item.get("word") or item.get("aspect") or item.get("label") or "")
-    desc = (item.get("description") or item.get("detail") or item.get("definition")
-            or item.get("explanation") or item.get("translation") or item.get("context") or "")
-    result = {"name": str(name), "description": str(desc)}
-    for passthrough in ("emoji", "cost", "duration", "mapQuery", "tips", "thumbnailUrl",
-                        "pronunciation", "timestamp"):
-        if passthrough in item:
-            result[passthrough] = item[passthrough]
+_SPOT_PASSTHROUGH_FIELDS: tuple[str, ...] = (
+    "emoji", "cost", "duration", "mapQuery", "tips", "thumbnailUrl",
+    "pronunciation", "timestamp",
+)
+
+
+def _normalize_to_spot(item: dict) -> dict | None:
+    """Normalize diverse dict shapes to spot format {name, description, emoji}.
+
+    Returns None when the item lacks a non-empty name, or has only a name with
+    no descriptive/passthrough content — such entries render as empty cards in
+    the spot_explorer UI.
+    """
+    name_raw = (item.get("name") or item.get("title") or item.get("phrase")
+                or item.get("word") or item.get("aspect") or item.get("label") or "")
+    name = str(name_raw).strip()
+    if not name:
+        return None
+
+    desc_raw = (item.get("description") or item.get("detail") or item.get("definition")
+                or item.get("explanation") or item.get("translation") or item.get("context") or "")
+    description = str(desc_raw).strip()
+
+    result: dict = {"name": name, "description": description}
+    has_passthrough = False
+    for field in _SPOT_PASSTHROUGH_FIELDS:
+        if field not in item:
+            continue
+        value = item[field]
+        if value is None or value == "":
+            continue
+        result[field] = value
+        has_passthrough = True
+
+    if not description and not has_passthrough:
+        return None
     return result
 
 
@@ -174,29 +199,71 @@ def _normalize_code_snippet(item: Any) -> dict | None:
     }
 
 
-def _normalize_timeline_entry(item: Any, index: int) -> dict | None:
-    """Normalize timeline entry to {label, time, seconds}."""
+def _coerce_int(value: Any) -> int | None:
+    """Parse int or return None on failure."""
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
+
+def _normalize_moment_item(item: Any, index: int) -> dict | None:
+    """Normalize a moment/clip item to {label, time, seconds, endSeconds?, ...}.
+
+    Unified shape for MomentTrack: points (no endSeconds) and spans (with endSeconds).
+    Accepts the legacy field names from TimelineExplorer.entries and ClipPlayerInteractive.clips.
+    """
     if isinstance(item, str):
         stripped = item.strip()
         return {"label": stripped, "time": "0:00", "seconds": 0} if stripped else None
     if not isinstance(item, dict):
         return None
-    label = (item.get("label") or item.get("title") or item.get("name")
-             or item.get("description") or f"Point {index + 1}")
-    seconds = item.get("seconds")
+
+    description = item.get("description")
+    label_raw = (
+        item.get("label")
+        or item.get("title")
+        or item.get("name")
+        or (description[:60] if isinstance(description, str) and description else None)
+        or f"Moment {index + 1}"
+    )
+
+    seconds = _coerce_int(item.get("seconds"))
     if seconds is None:
-        ts = next((v for k in ("timestamp", "start_time", "startTime") if (v := item.get(k)) is not None), 0)
-        try:
-            seconds = int(ts)
-        except (ValueError, TypeError):
-            seconds = 0
-    else:
-        try:
-            seconds = int(seconds)
-        except (ValueError, TypeError):
-            seconds = 0
+        for key in ("startSeconds", "timestamp", "start_time", "startTime"):
+            seconds = _coerce_int(item.get(key))
+            if seconds is not None:
+                break
+    if seconds is None:
+        seconds = 0
+
+    end_seconds = None
+    for key in ("endSeconds", "end_seconds", "endTimestamp", "end_time", "endTime"):
+        end_seconds = _coerce_int(item.get(key))
+        if end_seconds is not None:
+            break
+    if end_seconds is not None and end_seconds <= seconds + 1:
+        end_seconds = None
+
     time_str = item.get("time") or _seconds_to_time_str(seconds)
-    return {"label": str(label), "time": time_str, "seconds": seconds}
+
+    normalized: dict[str, Any] = {
+        "label": str(label_raw),
+        "time": time_str,
+        "seconds": seconds,
+    }
+    if end_seconds is not None:
+        normalized["endSeconds"] = end_seconds
+    for key in ("description", "mood", "emoji", "speaker", "thumbnailUrl"):
+        value = item.get(key)
+        if value is not None and value != "":
+            normalized[key] = value
+    tags = item.get("tags")
+    if isinstance(tags, list) and tags:
+        normalized["tags"] = [str(t) for t in tags if t is not None]
+    return normalized
 
 
 def _normalize_exercise(item: Any) -> dict | None:
@@ -283,21 +350,31 @@ def _normalize_scenario_item(item: Any) -> dict | None:
     return {"question": str(question), "options": options}
 
 
-def _chapters_to_timeline(chapters: list[dict]) -> list[dict]:
-    """Convert yt-dlp chapters to timeline entry format."""
-    entries = []
-    for ch in chapters:
-        start = ch.get("start_time", 0)
-        seconds = int(start)
-        mins, secs = divmod(seconds, 60)
-        hours, mins = divmod(mins, 60)
-        time_str = f"{hours}:{mins:02d}:{secs:02d}" if hours else f"{mins}:{secs:02d}"
-        entries.append({
-            "time": time_str,
-            "seconds": seconds,
+def _chapters_to_moments(chapters: list[dict], video_duration: int | None = None) -> list[dict]:
+    """Convert yt-dlp chapters to MomentTrack item format with endSeconds spans.
+
+    Each chapter becomes a span: endSeconds is the next chapter's start minus 1.
+    The final chapter uses video_duration - 1 when available.
+    """
+    items: list[dict] = []
+    for i, ch in enumerate(chapters):
+        start = _coerce_int(ch.get("start_time")) or 0
+        next_start: int | None = None
+        if i + 1 < len(chapters):
+            next_start = _coerce_int(chapters[i + 1].get("start_time"))
+        elif video_duration is not None:
+            next_start = int(video_duration)
+        end_seconds = next_start - 1 if next_start is not None and next_start > start + 1 else None
+        entry: dict[str, Any] = {
+            "time": _seconds_to_time_str(start),
+            "seconds": start,
             "label": ch.get("title", ""),
-        })
-    return entries
+            "mood": "chapter",
+        }
+        if end_seconds is not None:
+            entry["endSeconds"] = end_seconds
+        items.append(entry)
+    return items
 
 
 # ─────────────────────────────────────────────────────
@@ -305,10 +382,27 @@ def _chapters_to_timeline(chapters: list[dict]) -> list[dict]:
 # ─────────────────────────────────────────────────────
 
 
+# SpotExplorer is a search/filter/browse UI — a single spot renders as a
+# degenerate explorer (no filters useful, no comparisons). When a tab can only
+# produce one valid spot, dropping it lets `build_fallback_candidates` in
+# core.py surface the content via overview/info_grid instead, which is the
+# better UX for sparse inputs.
+_MIN_SPOTS = 2
+
+
 def assemble_spot_explorer(
     tab: dict, data: Any, extraction: dict, enrichment: dict | None,
 ) -> dict | None:
-    """Flatten TravelDay[] to SpotItem[] with section groupings."""
+    """Flatten TravelDay[] to SpotItem[] with section groupings.
+
+    Every spot passes through `_normalize_to_spot`, which drops entries lacking
+    a non-empty name or any descriptive/passthrough content. Bare-string input
+    is rejected — extraction should produce structured `{name, description}`
+    dicts; string arrays are almost always a symptom of keyword-list pollution
+    via cross-domain fallback. Requires `_MIN_SPOTS` valid spots to ship; below
+    that, the tab is dropped and the fallback layer (overview/info_grid) takes
+    over so the content still surfaces.
+    """
     if not isinstance(data, list) or len(data) == 0:
         return None
 
@@ -322,34 +416,52 @@ def assemble_spot_explorer(
             label = f"Day {day.get('day', '?')}"
             if day.get("city"):
                 label += f": {day['city']}"
-            day_spots = day.get("spots", [])
-            if isinstance(day_spots, list):
-                start = len(all_spots)
-                sections.append({
-                    "label": label,
-                    "spotIndices": list(range(start, start + len(day_spots))),
-                })
-                all_spots.extend(day_spots)
-        return {"spots": all_spots, "sections": sections} if all_spots else None
+            day_spots_raw = day.get("spots", [])
+            if not isinstance(day_spots_raw, list):
+                continue
+            day_spots_clean = [
+                spot for spot in (
+                    _normalize_to_spot(s) for s in day_spots_raw if isinstance(s, dict)
+                ) if spot is not None
+            ]
+            if not day_spots_clean:
+                continue
+            start = len(all_spots)
+            sections.append({
+                "label": label,
+                "spotIndices": list(range(start, start + len(day_spots_clean))),
+            })
+            all_spots.extend(day_spots_clean)
+        if len(all_spots) < _MIN_SPOTS:
+            return None
+        return {"spots": all_spots, "sections": sections}
 
-    normalized = []
-    for item in data:
-        if isinstance(item, dict):
-            spot = _normalize_to_spot(item)
-            if spot["name"] or spot["description"]:
-                normalized.append(spot)
-        elif isinstance(item, str) and item.strip():
-            normalized.append({"name": item.strip(), "description": "", "emoji": ""})
-    return {"spots": normalized} if normalized else None
+    normalized = [
+        spot for spot in (
+            _normalize_to_spot(item) for item in data if isinstance(item, dict)
+        ) if spot is not None
+    ]
+    if len(normalized) < _MIN_SPOTS:
+        return None
+    return {"spots": normalized}
 
 
-def assemble_timeline(
+def assemble_moment_track(
     tab: dict, data: Any, extraction: dict, enrichment: dict | None,
 ) -> dict | None:
+    """Unified MomentTrack assembler for points and spans.
+
+    Replaces legacy assemble_timeline (points) and assemble_clip_player (spans).
+    Items keep endSeconds only when the LLM marked the moment as a replayable
+    highlight worth re-watching.
+    """
     if not isinstance(data, list) or len(data) < 1:
         return None
-    entries = [e for e in (_normalize_timeline_entry(item, i) for i, item in enumerate(data)) if e is not None]
-    return {"entries": entries} if entries else None
+    items = [
+        m for m in (_normalize_moment_item(item, i) for i, item in enumerate(data))
+        if m is not None
+    ]
+    return {"items": items} if items else None
 
 
 def assemble_code_explorer(
@@ -823,33 +935,6 @@ def assemble_gallery(
     return {"images": data}
 
 
-def assemble_clip_player(
-    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
-) -> dict | None:
-    if not isinstance(data, list) or len(data) < 1:
-        return None
-    clips = []
-    for item in data:
-        if isinstance(item, dict):
-            label = (item.get("label") or item.get("title") or item.get("name")
-                     or item.get("description") or "Clip")
-            start_seconds = next((v for k in ("startSeconds", "seconds", "timestamp") if (v := item.get(k)) is not None), 0)
-            try:
-                start_seconds = int(start_seconds)
-            except (ValueError, TypeError):
-                start_seconds = 0
-            time_str = item.get("time") or _seconds_to_time_str(start_seconds)
-            clips.append({
-                "label": str(label),
-                "timestamp": item.get("timestamp"),
-                "startSeconds": start_seconds,
-                "time": time_str,
-                "mood": item.get("mood"),
-                "description": str(item.get("description") or ""),
-            })
-    return {"clips": clips} if clips else None
-
-
 def assemble_lyrics_player(
     tab: dict, data: Any, extraction: dict, enrichment: dict | None,
 ) -> dict | None:
@@ -914,7 +999,7 @@ def assemble_display_section(
 
 ASSEMBLER_REGISTRY: dict[str, Callable] = {
     "spot_explorer": assemble_spot_explorer,
-    "timeline": assemble_timeline,
+    "moment_track": assemble_moment_track,
     "code_explorer": assemble_code_explorer,
     "comparison": assemble_comparison,
     "gallery": assemble_gallery,
@@ -925,7 +1010,6 @@ ASSEMBLER_REGISTRY: dict[str, Callable] = {
     "quiz": assemble_quiz,
     "flash_deck": assemble_flash_deck,
     "scenario": assemble_scenario,
-    "clip_player": assemble_clip_player,
     "lyrics_player": assemble_lyrics_player,
     "verdict": assemble_verdict,
     "budget": assemble_budget,
@@ -936,8 +1020,9 @@ ASSEMBLER_REGISTRY: dict[str, Callable] = {
 _TAB_ID_TO_COMPONENT: dict[str, str] = {
     "itinerary": "spot_explorer",
     "spots": "spot_explorer",
-    "key_moments": "timeline",
-    "timestamps": "timeline",
+    "key_moments": "moment_track",
+    "timestamps": "moment_track",
+    "highlights": "moment_track",
     "code": "code_explorer",
     "cheat_sheet": "code_explorer",
     "setup": "code_explorer",
@@ -956,7 +1041,6 @@ _TAB_ID_TO_COMPONENT: dict[str, str] = {
     "concepts": "flash_deck",
     "scenarios": "scenario",
     "gallery": "gallery",
-    "highlights": "clip_player",
     "lyrics": "lyrics_player",
     "structure": "lyrics_player",
     "verdict": "verdict",

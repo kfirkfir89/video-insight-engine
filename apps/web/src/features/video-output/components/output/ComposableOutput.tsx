@@ -18,7 +18,8 @@ import {
   SpotExplorer,
   StepByStepInteractive,
   ExerciseInteractive,
-  TimelineExplorer,
+  MomentTrack,
+  type MomentItem,
   CodeExplorer,
   ComparisonInteractive,
   VerdictInteractive,
@@ -26,7 +27,6 @@ import {
   OverviewInteractive,
   InfoGridInteractive,
   GalleryInteractive,
-  ClipPlayerInteractive,
   LyricsPlayerInteractive,
 } from './interactive';
 
@@ -78,9 +78,45 @@ const COMPONENT_REGISTRY: Record<string, (props: Record<string, unknown>, nav: N
       {...nav}
     />
   ),
-  timeline: (props, nav) => (
-    <TimelineExplorer entries={asArray(props.entries)} onSeek={nav.onSeek} currentTime={nav.currentTime} {...nav} />
+  moment_track: (props, nav) => (
+    <MomentTrack
+      items={asArray(props.items)}
+      filters={typeof props.filters === 'boolean' ? props.filters : undefined}
+      onSeek={nav.onSeek}
+      currentTime={nav.currentTime}
+      {...nav}
+    />
   ),
+  // Legacy aliases — cached `assembledTabs` rows in MongoDB written before the
+  // moment_track unification still reference these component names. Translate
+  // their prop shapes into MomentTrack's items[] so they keep rendering as a
+  // proper interactive instead of degrading to DisplaySection. Safe to remove
+  // once the cache rolls over (currently keyed by youtubeId+promptVersion).
+  timeline: (props, nav) => (
+    <MomentTrack
+      items={asArray<MomentItem>(props.entries)}
+      onSeek={nav.onSeek}
+      currentTime={nav.currentTime}
+      {...nav}
+    />
+  ),
+  clip_player: (props, nav) => {
+    const items = asArray<Record<string, unknown>>(props.clips).map((clip) => {
+      const seconds = typeof clip.seconds === 'number'
+        ? clip.seconds
+        : (typeof clip.startSeconds === 'number' ? clip.startSeconds : 0);
+      return { ...clip, seconds } as MomentItem;
+    });
+    return (
+      <MomentTrack
+        items={items}
+        filters={typeof props.filters === 'boolean' ? props.filters : undefined}
+        onSeek={nav.onSeek}
+        currentTime={nav.currentTime}
+        {...nav}
+      />
+    );
+  },
   code_explorer: (props, nav) => (
     <CodeExplorer
       snippets={asArray<TechSnippet>(props.snippets)}
@@ -205,14 +241,6 @@ const COMPONENT_REGISTRY: Record<string, (props: Record<string, unknown>, nav: N
     <GalleryInteractive
       images={asArray(props.images)}
       layout={typeof props.layout === 'string' ? props.layout as 'grid' | 'carousel' | 'hero_stack' : undefined}
-      onSeek={nav.onSeek}
-      {...nav}
-    />
-  ),
-  clip_player: (props, nav) => (
-    <ClipPlayerInteractive
-      clips={asArray(props.clips)}
-      filters={typeof props.filters === 'boolean' ? props.filters : undefined}
       onSeek={nav.onSeek}
       {...nav}
     />

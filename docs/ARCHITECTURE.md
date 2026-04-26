@@ -9,7 +9,7 @@ System overview and data flows.
 ```
 ┌───────────────────────────────────────────────────────────────────┐
 │                         vie-web (React 19)                         │
-│  Tailwind v4 · shadcn/ui · 36 UI components · 17 interactives    │
+│  Tailwind v4 · shadcn/ui · 36 UI components · 16 interactives    │
 │  ComposableOutput → COMPONENT_REGISTRY[tab.component] → render    │
 │  VideoPlayerContext (seekTo) · SSE stream consumer                 │
 └──────────────────────────┬────────────────────────────────────────┘
@@ -196,7 +196,7 @@ Content type is determined by a **plan phase** that runs a classifier (fast mode
 │     └── Quiz + flashcards + scenarios (domains with enrichment mapping)    │
 │                                                                             │
 │  7. ASSEMBLY (pure code, <10ms)                                            │
-│     ├── 18 assemblers in ASSEMBLER_REGISTRY                                │
+│     ├── 17 assemblers in ASSEMBLER_REGISTRY                                │
 │     ├── Extraction → TabEntry[] with component-addressed props             │
 │     ├── Frame thumbnail injection                                          │
 │     └── Cross-tab link resolution                                          │

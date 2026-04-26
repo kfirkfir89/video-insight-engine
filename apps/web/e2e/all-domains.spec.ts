@@ -216,7 +216,7 @@ const PROJECT_DATA = {
 };
 
 const NARRATIVE_DATA = {
-  // keyMoments: TimelineEntry[] → TimelineExplorer
+  // keyMoments: MomentItem[] → MomentTrack
   keyMoments: [
     { time: "0:45", seconds: 45, label: "The unexpected twist", emoji: "😮", mood: "Surprise", description: "The unexpected twist that changes everything." },
     { time: "3:00", seconds: 180, label: "The heartfelt confession", emoji: "😢", mood: "Emotional", description: "The heartfelt confession scene." },
@@ -555,11 +555,11 @@ test.describe("All Domain Renderers", () => {
       { id: "takeaways", label: "Takeaways", emoji: "🎯", dataSource: "narrative.takeaways" },
     ], { narrative: NARRATIVE_DATA });
 
-    test("should render narrative key moments timeline", async ({ authenticatedPage: page }) => {
+    test("should render narrative key moments via moment track", async ({ authenticatedPage: page }) => {
       await setupMock(page, "Steve Jobs Speech", narrativeOutput);
       await page.goto("/video/video-1");
       await waitForOutput(page);
-      // TimelineExplorer renders entry.label
+      // MomentTrack renders item.label
       await expect(page.getByText("The unexpected twist")).toBeVisible();
     });
 

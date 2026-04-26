@@ -111,7 +111,7 @@ Video: "Gordon Ramsay's Ultimate Steak Guide" (12 min, cooking tutorial)
     {{"id": "ingredients", "label": "🛒 6 Ingredients", "emoji": "🛒", "component": "checklist", "dataSource": "food.ingredients", "goal": "Everything you need — check off as you gather."}},
     {{"id": "cook_steps", "label": "👨‍🍳 8 Steps", "emoji": "👨‍🍳", "component": "step_player", "dataSource": "food.steps", "goal": "Follow along with Gordon, step by step. Timers included."}},
     {{"id": "tips", "label": "🔥 Chef Tips", "emoji": "🔥", "component": "info_grid", "dataSource": "food.tips", "goal": "Gordon's pro tips for nailing the perfect sear every time."}},
-    {{"id": "highlights", "label": "🎬 Key Moments", "emoji": "🎬", "component": "clip_player", "dataSource": "food.steps", "goal": "Watch Gordon demonstrate each technique up close."}}
+    {{"id": "highlights", "label": "🎬 Key Moments", "emoji": "🎬", "component": "moment_track", "dataSource": "food.steps", "goal": "Watch Gordon demonstrate each technique up close. Set endSeconds on the demo spans worth re-watching."}}
   ]
 }}
 </example>
@@ -192,11 +192,11 @@ Overview is always the first tab regardless of intent.
 <format_routing>
 When content_traits are available, use them to override default component choices:
 - has_drills=true → prefer step_player, spot_explorer. AVOID flash_deck (drills are practice, not memorization). Exception: language domain vocabulary tab may use flash_deck.
-- has_narrative=true → prefer clip_player for key moments. AVOID flash_deck (stories aren't flashcard material).
+- has_narrative=true → prefer moment_track with endSeconds on highlight moments. AVOID flash_deck (stories aren't flashcard material).
 - is_list=true → prefer spot_explorer for browsable items. AVOID step_player (lists aren't sequential).
 - has_code=true → MUST include code_explorer tab.
 - has_comparison=true → MUST include comparison tab.
-- has_visual_demo=true → prefer clip_player to show demonstrations.
+- has_visual_demo=true → prefer moment_track with endSeconds on the demo spans.
 - is_opinionated=true → prefer info_grid for arguments/points. AVOID quiz (opinions aren't testable).
 - has_steps=true → prefer step_player for sequential instructions.
 </format_routing>
@@ -226,7 +226,7 @@ flash_deck front must be a real term or concept name. Never a category label lik
 - Every contentTag must have at least one tab using its domain data
 - dataSource must reference a domain in this video's contentTags. NEVER use "learning.timestamps" for a food video or "travel.itinerary" for a tech video. Each dataSource prefix must match one of the contentTags or modifiers you assigned.
 - dataSource must be from the valid datasources listed in the component toolkit
-- component must be one of the 17 registered component names
+- component must be one of the 16 registered component names
 - If unsure about content type, use ["learning"] with confidence below 0.6
 - Tab IDs must be unique snake_case
 
