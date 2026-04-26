@@ -35,8 +35,8 @@ _COMPONENT_LINK_RULES: list[tuple[str, str, str, str | None]] = [
     ("exercise_tracker", "info_grid", "Pro tips", "fitness"),
     # Music domain flow
     ("overview", "lyrics_player", "Follow along", "music"),
-    ("lyrics_player", "clip_player", "Jump to highlights", "music"),
-    ("clip_player", "info_grid", "Deep dive", "music"),
+    ("lyrics_player", "moment_track", "Jump to highlights", "music"),
+    ("moment_track", "info_grid", "Deep dive", "music"),
     # Generic (cross-domain) rules — fire when no domain-specific rule matched
     ("overview", "checklist", "See what you need", None),
     ("overview", "step_player", "Get started", None),

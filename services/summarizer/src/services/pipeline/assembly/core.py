@@ -14,7 +14,7 @@ from src.utils.data_helpers import is_empty_data
 
 from .assemblers import (
     ASSEMBLER_REGISTRY,
-    _chapters_to_timeline,
+    _chapters_to_moments,
     assemble_display_section,
     infer_component,
 )
@@ -197,12 +197,11 @@ _NO_COUNT_COMPONENTS = frozenset({"overview", "verdict", "budget"})
 # Maps component → required list key. If the list is empty after assembly, drop the tab.
 _COMPONENT_REQUIRED_LISTS: dict[str, str] = {
     "code_explorer": "snippets",
-    "timeline": "entries",
+    "moment_track": "items",
     "exercise_tracker": "exercises",
     "quiz": "questions",
     "scenario": "scenarios",
     "spot_explorer": "spots",
-    "clip_player": "clips",
     "info_grid": "items",
     "checklist": "items",
     "step_player": "steps",
@@ -234,9 +233,8 @@ _COUNT_KEYS: dict[str, str] = {
     "quiz": "questions",
     "scenario": "scenarios",
     "info_grid": "items",
-    "timeline": "entries",
+    "moment_track": "items",
     "code_explorer": "snippets",
-    "clip_player": "clips",
     "gallery": "images",
     "comparison": "comparisons",
     "lyrics_player": "sections",
@@ -455,7 +453,7 @@ def build_fallback_candidates(
 ) -> list[dict]:
     """Build fallback tab candidates from synthesis and video metadata.
 
-    Priority: overview > info_grid > clip_player.
+    Priority: overview > info_grid > moment_track.
     Skips candidates that duplicate existing components or IDs.
     """
     candidates: list[dict] = []
@@ -496,29 +494,28 @@ def build_fallback_candidates(
                 "crossTabLinks": [],
             })
 
-    # Fallback 3: clip_player from video chapters
-    if "clip_player" not in existing_components and "key_moments" not in existing_ids:
+    # Fallback 3: moment_track from video chapters
+    if "moment_track" not in existing_components and "key_moments" not in existing_ids:
         chapters = video_meta.get("chapters", [])
         if isinstance(chapters, list) and len(chapters) >= 2:
-            clips = []
-            for ch in chapters:
-                if isinstance(ch, dict):
-                    clips.append({
-                        "title": ch.get("title", ch.get("label", "Clip")),
-                        "startSeconds": ch.get("start_time", ch.get("startTime", ch.get("start", 0))),
-                        "endSeconds": ch.get("end_time", ch.get("endTime", ch.get("end", 0))),
-                        "mood": "informational",
+            chapter_dicts = [ch for ch in chapters if isinstance(ch, dict)]
+            if len(chapter_dicts) >= 2:
+                video_duration = video_meta.get("duration")
+                try:
+                    video_duration = int(video_duration) if video_duration is not None else None
+                except (ValueError, TypeError):
+                    video_duration = None
+                items = _chapters_to_moments(chapter_dicts, video_duration)
+                if len(items) >= 2:
+                    candidates.append({
+                        "id": "key_moments",
+                        "label": "Key Moments",
+                        "emoji": "🎬",
+                        "component": "moment_track",
+                        "props": {"items": items},
+                        "goal": "Jump to the chapters of this video",
+                        "crossTabLinks": [],
                     })
-            if len(clips) >= 2:
-                candidates.append({
-                    "id": "key_moments",
-                    "label": "Key Moments",
-                    "emoji": "🎬",
-                    "component": "clip_player",
-                    "props": {"clips": clips},
-                    "goal": "Watch the key moments from this video",
-                    "crossTabLinks": [],
-                })
 
     return candidates
 
@@ -604,14 +601,28 @@ def assemble_response(
                 review = extraction.get("review", {})
                 if isinstance(review, dict):
                     data = {"pros": review.get("pros", []), "cons": review.get("cons", []), "comparisons": review.get("comparisons", [])}
-            elif component == "timeline":
+            elif component == "moment_track":
                 data = (extraction.get("learning") or {}).get("timestamps")
 
-        if component == "timeline":
+        # YouTube chapters fall through to fill *empty* moment_track data only.
+        # Prior behavior (pre-MomentTrack) was the opposite: chapters always
+        # overrode LLM timestamps. We flipped this with the unified MomentTrack
+        # because LLM-extracted moments now carry mood / description / highlight
+        # spans — strictly richer than the {start_time, title} pairs YouTube
+        # exposes. When extraction returns nothing, chapters are still the best
+        # navigation aid we have, so we keep the fallback.
+        if component == "moment_track" and (data is None or (isinstance(data, list) and len(data) == 0)):
             yt_chapters = (video_meta or {}).get("chapters", [])
             if isinstance(yt_chapters, list) and len(yt_chapters) > 0:
-                data = _chapters_to_timeline(yt_chapters)
-                data_resolved = True
+                chapter_dicts = [ch for ch in yt_chapters if isinstance(ch, dict)]
+                if chapter_dicts:
+                    video_duration = video_meta.get("duration") if video_meta else None
+                    try:
+                        video_duration = int(video_duration) if video_duration is not None else None
+                    except (ValueError, TypeError):
+                        video_duration = None
+                    data = _chapters_to_moments(chapter_dicts, video_duration)
+                    data_resolved = True
 
         # Components that build from synthesis/meta, not extraction data
         _SELF_SUFFICIENT = {"overview", "budget"}
@@ -644,7 +655,7 @@ def assemble_response(
             props = None
 
         if props is not None and frames:
-            for key in ("entries", "spots", "steps", "clips", "images"):
+            for key in ("items", "spots", "steps", "images"):
                 if key in props and isinstance(props[key], list):
                     inject_frame_thumbnails(props[key], frames, all_frames=all_frames)
 

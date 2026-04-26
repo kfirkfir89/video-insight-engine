@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 // VIE primitives for core block demos
 import { ScoreRing, VideoHero } from '@/components/vie';
 
-// Interactive output components (all 17)
+// Interactive output components (16 after merging Timeline + ClipPlayer into MomentTrack)
 import {
   ChecklistInteractive,
   QuizInteractive,
@@ -26,7 +26,7 @@ import {
   SpotExplorer,
   StepByStepInteractive,
   ExerciseInteractive,
-  TimelineExplorer,
+  MomentTrack,
   CodeExplorer,
   ComparisonInteractive,
   VerdictInteractive,
@@ -34,7 +34,6 @@ import {
   OverviewInteractive,
   InfoGridInteractive,
   GalleryInteractive,
-  ClipPlayerInteractive,
   LyricsPlayerInteractive,
 } from '@/features/video-output/components/output/interactive';
 
@@ -201,11 +200,25 @@ function ExerciseDemo() {
   );
 }
 
-function TimelineDemo() {
+function MomentTrackDemo() {
   const { lastNav, onNavigateTab } = useNavHandler();
+  // Mix the timeline points with the clip dataset to showcase points + spans together
+  const items = [
+    ...timeline.map((t) => ({ ...t, endSeconds: undefined as number | undefined })),
+    ...clips.clips.map((c: Record<string, unknown>) => ({
+      label: c.label as string,
+      seconds: (c.startSeconds as number) ?? 0,
+      endSeconds: c.endSeconds as number | undefined,
+      time: c.time as string,
+      mood: c.mood as string | undefined,
+      description: c.description as string | undefined,
+      tags: c.tags as string[] | undefined,
+      thumbnailUrl: c.thumbnailUrl as string | undefined,
+    })),
+  ].sort((a, b) => a.seconds - b.seconds);
   return (
-    <OutputCard label="Timeline Explorer" type="TimelineExplorer" domain="general" lastNav={lastNav}>
-      <TimelineExplorer entries={timeline} nextTab="takeaways" onNavigateTab={onNavigateTab} />
+    <OutputCard label="Moment Track" type="MomentTrack" domain="general" lastNav={lastNav}>
+      <MomentTrack items={items} nextTab="takeaways" onNavigateTab={onNavigateTab} />
     </OutputCard>
   );
 }
@@ -273,15 +286,6 @@ function GalleryDemo() {
   );
 }
 
-function ClipPlayerDemo() {
-  const { lastNav, onNavigateTab } = useNavHandler();
-  return (
-    <OutputCard label="Clip Player" type="ClipPlayerInteractive" domain="media" lastNav={lastNav}>
-      <ClipPlayerInteractive clips={clips.clips} filters={clips.filters} nextTab="analysis" onNavigateTab={onNavigateTab} />
-    </OutputCard>
-  );
-}
-
 function LyricsPlayerDemo() {
   const { lastNav, onNavigateTab } = useNavHandler();
   return (
@@ -294,7 +298,7 @@ function LyricsPlayerDemo() {
 // Map demo components to categories for filtering
 const OUTPUT_DEMOS: { category: Exclude<Category, 'all' | 'core'>; Component: React.ComponentType }[] = [
   { category: 'general', Component: OverviewDemo },
-  { category: 'general', Component: TimelineDemo },
+  { category: 'general', Component: MomentTrackDemo },
   { category: 'general', Component: InfoGridDemo },
   { category: 'learning', Component: QuizDemo },
   { category: 'learning', Component: FlashDeckDemo },
@@ -308,7 +312,6 @@ const OUTPUT_DEMOS: { category: Exclude<Category, 'all' | 'core'>; Component: Re
   { category: 'review', Component: ComparisonDemo },
   { category: 'review', Component: VerdictDemo },
   { category: 'media', Component: GalleryDemo },
-  { category: 'media', Component: ClipPlayerDemo },
   { category: 'learning', Component: LyricsPlayerDemo },
 ];
 

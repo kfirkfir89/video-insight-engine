@@ -5,7 +5,7 @@
  * - Core blocks: FlashCard, ScenarioCard, SpotCard, ScoreRing
  * - Interactive output components: ChecklistInteractive, QuizInteractive,
  *   FlashDeckInteractive, ScenarioInteractive, SpotExplorer,
- *   StepByStepInteractive, ExerciseInteractive, TimelineExplorer,
+ *   StepByStepInteractive, ExerciseInteractive, MomentTrack,
  *   CodeExplorer, ComparisonInteractive
  */
 

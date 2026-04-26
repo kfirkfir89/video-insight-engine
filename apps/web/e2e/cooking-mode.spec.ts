@@ -152,9 +152,9 @@ const LEARNING_TABS: TabEntry[] = [
     id: 'timestamps',
     label: 'Timestamps',
     emoji: '⏱️',
-    component: 'timeline',
+    component: 'moment_track',
     props: {
-      entries: [
+      items: [
         { time: '0:00', seconds: 0, label: 'Introduction' },
         { time: '2:30', seconds: 150, label: 'Main topic' },
       ],

@@ -167,9 +167,9 @@ const LEARNING_TABS: TabEntry[] = [
     id: 'timestamps',
     label: 'Timestamps',
     emoji: '⏱️',
-    component: 'timeline',
+    component: 'moment_track',
     props: {
-      entries: [
+      items: [
         { time: '0:00', seconds: 0, label: 'Introduction to quantum mechanics' },
         { time: '3:45', seconds: 225, label: 'Superposition explained with analogies' },
         { time: '8:20', seconds: 500, label: 'Practical applications of quantum computing' },
@@ -763,11 +763,11 @@ const NARRATIVE_TABS: TabEntry[] = [
     id: 'key_moments',
     label: 'Key Moments',
     emoji: '⭐',
-    component: 'timeline',
+    component: 'moment_track',
     props: {
-      entries: [
+      items: [
         { time: '0:45', seconds: 45, label: 'The unexpected revelation', emoji: '😮', mood: 'Surprise', description: 'A twist that reframes the entire narrative.' },
-        { time: '5:30', seconds: 330, label: 'The emotional turning point', emoji: '😢', mood: 'Emotional', description: 'The heartfelt confession that changes everything.' },
+        { time: '5:30', seconds: 330, endSeconds: 420, label: 'The emotional turning point', emoji: '😢', mood: 'Emotional', description: 'The heartfelt confession that changes everything.' },
         { time: '12:00', seconds: 720, label: 'The triumphant conclusion', emoji: '🎉', mood: 'Joy', description: 'Against all odds, the protagonist achieves their goal.' },
       ],
     },
@@ -832,7 +832,7 @@ test.describe('Domain Videos — v2 Assembled Tabs', () => {
       await expect(page.getByText('Error correction remains')).toBeVisible();
     });
 
-    test('should render timestamps via timeline component', async ({ authenticatedPage: page }) => {
+    test('should render timestamps via moment_track component', async ({ authenticatedPage: page }) => {
       await setupMock(page, 'Quantum Computing 101', output);
       await page.goto('/video/video-1');
       await waitForOutput(page);
@@ -1190,7 +1190,7 @@ test.describe('Domain Videos — v2 Assembled Tabs', () => {
   test.describe('Narrative modifier', () => {
     const output = makeV2Output('learning', NARRATIVE_TABS);
 
-    test('should render key moments via timeline', async ({ authenticatedPage: page }) => {
+    test('should render key moments via moment_track', async ({ authenticatedPage: page }) => {
       await setupMock(page, 'Steve Jobs Stanford Speech', output);
       await page.goto('/video/video-1');
       await waitForOutput(page);

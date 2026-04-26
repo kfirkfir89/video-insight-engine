@@ -1,7 +1,7 @@
 {
   "components": [
     "spot_explorer",
-    "timeline",
+    "moment_track",
     "code_explorer",
     "comparison",
     "gallery",
@@ -11,7 +11,6 @@
     "quiz",
     "flash_deck",
     "scenario",
-    "clip_player",
     "lyrics_player",
     "verdict",
     "budget",
@@ -27,7 +26,7 @@
         { "id": "key_points", "component": "overview", "dataSource": "learning.keyPoints", "label": "Key Points", "emoji": "💡" },
         { "id": "concepts", "component": "flash_deck", "dataSource": "learning.concepts", "label": "Concepts", "emoji": "📚" },
         { "id": "takeaways", "component": "checklist", "dataSource": "learning.takeaways", "label": "Takeaways", "emoji": "🎯" },
-        { "id": "timestamps", "component": "timeline", "dataSource": "learning.timestamps", "label": "Timestamps", "emoji": "🕐" }
+        { "id": "timestamps", "component": "moment_track", "dataSource": "learning.timestamps", "label": "Timestamps", "emoji": "🕐" }
       ]
     },
     "tech": {
@@ -66,7 +65,7 @@
       "gradient": "linear-gradient(135deg, var(--vie-rose), var(--vie-plum))",
       "defaultTabs": [
         { "id": "analysis", "component": "overview", "dataSource": "music.analysis", "label": "Analysis", "emoji": "🎼" },
-        { "id": "structure", "component": "timeline", "dataSource": "music.structure", "label": "Structure", "emoji": "🎵" },
+        { "id": "structure", "component": "moment_track", "dataSource": "music.structure", "label": "Structure", "emoji": "🎵" },
         { "id": "credits", "component": "info_grid", "dataSource": "music.credits", "label": "Credits", "emoji": "🎤" }
       ]
     },

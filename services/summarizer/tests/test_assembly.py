@@ -22,14 +22,14 @@ from src.services.pipeline.assembly import (
     assemble_overview,
     assemble_display_section,
     assemble_gallery,
-    assemble_clip_player,
     assemble_lyrics_player,
-    assemble_timeline,
+    assemble_moment_track,
     assemble_code_explorer,
     assemble_quiz,
     assemble_scenario,
+    _chapters_to_moments,
     _normalize_code_snippet,
-    _normalize_timeline_entry,
+    _normalize_moment_item,
     _normalize_exercise,
     _normalize_quiz_question,
     _normalize_scenario_item,
@@ -152,8 +152,13 @@ class TestCrossTabLinks:
 class TestAssembleSpotExplorer:
     def test_travel_days(self):
         data = [
-            {"day": 1, "city": "Tokyo", "spots": [{"name": "Shibuya"}, {"name": "Harajuku"}]},
-            {"day": 2, "city": "Osaka", "spots": [{"name": "Dotonbori"}]},
+            {"day": 1, "city": "Tokyo", "spots": [
+                {"name": "Shibuya", "description": "Iconic scramble crossing"},
+                {"name": "Harajuku", "description": "Youth fashion district"},
+            ]},
+            {"day": 2, "city": "Osaka", "spots": [
+                {"name": "Dotonbori", "description": "Neon-lit canal nightlife"},
+            ]},
         ]
         result = assemble_spot_explorer({}, data, {}, None)
         assert result is not None
@@ -164,7 +169,10 @@ class TestAssembleSpotExplorer:
         assert result["sections"][1]["spotIndices"] == [2]
 
     def test_flat_spots(self):
-        data = [{"name": "Spot A"}, {"name": "Spot B"}]
+        data = [
+            {"name": "Spot A", "description": "First stop"},
+            {"name": "Spot B", "description": "Second stop"},
+        ]
         result = assemble_spot_explorer({}, data, {}, None)
         assert result is not None
         assert len(result["spots"]) == 2
@@ -173,6 +181,39 @@ class TestAssembleSpotExplorer:
     def test_empty(self):
         assert assemble_spot_explorer({}, [], {}, None) is None
         assert assemble_spot_explorer({}, None, {}, None) is None
+
+    def test_name_only_spots_dropped(self):
+        # A spot needs at least a description or a passthrough field — bare
+        # name dicts render as empty cards in spot_explorer and are usually a
+        # symptom of cross-domain keyword pollution. Pin the behavior so a
+        # future contributor doesn't loosen the rule by accident.
+        data = [{"name": "Spot A"}, {"name": "Spot B"}]
+        assert assemble_spot_explorer({}, data, {}, None) is None
+
+    def test_name_with_passthrough_kept(self):
+        # Passthrough fields (emoji, cost, duration, …) count as descriptive
+        # content, so name + emoji is enough to render a real card.
+        data = [
+            {"name": "Spot A", "emoji": "🍕"},
+            {"name": "Spot B", "emoji": "🍣"},
+        ]
+        result = assemble_spot_explorer({}, data, {}, None)
+        assert result is not None
+        assert len(result["spots"]) == 2
+        assert result["spots"][0]["emoji"] == "🍕"
+
+    def test_string_items_dropped(self):
+        # String items used to be promoted to {name: "...", description: ""};
+        # now they're rejected because extraction should produce structured
+        # dicts. Below the _MIN_SPOTS threshold ⇒ tab is dropped entirely.
+        data = ["Spot A", "Spot B"]
+        assert assemble_spot_explorer({}, data, {}, None) is None
+
+    def test_below_min_spots_dropped(self):
+        # _MIN_SPOTS = 2 — single-spot tabs degrade poorly in the explorer UI,
+        # so the fallback layer takes over (overview/info_grid).
+        data = [{"name": "Lone Spot", "description": "Only one"}]
+        assert assemble_spot_explorer({}, data, {}, None) is None
 
 
 class TestAssembleChecklist:
@@ -396,7 +437,10 @@ class TestAssembleResponse:
         extraction = {
             "travel": {
                 "itinerary": [
-                    {"day": 1, "city": "Rome", "spots": [{"name": "Colosseum"}, {"name": "Forum"}]},
+                    {"day": 1, "city": "Rome", "spots": [
+                        {"name": "Colosseum", "description": "Ancient amphitheatre"},
+                        {"name": "Forum", "description": "Political heart of old Rome"},
+                    ]},
                 ],
                 "budget": {"total": 2000, "currency": "USD", "breakdown": [{"item": "Hotels", "amount": 1200}]},
                 "packingList": [{"item": "Sunscreen", "category": "Essentials", "essential": True}],
@@ -433,13 +477,13 @@ class TestAssembleResponse:
             "primaryTag": "learning",
             "userGoal": "Learn",
             "tabs": [
-                {"id": "key_points", "label": "Points", "emoji": "💡", "dataSource": "learning.keyPoints", "component": "timeline"},
+                {"id": "key_points", "label": "Points", "emoji": "💡", "dataSource": "learning.keyPoints", "component": "moment_track"},
             ],
         }
         extraction = {"learning": {"keyPoints": [{"title": "P1"}]}}
         result = assemble_response(triage, extraction, None, None)
 
-        assert result["tabs"][0]["component"] == "timeline"
+        assert result["tabs"][0]["component"] == "moment_track"
 
     def test_synthesis_merged_into_meta(self):
         triage = self._make_triage()
@@ -505,22 +549,26 @@ class TestAssembleGallery:
         assert assemble_gallery({}, None, {}, None) is None
 
 
-class TestAssembleClipPlayer:
+class TestAssembleMomentTrackHighlight:
+    """assemble_moment_track with clip-style input (mood + description)."""
+
     def test_with_moments(self):
         data = [
-            {"label": "Best play", "timestamp": 120, "mood": "exciting", "description": "Amazing goal"},
+            {"label": "Best play", "timestamp": 120, "mood": "exciting", "description": "Amazing goal", "endTimestamp": 180},
             {"title": "Funny moment", "timestamp": 300},
         ]
-        result = assemble_clip_player({}, data, {}, None)
+        result = assemble_moment_track({}, data, {}, None)
         assert result is not None
-        assert len(result["clips"]) == 2
-        assert result["clips"][0]["label"] == "Best play"
-        assert result["clips"][0]["mood"] == "exciting"
-        assert result["clips"][1]["label"] == "Funny moment"
+        assert len(result["items"]) == 2
+        assert result["items"][0]["label"] == "Best play"
+        assert result["items"][0]["mood"] == "exciting"
+        assert result["items"][0]["endSeconds"] == 180
+        assert result["items"][1]["label"] == "Funny moment"
+        assert "endSeconds" not in result["items"][1]
 
     def test_empty(self):
-        assert assemble_clip_player({}, [], {}, None) is None
-        assert assemble_clip_player({}, None, {}, None) is None
+        assert assemble_moment_track({}, [], {}, None) is None
+        assert assemble_moment_track({}, None, {}, None) is None
 
 
 class TestAssembleLyricsPlayer:
@@ -580,16 +628,17 @@ class TestMaterialsStepsCrossLinks:
 class TestRegistryCoverage:
     def test_all_registered(self):
         expected = {
-            "spot_explorer", "timeline", "code_explorer", "comparison", "gallery",
+            "spot_explorer", "moment_track", "code_explorer", "comparison", "gallery",
             "info_grid", "checklist", "step_player", "exercise_tracker",
             "quiz", "flash_deck", "scenario",
-            "clip_player", "lyrics_player",
+            "lyrics_player",
             "verdict", "budget", "overview", "display_section",
         }
         assert set(ASSEMBLER_REGISTRY.keys()) == expected
 
-    def test_registry_has_18_entries(self):
-        assert len(ASSEMBLER_REGISTRY) == 18
+    def test_registry_has_17_entries(self):
+        # 18 before merging timeline+clip_player into moment_track
+        assert len(ASSEMBLER_REGISTRY) == 17
 
     def test_all_assemblers_handle_none(self):
         for name, assembler in ASSEMBLER_REGISTRY.items():
@@ -636,14 +685,14 @@ class TestSyncGuard:
         )
 
 
-# ─── Timeline Fallback ───
+# ─── MomentTrack Fallback ───
 
 
-class TestTimelineFallback:
-    """When triage assigns a wrong dataSource for timeline, assembly falls back to learning.timestamps."""
+class TestMomentTrackFallback:
+    """When triage assigns a wrong dataSource for moment_track, assembly falls back to learning.timestamps."""
 
-    def test_timeline_falls_back_to_learning_timestamps(self):
-        """timeline with invalid dataSource should fall back to learning.timestamps."""
+    def test_moment_track_falls_back_to_learning_timestamps(self):
+        """moment_track with invalid dataSource should fall back to learning.timestamps."""
         triage = {
             "contentTags": ["tech", "learning"],
             "primaryTag": "tech",
@@ -652,7 +701,7 @@ class TestTimelineFallback:
                     "id": "key_moments",
                     "label": "⭐ Key Moments",
                     "emoji": "⭐",
-                    "component": "timeline",
+                    "component": "moment_track",
                     "dataSource": "tech.timestamps",  # wrong — doesn't exist
                 },
             ],
@@ -667,13 +716,13 @@ class TestTimelineFallback:
         }
         result = assemble_response(triage, extraction, None, None)
 
-        assert len(result["tabs"]) == 1, "timeline tab should survive via fallback"
+        assert len(result["tabs"]) == 1, "moment_track tab should survive via fallback"
         tab = result["tabs"][0]
-        assert tab["component"] == "timeline"
-        assert len(tab["props"]["entries"]) == 2
+        assert tab["component"] == "moment_track"
+        assert len(tab["props"]["items"]) == 2
 
-    def test_timeline_with_correct_datasource_still_works(self):
-        """Regression: timeline with correct learning.timestamps dataSource works as before."""
+    def test_moment_track_with_correct_datasource_still_works(self):
+        """Regression: moment_track with correct learning.timestamps dataSource works as before."""
         triage = {
             "contentTags": ["tech", "learning"],
             "primaryTag": "tech",
@@ -682,7 +731,7 @@ class TestTimelineFallback:
                     "id": "key_moments",
                     "label": "⭐ Key Moments",
                     "emoji": "⭐",
-                    "component": "timeline",
+                    "component": "moment_track",
                     "dataSource": "learning.timestamps",
                 },
             ],
@@ -694,10 +743,10 @@ class TestTimelineFallback:
         }
         result = assemble_response(triage, extraction, None, None)
         assert len(result["tabs"]) == 1
-        assert result["tabs"][0]["props"]["entries"][0]["label"] == "Intro"
+        assert result["tabs"][0]["props"]["items"][0]["label"] == "Intro"
 
-    def test_youtube_chapters_override_llm_timestamps(self):
-        """YouTube chapters take priority over LLM-extracted timestamps."""
+    def test_youtube_chapters_override_empty_timestamps(self):
+        """YouTube chapters fill in when learning.timestamps is empty."""
         triage = {
             "contentTags": ["learning"],
             "primaryTag": "learning",
@@ -706,15 +755,13 @@ class TestTimelineFallback:
                     "id": "key_moments",
                     "label": "⭐ Key Moments",
                     "emoji": "⭐",
-                    "component": "timeline",
+                    "component": "moment_track",
                     "dataSource": "learning.timestamps",
                 },
             ],
         }
         extraction = {
-            "learning": {
-                "timestamps": [{"time": "0:00", "seconds": 0, "label": "LLM Intro"}],
-            },
+            "learning": {"timestamps": []},
         }
         video_meta = {
             "chapters": [
@@ -724,14 +771,17 @@ class TestTimelineFallback:
         }
         result = assemble_response(triage, extraction, None, None, video_meta=video_meta)
         assert len(result["tabs"]) == 1
-        entries = result["tabs"][0]["props"]["entries"]
-        assert len(entries) == 2
-        assert entries[0]["label"] == "YT Intro"
-        assert entries[0]["seconds"] == 0
-        assert entries[0]["time"] == "0:00"
-        assert entries[1]["label"] == "YT Main Content"
-        assert entries[1]["seconds"] == 120
-        assert entries[1]["time"] == "2:00"
+        items = result["tabs"][0]["props"]["items"]
+        assert len(items) == 2
+        assert items[0]["label"] == "YT Intro"
+        assert items[0]["seconds"] == 0
+        assert items[0]["time"] == "0:00"
+        # Chapter span: endSeconds should be next chapter start minus 1
+        assert items[0]["endSeconds"] == 119
+        assert items[0]["mood"] == "chapter"
+        assert items[1]["label"] == "YT Main Content"
+        assert items[1]["seconds"] == 120
+        assert items[1]["time"] == "2:00"
 
     def test_youtube_chapters_rescue_empty_timestamps(self):
         """YouTube chapters used when learning.timestamps is empty []."""
@@ -743,7 +793,7 @@ class TestTimelineFallback:
                     "id": "video_highlights",
                     "label": "📺 Highlights",
                     "emoji": "📺",
-                    "component": "timeline",
+                    "component": "moment_track",
                     "dataSource": "learning.timestamps",
                 },
             ],
@@ -754,11 +804,12 @@ class TestTimelineFallback:
         video_meta = {
             "chapters": [
                 {"start_time": 0.0, "end_time": 60.0, "title": "Best Pizza"},
+                {"start_time": 60.0, "end_time": 120.0, "title": "Final Touches"},
             ],
         }
         result = assemble_response(triage, extraction, None, None, video_meta=video_meta)
         assert len(result["tabs"]) == 1
-        assert result["tabs"][0]["props"]["entries"][0]["label"] == "Best Pizza"
+        assert result["tabs"][0]["props"]["items"][0]["label"] == "Best Pizza"
 
     def test_no_chapters_falls_back_to_llm_timestamps(self):
         """Without YouTube chapters, LLM timestamps are used."""
@@ -770,7 +821,7 @@ class TestTimelineFallback:
                     "id": "key_moments",
                     "label": "⭐ Key Moments",
                     "emoji": "⭐",
-                    "component": "timeline",
+                    "component": "moment_track",
                     "dataSource": "learning.timestamps",
                 },
             ],
@@ -783,7 +834,7 @@ class TestTimelineFallback:
         video_meta = {"chapters": []}
         result = assemble_response(triage, extraction, None, None, video_meta=video_meta)
         assert len(result["tabs"]) == 1
-        assert result["tabs"][0]["props"]["entries"][0]["label"] == "LLM Topic"
+        assert result["tabs"][0]["props"]["items"][0]["label"] == "LLM Topic"
 
     def test_chapters_time_formatting_with_hours(self):
         """Chapters over 1 hour get H:MM:SS format."""
@@ -793,7 +844,7 @@ class TestTimelineFallback:
             "tabs": [
                 {
                     "id": "timestamps",
-                    "component": "timeline",
+                    "component": "moment_track",
                     "dataSource": "learning.timestamps",
                 },
             ],
@@ -802,12 +853,41 @@ class TestTimelineFallback:
         video_meta = {
             "chapters": [
                 {"start_time": 3661.0, "end_time": 4000.0, "title": "Hour Mark"},
+                {"start_time": 4000.0, "end_time": 4500.0, "title": "Follow-up"},
             ],
         }
         result = assemble_response(triage, extraction, None, None, video_meta=video_meta)
-        entry = result["tabs"][0]["props"]["entries"][0]
+        entry = result["tabs"][0]["props"]["items"][0]
         assert entry["time"] == "1:01:01"
         assert entry["seconds"] == 3661
+
+    def test_chapters_fallback_sets_endSeconds(self):
+        """Each chapter span gets endSeconds = next.start - 1; final uses video duration."""
+        chapters = [
+            {"start_time": 0.0, "title": "A"},
+            {"start_time": 100.0, "title": "B"},
+            {"start_time": 250.0, "title": "C"},
+        ]
+        items = _chapters_to_moments(chapters, video_duration=400)
+        assert items[0]["endSeconds"] == 99
+        assert items[1]["endSeconds"] == 249
+        # Final chapter uses video_duration - 1
+        assert items[2]["endSeconds"] == 399
+        # All chapters flagged as mood="chapter"
+        assert all(item["mood"] == "chapter" for item in items)
+
+    def test_music_cross_tab_links_use_moment_track(self):
+        """Music-domain cross-tab rules resolve to moment_track, not clip_player."""
+        from src.services.pipeline.assembly.cross_tab import _COMPONENT_LINK_RULES
+        source_components = {(src, tgt, domain) for src, tgt, _label, domain in _COMPONENT_LINK_RULES}
+        assert ("lyrics_player", "moment_track", "music") in source_components
+        assert ("moment_track", "info_grid", "music") in source_components
+        # Confirm the old clip_player rules are gone
+        clip_player_rules = [
+            (src, tgt) for src, tgt, _label, _domain in _COMPONENT_LINK_RULES
+            if src == "clip_player" or tgt == "clip_player"
+        ]
+        assert clip_player_rules == []
 
 
 # ─── Frame Utilities ───
@@ -957,22 +1037,31 @@ class TestFlexSpotExplorer:
     """Tests for cross-domain spot_explorer input shapes."""
 
     def test_name_description_shape(self):
-        data = [{"name": "React Hooks", "description": "State management primitive", "emoji": "⚛️"}]
+        data = [
+            {"name": "React Hooks", "description": "State management primitive", "emoji": "⚛️"},
+            {"name": "useEffect", "description": "Side-effect scheduling", "emoji": "⚛️"},
+        ]
         result = assemble_spot_explorer({}, data, {}, None)
         assert result is not None
-        assert len(result["spots"]) == 1
+        assert len(result["spots"]) == 2
         assert result["spots"][0]["name"] == "React Hooks"
         assert result["spots"][0]["description"] == "State management primitive"
 
     def test_aspect_detail_shape(self):
-        data = [{"aspect": "Melody", "emoji": "🎵", "detail": "Uses pentatonic scale"}]
+        data = [
+            {"aspect": "Melody", "emoji": "🎵", "detail": "Uses pentatonic scale"},
+            {"aspect": "Harmony", "emoji": "🎼", "detail": "Stacked thirds over I-IV-V"},
+        ]
         result = assemble_spot_explorer({}, data, {}, None)
         assert result is not None
         assert result["spots"][0]["name"] == "Melody"
         assert result["spots"][0]["description"] == "Uses pentatonic scale"
 
     def test_label_explanation_shape(self):
-        data = [{"label": "Cognitive Bias", "explanation": "Systematic error in thinking"}]
+        data = [
+            {"label": "Cognitive Bias", "explanation": "Systematic error in thinking"},
+            {"label": "Anchoring", "explanation": "Over-reliance on first piece of information"},
+        ]
         result = assemble_spot_explorer({}, data, {}, None)
         assert result is not None
         assert result["spots"][0]["name"] == "Cognitive Bias"
@@ -982,8 +1071,12 @@ class TestFlexSpotExplorer:
         assert assemble_spot_explorer({}, [], {}, None) is None
 
     def test_passthrough_fields(self):
-        data = [{"name": "Place", "description": "Nice", "cost": "$50", "mapQuery": "place+near+me"}]
+        data = [
+            {"name": "Place", "description": "Nice", "cost": "$50", "mapQuery": "place+near+me"},
+            {"name": "Spot B", "description": "Also nice", "cost": "$30"},
+        ]
         result = assemble_spot_explorer({}, data, {}, None)
+        assert result is not None
         assert result["spots"][0]["cost"] == "$50"
         assert result["spots"][0]["mapQuery"] == "place+near+me"
 
@@ -1006,6 +1099,7 @@ class TestFlexSpotExplorer:
         """Language vocabulary: {word, definition, pronunciation, partOfSpeech, example}."""
         data = [
             {"word": "ambitious", "definition": "Having a strong desire to succeed", "pronunciation": "æmˈbɪʃəs", "partOfSpeech": "adjective", "example": "ambitious goals"},
+            {"word": "fluent", "definition": "Able to express oneself easily", "pronunciation": "ˈfluːənt", "partOfSpeech": "adjective"},
         ]
         result = assemble_spot_explorer({}, data, {}, None)
         assert result is not None
@@ -1136,35 +1230,116 @@ class TestFlexInfoGrid:
 
 
 class TestSpotExplorerEmptyFiltering:
-    """Tests for filtering empty spots in spot_explorer assembler."""
+    """Tests for filtering empty/low-quality spots in spot_explorer assembler."""
 
     def test_empty_spots_are_dropped(self):
         data = [
             {"name": "", "description": ""},
             {"name": "Valid Spot", "description": "Has content"},
             {"name": "", "description": ""},
+            {"name": "Second Valid", "description": "Also real content"},
         ]
         result = assemble_spot_explorer({}, data, {}, None)
         assert result is not None
-        assert len(result["spots"]) == 1
+        assert len(result["spots"]) == 2
         assert result["spots"][0]["name"] == "Valid Spot"
+        assert result["spots"][1]["name"] == "Second Valid"
 
     def test_all_empty_spots_returns_none(self):
         data = [{"name": "", "description": ""}, {"name": "", "description": ""}]
         result = assemble_spot_explorer({}, data, {}, None)
         assert result is None
 
-    def test_spot_with_only_name_kept(self):
-        data = [{"name": "Has name only", "description": ""}]
+    def test_spot_with_only_name_is_dropped(self):
+        """A spot with just a name (no description or passthrough) renders as an empty card — drop it."""
+        data = [
+            {"name": "Has name only", "description": ""},
+            {"name": "Also name only", "description": ""},
+        ]
         result = assemble_spot_explorer({}, data, {}, None)
-        assert result is not None
-        assert len(result["spots"]) == 1
+        assert result is None
 
-    def test_spot_with_only_description_kept(self):
-        data = [{"name": "", "description": "Has description only"}]
+    def test_spot_with_only_description_is_dropped(self):
+        """A spot with no name cannot be the title of a card — drop it."""
+        data = [
+            {"name": "", "description": "Has description only"},
+            {"name": "", "description": "Another orphan description"},
+        ]
+        result = assemble_spot_explorer({}, data, {}, None)
+        assert result is None
+
+    def test_bare_string_list_rejected(self):
+        """List of raw strings (keyword pollution) should not assemble as spots."""
+        data = ["live dashboards", "API integration", "data visualization", "scheduled data refresh"]
+        result = assemble_spot_explorer({}, data, {}, None)
+        assert result is None
+
+    def test_below_minimum_spot_count_returns_none(self):
+        """A single valid spot is not an explorer — drop so fallback layer can recover."""
+        data = [{"name": "Lonely Spot", "description": "Only one"}]
+        result = assemble_spot_explorer({}, data, {}, None)
+        assert result is None
+
+    def test_name_plus_emoji_is_kept(self):
+        """Name + emoji-only (no description) is still meaningful visual content."""
+        data = [
+            {"name": "Tokyo Tower", "emoji": "🗼"},
+            {"name": "Sky Tree", "emoji": "🗾"},
+        ]
         result = assemble_spot_explorer({}, data, {}, None)
         assert result is not None
-        assert len(result["spots"]) == 1
+        assert len(result["spots"]) == 2
+        assert result["spots"][0]["emoji"] == "🗼"
+
+    def test_mixed_valid_and_invalid_keeps_only_valid(self):
+        data = [
+            {"name": "Real Place", "description": "With detail"},
+            {"name": "Name only"},
+            {"name": "Another Real Place", "emoji": "📍"},
+            {"name": ""},
+            {"description": "Orphan description"},
+        ]
+        result = assemble_spot_explorer({}, data, {}, None)
+        assert result is not None
+        assert len(result["spots"]) == 2
+        assert result["spots"][0]["name"] == "Real Place"
+        assert result["spots"][1]["name"] == "Another Real Place"
+
+    def test_travel_day_empty_spots_drops_tab(self):
+        """TravelDay where every day's spots are name-only — whole tab drops."""
+        data = [
+            {"day": 1, "city": "Rome", "spots": [{"name": "Colosseum"}, {"name": "Forum"}]},
+            {"day": 2, "city": "Florence", "spots": [{"name": "Duomo"}]},
+        ]
+        result = assemble_spot_explorer({}, data, {}, None)
+        assert result is None
+
+    def test_travel_day_section_indices_stay_aligned_after_filter(self):
+        """When some day-spots are filtered, sections' spotIndices must re-align to the kept list."""
+        data = [
+            {"day": 1, "city": "Rome", "spots": [
+                {"name": "Colosseum", "description": "Ancient amphitheatre"},
+                {"name": "Name only"},
+                {"name": "Forum", "description": "Political heart"},
+            ]},
+            {"day": 2, "city": "Florence", "spots": [
+                {"name": "Duomo"},
+            ]},
+            {"day": 3, "city": "Venice", "spots": [
+                {"name": "St Mark's", "description": "Basilica square"},
+            ]},
+        ]
+        result = assemble_spot_explorer({}, data, {}, None)
+        assert result is not None
+        assert len(result["spots"]) == 3
+        assert result["spots"][0]["name"] == "Colosseum"
+        assert result["spots"][1]["name"] == "Forum"
+        assert result["spots"][2]["name"] == "St Mark's"
+        assert len(result["sections"]) == 2
+        assert result["sections"][0]["label"] == "Day 1: Rome"
+        assert result["sections"][0]["spotIndices"] == [0, 1]
+        assert result["sections"][1]["label"] == "Day 3: Venice"
+        assert result["sections"][1]["spotIndices"] == [2]
 
 
 class TestComparisonProductLabel:
@@ -1476,41 +1651,82 @@ class TestCodeExplorerNormalization:
         assert result["filename"] == "main.py"
 
 
-class TestTimelineNormalization:
-    """Phase 1.2: _normalize_timeline_entry + assemble_timeline."""
+class TestMomentItemNormalization:
+    """_normalize_moment_item + assemble_moment_track — merged point/clip normalization."""
 
     def test_valid_entry_passthrough(self):
-        result = _normalize_timeline_entry({"label": "Intro", "time": "0:00", "seconds": 0}, 0)
+        result = _normalize_moment_item({"label": "Intro", "time": "0:00", "seconds": 0}, 0)
         assert result is not None
         assert result["label"] == "Intro"
         assert result["seconds"] == 0
+        # No endSeconds ⇒ point moment
+        assert "endSeconds" not in result
 
     def test_missing_time_computed(self):
-        result = _normalize_timeline_entry({"label": "Test", "seconds": 125}, 0)
+        result = _normalize_moment_item({"label": "Test", "seconds": 125}, 0)
         assert result is not None
         assert result["time"] == "2:05"
 
     def test_label_aliases(self):
-        result = _normalize_timeline_entry({"title": "Chapter 1", "seconds": 0}, 0)
+        result = _normalize_moment_item({"title": "Chapter 1", "seconds": 0}, 0)
         assert result["label"] == "Chapter 1"
-        result = _normalize_timeline_entry({"name": "Section A", "seconds": 0}, 0)
+        result = _normalize_moment_item({"name": "Section A", "seconds": 0}, 0)
         assert result["label"] == "Section A"
 
     def test_string_entry(self):
-        result = _normalize_timeline_entry("Introduction", 0)
+        result = _normalize_moment_item("Introduction", 0)
         assert result is not None
         assert result["label"] == "Introduction"
         assert result["seconds"] == 0
 
     def test_empty_string_returns_none(self):
-        assert _normalize_timeline_entry("", 0) is None
+        assert _normalize_moment_item("", 0) is None
 
     def test_non_dict_non_str_returns_none(self):
-        assert _normalize_timeline_entry(42, 0) is None
+        assert _normalize_moment_item(42, 0) is None
 
     def test_missing_label_gets_default(self):
-        result = _normalize_timeline_entry({"seconds": 60}, 2)
-        assert result["label"] == "Point 3"
+        result = _normalize_moment_item({"seconds": 60}, 2)
+        assert result["label"] == "Moment 3"
+
+    def test_label_from_description_when_no_title(self):
+        """When label/title/name are absent, derive from description prefix."""
+        result = _normalize_moment_item({"timestamp": 30, "description": "Amazing goal sailed over the defender"}, 0)
+        assert result["label"] == "Amazing goal sailed over the defender"[:60]
+
+    def test_endSeconds_preserved_when_valid(self):
+        """endSeconds is kept when > seconds + 1 (real span)."""
+        result = _normalize_moment_item({"label": "Demo", "seconds": 100, "endSeconds": 160}, 0)
+        assert result["endSeconds"] == 160
+
+    def test_endSeconds_dropped_when_too_short(self):
+        """endSeconds is dropped when it's ≤ seconds + 1 (not a real span)."""
+        result = _normalize_moment_item({"label": "X", "seconds": 100, "endSeconds": 101}, 0)
+        assert "endSeconds" not in result
+
+    def test_startSeconds_maps_to_seconds(self):
+        """Legacy clip shape using startSeconds maps into canonical seconds."""
+        result = _normalize_moment_item({"label": "X", "startSeconds": 42}, 0)
+        assert result["seconds"] == 42
+
+    def test_endTimestamp_alias(self):
+        """narrative.keyMoments uses endTimestamp — the normalizer accepts it."""
+        result = _normalize_moment_item({"label": "X", "timestamp": 200, "endTimestamp": 260}, 0)
+        assert result["seconds"] == 200
+        assert result["endSeconds"] == 260
+
+    def test_optional_fields_passthrough(self):
+        result = _normalize_moment_item({
+            "label": "X", "seconds": 10, "description": "detail",
+            "mood": "excited", "emoji": "🔥", "speaker": "Gordon",
+            "tags": ["highlight"], "thumbnailUrl": "https://a/b.jpg",
+        }, 0)
+        assert result["description"] == "detail"
+        assert result["mood"] == "excited"
+        assert result["emoji"] == "🔥"
+        assert result["speaker"] == "Gordon"
+        assert result["tags"] == ["highlight"]
+        assert result["thumbnailUrl"] == "https://a/b.jpg"
 
     def test_assembler_normalizes(self):
         data = [
@@ -1518,11 +1734,25 @@ class TestTimelineNormalization:
             {"label": "Middle", "seconds": 120},
             42,  # dropped
         ]
-        result = assemble_timeline({}, data, {}, None)
+        result = assemble_moment_track({}, data, {}, None)
         assert result is not None
-        assert len(result["entries"]) == 2
-        assert result["entries"][0]["label"] == "Start"
-        assert result["entries"][1]["time"] == "2:00"
+        assert len(result["items"]) == 2
+        assert result["items"][0]["label"] == "Start"
+        assert result["items"][1]["time"] == "2:00"
+
+    def test_mixed_points_and_spans(self):
+        """Single items[] with both navigation points and highlight spans."""
+        data = [
+            {"label": "Intro", "timestamp": 0},                                    # point
+            {"label": "Punchline", "timestamp": 60, "endTimestamp": 78},           # span
+            {"label": "Wrap", "timestamp": 200},                                   # point
+        ]
+        result = assemble_moment_track({}, data, {}, None)
+        items = result["items"]
+        assert len(items) == 3
+        assert "endSeconds" not in items[0]
+        assert items[1]["endSeconds"] == 78
+        assert "endSeconds" not in items[2]
 
 
 class TestExerciseNormalization:
@@ -1672,30 +1902,32 @@ class TestScenarioNormalization:
         assert len(result["scenarios"]) == 1
 
 
-class TestClipPlayerNormalization:
-    """Phase 1.6: assemble_clip_player defaults."""
+class TestMomentTrackClipDefaults:
+    """assemble_moment_track with clip-style input — default value behavior."""
 
     def test_label_fallback_chain(self):
-        result = assemble_clip_player({}, [{"timestamp": 10}], {}, None)
+        result = assemble_moment_track({}, [{"timestamp": 10}], {}, None)
         assert result is not None
-        assert result["clips"][0]["label"] == "Clip"
+        # No label/title/description ⇒ default "Moment 1"
+        assert result["items"][0]["label"] == "Moment 1"
 
     def test_label_from_title(self):
-        result = assemble_clip_player({}, [{"title": "Great moment"}], {}, None)
-        assert result["clips"][0]["label"] == "Great moment"
+        result = assemble_moment_track({}, [{"title": "Great moment"}], {}, None)
+        assert result["items"][0]["label"] == "Great moment"
 
-    def test_start_seconds_from_timestamp(self):
-        result = assemble_clip_player({}, [{"label": "X", "timestamp": 120}], {}, None)
-        assert result["clips"][0]["startSeconds"] == 120
-        assert result["clips"][0]["time"] == "2:00"
+    def test_seconds_from_timestamp(self):
+        result = assemble_moment_track({}, [{"label": "X", "timestamp": 120}], {}, None)
+        assert result["items"][0]["seconds"] == 120
+        assert result["items"][0]["time"] == "2:00"
+        # No endSeconds ⇒ point, not span
+        assert "endSeconds" not in result["items"][0]
 
-    def test_description_defaults_empty(self):
-        result = assemble_clip_player({}, [{"label": "X"}], {}, None)
-        assert result["clips"][0]["description"] == ""
-
-    def test_mood_defaults_none(self):
-        result = assemble_clip_player({}, [{"label": "X"}], {}, None)
-        assert result["clips"][0]["mood"] is None
+    def test_optional_fields_omitted_when_absent(self):
+        """Optional fields (description, mood, ...) are dropped — not defaulted."""
+        result = assemble_moment_track({}, [{"label": "X"}], {}, None)
+        item = result["items"][0]
+        assert "description" not in item
+        assert "mood" not in item
 
 
 class TestComparisonNullHandling:
@@ -1734,7 +1966,12 @@ class TestAssemblyValidation:
         assert _validate_assembled_props("quiz", {"questions": []}) is False
 
     def test_missing_required_list_fails(self):
-        assert _validate_assembled_props("timeline", {"data": "something"}) is False
+        assert _validate_assembled_props("moment_track", {"data": "something"}) is False
+
+    def test_moment_track_required_list_items(self):
+        """Required list for moment_track is 'items' — empty list drops the tab."""
+        assert _validate_assembled_props("moment_track", {"items": []}) is False
+        assert _validate_assembled_props("moment_track", {"items": [{"label": "x"}]}) is True
 
     def test_unknown_component_passes(self):
         assert _validate_assembled_props("unknown_widget", {"anything": True}) is True

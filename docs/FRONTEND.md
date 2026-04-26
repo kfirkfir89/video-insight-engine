@@ -685,9 +685,8 @@ Each tab's `component` field maps to a renderer in `ComposableOutput.tsx`:
 | `exercise_tracker` | ExerciseInteractive | Sets/reps, warmup/cooldown, difficulty |
 | `verdict` | VerdictInteractive | Sub-category ScoreRings, agree/disagree poll, expandable |
 | `budget` | BudgetInteractive | Editable amounts, SVG donut chart, savings calculator |
-| `timeline` | TimelineExplorer | currentTime highlight, auto-expand, seek |
+| `moment_track` | MomentTrack | Unified track for navigation points + replayable highlight spans, mood/type filters, live progress on active clip, share-link with `#t=start[,end]` |
 | `gallery` | GalleryInteractive | Grid/carousel/hero_stack layouts, seek |
-| `clip_player` | ClipPlayerInteractive | Video clip playback with filters |
 | `lyrics_player` | LyricsPlayerInteractive | Synced lyrics sections with seek |
 | `display_section` | DisplaySection | Generic data-driven fallback renderer |
 

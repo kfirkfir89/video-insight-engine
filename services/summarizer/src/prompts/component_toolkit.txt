@@ -89,11 +89,20 @@ LEARNING — user tests understanding:
 
 MEDIA — user watches/listens:
 
-  clip_player ⭐ RICHER ALTERNATIVE TO TIMELINE
-    CREATES: Video clip segments with mood filters and auto-advance
-    GOOD FOR: Highlight reels, key moments, demos, funny scenes — any moment worth rewatching
-    NEEDS: Array of clips with startSeconds, endSeconds, title, mood, videoId
-    PREFER clip_player over timeline when you want users to actually watch segments, not just jump.
+  moment_track
+    CREATES: Vertical track where chronological markers (dots) and curated
+      highlights (capsules sized by duration) sit on the same spine.
+    GOOD FOR: Navigation + highlight reels in one tab. Points for chapter jumps
+      and topic transitions; spans for demos, punchlines, pivotal arguments.
+    NEEDS: items[] with { time, seconds, label } required; optional endSeconds,
+      description, mood, emoji, speaker, tags, thumbnailUrl.
+    USE endSeconds ONLY for replayable highlights worth re-watching as a span
+      (typical 15s–3min). OMIT endSeconds for navigation points (chapters,
+      topic transitions) — the user jumps to these, they don't re-watch them.
+    MIXING both kinds in the same items[] is encouraged when content justifies
+      it (e.g., narrative video with 6 chapter points + 3 highlight spans).
+    VALID DATASOURCES: learning.timestamps, narrative.keyMoments, music.structure.
+      YouTube chapters auto-fill as a fallback.
 
   lyrics_player
     CREATES: Song structure display with synced lyrics and section navigation
@@ -104,16 +113,6 @@ DISPLAY — user reads (USE SPARINGLY — max 1 display tab per output):
 
   verdict — Score ring + recommendation badge + best-for/not-for lists
   budget — Total + category breakdown bars + saving tips
-
-LOW PRIORITY — use only when clearly warranted:
-
-  timeline
-    CREATES: Timestamped moments with mood filters and optional video clips
-    NEEDS: Array of moments with timestamp, title, description, mood
-    DATASOURCE: "learning.timestamps" (this is the only valid timeline datasource)
-    CAVEAT: Only use when chapters have descriptions AND meaningful labels.
-    Bare "Intro", "Part 1", "Section 2" labels are NOT worth a tab.
-    Prefer clip_player for key moments — it lets users actually watch, not just jump.
 
 <valid_datasources>
 tech: tech.snippets, tech.patterns, tech.cheatSheet, tech.setup.commands, tech.topics
@@ -126,9 +125,9 @@ fitness: fitness.exercises, fitness.warmup, fitness.cooldown, fitness.timer
 music: music.analysis, music.structure, music.lyrics, music.credits
 language: language.phrases, language.rules, language.drills, language.vocabulary
 science: science.concepts, science.keyFacts, science.experiments
+narrative: narrative.keyMoments, narrative.quotes, narrative.takeaways
 enrichment: enrichment.quiz, enrichment.flashcards, enrichment.scenarios
 
 Use only the paths listed here. If a path is not listed, it does not exist.
-For timeline component, always use learning.timestamps as the datasource.
 </valid_datasources>
 </component_toolkit>

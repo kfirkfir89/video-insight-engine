@@ -46,11 +46,11 @@ Every video gets a unique set of **interactive tabs** — chosen automatically b
 
 | Tab               | Component  | What it does                                          |
 | ----------------- | ---------- | ----------------------------------------------------- |
-| 🛒 Ingredients    | Checklist  | Checkable shopping list with quantities               |
-| 👨‍🍳 Steps          | StepPlayer | Timed cooking steps with "Watch this step" video seek |
-| 🔪 Tips           | FlashDeck  | Swipeable chef tips and storage advice                |
-| ⏰ Timeline       | Timeline   | Clickable chapter markers with frame thumbnails       |
-| 🖼️ Visual Moments | Gallery    | Key frames from the video with lightbox               |
+| 🛒 Ingredients    | Checklist   | Checkable shopping list with quantities               |
+| 👨‍🍳 Steps          | StepPlayer  | Timed cooking steps with "Watch this step" video seek |
+| 🔪 Tips           | FlashDeck   | Swipeable chef tips and storage advice                |
+| ⏰ Moments        | MomentTrack | Chapter markers + replayable highlight spans, both seekable |
+| 🖼️ Visual Moments | Gallery     | Key frames from the video with lightbox               |
 
 ### A tech tutorial might get:
 
@@ -60,11 +60,11 @@ Every video gets a unique set of **interactive tabs** — chosen automatically b
 | 📋 Steps    | StepPlayer   | Setup instructions with timestamps       |
 | 🔧 Tools    | Checklist    | Required tools and dependencies          |
 | 📚 Concepts | FlashDeck    | Key concept flashcards                   |
-| ⏰ Timeline | Timeline     | Video navigation with thumbnails         |
+| ⏰ Moments  | MomentTrack  | Video navigation with thumbnails         |
 
-### 17 interactive components available:
+### 16 interactive components available:
 
-Timeline, StepPlayer, CodeExplorer, SpotExplorer, FlashDeck, Checklist, Gallery, ClipPlayer, LyricsPlayer, ComparisonTable, ProConList, RatingBreakdown, BudgetCalculator, GearList, QuizChallenge, ScenarioExplorer, ResourceHub
+MomentTrack, StepPlayer, CodeExplorer, SpotExplorer, FlashDeck, Checklist, Gallery, LyricsPlayer, ComparisonTable, ProConList, RatingBreakdown, BudgetCalculator, GearList, QuizChallenge, ScenarioExplorer, ResourceHub
 
 The AI picks which components to use based on the video's content — not a template.
 
@@ -127,7 +127,7 @@ Each stage is a separate async phase. The pipeline streams results to the fronte
 ```
 ┌───────────────────────────────────────────────────────────────────┐
 │                         vie-web (React 19)                         │
-│  Tailwind v4 · shadcn/ui · 36 UI components · 17 interactives    │
+│  Tailwind v4 · shadcn/ui · 36 UI components · 16 interactives    │
 │  OutputShell → INTERACTIVE_REGISTRY[tab.component] → render       │
 │  VideoPlayerContext (seekTo) · SSE stream consumer                 │
 └──────────────────────────┬────────────────────────────────────────┘
@@ -217,7 +217,7 @@ Single source of truth: `packages/shared/src/config/domains.json`
   "food": {
     "label": "Food & Cooking",
     "schemas": ["food"],
-    "components": ["checklist", "step_player", "flash_deck", "timeline"],
+    "components": ["checklist", "step_player", "flash_deck", "moment_track"],
     "enrichment": true
   },
   "tech": {
@@ -368,7 +368,7 @@ video-insight-engine/
 │   └── web/                          # React 19 frontend
 │       └── src/
 │           ├── components/
-│           │   ├── interactives/     # 17 interactive components
+│           │   ├── interactives/     # 16 interactive components
 │           │   └── video-detail/     # Detail page, OutputShell
 │           ├── contexts/             # VideoPlayerContext (seekTo)
 │           ├── lib/                  # SSE stream processor
@@ -400,13 +400,13 @@ video-insight-engine/
 
 **Cooking** — Ingredient checklists, timed step-by-step instructions, chef tips as flashcards, frame thumbnails on each cooking step.
 
-**Tech tutorials** — Code blocks with syntax highlighting, tool/dependency checklists, concept flashcards, timeline with code-on-screen frame detection.
+**Tech tutorials** — Code blocks with syntax highlighting, tool/dependency checklists, concept flashcards, moment track with code-on-screen frame detection.
 
 **Travel vlogs** — Spot explorer with locations and frame images, budget calculators, itinerary timelines, tips as flashcards.
 
 **Lectures & courses** — Quiz challenges, concept flashcards, scenario explorations, chapter-based navigation, hierarchical summaries for long content.
 
-**Music** — Lyrics player with synced timestamps, clip segments, timeline of song structure.
+**Music** — Lyrics player with synced timestamps, song structure as a moment track with replayable section highlights.
 
 **Product reviews** — Pro/con lists, rating breakdowns, comparison tables, gear lists.
 
@@ -416,7 +416,7 @@ video-insight-engine/
 
 **Students** — Process a 3-hour lecture into quiz challenges, concept flashcards, and chapter-based navigation. Review before exams with scenario explorations instead of rewatching. Every timestamp is clickable — jump to exactly the explanation you need.
 
-**Developers** — Turn conference talks and tutorials into code explorers with syntax-highlighted snippets, tool/dependency checklists, and concept flashcards. Frame intelligence detects code-on-screen moments and links them to the timeline.
+**Developers** — Turn conference talks and tutorials into code explorers with syntax-highlighted snippets, tool/dependency checklists, and concept flashcards. Frame intelligence detects code-on-screen moments and links them to the moment track.
 
 **Home Cooks** — Cooking mode with timed step-by-step instructions, checkable ingredient lists, and chef tip flashcards. Click any step to seek the video to that exact moment. Never pause-and-scroll again.
 
@@ -430,7 +430,7 @@ video-insight-engine/
 
 | Feature                           | YouTube       | Notion | ChatGPT           | VIE                           |
 | --------------------------------- | ------------- | ------ | ----------------- | ----------------------------- |
-| Interactive components from video | ❌            | ❌     | ❌                | 17 domain-aware components    |
+| Interactive components from video | ❌            | ❌     | ❌                | 16 domain-aware components    |
 | Click timestamp → video seeks     | Chapters only | ❌     | ❌                | Every element is clickable    |
 | Domain-specific extraction        | ❌            | Manual | Generic summary   | 12 domain schemas             |
 | Quiz / flashcards / scenarios     | ❌            | Manual | On request        | Auto-generated per domain     |
@@ -450,7 +450,7 @@ video-insight-engine/
 
 ## Roadmap
 
-- [x] Triage-driven pipeline with 17 interactive components
+- [x] Triage-driven pipeline with 16 interactive components
 - [x] Domain-specific extraction (12 domains)
 - [x] Frame extraction with smart scoring
 - [x] Collapsible video player with seekTo wiring

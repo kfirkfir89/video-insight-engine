@@ -33,7 +33,7 @@ Extract structured educational content.
       "label": "Descriptive label for this moment"
     }
   ],
-> UI: Timestamps → TimelineExplorer entries. Fill seconds for playback jump links.
+> UI: Timestamps → MomentTrack items (navigation points — no endSeconds). Fill seconds for playback jump links.
   "keyQuestion": "Central question this video answers",
   "summary": "2-3 sentence summary of the core teaching"
 }
