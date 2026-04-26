@@ -37,7 +37,7 @@ test.describe('Usage Page', () => {
 
   test('recent calls table shows mock data', async ({ adminPage }) => {
     // Model name from mock data
-    await expect(adminPage.locator('table tbody').getByText('claude-sonnet-4-20250514')).toBeVisible();
+    await expect(adminPage.locator('table tbody').getByText('claude-sonnet-4-6')).toBeVisible();
 
     // Cost values
     await expect(adminPage.locator('table tbody').getByText('$0.0234')).toBeVisible();

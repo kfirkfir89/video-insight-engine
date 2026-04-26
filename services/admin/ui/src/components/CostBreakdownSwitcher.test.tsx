@@ -54,7 +54,7 @@ describe('CostBreakdownSwitcher', () => {
   it('should render bar chart when data loads', () => {
     modelMock.mockReturnValue(
       ok([
-        { model: 'anthropic/claude-sonnet-4-5', cost_usd: 2.5, calls: 10 },
+        { model: 'anthropic/claude-sonnet-4-6', cost_usd: 2.5, calls: 10 },
         { model: 'openai/gpt-4o-mini', cost_usd: 0.5, calls: 100 },
       ]),
     );

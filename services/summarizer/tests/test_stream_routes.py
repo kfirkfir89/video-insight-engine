@@ -178,7 +178,7 @@ def mock_repository():
 def mock_llm_service():
     """Mock LLM service."""
     service = AsyncMock()
-    service.fast_model = "anthropic/claude-3-5-haiku-20241022"
+    service.fast_model = "anthropic/claude-haiku-4-5-20251001"
     service.generate_metadata_tldr = AsyncMock(return_value={
         "tldr": "Test TLDR",
         "keyTakeaways": ["Point 1"],

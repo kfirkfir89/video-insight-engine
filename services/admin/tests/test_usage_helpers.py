@@ -66,14 +66,14 @@ class TestSerializeDoc:
         doc = {
             "_id": ObjectId("507f1f77bcf86cd799439011"),
             "timestamp": datetime(2026, 3, 1, tzinfo=UTC),
-            "model": "claude-sonnet-4-20250514",
+            "model": "claude-sonnet-4-6",
             "cost_usd": 0.05,
             "tags": ["a", "b"],
         }
         result = _serialize_doc(doc)
         assert result["_id"] == "507f1f77bcf86cd799439011"
         assert result["timestamp"] == "2026-03-01T00:00:00+00:00"
-        assert result["model"] == "claude-sonnet-4-20250514"
+        assert result["model"] == "claude-sonnet-4-6"
         assert result["cost_usd"] == 0.05
         assert result["tags"] == ["a", "b"]
 

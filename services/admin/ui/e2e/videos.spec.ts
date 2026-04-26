@@ -35,7 +35,7 @@ test.describe('Videos Page', () => {
     await expect(panel).toBeVisible();
 
     // Should show call details (model names + feature pills)
-    await expect(panel.getByText('claude-sonnet-4-20250514')).toBeVisible();
+    await expect(panel.getByText('claude-sonnet-4-6')).toBeVisible();
     await expect(panel.getByText('gpt-4o')).toBeVisible();
     // Feature pills show "summarize X calls $Y"
     await expect(panel.getByText(/summarize.*calls/)).toBeVisible();
@@ -104,7 +104,7 @@ test.describe('Video Detail Page', () => {
     await adminPage.goto('/videos/abc123');
 
     await expect(adminPage.getByText('Individual Calls (2)')).toBeVisible();
-    await expect(adminPage.getByText('claude-sonnet-4-20250514')).toBeVisible();
+    await expect(adminPage.getByText('claude-sonnet-4-6')).toBeVisible();
     await expect(adminPage.getByText('gpt-4o')).toBeVisible();
   });
 

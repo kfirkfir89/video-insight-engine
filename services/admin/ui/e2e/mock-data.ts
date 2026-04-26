@@ -27,7 +27,7 @@ export const mockUsageByFeature = [
 ];
 
 export const mockUsageByModel = [
-  { model: 'claude-sonnet-4-20250514', calls: 600, cost_usd: 6.78 },
+  { model: 'claude-sonnet-4-6', calls: 600, cost_usd: 6.78 },
   { model: 'gpt-4o', calls: 400, cost_usd: 3.89 },
   { model: 'claude-haiku-4-5-20251001', calls: 247, cost_usd: 1.78 },
 ];
@@ -40,7 +40,7 @@ export const mockUsageByService = [
 export const mockUsageRecent = [
   {
     _id: 'rec-1',
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     feature: 'summarize',
     cost_usd: 0.0234,
     tokens_in: 1500,
@@ -129,13 +129,13 @@ export const mockVideoDetail = {
     { feature: 'explain', calls: 4, cost_usd: 0.0134, tokens_in: 5000, tokens_out: 2500, avg_duration_ms: 1800 },
   ],
   calls: [
-    { _id: 'call-1', model: 'claude-sonnet-4-20250514', feature: 'summarize', cost_usd: 0.0089, tokens_in: 1500, tokens_out: 800, duration_ms: 2100, timestamp: '2026-02-26T14:00:00Z' },
+    { _id: 'call-1', model: 'claude-sonnet-4-6', feature: 'summarize', cost_usd: 0.0089, tokens_in: 1500, tokens_out: 800, duration_ms: 2100, timestamp: '2026-02-26T14:00:00Z' },
     { _id: 'call-2', model: 'gpt-4o', feature: 'explain', cost_usd: 0.0045, tokens_in: 1200, tokens_out: 600, duration_ms: 1800, timestamp: '2026-02-26T12:00:00Z' },
   ],
 };
 
 export const mockUsageDuplicates = [
-  { video_id: 'dup-vid-1', model: 'claude-sonnet-4-20250514', count: 3, total_cost_usd: 0.0702 },
+  { video_id: 'dup-vid-1', model: 'claude-sonnet-4-6', count: 3, total_cost_usd: 0.0702 },
 ];
 
 export const mockHealthServices = {
@@ -161,7 +161,7 @@ export const mockAlertsRecent = [
   {
     _id: 'alert-1',
     type: 'high_cost',
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     feature: 'summarize',
     cost_usd: 0.8923,
     timestamp: '2026-02-26T09:00:00Z',

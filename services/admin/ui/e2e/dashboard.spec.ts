@@ -28,7 +28,7 @@ test.describe('Dashboard Page', () => {
 
     await expect(banner.getByText('high_cost')).toBeVisible();
     await expect(banner.getByText('$0.8923')).toBeVisible();
-    await expect(banner.getByText('claude-sonnet-4-20250514')).toBeVisible();
+    await expect(banner.getByText('claude-sonnet-4-6')).toBeVisible();
   });
 
   test('service health grid renders all services', async ({ adminPage }) => {

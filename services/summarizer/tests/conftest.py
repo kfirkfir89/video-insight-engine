@@ -110,7 +110,7 @@ def mock_llm_provider():
     from src.services.llm_provider import LLMProvider
 
     provider = MagicMock(spec=LLMProvider)
-    provider.model = "anthropic/claude-sonnet-4-20250514"
+    provider.model = "anthropic/claude-sonnet-4-6"
 
     # Default mock for complete() - can be overridden per test
     provider.complete = AsyncMock(

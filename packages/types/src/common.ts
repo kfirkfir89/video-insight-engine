@@ -33,7 +33,7 @@ export interface RawTranscript {
  * Stored with each summary to know what model/prompt produced it.
  */
 export interface GenerationMetadata {
-  model: string;               // e.g., "anthropic/claude-sonnet-4-20250514"
+  model: string;               // e.g., "anthropic/claude-sonnet-4-6"
   promptVersion: string;       // e.g., "v2.3"
   generatedAt: string;         // ISO date
 }

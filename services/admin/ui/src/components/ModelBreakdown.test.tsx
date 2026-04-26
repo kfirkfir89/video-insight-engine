@@ -11,8 +11,8 @@ describe('ModelBreakdown', () => {
   });
 
   describe('model label formatter', () => {
-    it('should preserve the full version suffix for claude-sonnet-4-5', () => {
-      expect(formatModelLabel('anthropic/claude-sonnet-4-5')).toBe('claude-sonnet-4-5');
+    it('should preserve the full version suffix for claude-sonnet-4-6', () => {
+      expect(formatModelLabel('anthropic/claude-sonnet-4-6')).toBe('claude-sonnet-4-6');
     });
 
     it('should preserve the full version suffix for claude-opus-4-7', () => {

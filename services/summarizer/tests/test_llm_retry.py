@@ -15,8 +15,8 @@ def mock_llm():
     service = MagicMock()
     service.call_llm = AsyncMock()
     service.call_llm_fast = AsyncMock()
-    service.model = "anthropic/claude-sonnet-4-5-20250929"
-    service.fast_model = "anthropic/claude-3-5-haiku-20241022"
+    service.model = "anthropic/claude-sonnet-4-6"
+    service.fast_model = "anthropic/claude-haiku-4-5-20251001"
     return service
 
 
@@ -190,12 +190,12 @@ class TestCallLlmWithRetry:
 class TestTruncatePromptIfNeeded:
     def test_short_prompt_unchanged(self):
         prompt = "Short prompt"
-        result = truncate_prompt_if_needed(prompt, "anthropic/claude-sonnet-4-5-20250929")
+        result = truncate_prompt_if_needed(prompt, "anthropic/claude-sonnet-4-6")
         assert result == prompt
 
     def test_long_prompt_truncated(self):
         prompt = "x" * 700_000
-        result = truncate_prompt_if_needed(prompt, "anthropic/claude-sonnet-4-5-20250929")
+        result = truncate_prompt_if_needed(prompt, "anthropic/claude-sonnet-4-6")
         assert len(result) < 700_000
         assert result.endswith("[TRANSCRIPT TRUNCATED DUE TO LENGTH]")
 

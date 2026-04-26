@@ -6,7 +6,7 @@ from llm_common.models import UsageRecord, extract_provider
 
 
 def test_extract_provider_with_slash():
-    assert extract_provider("anthropic/claude-sonnet-4-20250514") == "anthropic"
+    assert extract_provider("anthropic/claude-sonnet-4-6") == "anthropic"
 
 
 def test_extract_provider_without_slash():
@@ -26,7 +26,7 @@ def test_usage_record_defaults():
 
 def test_usage_record_full():
     record = UsageRecord(
-        model="anthropic/claude-sonnet-4-20250514",
+        model="anthropic/claude-sonnet-4-6",
         provider="anthropic",
         tokens_in=100,
         tokens_out=200,

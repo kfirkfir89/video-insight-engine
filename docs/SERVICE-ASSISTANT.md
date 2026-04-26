@@ -114,7 +114,7 @@ Health check. No authentication required.
 {
   "status": "healthy",
   "service": "vie-assistant",
-  "model": "anthropic/claude-sonnet-4-5-20250929"
+  "model": "anthropic/claude-sonnet-4-6"
 }
 ```
 

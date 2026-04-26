@@ -31,14 +31,14 @@ class TestCompletionResult:
     def test_completion_result_creation(self):
         result = CompletionResult(
             content="Hello world",
-            model="anthropic/claude-sonnet-4-20250514",
+            model="anthropic/claude-sonnet-4-6",
             input_tokens=10,
             output_tokens=5,
             cost_usd=0.001,
             duration_ms=500,
         )
         assert result.content == "Hello world"
-        assert result.model == "anthropic/claude-sonnet-4-20250514"
+        assert result.model == "anthropic/claude-sonnet-4-6"
         assert result.input_tokens == 10
         assert result.output_tokens == 5
         assert result.cost_usd == 0.001
@@ -51,18 +51,18 @@ class TestLLMProvider:
     def test_init_default_model(self):
         """Test initialization with default model."""
         with patch("src.services.llm_provider.settings") as mock_settings:
-            mock_settings.llm_model = "anthropic/claude-sonnet-4-20250514"
+            mock_settings.llm_model = "anthropic/claude-sonnet-4-6"
             mock_settings.llm_fallback_models = None
             mock_settings.LLM_TIMEOUT_SECONDS = 60.0
             mock_settings.LLM_NUM_RETRIES = 2
 
             provider = LLMProvider()
-            assert provider.model == "anthropic/claude-sonnet-4-20250514"
+            assert provider.model == "anthropic/claude-sonnet-4-6"
 
     def test_init_custom_model(self):
         """Test initialization with custom model."""
         with patch("src.services.llm_provider.settings") as mock_settings:
-            mock_settings.llm_model = "anthropic/claude-sonnet-4-20250514"
+            mock_settings.llm_model = "anthropic/claude-sonnet-4-6"
             mock_settings.llm_fallback_models = None
             mock_settings.LLM_TIMEOUT_SECONDS = 60.0
             mock_settings.LLM_NUM_RETRIES = 2
@@ -73,13 +73,13 @@ class TestLLMProvider:
     def test_extract_provider(self):
         """Test provider extraction from model string."""
         with patch("src.services.llm_provider.settings") as mock_settings:
-            mock_settings.llm_model = "anthropic/claude-sonnet-4-20250514"
+            mock_settings.llm_model = "anthropic/claude-sonnet-4-6"
             mock_settings.llm_fallback_models = None
             mock_settings.LLM_TIMEOUT_SECONDS = 60.0
             mock_settings.LLM_NUM_RETRIES = 2
 
             provider = LLMProvider()
-            assert provider._extract_provider("anthropic/claude-sonnet-4-20250514") == "anthropic"
+            assert provider._extract_provider("anthropic/claude-sonnet-4-6") == "anthropic"
             assert provider._extract_provider("openai/gpt-4o") == "openai"
             assert provider._extract_provider("gemini/gemini-1.5-pro") == "gemini"
             assert provider._extract_provider("no-slash") == "unknown"
@@ -94,7 +94,7 @@ class TestLLMProvider:
             mock_acompletion.return_value = mock_response
 
             with patch("src.services.llm_provider.settings") as mock_settings:
-                mock_settings.llm_model = "anthropic/claude-sonnet-4-20250514"
+                mock_settings.llm_model = "anthropic/claude-sonnet-4-6"
                 mock_settings.llm_fallback_models = None
                 mock_settings.LLM_TIMEOUT_SECONDS = 60.0
                 mock_settings.LLM_NUM_RETRIES = 2
@@ -115,7 +115,7 @@ class TestLLMProvider:
             mock_acompletion.return_value = mock_response
 
             with patch("src.services.llm_provider.settings") as mock_settings:
-                mock_settings.llm_model = "anthropic/claude-sonnet-4-20250514"
+                mock_settings.llm_model = "anthropic/claude-sonnet-4-6"
                 mock_settings.llm_fallback_models = None
                 mock_settings.LLM_TIMEOUT_SECONDS = 60.0
                 mock_settings.LLM_NUM_RETRIES = 2
@@ -139,7 +139,7 @@ class TestLLMProvider:
             mock_acompletion.return_value = mock_response
 
             with patch("src.services.llm_provider.settings") as mock_settings:
-                mock_settings.llm_model = "anthropic/claude-sonnet-4-20250514"
+                mock_settings.llm_model = "anthropic/claude-sonnet-4-6"
                 mock_settings.llm_fallback_models = None
                 mock_settings.LLM_TIMEOUT_SECONDS = 60.0
                 mock_settings.LLM_NUM_RETRIES = 2
@@ -160,7 +160,7 @@ class TestLLMProvider:
             mock_response = MagicMock()
             mock_response.choices = [MagicMock()]
             mock_response.choices[0].message.content = "Hello"
-            mock_response.model = "anthropic/claude-sonnet-4-20250514"
+            mock_response.model = "anthropic/claude-sonnet-4-6"
             mock_response.usage = MagicMock()
             mock_response.usage.prompt_tokens = 10
             mock_response.usage.completion_tokens = 5
@@ -170,7 +170,7 @@ class TestLLMProvider:
                 mock_cost.return_value = 0.001
 
                 with patch("src.services.llm_provider.settings") as mock_settings:
-                    mock_settings.llm_model = "anthropic/claude-sonnet-4-20250514"
+                    mock_settings.llm_model = "anthropic/claude-sonnet-4-6"
                     mock_settings.llm_fallback_models = None
                     mock_settings.LLM_TIMEOUT_SECONDS = 60.0
                     mock_settings.LLM_NUM_RETRIES = 2
@@ -201,7 +201,7 @@ class TestLLMProvider:
             mock_acompletion.return_value = mock_stream()
 
             with patch("src.services.llm_provider.settings") as mock_settings:
-                mock_settings.llm_model = "anthropic/claude-sonnet-4-20250514"
+                mock_settings.llm_model = "anthropic/claude-sonnet-4-6"
                 mock_settings.llm_fallback_models = None
                 mock_settings.LLM_TIMEOUT_SECONDS = 60.0
                 mock_settings.LLM_NUM_RETRIES = 2
@@ -223,7 +223,7 @@ class TestLLMProvider:
             mock_acompletion.return_value = mock_response
 
             with patch("src.services.llm_provider.settings") as mock_settings:
-                mock_settings.llm_model = "anthropic/claude-sonnet-4-20250514"
+                mock_settings.llm_model = "anthropic/claude-sonnet-4-6"
                 mock_settings.llm_fallback_models = ["openai/gpt-4o"]
                 mock_settings.LLM_TIMEOUT_SECONDS = 60.0
                 mock_settings.LLM_NUM_RETRIES = 2
@@ -246,7 +246,7 @@ class TestGetLLMProvider:
         llm_module._default_provider = None
 
         with patch("src.services.llm_provider.settings") as mock_settings:
-            mock_settings.llm_model = "anthropic/claude-sonnet-4-20250514"
+            mock_settings.llm_model = "anthropic/claude-sonnet-4-6"
             mock_settings.llm_fallback_models = None
             mock_settings.LLM_TIMEOUT_SECONDS = 60.0
             mock_settings.LLM_NUM_RETRIES = 2

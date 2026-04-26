@@ -283,7 +283,7 @@ class TestGetGeminiModel:
     @patch("src.services.transcription.gemini_transcriber.settings")
     def test_anthropic_model_uses_default(self, mock_settings):
         """Test that Anthropic model falls back to default Gemini model."""
-        mock_settings.LLM_FAST_MODEL = "anthropic/claude-3-5-haiku-20241022"
+        mock_settings.LLM_FAST_MODEL = "anthropic/claude-haiku-4-5-20251001"
         assert _get_gemini_model() == GEMINI_TRANSCRIPTION_MODEL
 
 
