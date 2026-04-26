@@ -140,8 +140,8 @@ class TestExtractRouting:
     async def test_short_video_uses_single_extraction(self):
         """Videos <30 min without chapters should use single/overflow extraction."""
         mock_llm = AsyncMock()
-        mock_llm.model = "anthropic/claude-sonnet-4-5-20250929"
-        mock_llm.fast_model = "anthropic/claude-3-5-haiku-20241022"
+        mock_llm.model = "anthropic/claude-sonnet-4-6"
+        mock_llm.fast_model = "anthropic/claude-haiku-4-5-20251001"
 
         triage = _make_triage()
         short_transcript = " ".join(["word"] * 1000)  # <5.3K words → single
@@ -171,8 +171,8 @@ class TestExtractRouting:
     async def test_long_video_with_chapters_uses_chunked(self):
         """Videos >30 min with chapters should use chunked extraction."""
         mock_llm = AsyncMock()
-        mock_llm.model = "anthropic/claude-sonnet-4-5-20250929"
-        mock_llm.fast_model = "anthropic/claude-3-5-haiku-20241022"
+        mock_llm.model = "anthropic/claude-sonnet-4-6"
+        mock_llm.fast_model = "anthropic/claude-haiku-4-5-20251001"
 
         triage = _make_triage()
         transcript = " ".join(["word"] * 10000)
@@ -201,8 +201,8 @@ class TestExtractRouting:
     async def test_long_video_without_chapters_uses_overflow(self):
         """Videos >30 min but no chapters should use overflow extraction."""
         mock_llm = AsyncMock()
-        mock_llm.model = "anthropic/claude-sonnet-4-5-20250929"
-        mock_llm.fast_model = "anthropic/claude-3-5-haiku-20241022"
+        mock_llm.model = "anthropic/claude-sonnet-4-6"
+        mock_llm.fast_model = "anthropic/claude-haiku-4-5-20251001"
 
         triage = _make_triage()
         transcript = " ".join(["word"] * 10000)

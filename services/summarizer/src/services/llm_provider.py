@@ -64,8 +64,8 @@ class LLMProvider:
         """Initialize LLM provider.
 
         Args:
-            model: Model to use (e.g., "anthropic/claude-sonnet-4-20250514")
-            fast_model: Fast model for quick tasks (e.g., "anthropic/claude-3-5-haiku-20241022")
+            model: Model to use (e.g., "anthropic/claude-sonnet-4-6")
+            fast_model: Fast model for quick tasks (e.g., "anthropic/claude-haiku-4-5-20251001")
             fallback_models: List of fallback models if primary fails
             timeout: Request timeout in seconds
             num_retries: Number of retries on failure

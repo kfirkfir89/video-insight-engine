@@ -114,7 +114,7 @@ class TestQuizGenerator:
         # Act
         with patch("src.tools.quiz_generator.LLMProvider", return_value=mock_fast_llm) as mock_cls, \
              patch("src.tools.quiz_generator.settings") as mock_settings:
-            mock_settings.llm_fast_model = "anthropic/claude-3-5-haiku-20241022"
+            mock_settings.llm_fast_model = "anthropic/claude-haiku-4-5-20251001"
             mock_settings.llm_fallback_models = None
             await tool.execute(params, context)
 

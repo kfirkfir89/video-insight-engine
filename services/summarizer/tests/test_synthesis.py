@@ -12,8 +12,8 @@ def mock_llm():
     service = MagicMock()
     service.call_llm = AsyncMock()
     service.call_llm_fast = AsyncMock()
-    service.model = "anthropic/claude-sonnet-4-5-20250929"
-    service.fast_model = "anthropic/claude-3-5-haiku-20241022"
+    service.model = "anthropic/claude-sonnet-4-6"
+    service.fast_model = "anthropic/claude-haiku-4-5-20251001"
     return service
 
 

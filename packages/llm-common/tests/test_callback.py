@@ -23,7 +23,7 @@ class TestSyncCallback:
         token = llm_feature_var.set("summarize:chapter")
         try:
             cb.log_success_event(
-                kwargs={"model": "anthropic/claude-sonnet-4-20250514", "messages": [{"content": "hello"}]},
+                kwargs={"model": "anthropic/claude-sonnet-4-6", "messages": [{"content": "hello"}]},
                 response_obj=MockResponse(),
                 start_time=datetime.now(UTC),
                 end_time=datetime.now(UTC),
@@ -141,7 +141,7 @@ class TestCrossModeCallback:
         token = llm_feature_var.set("summarize:chapter")
         try:
             await cb.async_log_success_event(
-                kwargs={"model": "anthropic/claude-sonnet-4-20250514", "messages": [{"content": "test"}]},
+                kwargs={"model": "anthropic/claude-sonnet-4-6", "messages": [{"content": "test"}]},
                 response_obj=MockResponse(),
                 start_time=datetime.now(UTC),
                 end_time=datetime.now(UTC),

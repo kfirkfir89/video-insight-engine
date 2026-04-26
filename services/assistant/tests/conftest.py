@@ -98,7 +98,7 @@ def mock_llm():
 
     llm.stream_with_messages = _mock_stream
     llm.complete_with_messages = AsyncMock(return_value="Hello world!")
-    llm.model = "anthropic/claude-sonnet-4-5-20250929"
+    llm.model = "anthropic/claude-sonnet-4-6"
 
     return llm
 
@@ -116,8 +116,8 @@ def mock_settings():
     s = MagicMock()
     s.MAX_CONTEXT_CHUNKS = 8
     s.MAX_CONVERSATION_TURNS = 20
-    s.llm_model = "anthropic/claude-sonnet-4-5-20250929"
-    s.llm_fast_model = "anthropic/claude-3-5-haiku-20241022"
+    s.llm_model = "anthropic/claude-sonnet-4-6"
+    s.llm_fast_model = "anthropic/claude-haiku-4-5-20251001"
     return s
 
 

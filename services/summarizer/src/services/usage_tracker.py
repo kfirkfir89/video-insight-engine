@@ -71,7 +71,7 @@ class UsageTracker:
         """Track a successful LLM call.
 
         Args:
-            model: Model used (e.g., "anthropic/claude-sonnet-4-20250514")
+            model: Model used (e.g., "anthropic/claude-sonnet-4-6")
             tokens_in: Input tokens
             tokens_out: Output tokens
             cost_usd: Cost in USD

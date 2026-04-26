@@ -429,7 +429,7 @@ if await get_failed_jobs_count() > 10:
 # summarizer/src/services/llm.py
 
 LLM_CONFIG = {
-    'primary': 'claude-sonnet-4-20250514',
+    'primary': 'claude-sonnet-4-6',
     'fallback': 'claude-3-haiku-20240307',  # Cheaper, for retries
     'max_retries': 3
 }

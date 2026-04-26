@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 # Conservative character limits per model family (leaves headroom for system overhead).
 # These are safety nets — chunking should prevent them from triggering.
 MODEL_CHAR_LIMITS: dict[str, int] = {
-    "anthropic/claude-sonnet-4-5-20250929": 600_000,
-    "anthropic/claude-3-5-haiku-20241022": 600_000,
+    "anthropic/claude-sonnet-4-6": 600_000,
+    "anthropic/claude-haiku-4-5-20251001": 600_000,
     "openai/gpt-4o": 380_000,
     "openai/gpt-4o-mini": 380_000,
     "gemini/gemini-2.5-flash": 3_000_000,

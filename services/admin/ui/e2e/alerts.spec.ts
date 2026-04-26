@@ -36,7 +36,7 @@ test.describe('Alerts Page', () => {
     await expect(tbody.getByText('failure')).toBeVisible();
 
     // Model names
-    await expect(tbody.getByText('claude-sonnet-4-20250514')).toBeVisible();
+    await expect(tbody.getByText('claude-sonnet-4-6')).toBeVisible();
     await expect(tbody.getByText('gpt-4o')).toBeVisible();
 
     // Cost values

@@ -11,8 +11,8 @@ _DEFAULT_INTERNAL_SECRET = "dev-internal-secret-change-me"
 # Model mapping for each provider
 MODEL_MAP = {
     "anthropic": {
-        "default": "anthropic/claude-sonnet-4-5-20250929",
-        "fast": "anthropic/claude-3-5-haiku-20241022",
+        "default": "anthropic/claude-sonnet-4-6",
+        "fast": "anthropic/claude-haiku-4-5-20251001",
     },
     "openai": {
         "default": "openai/gpt-4o",
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = "anthropic"  # anthropic, openai, gemini
     LLM_FAST_PROVIDER: str | None = None  # Optional separate provider for fast model
     LLM_FALLBACK_PROVIDER: str | None = None  # Optional fallback provider
-    LLM_MODEL: str | None = None  # Override default model (e.g., "anthropic/claude-sonnet-4-20250514")
+    LLM_MODEL: str | None = None  # Override default model (e.g., "anthropic/claude-sonnet-4-6")
     LLM_FAST_MODEL: str | None = None  # Override fast model
 
     # Provider API Keys (set for providers you use)

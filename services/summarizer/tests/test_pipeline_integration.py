@@ -162,8 +162,8 @@ def mock_llm():
     shared_mock = AsyncMock()
     service.call_llm = shared_mock
     service.call_llm_fast = shared_mock
-    service.model = "anthropic/claude-sonnet-4-5-20250929"
-    service.fast_model = "anthropic/claude-3-5-haiku-20241022"
+    service.model = "anthropic/claude-sonnet-4-6"
+    service.fast_model = "anthropic/claude-haiku-4-5-20251001"
     return service
 
 

@@ -200,8 +200,8 @@ class TestSplitTranscriptIntoChapters:
         video_data = {"duration": duration, "title": "Test Video"}
 
         mock_llm = AsyncMock()
-        mock_llm.model = "anthropic/claude-sonnet-4-5-20250929"
-        mock_llm.fast_model = "anthropic/claude-3-5-haiku-20241022"
+        mock_llm.model = "anthropic/claude-sonnet-4-6"
+        mock_llm.fast_model = "anthropic/claude-haiku-4-5-20251001"
 
         ai_json = '[{"title":"Intro","startSeconds":0,"endSeconds":900},{"title":"Main","startSeconds":900,"endSeconds":1800},{"title":"Conclusion","startSeconds":1800,"endSeconds":2700}]'
 
@@ -230,8 +230,8 @@ class TestSplitTranscriptIntoChapters:
         video_data = {"duration": duration, "title": "Test Video"}
 
         mock_llm = AsyncMock()
-        mock_llm.model = "anthropic/claude-sonnet-4-5-20250929"
-        mock_llm.fast_model = "anthropic/claude-3-5-haiku-20241022"
+        mock_llm.model = "anthropic/claude-sonnet-4-6"
+        mock_llm.fast_model = "anthropic/claude-haiku-4-5-20251001"
 
         with patch(
             "src.services.transcription.transcript_chunker._detect_chapters_with_ai",
