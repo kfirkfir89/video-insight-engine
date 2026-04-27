@@ -27,8 +27,8 @@ def _make_video_ctx() -> VideoContext:
 
 def _make_rag_sources(count: int = 2) -> list[RAGSource]:
     pool = [
-        RAGSource(text="Gradient descent updates weights by following the slope.", timestamp="2:15", score=0.93, chunk_index=0),
-        RAGSource(text="The learning rate controls step size.", timestamp="4:00", score=0.85, chunk_index=1),
+        RAGSource(text="Gradient descent updates weights by following the slope.", video_id="abc123", timestamp="2:15", score=0.93, chunk_index=0),
+        RAGSource(text="The learning rate controls step size.", video_id="abc123", timestamp="4:00", score=0.85, chunk_index=1),
     ]
     return pool[:count]
 

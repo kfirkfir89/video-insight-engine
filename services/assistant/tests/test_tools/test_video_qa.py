@@ -29,9 +29,9 @@ def _make_video_ctx(**overrides) -> VideoContext:
 
 def _make_rag_sources(count: int = 2) -> list[RAGSource]:
     pool = [
-        RAGSource(text="Self-attention computes weights.", timestamp="1:23", score=0.95, chunk_index=0),
-        RAGSource(text="The encoder processes input tokens.", timestamp="3:10", score=0.88, chunk_index=1),
-        RAGSource(text="Positional encoding adds order.", timestamp=None, score=0.80, chunk_index=2),
+        RAGSource(text="Self-attention computes weights.", video_id="abc123", timestamp="1:23", score=0.95, chunk_index=0),
+        RAGSource(text="The encoder processes input tokens.", video_id="abc123", timestamp="3:10", score=0.88, chunk_index=1),
+        RAGSource(text="Positional encoding adds order.", video_id="abc123", timestamp=None, score=0.80, chunk_index=2),
     ]
     return pool[:count]
 

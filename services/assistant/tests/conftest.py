@@ -45,9 +45,9 @@ def make_rag_sources(count: int = 3):
     from src.models.responses import RAGSource
 
     samples = [
-        RAGSource(text="A neural network consists of layers.", timestamp="0:45", score=0.92, chunk_index=0),
-        RAGSource(text="Backpropagation computes the gradient.", timestamp="2:00", score=0.87, chunk_index=1),
-        RAGSource(text="Each layer applies a non-linear activation.", timestamp="3:20", score=0.81, chunk_index=2),
+        RAGSource(text="A neural network consists of layers.", video_id="abc123", timestamp="0:45", score=0.92, chunk_index=0),
+        RAGSource(text="Backpropagation computes the gradient.", video_id="abc123", timestamp="2:00", score=0.87, chunk_index=1),
+        RAGSource(text="Each layer applies a non-linear activation.", video_id="abc123", timestamp="3:20", score=0.81, chunk_index=2),
     ]
     return samples[:count]
 
@@ -155,8 +155,9 @@ async def app_client(mock_llm, mock_rag, mock_video_repo, mock_settings):
 
     mock_assistant.chat = _mock_chat
 
-    # Inject mock assistant into app.state (matches current server pattern)
+    # Inject mocks into app.state (matches current server pattern)
     app.state.assistant_service = mock_assistant
+    app.state.rag_service = mock_rag
 
     transport = ASGITransport(app=app)
     async with AsyncClient(
@@ -168,3 +169,4 @@ async def app_client(mock_llm, mock_rag, mock_video_repo, mock_settings):
 
     # Cleanup
     app.state.assistant_service = None
+    app.state.rag_service = None

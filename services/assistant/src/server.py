@@ -17,7 +17,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from src.config import settings, validate_internal_secret
 from src.exceptions import AppError
 from src.logging_config import configure_structlog, get_logger
-from src.models.requests import ActionRequest, ChatRequest
+from src.models.requests import ActionRequest, ChatRequest, LibrarySearchRequest
 from src.repositories.qdrant_repository import QdrantRepository
 from src.repositories.video_repository import MongoVideoRepository
 from src.services.assistant import AssistantService
@@ -30,22 +30,35 @@ configure_structlog(json_format=settings.LOG_FORMAT == "json")
 logger = get_logger(__name__)
 
 # --- In-memory rate limiting (bounded) ---
-_RATE_LIMIT_MAX: int = 30  # requests per window
+_RATE_LIMIT_MAX: int = 30  # /chat requests per window
 _RATE_LIMIT_WINDOW: int = 60  # seconds
+_LIBRARY_RATE_LIMIT_MAX: int = 60  # /library/search — cheap, no LLM
 _rate_tracker: TTLCache[str, list[float]] = TTLCache(maxsize=10000, ttl=_RATE_LIMIT_WINDOW * 2)
+_library_rate_tracker: TTLCache[str, list[float]] = TTLCache(
+    maxsize=10000, ttl=_RATE_LIMIT_WINDOW * 2,
+)
 
 
 def _check_rate_limit(key: str) -> bool:
-    """Return True if the rate limit is exceeded for *key*."""
+    """Return True if the chat rate limit is exceeded for *key*."""
+    return _check_bucket(_rate_tracker, key, _RATE_LIMIT_MAX)
+
+
+def _check_library_rate_limit(key: str) -> bool:
+    """Return True if the library search rate limit is exceeded for *key*."""
+    return _check_bucket(_library_rate_tracker, key, _LIBRARY_RATE_LIMIT_MAX)
+
+
+def _check_bucket(tracker: TTLCache, key: str, limit: int) -> bool:
+    """Sliding-window rate limit on a TTLCache bucket."""
     now = time.time()
     window_start = now - _RATE_LIMIT_WINDOW
-    timestamps = _rate_tracker.get(key, [])
-    timestamps = [t for t in timestamps if t > window_start]
-    if len(timestamps) >= _RATE_LIMIT_MAX:
-        _rate_tracker[key] = timestamps
+    timestamps = [t for t in tracker.get(key, []) if t > window_start]
+    if len(timestamps) >= limit:
+        tracker[key] = timestamps
         return True
     timestamps.append(now)
-    _rate_tracker[key] = timestamps
+    tracker[key] = timestamps
     return False
 
 
@@ -106,6 +119,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         context_builder=context_builder,
         settings=settings,
     )
+    # Expose rag_service directly for /library/search (no LLM needed).
+    app.state.rag_service = rag_service
 
     logger.info("assistant_service_ready", model=llm.model, port=settings.ASSISTANT_PORT)
 
@@ -195,6 +210,49 @@ def create_app() -> FastAPI:
                 "Cache-Control": "no-cache",
                 "X-Accel-Buffering": "no",
             },
+        )
+
+    @application.post("/library/search")
+    async def library_search(
+        request: LibrarySearchRequest,
+        req: Request,
+        x_internal_secret: str = Header(..., alias="X-Internal-Secret"),
+    ) -> JSONResponse:
+        """Semantic search across a library of videos.
+
+        Trusts the caller (Node api gateway) to enforce ``video_ids``
+        ownership before forwarding. Pure retrieval — no LLM.
+        """
+        if not hmac.compare_digest(x_internal_secret, settings.INTERNAL_SECRET):
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        # Bucket per upstream caller (vie-api forwards X-User-Id) so the
+        # 60/min guarantee can't be bypassed by varying the video_ids set.
+        # Falls back to a shared "anonymous" bucket when the header isn't
+        # forwarded — strictly tighter than the previous payload-derived key.
+        rate_key = req.headers.get("X-User-Id") or "anonymous"
+        if _check_library_rate_limit(rate_key):
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": "Rate limit exceeded — try again shortly",
+                    "code": "RATE_LIMIT_EXCEEDED",
+                },
+            )
+
+        rag: RAGService | None = getattr(req.app.state, "rag_service", None)
+        if rag is None:
+            raise HTTPException(status_code=503, detail="Service not ready")
+
+        results = await rag.search_library(
+            query=request.query,
+            video_ids=list(request.video_ids),
+            top_k=request.top_k,
+            sources=list(request.sources) if request.sources else None,
+        )
+        return JSONResponse(
+            status_code=200,
+            content={"results": [r.model_dump() for r in results]},
         )
 
     @application.post("/action", status_code=501)

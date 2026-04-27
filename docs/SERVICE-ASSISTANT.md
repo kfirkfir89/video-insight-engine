@@ -146,6 +146,62 @@ data: {"type":"done","metadata":{"video_id":"dQw4w9WgXcQ","sources_count":3}}
 
 ```
 
+### `POST /library/search`
+
+Semantic search across a library of videos. Pure retrieval — no LLM call. Requires `X-Internal-Secret` header. Trusts the caller (vie-api gateway) to verify that the requesting user owns or has access to every `video_id` in the list.
+
+**Request:**
+```json
+{
+  "video_ids": ["dQw4w9WgXcQ", "abc123", "xyz789"],
+  "query": "React coding with hooks",
+  "top_k": 10,
+  "sources": ["transcript", "default_output"]
+}
+```
+
+| Field | Type | Constraints |
+|---|---|---|
+| `video_ids` | `string[]` | 1–200 items; each matches `^[A-Za-z0-9_\-]+$`, max 64 chars |
+| `query` | `string` | 1–500 chars |
+| `top_k` | `int` | 1–50 (default 10) |
+| `sources` | `string[]` \| `null` | Optional. Subset of `["transcript", "default_output"]`. `null` returns all sources. |
+
+**Response** `200`:
+```json
+{
+  "results": [
+    {
+      "text": "Hooks are functions that let you tap into React's state and lifecycle features...",
+      "video_id": "dQw4w9WgXcQ",
+      "score": 0.741,
+      "chunk_index": 1,
+      "timestamp": null,
+      "source": "transcript",
+      "tab_id": null,
+      "tab_component": null,
+      "prop_path": null
+    },
+    {
+      "text": "Use useState for local component state with simple value-and-setter destructuring patterns.",
+      "video_id": "dQw4w9WgXcQ",
+      "score": 0.684,
+      "chunk_index": 0,
+      "source": "default_output",
+      "tab_id": "overview_tab",
+      "tab_component": "overview",
+      "prop_path": "keyTakeaways[0]"
+    }
+  ]
+}
+```
+
+**Errors:**
+- `403` — invalid or missing `X-Internal-Secret`
+- `422` — validation error (empty `video_ids`, invalid char in id, oversized `top_k`, missing `query`)
+- `429` — rate limit exceeded (60/min/caller — keyed on `X-User-Id` forwarded by vie-api; falls back to a shared `anonymous` bucket if the header is absent. Separate bucket from `/chat`.)
+- `503` — RAG service not initialized (lifespan hasn't completed)
+
 ### `POST /action`
 
 Structured action endpoint. Returns `501 Not Implemented` (Phase 2).
@@ -184,14 +240,35 @@ If no intent matches, the message falls through to the default RAG chat path (se
 
 1. **Detect** user language (`language_detect.py`)
 2. **Translate** non-English queries to English for RAG search (LLM translation)
-3. **Encode** query via sentence-transformers (`all-MiniLM-L6-v2`, lazy-loaded at startup)
-4. **Search** Qdrant for top-k transcript chunks filtered by `video_id`
+3. **Encode** query via sentence-transformers (model name from `EMBEDDING_MODEL_NAME` setting, default `all-MiniLM-L6-v2`, lazy-loaded at startup)
+4. **Search** Qdrant for top-k chunks filtered by `video_ids` (single-video uses `MatchValue`; multi-video uses `MatchAny`) and optionally by `sources` (subset of `transcript`/`default_output`)
 5. **Deduplicate** near-identical chunks using cosine similarity (threshold: 0.95)
 6. **Build** system prompt with video metadata + RAG chunks + conversation history
    - Uses `text_original` when user language matches video language (non-English)
    - Uses `synthesis_en` for English users on non-English videos
    - Appends language instruction for non-English responses
 7. **Stream** LLM response token by token via SSE
+
+### Retrieval payload schema
+
+Each result carries enough metadata for the UI to render a deep link back into a specific tab:
+
+| Field | Description |
+|---|---|
+| `text` | Natural-language chunk used for retrieval |
+| `text_original` | Original-language text (only set for non-English transcripts) |
+| `video_id` | Source video — populated for multi-video / library queries |
+| `score` | Cosine similarity score |
+| `source` | `"transcript"` or `"default_output"` |
+| `tab_id` / `tab_component` / `prop_path` | Set when `source == "default_output"`. Identify the originating tab and prop (e.g. `tab_component="quiz"`, `prop_path="questions[2]"`) |
+| `chunk_index` | Position within the (video_id, source, tab_id) group |
+
+### Two retrieval entry points
+
+| Method | Scope | Used by |
+|---|---|---|
+| `RAGService.search(query, video_id, top_k, sources)` | Single video | `/chat`, all tools |
+| `RAGService.search_library(query, video_ids, top_k, sources)` | Many videos at once; populates `video_id` on every result so the UI can group | `POST /library/search` |
 
 ---
 

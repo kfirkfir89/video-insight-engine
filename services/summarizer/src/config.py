@@ -111,6 +111,9 @@ class Settings(BaseSettings):
     QDRANT_PORT: int = 6333
     QDRANT_ENABLED: bool = True
 
+    # Embedding model — drop-in alternatives must keep VECTOR_SIZE=384 (e.g. BAAI/bge-small-en-v1.5).
+    EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
+
     # Redis response cache
     REDIS_URL: str = "redis://localhost:6379"
     REDIS_ENABLED: bool = True
