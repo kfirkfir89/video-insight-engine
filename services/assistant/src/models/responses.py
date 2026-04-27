@@ -8,13 +8,18 @@ from pydantic import BaseModel
 
 
 class RAGSource(BaseModel):
-    """A retrieved transcript chunk used as context."""
+    """A retrieved transcript or output chunk used as context."""
 
     text: str
-    text_original: str | None = None  # Original-language text for non-English videos
+    video_id: str  # source video — always populated from Qdrant payload
+    text_original: str | None = None  # Original-language transcript text (transcript-source only today)
     timestamp: str | None = None
     score: float = 0.0
     chunk_index: int = 0
+    source: str = "transcript"  # "transcript" | "default_output"
+    tab_id: str | None = None  # set for default_output results
+    tab_component: str | None = None  # e.g. "quiz", "overview"
+    prop_path: str | None = None  # e.g. "questions[0]"
 
 
 class ChatEvent(BaseModel):

@@ -168,9 +168,57 @@ AWS_ACCESS_KEY_ID=your-key      # AWS credentials
 AWS_SECRET_ACCESS_KEY=your-secret
 PROMPT_VERSION=v1.0             # For generation tracking
 
+# Vector store / RAG indexing
+QDRANT_HOST=vie-qdrant
+QDRANT_PORT=6333
+QDRANT_ENABLED=true
+EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2  # Drop-in alternatives must keep VECTOR_SIZE=384 (e.g. BAAI/bge-small-en-v1.5)
+
 LOG_LEVEL=INFO
 LOG_FORMAT=console              # console or json
 ```
+
+---
+
+## Vector Store Indexing (transcript + output)
+
+After every successful pipeline run, two background tasks index the video's
+content into Qdrant for the assistant to retrieve:
+
+| Task | Source field | Phase | Content |
+|---|---|---|---|
+| `store_transcript_chunks` | `source="transcript"` | assembly | `chunk_transcript()` output (English text; original-language text retained in `text_original` for non-English videos) |
+| `store_default_output_chunks` | `source="default_output"` | assembly (English videos) / translation (non-English videos) | Per-component chunking of the assembled tabs via `output_chunker.py` — emits one chunk per natural retrieval unit (one `keyTakeaways[i]`, one quiz question, one comparison row, etc.) |
+
+For non-English videos, output indexing is deferred to the translation phase
+so it embeds `ctx.tabs_en` (English) instead of source-language strings —
+the embedding model is English-trained, and embedding source-language tabs
+on it produces poor retrieval quality.
+
+Both paths pre-delete by `(video_id, source)` before upsert (and pre-delete
+runs *before* chunking, so a chunker exception still cleans up prior runs'
+orphans). Output chunks from all tabs upsert in a **single batched call**
+with per-chunk `tab_id` / `tab_component` metadata, instead of one
+round-trip per tab. Keys are deterministic:
+`sha256(f"{source}:{video_id}:{tab_id or ''}:{prop_path or ''}:{chunk_idx}")`,
+with the legacy `f"{video_id}_{idx}"` format preserved for transcript-only
+points (so existing pre-migration points remain addressable).
+
+### Output chunker rules
+
+`output_chunker.py` registers an explicit handler per component. Components
+not in the registry emit zero chunks (silent fallbacks would index button
+labels and IDs as embeddings, polluting retrieval). Cross-cutting rules:
+
+- Drop chunks under 6 whitespace-separated tokens (low signal)
+- Never embed code, numbers, timestamps, URLs, enum flags, raw JSON
+- For the catch-all `display_section`, only flatten string values whose key
+  appears in the whitelist: `text`, `description`, `summary`, `explanation`,
+  `content`, `analysis`, `caption`, `label`, `instruction`, `tip`, `note`
+
+Adding a new component to `assemblers.py` requires adding a row to
+`_COMPONENT_HANDLERS` in `output_chunker.py` before that component's content
+will be retrievable.
 
 ---
 

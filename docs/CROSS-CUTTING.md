@@ -157,6 +157,45 @@ vie-web
 
 ---
 
+### Vector store: shared collection, source-filtered access
+
+Both `vie-summarizer` (writer) and `vie-assistant` (reader) speak to the
+same `transcript_chunks` Qdrant collection. The `source` payload field
+splits content within that collection, so callers can scope retrieval
+without splitting infrastructure.
+
+```
+                  ┌─────────────────────────────────────┐
+                  │ Qdrant: transcript_chunks (384-dim) │
+                  └─────────────────────────────────────┘
+                     ▲                              │
+   writer            │                              │  reader (filter by source)
+   ┌────────────────────────────┐         ┌──────────────────────────────┐
+   │ vie-summarizer assembly    │         │ vie-assistant RAGService     │
+   │  ├─ store_transcript_chunks│         │  ├─ search(video_id, sources)│
+   │  │   source="transcript"   │         │  └─ search_library(video_ids)│
+   │  └─ store_default_output_  │         └──────────────────────────────┘
+   │      chunks                │
+   │      source="default_output"│
+   └────────────────────────────┘
+```
+
+**Single contract:**
+- Payload: `source`, `video_id`, `user_id` (reserved, currently `null`),
+  `tab_id`, `tab_component`, `prop_path`, `chunk_index`, `text`,
+  `text_original`, `language`
+- Point ID: `sha256(f"{source}:{video_id}:{tab_id or ''}:{prop_path or ''}:{chunk_idx}")` (transcript path keeps the legacy `f"{video_id}_{idx}"` for backward compat)
+- Both writers pre-delete by `(video_id, source)` before upsert — orphan-free reprocess
+- `EMBEDDING_MODEL_NAME` (summarizer) MUST match the model the assistant's `RAGService` loads (defaults to `all-MiniLM-L6-v2` in both); changing it requires re-ingesting fixtures
+
+**When adding a new content source** (e.g. `user_notes`):
+1. Add the source name to the writer's `source` literal
+2. Pre-delete by the new `(video_id, source)` pair before upsert
+3. Update the assistant's `RAGService.search` / `search_library` to accept it in `sources`
+4. Update `output_chunker.py` if the new source has its own chunking rules
+
+---
+
 ## Shared Types Strategy
 
 ### TypeScript (vie-api, vie-web)

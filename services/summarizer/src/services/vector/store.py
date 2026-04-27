@@ -1,7 +1,12 @@
-"""Store transcript chunks in Qdrant as a background task.
+"""Store transcript and output chunks in Qdrant as background tasks.
 
-Called after pipeline completion. Failures are logged but never break the pipeline.
+Called after pipeline completion. Failures are logged but never break the
+pipeline. Both ``store_transcript_chunks`` and ``store_default_output_chunks``
+pre-delete by ``(video_id, source)`` before upsert to keep reprocess
+idempotent — reprocesses with fewer chunks no longer leave orphan points.
 """
+
+from __future__ import annotations
 
 import asyncio
 import logging
@@ -9,7 +14,12 @@ import logging
 from src.config import settings
 from src.services.vector.chunking import chunk_transcript
 from src.services.vector.embedding import embed_texts
-from src.services.vector.qdrant_service import VectorService
+from src.services.vector.output_chunker import chunk_assembled_tabs
+from src.services.vector.qdrant_service import (
+    SOURCE_DEFAULT_OUTPUT,
+    SOURCE_TRANSCRIPT,
+    VectorService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -89,9 +99,15 @@ async def store_transcript_chunks(
         embeddings = await asyncio.to_thread(embed_texts, texts)
 
         service = _get_vector_service()
+        # Pre-delete prior transcript points to avoid orphans when the new
+        # chunk count is smaller than the previous run.
+        await asyncio.to_thread(
+            service.delete_by_video_and_source, video_id, SOURCE_TRANSCRIPT,
+        )
         success = await asyncio.to_thread(
             service.store_chunks, video_id, chunks, embeddings,
             language, original_chunks,
+            SOURCE_TRANSCRIPT,
         )
 
         if success:
@@ -105,4 +121,68 @@ async def store_transcript_chunks(
     except Exception as e:
         logger.warning(
             "Background chunk storage failed for %s: %s", video_id, e,
+        )
+
+
+async def store_default_output_chunks(
+    video_id: str,
+    tabs: list[dict],
+    language: str = "en",
+) -> None:
+    """Chunk assembled tab output, embed, and store in Qdrant.
+
+    Reuses the same collection as transcript content but tags each point with
+    ``source="default_output"`` plus the originating ``tab_id``,
+    ``tab_component`` and ``prop_path`` so the assistant can filter to either
+    transcript-only, output-only, or combined retrieval.
+
+    For non-English videos, callers should pass the English-translated
+    ``tabs`` (via ``ctx.tabs_en``) so embeddings stay in the same language as
+    the (English-trained) embedding model — see translation phase.
+
+    Designed to run as a background task — never raises.
+    """
+    if not settings.QDRANT_ENABLED:
+        return
+
+    service = _get_vector_service()
+    try:
+        # Pre-delete first so an exception below cannot strand orphans.
+        await asyncio.to_thread(
+            service.delete_by_video_and_source, video_id, SOURCE_DEFAULT_OUTPUT,
+        )
+
+        output_chunks = chunk_assembled_tabs(tabs)
+        if not output_chunks:
+            logger.debug("No output chunks produced for video %s", video_id)
+            return
+
+        texts = [c.text for c in output_chunks]
+        embeddings = await asyncio.to_thread(embed_texts, texts)
+
+        chunk_dicts = [{"text": c.text} for c in output_chunks]
+        prop_paths = [c.prop_path for c in output_chunks]
+        tab_ids: list[str | None] = [c.tab_id for c in output_chunks]
+        tab_components: list[str | None] = [c.tab_component for c in output_chunks]
+
+        success = await asyncio.to_thread(
+            service.store_chunks,
+            video_id, chunk_dicts, embeddings,
+            language, None,
+            SOURCE_DEFAULT_OUTPUT, None, None, prop_paths,
+            tab_ids, tab_components,
+        )
+
+        if success:
+            distinct_tabs = len({(c.tab_id, c.tab_component) for c in output_chunks})
+            logger.info(
+                "Stored %d output chunks for video %s across %d tabs",
+                len(output_chunks), video_id, distinct_tabs,
+            )
+        else:
+            logger.warning("Failed to store output chunks for video %s", video_id)
+
+    except Exception as e:
+        logger.warning(
+            "Background output chunk storage failed for %s: %s", video_id, e,
         )

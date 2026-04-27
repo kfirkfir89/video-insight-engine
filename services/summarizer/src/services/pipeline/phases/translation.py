@@ -6,14 +6,24 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, AsyncGenerator
 
+from src.config import settings
 from src.services.pipeline.pipeline_helpers import sse_event
 from src.services.pipeline.translation import translate_assembled_output
+from src.services.vector.store import store_default_output_chunks
 
 if TYPE_CHECKING:
     from src.repositories.mongodb_repository import MongoDBVideoRepository
     from src.services.pipeline.context import PipelineContext
 
 logger = logging.getLogger(__name__)
+
+
+def _log_qdrant_error(t: asyncio.Task) -> None:
+    if t.cancelled():
+        return
+    exc = t.exception()
+    if exc:
+        logger.error("Qdrant store failed: %s", exc)
 
 
 async def run_phase_translation(
@@ -64,3 +74,18 @@ async def run_phase_translation(
         )
 
     logger.info("[pipeline] Translation complete for language=%s", ctx.language)
+
+    # Index English-translated output now that ``ctx.tabs_en`` exists.
+    # Background, non-blocking, graceful-degrade — embedding the English
+    # tabs keeps output retrieval consistent with the (English-trained)
+    # transcript embeddings.
+    if settings.QDRANT_ENABLED and ctx.tabs_en:
+        output_task = asyncio.create_task(
+            store_default_output_chunks(
+                ctx.youtube_id,
+                ctx.tabs_en,
+                language="en",
+            ),
+            name=f"store_output_{ctx.youtube_id}",
+        )
+        output_task.add_done_callback(_log_qdrant_error)

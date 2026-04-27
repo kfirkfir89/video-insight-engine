@@ -1,10 +1,16 @@
 """Generate embeddings for transcript chunks using SentenceTransformer.
 
-Model: all-MiniLM-L6-v2 (384-dim, fast, good quality for semantic search).
+Default model: all-MiniLM-L6-v2 (384-dim, fast, good quality for semantic search).
+Configurable via ``settings.EMBEDDING_MODEL_NAME`` — drop-in replacements must
+keep the 384-dim vector size (e.g. ``BAAI/bge-small-en-v1.5``).
 Lazy-loaded to avoid ~500MB memory hit on import.
 """
 
+from __future__ import annotations
+
 import logging
+
+from src.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +23,9 @@ def _get_model():
     if _model is None:
         from sentence_transformers import SentenceTransformer
 
-        _model = SentenceTransformer("all-MiniLM-L6-v2")
-        logger.info("Loaded SentenceTransformer model: all-MiniLM-L6-v2")
+        model_name = settings.EMBEDDING_MODEL_NAME
+        _model = SentenceTransformer(model_name)
+        logger.info("Loaded SentenceTransformer model: %s", model_name)
     return _model
 
 

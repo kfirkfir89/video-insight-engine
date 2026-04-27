@@ -12,7 +12,7 @@ from src.services.cache.response_cache import response_cache
 from src.services.media.s3_client import S3Client
 from src.services.pipeline.assembly import assemble_response
 from src.services.pipeline.pipeline_helpers import sse_event, normalize_segments
-from src.services.vector.store import store_transcript_chunks
+from src.services.vector.store import store_default_output_chunks, store_transcript_chunks
 from src.services.transcription.whisper_transcriber import translate_audio_to_english
 from src.services.video.description_analyzer import DescriptionAnalysis
 from src.utils.language_utils import get_language_name
@@ -155,6 +155,22 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
             )
         )
         task.add_done_callback(_log_qdrant_error)
+
+        # Index assembled output content (tabs + props) alongside transcript.
+        # English videos: index here. Non-English videos: deferred to the
+        # translation phase, which has the English-translated ``ctx.tabs_en``
+        # — embedding source-language text on an English-trained model
+        # produces poor retrieval quality.
+        if ctx.language == "en":
+            output_task = asyncio.create_task(
+                store_default_output_chunks(
+                    ctx.youtube_id,
+                    ctx.assembled_tabs or [],
+                    language="en",
+                ),
+                name=f"store_output_{ctx.youtube_id}",
+            )
+            output_task.add_done_callback(_log_qdrant_error)
 
     # Store raw transcript to S3 (background, non-blocking, best-effort)
     if S3Client.is_available() and ctx.transcript_data:

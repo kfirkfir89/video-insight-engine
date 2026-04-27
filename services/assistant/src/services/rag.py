@@ -1,4 +1,4 @@
-"""RAG service for semantic search over transcript chunks."""
+"""RAG service for semantic search over transcript and output chunks."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ _DEDUP_SIMILARITY_THRESHOLD = 0.95
 
 
 class RAGService:
-    """Retrieval-augmented generation over video transcript chunks."""
+    """Retrieval-augmented generation over video transcript + output chunks."""
 
     def __init__(
         self,
@@ -47,13 +47,16 @@ class RAGService:
         query: str,
         video_id: str,
         top_k: int = 8,
+        sources: list[str] | None = None,
     ) -> list[RAGSource]:
-        """Search for relevant transcript chunks.
+        """Search for relevant chunks within a single video.
 
         Args:
             query: User query text.
             video_id: Video to search within.
             top_k: Maximum number of results.
+            sources: Optional source filter (``["transcript"]``,
+                ``["default_output"]``, or both). ``None`` returns all sources.
 
         Returns:
             Deduplicated list of RAGSource objects sorted by relevance.
@@ -63,26 +66,60 @@ class RAGService:
             results = await asyncio.to_thread(
                 self._qdrant_repo.search,
                 query_vector=query_vector,
-                video_id=video_id,
+                video_ids=[video_id],
                 top_k=top_k,
+                sources=sources,
             )
 
-            sources = [
-                RAGSource(
-                    text=r["text"],
-                    text_original=r.get("text_original"),
-                    timestamp=r.get("timestamp"),
-                    score=r.get("score", 0.0),
-                    chunk_index=r.get("chunk_index", 0),
-                )
-                for r in results
-            ]
-
-            return await self._deduplicate(sources)
+            sources_list = [_result_to_source(r) for r in results]
+            return await self._deduplicate(sources_list)
         except Exception as exc:
             logger.warning(
                 "rag_search_failed_degraded_mode",
                 video_id=video_id,
+                error=str(exc),
+            )
+            return []
+
+    async def search_library(
+        self,
+        query: str,
+        video_ids: list[str],
+        top_k: int = 10,
+        sources: list[str] | None = None,
+    ) -> list[RAGSource]:
+        """Search for relevant chunks across multiple videos.
+
+        Args:
+            query: User query text.
+            video_ids: Library scope to search across. Empty list returns
+                ``[]`` without contacting Qdrant.
+            top_k: Maximum number of results.
+            sources: Optional source filter (see ``search``).
+
+        Returns:
+            Deduplicated list of ``RAGSource`` with ``video_id`` populated so
+            callers can group results by video.
+        """
+        if not video_ids:
+            return []
+
+        try:
+            query_vector = await asyncio.to_thread(self._encode, query)
+            results = await asyncio.to_thread(
+                self._qdrant_repo.search,
+                query_vector=query_vector,
+                video_ids=video_ids,
+                top_k=top_k,
+                sources=sources,
+            )
+
+            sources_list = [_result_to_source(r) for r in results]
+            return await self._deduplicate(sources_list)
+        except Exception as exc:
+            logger.warning(
+                "rag_library_search_failed",
+                video_ids=video_ids,
                 error=str(exc),
             )
             return []
@@ -126,3 +163,19 @@ class RAGService:
     async def preload_model(self) -> None:
         """Preload the embedding model at startup."""
         await asyncio.to_thread(self._get_model)
+
+
+def _result_to_source(r: dict) -> RAGSource:
+    """Map a Qdrant repository dict to a ``RAGSource``."""
+    return RAGSource(
+        text=r.get("text", ""),
+        text_original=r.get("text_original"),
+        timestamp=r.get("timestamp"),
+        score=float(r.get("score", 0.0)),
+        chunk_index=int(r.get("chunk_index", 0)),
+        video_id=r.get("video_id", ""),
+        source=r.get("source", "transcript"),
+        tab_id=r.get("tab_id"),
+        tab_component=r.get("tab_component"),
+        prop_path=r.get("prop_path"),
+    )
