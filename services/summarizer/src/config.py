@@ -76,6 +76,18 @@ class Settings(BaseSettings):
     CHUNKED_EXTRACTION_THRESHOLD: int = 1800  # seconds (30 min) — videos longer than this use chunked extraction
     MAX_TOKENS_PER_BATCH: int = 50000  # conservative token limit per extraction batch
     CHUNKED_EXTRACTION_TIMEOUT: float = 300.0  # 5 min — per-batch timeout for chunked extraction
+    # Parallel concurrency for the chunked extraction batches. Defaults to 2
+    # because production has hit Anthropic 529 (overloaded) at 3 concurrent
+    # Sonnet calls; 2 keeps tail latency stable while still ~halving wall time.
+    EXTRACTION_PARALLEL_BATCHES: int = 2
+    # Force-split target — kept aligned with EXTRACTION_PARALLEL_BATCHES * 2
+    # so a single round of the parallel limit drains half the chunks.
+    EXTRACTION_FORCE_SPLIT_CHUNKS: int = 4
+    # Phase 4 / P2: route the *first* extraction pass through the fast model.
+    # Default OFF — flip via env after the corpus eval (scripts/eval_extraction_models.py)
+    # confirms quality delta < 0.05 across all primary domains. Retries always
+    # escalate to the primary model regardless of this flag.
+    EXTRACTION_USE_FAST_FIRST: bool = False
 
     # Timeout constants for pipeline stages
     TRANSCRIPT_FETCH_TIMEOUT: float = 30.0

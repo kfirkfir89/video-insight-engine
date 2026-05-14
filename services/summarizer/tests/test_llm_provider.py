@@ -236,6 +236,82 @@ class TestLLMProvider:
                 assert call_kwargs.get("fallbacks") == ["openai/gpt-4o"]
 
 
+class TestUseFastModel:
+    """Tests for the ``use_fast_model`` switch on complete_with_messages."""
+
+    @pytest.mark.asyncio
+    async def test_use_fast_model_routes_to_fast_model(self):
+        """When use_fast_model=True, the call must target the fast model
+        instead of the primary."""
+        with patch("src.services.llm_provider.acompletion") as mock_acompletion:
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].message.content = "haiku-response"
+            mock_acompletion.return_value = mock_response
+
+            with patch("src.services.llm_provider.settings") as mock_settings:
+                mock_settings.llm_model = "anthropic/claude-sonnet-4-6"
+                mock_settings.llm_fast_model = "anthropic/claude-haiku-4-5-20251001"
+                mock_settings.llm_fallback_models = None
+                mock_settings.LLM_TIMEOUT_SECONDS = 60.0
+                mock_settings.LLM_NUM_RETRIES = 2
+
+                provider = LLMProvider()
+                messages = [{"role": "user", "content": "hi"}]
+                result = await provider.complete_with_messages(messages, use_fast_model=True)
+
+                assert result == "haiku-response"
+                call_kwargs = mock_acompletion.call_args.kwargs
+                assert call_kwargs["model"] == "anthropic/claude-haiku-4-5-20251001"
+
+    @pytest.mark.asyncio
+    async def test_use_fast_model_default_false_keeps_primary(self):
+        """Default behavior (omit use_fast_model) must keep the primary model."""
+        with patch("src.services.llm_provider.acompletion") as mock_acompletion:
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].message.content = "sonnet-response"
+            mock_acompletion.return_value = mock_response
+
+            with patch("src.services.llm_provider.settings") as mock_settings:
+                mock_settings.llm_model = "anthropic/claude-sonnet-4-6"
+                mock_settings.llm_fast_model = "anthropic/claude-haiku-4-5-20251001"
+                mock_settings.llm_fallback_models = None
+                mock_settings.LLM_TIMEOUT_SECONDS = 60.0
+                mock_settings.LLM_NUM_RETRIES = 2
+
+                provider = LLMProvider()
+                messages = [{"role": "user", "content": "hi"}]
+                await provider.complete_with_messages(messages)
+
+                call_kwargs = mock_acompletion.call_args.kwargs
+                assert call_kwargs["model"] == "anthropic/claude-sonnet-4-6"
+
+    @pytest.mark.asyncio
+    async def test_use_fast_model_skips_fallbacks(self):
+        """Fallbacks are configured for the primary model — sending them
+        with a fast call would defeat the cost saving."""
+        with patch("src.services.llm_provider.acompletion") as mock_acompletion:
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].message.content = "ok"
+            mock_acompletion.return_value = mock_response
+
+            with patch("src.services.llm_provider.settings") as mock_settings:
+                mock_settings.llm_model = "anthropic/claude-sonnet-4-6"
+                mock_settings.llm_fast_model = "anthropic/claude-haiku-4-5-20251001"
+                mock_settings.llm_fallback_models = ["openai/gpt-4o"]
+                mock_settings.LLM_TIMEOUT_SECONDS = 60.0
+                mock_settings.LLM_NUM_RETRIES = 2
+
+                provider = LLMProvider()
+                messages = [{"role": "user", "content": "hi"}]
+                await provider.complete_with_messages(messages, use_fast_model=True)
+
+                call_kwargs = mock_acompletion.call_args.kwargs
+                assert "fallbacks" not in call_kwargs
+
+
 class TestGetLLMProvider:
     """Tests for get_llm_provider factory function."""
 

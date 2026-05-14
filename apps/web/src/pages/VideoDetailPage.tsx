@@ -13,6 +13,7 @@ import { VideoPlayerProvider } from "@/features/video-output/contexts/VideoPlaye
 
 import { Confetti } from "@/components/ui/Confetti";
 import { buildSynthesisFromMeta } from "@/features/video-output/lib/synthesis-utils";
+import { shouldOpenStreamForStatus } from "@/features/video-output/lib/streaming/should-open-stream";
 import type { TabEntry } from "@vie/types";
 
 export function VideoDetailPage() {
@@ -24,8 +25,11 @@ export function VideoDetailPage() {
   // Extract data safely (may be undefined during loading/error)
   const video = data ?? null;
 
-  // Determine if we should stream
-  const isProcessing = video?.status === "pending" || video?.status === "processing";
+  // Frontend stream dedup: only open `/stream` when the cached video record
+  // says processing is in flight. COMPLETED → render cached output, do NOT
+  // re-open the stream (saves a round-trip + a backend "additional consumer"
+  // attach log). FAILED renders the retry UI further down — no auto-stream.
+  const isProcessing = shouldOpenStreamForStatus(video?.status);
   const videoSummaryId = video?.videoSummaryId || "";
 
   // Tell the processing manager to yield streaming to the page-level hook
@@ -68,6 +72,7 @@ export function VideoDetailPage() {
     tabCount,
     tabLabels,
     phase,
+    extractionProgress,
     confettiCount,
   } = useSummaryStream({
     videoSummaryId,
@@ -245,6 +250,7 @@ export function VideoDetailPage() {
             language={resolvedMeta?.language}
             isRTL={resolvedMeta?.isRTL}
             streamPhase={phase}
+            extractionProgress={extractionProgress}
           />
           <Confetti trigger={confettiTrigger} />
         </Layout>

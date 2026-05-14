@@ -62,6 +62,19 @@ export interface FrameInfo {
   textDensity?: number;
 }
 
+/** Per-batch extraction progress shape.
+ *
+ * ``batch`` and ``of`` are populated only by the chunked extraction path
+ * (Phase 3). Single + overflow extractions emit just ``section`` and
+ * ``percent``. Consumers must treat the optional fields as such — undefined
+ * means "not chunked", not "unknown count". */
+export interface ExtractionProgressInfo {
+  section: string;
+  percent: number;
+  batch?: number;
+  of?: number;
+}
+
 // Local types not in shared package
 export interface VideoMetadata {
   title?: string;
@@ -84,7 +97,7 @@ export interface StreamState {
   confettiCount: number;
   // Pipeline output state (triage pipeline)
   triage: TriageResult | null;
-  extractionProgress: { section: string; percent: number } | null;
+  extractionProgress: ExtractionProgressInfo | null;
   domainData: Record<string, unknown> | null;
   enrichment: EnrichmentData | null;
   synthesis: SynthesisResult | null;

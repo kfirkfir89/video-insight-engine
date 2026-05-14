@@ -239,6 +239,7 @@ class LLMProvider:
         metadata: dict[str, Any] | None = None,
         timeout: float | None = None,
         json_mode: bool = False,
+        use_fast_model: bool = False,
     ) -> str:
         """Generate completion from message list.
 
@@ -246,6 +247,9 @@ class LLMProvider:
             messages: List of messages (dict or Message objects)
             max_tokens: Maximum tokens in response
             metadata: Optional metadata for tracking
+            use_fast_model: When True, route to ``self._fast_model``
+                (Haiku/mini/flash-lite). Used by callers that don't need
+                primary-model quality (frame vision, chapter detection).
 
         Returns:
             Generated text content
@@ -255,10 +259,12 @@ class LLMProvider:
             m.model_dump() if isinstance(m, Message) else m for m in messages
         ]
 
+        effective_model = self._fast_model if use_fast_model else self._model
+
         # Build kwargs, only including optional params if set
         effective_timeout = timeout if timeout is not None else self._timeout
         kwargs: dict[str, Any] = {
-            "model": self._model,
+            "model": effective_model,
             "messages": msg_dicts,
             "max_tokens": max_tokens,
             "timeout": effective_timeout,
@@ -266,20 +272,24 @@ class LLMProvider:
         }
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
-        if self._fallback_models:
+        # Fallbacks are configured for the primary model only — they may
+        # not be appropriate for the fast model (e.g., a Sonnet fallback
+        # behind a Haiku call defeats the cost savings).
+        if self._fallback_models and not use_fast_model:
             kwargs["fallbacks"] = self._fallback_models
         if metadata:
             kwargs["metadata"] = metadata
 
         response = await self._call_with_error_logging(
             acompletion(**kwargs),
+            model=effective_model,
             timeout_value=effective_timeout,
         )
         choice = response.choices[0]
         if choice.finish_reason == "length":
             logger.warning(
                 "LLM response truncated (finish_reason=length), model=%s, max_tokens=%d",
-                self._model, max_tokens,
+                effective_model, max_tokens,
             )
         return choice.message.content or ""
 

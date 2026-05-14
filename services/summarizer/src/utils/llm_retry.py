@@ -12,7 +12,12 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
-from litellm.exceptions import APIError as LitellmAPIError, RateLimitError, Timeout as LitellmTimeout
+from litellm.exceptions import (
+    APIError as LitellmAPIError,
+    RateLimitError,
+    ServiceUnavailableError,
+    Timeout as LitellmTimeout,
+)
 
 if TYPE_CHECKING:
     from src.services.llm import LLMService
@@ -60,6 +65,7 @@ async def call_llm_with_retry(
     use_fast_model: bool = False,
     json_mode: bool = False,
     cache_static: str | None = None,
+    propagate_rate_limit: bool = False,
 ) -> str | None:
     """Call LLM with timeout and retry. Returns raw string or None.
 
@@ -71,6 +77,12 @@ async def call_llm_with_retry(
         max_retries: Maximum retry attempts (0 = no retries).
         stage_name: Name for logging (e.g., "triage", "extraction").
         use_fast_model: When True, route to the fast model (Haiku/mini/flash-lite).
+        propagate_rate_limit: When True, re-raise the terminal
+            ``RateLimitError`` / ``ServiceUnavailableError`` after exhausting
+            retries instead of returning ``None``. Used by the parallel batch
+            extractor so it can route rate-limited batches into the sequential
+            fallback. Default ``False`` preserves the "never raises" contract
+            for every other call site.
 
     Returns:
         Raw LLM response string, or None if all attempts failed.
@@ -78,6 +90,8 @@ async def call_llm_with_retry(
     # Safety net: truncate oversized prompts
     model_name = llm_service.fast_model if use_fast_model else llm_service.model
     prompt = truncate_prompt_if_needed(prompt, model_name)
+
+    last_rate_limit_error: RateLimitError | ServiceUnavailableError | None = None
 
     for attempt in range(max_retries + 1):
         start = time.monotonic()
@@ -120,6 +134,8 @@ async def call_llm_with_retry(
                 "[%s] LLM error in %.1fs: %s (attempt %d/%d)",
                 stage_name, duration, str(e)[:200], attempt + 1, max_retries + 1,
             )
+            if propagate_rate_limit and isinstance(e, (RateLimitError, ServiceUnavailableError)):
+                last_rate_limit_error = e
 
         if attempt < max_retries:
             backoff = 1.0 * (attempt + 1)
@@ -127,4 +143,6 @@ async def call_llm_with_retry(
             await asyncio.sleep(backoff)
 
     logger.error("[%s] All %d attempts failed", stage_name, max_retries + 1)
+    if propagate_rate_limit and last_rate_limit_error is not None:
+        raise last_rate_limit_error
     return None

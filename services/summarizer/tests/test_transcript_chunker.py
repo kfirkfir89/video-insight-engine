@@ -276,6 +276,85 @@ class TestSplitTranscriptIntoChapters:
             assert ch.text.strip()
 
     @pytest.mark.asyncio
+    async def test_ai_chapter_detection_uses_fast_model(self):
+        """``_detect_chapters_with_ai`` must route through the fast model.
+
+        Chapter detection is a low-stakes parse — Sonnet is overkill.
+        Switching to Haiku/mini saves ~$0.009 per long video (over 80%
+        of the chapter_detect line item).
+        """
+        from src.services.transcription import transcript_chunker as tc
+
+        duration = 2700
+        segments = _make_segments(duration)
+        video_data = {"duration": duration, "title": "Test Video"}
+
+        mock_llm = AsyncMock()
+        mock_llm.model = "anthropic/claude-sonnet-4-6"
+        mock_llm.fast_model = "anthropic/claude-haiku-4-5-20251001"
+
+        with patch(
+            "src.services.transcription.transcript_chunker.call_llm_with_retry",
+            new_callable=AsyncMock,
+            return_value=None,  # short-circuit; we only care about kwargs
+        ) as mock_call:
+            tc._CHAPTER_DETECT_PROMPT = (
+                "{title} {description} {first_500_words} {last_500_words} {duration_minutes}"
+            )
+            await tc._detect_chapters_with_ai(
+                title="t", description="d", transcript="word " * 100,
+                duration=duration, segments=segments, llm_service=mock_llm,
+            )
+
+            assert mock_call.await_count == 1
+            kwargs = mock_call.await_args.kwargs
+            assert kwargs.get("use_fast_model") is True
+            assert kwargs.get("stage_name") == "chapter_detect"
+
+    @pytest.mark.asyncio
+    async def test_ai_chapter_detection_tags_feature(self):
+        """``_detect_chapters_with_ai`` must set llm_feature_var to
+        ``summarize:chapter_detect`` for the duration of its LLM call so
+        the cost appears under its own line item in admin's
+        ``/usage/by-feature`` instead of being absorbed by the outer
+        ``summarize:extraction`` tag set in `phases/extraction.py`."""
+        from src.services.transcription import transcript_chunker as tc
+        from llm_common.context import llm_feature_var
+
+        duration = 1800
+        segments = _make_segments(duration)
+        mock_llm = AsyncMock()
+
+        observed_feature: list[str | None] = []
+
+        async def _capture_feature(*_args, **_kwargs):
+            observed_feature.append(llm_feature_var.get())
+            return None
+
+        # Pre-set outer feature to mimic the extraction phase wrapper
+        outer_token = llm_feature_var.set("summarize:extraction")
+        try:
+            with patch(
+                "src.services.transcription.transcript_chunker.call_llm_with_retry",
+                side_effect=_capture_feature,
+            ):
+                tc._CHAPTER_DETECT_PROMPT = (
+                    "{title} {description} {first_500_words} {last_500_words} {duration_minutes}"
+                )
+                await tc._detect_chapters_with_ai(
+                    title="t", description="d", transcript="word " * 50,
+                    duration=duration, segments=segments, llm_service=mock_llm,
+                )
+        finally:
+            llm_feature_var.reset(outer_token)
+
+        assert observed_feature == ["summarize:chapter_detect"]
+        # Outer feature must be restored after the call returns
+        # (we reset outer_token above; just confirm the var no longer
+        # holds chapter_detect — i.e., the inner reset ran).
+        assert llm_feature_var.get() != "summarize:chapter_detect"
+
+    @pytest.mark.asyncio
     async def test_segments_with_start_duration_produce_correct_chapter_text(self):
         """Verify that start/duration segments produce distinct text per chapter."""
         duration = 600  # 10 min

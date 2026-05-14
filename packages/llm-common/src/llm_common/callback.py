@@ -24,7 +24,22 @@ from litellm.integrations.custom_logger import CustomLogger
 
 from llm_common.buffer import AsyncBuffer, SyncBuffer
 from llm_common.context import llm_feature_var, llm_request_id_var, llm_video_id_var
-from llm_common.models import UsageRecord, extract_provider
+from llm_common.models import UsageRecord, compute_cache_savings_usd, extract_provider
+
+
+def _safe_int(obj: object, attr: str) -> int:
+    """Return ``obj.attr`` if it is an int, else 0.
+
+    ``getattr(MagicMock(), "x", 0)`` returns a Mock (not 0) because the
+    attribute exists on the mock. Without an explicit isinstance check
+    we'd silently leak Mocks into the record under test.
+    """
+    val = getattr(obj, attr, 0)
+    if isinstance(val, bool):
+        return int(val)
+    if isinstance(val, int):
+        return val
+    return 0
 
 logger = structlog.get_logger(__name__)
 
@@ -85,9 +100,16 @@ class MongoDBUsageCallback(CustomLogger):
             # Extract usage from response
             tokens_in = 0
             tokens_out = 0
+            cache_creation_tokens = 0
+            cache_read_tokens = 0
             if response_obj and hasattr(response_obj, "usage") and response_obj.usage:
-                tokens_in = getattr(response_obj.usage, "prompt_tokens", 0) or 0
-                tokens_out = getattr(response_obj.usage, "completion_tokens", 0) or 0
+                usage = response_obj.usage
+                tokens_in = _safe_int(usage, "prompt_tokens")
+                tokens_out = _safe_int(usage, "completion_tokens")
+                # Anthropic prompt cache fields. Surfaced under these names by
+                # both the native Anthropic SDK and LiteLLM's translation.
+                cache_creation_tokens = _safe_int(usage, "cache_creation_input_tokens")
+                cache_read_tokens = _safe_int(usage, "cache_read_input_tokens")
 
             # Calculate cost
             cost = 0.0
@@ -104,10 +126,16 @@ class MongoDBUsageCallback(CustomLogger):
             # Check for streaming
             is_stream = kwargs.get("stream", False)
 
-            # Cache hit detection
+            # Cache hit: prefer LiteLLM's hidden flag, fall back to a non-zero
+            # cache_read_tokens — the latter is the authoritative provider-side
+            # signal for Anthropic prompt caching.
             cache_hit = False
             if response_obj and hasattr(response_obj, "_hidden_params"):
                 cache_hit = bool(getattr(response_obj._hidden_params, "cache_hit", False))
+            if not cache_hit and cache_read_tokens > 0:
+                cache_hit = True
+
+            cache_savings_usd = compute_cache_savings_usd(model, cache_read_tokens)
 
             record = UsageRecord(
                 model=model,
@@ -126,6 +154,9 @@ class MongoDBUsageCallback(CustomLogger):
                 prompt_preview=prompt_text,
                 prompt_hash=prompt_hash,
                 cache_hit=cache_hit,
+                cache_creation_tokens=cache_creation_tokens,
+                cache_read_tokens=cache_read_tokens,
+                cache_savings_usd=cache_savings_usd,
                 litellm_version=getattr(litellm, "version", ""),
             )
             return record.model_dump()

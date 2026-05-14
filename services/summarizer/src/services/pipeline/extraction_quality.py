@@ -4,14 +4,49 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.utils.data_helpers import is_empty_data
+
+if TYPE_CHECKING:
+    from src.services.pipeline.classifier import ContentTraits
 
 logger = logging.getLogger(__name__)
 
 # A quality score below this triggers an unconditional retry.
 RETRY_SCORE_THRESHOLD = 0.6
+
+# Above this score, hard-miss-only retries are suppressed: the gap is
+# more likely a single mis-planned field than a systemic extraction
+# failure, so the ~$0.20 retry cost is rarely recovered.
+HARD_MISS_SCORE_GATE = 0.7
+
+# Formats whose transcripts almost never produce true step structure.
+# A vlog or podcast may have the manifest predict ``steps: 5`` from a
+# loose mention — retrying on that signal wastes tokens with zero yield.
+NARRATIVE_FORMATS: frozenset[str] = frozenset([
+    "vlog", "commentary", "opinion_rant", "motivational",
+    "podcast", "news", "news_commentary", "entertainment",
+    "performance", "story", "reaction", "interview",
+])
+
+# Schema fields that imply ordered, step-by-step content. We drop these
+# from the hard-miss list when the classified content is narrative.
+STEP_LIKE_FIELDS: frozenset[str] = frozenset([
+    "steps", "drills", "exercises", "ingredients", "itinerary",
+])
+
+
+def _is_narrative_content(
+    content_format: str | None,
+    content_traits: ContentTraits | None,
+) -> bool:
+    """Return True when step-like fields are unlikely to contain real items."""
+    if content_format and content_format in NARRATIVE_FORMATS:
+        return True
+    if content_traits and (content_traits.has_narrative or content_traits.is_opinionated):
+        return True
+    return False
 
 
 @dataclass
@@ -104,22 +139,26 @@ def decide_extraction_retry(
     count_warnings: dict[str, dict[str, Any]],
     score_threshold: float = RETRY_SCORE_THRESHOLD,
     content_tags: list[str] | None = None,
+    content_format: str | None = None,
+    content_traits: ContentTraits | None = None,
 ) -> RetryDecision:
     """Combine overall quality score with per-field count validation.
 
     Two independent retry triggers:
 
-    1. Overall score below threshold — existing behavior.
-    2. A "hard miss" on any manifest-planned field: the plan specified
-       ``itemCount > 0`` but extraction returned zero items. This fires
-       regardless of the overall score, since a high score on other
-       fields should not mask a completely missed section (e.g., plan
-       said ``tips: 6`` and extraction returned ``[]``).
+    1. Overall score below ``score_threshold`` — fires unconditionally.
+    2. A "hard miss" on a manifest-planned field (plan said
+       ``itemCount > 0`` but extraction returned zero) — fires only when
+       the overall score is below ``HARD_MISS_SCORE_GATE``. Above the
+       gate, the retry rarely recovers data and the cost is wasted.
 
-    When ``content_tags`` is provided, hard-miss fields whose domains are
-    not in any active contentTag schema are skipped — the manifest may
-    predict ``steps: 6`` for a tech tutorial, but neither the ``tech`` nor
-    ``learning`` schemas define a ``steps[]`` array, so retrying is wasteful.
+    Filters applied to ``hard_miss_fields`` before the retry decision:
+
+    * ``content_tags`` — drops fields whose domains aren't owned by any
+      active schema (e.g., ``steps`` for a ``tech`` video).
+    * ``content_format`` / ``content_traits`` — when the content is
+      narrative (vlog, podcast, opinion piece), drops step-like fields
+      since they almost never have real items in the source.
     """
     hard_miss_fields = [
         field_name
@@ -146,6 +185,18 @@ def decide_extraction_retry(
             )
         hard_miss_fields = retained
 
+    if hard_miss_fields and _is_narrative_content(content_format, content_traits):
+        retained = [f for f in hard_miss_fields if f not in STEP_LIKE_FIELDS]
+        if len(retained) != len(hard_miss_fields):
+            dropped = [f for f in hard_miss_fields if f in STEP_LIKE_FIELDS]
+            logger.info(
+                "Skipping hard-miss retry for narrative format: format=%s, traits=%s, dropped=%s",
+                content_format,
+                content_traits.active_traits() if content_traits else None,
+                dropped,
+            )
+        hard_miss_fields = retained
+
     low_score = quality.score < score_threshold and quality.total > 0
 
     if low_score:
@@ -157,12 +208,20 @@ def decide_extraction_retry(
             reason=reason,
             hard_miss_fields=hard_miss_fields,
         )
-    if hard_miss_fields:
+
+    if hard_miss_fields and quality.score < HARD_MISS_SCORE_GATE:
         return RetryDecision(
             should_retry=True,
             reason=f"hard miss on {', '.join(hard_miss_fields)}",
             hard_miss_fields=hard_miss_fields,
         )
+
+    if hard_miss_fields:
+        logger.info(
+            "Skipping hard-miss retry: score %.2f >= gate %.2f, fields=%s",
+            quality.score, HARD_MISS_SCORE_GATE, hard_miss_fields,
+        )
+
     return RetryDecision(
         should_retry=False,
         reason="",

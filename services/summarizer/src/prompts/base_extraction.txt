@@ -100,5 +100,5 @@ Return valid JSON only.
 </output_rules>
 
 <transcript>
-{transcript}
+{batch_context}{transcript}
 </transcript>

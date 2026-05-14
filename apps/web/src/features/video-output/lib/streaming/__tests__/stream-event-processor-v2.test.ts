@@ -201,6 +201,50 @@ describe('stream-event-processor — Pipeline events', () => {
 
       expect(mockSetState.getState().extractionProgress).toEqual({ section: 'main', percent: 80 });
     });
+
+    // Phase 3 — chunked extraction emits batch/of fields per completed batch.
+    it('should parse batch and of fields when present', () => {
+      processEvent(
+        { event: 'extraction_progress', section: 'chunked', percent: 30, batch: 2, of: 4 },
+        mockSetState.setState,
+      );
+
+      const state = mockSetState.getState();
+      expect(state.extractionProgress?.batch).toBe(2);
+      expect(state.extractionProgress?.of).toBe(4);
+      expect(state.extractionProgress?.section).toBe('chunked');
+    });
+
+    it('should preserve chunked-sequential section name verbatim', () => {
+      processEvent(
+        { event: 'extraction_progress', section: 'chunked-sequential', percent: 70, batch: 3, of: 4 },
+        mockSetState.setState,
+      );
+
+      expect(mockSetState.getState().extractionProgress?.section).toBe('chunked-sequential');
+    });
+
+    it('should leave batch/of undefined for legacy events', () => {
+      processEvent(
+        { event: 'extraction_progress', section: 'all', percent: 50 },
+        mockSetState.setState,
+      );
+
+      const state = mockSetState.getState();
+      expect(state.extractionProgress?.batch).toBeUndefined();
+      expect(state.extractionProgress?.of).toBeUndefined();
+    });
+
+    it('should ignore non-numeric batch/of fields', () => {
+      processEvent(
+        { event: 'extraction_progress', section: 'chunked', percent: 30, batch: '2', of: 'four' },
+        mockSetState.setState,
+      );
+
+      const state = mockSetState.getState();
+      expect(state.extractionProgress?.batch).toBeUndefined();
+      expect(state.extractionProgress?.of).toBeUndefined();
+    });
   });
 
   // ─────────────────────────────────────────────────────

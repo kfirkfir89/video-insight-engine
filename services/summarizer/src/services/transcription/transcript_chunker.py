@@ -54,12 +54,17 @@ def force_split_by_sentences(
     transcript: str,
     duration_seconds: float,
     target_words: int = FORCE_SPLIT_TARGET_WORDS,
+    target_chunks: int | None = None,
 ) -> list[ChapterChunk]:
     """Force-split transcript at sentence boundaries when chapter splitting fails.
 
     Creates synthetic ChapterChunk objects by splitting the transcript
     into roughly equal word-count segments, snapping to sentence endings
     to avoid breaking mid-sentence.
+
+    When ``target_chunks`` is provided, ``target_words`` is overridden so the
+    transcript is divided into approximately that many chunks. Used by
+    extraction to align chunk count with parallel batch concurrency.
     """
     # Protect common abbreviations from being treated as sentence endings
     protected = _ABBREV_RE.sub(lambda m: m.group(1) + _ABBREV_PLACEHOLDER, transcript)
@@ -69,6 +74,9 @@ def force_split_by_sentences(
         return []
 
     total_words = sum(len(s.split()) for s in sentences)
+    if target_chunks is not None and target_chunks > 1:
+        # Round up so we don't undershoot the requested chunk count.
+        target_words = max(1, (total_words + target_chunks - 1) // target_chunks)
     if total_words <= target_words:
         return []  # no split needed
 
@@ -288,11 +296,15 @@ async def _detect_chapters_with_ai(
         .replace("{duration_minutes}", str(duration_min))
     )
 
+    # Re-tag the feature so admin attribution shows chapter_detect cost
+    # separately from extraction (outer phase sets summarize:extraction).
+    from llm_common.context import llm_feature_var
+    feature_token = llm_feature_var.set("summarize:chapter_detect")
     try:
         raw = await call_llm_with_retry(
             llm_service, prompt,
             max_tokens=2048, timeout=15.0, max_retries=1,
-            stage_name="chapter_detect",
+            stage_name="chapter_detect", use_fast_model=True,
         )
         if not raw:
             return None
@@ -351,6 +363,8 @@ async def _detect_chapters_with_ai(
     except Exception as e:
         logger.warning("AI chapter detection failed (non-critical): %s", e)
         return None
+    finally:
+        llm_feature_var.reset(feature_token)
 
 
 def _time_split_chapters(

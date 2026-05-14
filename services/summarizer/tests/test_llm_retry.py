@@ -4,7 +4,11 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from litellm.exceptions import APIError as LitellmAPIError
+from litellm.exceptions import (
+    APIError as LitellmAPIError,
+    RateLimitError,
+    ServiceUnavailableError,
+)
 
 from src.utils.llm_retry import call_llm_with_retry, truncate_prompt_if_needed
 
@@ -185,6 +189,80 @@ class TestCallLlmWithRetry:
         assert result == '{"default": true}'
         mock_llm.call_llm.assert_called_once()
         mock_llm.call_llm_fast.assert_not_called()
+
+
+class TestPropagateRateLimit:
+    """Terminal RateLimitError / ServiceUnavailableError must re-raise when
+    ``propagate_rate_limit=True`` so the parallel batch extractor can route
+    the batch into its sequential fallback."""
+
+    @pytest.mark.asyncio
+    async def test_re_raises_terminal_rate_limit_error(self, mock_llm):
+        rate_err = RateLimitError(
+            message="429", model="anthropic/claude-sonnet-4-6",
+            llm_provider="anthropic",
+        )
+        mock_llm.call_llm.side_effect = rate_err
+
+        with pytest.raises(RateLimitError):
+            await call_llm_with_retry(
+                mock_llm, "prompt",
+                max_tokens=100, timeout=1.0, max_retries=1, stage_name="test",
+                propagate_rate_limit=True,
+            )
+        # 1 initial + 1 retry = 2 attempts before re-raising.
+        assert mock_llm.call_llm.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_re_raises_terminal_service_unavailable(self, mock_llm):
+        svc_err = ServiceUnavailableError(
+            message="529", model="anthropic/claude-sonnet-4-6",
+            llm_provider="anthropic",
+        )
+        mock_llm.call_llm.side_effect = svc_err
+
+        with pytest.raises(ServiceUnavailableError):
+            await call_llm_with_retry(
+                mock_llm, "prompt",
+                max_tokens=100, timeout=1.0, max_retries=0, stage_name="test",
+                propagate_rate_limit=True,
+            )
+        assert mock_llm.call_llm.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_default_returns_none_on_terminal_rate_limit(self, mock_llm):
+        """Default contract preserved: callers without the flag still get None."""
+        rate_err = RateLimitError(
+            message="429", model="anthropic/claude-sonnet-4-6",
+            llm_provider="anthropic",
+        )
+        mock_llm.call_llm.side_effect = rate_err
+
+        result = await call_llm_with_retry(
+            mock_llm, "prompt",
+            max_tokens=100, timeout=1.0, max_retries=0, stage_name="test",
+        )
+
+        assert result is None
+        assert mock_llm.call_llm.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_propagate_flag_recovers_if_retry_succeeds(self, mock_llm):
+        """A rate-limit on attempt 1 + success on attempt 2 should NOT raise."""
+        rate_err = RateLimitError(
+            message="429", model="anthropic/claude-sonnet-4-6",
+            llm_provider="anthropic",
+        )
+        mock_llm.call_llm.side_effect = [rate_err, '{"recovered": true}']
+
+        result = await call_llm_with_retry(
+            mock_llm, "prompt",
+            max_tokens=100, timeout=1.0, max_retries=1, stage_name="test",
+            propagate_rate_limit=True,
+        )
+
+        assert result == '{"recovered": true}'
+        assert mock_llm.call_llm.call_count == 2
 
 
 class TestTruncatePromptIfNeeded:

@@ -65,11 +65,15 @@ async def _attempt_synthesis_fed_retry(
     )
 
     retry_data = None
+    # Synthesis-fed retry always escalates to the primary model — even when
+    # EXTRACTION_USE_FAST_FIRST is on. The first pass already proved the fast
+    # model under-extracted; doubling down on it just burns tokens.
     async for evt in extract(
         ctx.llm_service, ctx.triage, ctx.clean_text, video_info,
         chapters=chapters, video_context=ctx.video_dna_compact,
         extra_instruction=retry_prompt,
         language_instruction=build_language_instruction(ctx.language),
+        force_primary_model=True,
     ):
         if evt["event"] == "extraction_complete":
             retry_data = evt.get("data")
@@ -174,6 +178,8 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
             quality,
             count_warnings,
             content_tags=ctx.plan_result.content_tags,
+            content_format=ctx.content_format,
+            content_traits=ctx.content_traits,
         )
 
         logger.info(

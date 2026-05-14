@@ -459,7 +459,7 @@ The pipeline uses triage (LLM) to determine content tags from manifest + metadat
 | `sponsor_segments` | `{count, filteredDuration}` (SponsorBlock integration) |
 | `description_analysis` | `{links, resources, socialLinks}` (concurrent with manifest) |
 | `triage_complete` | `{contentTags, modifiers, primaryTag, tabs, confidence}` |
-| `extraction_progress` | `{section, percent}` (multiple events) |
+| `extraction_progress` | `{section, percent, batch?, of?}` — chunked path emits `batch`/`of` per batch with `section="chunked"`; rate-limited fallback batches use `section="chunked-sequential"` |
 | `extraction_complete` | `{domain-keyed data}` |
 | `enrichment_complete` | `{quiz?, flashcards?, scenarios?}` (learning and tech domains only) |
 | `synthesis_complete` | `{tldr, keyTakeaways, masterSummary, seoDescription}` |
@@ -653,9 +653,16 @@ Fallback chain for splitting transcripts into chapters:
 ### Batched Extraction (`extractor.py`)
 
 - Groups chapters into batches of ≤50K tokens (`batch_chapters()`)
-- Parallel extraction per batch with `asyncio.Semaphore(3)` for concurrency
-- Fast model for multi-batch, default model for single batch
+- Parallel extraction per batch with `asyncio.Semaphore(EXTRACTION_PARALLEL_BATCHES)` (default 2)
+- Single-batch chunked input is force-split into `EXTRACTION_FORCE_SPLIT_CHUNKS` sub-batches (default 4) so parallelism still engages on long single-chapter videos; falls back to overflow only when the split also yields one chunk
+- Force-split bypasses `batch_chapters()`: `_resolve_strategy` returns `one_chunk_per_batch=True` and `_chunked_extraction` builds `batches=[[c] for c in chunks]` so the sub-batches don't re-collapse under `MAX_TOKENS_PER_BATCH`
+- **Batch-aware prompt** (Phase 6): each batch's prompt carries a `<batch_partial_context>` block built by `_build_batch_context(batch_idx, total_batches, batch, full_duration_seconds)`. The block tells the model it sees only a slice of the video, overrides the base prompt's "no empty arrays" / density rules for partial transcripts, and explicitly instructs `Return EMPTY arrays for fields not present in your segment — other batches cover them`. The placeholder `{batch_context}` lives inside the `<transcript>` block (after the cache-split marker), so per-batch context never invalidates the Anthropic prompt cache
+- Per-batch progress streamed via `asyncio.Queue` → SSE `extraction_progress` with `batch`/`of`
+- Rate-limit aware: batches whose LLM call raises `RateLimitError` / `ServiceUnavailableError` propagate up (via `call_llm_with_retry(propagate_rate_limit=True)`) and are queued for a sequential second pass with `_RATE_LIMIT_BACKOFF_SECONDS = 2.0`; sequential events carry `section="chunked-sequential"` so the UI can surface the fallback. Sequential retries inherit the same `batch_context` so the prompt stays consistent across attempts
+- First-pass model controlled by `EXTRACTION_USE_FAST_FIRST` (default off); synthesis-fed retry always escalates back to the primary model via `force_primary_model=True`
 - Chapter headers injected into transcript for better context
+
+> **Phase 6 rationale (2026-05-14):** v6 verification on `K-mA3MZ_EzU` showed parallel batches scored 0.40 on the merged extraction (below `RETRY_SCORE_THRESHOLD=0.6`) because each batch saw a 1/4 transcript slice but was told via `<completeness>` to extract for the full 108-min video — so empty `steps[]` from a batch that genuinely had no steps in its slice looked like a coverage gap. The synthesis-fed retry then re-ran all 4 batches, doubling extraction cost ($0.41 → $0.92). The Phase 6 `<batch_partial_context>` block targets the root cause: the model is now explicitly told its input is partial and `DO NOT pad fields to meet "no empty array" or density quotas`, so the merged extraction reflects true field-presence and the retry only fires on genuine quality misses.
 
 ### Extraction Merger (`extraction_merger.py`)
 
@@ -675,8 +682,10 @@ Model routing by stage:
 - Plan: Sonnet (primary model, 30s timeout, 2 retries) — replaces old Manifest + Triage
 - Classifier: fast model (10s timeout, 1 retry)
 - Synthesis: `use_fast_model=True` (30s timeout)
-- Multi-batch extraction: `use_fast_model=True` (120s timeout)
-- Single-batch extraction: Sonnet (primary model)
+- Enrichment: `use_fast_model=True`
+- Frame vision (`frame_analyzer.analyze_frames_with_vision`): **primary (Sonnet)**. Originally routed to fast in Phase 1B / P3, reverted 2026-05-14 after a 5-frame spot-check (`scripts/spotcheck_frame_vision.py`) found `openai/gpt-4o-mini` was only ~20% cheaper *and* hallucinated OCR on dense-text frames
+- AI chapter detection (`transcript_chunker._detect_chapters_with_ai`): `use_fast_model=True`, scoped under its own `llm_feature_var.set("summarize:chapter_detect")` context so cost is attributed correctly in `llm_usage` (was previously absorbed by the outer `summarize:extraction` tag)
+- Extraction first pass: gated on `EXTRACTION_USE_FAST_FIRST` (default off → primary). Synthesis-fed retry passes `force_primary_model=True` to always escalate.
 
 ### Prompt Safety Net (`llm_retry.py`)
 
@@ -692,6 +701,9 @@ Hard character limit per model before every LLM call:
 | `CHUNKED_EXTRACTION_THRESHOLD` | 1800 (30 min) | Duration threshold for chunked path |
 | `MAX_TOKENS_PER_BATCH` | 50000 | Max tokens per extraction batch |
 | `CHAPTER_BATCH_SIZE` | 3 | Chapters per batch target |
+| `EXTRACTION_PARALLEL_BATCHES` | 2 | Semaphore bound for parallel chunked batches |
+| `EXTRACTION_FORCE_SPLIT_CHUNKS` | 4 | Sub-batches when chunked input collapses to 1 batch |
+| `EXTRACTION_USE_FAST_FIRST` | False | Route extraction first pass to fast model (gated rollout, primary still used on retry) |
 
 ### Key Files
 
