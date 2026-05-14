@@ -40,7 +40,7 @@ Python package providing automatic LLM call tracking via LiteLLM callbacks.
 
 | Module | Purpose |
 |--------|---------|
-| `models.py` | `UsageRecord` Pydantic model (20 fields) |
+| `models.py` | `UsageRecord` Pydantic model (23 fields incl. `cache_creation_tokens`, `cache_read_tokens`, `cache_savings_usd`) + `compute_cache_savings_usd(model, tokens)` helper backed by `_CACHE_RATES_USD_PER_M` (Sonnet 4.5/4.6, Haiku 4.5) |
 | `context.py` | `ContextVar` for feature, request_id, video_id |
 | `buffer.py` | `SyncBuffer` (threading.Timer) + `AsyncBuffer` (asyncio) |
 | `callback.py` | `MongoDBUsageCallback(CustomLogger)` with cost alerting |

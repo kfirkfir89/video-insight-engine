@@ -264,3 +264,26 @@ class TestAnalyzeFramesWithVision:
             content = messages[0]["content"]
             image_count = sum(1 for c in content if c.get("type") == "image_url")
             assert image_count == 5
+
+    @pytest.mark.asyncio
+    async def test_routes_to_primary_model(self):
+        """Vision frame analysis routes to the primary model
+        (``use_fast_model=False``). Live spot-check on 2026-05-14 showed
+        ``openai/gpt-4o-mini`` is only ~20% cheaper for vision (not 6×)
+        and hallucinates OCR on dense-text frames — see
+        `reports/frame-vision-spotcheck-20260514-101033.json` and the v5
+        verification notes in `dev/active/.../tasks.md`. Sonnet is the
+        right default until a Haiku-specific override lands."""
+        provider = MagicMock()
+        provider.complete_with_messages = AsyncMock(return_value="[]")
+
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "frame.jpg")
+            with open(path, "wb") as f:
+                f.write(b"\xff\xd8\xff\xe0" + b"\x00" * 100)
+
+            frames = [{"path": path, "total_score": 0.8, "index": 0, "timestamp": 30}]
+            await analyze_frames_with_vision(frames, provider, max_frames=1)
+
+            kwargs = provider.complete_with_messages.call_args.kwargs
+            assert kwargs.get("use_fast_model") is False

@@ -224,7 +224,9 @@ def build_extraction_prompt(
         user_goal, tab_goals, detail_level, content_emphasis, video_context,
         language_instruction,
     )
-    return template.replace("{transcript}", transcript)
+    # build_extraction_prompt is the single-shot convenience wrapper —
+    # no batch context applies, so clear the placeholder explicitly.
+    return template.replace("{batch_context}", "").replace("{transcript}", transcript)
 
 
 def build_extraction_template(

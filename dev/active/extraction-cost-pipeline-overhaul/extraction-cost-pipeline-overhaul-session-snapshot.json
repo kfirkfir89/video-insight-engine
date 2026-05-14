@@ -1,0 +1,23 @@
+{
+  "session_id": "c317e427-ded4-4ae1-9b3a-fc1e9e20e39a",
+  "saved_at": "2026-05-14T12:49:47Z",
+  "affected_repos": [
+    "apps/web"
+  ],
+  "files_edited": [
+    "apps/web/src/components/dev/design-system/InteractiveBlockShowcase.tsx",
+    "apps/web/src/components/vie/cards/VideoHero.tsx",
+    "apps/web/src/components/vie/cards/__tests__/video-hero.test.tsx",
+    "apps/web/src/features/video-output/components/OutputRouter.tsx",
+    "apps/web/src/features/video-output/components/output/ComposableOutput.tsx",
+    "apps/web/src/features/video-output/components/output/__tests__/composable-output.test.tsx",
+    "apps/web/src/features/video-output/components/output/interactive/OverviewInteractive.tsx",
+    "apps/web/src/features/video-output/components/output/interactive/__tests__/overview-interactive.test.tsx",
+    "apps/web/src/lib/__tests__/takeaway-emoji.test.ts",
+    "apps/web/src/lib/dev/mock-interactive-blocks.ts",
+    "apps/web/src/lib/takeaway-emoji.ts"
+  ],
+  "file_count": 11,
+  "edit_count": 35,
+  "resume_hint": "Session edited 11 unique files across apps/web."
+}

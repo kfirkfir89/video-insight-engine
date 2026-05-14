@@ -129,7 +129,9 @@ async def analyze_frames_with_vision(
     started = time.monotonic()
     try:
         raw = await asyncio.wait_for(
-            llm_provider.complete_with_messages(messages, max_tokens=2000, timeout=timeout),
+            llm_provider.complete_with_messages(
+                messages, max_tokens=2000, timeout=timeout, use_fast_model=False,
+            ),
             timeout=timeout + 5,  # outer safety net
         )
         logger.info(

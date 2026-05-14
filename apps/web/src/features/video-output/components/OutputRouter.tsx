@@ -16,7 +16,7 @@ import { stripLeadingEmoji } from '@/lib/string-utils';
 import { DirectionProvider } from '@/contexts/DirectionContext';
 import { getLabels } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import type { StreamPhase } from '@/features/video-output/hooks/use-summary-stream';
+import type { StreamPhase, ExtractionProgressInfo } from '@/features/video-output/hooks/use-summary-stream';
 import { STREAM_PHASE_LABELS } from '@/features/video-output/hooks/use-summary-stream';
 
 interface OutputRouterProps {
@@ -34,6 +34,7 @@ interface OutputRouterProps {
   language?: string;
   isRTL?: boolean;
   streamPhase?: StreamPhase;
+  extractionProgress?: ExtractionProgressInfo | null;
 }
 
 export function OutputRouter({
@@ -51,6 +52,7 @@ export function OutputRouter({
   language,
   isRTL: isRTLProp,
   streamPhase,
+  extractionProgress,
 }: OutputRouterProps) {
   const primaryTag = useMemo((): ContentTag => {
     const raw = typeof meta?.primaryTag === 'string' ? meta.primaryTag : '';
@@ -68,13 +70,13 @@ export function OutputRouter({
   // here above DirectionProvider (it takes the language prop directly).
   const tabPreviews = useMemo(() => getLabels(language ?? 'en').tabPreviews, [language]);
 
-  // Defensive: backend guarantees overview at index 0, but reorder here too
-  // so the UX is correct even if a stale cache or older payload drifts.
+  // Overview tab is suppressed in the tab strip — the page-level VideoHero
+  // owns the briefing (title, brief, key takeaways), so a dedicated Overview
+  // tab would just repeat content. The backend still emits it (cache-friendly),
+  // we just drop it before rendering.
   const orderedTabs = useMemo(() => {
     if (!tabs || tabs.length === 0) return tabs;
-    const idx = tabs.findIndex(t => t.id === 'overview' || t.component === 'overview');
-    if (idx <= 0) return tabs;
-    return [tabs[idx], ...tabs.slice(0, idx), ...tabs.slice(idx + 1)];
+    return tabs.filter((t) => t.id !== 'overview' && t.component !== 'overview');
   }, [tabs]);
 
   const tabDefs = useMemo(() => {
@@ -110,6 +112,7 @@ export function OutputRouter({
                 youtubeId={youtubeId}
                 tabDefs={tabDefs}
                 domainGradient={domainGradient}
+                primaryTag={primaryTag}
               />
               <TabPanel
                 tabDefs={tabDefs}
@@ -118,6 +121,7 @@ export function OutputRouter({
                 isStreaming={isStreaming}
                 tabCount={tabCount}
                 streamPhase={streamPhase}
+                videoSummaryId={videoSummaryId}
               />
             </TabStateProvider>
           </TabCoordinationProvider>
@@ -131,9 +135,15 @@ export function OutputRouter({
               keyTakeaways={synthesis?.keyTakeaways}
               masterSummary={synthesis?.masterSummary}
               youtubeId={youtubeId}
+              primaryTag={primaryTag}
+              domainGradient={domainGradient}
             />
             {isStreaming ? (
-              <StreamingPlaceholder tabLabels={tabLabels} streamPhase={streamPhase} />
+              <StreamingPlaceholder
+                tabLabels={tabLabels}
+                streamPhase={streamPhase}
+                extractionProgress={extractionProgress ?? null}
+              />
             ) : (
               <GlassCard>
                 <p className="text-sm text-muted-foreground text-center py-6">
@@ -162,6 +172,7 @@ interface CommandDeckProps {
   youtubeId?: string;
   tabDefs: Array<{ id: string; label: string; emoji: string; preview?: string; dataSource: string }>;
   domainGradient: string;
+  primaryTag: ContentTag;
 }
 
 /** Reads active-tab state from coordination context and renders the hero with
@@ -177,6 +188,7 @@ function CommandDeck({
   youtubeId,
   tabDefs,
   domainGradient,
+  primaryTag,
 }: CommandDeckProps) {
   // CommandDeck is only rendered inside <TabCoordinationProvider> (see parent
   // render). Context must be present — fail loud if a future refactor breaks
@@ -201,6 +213,7 @@ function CommandDeck({
       onTabSelect={setActiveTab}
       completedTabs={completedTabs}
       domainGradient={domainGradient}
+      primaryTag={primaryTag}
     />
   );
 }
@@ -212,9 +225,10 @@ interface TabPanelProps {
   isStreaming?: boolean;
   tabCount: number;
   streamPhase?: StreamPhase;
+  videoSummaryId: string;
 }
 
-function TabPanel({ tabDefs, tabs, primaryTag, isStreaming, tabCount, streamPhase }: TabPanelProps) {
+function TabPanel({ tabDefs, tabs, primaryTag, isStreaming, tabCount, streamPhase, videoSummaryId }: TabPanelProps) {
   const tabLayoutRef = useRef<TabLayoutHandle>(null);
   return (
     <TabLayout
@@ -241,6 +255,7 @@ function TabPanel({ tabDefs, tabs, primaryTag, isStreaming, tabCount, streamPhas
             activeTab={activeTabId}
             onNavigateTab={onNavigateTab}
             primaryTag={primaryTag}
+            videoSummaryId={videoSummaryId}
           />
         </ErrorBoundary>
       )}
@@ -251,6 +266,7 @@ function TabPanel({ tabDefs, tabs, primaryTag, isStreaming, tabCount, streamPhas
 interface StreamingPlaceholderProps {
   tabLabels: { id: string; label: string; emoji: string }[];
   streamPhase?: StreamPhase;
+  extractionProgress?: ExtractionProgressInfo | null;
 }
 
 const PHASE_EMOJI: Partial<Record<StreamPhase, string>> = {
@@ -271,9 +287,20 @@ const PHASE_HUE: Partial<Record<StreamPhase, number>> = {
   synthesis: 330,
 };
 
-function StreamingPlaceholder({ tabLabels, streamPhase }: StreamingPlaceholderProps) {
+function StreamingPlaceholder({ tabLabels, streamPhase, extractionProgress }: StreamingPlaceholderProps) {
   const phaseEmoji = streamPhase ? PHASE_EMOJI[streamPhase] : '⚡';
   const hue = streamPhase ? (PHASE_HUE[streamPhase] ?? 290) : 290;
+
+  // Per-batch extraction label only renders when chunked extraction is the
+  // active strategy (`of` is sent only by that path). Single/overflow
+  // extractions keep the current generic phase label.
+  const showBatchLabel =
+    streamPhase === 'extraction' &&
+    !!extractionProgress &&
+    typeof extractionProgress.of === 'number' &&
+    extractionProgress.of > 1;
+  const batchPercent = extractionProgress?.percent ?? 0;
+  const isSequentialFallback = extractionProgress?.section === 'chunked-sequential';
 
   return (
     <div className="relative flex flex-col gap-6">
@@ -315,8 +342,31 @@ function StreamingPlaceholder({ tabLabels, streamPhase }: StreamingPlaceholderPr
           />
         )}
         <p className="text-base md:text-lg font-medium text-foreground">
-          {streamPhase ? STREAM_PHASE_LABELS[streamPhase] : 'Getting ready…'}
+          {showBatchLabel
+            ? `Extracting batch ${extractionProgress?.batch}/${extractionProgress?.of}…`
+            : streamPhase ? STREAM_PHASE_LABELS[streamPhase] : 'Getting ready…'}
         </p>
+        {showBatchLabel && (
+          <div className="w-full max-w-xs flex flex-col items-center gap-2">
+            <div
+              className="h-1.5 w-full overflow-hidden rounded-full bg-muted/40"
+              role="progressbar"
+              aria-valuenow={batchPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className="h-full rounded-full bg-foreground/70 transition-[width] duration-500 ease-out"
+                style={{ width: `${Math.min(100, Math.max(0, batchPercent))}%` }}
+              />
+            </div>
+            {isSequentialFallback && (
+              <p className="text-xs text-muted-foreground/80">
+                (running sequentially due to upstream load)
+              </p>
+            )}
+          </div>
+        )}
         <StreamProgressSteps phase={streamPhase} />
       </div>
     </div>

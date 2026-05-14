@@ -88,10 +88,14 @@ function handleTriageEvent(event: Record<string, unknown>, setState: SetState): 
 function handleExtractionProgress(event: Record<string, unknown>, setState: SetState): void {
   const section = typeof event.section === "string" ? event.section : "";
   const percent = typeof event.percent === "number" ? event.percent : 0;
+  // Per-batch fields are emitted only by chunked extraction (Phase 3).
+  // They are optional so legacy single/overflow events still parse.
+  const batch = typeof event.batch === "number" ? event.batch : undefined;
+  const of = typeof event.of === "number" ? event.of : undefined;
   setState((prev) => ({
     ...prev,
     phase: "extraction",
-    extractionProgress: { section, percent },
+    extractionProgress: { section, percent, batch, of },
   }));
 }
 

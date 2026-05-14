@@ -2,13 +2,16 @@
 
 import pytest
 
+from src.services.pipeline.classifier import ContentTraits
 from src.utils.data_helpers import is_empty_data
 from src.services.pipeline.extraction_quality import (
     ExtractionQuality,
+    HARD_MISS_SCORE_GATE,
     build_synthesis_fed_retry_prompt,
     check_extraction_quality,
     decide_extraction_retry,
     merge_retry_fields,
+    _is_narrative_content,
     _resolve_dot_path,
 )
 
@@ -239,15 +242,15 @@ class TestDecideExtractionRetry:
         assert decision.should_retry is False
         assert decision.reason == ""
 
-    def test_hard_miss_triggers_retry_despite_high_score(self):
-        """Regression: plan said 6 tips, extraction got 0, but other fields populated.
+    def test_hard_miss_below_gate_triggers_retry(self):
+        """Regression: plan said 6 tips, extraction got 0, score in the gate band.
 
-        Overall score 5/6 = 0.83, above the 0.6 threshold — prior behavior
-        skipped the retry. This test guards the fix that makes a hard miss
-        trigger a retry regardless of overall score.
+        Score = 0.65 sits between the low-score threshold (0.6) and the
+        hard-miss gate (0.7). The retry must fire despite the score being
+        above 0.6, because a completely missed section is its own signal.
         """
         quality = ExtractionQuality(
-            score=5 / 6, populated=5, total=6, empty_fields=["food.tips"],
+            score=0.65, populated=4, total=6, empty_fields=["food.tips"],
         )
         count_warnings = {
             "tips": {"manifest": 6, "extracted": 0, "ratio": 0.0},
@@ -257,6 +260,23 @@ class TestDecideExtractionRetry:
         assert "hard miss" in decision.reason
         assert "tips" in decision.reason
         assert decision.hard_miss_fields == ["tips"]
+
+    def test_high_score_above_gate_suppresses_hard_miss_retry(self):
+        """A hard miss alone does NOT trigger retry above HARD_MISS_SCORE_GATE.
+
+        At score >= 0.7 the residual gap is most likely a single mis-planned
+        field; the ~$0.20 retry rarely recovers data. This guards the cost
+        gate that was the primary motivation for the format-aware fix.
+        """
+        quality = ExtractionQuality(
+            score=5 / 6, populated=5, total=6, empty_fields=["food.tips"],
+        )
+        count_warnings = {
+            "tips": {"manifest": 6, "extracted": 0, "ratio": 0.0},
+        }
+        decision = decide_extraction_retry(quality, count_warnings)
+        assert decision.should_retry is False
+        assert quality.score >= HARD_MISS_SCORE_GATE
 
     def test_partial_count_warning_no_retry(self):
         """A partial undercount (extracted > 0 but below 60%) is not a hard miss."""
@@ -274,7 +294,7 @@ class TestDecideExtractionRetry:
         assert decision.should_retry is False
 
     def test_multiple_hard_misses(self):
-        quality = ExtractionQuality(score=0.8, populated=4, total=5, empty_fields=["food.tips"])
+        quality = ExtractionQuality(score=0.65, populated=4, total=6, empty_fields=["food.tips"])
         count_warnings = {
             "tips": {"manifest": 6, "extracted": 0, "ratio": 0.0},
             "ingredients": {"manifest": 8, "extracted": 0, "ratio": 0.0},
@@ -320,7 +340,7 @@ class TestDecideExtractionRetry:
 
     def test_keeps_hard_miss_when_field_is_in_active_schema(self):
         """If at least one active contentTag schema owns the field, retry."""
-        quality = ExtractionQuality(score=0.8, populated=5, total=6, empty_fields=["food.tips"])
+        quality = ExtractionQuality(score=0.65, populated=4, total=6, empty_fields=["food.tips"])
         count_warnings = {"tips": {"manifest": 6, "extracted": 0, "ratio": 0.0}}
         decision = decide_extraction_retry(
             quality, count_warnings, content_tags=["food"],
@@ -330,7 +350,7 @@ class TestDecideExtractionRetry:
 
     def test_partial_schema_match_keeps_only_relevant_field(self):
         """A mixed set: keep fields owned by active domains, drop the rest."""
-        quality = ExtractionQuality(score=0.8, populated=4, total=5, empty_fields=[])
+        quality = ExtractionQuality(score=0.65, populated=4, total=6, empty_fields=[])
         count_warnings = {
             "steps": {"manifest": 8, "extracted": 0, "ratio": 0.0},  # food/project — kept (food active)
             "spots": {"manifest": 5, "extracted": 0, "ratio": 0.0},  # travel only — dropped
@@ -344,7 +364,7 @@ class TestDecideExtractionRetry:
     def test_unknown_field_in_count_warnings_is_kept(self):
         """A field not in the schema map (no domain mapping) should be kept —
         we don't have evidence it's unfulfillable."""
-        quality = ExtractionQuality(score=0.8, populated=4, total=5, empty_fields=[])
+        quality = ExtractionQuality(score=0.65, populated=4, total=6, empty_fields=[])
         count_warnings = {"unknown_field": {"manifest": 3, "extracted": 0, "ratio": 0.0}}
         decision = decide_extraction_retry(
             quality, count_warnings, content_tags=["tech"],
@@ -355,11 +375,119 @@ class TestDecideExtractionRetry:
     def test_omitting_content_tags_preserves_legacy_behavior(self):
         """When the caller passes no content_tags, the schema gating is
         skipped entirely so we don't break callers that haven't migrated."""
-        quality = ExtractionQuality(score=0.8, populated=5, total=6, empty_fields=[])
+        quality = ExtractionQuality(score=0.65, populated=4, total=6, empty_fields=[])
         count_warnings = {"steps": {"manifest": 8, "extracted": 0, "ratio": 0.0}}
         decision = decide_extraction_retry(quality, count_warnings)  # no content_tags
         assert decision.should_retry is True
         assert decision.hard_miss_fields == ["steps"]
+
+
+class TestFormatAwareRetryGate:
+    """Tests for the format/trait-aware filter and the hard-miss score gate."""
+
+    def test_narrative_format_drops_step_like_hard_miss(self):
+        """A vlog with a hard miss on 'steps' should NOT retry — vlogs don't
+        produce step structure, retrying wastes ~$0.20 with zero recoverable
+        data."""
+        quality = ExtractionQuality(score=0.65, populated=4, total=6, empty_fields=[])
+        count_warnings = {"steps": {"manifest": 6, "extracted": 0, "ratio": 0.0}}
+        decision = decide_extraction_retry(
+            quality, count_warnings, content_format="vlog",
+        )
+        assert decision.should_retry is False
+        assert decision.hard_miss_fields == []
+
+    def test_tutorial_format_keeps_step_like_hard_miss(self):
+        """A tutorial with a hard miss on 'steps' SHOULD retry — tutorials
+        legitimately have step structure, and a missed section is real."""
+        quality = ExtractionQuality(score=0.65, populated=4, total=6, empty_fields=[])
+        count_warnings = {"steps": {"manifest": 6, "extracted": 0, "ratio": 0.0}}
+        decision = decide_extraction_retry(
+            quality, count_warnings, content_format="tutorial",
+        )
+        assert decision.should_retry is True
+        assert decision.hard_miss_fields == ["steps"]
+
+    def test_low_score_with_non_step_hard_miss_retries(self):
+        """A low-score retry fires regardless of format/trait gating —
+        a low overall score is its own systemic signal."""
+        quality = ExtractionQuality(score=0.3, populated=1, total=4, empty_fields=["concepts"])
+        count_warnings = {"concepts": {"manifest": 4, "extracted": 0, "ratio": 0.0}}
+        decision = decide_extraction_retry(
+            quality, count_warnings, content_format="vlog",
+        )
+        assert decision.should_retry is True
+        assert "low score" in decision.reason
+
+    def test_traits_narrative_drops_step_like_hard_miss(self):
+        """Trait-based gate: format may not be narrative, but the
+        has_narrative trait is enough to drop step-like hard misses."""
+        quality = ExtractionQuality(score=0.65, populated=4, total=6, empty_fields=[])
+        count_warnings = {"drills": {"manifest": 5, "extracted": 0, "ratio": 0.0}}
+        traits = ContentTraits(has_narrative=True)
+        decision = decide_extraction_retry(
+            quality, count_warnings, content_format="lecture", content_traits=traits,
+        )
+        assert decision.should_retry is False
+        assert decision.hard_miss_fields == []
+
+    def test_traits_opinionated_drops_step_like_hard_miss(self):
+        """Trait-based gate: is_opinionated also signals narrative content."""
+        quality = ExtractionQuality(score=0.65, populated=4, total=6, empty_fields=[])
+        count_warnings = {"exercises": {"manifest": 5, "extracted": 0, "ratio": 0.0}}
+        traits = ContentTraits(is_opinionated=True)
+        decision = decide_extraction_retry(
+            quality, count_warnings, content_traits=traits,
+        )
+        assert decision.should_retry is False
+
+    def test_narrative_keeps_non_step_hard_miss(self):
+        """Narrative gate only filters STEP_LIKE_FIELDS — other hard misses
+        are kept and still trigger the gated retry."""
+        quality = ExtractionQuality(score=0.65, populated=4, total=6, empty_fields=[])
+        count_warnings = {"concepts": {"manifest": 5, "extracted": 0, "ratio": 0.0}}
+        decision = decide_extraction_retry(
+            quality, count_warnings, content_format="vlog",
+        )
+        assert decision.should_retry is True
+        assert decision.hard_miss_fields == ["concepts"]
+
+    def test_narrative_with_mixed_hard_misses_filters_only_step_like(self):
+        """Mixed step + non-step hard misses on a narrative video: drop
+        only the step-like ones; the rest still gate the retry."""
+        quality = ExtractionQuality(score=0.65, populated=4, total=6, empty_fields=[])
+        count_warnings = {
+            "steps": {"manifest": 6, "extracted": 0, "ratio": 0.0},
+            "concepts": {"manifest": 5, "extracted": 0, "ratio": 0.0},
+        }
+        decision = decide_extraction_retry(
+            quality, count_warnings, content_format="podcast",
+        )
+        assert decision.should_retry is True
+        assert decision.hard_miss_fields == ["concepts"]
+
+    def test_high_score_with_narrative_step_miss_no_retry(self):
+        """Both filters apply at once: narrative format drops step-like, and
+        the score gate would have suppressed it anyway. End result: no retry."""
+        quality = ExtractionQuality(score=0.85, populated=5, total=6, empty_fields=[])
+        count_warnings = {"itinerary": {"manifest": 6, "extracted": 0, "ratio": 0.0}}
+        decision = decide_extraction_retry(
+            quality, count_warnings, content_format="commentary",
+        )
+        assert decision.should_retry is False
+
+    def test_is_narrative_content_helper_format(self):
+        """Direct check of the helper used by decide_extraction_retry."""
+        assert _is_narrative_content("vlog", None) is True
+        assert _is_narrative_content("podcast", None) is True
+        assert _is_narrative_content("tutorial", None) is False
+        assert _is_narrative_content(None, None) is False
+
+    def test_is_narrative_content_helper_traits(self):
+        assert _is_narrative_content(None, ContentTraits(has_narrative=True)) is True
+        assert _is_narrative_content(None, ContentTraits(is_opinionated=True)) is True
+        assert _is_narrative_content(None, ContentTraits(has_steps=True)) is False
+        assert _is_narrative_content("tutorial", ContentTraits(has_narrative=True)) is True
 
 
 class TestMergeRetryFields:
