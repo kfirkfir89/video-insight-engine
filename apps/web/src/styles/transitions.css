@@ -30,9 +30,6 @@
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
-  /* Was a soft overshoot; retuned to pure ease-out-quint so motion decelerates
-     without the recognisable AI "spring" bounce. Name preserved for callers. */
-  --ease-spring-soft: cubic-bezier(0.22, 1, 0.36, 1);
   --vie-vt-fast: 220ms;
   --vie-vt-base: 360ms;
   --vie-vt-slow: 540ms;
@@ -86,7 +83,7 @@
   /* The shared spine element gets a longer, more expressive morph. */
   html[data-vt-type="stream-input-spine"]::view-transition-group(vie-input-spine) {
     animation-duration: var(--vie-vt-slow);
-    animation-timing-function: var(--ease-spring-soft);
+    animation-timing-function: var(--ease-out-quint);
   }
   html[data-vt-type="stream-input-spine"]::view-transition-image-pair(vie-input-spine) {
     isolation: isolate;
@@ -194,7 +191,7 @@
   [data-stream-entry] {
     transition:
       opacity 380ms var(--ease-out-expo),
-      transform 480ms var(--ease-spring-soft);
+      transform 480ms var(--ease-out-quint);
   }
   @starting-style {
     [data-stream-entry] {
@@ -208,7 +205,7 @@
   [data-stream-tab-pill] {
     transition:
       opacity 360ms var(--ease-out-expo),
-      transform 520ms var(--ease-spring-soft);
+      transform 520ms var(--ease-out-quint);
     transition-delay: calc(var(--stagger-i, 0) * 80ms);
   }
   @starting-style {

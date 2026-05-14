@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { isContentTag } from '@vie/types';
 import type { TabEntry, SynthesisResult, ContentTag, VIEResponseMeta } from '@vie/types';
 import { getDomainGradient } from '@vie/shared/config';
@@ -35,6 +35,10 @@ interface OutputRouterProps {
   isRTL?: boolean;
   streamPhase?: StreamPhase;
   extractionProgress?: ExtractionProgressInfo | null;
+  /** Abort the in-flight stream. When provided, the streaming placeholder
+   *  surfaces a Cancel control after a brief delay (so it doesn't compete
+   *  with the peak moment). */
+  onCancelStream?: () => void;
 }
 
 export function OutputRouter({
@@ -53,6 +57,7 @@ export function OutputRouter({
   isRTL: isRTLProp,
   streamPhase,
   extractionProgress,
+  onCancelStream,
 }: OutputRouterProps) {
   const primaryTag = useMemo((): ContentTag => {
     const raw = typeof meta?.primaryTag === 'string' ? meta.primaryTag : '';
@@ -143,6 +148,7 @@ export function OutputRouter({
                 tabLabels={tabLabels}
                 streamPhase={streamPhase}
                 extractionProgress={extractionProgress ?? null}
+                onCancel={onCancelStream}
               />
             ) : (
               <GlassCard>
@@ -267,7 +273,14 @@ interface StreamingPlaceholderProps {
   tabLabels: { id: string; label: string; emoji: string }[];
   streamPhase?: StreamPhase;
   extractionProgress?: ExtractionProgressInfo | null;
+  onCancel?: () => void;
 }
+
+/** Delay (ms) before the Cancel control fades in. The peak moment of the
+ *  product is the first ~5s of streaming — phase emoji breathing, tab pills
+ *  materializing. A Cancel button competing for attention during that beat
+ *  would dilute it; surface it once the user has settled into "waiting". */
+const CANCEL_REVEAL_MS = 5000;
 
 const PHASE_EMOJI: Partial<Record<StreamPhase, string>> = {
   connecting: '⚡',
@@ -287,9 +300,19 @@ const PHASE_HUE: Partial<Record<StreamPhase, number>> = {
   synthesis: 330,
 };
 
-function StreamingPlaceholder({ tabLabels, streamPhase, extractionProgress }: StreamingPlaceholderProps) {
+function StreamingPlaceholder({ tabLabels, streamPhase, extractionProgress, onCancel }: StreamingPlaceholderProps) {
   const phaseEmoji = streamPhase ? PHASE_EMOJI[streamPhase] : '⚡';
   const hue = streamPhase ? (PHASE_HUE[streamPhase] ?? 290) : 290;
+
+  // Cancel control is hidden for the first ~5s so the streaming peak moment
+  // (phase emoji breathing, tab pills materializing) doesn't have to share
+  // attention with an abort affordance.
+  const [showCancel, setShowCancel] = useState(false);
+  useEffect(() => {
+    if (!onCancel) return;
+    const t = setTimeout(() => setShowCancel(true), CANCEL_REVEAL_MS);
+    return () => clearTimeout(t);
+  }, [onCancel]);
 
   // Per-batch extraction label only renders when chunked extraction is the
   // active strategy (`of` is sent only by that path). Single/overflow
@@ -368,6 +391,20 @@ function StreamingPlaceholder({ tabLabels, streamPhase, extractionProgress }: St
           </div>
         )}
         <StreamProgressSteps phase={streamPhase} />
+        {onCancel && showCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className={cn(
+              'mt-1 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium',
+              'text-muted-foreground/80 hover:text-foreground transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'animate-in fade-in duration-300 motion-reduce:animate-none',
+            )}
+          >
+            Cancel
+          </button>
+        )}
       </div>
     </div>
   );

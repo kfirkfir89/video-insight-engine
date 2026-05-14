@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Folder, Link2, ListVideo, Loader2, Sparkles } from 'lucide-react';
+import { ArrowRight, Folder, Link2, ListVideo, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -182,11 +182,7 @@ export function VideoIntakeForm({ className }: VideoIntakeFormProps) {
       >
         {/* Row 1: URL input + Summarize */}
         <div className="flex items-stretch gap-2">
-          <div className="flex-1 flex items-center gap-2 ps-3">
-            <Sparkles
-              className="h-4 w-4 text-primary shrink-0 animate-pulse motion-reduce:animate-none"
-              aria-hidden="true"
-            />
+          <div className="flex-1 flex items-center ps-3">
             <Input
               ref={inputRef}
               type="url"

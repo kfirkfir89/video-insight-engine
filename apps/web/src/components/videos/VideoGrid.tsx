@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Folder as FolderIcon, Play, Sparkles, Command, FileVideo, GraduationCap, ChefHat, Dumbbell, Code2 } from "lucide-react";
+import { Folder as FolderIcon, Play, Plus, Command, FileVideo, GraduationCap, ChefHat, Dumbbell, Code2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { getDomainGradient } from "@vie/shared/config";
@@ -190,7 +190,7 @@ export const VideoGrid = memo(function VideoGrid({
             <div className="stack-sm">
               <Button asChild size="sm" className="gap-1.5 px-5 py-2 self-start">
                 <Link to="/generate">
-                  <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   Create your first summary
                 </Link>
               </Button>
@@ -223,10 +223,10 @@ export const VideoGrid = memo(function VideoGrid({
                   to="/generate"
                   className="group relative overflow-hidden rounded-xl border border-border/60 bg-card p-4 stack-sm hover:border-border hover:shadow-md transition-[box-shadow,border-color,transform] hover:-translate-y-0.5 motion-reduce:hover:translate-y-0"
                 >
-                  {/* Domain spine — mirrors VideoCard's chromatic signal */}
+                  {/* Domain top-edge — mirrors VideoCard's chromatic signal */}
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-y-0 start-0 w-[3px]"
+                    className="pointer-events-none absolute inset-x-0 top-0 h-px"
                     style={{ backgroundImage: getDomainGradient(tag) }}
                   />
                   <Icon

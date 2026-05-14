@@ -76,9 +76,9 @@ export const VideoCard = memo(function VideoCard({ video }: VideoCardProps) {
     [video.createdAt]
   );
 
-  /** Domain spine — a 3px inline-start bar using the video's content-tag gradient.
+  /** Domain accent — a 1px top-edge rule using the video's content-tag gradient.
    *  Gives the grid chromatic identity without shouting: a fitness video reads
-   *  coral, a code video reads mint, etc. Null while processing (no tag yet). */
+   *  coral, a code video reads mint. Null while processing (no tag yet). */
   const domainGradient = useMemo(() => {
     const tag = video.outputType;
     if (!tag || !isContentTag(tag)) return null;
@@ -119,13 +119,13 @@ export const VideoCard = memo(function VideoCard({ video }: VideoCardProps) {
         className="block [content-visibility:auto] [contain-intrinsic-size:auto_260px]"
       >
         <Card className={cn("relative overflow-hidden transition-[box-shadow,transform] duration-200 ease-out hover:shadow-lg hover:-translate-y-0.5 motion-reduce:hover:translate-y-0", STATUS_RING_MAP[video.status])}>
-          {/* Domain-colored spine — absolute inline-start strip. Renders only
-              once the pipeline has assigned a content tag, so processing cards
-              stay neutral until they're ready. */}
+          {/* Domain-colored top edge — 1px rule. Renders only once the pipeline
+              has assigned a content tag, so processing cards stay neutral
+              until they're ready. */}
           {domainGradient && (
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 start-0 w-[3px] z-10"
+              className="pointer-events-none absolute inset-x-0 top-0 h-px z-10"
               style={{ backgroundImage: domainGradient }}
             />
           )}

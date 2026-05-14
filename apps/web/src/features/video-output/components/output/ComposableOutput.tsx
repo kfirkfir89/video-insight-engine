@@ -10,6 +10,7 @@ import { useVideoPlayer } from '@/features/video-output/contexts/VideoPlayerCont
 import { RecipePlayer } from './RecipePlayer';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { EmojiMarker } from '@/components/vie';
+import { stripLeadingEmoji } from '@/lib/string-utils';
 import {
   ChecklistInteractive,
   QuizInteractive,
@@ -29,6 +30,7 @@ import {
   GalleryInteractive,
   LyricsPlayerInteractive,
 } from './interactive';
+import type { OverviewCrossTabLink } from './interactive/OverviewInteractive';
 
 interface ComposableOutputProps {
   /** v1: VIEResponse with domain-keyed data (null when using assembled tabs). */
@@ -39,6 +41,8 @@ interface ComposableOutputProps {
   onNavigateTab: (tabId: string) => void;
   /** Primary content tag (for cooking mode detection). */
   primaryTag?: string;
+  /** Stable per-video id used for per-video local state (e.g. overview bookmarks). */
+  videoSummaryId?: string;
 }
 
 // ─── Component Registry (v2: component name → renderer) ───
@@ -50,6 +54,80 @@ interface NavProps {
   tabId?: string;
   currentTime?: number;
   contentTag?: string;
+  /** Full tab list — used by hub-style renderers (overview) to build sibling
+   *  navigation. Optional so renderers that don't need it can ignore it. */
+  allTabs?: TabEntry[];
+  /** Stable per-video id — wired through for renderers that persist per-video
+   *  local state (overview bookmarks). */
+  videoId?: string;
+  /** Pre-computed Overview cross-tab links, memoized at the parent so the
+   *  reference is stable across `currentTime` ticks (would otherwise defeat
+   *  `memo()` on OverviewInteractive). */
+  derivedOverviewLinks?: OverviewCrossTabLink[];
+}
+
+/** Component name → the props key holding its primary item list. Used by the
+ *  Overview nav grid to surface "how many things are inside this tab". Kept as
+ *  a single source of truth next to the renderers so new components only need
+ *  to register their count-prop here. */
+const COUNT_PROP_BY_COMPONENT: Record<string, string> = {
+  quiz: 'questions',
+  flash_deck: 'cards',
+  step_player: 'steps',
+  checklist: 'items',
+  info_grid: 'items',
+  spot_explorer: 'spots',
+  moment_track: 'items',
+  timeline: 'items',
+  clip_player: 'clips',
+  code_explorer: 'snippets',
+  exercise_tracker: 'exercises',
+  scenario: 'scenarios',
+  gallery: 'images',
+  lyrics_player: 'sections',
+  budget: 'breakdown',
+};
+
+/** Pull the most-meaningful item count out of an assembled tab's props.
+ *  Returns undefined when the count is ambiguous — the nav card still renders
+ *  without a number rather than guessing. */
+function inferItemCount(tab: TabEntry): number | undefined {
+  const props = tab.props ?? {};
+  // Comparison has no single "items" list — it's pros + cons + rows together.
+  if (tab.component === 'comparison') {
+    const pros = Array.isArray(props.pros) ? props.pros.length : 0;
+    const cons = Array.isArray(props.cons) ? props.cons.length : 0;
+    const rows = Array.isArray(props.comparisons) ? props.comparisons.length : 0;
+    const total = rows + pros + cons;
+    return total > 0 ? total : undefined;
+  }
+  const key = COUNT_PROP_BY_COMPONENT[tab.component];
+  if (!key) return undefined;
+  const value = props[key];
+  // moment_track / timeline historically also used `entries` — fall through
+  // when `items` is missing so older assembler outputs still display a count.
+  if (!Array.isArray(value) && (tab.component === 'moment_track' || tab.component === 'timeline')) {
+    const entries = props.entries;
+    return Array.isArray(entries) ? entries.length : undefined;
+  }
+  return Array.isArray(value) ? value.length : undefined;
+}
+
+/** Build the cross-tab nav grid shown inside the Overview tab. Sources sibling
+ *  tabs from the assembled response, drops the overview itself, and annotates
+ *  each entry with an emoji + best-effort item count. */
+function buildOverviewCrossTabLinks(
+  allTabs: TabEntry[] | undefined,
+  activeTabId: string,
+): OverviewCrossTabLink[] {
+  if (!allTabs || allTabs.length === 0) return [];
+  const siblings = allTabs.filter((t) => t.id !== activeTabId && t.component !== 'overview');
+  return siblings.map((t) => ({
+    targetTab: t.id,
+    label: stripLeadingEmoji(t.label),
+    emoji: t.emoji || undefined,
+    count: inferItemCount(t),
+  }));
 }
 
 interface ExerciseMeta {
@@ -205,27 +283,29 @@ const COMPONENT_REGISTRY: Record<string, (props: Record<string, unknown>, nav: N
     />
   ),
   overview: (props, nav) => {
-    // Overview props are nested inside props.data from the assembler
+    // Overview props are nested inside props.data from the assembler.
     const d = (typeof props.data === 'object' && props.data !== null ? props.data : props) as Record<string, unknown>;
-    const dur = typeof d.duration === 'number' ? `${Math.round(Number(d.duration) / 60)} min` : typeof d.duration === 'string' ? d.duration : undefined;
+    const dur = typeof d.duration === 'number'
+      ? `${Math.round(Number(d.duration) / 60)} min`
+      : typeof d.duration === 'string' ? d.duration : undefined;
+    // Sibling-tab nav grid is computed once at the parent (memoized on
+    // `tabs` + `activeTab`) so `memo()` on OverviewInteractive holds across
+    // `currentTime` ticks. We deliberately stop forwarding
+    // title / subtitle / summary / masterSummary — they duplicate the page
+    // hero above this tab.
+    const derivedLinks = nav.derivedOverviewLinks ?? [];
     return (
       <OverviewInteractive
-        title={typeof d.title === 'string' ? d.title : typeof props.title === 'string' ? props.title : 'Overview'}
-        emoji={typeof d.emoji === 'string' ? d.emoji : undefined}
-        subtitle={typeof d.subtitle === 'string' ? d.subtitle : undefined}
-        stats={Array.isArray(d.stats) ? d.stats as Array<{ label: string; value: string }> : undefined}
-        highlights={Array.isArray(d.highlights) ? d.highlights as Array<{ emoji: string; text: string }> : undefined}
         tips={Array.isArray(d.tips) ? d.tips as string[] : undefined}
-        summary={typeof d.summary === 'string' ? d.summary : undefined}
-        masterSummary={typeof d.masterSummary === 'string' ? d.masterSummary : undefined}
         keyTakeaways={Array.isArray(d.keyTakeaways) ? d.keyTakeaways as string[] : undefined}
+        highlights={Array.isArray(d.highlights) ? d.highlights as Array<{ emoji: string; text: string }> : undefined}
         quote={typeof d.quote === 'string' ? d.quote : undefined}
         quoteAuthor={typeof d.quoteAuthor === 'string' ? d.quoteAuthor : undefined}
         duration={dur}
         level={typeof d.level === 'string' ? d.level : typeof d.difficulty === 'string' ? d.difficulty as string : undefined}
-        itemCount={typeof d.itemCount === 'number' ? d.itemCount : undefined}
-        crossTabLinks={Array.isArray(props.crossTabLinks) ? props.crossTabLinks as Array<{ targetTab: string; label: string }> : undefined}
-        {...nav}
+        crossTabLinks={derivedLinks.length > 0 ? derivedLinks : undefined}
+        videoId={nav.videoId}
+        onNavigateTab={nav.onNavigateTab}
       />
     );
   },
@@ -272,9 +352,28 @@ export const ComposableOutput = memo(function ComposableOutput({
   activeTab,
   onNavigateTab,
   primaryTag,
+  videoSummaryId,
 }: ComposableOutputProps) {
   const { seekTo, currentTime } = useVideoPlayer();
   const [cookingMode, setCookingMode] = useState(false);
+
+  // Memoize derived structures on `tabs` so per-tab filtering and the Overview
+  // cross-tab nav don't allocate fresh arrays on every `currentTime` tick.
+  // This is what makes `memo()` on individual tab renderers actually hold.
+  const filteredCrossLinks = useMemo(() => {
+    const map = new Map<string, NonNullable<TabEntry['crossTabLinks']>>();
+    if (tabs) {
+      for (const t of tabs) {
+        map.set(t.id, (t.crossTabLinks ?? []).filter((l) => l.targetTab !== 'overview'));
+      }
+    }
+    return map;
+  }, [tabs]);
+
+  const derivedOverviewLinks = useMemo(
+    () => buildOverviewCrossTabLinks(tabs ?? undefined, activeTab),
+    [tabs, activeTab],
+  );
 
   // Detect cooking mode availability: food domain + has checklist + has step_player
   const cookingModeData = useMemo(() => {
@@ -304,10 +403,21 @@ export const ComposableOutput = memo(function ComposableOutput({
     if (!renderer && tab.component && import.meta.env.DEV) {
       console.warn(`[ComposableOutput] Unknown component "${tab.component}" for tab "${tab.id}", falling back to DisplaySection`);
     }
-    const crossLinks = tab.crossTabLinks ?? [];
+    // Pull pre-filtered crossLinks from the memoized map. The Overview tab is
+    // filtered from the strip at the OutputRouter layer; legacy backend rules
+    // can still target "overview" and the parent-level filter drops those.
+    const crossLinks = filteredCrossLinks.get(tab.id) ?? [];
     // Don't pass nextTab — ComposableOutput renders CrossTabLink after each tab.
     // Passing nextTab causes duplicate "Next" buttons inside Celebration components.
-    const nav: NavProps = { onNavigateTab, onSeek: seekTo, tabId: tab.id, currentTime };
+    const nav: NavProps = {
+      onNavigateTab,
+      onSeek: seekTo,
+      tabId: tab.id,
+      currentTime,
+      allTabs: tabs,
+      videoId: videoSummaryId,
+      derivedOverviewLinks,
+    };
 
     return (
       <div className="flex flex-col gap-4">

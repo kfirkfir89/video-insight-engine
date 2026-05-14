@@ -210,10 +210,9 @@
   --vie-glass-border-strong: oklch(from var(--border) l c h / 0.6);
   --vie-nav-bg: oklch(from var(--card) l c h / 0.85);
 
-  /* Easing tokens. Name kept for legacy callers (heart-pop, fade-up-spring,
-     pop-in) but the curve is now ease-out-quint — decelerates smoothly with
-     no overshoot. Bounce/elastic reads as AI-generated motion. */
-  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Easing tokens. Bounce/elastic reads as AI-generated motion — VIE
+     decelerates without overshoot. ease-out-quint is the workhorse; expo and
+     quart are sharper variants for specific cases. */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
@@ -679,10 +678,10 @@
   --animate-counter-pop: counter-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-line-grow: line-grow 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-fade-up: fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-heart-pop: heart-pop 0.4s var(--ease-spring) both;
+  --animate-heart-pop: heart-pop 0.4s var(--ease-out-quint) both;
   --animate-float: float 3s ease-in-out infinite;
-  --animate-fade-up-spring: fadeUp 0.4s var(--ease-spring) both;
-  --animate-pop-in: popIn 0.35s var(--ease-spring) both;
+  --animate-fade-up-spring: fadeUp 0.4s var(--ease-out-quint) both;
+  --animate-pop-in: popIn 0.35s var(--ease-out-quint) both;
   --animate-pulse-slow: pulse 2s ease-in-out infinite;
 }
 
@@ -1146,7 +1145,7 @@
   animation: vie-mark-face-flank 560ms cubic-bezier(0.22, 1, 0.36, 1) 200ms both;
 }
 .vie-mark--animated .vie-mark__vertex {
-  animation: vie-mark-vertex 400ms var(--ease-spring-soft) 360ms both;
+  animation: vie-mark-vertex 400ms var(--ease-out-quint) 360ms both;
 }
 
 @media (prefers-reduced-motion: reduce) {

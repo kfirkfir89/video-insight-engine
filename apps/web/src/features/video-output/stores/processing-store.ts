@@ -23,6 +23,12 @@ interface ProcessingState {
   /** Video currently being viewed on the detail page (page-level stream takes priority) */
   viewingVideoSummaryId: string | null;
 
+  /** IDs the user explicitly cancelled in this tab. Prevents the detail page
+   *  from auto-resubscribing on return — the user gets a Resume affordance
+   *  instead of the stream silently re-attaching to a backend pipeline that
+   *  the frontend can't actually abort. */
+  cancelledIds: Set<string>;
+
   /** Set or update stream state for a video */
   setStreamState: (videoSummaryId: string, state: ProcessingStreamState) => void;
 
@@ -35,6 +41,12 @@ interface ProcessingState {
   /** Set the video currently being viewed (detail page takes over streaming) */
   setViewingVideo: (videoSummaryId: string | null) => void;
 
+  /** Mark a video's stream as cancelled by the user. Survives navigation. */
+  markCancelled: (videoSummaryId: string) => void;
+
+  /** Clear the cancelled flag so the stream can resubscribe. */
+  clearCancelled: (videoSummaryId: string) => void;
+
   /** Clear all streams (for logout) */
   clearAllStreams: () => void;
 }
@@ -42,6 +54,7 @@ interface ProcessingState {
 export const useProcessingStore = create<ProcessingState>((set, get) => ({
   streams: new Map(),
   viewingVideoSummaryId: null,
+  cancelledIds: new Set(),
 
   setStreamState: (videoSummaryId, state) => {
     set((prev) => {
@@ -67,8 +80,25 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
     set({ viewingVideoSummaryId: videoSummaryId });
   },
 
+  markCancelled: (videoSummaryId) => {
+    set((prev) => {
+      const next = new Set(prev.cancelledIds);
+      next.add(videoSummaryId);
+      return { cancelledIds: next };
+    });
+  },
+
+  clearCancelled: (videoSummaryId) => {
+    set((prev) => {
+      if (!prev.cancelledIds.has(videoSummaryId)) return prev;
+      const next = new Set(prev.cancelledIds);
+      next.delete(videoSummaryId);
+      return { cancelledIds: next };
+    });
+  },
+
   clearAllStreams: () => {
-    set({ streams: new Map(), viewingVideoSummaryId: null });
+    set({ streams: new Map(), viewingVideoSummaryId: null, cancelledIds: new Set() });
   },
 }));
 

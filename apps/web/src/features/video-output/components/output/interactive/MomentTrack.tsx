@@ -300,10 +300,7 @@ export const MomentTrack = memo(function MomentTrack({
                     {clip ? (
                       <div
                         data-testid={`capsule-${originalIndex}`}
-                        style={{
-                          height: `${capsuleHeight}px`,
-                          transition: reducedMotion ? undefined : 'height 400ms ease-out',
-                        }}
+                        style={{ height: `${capsuleHeight}px` }}
                         className={cn(
                           'relative w-[14px] rounded-full border border-primary/40 bg-primary/15',
                           'shadow-[inset_0_0_12px_oklch(var(--primary)/0.25)]',
