@@ -304,14 +304,27 @@ export function createMockBudget() {
 }
 
 export function createMockOverview() {
+  // Matches the post-redesign shape: no title/subtitle/summary (the page-level
+  // VideoHero owns those at runtime), inline meta strip, numbered takeaways,
+  // cross-tab nav grid, collapsible highlights + tips.
   return {
-    title: 'React Performance Masterclass',
-    emoji: '⚡',
-    subtitle: 'A comprehensive guide to optimizing React applications for speed and efficiency.',
-    stats: [
-      { label: 'Duration', value: '45 min', emoji: '⏱️' },
-      { label: 'Topics', value: '8', emoji: '📚' },
-      { label: 'Level', value: 'Advanced', emoji: '🎯' },
+    duration: '45 min',
+    level: 'Advanced',
+    itemCount: 8,
+    videoId: 'demo-overview',
+    keyTakeaways: [
+      'React 19 ships a new compiler that auto-memoizes — most useMemo calls become obsolete',
+      'Profile before optimizing: the slowest part of your app is rarely where you think it is',
+      'Server components reduce client bundle by moving data fetching out of the browser',
+      'Suspense for data fetching unlocks streaming HTML and progressive hydration',
+      'Concurrent rendering keeps the UI responsive under load — never block the main thread',
+      'Treat the React DevTools Profiler flamegraph as ground truth',
+    ],
+    crossTabLinks: [
+      { targetTab: 'concepts', label: 'Concepts', emoji: '🧠', count: 9 },
+      { targetTab: 'code', label: 'Code', emoji: '📝', count: 12 },
+      { targetTab: 'quizzes', label: 'Quizzes', emoji: '🧪', count: 6 },
+      { targetTab: 'timeline', label: 'Timeline', emoji: '⏱️' },
     ],
     highlights: [
       { emoji: '🔥', text: 'Virtual DOM reconciliation deep dive' },
@@ -324,7 +337,6 @@ export function createMockOverview() {
       'Use React DevTools Profiler to identify actual bottlenecks.',
       'Prefer composition over memoization when possible.',
     ],
-    summary: 'This masterclass covers everything from basic rendering optimization to advanced patterns like virtualization and concurrent features. Perfect for developers looking to ship faster React apps.',
   };
 }
 

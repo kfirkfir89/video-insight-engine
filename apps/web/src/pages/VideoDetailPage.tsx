@@ -35,6 +35,14 @@ export function VideoDetailPage() {
   // Tell the processing manager to yield streaming to the page-level hook
   // (the manager aborts its stream when viewingVideoSummaryId is set)
   const setViewingVideo = useProcessingStore((s) => s.setViewingVideo);
+  const markCancelled = useProcessingStore((s) => s.markCancelled);
+  const clearCancelled = useProcessingStore((s) => s.clearCancelled);
+  // Whether THIS video was explicitly cancelled in this tab. Survives nav so
+  // the user doesn't auto-resubscribe to a stream they already walked away
+  // from. Cleared on Resume / Retry.
+  const isCancelled = useProcessingStore(
+    (s) => (videoSummaryId ? s.cancelledIds.has(videoSummaryId) : false),
+  );
   useEffect(() => {
     if (videoSummaryId) {
       setViewingVideo(videoSummaryId);
@@ -74,11 +82,31 @@ export function VideoDetailPage() {
     phase,
     extractionProgress,
     confettiCount,
+    stop: stopStream,
   } = useSummaryStream({
     videoSummaryId,
-    enabled: isProcessing && !!videoSummaryId,
+    // Stream is enabled only when the backend says we're processing AND the
+    // user hasn't explicitly cancelled in this tab. Without the cancel gate,
+    // re-entering a video the user just cancelled would auto-resubscribe and
+    // make the Cancel button feel decorative.
+    enabled: isProcessing && !!videoSummaryId && !isCancelled,
     onComplete: handleStreamComplete,
   });
+
+  // Cancel handler — flags the id as user-cancelled (so revisits show Resume
+  // instead of re-attaching), aborts the local stream, and routes back to the
+  // library. The backend pipeline keeps running; Resume reattaches when ready.
+  const handleCancelStream = useCallback(() => {
+    if (videoSummaryId) markCancelled(videoSummaryId);
+    stopStream();
+    navigate("/board");
+  }, [stopStream, navigate, videoSummaryId, markCancelled]);
+
+  // Resume handler — clears the cancel flag so the next render of this page
+  // re-enables the stream subscription. No-op when the id isn't cancelled.
+  const handleResumeStream = useCallback(() => {
+    if (videoSummaryId) clearCancelled(videoSummaryId);
+  }, [videoSummaryId, clearCancelled]);
 
   // Confetti: fires exactly once per video per session via the shared hook.
   // See use-celebration-trigger for the atomic per-id gating logic.
@@ -137,7 +165,7 @@ export function VideoDetailPage() {
           </p>
           <Link to="/board">
             <Button variant="outline" className="mt-4">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to library
+              <ArrowLeft className="me-2 h-4 w-4" /> Back to library
             </Button>
           </Link>
         </div>
@@ -193,14 +221,14 @@ export function VideoDetailPage() {
           <div className="flex gap-3 justify-center">
             <Link to="/board">
               <Button variant="outline">
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                <ArrowLeft className="me-2 h-4 w-4" /> Back
               </Button>
             </Link>
             <Button onClick={handleRetry} disabled={retryVideo.isPending}>
               {retryVideo.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="me-2 h-4 w-4 animate-spin" />
               ) : (
-                <RefreshCw className="mr-2 h-4 w-4" />
+                <RefreshCw className="me-2 h-4 w-4" />
               )}
               Retry
             </Button>
@@ -211,9 +239,38 @@ export function VideoDetailPage() {
   }
 
   const isStreaming = isProcessing &&
+    !isCancelled &&
     phase !== "done" &&
     phase !== "cancelled" &&
     phase !== "error";
+
+  // User cancelled in this tab but the backend pipeline is still running.
+  // Surface an explicit Resume control instead of silently re-attaching to
+  // the SSE feed — that would make Cancel feel decorative.
+  if (isProcessing && isCancelled) {
+    return (
+      <Layout>
+        <div className="text-center p-4 md:p-6 py-12 space-y-3 max-w-md mx-auto">
+          <p className="type-h3">You stopped watching this stream</p>
+          <p className="type-caption">
+            Processing is still running in the background. Resume to reattach to
+            the live stream, or come back later — the video will be ready when
+            you do.
+          </p>
+          <div className="flex gap-3 justify-center pt-2">
+            <Link to="/board">
+              <Button variant="outline">
+                <ArrowLeft className="me-2 h-4 w-4" /> Back to library
+              </Button>
+            </Link>
+            <Button onClick={handleResumeStream}>
+              <RefreshCw className="me-2 h-4 w-4" /> Resume
+            </Button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   // Issue #13: Error boundary fallback for rendering errors from malformed streaming state
   const errorFallback = (
@@ -251,6 +308,7 @@ export function VideoDetailPage() {
             isRTL={resolvedMeta?.isRTL}
             streamPhase={phase}
             extractionProgress={extractionProgress}
+            onCancelStream={isStreaming ? handleCancelStream : undefined}
           />
           <Confetti trigger={confettiTrigger} />
         </Layout>

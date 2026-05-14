@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import type { VIEResponse } from '@vie/types';
+import { render, screen, within } from '@testing-library/react';
+import type { VIEResponse, TabEntry } from '@vie/types';
 
 // Mock cross-tab link dependencies
 vi.mock('../CrossTabLink', () => ({
@@ -129,5 +129,105 @@ describe('ComposableOutput', () => {
 
     // "ingredients" is in TAB_INTERACTIVE_MAP (ChecklistInteractive)
     expect(container.innerHTML).not.toBe('');
+  });
+
+  describe('v2 overview rendering', () => {
+    function buildAssembledTabs(): TabEntry[] {
+      return [
+        {
+          id: 'overview',
+          label: 'Overview',
+          emoji: '📋',
+          component: 'overview',
+          props: {
+            data: {
+              keyTakeaways: ['First insight', 'Second insight', 'Third insight'],
+              level: 'Advanced',
+              duration: 2700, // seconds — renderer converts to "45 min"
+            },
+          },
+        },
+        {
+          id: 'quizzes',
+          label: '🧪 Quizzes',
+          emoji: '🧪',
+          component: 'quiz',
+          props: { questions: [{ q: '1' }, { q: '2' }, { q: '3' }] },
+        },
+        {
+          id: 'concepts',
+          label: 'Concepts',
+          emoji: '🧠',
+          component: 'info_grid',
+          props: { items: [{ key: 'k1', value: 'v1' }, { key: 'k2', value: 'v2' }] },
+        },
+      ];
+    }
+
+    it('should derive crossTabLinks from sibling tabs and render the nav grid', () => {
+      render(
+        <ComposableOutput
+          response={null}
+          tabs={buildAssembledTabs()}
+          activeTab="overview"
+          onNavigateTab={vi.fn()}
+          videoSummaryId="vsum-1"
+        />,
+      );
+      expect(screen.getByText('Continue exploring')).toBeInTheDocument();
+      // Sibling tab buttons appear with their stripped labels.
+      expect(screen.getByRole('button', { name: 'Open Quizzes' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open Concepts' })).toBeInTheDocument();
+      // The active overview tab itself is excluded from the grid.
+      expect(screen.queryByRole('button', { name: 'Open Overview' })).not.toBeInTheDocument();
+    });
+
+    it('should infer item counts for known sibling components', () => {
+      render(
+        <ComposableOutput
+          response={null}
+          tabs={buildAssembledTabs()}
+          activeTab="overview"
+          onNavigateTab={vi.fn()}
+          videoSummaryId="vsum-1"
+        />,
+      );
+      // Scope the count assertion inside each nav button so we don't collide
+      // with the takeaway list's own "1/2/3" numbering elsewhere on the page.
+      expect(
+        within(screen.getByRole('button', { name: 'Open Quizzes' })).getByText('3'),
+      ).toBeInTheDocument();
+      expect(
+        within(screen.getByRole('button', { name: 'Open Concepts' })).getByText('2'),
+      ).toBeInTheDocument();
+    });
+
+    it('should NOT render a duplicate hero card with title/subtitle/masterSummary or top takeaways', () => {
+      const tabs = buildAssembledTabs();
+      tabs[0].props = {
+        data: {
+          title: 'React Performance Masterclass',
+          subtitle: 'A comprehensive guide…',
+          masterSummary: 'Long-form duplicate of the page hero.',
+          keyTakeaways: ['Profile before optimizing'],
+        },
+      };
+      render(
+        <ComposableOutput
+          response={null}
+          tabs={tabs}
+          activeTab="overview"
+          onNavigateTab={vi.fn()}
+          videoSummaryId="vsum-1"
+        />,
+      );
+      // The page hero (VideoHero) owns title/subtitle/masterSummary AND the
+      // first six takeaways. Rendering any of them again here produced a
+      // duplicate stack under the hero — see the brand-rule compliance pass.
+      expect(screen.queryByText('React Performance Masterclass')).not.toBeInTheDocument();
+      expect(screen.queryByText('A comprehensive guide…')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Long-form duplicate/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Profile before optimizing')).not.toBeInTheDocument();
+    });
   });
 });

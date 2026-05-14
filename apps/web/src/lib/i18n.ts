@@ -38,6 +38,12 @@ export interface Labels {
   // Overview
   level: string;
   items: string;
+  brief: string;
+  keyTakeaways: string;
+  continueExploring: string;
+  highlights: string;
+  moreTakeaways: string;
+  tips: string;
   // Verdict
   price: string;
   score: string;
@@ -76,6 +82,12 @@ const EN: Labels = {
   goForIt: 'Go for it if...',
   level: 'Level',
   items: 'Items',
+  brief: 'Brief',
+  keyTakeaways: 'Key takeaways',
+  continueExploring: 'Continue exploring',
+  highlights: 'Highlights',
+  moreTakeaways: 'More takeaways',
+  tips: 'Tips',
   price: 'Price',
   score: 'Score',
   tabPreviews: {
@@ -151,6 +163,12 @@ const TRANSLATIONS: Record<string, Labels> = {
     goForIt: 'שווה את זה אם...',
     level: 'רמה',
     items: 'פריטים',
+    brief: 'תקציר',
+    keyTakeaways: 'תובנות מפתח',
+    continueExploring: 'המשיכו לחקור',
+    highlights: 'נקודות בולטות',
+    moreTakeaways: 'תובנות נוספות',
+    tips: 'טיפים',
     price: 'מחיר',
     score: 'ציון',
     tabPreviews: {
@@ -223,6 +241,12 @@ const TRANSLATIONS: Record<string, Labels> = {
     goForIt: 'اختره إذا...',
     level: 'المستوى',
     items: 'العناصر',
+    brief: 'موجز',
+    keyTakeaways: 'النقاط الرئيسية',
+    continueExploring: 'تابع الاستكشاف',
+    highlights: 'أبرز النقاط',
+    moreTakeaways: 'نقاط إضافية',
+    tips: 'نصائح',
     price: 'السعر',
     score: 'النتيجة',
     tabPreviews: {

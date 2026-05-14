@@ -263,7 +263,17 @@ function OverviewDemo() {
   const { lastNav, onNavigateTab } = useNavHandler();
   return (
     <OutputCard label="Overview" type="OverviewInteractive" domain="general" lastNav={lastNav}>
-      <OverviewInteractive title={overview.title} emoji={overview.emoji} subtitle={overview.subtitle} stats={overview.stats} highlights={overview.highlights} tips={overview.tips} summary={overview.summary} nextTab="concepts" onNavigateTab={onNavigateTab} />
+      <OverviewInteractive
+        duration={overview.duration}
+        level={overview.level}
+        itemCount={overview.itemCount}
+        keyTakeaways={overview.keyTakeaways}
+        highlights={overview.highlights}
+        tips={overview.tips}
+        crossTabLinks={overview.crossTabLinks}
+        videoId={overview.videoId}
+        onNavigateTab={onNavigateTab}
+      />
     </OutputCard>
   );
 }

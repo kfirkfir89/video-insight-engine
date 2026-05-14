@@ -144,7 +144,7 @@ export function Layout({ children, showSidebar = true }: LayoutProps) {
   }, [sidebarWidth]);
 
   return (
-    <div className="h-screen flex bg-[var(--app-canvas)] overflow-hidden md:p-(--app-chrome-gap) md:gap-(--app-chrome-gap)">
+    <div className="h-dvh flex bg-[var(--app-canvas)] overflow-hidden md:p-(--app-chrome-gap) md:gap-(--app-chrome-gap)">
       {/* Skip to main content — accessible keyboard navigation */}
       <a
         href="#main-content"

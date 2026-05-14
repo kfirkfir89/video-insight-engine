@@ -1,54 +1,56 @@
 import { memo, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Star, ArrowRight, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { HeroCard, FadeIn, GlassCard, StatPill, ExpandableCard, Badge, QuoteBlock } from '@/components/vie';
+import { FadeIn, GlassCard, ExpandableCard, Badge, QuoteBlock } from '@/components/vie';
 import { useLabels } from '@/lib/i18n';
 
-
-interface OverviewStat {
-  label: string;
-  value: string;
-  emoji?: string;
-  tabId?: string;
-}
 
 interface OverviewHighlight {
   emoji: string;
   text: string;
 }
 
-interface OverviewInteractiveProps {
-  title: string;
+/** Sibling-tab nav entry rendered in the Overview's "Continue exploring" grid.
+ *  Exported so the producer (ComposableOutput) imports a single source of truth
+ *  and the shape can't drift between sites. */
+export interface OverviewCrossTabLink {
+  targetTab: string;
+  label: string;
+  count?: number;
   emoji?: string;
+}
+
+interface OverviewInteractiveProps {
+  /** @deprecated Owned by the page-level VideoHero — passing has no effect.
+   *  Retained in the type so the v2 backend assembler can keep emitting the
+   *  field without TS errors at the call site. */
+  title?: string;
+  /** @deprecated Owned by the page-level VideoHero. */
   subtitle?: string;
-  stats?: OverviewStat[];
+  /** @deprecated Owned by the page-level VideoHero (Brief surface). */
+  summary?: string;
+  /** @deprecated Owned by the page-level VideoHero (Brief surface). */
+  masterSummary?: string;
+
+  // Rendered surfaces.
   highlights?: OverviewHighlight[];
   tips?: string[];
-  summary?: string;
-  masterSummary?: string;
   keyTakeaways?: string[];
   quote?: string;
   quoteAuthor?: string;
   duration?: string;
   level?: string;
   itemCount?: number;
-  crossTabLinks?: Array<{ targetTab: string; label: string }>;
+  crossTabLinks?: OverviewCrossTabLink[];
   videoId?: string;
-  nextTab?: string;
   onNavigateTab?: (id: string) => void;
 }
 
-const STARRED_KEY = (id: string) => `vie-overview-starred-${id}`;
+const STARRED_KEY = (id: string): string => `vie-overview-starred-${id}`;
 
 export const OverviewInteractive = memo(function OverviewInteractive({
-  title,
-  emoji = '📋',
-  subtitle,
-  stats,
   highlights,
   tips,
-  summary,
-  masterSummary,
   keyTakeaways,
   quote,
   quoteAuthor,
@@ -57,24 +59,47 @@ export const OverviewInteractive = memo(function OverviewInteractive({
   itemCount,
   crossTabLinks,
   videoId,
-  nextTab: _nextTab,
-  onNavigateTab: _onNavigateTab,
+  onNavigateTab,
 }: OverviewInteractiveProps) {
   const t = useLabels();
-  const [starredHighlights, setStarredHighlights] = useState<Set<number>>(new Set());
-
-  // Load bookmarks from localStorage
-  useEffect(() => {
-    if (!videoId) return;
+  // Lazy init from localStorage — keeps the hydration synchronous with the
+  // first render so we don't flash an empty state, and sidesteps the
+  // set-state-in-effect rule. The component is re-mounted per-video so we
+  // don't need to react to videoId changes after mount.
+  const [starredHighlights, setStarredHighlights] = useState<Set<number>>(() => {
+    if (typeof window === 'undefined' || !videoId) return new Set();
     try {
-      const saved = localStorage.getItem(STARRED_KEY(videoId));
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.every((v) => typeof v === 'number'))
-          setStarredHighlights(new Set(parsed));
+      const saved = window.localStorage.getItem(STARRED_KEY(videoId));
+      if (!saved) return new Set();
+      const parsed: unknown = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.every((v) => typeof v === 'number')) {
+        return new Set(parsed as number[]);
       }
     } catch { /* ignore corrupt data */ }
-  }, [videoId]);
+    return new Set();
+  });
+
+  // Top takeaways live in the page hero. Takeaway 4+ back the collapsible
+  // below (when there's no curated highlights array) so overflow stays
+  // surfaced — same UI, real content, no backend change needed. Curated
+  // highlights win when present (richer than plain-text fallbacks).
+  const extraTakeaways = useMemo(() => keyTakeaways?.slice(3) ?? [], [keyTakeaways]);
+  const hasRealHighlights = !!(highlights && highlights.length > 0);
+  const collapsibleItems = useMemo<OverviewHighlight[]>(() => {
+    if (hasRealHighlights) return highlights!;
+    return extraTakeaways.map((text) => ({ emoji: '•', text }));
+  }, [hasRealHighlights, highlights, extraTakeaways]);
+  const collapsibleLabel = hasRealHighlights ? t.highlights : t.moreTakeaways;
+
+  // Inline metadata strip — replaces the inner HeroCard, surfaces only the
+  // attributes the page hero doesn't already show prominently.
+  const metaChips = useMemo<Array<{ label: string; value: string }>>(() => {
+    const out: Array<{ label: string; value: string }> = [];
+    if (level) out.push({ label: t.level, value: level });
+    if (duration) out.push({ label: t.duration, value: duration });
+    if (itemCount != null && itemCount > 0) out.push({ label: t.items, value: String(itemCount) });
+    return out;
+  }, [duration, level, itemCount, t.duration, t.level, t.items]);
 
   const toggleStar = useCallback((index: number) => {
     setStarredHighlights((prev) => {
@@ -85,119 +110,118 @@ export const OverviewInteractive = memo(function OverviewInteractive({
     });
   }, []);
 
-  // Sync starred highlights to localStorage (debounced to avoid per-click serialization)
+  // Debounce writes to localStorage so per-click churn collapses into one
+  // serialize. The cleanup *flushes* the snapshot synchronously on unmount —
+  // cancelling the timer would lose a star-then-navigate-away within 500ms.
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     if (!videoId) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
+    const flush = (): void => {
       try {
         if (starredHighlights.size === 0) {
           localStorage.removeItem(STARRED_KEY(videoId));
         } else {
           localStorage.setItem(STARRED_KEY(videoId), JSON.stringify(Array.from(starredHighlights)));
         }
-      } catch { /* ignore */ }
-    }, 500);
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+      } catch { /* ignore quota / private-mode errors */ }
+    };
+    saveTimerRef.current = setTimeout(flush, 500);
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = undefined;
+        flush();
+      }
+    };
   }, [videoId, starredHighlights]);
 
-  // Metadata chips (duration, level, items) — rendered as a compact inline row
-  // *under* the hero title, not as prominent StatPills. Keeps the overview
-  // from reading as a hero-metric template.
-  const metaChips = useMemo<OverviewStat[]>(() => {
-    const out: OverviewStat[] = [];
-    if (duration) out.push({ label: t.duration, value: duration });
-    if (level) out.push({ label: t.level, value: level });
-    if (itemCount != null && itemCount > 0) out.push({ label: t.items, value: String(itemCount) });
-    return out;
-  }, [duration, level, itemCount, t.duration, t.level, t.items]);
+  const hasAnyContent =
+    metaChips.length > 0 ||
+    !!(crossTabLinks && crossTabLinks.length > 0) ||
+    !!quote ||
+    collapsibleItems.length > 0 ||
+    !!(tips && tips.length > 0);
 
-  // Only user-provided stats get the StatPill treatment. Metadata gets chips.
-  const userStats = stats ?? [];
-
-  // Use masterSummary (2-3 sentences) or fall back to summary
-  const displaySummary = masterSummary || summary;
-
-  // Top 3 takeaways for landing page (memoized slice)
-  const topTakeaways = useMemo(() => keyTakeaways?.slice(0, 3), [keyTakeaways]);
+  if (!hasAnyContent) return null;
 
   return (
     <div className="space-y-4">
-      {/* Hero — metadata rendered as inline chips (not StatPills) so duration
-          never reads as the primary content of the tab. */}
-      <HeroCard emoji={emoji} title={title} subtitle={subtitle}>
-        {metaChips.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            {metaChips.map((chip, i) => (
-              <span key={chip.label} className="inline-flex items-center gap-1">
-                {i > 0 && <span aria-hidden="true" className="text-muted-foreground/40">·</span>}
-                <span className="font-medium text-foreground/80 tabular-nums">{chip.value}</span>
-                <span className="text-muted-foreground/70">{chip.label}</span>
-              </span>
-            ))}
-          </div>
-        )}
-        {userStats.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-3">
-            {userStats.map((stat, i) => (
-              <StatPill
-                key={i}
-                value={stat.value}
-                label={stat.label}
-                onClick={stat.tabId && _onNavigateTab ? () => _onNavigateTab(stat.tabId!) : undefined}
-              />
-            ))}
-          </div>
-        )}
-      </HeroCard>
-
-      {/* Master summary */}
-      {displaySummary && (
-        <FadeIn>
-          <GlassCard variant="outlined">
-            <p className="text-sm leading-relaxed text-muted-foreground">{displaySummary}</p>
-          </GlassCard>
-        </FadeIn>
-      )}
-
-      {/* Key Takeaways */}
-      {topTakeaways && topTakeaways.length > 0 && (
-        <FadeIn index={1}>
-          <GlassCard variant="outlined" className="space-y-2">
-            <span className="type-eyebrow">
-              Key takeaways
+      {metaChips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground px-1">
+          {metaChips.map((chip, i) => (
+            <span key={chip.label} className="inline-flex items-center gap-1">
+              {i > 0 && <span aria-hidden="true" className="text-muted-foreground/40">·</span>}
+              <span className="font-semibold text-foreground/85 tabular-nums">{chip.value}</span>
+              <span className="text-muted-foreground/70">{chip.label}</span>
             </span>
-            <ul className="space-y-2">
-              {topTakeaways.map((takeaway, i) => (
-                <li key={i} className="flex items-start gap-2.5 text-sm leading-relaxed text-muted-foreground">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0 translate-y-1.5" />
-                  <span>{takeaway}</span>
-                </li>
+          ))}
+        </div>
+      )}
+
+      {crossTabLinks && crossTabLinks.length > 0 && onNavigateTab && (
+        <FadeIn index={1}>
+          <div className="space-y-2">
+            <span className="type-eyebrow px-1">{t.continueExploring}</span>
+            <div
+              className="grid gap-2"
+              style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}
+            >
+              {crossTabLinks.map((link) => (
+                <button
+                  key={link.targetTab}
+                  type="button"
+                  onClick={() => onNavigateTab(link.targetTab)}
+                  className={cn(
+                    'group relative flex items-center justify-between gap-3 overflow-hidden rounded-xl',
+                    'border border-border/50 bg-muted/10 px-3.5 py-3 text-start',
+                    'transition-all duration-200 ease-[var(--ease-out-expo)]',
+                    'hover:-translate-y-0.5 hover:border-border hover:bg-muted/25 motion-reduce:hover:translate-y-0',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  )}
+                  aria-label={`Open ${link.label}`}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    {link.emoji && (
+                      <span aria-hidden="true" className="text-base leading-none shrink-0">
+                        {link.emoji}
+                      </span>
+                    )}
+                    <span className="truncate text-sm font-semibold leading-tight text-foreground/90">
+                      {link.label}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {typeof link.count === 'number' && link.count > 0 && (
+                      <Badge variant="muted" className="tabular-nums">{link.count}</Badge>
+                    )}
+                    <ArrowRight
+                      className="h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5 motion-reduce:group-hover:translate-x-0"
+                      aria-hidden="true"
+                    />
+                  </span>
+                </button>
               ))}
-            </ul>
-          </GlassCard>
+            </div>
+          </div>
         </FadeIn>
       )}
 
-      {/* Quote */}
       {quote && (
         <FadeIn index={2}>
-          <GlassCard variant="outlined" className="border-s-2 border-primary/30">
+          <GlassCard variant="outlined">
             <QuoteBlock text={quote} attribution={quoteAuthor} variant="speaker" />
           </GlassCard>
         </FadeIn>
       )}
 
-      {/* Highlights — collapsed by default so Overview stays scannable;
-          users opt-in rather than facing a wall of content. */}
-      {highlights && highlights.length > 0 && (
+      {collapsibleItems.length > 0 && (
         <ExpandableCard
           defaultExpanded={false}
           header={
             <div className="flex items-center gap-2 w-full">
-              <span className="type-eyebrow">Highlights</span>
-              <Badge variant="muted" className="tabular-nums">{highlights.length}</Badge>
+              <span className="type-eyebrow">{collapsibleLabel}</span>
+              <Badge variant="muted" className="tabular-nums">{collapsibleItems.length}</Badge>
               {videoId && starredHighlights.size > 0 && (
                 <button
                   type="button"
@@ -205,22 +229,22 @@ export const OverviewInteractive = memo(function OverviewInteractive({
                     e.stopPropagation();
                     const starred = Array.from(starredHighlights)
                       .sort((a, b) => a - b)
-                      .map((i) => highlights[i])
+                      .map((i) => collapsibleItems[i])
                       .filter(Boolean);
                     const text = starred
                       .map((h) => `${h.emoji} ${h.text}`)
                       .join('\n\n');
-                    const header = `# ${title} — Starred highlights\n\n`;
-                    const blob = new Blob([header + text], { type: 'text/markdown;charset=utf-8' });
+                    const headerLine = `# ${collapsibleLabel} — starred\n\n`;
+                    const blob = new Blob([headerLine + text], { type: 'text/markdown;charset=utf-8' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `${title.replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 60)}-highlights.md`;
+                    a.download = `overview-${collapsibleLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.md`;
                     a.click();
                     URL.revokeObjectURL(url);
                   }}
                   className="ms-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/10 transition-colors"
-                  aria-label={`Export ${starredHighlights.size} starred highlights`}
+                  aria-label={`Export ${starredHighlights.size} starred items`}
                 >
                   <Download className="h-3 w-3" aria-hidden="true" />
                   Export {starredHighlights.size}
@@ -230,7 +254,7 @@ export const OverviewInteractive = memo(function OverviewInteractive({
           }
         >
           <ul className="space-y-2">
-            {highlights.map((item, i) => (
+            {collapsibleItems.map((item, i) => (
               <FadeIn key={i} index={i}>
                 <li className="flex items-start gap-2.5 text-sm leading-relaxed group">
                   <span className="text-lg shrink-0" aria-hidden="true">{item.emoji}</span>
@@ -263,13 +287,12 @@ export const OverviewInteractive = memo(function OverviewInteractive({
         </ExpandableCard>
       )}
 
-      {/* Tips — collapsed by default (see Highlights rationale above). */}
       {tips && tips.length > 0 && (
         <ExpandableCard
           defaultExpanded={false}
           header={
             <div className="flex items-center gap-2">
-              <span className="type-eyebrow text-info">Tips</span>
+              <span className="type-eyebrow text-info">{t.tips}</span>
               <Badge variant="info" className="tabular-nums">{tips.length}</Badge>
             </div>
           }
@@ -284,23 +307,6 @@ export const OverviewInteractive = memo(function OverviewInteractive({
           </ul>
         </ExpandableCard>
       )}
-
-      {/* Navigation buttons (cross-tab links) */}
-      {crossTabLinks && crossTabLinks.length > 0 && _onNavigateTab && (
-        <div className="flex flex-col gap-2">
-          {crossTabLinks.map((link) => (
-            <button
-              key={link.targetTab}
-              onClick={() => _onNavigateTab(link.targetTab)}
-              className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-muted/10 px-4 py-2.5 text-sm font-semibold leading-snug transition-colors hover:bg-muted/20"
-            >
-              <span>{link.label}</span>
-              <ArrowRight className="h-4 w-4 text-muted-foreground rtl:rotate-180" aria-hidden="true" />
-            </button>
-          ))}
-        </div>
-      )}
-
     </div>
   );
 });
