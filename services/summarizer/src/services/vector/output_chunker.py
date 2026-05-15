@@ -164,6 +164,10 @@ def _h_spot_explorer(tab_id: str, component: str, props: dict) -> list[OutputChu
 
 
 def _h_timeline(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
+    """Legacy — superseded by ``moment_track``. Kept so historical tabs that
+    were serialized with ``component="timeline"`` still chunk correctly on
+    reprocess. Safe to remove once production data no longer contains it.
+    """
     out: list[OutputChunk] = []
     for i, entry in enumerate(props.get("entries") or []):
         if not isinstance(entry, dict):
@@ -174,6 +178,27 @@ def _h_timeline(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
             continue
         text = f"At {timestamp}: {label}" if timestamp else label
         out.append(_make(text, tab_id, component, f"entries[{i}]"))
+    return out
+
+
+def _h_moment_track(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
+    """Unified replacement for legacy ``timeline`` and ``clip_player``.
+
+    Pulls only prose fields (``label`` and ``description``). Numeric
+    ``seconds`` / ``endSeconds`` and pre-formatted ``time`` strings are
+    intentionally excluded — embedding them poisons retrieval with low-signal
+    numbers and clock-shaped tokens.
+    """
+    out: list[OutputChunk] = []
+    for i, item in enumerate(props.get("items") or []):
+        if not isinstance(item, dict):
+            continue
+        label = _norm(item.get("label"))
+        description = _norm(item.get("description"))
+        if not (label or description):
+            continue
+        text = f"{label}. {description}" if (label and description) else (label or description)
+        out.append(_make(text, tab_id, component, f"items[{i}]"))
     return out
 
 
@@ -376,6 +401,10 @@ def _h_gallery(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
 
 
 def _h_clip_player(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
+    """Legacy — superseded by ``moment_track``. Same retention rationale as
+    ``_h_timeline``: defensive coverage for historical MongoDB records that
+    were serialized before the unified component shipped.
+    """
     out: list[OutputChunk] = []
     for i, clip in enumerate(props.get("clips") or []):
         if not isinstance(clip, dict):
@@ -436,9 +465,11 @@ def _collect_whitelisted_strings(node: Any, out: list[str]) -> None:
 # ──────────────────────────────────────────────────────────────────────
 
 _COMPONENT_HANDLERS: dict[str, Callable[[str, str, dict], list[OutputChunk]]] = {
+    # ASSEMBLER_REGISTRY components — keep in sync with
+    # ``services/summarizer/src/services/pipeline/assembly/assemblers.py``.
     "overview": _h_overview,
     "spot_explorer": _h_spot_explorer,
-    "timeline": _h_timeline,
+    "moment_track": _h_moment_track,
     "code_explorer": _h_code_explorer,
     "comparison": _h_comparison,
     "info_grid": _h_info_grid,
@@ -451,7 +482,11 @@ _COMPONENT_HANDLERS: dict[str, Callable[[str, str, dict], list[OutputChunk]]] = 
     "verdict": _h_verdict,
     "budget": _h_budget,
     "gallery": _h_gallery,
-    "clip_player": _h_clip_player,
     "lyrics_player": _h_lyrics_player,
     "display_section": _h_display_section,
+    # Legacy — superseded by ``moment_track``. Retained so historical
+    # MongoDB records keep producing chunks on reprocess. Remove once
+    # ``db.videoSummary.distinct("tabs.component")`` no longer returns them.
+    "timeline": _h_timeline,
+    "clip_player": _h_clip_player,
 }

@@ -128,6 +128,13 @@ async def analyze_frames_with_vision(
 
     started = time.monotonic()
     try:
+        # Vision frame analysis stays on the primary model. Spot-check on
+        # 2026-05-14 (`reports/frame-vision-spotcheck-20260514-101033.json`)
+        # showed gpt-4o-mini agrees with Sonnet on scene_type for only 2/5
+        # frames and diverges on text_visible for every frame. Cost saving
+        # was ~20%, not the ~6× the fast tier achieves on text-only calls —
+        # not worth the OCR/scene regression. Re-evaluate via
+        # `scripts/spotcheck_frame_vision.py` before changing this.
         raw = await asyncio.wait_for(
             llm_provider.complete_with_messages(
                 messages, max_tokens=2000, timeout=timeout, use_fast_model=False,

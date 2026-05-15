@@ -1754,6 +1754,54 @@ class TestMomentItemNormalization:
         assert items[1]["endSeconds"] == 78
         assert "endSeconds" not in items[2]
 
+    # ─── Malformed-input safety net (P1 sign-off) ────────────────────────
+    # These guard the chain `label or title or name or description[:60] or
+    # "Moment N+1"` against JSON `null`, empty strings, and string-typed
+    # numerics that LLMs occasionally emit despite the schema saying int.
+
+    def test_null_label_falls_back_to_description(self):
+        """JSON null label should not block the description fallback."""
+        result = _normalize_moment_item(
+            {"label": None, "seconds": 30, "description": "Demo of pivot table"}, 0,
+        )
+        assert result is not None
+        assert result["label"] == "Demo of pivot table"
+
+    def test_null_label_and_title_fall_back_to_name(self):
+        """Cascading nulls don't short-circuit the alias chain."""
+        result = _normalize_moment_item(
+            {"label": None, "title": None, "name": "Section A", "seconds": 0}, 0,
+        )
+        assert result["label"] == "Section A"
+
+    def test_seconds_as_numeric_string_coerces_to_int(self):
+        """LLM sometimes returns `"seconds": "125"` despite schema asking for int."""
+        result = _normalize_moment_item({"label": "X", "seconds": "125"}, 0)
+        assert result is not None and result["seconds"] == 125
+
+    def test_seconds_as_numeric_string_renders_time(self):
+        """The coerced int feeds the time formatter — verify the visible label."""
+        result = _normalize_moment_item({"label": "X", "seconds": "125"}, 0)
+        assert result is not None and result["time"] == "2:05"
+
+    def test_seconds_as_garbage_string_falls_back_to_zero(self):
+        """Unparseable seconds shouldn't crash the assembler — fall back to 0."""
+        result = _normalize_moment_item({"label": "X", "seconds": "abc"}, 0)
+        assert result is not None and result["seconds"] == 0
+
+    def test_seconds_as_garbage_string_renders_zero_time(self):
+        """The 0-second fallback formats as 0:00, not blank or 'None'."""
+        result = _normalize_moment_item({"label": "X", "seconds": "abc"}, 0)
+        assert result is not None and result["time"] == "0:00"
+
+    def test_null_endSeconds_omitted(self):
+        """JSON null endSeconds collapses to a point moment (no endSeconds key)."""
+        result = _normalize_moment_item(
+            {"label": "X", "seconds": 100, "endSeconds": None}, 0,
+        )
+        assert result is not None
+        assert "endSeconds" not in result
+
 
 class TestExerciseNormalization:
     """Phase 1.3: _normalize_exercise + assemble_exercise_tracker."""
