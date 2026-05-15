@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
-
+from src.services.pipeline.assembly.assemblers import ASSEMBLER_REGISTRY
 from src.services.vector.output_chunker import (
+    _COMPONENT_HANDLERS,
     OutputChunk,
     chunk_assembled_tabs,
 )
@@ -86,6 +86,68 @@ class TestTimeline:
         assert len(chunks) == 1
         assert chunks[0].text.startswith("At 1:23: ")
         assert chunks[0].prop_path == "entries[0]"
+
+
+class TestMomentTrack:
+    def test_should_emit_label_plus_description_prose_only(self):
+        tab = _tab(
+            "moment_track",
+            {
+                "items": [
+                    {
+                        "label": "Hands-on demo of the rebase workflow",
+                        "description": "Walks through resolving a conflict during an interactive rebase.",
+                        "seconds": 312,
+                        "endSeconds": 405,
+                        "time": "5:12",
+                    },
+                ],
+            },
+        )
+        chunks = chunk_assembled_tabs([tab])
+        assert len(chunks) == 1
+        c = chunks[0]
+        assert c.prop_path == "items[0]"
+        assert "Hands-on demo" in c.text
+        assert "rebase" in c.text
+        # Numeric seconds / clock strings must not be embedded.
+        assert "312" not in c.text
+        assert "405" not in c.text
+        assert "5:12" not in c.text
+
+    def test_should_emit_only_label_when_description_absent(self):
+        tab = _tab(
+            "moment_track",
+            {"items": [{"label": "Tour of the application's settings panel"}]},
+        )
+        chunks = chunk_assembled_tabs([tab])
+        assert len(chunks) == 1
+        assert chunks[0].text == "Tour of the application's settings panel"
+
+    def test_should_emit_only_description_when_label_absent(self):
+        tab = _tab(
+            "moment_track",
+            {"items": [{"description": "Walks through resolving a conflict during an interactive rebase."}]},
+        )
+        chunks = chunk_assembled_tabs([tab])
+        assert len(chunks) == 1
+        assert chunks[0].text == "Walks through resolving a conflict during an interactive rebase."
+
+    def test_should_skip_items_with_neither_label_nor_description(self):
+        tab = _tab(
+            "moment_track",
+            {"items": [{"seconds": 10}, {"label": "", "description": ""}]},
+        )
+        chunks = chunk_assembled_tabs([tab])
+        assert chunks == []
+
+    def test_should_drop_when_combined_text_under_minimum_words(self):
+        tab = _tab(
+            "moment_track",
+            {"items": [{"label": "Intro", "description": "Short."}]},  # 2 words
+        )
+        chunks = chunk_assembled_tabs([tab])
+        assert chunks == []
 
 
 class TestCodeExplorer:
@@ -471,3 +533,21 @@ class TestMalformedInput:
         tab = {"component": "overview", "props": {"masterSummary": "Long enough sentence to pass the threshold."}}
         chunks = chunk_assembled_tabs([tab])
         assert chunks == []
+
+
+class TestRegistryCoverage:
+    """Locks in the invariant that every assembler-emitted component has a
+    chunker handler. The entire reason this task existed was that
+    ``moment_track`` shipped in ASSEMBLER_REGISTRY without a matching chunker
+    entry — this test makes that exact regression class fail at CI time
+    instead of waiting for the next manual audit.
+    """
+
+    def test_every_assembler_component_has_a_chunker_handler(self):
+        missing = set(ASSEMBLER_REGISTRY) - set(_COMPONENT_HANDLERS)
+        assert missing == set(), (
+            f"ASSEMBLER_REGISTRY components without chunker handlers: {missing}. "
+            "Add a _h_{component} handler in "
+            "services/summarizer/src/services/vector/output_chunker.py and "
+            "update reports/chunker-coverage.md."
+        )
