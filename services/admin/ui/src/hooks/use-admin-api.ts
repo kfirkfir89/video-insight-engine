@@ -66,6 +66,14 @@ export function useHealthUptime(days = 7) {
   return useQuery({ queryKey: ['health-uptime', days], queryFn: () => api.health.uptime(days) });
 }
 
+export function useQueueStats() {
+  return useQuery({
+    queryKey: ['queue-stats'],
+    queryFn: () => api.queue.stats(),
+    refetchInterval: 10_000,
+  });
+}
+
 export function useAlertsRecent(limit = 20) {
   return useQuery({ queryKey: ['alerts-recent', limit], queryFn: () => api.alerts.recent(limit), refetchInterval: 30_000 });
 }

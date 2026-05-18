@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from src.logging_config import get_logger
@@ -47,13 +48,26 @@ class MongoVideoRepository:
         try:
             doc = await self._collection.find_one({"youtubeId": video_id})
             if not doc:
-                doc = await self._collection.find_one({"_id": video_id})
+                doc = await self._find_by_id(video_id)
             if not doc:
                 return None
             return self._to_entity(doc)
         except Exception:
             logger.exception("failed_to_load_video_context", video_id=video_id)
             return None
+
+    async def _find_by_id(self, video_id: str) -> dict | None:
+        """Find by `_id`, accepting either ObjectId-hex or string ids.
+
+        videoSummaryCache uses ObjectId `_id` in production, but tests and
+        legacy callers may pass plain strings. Try ObjectId first when the
+        input looks like a 24-char hex; fall back to the raw string.
+        """
+        if ObjectId.is_valid(video_id):
+            doc = await self._collection.find_one({"_id": ObjectId(video_id)})
+            if doc:
+                return doc
+        return await self._collection.find_one({"_id": video_id})
 
     def _to_entity(self, doc: dict) -> VideoContext:
         """Convert a MongoDB document to a VideoContext dataclass.

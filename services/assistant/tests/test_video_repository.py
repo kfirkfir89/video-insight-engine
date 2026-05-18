@@ -210,7 +210,64 @@ class TestGetVideoContext:
         ctx = await repo.get_video_context("raw_id")
         assert ctx is not None
         assert ctx.title == "Found by _id"
+        # 2 calls: youtubeId lookup, then string-_id lookup (input is not a 24-hex id)
         assert collection.find_one.call_count == 2
+
+    async def test_should_lookup_by_objectid_when_input_is_24hex(self):
+        """Regression: 24-char hex strings must be converted to ObjectId for _id lookup.
+
+        Production `_id` fields are stored as ObjectId, not string. A naive string
+        lookup misses every document — manifested as `NotFoundError: Video not
+        found` despite the row existing.
+        """
+        from bson import ObjectId  # local import keeps test runner-friendly
+
+        oid_hex = "69e485654aebac28044d54ca"
+        repo, collection = _make_repo()
+        collection.find_one.side_effect = [
+            None,  # youtubeId miss
+            {
+                "_id": ObjectId(oid_hex),
+                "youtubeId": "WkHdkwDQJ5o",
+                "title": "Found by ObjectId",
+                "creator": "C",
+                "meta": {"masterSummary": "ok"},
+            },
+        ]
+        ctx = await repo.get_video_context(oid_hex)
+        assert ctx is not None
+        assert ctx.title == "Found by ObjectId"
+
+        # First call: youtubeId. Second call: ObjectId-typed _id.
+        assert collection.find_one.call_count == 2
+        second_call_filter = collection.find_one.await_args_list[1].args[0]
+        assert isinstance(second_call_filter["_id"], ObjectId)
+        assert str(second_call_filter["_id"]) == oid_hex
+
+    async def test_should_fall_back_to_string_id_when_objectid_lookup_misses(self):
+        """If ObjectId lookup returns None, still attempt a raw-string `_id` query."""
+        from bson import ObjectId
+
+        oid_hex = "69e485654aebac28044d54ca"
+        repo, collection = _make_repo()
+        collection.find_one.side_effect = [
+            None,  # youtubeId
+            None,  # ObjectId(_id)
+            {
+                "_id": oid_hex,
+                "youtubeId": "x",
+                "title": "Found via string id",
+                "creator": "C",
+                "meta": {"masterSummary": "ok"},
+            },
+        ]
+        ctx = await repo.get_video_context(oid_hex)
+        assert ctx is not None
+        assert ctx.title == "Found via string id"
+        assert collection.find_one.call_count == 3
+
+        types = [call.args[0]["_id"].__class__.__name__ for call in collection.find_one.await_args_list[1:]]
+        assert types == ["ObjectId", "str"]
 
     async def test_should_return_none_when_query_raises(self):
         repo, collection = _make_repo()

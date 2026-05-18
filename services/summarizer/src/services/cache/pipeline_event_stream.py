@@ -73,12 +73,20 @@ class PipelineEventStream:
         self._refresh_script = None
 
     def _get_client(self) -> aioredis.Redis:
-        """Lazy-initialize async Redis client. Mirrors ResponseCache pattern."""
+        """Lazy-initialize async Redis client. Mirrors ResponseCache pattern.
+
+        socket_timeout must exceed the longest blocking command we issue,
+        otherwise BLOCK reads (``xread block=30_000``) trip a spurious
+        TimeoutError every time the producer is idle. 35s gives the 30s
+        block a 5s safety margin without making dead-connection detection
+        meaningfully slower for one-shot commands.
+        """
         if self._client is None:
             self._client = aioredis.from_url(
                 self._url,
                 socket_connect_timeout=2.0,
-                socket_timeout=2.0,
+                socket_timeout=35.0,
+                socket_keepalive=True,
                 decode_responses=True,
             )
         return self._client
