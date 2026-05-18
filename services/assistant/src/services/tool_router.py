@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import re
 from collections.abc import AsyncGenerator
+from typing import Any
 
-from src.exceptions import AppError
+from src.exceptions import AppError, ValidationError
 from src.logging_config import get_logger
 from src.models.responses import ChatEvent
 from src.repositories.video_repository import VideoContext
@@ -22,6 +23,14 @@ _INTENT_PATTERNS: list[tuple[str, list[str]]] = [
     ("cross_reference", ["compare with", "cross-reference", "similar to"]),
 ]
 
+# Action -> (tool_name, required param keys). Used by /action dispatcher.
+ACTION_TO_TOOL: dict[str, tuple[str, tuple[str, ...]]] = {
+    "save_note": ("note_taker", ("text",)),
+    "quiz_me": ("quiz_generator", ()),
+    "find_moment": ("navigator", ("query",)),
+    "explain": ("concept_explain", ("concept",)),
+}
+
 
 class ToolRouter:
     """Detects intent from messages and routes to registered tools."""
@@ -33,6 +42,10 @@ class ToolRouter:
         """Register a tool for intent-based routing."""
         self._tools[tool.name] = tool
         logger.info("tool_registered", tool_name=tool.name)
+
+    def get_tool(self, name: str) -> BaseTool | None:
+        """Return a registered tool by name (or None)."""
+        return self._tools.get(name)
 
     def detect_intent(self, message: str) -> str | None:
         """Detect tool intent from message keywords.
@@ -111,3 +124,97 @@ def _build_tool_params(tool_name: str, message: str, video_id: str) -> dict:
     if tool_name == "cross_reference":
         return {"query": message, "video_ids": [video_id]}
     return {"query": message, "video_id": video_id}
+
+
+def _build_action_params(
+    action: str,
+    payload: dict[str, Any],
+    video_id: str,
+) -> dict[str, Any]:
+    """Map an action's params into the underlying tool's param shape.
+
+    Raises:
+        ValidationError: When a required param is missing or empty.
+    """
+    if action not in ACTION_TO_TOOL:
+        raise ValidationError(f"Unknown action: {action}")
+
+    _, required_keys = ACTION_TO_TOOL[action]
+    for key in required_keys:
+        value = payload.get(key)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            raise ValidationError(f"Action '{action}' requires param '{key}'")
+
+    if action == "save_note":
+        params: dict[str, Any] = {"text": payload["text"]}
+        if "timestamp" in payload:
+            params["timestamp"] = payload["timestamp"]
+        return params
+    if action == "quiz_me":
+        params = {}
+        if "topic" in payload:
+            params["topic"] = payload["topic"]
+        if "num_questions" in payload:
+            params["num_questions"] = payload["num_questions"]
+        return params
+    if action == "find_moment":
+        return {"query": payload["query"]}
+    if action == "explain":
+        return {"concept": payload["concept"], "video_id": video_id}
+    return dict(payload)
+
+
+class ActionDispatcher:
+    """Dispatch /action requests to registered tools.
+
+    Separate from ``ToolRouter`` so chat-intent and action paths can evolve
+    independently. Reuses the same ``BaseTool`` protocol.
+    """
+
+    def __init__(self, router: ToolRouter) -> None:
+        self._router = router
+
+    async def dispatch(
+        self,
+        action: str,
+        video_id: str,
+        params: dict[str, Any],
+        video_ctx: VideoContext,
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Run the tool matched to ``action``.
+
+        Args:
+            action: One of the keys in :data:`ACTION_TO_TOOL`.
+            video_id: Target video.
+            params: Action-specific parameters (validated per action).
+            video_ctx: Loaded video context (passed into tools).
+            user_id: Caller's user ID (used to attribute notes).
+
+        Returns:
+            The tool's result dict.
+
+        Raises:
+            ValidationError: Unknown action or missing required params.
+            NotFoundError: Tool isn't registered (should not happen in production).
+            AppError: Bubbled up from the tool.
+        """
+        if action not in ACTION_TO_TOOL:
+            raise ValidationError(f"Unknown action: {action}")
+
+        tool_name, _ = ACTION_TO_TOOL[action]
+        tool = self._router.get_tool(tool_name)
+        if tool is None:
+            raise ValidationError(f"Tool '{tool_name}' for action '{action}' is not available")
+
+        tool_params = _build_action_params(action, params, video_id)
+        context = {"video_ctx": video_ctx, "video_id": video_id, "user_id": user_id}
+
+        logger.info(
+            "action_dispatch",
+            action=action,
+            tool=tool_name,
+            video_id=video_id,
+            user_id=user_id,
+        )
+        return await tool.execute(tool_params, context)

@@ -38,6 +38,19 @@ const envSchema = z.object({
   USER_COST_LIMIT_TEAM: z.string().default('-1').transform(Number),
   // Analytics (PostHog)
   POSTHOG_API_KEY: z.string().optional(),
+  // ─── RabbitMQ job queue ─────────────────────────────────────────────
+  // amqplib connection URL. The credentials are supplied via docker-compose env
+  // (RABBITMQ_DEFAULT_USER / PASS) so this default works in the dev compose.
+  RABBITMQ_URL: z.string().default('amqp://vie:vie-dev@vie-rabbitmq:5672/'),
+  // Publisher confirms are always enabled; this caps the unacknowledged outflight
+  // window. Conservative because the API publishes one message per request.
+  RABBITMQ_PUBLISH_TIMEOUT_MS: z.string().default('5000').transform(Number),
+  // Flip ON to route POST /api/videos through RabbitMQ. Behind a flag so shadow
+  // testing and quick rollback are both one env-var away.
+  USE_QUEUE_PIPELINE: z.string().default('false').transform(v => v === 'true'),
+  // Admin endpoints for /api/admin/queue/* and DLQ replay. Different from
+  // INTERNAL_SECRET so a leaked admin key cannot impersonate the summarizer.
+  ADMIN_API_KEY: z.string().min(8).default('dev-admin-key-change-me'),
 });
 
 const parsedConfig = envSchema.parse(process.env);

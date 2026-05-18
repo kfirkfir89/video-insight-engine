@@ -15,7 +15,7 @@ from src.repositories.video_repository import MongoVideoRepository, VideoContext
 from src.services.context_builder import ContextBuilder
 from src.services.llm_provider import LLMProvider
 from src.services.rag import RAGService
-from src.services.tool_router import ToolRouter
+from src.services.tool_router import ActionDispatcher, ToolRouter
 from src.tools.base import BaseTool
 from src.utils.language_detect import detect_language
 
@@ -40,6 +40,7 @@ class AssistantService:
         self._settings = settings
         self._video_cache: TTLCache[str, VideoContext] = TTLCache(maxsize=200, ttl=600)
         self._tool_router = ToolRouter()
+        self._action_dispatcher = ActionDispatcher(self._tool_router)
 
     def register_tool(self, tool: BaseTool) -> None:
         """Register a tool for intent-based routing.
@@ -48,6 +49,28 @@ class AssistantService:
             tool: A tool implementing the BaseTool protocol.
         """
         self._tool_router.register(tool)
+
+    async def dispatch_action(
+        self,
+        action: str,
+        video_id: str,
+        params: dict,
+        user_id: str | None = None,
+    ) -> dict:
+        """Execute a structured action against a video.
+
+        Loads the video context (cached) and forwards to the
+        :class:`ActionDispatcher`. Raises :class:`NotFoundError` when the
+        video doesn't exist and :class:`ValidationError` on bad input.
+        """
+        video_ctx = await self._load_video_context(video_id)
+        return await self._action_dispatcher.dispatch(
+            action=action,
+            video_id=video_id,
+            params=params,
+            video_ctx=video_ctx,
+            user_id=user_id,
+        )
 
     async def _load_video_context(self, video_id: str) -> VideoContext:
         """Load video context from cache or MongoDB.

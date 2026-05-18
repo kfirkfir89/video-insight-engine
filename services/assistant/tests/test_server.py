@@ -67,17 +67,31 @@ class TestChatEndpoint:
 
 
 class TestActionEndpoint:
-    """POST /action endpoint tests."""
+    """POST /action endpoint tests — see test_action.py for richer coverage."""
 
-    async def test_should_return_501_when_action_called(self, app_client):
+    async def test_should_return_422_when_action_is_invalid(self, app_client):
         # Arrange
-        payload = {"video_id": "abc123", "action": "quiz"}
+        payload = {"video_id": "abc123", "action": "unknown_action"}
 
         # Act
         response = await app_client.post("/action", json=payload)
 
         # Assert
-        assert response.status_code == 501
+        assert response.status_code == 422
+
+    async def test_should_return_403_when_internal_secret_wrong(self, app_client):
+        # Arrange
+        payload = {"video_id": "abc123", "action": "save_note", "params": {"text": "hi"}}
+
+        # Act
+        response = await app_client.post(
+            "/action",
+            json=payload,
+            headers={"X-Internal-Secret": "bad"},
+        )
+
+        # Assert
+        assert response.status_code == 403
 
 
 class TestLibrarySearchEndpoint:

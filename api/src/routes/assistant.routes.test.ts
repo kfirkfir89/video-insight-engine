@@ -163,27 +163,142 @@ describe('assistant routes', () => {
   });
 
   describe('POST /api/videos/:videoSummaryId/action', () => {
-    it('should return 501 not implemented', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: `/api/videos/${validVideoSummaryId}/action`,
-        headers: { authorization: authHeader },
-        payload: { action: 'bookmark', params: { timestamp: 120 } },
-      });
-
-      expect(response.statusCode).toBe(501);
-      expect(response.json().error).toBe('NOT_IMPLEMENTED');
-      expect(response.json().message).toBe('Assistant actions are not yet implemented.');
-    });
+    const successEnvelope = {
+      success: true,
+      action: 'save_note',
+      data: { saved: true, note_id: 'n1' },
+      error: null,
+      trace_id: 'abcdef012345',
+    };
 
     it('should return 401 without auth token', async () => {
       const response = await app.inject({
         method: 'POST',
         url: `/api/videos/${validVideoSummaryId}/action`,
-        payload: { action: 'bookmark' },
+        payload: { action: 'save_note', params: { text: 'note' } },
       });
 
       expect(response.statusCode).toBe(401);
+      expect(mockContainer.assistantClient.action).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 when action is unknown', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/videos/${validVideoSummaryId}/action`,
+        headers: { authorization: authHeader },
+        payload: { action: 'teleport' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe('VALIDATION_ERROR');
+      expect(mockContainer.assistantClient.action).not.toHaveBeenCalled();
+    });
+
+    it('should return 404 when user has no access to video', async () => {
+      mockContainer.videoRepository.userHasAccessToSummary.mockResolvedValue(false);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/videos/${validVideoSummaryId}/action`,
+        headers: { authorization: authHeader },
+        payload: { action: 'save_note', params: { text: 'note' } },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(mockContainer.assistantClient.action).not.toHaveBeenCalled();
+    });
+
+    it('should forward action to assistant with user identity', async () => {
+      mockContainer.videoRepository.userHasAccessToSummary.mockResolvedValue(true);
+      mockContainer.assistantClient.action.mockResolvedValue({
+        status: 200,
+        body: successEnvelope,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/videos/${validVideoSummaryId}/action`,
+        headers: { authorization: authHeader },
+        payload: { action: 'save_note', params: { text: 'remember this' } },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual(successEnvelope);
+      expect(mockContainer.assistantClient.action).toHaveBeenCalledWith({
+        videoId: validVideoSummaryId,
+        userId: 'test-user-id',
+        action: 'save_note',
+        params: { text: 'remember this' },
+      });
+    });
+
+    it('should propagate non-200 status from assistant', async () => {
+      mockContainer.videoRepository.userHasAccessToSummary.mockResolvedValue(true);
+      mockContainer.assistantClient.action.mockResolvedValue({
+        status: 400,
+        body: {
+          success: false,
+          action: 'save_note',
+          data: null,
+          error: "Action 'save_note' requires param 'text'",
+          trace_id: 'fedcba012345',
+        },
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/videos/${validVideoSummaryId}/action`,
+        headers: { authorization: authHeader },
+        payload: { action: 'save_note', params: {} },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().success).toBe(false);
+      expect(response.json().error).toContain('requires param');
+    });
+
+    it('should return 502 when assistant service is unavailable', async () => {
+      mockContainer.videoRepository.userHasAccessToSummary.mockResolvedValue(true);
+
+      const { ServiceUnavailableError } = await import('../utils/errors.js');
+      mockContainer.assistantClient.action.mockRejectedValue(new ServiceUnavailableError('Assistant'));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/videos/${validVideoSummaryId}/action`,
+        headers: { authorization: authHeader },
+        payload: { action: 'save_note', params: { text: 'x' } },
+      });
+
+      expect(response.statusCode).toBe(502);
+      expect(response.json().error).toBe('SERVICE_UNAVAILABLE');
+    });
+
+    it('should accept all four documented action names', async () => {
+      mockContainer.videoRepository.userHasAccessToSummary.mockResolvedValue(true);
+      mockContainer.assistantClient.action.mockResolvedValue({
+        status: 200,
+        body: successEnvelope,
+      });
+
+      const actions = ['save_note', 'quiz_me', 'find_moment', 'explain'] as const;
+      for (const action of actions) {
+        const response = await app.inject({
+          method: 'POST',
+          url: `/api/videos/${validVideoSummaryId}/action`,
+          headers: { authorization: authHeader },
+          payload: action === 'save_note'
+            ? { action, params: { text: 'note' } }
+            : action === 'find_moment'
+              ? { action, params: { query: 'q' } }
+              : action === 'explain'
+                ? { action, params: { concept: 'c' } }
+                : { action },
+        });
+        expect(response.statusCode).toBe(200);
+      }
+      expect(mockContainer.assistantClient.action).toHaveBeenCalledTimes(actions.length);
     });
   });
 });

@@ -15,6 +15,7 @@ import { VideoHero, EmojiMarker } from '@/components/vie';
 import { stripLeadingEmoji } from '@/lib/string-utils';
 import { DirectionProvider } from '@/contexts/DirectionContext';
 import { getLabels } from '@/lib/i18n';
+import { isRTL as isRTLLanguage } from '@/lib/rtl';
 import { cn } from '@/lib/utils';
 import type { StreamPhase, ExtractionProgressInfo } from '@/features/video-output/hooks/use-summary-stream';
 import { STREAM_PHASE_LABELS } from '@/features/video-output/hooks/use-summary-stream';
@@ -102,7 +103,7 @@ export function OutputRouter({
   if (!hasData && !isStreaming) return null;
 
   return (
-    <DirectionProvider language={language} isRTL={isRTLProp}>
+    <DirectionProvider language={language} isRTL={isRTLProp ?? isRTLLanguage(language)}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-3 pt-3 pb-8 md:px-6 md:pt-5 md:pb-12">
         {hasData && tabDefs.length > 0 ? (
           <TabCoordinationProvider videoId={videoSummaryId} initialTab={initialTab}>

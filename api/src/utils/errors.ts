@@ -261,3 +261,12 @@ export class ServiceUnavailableError extends AppError {
     this.name = 'ServiceUnavailableError';
   }
 }
+
+// Queue errors — surfaced as 503 so the client retries; the DB row is already
+// created so a retry is idempotent.
+export class QueuePublishError extends AppError {
+  constructor(message: string) {
+    super('QUEUE_PUBLISH_FAILED', 503, `Failed to enqueue job: ${message}`);
+    this.name = 'QueuePublishError';
+  }
+}

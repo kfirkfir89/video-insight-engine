@@ -40,9 +40,13 @@ export interface MockContainer {
   };
   assistantClient: {
     chat: ReturnType<typeof vi.fn>;
+    action: ReturnType<typeof vi.fn>;
   };
   summarizerClient: {
     triggerSummarization: ReturnType<typeof vi.fn>;
+  };
+  queuePublisher: {
+    publishVideoJob: ReturnType<typeof vi.fn>;
   };
   shareService: {
     createShare: ReturnType<typeof vi.fn>;
@@ -132,9 +136,13 @@ export function createMockContainer(): MockContainer {
     },
     assistantClient: {
       chat: vi.fn(),
+      action: vi.fn(),
     },
     summarizerClient: {
       triggerSummarization: vi.fn(),
+    },
+    queuePublisher: {
+      publishVideoJob: vi.fn().mockResolvedValue({ requestId: 'test-req-1' }),
     },
     shareService: {
       createShare: vi.fn(),
