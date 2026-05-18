@@ -365,6 +365,25 @@ Submit YouTube URL for summarization.
 }
 ```
 
+**Response (429) - Daily Cost Limit Reached:**
+
+The handler atomically reserves an estimated cost against the user's daily cap
+(`COST_LIMITS_PER_TIER`) before publishing the job. If the reservation pushes
+the user past the cap, the increment is refunded and the request fails:
+
+```json
+{
+  "error": "DAILY_LIMIT_REACHED",
+  "message": "You've reached your daily cost limit ($2.00). Resets at midnight UTC.",
+  "resetAt": "2026-05-15T00:00:00.000Z",
+  "limitUsd": 2
+}
+```
+
+Cache hits refund the reservation immediately. Real spend is reconciled from
+`llm_usage` when the pipeline reaches a terminal status (see
+[Per-User Cost Model](./llm-cost-model.md)).
+
 ---
 
 ### DELETE /videos/:id
@@ -709,6 +728,41 @@ Get current user tier and limits. Auth required.
 
 ---
 
+## Usage
+
+### GET /users/me/usage
+
+Today's LLM cost spend, remaining headroom, and the next UTC midnight reset.
+Used by the in-app usage tile and `DailyLimitCallout`.
+
+Auth required (resolves the caller's tier).
+
+**Response (200):**
+
+```json
+{
+  "tier": "free",
+  "today": {
+    "date": "2026-05-14",
+    "rawUsd": 0.42,
+    "creditAdjustmentUsd": 0,
+    "effectiveUsd": 0.42,
+    "videoCount": 3
+  },
+  "limitUsd": 2,
+  "remainingUsd": 1.58,
+  "resetAt": "2026-05-15T00:00:00.000Z"
+}
+```
+
+- `effectiveUsd = rawUsd + creditAdjustmentUsd`. Admin credits are stored as
+  negative `creditAdjustmentUsd`, so a grant lowers `effectiveUsd`.
+- `limitUsd: -1` (or `0`) means the tier is unlimited; `remainingUsd` will be
+  `null` in that case so the wire format stays JSON-honest (no `Infinity`).
+- `resetAt` is always the next UTC midnight ISO timestamp.
+
+---
+
 ## SSR (Server-Side Rendered)
 
 ### GET /s/:slug
@@ -750,8 +804,9 @@ Common error codes:
 - `403` - Forbidden: `TIER_LIMIT_EXCEEDED`, `SHARE_NOT_ALLOWED`
 - `404` - Not Found: `SHARE_NOT_FOUND`
 - `409` - Conflict: `ALREADY_SHARED`
+- `429` - Rate Limited: `RATE_LIMITED`, `DAILY_LIMIT_REACHED` (per-user daily cost cap; also returns `resetAt` + `limitUsd`)
 - `500` - Internal Server Error, `PAYMENT_ERROR`
-- `503` - Service Unavailable: `COST_LIMIT_EXCEEDED`
+- `503` - Service Unavailable: `COST_LIMIT_EXCEEDED` (global aggregate cap)
 
 ---
 

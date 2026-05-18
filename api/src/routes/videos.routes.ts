@@ -38,7 +38,7 @@ const versionsQuerySchema = z.object({
 });
 
 export async function videosRoutes(fastify: FastifyInstance) {
-  const { videoService } = fastify.container;
+  const { videoService, costMonitorService } = fastify.container;
 
   // GET /api/videos
   fastify.get<{
@@ -81,16 +81,41 @@ export async function videosRoutes(fastify: FastifyInstance) {
     },
   }, async (req, reply) => {
     const input = createVideoSchema.parse(req.body);
-    const result = await videoService.createVideo(
+
+    // Atomic reservation — increment-then-check serializes concurrent starts on
+    // the per-user/day doc. Throws DailyLimitReachedError if the user is past
+    // their tier cap. `reservation` is null for unlimited tiers.
+    const reservation = await costMonitorService.reserveUserCost(
       req.user.userId,
-      input.url,
-      {
-        folderId: input.folderId,
-        bypassCache: input.bypassCache,
-        providers: input.providers,
-        tier: req.tier.name,
-      }
+      req.tier.name,
     );
+
+    let result: Awaited<ReturnType<typeof videoService.createVideo>>;
+    try {
+      result = await videoService.createVideo(
+        req.user.userId,
+        input.url,
+        {
+          folderId: input.folderId,
+          bypassCache: input.bypassCache,
+          providers: input.providers,
+          tier: req.tier.name,
+        }
+      );
+    } catch (err) {
+      await costMonitorService.refundReservation(reservation);
+      throw err;
+    }
+
+    // Cached videos run no pipeline, so no llm_usage rows will arrive — refund now.
+    // Swallow refund errors: the user's video is already created, and the nightly
+    // reconcile will heal a stuck reservation if the refund Mongo call transiently fails.
+    if (result.cached) {
+      await costMonitorService.refundReservation(reservation).catch((err) => {
+        req.log.warn({ err, userId: req.user.userId }, 'cached-video refund failed; nightly reconcile will recover');
+      });
+    }
+
     return reply.code(201).send(result);
   });
 

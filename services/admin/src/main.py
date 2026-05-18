@@ -17,6 +17,7 @@ from src.routes.health import router as health_router
 from src.routes.shares import router as shares_router
 from src.routes.tiers import router as tiers_router
 from src.routes.usage import router as usage_router
+from src.routes.users import router as users_router
 from src.services.aggregator import aggregate_daily
 from src.services.health_checker import health_poller_loop
 
@@ -87,6 +88,7 @@ app.include_router(health_router)
 app.include_router(alerts_router)
 app.include_router(shares_router)
 app.include_router(tiers_router)
+app.include_router(users_router)
 
 
 @app.get("/health")

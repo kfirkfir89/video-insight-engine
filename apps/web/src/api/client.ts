@@ -6,12 +6,20 @@ const REQUEST_TIMEOUT_MS = 30000;
 class ApiError extends Error {
   status: number;
   code?: string;
+  /** Free-form details from the server (e.g. resetAt, limitUsd for 429). */
+  details?: Record<string, unknown>;
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(
+    status: number,
+    message: string,
+    code?: string,
+    details?: Record<string, unknown>,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -88,7 +96,7 @@ export async function request<T>(
       const error = await res
         .json()
         .catch(() => ({ message: "Request failed" }));
-      throw new ApiError(res.status, error.message, error.error);
+      throw new ApiError(res.status, error.message, error.error, error);
     }
 
     if (res.status === 204) return undefined as T;

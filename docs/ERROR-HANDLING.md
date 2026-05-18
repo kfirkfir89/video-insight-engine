@@ -41,9 +41,10 @@ All errors follow this structure:
 
 See [docs/SECURITY.md](./SECURITY.md#rate-limiting) for implementation.
 
-| Code           | Message           | When                |
-| -------------- | ----------------- | ------------------- |
-| `RATE_LIMITED` | Too many requests | Rate limit exceeded |
+| Code                  | Status | Message                                       | When                                                                            |
+| --------------------- | ------ | --------------------------------------------- | ------------------------------------------------------------------------------- |
+| `RATE_LIMITED`        | 429    | Too many requests                             | Rate limit exceeded (global plugin or per-route quota)                          |
+| `DAILY_LIMIT_REACHED` | 429    | You've reached your daily cost limit ($X.XX)  | Per-user LLM cost cap reached. Response includes `resetAt` + `limitUsd` fields. |
 
 ### Validation Errors (400)
 

@@ -1,7 +1,7 @@
 import Fastify, { FastifyInstance, FastifyServerOptions } from 'fastify';
 import { ZodError } from 'zod';
 import { config } from './config.js';
-import { AppError } from './utils/errors.js';
+import { AppError, DailyLimitReachedError } from './utils/errors.js';
 import { createContainer, Container } from './container.js';
 
 // Plugins
@@ -25,7 +25,7 @@ import { shareRoutes } from './routes/share.routes.js';
 import { ssrRoutes } from './routes/ssr.routes.js';
 import { overrideRoutes } from './routes/override.routes.js';
 import { paymentRoutes } from './routes/payment.routes.js';
-import { preferencesRoutes } from './routes/preferences.routes.js';
+import { preferencesRoutes, userUsageRoutes } from './routes/preferences.routes.js';
 
 export interface BuildAppOptions {
   logger?: FastifyServerOptions['logger'];
@@ -100,6 +100,16 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
       });
     }
 
+    // Daily cost limit reached — surface resetAt for the UI countdown
+    if (error instanceof DailyLimitReachedError) {
+      return reply.status(error.status).send({
+        error: error.code,
+        message: error.message,
+        resetAt: error.resetAt,
+        limitUsd: error.limitUsd,
+      });
+    }
+
     // Application errors (AppError and subclasses)
     if (error instanceof AppError) {
       return reply.status(error.status).send({
@@ -150,6 +160,7 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   await fastify.register(shareRoutes, { prefix: '/api/share' });
   await fastify.register(paymentRoutes, { prefix: '/api/payments' });
   await fastify.register(preferencesRoutes, { prefix: '/api/users/me/preferences' });
+  await fastify.register(userUsageRoutes, { prefix: '/api/users/me/usage' });
   await fastify.register(internalRoutes, { prefix: '/internal' });
 
   // SSR routes (top-level, no /api prefix — for social media crawlers)

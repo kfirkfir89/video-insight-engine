@@ -11,6 +11,9 @@ import {
 import { VideoService } from './video.service.js';
 import { FolderService } from './folder.service.js';
 import { SummarizerClient, type ProviderConfig } from './summarizer-client.js';
+import { CostMonitorService } from './cost-monitor.service.js';
+import { DailyLimitReachedError } from '../utils/errors.js';
+import type { UserTier } from '@vie/types';
 
 // Types for summarizer response
 interface SummarizerPlaylistVideo {
@@ -88,7 +91,8 @@ export class PlaylistService {
     private readonly videoService: VideoService,
     private readonly folderService: FolderService,
     private readonly summarizerClient: SummarizerClient,
-    private readonly logger: FastifyBaseLogger
+    private readonly logger: FastifyBaseLogger,
+    private readonly costMonitorService?: CostMonitorService,
   ) {}
 
   /**
@@ -139,7 +143,8 @@ export class PlaylistService {
     url: string,
     folderId?: string,
     maxVideos = 100,
-    providers?: ProviderConfig
+    providers?: ProviderConfig,
+    tier: UserTier = 'free'
   ): Promise<PlaylistImportResult> {
     const playlistId = extractPlaylistId(url);
     if (!playlistId) {
@@ -175,16 +180,40 @@ export class PlaylistService {
     let cachedCount = 0;
     let processingCount = 0;
 
+    // Track whether the per-user cost cap stopped the import mid-loop. Subsequent
+    // videos are recorded as failed with a stable error so the UI can show a
+    // "stopped at video N because you hit your daily limit" message.
+    let limitReached = false;
+
     for (const video of playlistData.videos) {
+      if (limitReached) {
+        failedVideos.push({
+          youtubeId: video.video_id,
+          title: video.title,
+          position: video.position,
+          error: 'DAILY_LIMIT_REACHED',
+        });
+        continue;
+      }
+
+      let reservation = null;
       try {
         const videoUrl = `https://www.youtube.com/watch?v=${video.video_id}`;
 
-        // Create video
+        if (this.costMonitorService) {
+          reservation = await this.costMonitorService.reserveUserCost(userId, tier);
+        }
+
         const result = await this.videoService.createVideo(
           userId,
           videoUrl,
-          { folderId: folder.id, bypassCache: false, providers, tier: 'free' }
+          { folderId: folder.id, bypassCache: false, providers, tier }
         );
+
+        // Cached videos run no pipeline, so no llm_usage will land — refund.
+        if (result.cached && this.costMonitorService) {
+          await this.costMonitorService.refundReservation(reservation);
+        }
 
         results.push({
           id: result.video.id,
@@ -201,7 +230,26 @@ export class PlaylistService {
           processingCount++;
         }
       } catch (err) {
+        if (this.costMonitorService && reservation) {
+          await this.costMonitorService.refundReservation(reservation);
+        }
         const errorMessage = err instanceof Error ? err.message : String(err);
+
+        if (err instanceof DailyLimitReachedError) {
+          limitReached = true;
+          this.logger.info(
+            { userId, importedSoFar: results.length },
+            'Playlist import stopped at per-user cost cap',
+          );
+          failedVideos.push({
+            youtubeId: video.video_id,
+            title: video.title,
+            position: video.position,
+            error: 'DAILY_LIMIT_REACHED',
+          });
+          continue;
+        }
+
         this.logger.warn({ youtubeId: video.video_id, error: errorMessage }, 'Failed to import video');
         failedVideos.push({
           youtubeId: video.video_id,

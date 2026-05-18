@@ -443,6 +443,65 @@ User's video library. References shared cache.
 
 ---
 
+## userCosts
+
+Per-user daily LLM cost aggregate. Powers the per-user reservation gate
+(`POST /videos`) and the in-app usage tile.
+
+```javascript
+{
+  _id: ObjectId,
+  userId: ObjectId,
+  date: string,                   // UTC `YYYY-MM-DD`
+  totalCostUsd: number,           // Sum of per-call LLM cost, denormalized from llm_usage
+  videoCount: number,             // Owned by reservation path: +1 on reserve, -1 on refund
+  creditAdjustmentUsd: number,    // Admin adjustments. Negative = credit, positive = manual charge
+  updatedAt: Date
+}
+```
+
+**Indexes:**
+```javascript
+{ userId: 1, date: 1 }  // unique — enables atomic upsert under contention
+{ date: 1 }             // supports admin aggregates over a trailing window
+```
+
+**Reconciliation:** `totalCostUsd` is rewritten from `llm_usage` (Python
+schema: `user_id` + `cost_usd` + `timestamp`) on every terminal video status
+and by the nightly `POST /internal/reconcile-costs` cron. `videoCount` is
+preserved across reconciles because it tracks reservations, not real spend.
+
+---
+
+## userCostAdjustments
+
+Audit log for admin grant-credit and manual-charge actions.
+
+```javascript
+{
+  _id: ObjectId,
+  userId: ObjectId,
+  date: string,                   // UTC `YYYY-MM-DD` — adjustments are day-scoped
+  amountUsd: number,              // Signed. Negative = credit (lowers spend), positive = manual charge
+  reason: string,                 // 1–500 chars
+  adminId: ObjectId,              // Self-attested from request body (admin service is shared-key auth)
+  createdAt: Date
+}
+```
+
+**Indexes:**
+```javascript
+{ userId: 1, createdAt: -1 }
+{ adminId: 1, createdAt: -1 }
+```
+
+**Signed-storage convention:** the canonical contract across Node + Python is
+`amountUsd < 0 → credit`. The admin HTTP boundary accepts a user-friendly
+"positive = grant" input and inverts the sign before storage — see
+`services/admin/src/routes/users.py:230-291`.
+
+---
+
 # Relationships
 
 ```

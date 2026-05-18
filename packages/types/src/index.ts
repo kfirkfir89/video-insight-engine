@@ -9,6 +9,9 @@ export * from './common.js';
 // User & Tier
 export * from './user.js';
 
+// Per-user daily cost tracking
+export * from './user-cost.js';
+
 // Video (context, chapters, summary, response)
 export * from './video.js';
 

@@ -195,6 +195,110 @@ describe('videos routes', () => {
 
       expect(response.statusCode).toBe(400);
     });
+
+    it('should block the request with 429 when the reservation throws DailyLimitReachedError', async () => {
+      const { DailyLimitReachedError } = await import('../utils/errors.js');
+      mockContainer.costMonitorService.reserveUserCost.mockRejectedValue(
+        new DailyLimitReachedError(2, '2026-05-15T00:00:00.000Z'),
+      );
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/videos',
+        headers: {
+          authorization: authHeader,
+          'content-type': 'application/json',
+        },
+        payload: {
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        },
+      });
+
+      expect(response.statusCode).toBe(429);
+      const body = response.json();
+      expect(body.error).toBe('DAILY_LIMIT_REACHED');
+      expect(body.resetAt).toBe('2026-05-15T00:00:00.000Z');
+      expect(body.limitUsd).toBe(2);
+      expect(mockContainer.videoService.createVideo).not.toHaveBeenCalled();
+    });
+
+    it('should reserve, then call createVideo when the user is still under their daily cost limit', async () => {
+      mockContainer.costMonitorService.reserveUserCost.mockResolvedValue({
+        userId: 'test-user-id',
+        dateKey: '2026-05-14',
+        amountUsd: 0.15,
+      });
+      mockContainer.videoService.createVideo.mockResolvedValue({
+        video: { id: 'v1', status: 'pending' },
+        cached: false,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/videos',
+        headers: {
+          authorization: authHeader,
+          'content-type': 'application/json',
+        },
+        payload: {
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mockContainer.costMonitorService.reserveUserCost).toHaveBeenCalledWith(
+        'test-user-id',
+        'free',
+      );
+      expect(mockContainer.videoService.createVideo).toHaveBeenCalled();
+      // Non-cached video → reservation is settled by reconcile, not refunded inline.
+      expect(mockContainer.costMonitorService.refundReservation).not.toHaveBeenCalled();
+    });
+
+    it('should refund the reservation when createVideo throws', async () => {
+      const reservation = { userId: 'test-user-id', dateKey: '2026-05-14', amountUsd: 0.15 };
+      mockContainer.costMonitorService.reserveUserCost.mockResolvedValue(reservation);
+      mockContainer.videoService.createVideo.mockRejectedValue(new Error('downstream-blew-up'));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/videos',
+        headers: {
+          authorization: authHeader,
+          'content-type': 'application/json',
+        },
+        payload: {
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        },
+      });
+
+      expect(response.statusCode).toBe(500);
+      expect(mockContainer.costMonitorService.refundReservation).toHaveBeenCalledWith(reservation);
+    });
+
+    it('should refund the reservation when the video is served from cache', async () => {
+      const reservation = { userId: 'test-user-id', dateKey: '2026-05-14', amountUsd: 0.15 };
+      mockContainer.costMonitorService.reserveUserCost.mockResolvedValue(reservation);
+      mockContainer.videoService.createVideo.mockResolvedValue({
+        video: { id: 'v1', status: 'completed' },
+        cached: true,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/videos',
+        headers: {
+          authorization: authHeader,
+          'content-type': 'application/json',
+        },
+        payload: {
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mockContainer.costMonitorService.refundReservation).toHaveBeenCalledWith(reservation);
+    });
   });
 
   describe('DELETE /api/videos/:id', () => {

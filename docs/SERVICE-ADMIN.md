@@ -90,6 +90,23 @@ Registered in:
 |--------|------|-------------|
 | POST | `/admin/aggregate-daily` | Trigger daily rollup aggregation |
 
+### Per-User Costs (`/users/`)
+
+Backs the **Users** page in the admin dashboard. Reads `userCosts` (per-user
+daily aggregates) and `userCostAdjustments` (admin audit log). See
+[Data Models — userCosts](./DATA-MODELS.md#usercosts).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/users/costs?days=7&limit=50&offset=0` | Top users by effective USD over the trailing window (joins `users` for email/name/tier) |
+| GET | `/users/{user_id}/costs?days=30` | One user's daily breakdown + last 20 audit rows |
+| POST | `/users/{user_id}/grant-credit` | Apply a signed adjustment; `amountUsd > 0` grants credit (stored as negative), `< 0` is a manual charge. Validated: `|amountUsd| ≤ 1000`, `reason` 1–500 chars, optional `date` (`YYYY-MM-DD`) |
+
+**Audit caveat:** the admin service authenticates with a shared
+`ADMIN_API_KEY`, so `adminId` in the grant-credit request body is
+self-attested. Acceptable for a single-admin team; swap for per-admin
+credentials if you need a forgery-resistant audit log.
+
 ## Frontend
 
 React SPA served as static files from the same container.

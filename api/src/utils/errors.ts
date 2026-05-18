@@ -229,6 +229,24 @@ export class CostLimitExceededError extends AppError {
   }
 }
 
+export class DailyLimitReachedError extends AppError {
+  /** ISO timestamp of next UTC midnight reset. */
+  public readonly resetAt: string;
+  /** Daily limit for the user's tier in USD. */
+  public readonly limitUsd: number;
+
+  constructor(limitUsd: number, resetAt: string) {
+    super(
+      'DAILY_LIMIT_REACHED',
+      429,
+      `You've reached your daily cost limit ($${limitUsd.toFixed(2)}). Resets at midnight UTC.`,
+    );
+    this.name = 'DailyLimitReachedError';
+    this.resetAt = resetAt;
+    this.limitUsd = limitUsd;
+  }
+}
+
 // External service errors
 export class ServiceTimeoutError extends AppError {
   constructor(service: string) {
