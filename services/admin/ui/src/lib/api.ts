@@ -196,6 +196,18 @@ export interface GrantCreditResponse {
   effectiveUsd: number;
 }
 
+export interface QueueStatsResponse {
+  main: {
+    messages: number;
+    ready: number;
+    inFlight: number;
+    consumers: number;
+  };
+  dlq: {
+    messages: number;
+  };
+}
+
 // Usage endpoints
 export const api = {
   usage: {
@@ -249,5 +261,8 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       }),
+  },
+  queue: {
+    stats: () => apiFetch<QueueStatsResponse>('/queue/stats'),
   },
 };
