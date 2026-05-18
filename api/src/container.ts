@@ -19,6 +19,7 @@ import { ShareService } from './services/share.service.js';
 import { OgImageService } from './services/og-image.service.js';
 import { PaymentService } from './services/payment.service.js';
 import { CostMonitorService } from './services/cost-monitor.service.js';
+import { QueuePublisher, type ChannelSupplier } from './services/queue-publisher.service.js';
 
 export interface Container {
   // Repositories
@@ -39,9 +40,19 @@ export interface Container {
   ogImageService: OgImageService;
   paymentService: PaymentService;
   costMonitorService: CostMonitorService;
+  queuePublisher: QueuePublisher;
 }
 
-export function createContainer(db: Db, logger: FastifyBaseLogger): Container {
+export interface CreateContainerOptions {
+  /** Supplier for a confirm channel — wired up by the rabbitmq plugin. */
+  queueChannelSupplier?: ChannelSupplier;
+}
+
+export function createContainer(
+  db: Db,
+  logger: FastifyBaseLogger,
+  options: CreateContainerOptions = {},
+): Container {
   // Create repositories
   const videoRepository = new VideoRepository(db);
   const folderRepository = new FolderRepository(db);
@@ -53,9 +64,19 @@ export function createContainer(db: Db, logger: FastifyBaseLogger): Container {
   const summarizerClient = new SummarizerClient(logger);
   const assistantClient = new AssistantClient(logger);
 
+  // Queue publisher — falls back to a stub supplier in tests / pre-plugin paths.
+  // The video service decides per-request whether to use HTTP or queue, so the
+  // stub is fine when USE_QUEUE_PIPELINE=false.
+  const channelSupplier: ChannelSupplier =
+    options.queueChannelSupplier ??
+    (() => {
+      throw new Error('RabbitMQ channel supplier not configured');
+    });
+  const queuePublisher = new QueuePublisher(channelSupplier, logger);
+
   // Create services with injected dependencies
   const authService = new AuthService(userRepository, logger);
-  const videoService = new VideoService(videoRepository, summarizerClient, logger);
+  const videoService = new VideoService(videoRepository, summarizerClient, queuePublisher, logger);
   const folderService = new FolderService(folderRepository, logger);
   const costMonitorService = new CostMonitorService(db, logger, userCostRepository);
   const playlistService = new PlaylistService(videoService, folderService, summarizerClient, logger, costMonitorService);
@@ -82,6 +103,7 @@ export function createContainer(db: Db, logger: FastifyBaseLogger): Container {
     ogImageService,
     paymentService,
     costMonitorService,
+    queuePublisher,
   };
 }
 

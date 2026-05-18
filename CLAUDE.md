@@ -14,6 +14,8 @@ Personal video knowledge management system — YouTube URL to interactive knowle
 | vie-mongodb | MongoDB 7 | 27017 |
 | vie-redis | Redis 7 | 6379 |
 | vie-qdrant | Qdrant | 6333/6334 |
+| vie-rabbitmq | RabbitMQ 3.13 (mgmt) | 5672/15672 |
+| vie-summarizer-worker | (shares vie-summarizer image) | — |
 
 ## Task Workflow
 

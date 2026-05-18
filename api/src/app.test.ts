@@ -34,6 +34,7 @@ describe('buildApp', () => {
       expect(app.container).toBeDefined();
       expect(app.container.assistantClient).toBeDefined();
       expect(app.container.videoService).toBeDefined();
+      expect(app.container.queuePublisher).toBeDefined();
 
       await app.close();
     });

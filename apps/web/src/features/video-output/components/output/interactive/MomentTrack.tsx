@@ -349,18 +349,19 @@ export const MomentTrack = memo(function MomentTrack({
                             <button
                               type="button"
                               onClick={() => handleSeek(item.seconds)}
+                              dir="ltr"
                               className="inline-flex items-center gap-1 text-xs font-bold tabular-nums text-primary bg-primary/10 px-2 py-0.5 rounded-md shrink-0 cursor-pointer hover:bg-primary/20 transition-colors"
                               aria-label={`Jump to ${item.time}`}
                             >
                               {chipContent}
                             </button>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-xs font-bold tabular-nums text-primary bg-primary/10 px-2 py-0.5 rounded-md shrink-0">
+                            <span dir="ltr" className="inline-flex items-center gap-1 text-xs font-bold tabular-nums text-primary bg-primary/10 px-2 py-0.5 rounded-md shrink-0">
                               {chipContent}
                             </span>
                           )}
                           {clip && (
-                            <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+                            <span dir="ltr" className="text-[11px] font-medium tabular-nums text-muted-foreground">
                               {formatDuration(duration)}
                             </span>
                           )}

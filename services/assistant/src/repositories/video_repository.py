@@ -56,36 +56,18 @@ class MongoVideoRepository:
             return None
 
     def _to_entity(self, doc: dict) -> VideoContext:
-        """Convert a MongoDB document to a VideoContext dataclass."""
-        # Extract tabs: prefer v2 assembledTabs, fall back to triage.tabs
-        tabs: list[dict] = []
-        assembled_tabs = doc.get("assembledTabs")
-        if assembled_tabs and isinstance(assembled_tabs, list):
-            tabs = assembled_tabs
-        else:
-            triage = doc.get("triage")
-            if isinstance(triage, dict):
-                triage_tabs = triage.get("tabs")
-                if isinstance(triage_tabs, list):
-                    tabs = triage_tabs
+        """Convert a MongoDB document to a VideoContext dataclass.
 
-        # Extract summary from synthesis
-        summary = ""
-        synthesis = doc.get("synthesis")
-        if isinstance(synthesis, dict):
-            summary = synthesis.get("summary", "")
+        Reads three schema shapes:
+        - new: ``tabs`` + ``meta`` at top level
+        - v2:  ``assembledTabs`` + ``synthesis`` at top level
+        - v1:  ``triage.tabs`` + ``synthesis``/``summary``
+        """
+        tabs = _resolve_tabs(doc)
+        summary = _resolve_summary(doc)
+        takeaways = _resolve_takeaways(doc)
 
-        # Extract takeaways from synthesis
-        takeaways: list[str] = []
-        if isinstance(synthesis, dict):
-            raw_takeaways = synthesis.get("takeaways", [])
-            if isinstance(raw_takeaways, list):
-                takeaways = [str(t) for t in raw_takeaways if t]
-
-        # Extract output data (full extraction result)
         output_data = doc.get("output")
-
-        # Language support
         language = doc.get("language", "en") or "en"
         synthesis_en = doc.get("synthesis_en")
 
@@ -101,3 +83,70 @@ class MongoVideoRepository:
             language=language,
             synthesis_en=synthesis_en,
         )
+
+
+# ─── Schema shape resolvers ───
+# Cover three known shapes (new / v2 / v1) without forcing a data migration.
+
+
+def _resolve_tabs(doc: dict) -> list[dict]:
+    """Resolve tab list from any known shape."""
+    for candidate in (doc.get("tabs"), doc.get("assembledTabs")):
+        if isinstance(candidate, list) and candidate:
+            return candidate
+
+    triage = doc.get("triage")
+    if isinstance(triage, dict):
+        triage_tabs = triage.get("tabs")
+        if isinstance(triage_tabs, list) and triage_tabs:
+            return triage_tabs
+
+    pipeline = doc.get("pipeline")
+    if isinstance(pipeline, dict):
+        pipeline_triage = pipeline.get("triage")
+        if isinstance(pipeline_triage, dict):
+            pt_tabs = pipeline_triage.get("tabs")
+            if isinstance(pt_tabs, list) and pt_tabs:
+                return pt_tabs
+
+    return []
+
+
+def _resolve_summary(doc: dict) -> str:
+    """Resolve a summary string from any known shape."""
+    meta = doc.get("meta") if isinstance(doc.get("meta"), dict) else None
+    synthesis = doc.get("synthesis") if isinstance(doc.get("synthesis"), dict) else None
+    summary_block = doc.get("summary") if isinstance(doc.get("summary"), dict) else None
+
+    for source, keys in (
+        (meta, ("masterSummary", "tldr")),
+        (synthesis, ("masterSummary", "tldr", "summary")),
+        (summary_block, ("masterSummary", "tldr")),
+    ):
+        if source is None:
+            continue
+        for key in keys:
+            value = source.get(key)
+            if isinstance(value, str) and value.strip():
+                return value
+    return ""
+
+
+def _resolve_takeaways(doc: dict) -> list[str]:
+    """Resolve takeaways list from any known shape."""
+    meta = doc.get("meta") if isinstance(doc.get("meta"), dict) else None
+    synthesis = doc.get("synthesis") if isinstance(doc.get("synthesis"), dict) else None
+    summary_block = doc.get("summary") if isinstance(doc.get("summary"), dict) else None
+
+    for source, keys in (
+        (meta, ("keyTakeaways",)),
+        (synthesis, ("keyTakeaways", "takeaways")),
+        (summary_block, ("keyTakeaways",)),
+    ):
+        if source is None:
+            continue
+        for key in keys:
+            value = source.get(key)
+            if isinstance(value, list) and value:
+                return [str(t) for t in value if t]
+    return []

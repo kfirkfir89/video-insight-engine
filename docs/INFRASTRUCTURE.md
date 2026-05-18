@@ -16,6 +16,8 @@ Docker setup, networking, and environment configuration.
 | vie-mongodb    | mongo:7                 | 27017      | Database           |
 | vie-redis      | redis:7-alpine          | 6379       | Response cache     |
 | vie-qdrant     | qdrant/qdrant:latest    | 6333/6334  | Vector DB (RAG)    |
+| vie-rabbitmq   | rabbitmq:3.13-mgmt      | 5672/15672 | Job queue (AMQP + Management UI) |
+| vie-summarizer-worker | (shares vie-summarizer image) | —  | RabbitMQ consumer for video pipeline jobs |
 
 ---
 
@@ -342,7 +344,66 @@ curl http://localhost:8000/health
 
 # MongoDB
 docker exec vie-mongodb mongosh --eval "db.runCommand('ping')"
+
+# RabbitMQ (management UI)
+open http://localhost:15672   # default creds vie / vie-dev
+curl -u vie:vie-dev http://localhost:15672/api/queues/%2F/vie.pipeline.jobs
+
+# RabbitMQ (AMQP)
+docker exec vie-rabbitmq rabbitmq-diagnostics ping
 ```
+
+---
+
+## RabbitMQ Job Queue
+
+The summarizer pipeline runs from a durable RabbitMQ queue (when `USE_QUEUE_PIPELINE=true`).
+`POST /api/videos` publishes a job; `vie-summarizer-worker` consumes it.
+
+**Topology** (declared by both publisher and consumer with identical args):
+
+| Object | Type | Args |
+| --- | --- | --- |
+| `vie.pipeline` | exchange (direct) | `durable: true` |
+| `vie.pipeline.jobs` | queue | `x-max-priority: 10`, `x-message-ttl: 3600000`, `x-dead-letter-exchange: vie.pipeline.dlx`, `x-dead-letter-routing-key: video.process.dead` |
+| `vie.pipeline.dlx` | exchange (direct) | `durable: true` |
+| `vie.pipeline.dlq` | queue | `durable: true` |
+| Routing key | `video.process` | (main) / `video.process.dead` (DLQ) |
+
+**Payload** (Zod-validated on publisher, Pydantic-validated on consumer):
+
+```jsonc
+{
+  "videoSummaryId": "ObjectId hex",
+  "youtubeId": "11-char string",
+  "url": "https://...",
+  "userId": "ObjectId hex | null",
+  "tier": "free | pro | team",
+  "priority": 1 | 5,                  // free=1, pro/team=5
+  "providers": { "default": "...", "fast": "...", "fallback": "..." } | null,
+  "bypassCache": false,
+  "requestId": "uuid",
+  "attempt": 1,                       // 1-indexed; incremented on republish
+  "createdAt": "ISO-8601"
+}
+```
+
+**Retry policy** — on consumer error the worker republishes to the main queue with
+`attempt = attempt + 1` (up to `WORKER_MAX_RETRIES`, default 3); after the cap the
+message is nacked with `requeue=False`, which the DLX routes into `vie.pipeline.dlq`.
+
+**SSE preservation** — the worker acquires the same Redis pipeline lock that the
+SSE producer uses (`pipeline_event_stream.acquire_lock`). When a client opens
+`/api/videos/:id/stream`, the existing SSE handler sees the lock held and attaches
+as a consumer of the Redis Streams event log — no frontend changes.
+
+**Admin endpoints** (require `X-Admin-Key` header):
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/admin/queue/stats` | Depth, in-flight, DLQ depth (RabbitMQ management API) |
+| GET | `/api/admin/queue/dlq` | List messages in `vie.pipeline.dlq` |
+| POST | `/api/admin/queue/replay` | Re-publish all DLQ messages back to `vie.pipeline.jobs` |
 
 ---
 

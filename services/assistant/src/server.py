@@ -6,6 +6,7 @@ import hmac
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
 from cachetools import TTLCache
 
@@ -15,15 +16,23 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from src.config import settings, validate_internal_secret
-from src.exceptions import AppError
+from src.exceptions import AppError, NotFoundError, ValidationError
 from src.logging_config import configure_structlog, get_logger
 from src.models.requests import ActionRequest, ChatRequest, LibrarySearchRequest
+from src.models.responses import ActionResponse
+from src.repositories.notes_repository import NotesRepository
 from src.repositories.qdrant_repository import QdrantRepository
 from src.repositories.video_repository import MongoVideoRepository
 from src.services.assistant import AssistantService
 from src.services.context_builder import ContextBuilder
 from src.services.llm_provider import LLMProvider
 from src.services.rag import RAGService
+from src.tools.concept_explain import ConceptExplainTool
+from src.tools.cross_reference import CrossReferenceTool
+from src.tools.navigator import NavigatorTool
+from src.tools.note_taker import NoteTakerTool
+from src.tools.quiz_generator import QuizGeneratorTool
+from src.tools.video_qa import VideoQATool
 
 # Configure structured logging before anything else
 configure_structlog(json_format=settings.LOG_FORMAT == "json")
@@ -33,8 +42,12 @@ logger = get_logger(__name__)
 _RATE_LIMIT_MAX: int = 30  # /chat requests per window
 _RATE_LIMIT_WINDOW: int = 60  # seconds
 _LIBRARY_RATE_LIMIT_MAX: int = 60  # /library/search — cheap, no LLM
+_ACTION_RATE_LIMIT_MAX: int = 30  # /action — 30 calls per 60s sliding window (≈1 every 2s on average)
 _rate_tracker: TTLCache[str, list[float]] = TTLCache(maxsize=10000, ttl=_RATE_LIMIT_WINDOW * 2)
 _library_rate_tracker: TTLCache[str, list[float]] = TTLCache(
+    maxsize=10000, ttl=_RATE_LIMIT_WINDOW * 2,
+)
+_action_rate_tracker: TTLCache[str, list[float]] = TTLCache(
     maxsize=10000, ttl=_RATE_LIMIT_WINDOW * 2,
 )
 
@@ -47,6 +60,11 @@ def _check_rate_limit(key: str) -> bool:
 def _check_library_rate_limit(key: str) -> bool:
     """Return True if the library search rate limit is exceeded for *key*."""
     return _check_bucket(_library_rate_tracker, key, _LIBRARY_RATE_LIMIT_MAX)
+
+
+def _check_action_rate_limit(key: str) -> bool:
+    """Return True if the action rate limit is exceeded for *key*."""
+    return _check_bucket(_action_rate_tracker, key, _ACTION_RATE_LIMIT_MAX)
 
 
 def _check_bucket(tracker: TTLCache, key: str, limit: int) -> bool:
@@ -112,13 +130,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Assemble services
     llm = LLMProvider()
     context_builder = ContextBuilder()
-    app.state.assistant_service = AssistantService(
+    notes_repo = NotesRepository(db)
+    assistant_service = AssistantService(
         llm=llm,
         rag=rag_service,
         video_repo=video_repo,
         context_builder=context_builder,
         settings=settings,
     )
+
+    # Register tools — uses primary (Sonnet) by default; quiz uses fast tier internally.
+    assistant_service.register_tool(VideoQATool(rag=rag_service, llm=llm))
+    assistant_service.register_tool(NavigatorTool(video_repo=video_repo))
+    assistant_service.register_tool(QuizGeneratorTool(llm=llm))
+    assistant_service.register_tool(NoteTakerTool(notes_repo=notes_repo))
+    assistant_service.register_tool(ConceptExplainTool(rag=rag_service, llm=llm))
+    assistant_service.register_tool(CrossReferenceTool(rag=rag_service, llm=llm))
+
+    app.state.assistant_service = assistant_service
     # Expose rag_service directly for /library/search (no LLM needed).
     app.state.rag_service = rag_service
 
@@ -255,18 +284,98 @@ def create_app() -> FastAPI:
             content={"results": [r.model_dump() for r in results]},
         )
 
-    @application.post("/action", status_code=501)
+    @application.post("/action")
     async def action(
-        _request: ActionRequest,
+        request: ActionRequest,
+        req: Request,
         x_internal_secret: str = Header(..., alias="X-Internal-Secret"),
     ) -> JSONResponse:
-        """Perform a structured action on a video (Phase 2)."""
+        """Perform a structured action on a video.
+
+        Dispatches to a registered tool based on ``action`` (save_note,
+        quiz_me, find_moment, explain). The caller (vie-api) is expected to
+        have verified ownership before forwarding.
+        """
         if not hmac.compare_digest(x_internal_secret, settings.INTERNAL_SECRET):
             raise HTTPException(status_code=403, detail="Forbidden")
 
+        user_id = req.headers.get("X-User-Id")
+        rate_key = user_id or request.video_id
+        if _check_action_rate_limit(rate_key):
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": "Rate limit exceeded — try again shortly",
+                    "code": "RATE_LIMIT_EXCEEDED",
+                },
+            )
+
+        service: AssistantService | None = getattr(req.app.state, "assistant_service", None)
+        if service is None:
+            raise HTTPException(status_code=503, detail="Service not ready")
+
+        trace_id = uuid4().hex[:12]
+        try:
+            result = await service.dispatch_action(
+                action=request.action,
+                video_id=request.video_id,
+                params=dict(request.params),
+                user_id=user_id,
+            )
+        except ValidationError as exc:
+            logger.warning(
+                "action_validation_failed",
+                trace_id=trace_id,
+                action=request.action,
+                error=exc.message,
+            )
+            return JSONResponse(
+                status_code=exc.status_code,
+                content=ActionResponse(
+                    success=False,
+                    action=request.action,
+                    data=None,
+                    error=exc.message,
+                    trace_id=trace_id,
+                ).model_dump(),
+            )
+        except NotFoundError as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content=ActionResponse(
+                    success=False,
+                    action=request.action,
+                    data=None,
+                    error=exc.message,
+                    trace_id=trace_id,
+                ).model_dump(),
+            )
+        except AppError as exc:
+            logger.exception(
+                "action_app_error",
+                trace_id=trace_id,
+                action=request.action,
+            )
+            return JSONResponse(
+                status_code=exc.status_code,
+                content=ActionResponse(
+                    success=False,
+                    action=request.action,
+                    data=None,
+                    error=exc.message,
+                    trace_id=trace_id,
+                ).model_dump(),
+            )
+
         return JSONResponse(
-            status_code=501,
-            content={"error": "Actions are not yet implemented", "code": "NOT_IMPLEMENTED"},
+            status_code=200,
+            content=ActionResponse(
+                success=True,
+                action=request.action,
+                data=result,
+                error=None,
+                trace_id=trace_id,
+            ).model_dump(),
         )
 
     return application

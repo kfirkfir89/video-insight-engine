@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import type { FastifyBaseLogger } from 'fastify';
 import { VideoService } from './video.service.js';
 import { VideoRepository } from '../repositories/video.repository.js';
 import { SummarizerClient } from './summarizer-client.js';
+import { QueuePublisher } from './queue-publisher.service.js';
+import { config } from '../config.js';
 
 // Mock logger for tests
 const mockLogger = {
@@ -41,6 +43,9 @@ describe('VideoService', () => {
   let mockSummarizerClient: {
     triggerSummarization: ReturnType<typeof vi.fn>;
   };
+  let mockQueuePublisher: {
+    publishVideoJob: ReturnType<typeof vi.fn>;
+  };
 
   beforeAll(() => {
     mockVideoRepository = {
@@ -65,9 +70,13 @@ describe('VideoService', () => {
     mockSummarizerClient = {
       triggerSummarization: vi.fn(),
     };
+    mockQueuePublisher = {
+      publishVideoJob: vi.fn().mockResolvedValue({ requestId: 'req-1' }),
+    };
     videoService = new VideoService(
       mockVideoRepository as unknown as VideoRepository,
       mockSummarizerClient as unknown as SummarizerClient,
+      mockQueuePublisher as unknown as QueuePublisher,
       mockLogger
     );
   });
@@ -245,6 +254,76 @@ describe('VideoService', () => {
 
       expect(result.video).toHaveProperty('videoSummaryId');
       expect(result.video.videoSummaryId).toBe(videoSummaryId);
+    });
+
+    describe('queue-driven pipeline (USE_QUEUE_PIPELINE=true)', () => {
+      beforeEach(() => {
+        config.USE_QUEUE_PIPELINE = true;
+      });
+
+      afterEach(() => {
+        config.USE_QUEUE_PIPELINE = false;
+      });
+
+      it('should publish to queue and skip the HTTP summarizer client on cache miss', async () => {
+        const youtubeId = 'dQw4w9WgXcQ';
+        const videoSummaryId = 'summary-queue-1';
+
+        mockVideoRepository.findUserVideoByYoutubeId.mockResolvedValue(null);
+        mockVideoRepository.findCacheByYoutubeId.mockResolvedValue(null);
+        mockVideoRepository.createCacheEntry.mockResolvedValue({
+          _id: { toString: () => videoSummaryId },
+          youtubeId,
+          status: 'pending',
+        });
+        mockVideoRepository.createUserVideo.mockResolvedValue({
+          _id: { toString: () => 'userVideo-queue' },
+          videoSummaryId: { toString: () => videoSummaryId },
+          youtubeId,
+          status: 'pending',
+        });
+
+        await videoService.createVideo(
+          'user-q',
+          'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          { tier: 'pro' },
+        );
+
+        expect(mockQueuePublisher.publishVideoJob).toHaveBeenCalledTimes(1);
+        expect(mockSummarizerClient.triggerSummarization).not.toHaveBeenCalled();
+
+        const arg = mockQueuePublisher.publishVideoJob.mock.calls[0][0];
+        expect(arg.videoSummaryId).toBe(videoSummaryId);
+        expect(arg.youtubeId).toBe(youtubeId);
+        expect(arg.tier).toBe('pro');
+      });
+
+      it('should publish to queue on failed-video retry', async () => {
+        const youtubeId = 'dQw4w9WgXcQ';
+        const videoSummaryId = 'summary-queue-failed';
+
+        mockVideoRepository.findUserVideoByYoutubeId.mockResolvedValue(null);
+        mockVideoRepository.findCacheByYoutubeId.mockResolvedValue({
+          _id: { toString: () => videoSummaryId },
+          youtubeId,
+          status: 'failed',
+        });
+        mockVideoRepository.createUserVideo.mockResolvedValue({
+          _id: { toString: () => 'userVideo-q2' },
+          videoSummaryId: { toString: () => videoSummaryId },
+          youtubeId,
+          status: 'pending',
+        });
+
+        await videoService.createVideo(
+          'user-q',
+          'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          { tier: 'free' },
+        );
+
+        expect(mockQueuePublisher.publishVideoJob).toHaveBeenCalledTimes(1);
+        expect(mockSummarizerClient.triggerSummarization).not.toHaveBeenCalled();
+      });
     });
   });
 });

@@ -1,3 +1,4 @@
+/// <reference types="@testing-library/jest-dom" />
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
@@ -97,10 +98,10 @@ describe('HeroCard', () => {
     expect(screen.getByText('🎉')).toBeInTheDocument();
   });
 
-  it('should render default variant as left-aligned with inline emoji', () => {
+  it('should render default variant as start-aligned (logical) with inline emoji', () => {
     const { container } = render(<HeroCard title="Title" emoji="🎉" />);
     const card = container.firstElementChild as HTMLElement;
-    expect(card.className).toContain('text-left');
+    expect(card.className).toContain('text-start');
     // Default emoji is small (text-xl), not large (text-4xl)
     expect(screen.getByText('🎉').className).toContain('text-xl');
   });

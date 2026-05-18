@@ -6,6 +6,7 @@ import type { FlashcardItem } from '@vie/types';
 import { GlassCard, FadeIn, BackForward, Stepper, Badge, ProgressBar, EmojiMarker } from '@/components/vie';
 import { Celebration } from '../Celebration';
 import { useLabels } from '@/lib/i18n';
+import { useDirection } from '@/contexts/DirectionContext';
 
 import { useTabState } from '@/features/video-output/contexts/TabStateContext';
 import { useTabCoordination } from '../TabCoordinationContext';
@@ -26,6 +27,7 @@ export const FlashDeckInteractive = memo(function FlashDeckInteractive({
   onNavigateTab,
 }: FlashDeckInteractiveProps) {
   const t = useLabels();
+  const { isRTL } = useDirection();
   const tabState = useTabState();
   const tabCoord = useTabCoordination();
   const [shuffleIndices, setShuffleIndices] = useState<number[] | null>(null);
@@ -105,22 +107,27 @@ export const FlashDeckInteractive = memo(function FlashDeckInteractive({
     return needsReview;
   }, [tabState.quizResults, cards.length]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts. Arrow keys map to visual direction: in LTR the
+  // "forward" key is ArrowRight, in RTL it's ArrowLeft. The card behavior
+  // stays the same (advance == "got it", back == "review again") — only the
+  // physical key that triggers each action flips.
   useEffect(() => {
+    const forwardKey = isRTL ? 'ArrowLeft' : 'ArrowRight';
+    const backKey = isRTL ? 'ArrowRight' : 'ArrowLeft';
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === ' ' || e.key === 'Spacebar') {
         e.preventDefault();
         handleFlip();
-      } else if (e.key === 'ArrowRight' && flipped) {
+      } else if (e.key === forwardKey && flipped) {
         markKnown();
-      } else if (e.key === 'ArrowLeft' && flipped) {
+      } else if (e.key === backKey && flipped) {
         markReview();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleFlip, flipped, markKnown, markReview]);
+  }, [handleFlip, flipped, markKnown, markReview, isRTL]);
 
   // Touch swipe handling
   const touchStartX = useRef<number | null>(null);
@@ -133,16 +140,17 @@ export const FlashDeckInteractive = memo(function FlashDeckInteractive({
     touchStartX.current = null;
     const SWIPE_THRESHOLD = 50;
     if (Math.abs(delta) < SWIPE_THRESHOLD) return;
-    if (delta > 0) {
-      // Swipe right
+    // In RTL, forward motion is a swipe to the LEFT (negative delta). Mirror
+    // the mapping so swipe semantics match the reading direction.
+    const forward = isRTL ? delta < 0 : delta > 0;
+    if (forward) {
       if (flipped) markKnown();
       else handleFlip();
     } else {
-      // Swipe left
       if (flipped) markReview();
       else handleFlip();
     }
-  }, [flipped, handleFlip, markKnown, markReview]);
+  }, [flipped, handleFlip, markKnown, markReview, isRTL]);
 
   if (cards.length === 0) return null;
 

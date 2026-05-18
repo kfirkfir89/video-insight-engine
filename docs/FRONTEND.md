@@ -182,9 +182,11 @@ OutputRouter
 
 ### Key Files
 
-- **`contexts/DirectionContext.tsx`** — React context providing `language`, `isRTL`, `dir` ("ltr" | "rtl")
+- **`contexts/DirectionContext.tsx`** — React context providing `language`, `isRTL`, `direction` ("ltr" | "rtl")
+- **`lib/rtl.ts`** — `isRTL(language)` + `directionFor(language)` helpers; canonical RTL ISO 639-1 codes (he, ar, fa, ur, ps, sd, yi, ku, dv)
 - **`lib/i18n.ts`** — UI label translations (English, Hebrew, Arabic); `useLabels()` hook
-- **`OutputRouter.tsx`** — Wraps output tree in `<DirectionProvider language={language} isRTL={isRTL}>`
+- **`OutputRouter.tsx`** — Wraps output tree in `<DirectionProvider language={language} isRTL={isRTLProp ?? isRTLLanguage(language)}>` (falls back to language inference when `meta.isRTL` is absent)
+- **`index.css`** — Registers `@custom-variant rtl (&:where([dir="rtl"], [dir="rtl"] *))` so Tailwind v4 compiles `rtl:` utilities (without this, every `rtl:` class silently drops)
 
 ### RTL Patterns
 
@@ -194,6 +196,9 @@ OutputRouter
 | Directional icons | Normal | `rtl:rotate-180` on chevrons/arrows |
 | Margins/padding | `ml-2`, `mr-2` | Use `ms-2`, `me-2` (logical properties) |
 | Flex direction | Default | Tailwind `rtl:` variant auto-flips |
+| Timestamps / code blocks | Normal | `dir="ltr"` on the element (always LTR — numerals + monospace) |
+| Mixed-script user content | Normal | `dir="auto"` (lyric lines, transcript snippets) |
+| Keyboard / swipe direction | ArrowRight = forward | `useDirection().isRTL` mirrors: ArrowLeft = forward, swipe-left = forward |
 
 ### UI Labels
 

@@ -35,5 +35,7 @@ class ActionResponse(BaseModel):
     """Response from an action request."""
 
     success: bool
+    action: str
     data: dict[str, Any] | None = None
     error: str | None = None
+    trace_id: str

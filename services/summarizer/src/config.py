@@ -166,6 +166,22 @@ class Settings(BaseSettings):
     # Prompt versioning (for regeneration tracking)
     PROMPT_VERSION: str = "v1.0"
 
+    # ─── RabbitMQ worker ────────────────────────────────────────────────
+    # AMQP URL — kept aligned with the API's RABBITMQ_URL in docker-compose.
+    RABBITMQ_URL: str = "amqp://vie:vie-dev@vie-rabbitmq:5672/"
+    # Concurrent jobs processed in one worker process. Cap matches the LLM
+    # provider's parallelism — 2 keeps Anthropic 529 (overloaded) rare.
+    WORKER_CONCURRENCY: int = 2
+    # Re-publish a failed message up to this many times before sending to DLQ.
+    # Tracked via the x-attempt header so retries survive restarts.
+    WORKER_MAX_RETRIES: int = 3
+    # Initial backoff for retry republish (seconds). Doubles each attempt.
+    WORKER_RETRY_BACKOFF_SECONDS: float = 5.0
+    # Prefetch — RabbitMQ pushes at most this many unacked messages to one
+    # consumer. Setting it ~= 2x concurrency keeps the pipeline full without
+    # holding messages a second consumer could be processing.
+    WORKER_PREFETCH: int = 4
+
     @property
     def llm_model(self) -> str:
         """Get the configured LLM model with provider prefix."""

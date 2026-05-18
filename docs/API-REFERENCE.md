@@ -1116,27 +1116,48 @@ data: {"type":"done"}
 
 ## POST /api/videos/:videoSummaryId/action
 
-Execute a predefined action on a video (e.g., generate flashcards, quiz). Currently returns 501 (not implemented).
+Dispatch a structured action to the assistant service. Proxies to `POST /action` on vie-assistant after verifying ownership.
 
-**Auth:** Bearer token required.
+**Auth:** Bearer token required. Ownership is enforced against the video summary.
 
 **Request:**
 
 ```json
 {
-  "action": "generate_flashcards",
-  "params": {}
+  "action": "save_note",
+  "params": { "text": "Remember this", "timestamp": "1:23" }
 }
 ```
 
-**Response (501):**
+**Supported actions:**
+
+| Action | Tool | Required params | Optional params |
+|--------|------|-----------------|-----------------|
+| `save_note` | `note_taker` | `text` | `timestamp` |
+| `quiz_me` | `quiz_generator` | — | `topic`, `num_questions` |
+| `find_moment` | `navigator` | `query` | — |
+| `explain` | `concept_explain` | `concept` | — |
+
+**Response (200):**
 
 ```json
 {
-  "error": "NOT_IMPLEMENTED",
-  "message": "Action endpoints coming soon"
+  "success": true,
+  "action": "save_note",
+  "data": { "saved": true, "note_id": "uuid-here" },
+  "error": null,
+  "trace_id": "abcdef012345"
 }
 ```
+
+The same envelope is returned for action-level errors (400/404) with `success: false` and `error` populated. `trace_id` is a 12-char hex ID — surface it to the user when reporting bugs.
+
+**Errors:**
+
+- `400`: Invalid action body or missing required param (e.g., `save_note` without `text`)
+- `401`: Missing or invalid auth
+- `404`: User has no access to the video
+- `502`: Assistant service unavailable
 
 ---
 

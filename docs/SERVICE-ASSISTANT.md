@@ -204,7 +204,50 @@ Semantic search across a library of videos. Pure retrieval — no LLM call. Requ
 
 ### `POST /action`
 
-Structured action endpoint. Returns `501 Not Implemented` (Phase 2).
+Structured action endpoint — dispatches to a registered tool based on `action`.
+
+**Headers**
+- `X-Internal-Secret: <secret>` — required
+- `X-User-Id: <user_id>` — optional; used to attribute notes and key the rate limit bucket
+
+**Request:**
+```json
+{
+  "video_id": "abc123",
+  "action": "save_note",
+  "params": { "text": "Remember this for later" }
+}
+```
+
+**Actions and required params:**
+
+| Action | Tool | Required params | Optional params |
+|--------|------|-----------------|-----------------|
+| `save_note` | `note_taker` | `text` | `timestamp` |
+| `quiz_me` | `quiz_generator` | (none) | `topic`, `num_questions` |
+| `find_moment` | `navigator` | `query` | — |
+| `explain` | `concept_explain` | `concept` | — |
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "action": "save_note",
+  "data": { "saved": true, "note_id": "uuid" },
+  "error": null,
+  "trace_id": "abcdef012345"
+}
+```
+
+The same envelope is used for 400/404 with `success: false` and `error` populated. `trace_id` is a 12-char hex ID for log correlation.
+
+**Errors:**
+- `400` — missing required param (e.g., `save_note` without `text`)
+- `403` — invalid or missing `X-Internal-Secret`
+- `404` — video not found
+- `422` — invalid `action` value at schema level
+- `429` — rate limit exceeded (30/min/caller — keyed on `X-User-Id` if present, else falls back to `video_id`)
+- `503` — assistant not initialized
 
 ---
 

@@ -1,0 +1,61 @@
+import { describe, it, expect, vi } from 'vitest';
+import type { Db } from 'mongodb';
+import type { FastifyBaseLogger } from 'fastify';
+import { createContainer } from './container.js';
+import { QueuePublisher } from './services/queue-publisher.service.js';
+
+/**
+ * `Db.collection()` is called in every repository constructor. We hand back
+ * mock collections so the container builds without a live Mongo connection.
+ */
+function makeMockDb(): Db {
+  const mockCollection = {
+    findOne: vi.fn(),
+    find: vi.fn(),
+    insertOne: vi.fn(),
+    updateOne: vi.fn(),
+    deleteOne: vi.fn(),
+    createIndex: vi.fn(),
+    createIndexes: vi.fn(),
+    aggregate: vi.fn(),
+    countDocuments: vi.fn(),
+  };
+  return { collection: vi.fn(() => mockCollection) } as unknown as Db;
+}
+
+const mockLogger = {
+  info: () => {}, error: () => {}, warn: () => {},
+  debug: () => {}, trace: () => {}, fatal: () => {},
+  child: () => mockLogger, level: 'silent', silent: () => {},
+} as unknown as FastifyBaseLogger;
+
+describe('createContainer', () => {
+  it('exposes a QueuePublisher in the container', () => {
+    const container = createContainer(makeMockDb(), mockLogger, {
+      queueChannelSupplier: async () => {
+        throw new Error('not used in this test');
+      },
+    });
+
+    expect(container.queuePublisher).toBeInstanceOf(QueuePublisher);
+  });
+
+  it('routes publisher calls through the supplied channel supplier', async () => {
+    let called = 0;
+    const container = createContainer(makeMockDb(), mockLogger, {
+      queueChannelSupplier: async () => {
+        called++;
+        throw new Error('marker');
+      },
+    });
+
+    await expect(container.queuePublisher.publishVideoJob({
+      videoSummaryId: 'a'.repeat(24),
+      youtubeId: 'dQw4w9WgXcQ',
+      url: 'https://youtu.be/dQw4w9WgXcQ',
+      userId: 'u1',
+      tier: 'free',
+    })).rejects.toThrow('marker');
+    expect(called).toBe(1);
+  });
+});

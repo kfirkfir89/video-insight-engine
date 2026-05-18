@@ -12,6 +12,7 @@ import { corsPlugin } from './plugins/cors.js';
 import { rateLimitPlugin } from './plugins/rate-limit.js';
 import { websocketPlugin } from './plugins/websocket.js';
 import { tierPlugin } from './plugins/tier.js';
+import { rabbitmqPlugin } from './plugins/rabbitmq.js';
 
 // Routes
 import { authRoutes } from './routes/auth.routes.js';
@@ -26,6 +27,7 @@ import { ssrRoutes } from './routes/ssr.routes.js';
 import { overrideRoutes } from './routes/override.routes.js';
 import { paymentRoutes } from './routes/payment.routes.js';
 import { preferencesRoutes, userUsageRoutes } from './routes/preferences.routes.js';
+import { adminQueueRoutes } from './routes/admin/queue.routes.js';
 
 export interface BuildAppOptions {
   logger?: FastifyServerOptions['logger'];
@@ -80,8 +82,20 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   await fastify.register(jwtPlugin);
   await fastify.register(websocketPlugin);
 
+  // RabbitMQ is only required when USE_QUEUE_PIPELINE is on. Registering
+  // conditionally means dev environments without RabbitMQ still boot cleanly
+  // and route through the legacy HTTP path.
+  if (config.USE_QUEUE_PIPELINE) {
+    await fastify.register(rabbitmqPlugin);
+  }
+
   // Create container and decorate (allow partial override for testing)
-  const container = createContainer(fastify.mongo.db, fastify.log);
+  const channelSupplier = config.USE_QUEUE_PIPELINE
+    ? () => fastify.rabbitmq.getChannel()
+    : undefined;
+  const container = createContainer(fastify.mongo.db, fastify.log, {
+    queueChannelSupplier: channelSupplier,
+  });
   if (options?.container) {
     Object.assign(container, options.container);
   }
@@ -162,6 +176,7 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   await fastify.register(preferencesRoutes, { prefix: '/api/users/me/preferences' });
   await fastify.register(userUsageRoutes, { prefix: '/api/users/me/usage' });
   await fastify.register(internalRoutes, { prefix: '/internal' });
+  await fastify.register(adminQueueRoutes, { prefix: '/api/admin/queue' });
 
   // SSR routes (top-level, no /api prefix — for social media crawlers)
   await fastify.register(ssrRoutes);

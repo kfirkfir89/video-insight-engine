@@ -29,11 +29,14 @@ class ChatRequest(BaseModel):
     )
 
 
+ActionName = Literal["save_note", "quiz_me", "find_moment", "explain"]
+
+
 class ActionRequest(BaseModel):
     """Request to perform an action on a video."""
 
     video_id: str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_\-]+$")
-    action: str
+    action: ActionName
     params: dict[str, str | int | float | bool] = Field(default_factory=dict)
 
 

@@ -23,7 +23,7 @@ const heroCardVariants = cva(
   {
     variants: {
       variant: {
-        default: 'p-5 text-left',
+        default: 'p-5 text-start',
         marketing: 'p-6 text-center vie-pointer-glow--strong',
       },
     },

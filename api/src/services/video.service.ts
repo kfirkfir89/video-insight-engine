@@ -1,8 +1,10 @@
 import { FastifyBaseLogger } from 'fastify';
 import { VideoRepository, VideoSummaryCacheDocument } from '../repositories/video.repository.js';
 import { SummarizerClient, type ProviderConfig } from './summarizer-client.js';
+import { QueuePublisher } from './queue-publisher.service.js';
+import { config } from '../config.js';
 import { extractYoutubeId } from '../utils/youtube.js';
-import { InvalidYouTubeUrlError, VideoNotFoundError, VersionCreationError, InvalidCategoryError } from '../utils/errors.js';
+import { InvalidYouTubeUrlError, VideoNotFoundError, VersionCreationError, InvalidCategoryError, QueuePublishError } from '../utils/errors.js';
 import { buildMetaFromDoc, buildTabsFromDoc } from '../utils/meta-builder.js';
 import type { UserTier } from '@vie/types';
 
@@ -36,8 +38,65 @@ export class VideoService {
   constructor(
     private readonly videoRepository: VideoRepository,
     private readonly summarizerClient: SummarizerClient,
+    private readonly queuePublisher: QueuePublisher,
     private readonly logger: FastifyBaseLogger
   ) {}
+
+  /**
+   * Dispatch a pipeline run via either the legacy HTTP path or the queue.
+   * Falls back to HTTP if the queue publish fails — the DB row is already in
+   * `pending`, so the SSE handler can still drive the pipeline directly when
+   * the frontend connects.
+   */
+  private async dispatchPipeline(
+    payload: {
+      videoSummaryId: string;
+      youtubeId: string;
+      url: string;
+      userId: string;
+      tier: UserTier;
+      providers?: ProviderConfig;
+      bypassCache?: boolean;
+    },
+  ): Promise<void> {
+    if (config.USE_QUEUE_PIPELINE) {
+      try {
+        await this.queuePublisher.publishVideoJob({
+          videoSummaryId: payload.videoSummaryId,
+          youtubeId: payload.youtubeId,
+          url: payload.url,
+          userId: payload.userId,
+          tier: payload.tier,
+          providers: payload.providers,
+          bypassCache: payload.bypassCache,
+        });
+        return;
+      } catch (err) {
+        // Only swallow broker-side / validation failures (QueuePublishError).
+        // Anything else is a real bug and should surface to the caller —
+        // masking it with the HTTP fallback would hide schema regressions.
+        if (!(err instanceof QueuePublishError)) {
+          throw err;
+        }
+        this.logger.error(
+          {
+            err,
+            videoSummaryId: payload.videoSummaryId,
+            youtubeId: payload.youtubeId,
+          },
+          'Queue publish failed, falling back to HTTP summarizer call',
+        );
+      }
+    }
+
+    this.summarizerClient.triggerSummarization({
+      videoSummaryId: payload.videoSummaryId,
+      youtubeId: payload.youtubeId,
+      url: payload.url,
+      userId: payload.userId,
+      providers: payload.providers,
+    });
+  }
 
   async createVideo(userId: string, url: string, options: CreateVideoOptions) {
     const { folderId, bypassCache = false, providers, tier } = options;
@@ -102,13 +161,15 @@ export class VideoService {
             this.logger.warn({ youtubeId, error: err }, 'Failed to cleanup old versions');
           });
 
-          // 6. Trigger summarization
-          this.summarizerClient.triggerSummarization({
+          // 6. Trigger summarization (queue or HTTP, controlled by USE_QUEUE_PIPELINE)
+          await this.dispatchPipeline({
             videoSummaryId: cacheEntry._id.toString(),
             youtubeId,
             url,
             userId,
+            tier,
             providers,
+            bypassCache: true,
           });
 
           return {
@@ -216,11 +277,12 @@ export class VideoService {
       // Previous attempt failed - retry summarization
       await this.videoRepository.incrementRetryCount(cached._id.toString());
 
-      this.summarizerClient.triggerSummarization({
+      await this.dispatchPipeline({
         videoSummaryId: cached._id.toString(),
         youtubeId,
         url,
         userId,
+        tier,
         providers,
       });
 
@@ -254,12 +316,13 @@ export class VideoService {
       ...(expiresAtForNew && { expiresAt: expiresAtForNew }),
     });
 
-    // Trigger summarization via HTTP (fire and forget)
-    this.summarizerClient.triggerSummarization({
+    // Trigger summarization (queue or HTTP based on USE_QUEUE_PIPELINE flag)
+    await this.dispatchPipeline({
       videoSummaryId: cacheEntry._id.toString(),
       youtubeId,
       url,
       userId,
+      tier,
       providers,
     });
 

@@ -1,0 +1,117 @@
+"""RabbitMQ-driven worker for the video summarization pipeline.
+
+The runner separates **process_message** (pure async function, easy to test)
+from the broker/loop concerns. Tests inject stubs for ``run_pipeline`` and
+``republish``; the entrypoint (``__main__``) wires the real pipeline and an
+aio-pika publisher.
+
+Retry policy (matches docs/INFRASTRUCTURE.md):
+- Validation error → reject(requeue=False) → DLX → DLQ
+- Pipeline error & ``attempt < max_retries`` → republish with attempt+1,
+  ack the original (treated as handled — the retry is a new message)
+- Pipeline error & ``attempt >= max_retries`` → reject(requeue=False) → DLQ
+"""
+
+from __future__ import annotations
+
+import enum
+import json
+import logging
+from collections.abc import Awaitable, Callable
+from typing import Any
+
+from pydantic import ValidationError
+
+from src.worker.payload import VideoJobPayload
+
+logger = logging.getLogger(__name__)
+
+
+class JobOutcome(enum.Enum):
+    """What happened to a single message — mostly for tests/observability."""
+
+    SUCCESS = "success"
+    RETRIED = "retried"
+    PERMANENT_FAILURE = "permanent_failure"
+
+
+PipelineDriver = Callable[[VideoJobPayload], Awaitable[None]]
+RepublishHook = Callable[[VideoJobPayload], Awaitable[None]]
+
+
+class WorkerRunner:
+    """Drives messages through the pipeline with retry + DLQ semantics."""
+
+    def __init__(
+        self,
+        run_pipeline: PipelineDriver,
+        republish: RepublishHook,
+        max_retries: int,
+    ) -> None:
+        self._run_pipeline = run_pipeline
+        self._republish = republish
+        self._max_retries = max_retries
+
+    async def process_message(self, message: Any) -> JobOutcome:
+        """Handle a single aio-pika IncomingMessage.
+
+        Always exits with the message in a terminal state (acked or rejected).
+        Returns the outcome so the loop can update metrics.
+        """
+        try:
+            data = json.loads(message.body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            logger.error("worker_payload_decode_failed: %s", e)
+            await message.reject(requeue=False)
+            return JobOutcome.PERMANENT_FAILURE
+
+        try:
+            payload = VideoJobPayload.model_validate(data)
+        except ValidationError as e:
+            logger.error("worker_payload_invalid: %s", e.errors())
+            await message.reject(requeue=False)
+            return JobOutcome.PERMANENT_FAILURE
+
+        try:
+            await self._run_pipeline(payload)
+        except Exception as exc:
+            return await self._handle_failure(message, payload, exc)
+
+        await message.ack()
+        logger.info(
+            "worker_job_done video=%s attempt=%d request=%s",
+            payload.video_summary_id,
+            payload.attempt,
+            payload.request_id,
+        )
+        return JobOutcome.SUCCESS
+
+    async def _handle_failure(
+        self,
+        message: Any,
+        payload: VideoJobPayload,
+        exc: Exception,
+    ) -> JobOutcome:
+        if payload.attempt >= self._max_retries:
+            logger.error(
+                "worker_job_dlq video=%s attempt=%d max=%d error=%s",
+                payload.video_summary_id,
+                payload.attempt,
+                self._max_retries,
+                exc,
+                exc_info=exc,
+            )
+            await message.reject(requeue=False)
+            return JobOutcome.PERMANENT_FAILURE
+
+        retry_payload = payload.model_copy(update={"attempt": payload.attempt + 1})
+        logger.warning(
+            "worker_job_retry video=%s attempt=%d->next=%d error=%s",
+            payload.video_summary_id,
+            payload.attempt,
+            retry_payload.attempt,
+            exc,
+        )
+        await self._republish(retry_payload)
+        await message.ack()
+        return JobOutcome.RETRIED

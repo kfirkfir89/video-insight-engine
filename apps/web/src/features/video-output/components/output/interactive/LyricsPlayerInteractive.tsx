@@ -71,6 +71,7 @@ export const LyricsPlayerInteractive = memo(function LyricsPlayerInteractive({
               variant="ghost"
               size="bare"
               onClick={() => onSeek(currentSection.timestamp!)}
+              dir="ltr"
               className="text-xs text-primary gap-1"
             >
               <Clock className="h-3 w-3" aria-hidden="true" />
@@ -88,12 +89,13 @@ export const LyricsPlayerInteractive = memo(function LyricsPlayerInteractive({
                     variant="ghost"
                     size="bare"
                     onClick={() => onSeek(line.timestamp!)}
+                    dir="ltr"
                     className="text-xs tabular-nums text-muted-foreground/50 shrink-0 mt-0.5"
                   >
                     {formatTime(line.timestamp)}
                   </Button>
                 )}
-                <p className="text-sm leading-relaxed italic text-foreground/90">{line.line}</p>
+                <p dir="auto" className="text-sm leading-relaxed italic text-foreground/90">{line.line}</p>
               </div>
             </FadeIn>
           ))}
