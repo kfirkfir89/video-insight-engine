@@ -32,6 +32,10 @@ const envSchema = z.object({
   // Cost monitoring
   COST_DAILY_LIMIT: z.string().default('50').transform(Number),
   COST_ALERT_SLACK_WEBHOOK: z.string().optional(),
+  // Per-user daily cost limits in USD (0 disables the limit; -1 means unlimited)
+  USER_COST_LIMIT_FREE: z.string().default('2').transform(Number),
+  USER_COST_LIMIT_PRO: z.string().default('20').transform(Number),
+  USER_COST_LIMIT_TEAM: z.string().default('-1').transform(Number),
   // Analytics (PostHog)
   POSTHOG_API_KEY: z.string().optional(),
 });
@@ -97,4 +101,13 @@ export const config = {
       ? parsedConfig.VIDEO_DAILY_LIMIT * TEST_RATE_LIMIT_MULTIPLIER
       : parsedConfig.VIDEO_DAILY_LIMIT,
   },
+  // Per-user daily LLM cost limits in USD by tier.
+  //   -1 → unlimited (admin/team)
+  //    0 → disabled (treated as unlimited)
+  //   > 0 → enforced hard ceiling at UTC midnight reset
+  COST_LIMITS_PER_TIER: {
+    free: parsedConfig.USER_COST_LIMIT_FREE,
+    pro: parsedConfig.USER_COST_LIMIT_PRO,
+    team: parsedConfig.USER_COST_LIMIT_TEAM,
+  } as Record<'free' | 'pro' | 'team', number>,
 };

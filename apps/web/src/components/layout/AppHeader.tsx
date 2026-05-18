@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UsageTile } from "@/components/usage/UsageTile";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useSidebarToggle } from "@/hooks/use-sidebar-toggle";
@@ -113,6 +114,7 @@ export function AppHeader() {
                 {user.email && (
                   <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                 )}
+                <UsageTile className="mt-3" />
               </VieMenuHeader>
               <VieMenuSeparator />
               <VieMenuItem

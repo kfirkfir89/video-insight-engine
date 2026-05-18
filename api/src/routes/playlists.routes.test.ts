@@ -303,7 +303,8 @@ describe('playlists routes', () => {
         'https://www.youtube.com/playlist?list=PLtest123',
         undefined, // folderId
         100, // default maxVideos
-        undefined // providers
+        undefined, // providers
+        'free', // tier resolved by fastify.resolveTier preHandler
       );
       expect(response.json()).toEqual(mockResult);
     });
@@ -331,7 +332,8 @@ describe('playlists routes', () => {
         'https://www.youtube.com/playlist?list=PLtest123',
         '507f1f77bcf86cd799439011',
         100,
-        undefined
+        undefined,
+        'free',
       );
     });
 
@@ -358,7 +360,8 @@ describe('playlists routes', () => {
         'https://www.youtube.com/playlist?list=PLtest123',
         undefined,
         25,
-        undefined
+        undefined,
+        'free',
       );
     });
 
@@ -393,7 +396,8 @@ describe('playlists routes', () => {
           default: 'anthropic',
           fast: 'openai',
           fallback: 'gemini',
-        }
+        },
+        'free',
       );
     });
 

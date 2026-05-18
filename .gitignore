@@ -3,6 +3,7 @@
 # ================================================
 dev/research/*
 dev/completed/*
+.claude/skills/impeccable2
 # Environment
 .env
 .env.local

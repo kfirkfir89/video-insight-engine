@@ -56,7 +56,7 @@ export async function playlistsRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Body: z.infer<typeof importSchema>;
   }>('/import', {
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticate, fastify.resolveTier],
     config: {
       rateLimit: {
         max: config.RATE_LIMITS.PLAYLIST_IMPORT,
@@ -75,7 +75,8 @@ export async function playlistsRoutes(fastify: FastifyInstance) {
       url,
       folderId,
       maxVideos,
-      providers
+      providers,
+      req.tier.name,
     );
     return reply.code(201).send(result);
   });

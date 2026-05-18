@@ -93,3 +93,19 @@ export function useSharesStats(days = 30) {
 export function useTierDistribution() {
   return useQuery({ queryKey: ['tier-distribution'], queryFn: () => api.tiers.distribution() });
 }
+
+export function useUserCosts(days = 7, limit = 50, offset = 0) {
+  return useQuery({
+    queryKey: ['user-costs', days, limit, offset],
+    queryFn: () => api.users.costs(days, limit, offset),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useUserCostDetail(userId: string | null | undefined, days = 30) {
+  return useQuery({
+    queryKey: ['user-cost-detail', userId, days],
+    queryFn: () => api.users.costDetail(userId!, days),
+    enabled: !!userId,
+  });
+}

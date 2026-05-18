@@ -165,6 +165,151 @@ describe('internal routes', () => {
         });
       });
 
+      // Regression: when a completion event arrives without userId, the route looks up
+      // userVideos. The mock cursor in this suite doesn't implement .project(), so the
+      // route must call .find().toArray() directly.
+      it('should reconcile the user cost cache when a video completes', async () => {
+        const videoSummaryId = new ObjectId().toHexString();
+        const userId = 'completed-user-123';
+
+        const mockUpdateMany = vi.fn().mockResolvedValue({ modifiedCount: 1 });
+        const mockCollection = vi.fn().mockReturnValue({
+          updateMany: mockUpdateMany,
+        });
+        app.mongo.db.collection = mockCollection;
+        app.broadcast = vi.fn();
+
+        mockContainer.costMonitorService.reconcileUserDay.mockResolvedValueOnce(1.42);
+
+        const response = await app.inject({
+          method: 'POST',
+          url: '/internal/status',
+          headers: {
+            'content-type': 'application/json',
+            'x-internal-secret': INTERNAL_SECRET,
+          },
+          payload: {
+            type: 'video.status',
+            payload: {
+              videoSummaryId,
+              userId,
+              status: 'completed',
+            },
+          },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(mockContainer.costMonitorService.reconcileUserDay).toHaveBeenCalledWith(
+          userId,
+          expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        );
+      });
+
+      it('should also reconcile when a video FAILS (so the upfront reservation gets refunded)', async () => {
+        const videoSummaryId = new ObjectId().toHexString();
+        const userId = 'failed-user-456';
+
+        const mockUpdateMany = vi.fn().mockResolvedValue({ modifiedCount: 1 });
+        app.mongo.db.collection = vi.fn().mockReturnValue({ updateMany: mockUpdateMany });
+        app.broadcast = vi.fn();
+
+        mockContainer.costMonitorService.reconcileUserDay.mockResolvedValueOnce(0.42);
+
+        await app.inject({
+          method: 'POST',
+          url: '/internal/status',
+          headers: {
+            'content-type': 'application/json',
+            'x-internal-secret': INTERNAL_SECRET,
+          },
+          payload: {
+            type: 'video.status',
+            payload: { videoSummaryId, userId, status: 'failed' },
+          },
+        });
+
+        expect(mockContainer.costMonitorService.reconcileUserDay).toHaveBeenCalledWith(
+          userId,
+          expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        );
+      });
+
+      it('should look up users in userVideos when the completion event has no userId', async () => {
+        const videoSummaryId = new ObjectId().toHexString();
+        const sharedUserA = new ObjectId();
+        const sharedUserB = new ObjectId();
+
+        const mockUpdateMany = vi.fn().mockResolvedValue({ modifiedCount: 2 });
+        // The route reads `_id` in the broadcast loop, then iterates again for
+        // reconcile — include both fields so both branches succeed.
+        const mockUserVideosFind = vi.fn().mockReturnValue({
+          toArray: vi.fn().mockResolvedValue([
+            { _id: new ObjectId(), userId: sharedUserA },
+            { _id: new ObjectId(), userId: sharedUserB },
+          ]),
+        });
+        app.mongo.db.collection = vi.fn().mockImplementation((name: string) => {
+          if (name === 'userVideos') return { updateMany: mockUpdateMany, find: mockUserVideosFind };
+          return { updateMany: mockUpdateMany };
+        });
+        app.broadcast = vi.fn();
+
+        mockContainer.costMonitorService.reconcileUserDay.mockResolvedValue(1);
+
+        await app.inject({
+          method: 'POST',
+          url: '/internal/status',
+          headers: {
+            'content-type': 'application/json',
+            'x-internal-secret': INTERNAL_SECRET,
+          },
+          payload: {
+            type: 'video.status',
+            // userId intentionally omitted to exercise the fallback branch
+            payload: { videoSummaryId, status: 'completed' },
+          },
+        });
+
+        // Both viewers of the shared video should be reconciled.
+        expect(mockContainer.costMonitorService.reconcileUserDay).toHaveBeenCalledWith(
+          sharedUserA.toHexString(),
+          expect.any(String),
+        );
+        expect(mockContainer.costMonitorService.reconcileUserDay).toHaveBeenCalledWith(
+          sharedUserB.toHexString(),
+          expect.any(String),
+        );
+      });
+
+      it('should not reconcile when a video transitions to processing', async () => {
+        const videoSummaryId = new ObjectId().toHexString();
+        const mockUpdateMany = vi.fn().mockResolvedValue({ modifiedCount: 1 });
+        const mockCollection = vi.fn().mockReturnValue({
+          updateMany: mockUpdateMany,
+        });
+        app.mongo.db.collection = mockCollection;
+        app.broadcast = vi.fn();
+
+        await app.inject({
+          method: 'POST',
+          url: '/internal/status',
+          headers: {
+            'content-type': 'application/json',
+            'x-internal-secret': INTERNAL_SECRET,
+          },
+          payload: {
+            type: 'video.status',
+            payload: {
+              videoSummaryId,
+              userId: 'u1',
+              status: 'processing',
+            },
+          },
+        });
+
+        expect(mockContainer.costMonitorService.reconcileUserDay).not.toHaveBeenCalled();
+      });
+
       it('should accept all valid status values', async () => {
         const statuses = ['pending', 'processing', 'completed', 'failed'];
         const videoSummaryId = new ObjectId().toHexString();
@@ -551,6 +696,79 @@ describe('internal routes', () => {
 
         expect(response.statusCode).toBe(400);
       });
+    });
+  });
+
+  describe('POST /internal/reconcile-costs', () => {
+    it('should reject requests without the internal secret', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/internal/reconcile-costs',
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should reconcile every user when called without a userId', async () => {
+      mockContainer.costMonitorService.reconcileAllUsersForDay.mockResolvedValueOnce({
+        usersReconciled: 3,
+        totalUsd: 12.34,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/internal/reconcile-costs',
+        headers: { 'x-internal-secret': INTERNAL_SECRET },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.usersReconciled).toBe(3);
+      expect(body.totalUsd).toBe(12.34);
+      expect(mockContainer.costMonitorService.reconcileAllUsersForDay).toHaveBeenCalled();
+    });
+
+    it('should reconcile only one user when userId is supplied', async () => {
+      mockContainer.costMonitorService.reconcileUserDay.mockResolvedValueOnce(4.2);
+      const userId = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/internal/reconcile-costs?userId=${userId}&date=2026-05-14`,
+        headers: { 'x-internal-secret': INTERNAL_SECRET },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockContainer.costMonitorService.reconcileUserDay).toHaveBeenCalledWith(
+        userId,
+        '2026-05-14',
+      );
+      expect(response.json()).toEqual({
+        dateKey: '2026-05-14',
+        userId,
+        totalCostUsd: 4.2,
+      });
+    });
+
+    it('should reject an invalid date format', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/internal/reconcile-costs?date=may-14',
+        headers: { 'x-internal-secret': INTERNAL_SECRET },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('should reject a non-ObjectId userId', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/internal/reconcile-costs?userId=not-an-object-id',
+        headers: { 'x-internal-secret': INTERNAL_SECRET },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mockContainer.costMonitorService.reconcileUserDay).not.toHaveBeenCalled();
     });
   });
 });

@@ -59,6 +59,8 @@ video-insight-engine/
 | API contracts | [docs/API-REFERENCE.md](./docs/API-REFERENCE.md) |
 | Service docs | [docs/SERVICE-API.md](./docs/SERVICE-API.md), [SERVICE-SUMMARIZER.md](./docs/SERVICE-SUMMARIZER.md), [SERVICE-ASSISTANT.md](./docs/SERVICE-ASSISTANT.md) |
 | Frontend patterns | [docs/FRONTEND.md](./docs/FRONTEND.md) |
+| LLM cost & cache crediting | [docs/llm-cost-model.md](./docs/llm-cost-model.md) |
+| RAG chunker, embeddings, `/library/search` | [docs/RAG.md](./docs/RAG.md) |
 
 ## Quick Start
 

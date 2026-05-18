@@ -63,6 +63,26 @@ export interface MockContainer {
     getDailySpend: ReturnType<typeof vi.fn>;
     getRecommendedModel: ReturnType<typeof vi.fn>;
     recordUsage: ReturnType<typeof vi.fn>;
+    checkUserCanProcess: ReturnType<typeof vi.fn>;
+    reserveUserCost: ReturnType<typeof vi.fn>;
+    refundReservation: ReturnType<typeof vi.fn>;
+    getUserDailyCost: ReturnType<typeof vi.fn>;
+    incrementUserCost: ReturnType<typeof vi.fn>;
+    getTierLimit: ReturnType<typeof vi.fn>;
+    getUserUsageSummary: ReturnType<typeof vi.fn>;
+    reconcileUserDay: ReturnType<typeof vi.fn>;
+    reconcileAllUsersForDay: ReturnType<typeof vi.fn>;
+  };
+  userCostRepository: {
+    findByUserAndDate: ReturnType<typeof vi.fn>;
+    getEffectiveCost: ReturnType<typeof vi.fn>;
+    incrementDailyCost: ReturnType<typeof vi.fn>;
+    setDailyCost: ReturnType<typeof vi.fn>;
+    refundReservation: ReturnType<typeof vi.fn>;
+    addAdjustment: ReturnType<typeof vi.fn>;
+    findRange: ReturnType<typeof vi.fn>;
+    findAdjustments: ReturnType<typeof vi.fn>;
+    aggregateUsersOverRange: ReturnType<typeof vi.fn>;
   };
   shareRepository: {
     findBySlug: ReturnType<typeof vi.fn>;
@@ -135,6 +155,43 @@ export function createMockContainer(): MockContainer {
       getDailySpend: vi.fn().mockResolvedValue({ total: 0, limit: 50, percentage: 0 }),
       getRecommendedModel: vi.fn().mockResolvedValue('sonnet'),
       recordUsage: vi.fn(),
+      checkUserCanProcess: vi.fn().mockResolvedValue({
+        allowed: true,
+        usedUsd: 0,
+        limitUsd: 2,
+        remainingUsd: 2,
+        resetAt: '2026-05-15T00:00:00.000Z',
+        tier: 'free',
+      }),
+      reserveUserCost: vi.fn().mockResolvedValue({
+        userId: 'test-user-id',
+        dateKey: '2026-05-14',
+        amountUsd: 0.15,
+      }),
+      refundReservation: vi.fn().mockResolvedValue(undefined),
+      getUserDailyCost: vi.fn().mockResolvedValue(0),
+      incrementUserCost: vi.fn().mockResolvedValue(undefined),
+      getTierLimit: vi.fn().mockReturnValue(2),
+      getUserUsageSummary: vi.fn().mockResolvedValue({
+        tier: 'free',
+        today: { date: '2026-05-14', rawUsd: 0, creditAdjustmentUsd: 0, effectiveUsd: 0, videoCount: 0 },
+        limitUsd: 2,
+        remainingUsd: 2,
+        resetAt: '2026-05-15T00:00:00.000Z',
+      }),
+      reconcileUserDay: vi.fn().mockResolvedValue(0),
+      reconcileAllUsersForDay: vi.fn().mockResolvedValue({ usersReconciled: 0, totalUsd: 0 }),
+    },
+    userCostRepository: {
+      findByUserAndDate: vi.fn().mockResolvedValue(null),
+      getEffectiveCost: vi.fn().mockResolvedValue(0),
+      incrementDailyCost: vi.fn().mockResolvedValue(undefined),
+      setDailyCost: vi.fn().mockResolvedValue(undefined),
+      refundReservation: vi.fn().mockResolvedValue(undefined),
+      addAdjustment: vi.fn().mockResolvedValue(undefined),
+      findRange: vi.fn().mockResolvedValue([]),
+      findAdjustments: vi.fn().mockResolvedValue([]),
+      aggregateUsersOverRange: vi.fn().mockResolvedValue([]),
     },
     shareRepository: {
       findBySlug: vi.fn(),

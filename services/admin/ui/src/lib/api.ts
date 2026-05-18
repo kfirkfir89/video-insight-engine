@@ -153,6 +153,49 @@ export interface TierItem {
   percentage: number;
 }
 
+export interface UserCostRow {
+  userId: string;
+  email: string | null;
+  name: string | null;
+  tier: string;
+  totalCostUsd: number;
+  videoCount: number;
+  creditAdjustmentUsd: number;
+  effectiveUsd: number;
+  days: number;
+}
+
+export interface UserDailyRow {
+  date: string;
+  totalCostUsd: number;
+  videoCount: number;
+  creditAdjustmentUsd: number;
+  effectiveUsd: number;
+}
+
+export interface UserCostAdjustment {
+  id: string;
+  date: string;
+  amountUsd: number;
+  reason: string;
+  adminId: string | null;
+  createdAt: string | null;
+}
+
+export interface UserCostDetail {
+  user: UserCostRow;
+  daily: UserDailyRow[];
+  adjustments: UserCostAdjustment[];
+}
+
+export interface GrantCreditResponse {
+  userId: string;
+  date: string;
+  amountUsd: number;
+  creditAdjustmentUsd: number;
+  effectiveUsd: number;
+}
+
 // Usage endpoints
 export const api = {
   usage: {
@@ -194,5 +237,17 @@ export const api = {
   admin: {
     aggregateDaily: (date?: string) =>
       apiFetch<Record<string, unknown>>(`/admin/aggregate-daily${qs({ target_date: date })}`, { method: 'POST' }),
+  },
+  users: {
+    costs: (days = 7, limit = 50, offset = 0) =>
+      apiFetch<UserCostRow[]>(`/users/costs${qs({ days, limit, offset })}`),
+    costDetail: (userId: string, days = 30) =>
+      apiFetch<UserCostDetail>(`/users/${encodeURIComponent(userId)}/costs${qs({ days })}`),
+    grantCredit: (userId: string, body: { amountUsd: number; reason: string; adminId: string; date?: string }) =>
+      apiFetch<GrantCreditResponse>(`/users/${encodeURIComponent(userId)}/grant-credit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
   },
 };

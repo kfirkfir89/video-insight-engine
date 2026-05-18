@@ -43,7 +43,7 @@ apps/web/src/
 │   ├── RegisterPage.tsx
 │   ├── LandingPage.tsx             # Public homepage with URL input
 │   ├── BoardPage.tsx               # Folder explorer + video grid
-│   ├── GeneratePage.tsx            # Centered URL input for new summaries
+│   ├── GeneratePage.tsx            # URL intake + first-run onboarding (value-prop chips, example disclosure, sample URL)
 │   ├── VideoDetailPage.tsx         # Video detail + output rendering
 │   ├── SharePage.tsx               # Public share view (/s/:slug)
 │   └── dev/DesignSystemPage.tsx
@@ -127,7 +127,7 @@ apps/web/src/
 | `/login`         | LoginPage       | Public     | Sign in → redirects to /board       |
 | `/register`      | RegisterPage    | Public     | Sign up → redirects to /board       |
 | `/board`         | BoardPage       | Protected  | Folder explorer + video grid (home) |
-| `/generate`      | GeneratePage    | Protected  | Centered URL input for new summaries|
+| `/generate`      | GeneratePage    | Protected  | URL intake; onboarding affordances collapse for users with ≥1 video |
 | `/video/:id`     | VideoDetailPage | Protected  | Video detail + output rendering     |
 | `/s/:slug`       | SharePage       | Public     | Public read-only shared output      |
 

@@ -6,6 +6,7 @@ import { VideoRepository } from './repositories/video.repository.js';
 import { FolderRepository } from './repositories/folder.repository.js';
 import { UserRepository } from './repositories/user.repository.js';
 import { ShareRepository } from './repositories/share.repository.js';
+import { UserCostRepository } from './repositories/user-cost.repository.js';
 
 // Services
 import { AuthService } from './services/auth.service.js';
@@ -25,6 +26,7 @@ export interface Container {
   folderRepository: FolderRepository;
   userRepository: UserRepository;
   shareRepository: ShareRepository;
+  userCostRepository: UserCostRepository;
 
   // Services
   authService: AuthService;
@@ -45,6 +47,7 @@ export function createContainer(db: Db, logger: FastifyBaseLogger): Container {
   const folderRepository = new FolderRepository(db);
   const userRepository = new UserRepository(db);
   const shareRepository = new ShareRepository(db);
+  const userCostRepository = new UserCostRepository(db);
 
   // Create external clients
   const summarizerClient = new SummarizerClient(logger);
@@ -54,11 +57,11 @@ export function createContainer(db: Db, logger: FastifyBaseLogger): Container {
   const authService = new AuthService(userRepository, logger);
   const videoService = new VideoService(videoRepository, summarizerClient, logger);
   const folderService = new FolderService(folderRepository, logger);
-  const playlistService = new PlaylistService(videoService, folderService, summarizerClient, logger);
+  const costMonitorService = new CostMonitorService(db, logger, userCostRepository);
+  const playlistService = new PlaylistService(videoService, folderService, summarizerClient, logger, costMonitorService);
   const shareService = new ShareService(shareRepository, videoRepository, logger);
   const ogImageService = new OgImageService(logger);
   const paymentService = new PaymentService(userRepository, videoRepository, logger);
-  const costMonitorService = new CostMonitorService(db, logger);
 
   return {
     // Repositories
@@ -66,6 +69,7 @@ export function createContainer(db: Db, logger: FastifyBaseLogger): Container {
     folderRepository,
     userRepository,
     shareRepository,
+    userCostRepository,
 
     // Services
     authService,

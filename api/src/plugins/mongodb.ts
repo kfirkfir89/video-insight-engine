@@ -65,6 +65,18 @@ async function mongodb(fastify: FastifyInstance) {
         { key: { createdAt: 1 }, expireAfterSeconds: 90 * 24 * 60 * 60 }, // 90-day TTL
       ]);
 
+      // userCosts indexes — per-user daily cost aggregates
+      await db.collection('userCosts').createIndexes([
+        { key: { userId: 1, date: 1 }, unique: true },
+        { key: { date: 1 } },
+      ]);
+
+      // userCostAdjustments — admin grant-credit audit log
+      await db.collection('userCostAdjustments').createIndexes([
+        { key: { userId: 1, createdAt: -1 } },
+        { key: { adminId: 1, createdAt: -1 } },
+      ]);
+
       fastify.log.info('MongoDB indexes created');
     } catch (err) {
       fastify.log.warn({ err }, 'Some indexes may already exist or failed to create');

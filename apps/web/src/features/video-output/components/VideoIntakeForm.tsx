@@ -20,6 +20,9 @@ import { cn } from '@/lib/utils';
 import type { PlaylistPreview as PlaylistPreviewType } from '@/api/playlists';
 import { PlaylistPreview } from '@/components/playlists/PlaylistPreview';
 import type { Folder as FolderEntity } from '@/types';
+import { SAMPLE_VIDEO } from '@/features/video-output/lib/onboarding-constants';
+import { ApiError } from '@/api/client';
+import { DailyLimitCallout } from '@/components/usage/DailyLimitCallout';
 
 type Mode = 'video' | 'playlist';
 
@@ -34,9 +37,6 @@ function detectMode(trimmed: string, fallback: Mode): Mode {
   return fallback;
 }
 
-const SAMPLE_URL = 'https://www.youtube.com/watch?v=iDbyYGrswtg';
-const SAMPLE_LABEL = '"Attention Is All You Need" — explained in 8 min';
-
 interface VideoIntakeFormProps {
   className?: string;
 }
@@ -50,6 +50,7 @@ export function VideoIntakeForm({ className }: VideoIntakeFormProps) {
   const [url, setUrl] = useState('');
   const [mode, setMode] = useState<Mode>('video');
   const [error, setError] = useState<string | null>(null);
+  const [dailyLimit, setDailyLimit] = useState<{ resetAt: string | null; limitUsd: number | null } | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [playlistPreview, setPlaylistPreview] = useState<PlaylistPreviewType | null>(null);
 
@@ -98,6 +99,7 @@ export function VideoIntakeForm({ className }: VideoIntakeFormProps) {
       }
       try {
         setError(null);
+        setDailyLimit(null);
         const result = await addVideo.mutateAsync({
           url: trimmed,
           folderId: selectedFolderId ?? undefined,
@@ -112,6 +114,15 @@ export function VideoIntakeForm({ className }: VideoIntakeFormProps) {
           );
         }
       } catch (err) {
+        if (err instanceof ApiError && err.code === 'DAILY_LIMIT_REACHED') {
+          const details = err.details ?? {};
+          setDailyLimit({
+            resetAt: typeof details.resetAt === 'string' ? details.resetAt : null,
+            limitUsd: typeof details.limitUsd === 'number' ? details.limitUsd : null,
+          });
+          setError(null);
+          return;
+        }
         setError(
           err instanceof Error
             ? err.message
@@ -154,12 +165,12 @@ export function VideoIntakeForm({ className }: VideoIntakeFormProps) {
   };
 
   const handleSampleClick = () => {
-    setUrl(SAMPLE_URL);
+    setUrl(SAMPLE_VIDEO.url);
     setError(null);
     setMode('video');
     inputRef.current?.focus();
     requestAnimationFrame(() => {
-      inputRef.current?.setSelectionRange(SAMPLE_URL.length, SAMPLE_URL.length);
+      inputRef.current?.setSelectionRange(SAMPLE_VIDEO.url.length, SAMPLE_VIDEO.url.length);
     });
   };
 
@@ -247,8 +258,16 @@ export function VideoIntakeForm({ className }: VideoIntakeFormProps) {
         </p>
       )}
 
+      {/* Daily cost limit callout (429) */}
+      {dailyLimit && (
+        <DailyLimitCallout
+          limitUsd={dailyLimit.limitUsd}
+          resetAtIso={dailyLimit.resetAt}
+        />
+      )}
+
       {/* Error */}
-      {error && (
+      {error && !dailyLimit && (
         <p
           id="intake-error"
           role="alert"
@@ -264,6 +283,7 @@ export function VideoIntakeForm({ className }: VideoIntakeFormProps) {
           type="button"
           onClick={handleSampleClick}
           disabled={isLoading}
+          data-testid="sample-url-button"
           className={cn(
             'mt-4 mx-auto flex items-center gap-2 text-xs text-muted-foreground/80',
             'hover:text-foreground transition-colors',
@@ -271,7 +291,7 @@ export function VideoIntakeForm({ className }: VideoIntakeFormProps) {
           )}
         >
           <span aria-hidden="true">↘</span>
-          Try an example: {SAMPLE_LABEL}
+          Try an example: {SAMPLE_VIDEO.label}
         </button>
       )}
 
