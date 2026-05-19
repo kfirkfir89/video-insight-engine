@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, AsyncGenerator
 
 from llm_common.context import llm_feature_var
 
+from src.config import settings
 from src.services.pipeline.pipeline_helpers import sse_event, validate_duration
 from src.services.video.description_analyzer import analyze_description, DescriptionAnalysis
 
@@ -35,7 +36,10 @@ async def run_phase_metadata(ctx: PipelineContext) -> AsyncGenerator[str, None]:
     try:
         description_analysis = await analyze_description(
             ctx.video_data.description or "",
-            fast_model=ctx.llm_service.fast_model,
+            fast_model=(
+                settings.get_stage_model("description_analysis")
+                or ctx.llm_service.fast_model
+            ),
         )
         ctx.description_analysis = description_analysis
         if isinstance(description_analysis, DescriptionAnalysis) and description_analysis.has_content:

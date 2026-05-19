@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from litellm.exceptions import (
@@ -31,11 +32,29 @@ MODEL_CHAR_LIMITS: dict[str, int] = {
     "anthropic/claude-haiku-4-5-20251001": 600_000,
     "openai/gpt-4o": 380_000,
     "openai/gpt-4o-mini": 380_000,
+    "openai/gpt-5-mini": 380_000,
     "gemini/gemini-2.5-flash": 3_000_000,
     "gemini/gemini-2.5-flash-lite": 3_000_000,
 }
 
 DEFAULT_CHAR_LIMIT = 300_000
+
+
+@lru_cache(maxsize=8)
+def _wrap_with_override(model: str) -> LLMService:
+    """Build (and cache) a one-off LLMService pinned to ``model``.
+
+    Used by ``call_llm_with_retry`` when the caller passes ``model_override``.
+    The cache keeps allocations off the hot path — there are at most ~7
+    override targets (one per pipeline stage), and the cached ``LLMService``
+    holds no per-call state. Local import keeps the heavy LLMProvider /
+    LLMService imports out of module-import time (this module is imported by
+    every pipeline stage).
+    """
+    from src.services.llm import LLMService as _LLMService
+    from src.services.llm_provider import LLMProvider as _LLMProvider
+    provider = _LLMProvider(model=model, fast_model=model)
+    return _LLMService(provider)
 
 
 def truncate_prompt_if_needed(prompt: str, model: str) -> str:
@@ -66,6 +85,7 @@ async def call_llm_with_retry(
     json_mode: bool = False,
     cache_static: str | None = None,
     propagate_rate_limit: bool = False,
+    model_override: str | None = None,
 ) -> str | None:
     """Call LLM with timeout and retry. Returns raw string or None.
 
@@ -83,10 +103,19 @@ async def call_llm_with_retry(
             extractor so it can route rate-limited batches into the sequential
             fallback. Default ``False`` preserves the "never raises" contract
             for every other call site.
+        model_override: When non-None, wrap ``llm_service`` with a one-off
+            provider pinned to this model. Stages look up their per-stage
+            override via ``settings.get_stage_model(stage_name)`` and pass
+            it here explicitly. Default ``None`` means "use the service as
+            given" — keeps tests that pass a ``MagicMock`` for ``llm_service``
+            working with no extra setup.
 
     Returns:
         Raw LLM response string, or None if all attempts failed.
     """
+    if model_override:
+        llm_service = _wrap_with_override(model_override)
+
     # Safety net: truncate oversized prompts
     model_name = llm_service.fast_model if use_fast_model else llm_service.model
     prompt = truncate_prompt_if_needed(prompt, model_name)

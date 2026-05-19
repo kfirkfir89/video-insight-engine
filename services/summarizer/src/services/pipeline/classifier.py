@@ -13,6 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ...config import settings
 from ...utils.json_parsing import parse_json_response
 from ...utils.llm_retry import call_llm_with_retry
 from .pipeline_helpers import sanitize_for_prompt
@@ -138,6 +139,7 @@ async def classify_domain_format(
         max_tokens=250, timeout=10.0, max_retries=1,
         stage_name="classifier", json_mode=True,
         use_fast_model=True,
+        model_override=settings.get_stage_model("classifier"),
     )
 
     if not raw:

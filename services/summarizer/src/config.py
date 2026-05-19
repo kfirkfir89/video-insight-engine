@@ -1,6 +1,7 @@
 """Configuration settings for vie-summarizer service."""
 
 import logging
+from typing import ClassVar
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
@@ -46,6 +47,22 @@ class Settings(BaseSettings):
     LLM_FALLBACK_PROVIDER: str | None = None  # Optional fallback provider
     LLM_MODEL: str | None = None  # Override default model (e.g., "anthropic/claude-sonnet-4-6")
     LLM_FAST_MODEL: str | None = None  # Override fast model
+
+    # Per-stage model overrides (None → fall back to LLM_FAST_MODEL).
+    # Defaults reflect the 2026-05-19 fast-tier benchmark winners
+    # (reports/fast-model-bench-20260519-074647.md). Override via env to test
+    # alternatives without rebuilding.
+    # Only the two stages with material wins (enrichment quality +35%,
+    # vision -67% cost) are pinned. Classifier/translation stay on the
+    # default fast tier (gpt-4o-mini); the Gemini Flash-Lite savings were
+    # fractions of a cent — not worth adding a third provider dependency.
+    LLM_CLASSIFIER_MODEL: str | None = None
+    LLM_CHAPTER_DETECT_MODEL: str | None = None
+    LLM_DESCRIPTION_MODEL: str | None = None
+    LLM_SYNTHESIS_MODEL: str | None = None
+    LLM_ENRICHMENT_MODEL: str | None = "anthropic/claude-haiku-4-5-20251001"
+    LLM_TRANSLATION_MODEL: str | None = None
+    LLM_VISION_MODEL: str | None = "anthropic/claude-haiku-4-5-20251001"
 
     # Provider API Keys (set for providers you use)
     ANTHROPIC_API_KEY: str | None = None
@@ -203,6 +220,30 @@ class Settings(BaseSettings):
         if self.LLM_FALLBACK_PROVIDER:
             return [get_model(self.LLM_FALLBACK_PROVIDER, "default")]
         return None
+
+    # Map stage_name (as used in call_llm_with_retry) → settings attribute.
+    # Used by stage call sites to look up their per-stage override, and by
+    # the vision / description stages (which bypass the retry wrapper) to
+    # read their own overrides. ClassVar marks this as a class-level
+    # constant — without it, Pydantic v2 might try to interpret it as a
+    # configurable field, which would silently break depending on version.
+    _STAGE_TO_SETTING: ClassVar[dict[str, str]] = {
+        "classifier": "LLM_CLASSIFIER_MODEL",
+        "chapter_detect": "LLM_CHAPTER_DETECT_MODEL",
+        "description_analysis": "LLM_DESCRIPTION_MODEL",
+        "synthesis": "LLM_SYNTHESIS_MODEL",
+        "enrichment": "LLM_ENRICHMENT_MODEL",
+        "translation": "LLM_TRANSLATION_MODEL",
+        "translation_tabs": "LLM_TRANSLATION_MODEL",
+        "translation_meta": "LLM_TRANSLATION_MODEL",
+        "translation_labels": "LLM_TRANSLATION_MODEL",
+        "vision": "LLM_VISION_MODEL",
+    }
+
+    def get_stage_model(self, stage_name: str) -> str | None:
+        """Return the per-stage model override or None to use fast/primary."""
+        attr = self._STAGE_TO_SETTING.get(stage_name)
+        return getattr(self, attr, None) if attr else None
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

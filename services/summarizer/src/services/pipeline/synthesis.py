@@ -6,6 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from ...config import settings
 from ...models.pipeline_types import SynthesisResult
 from ...utils.json_parsing import parse_json_response
 from ...utils.llm_retry import call_llm_with_retry
@@ -54,6 +55,7 @@ async def synthesize(
         llm_service, prompt,
         max_tokens=8192, timeout=30.0, max_retries=2,
         stage_name="synthesis", json_mode=True, use_fast_model=True,
+        model_override=settings.get_stage_model("synthesis"),
     )
     if not raw:
         raise ValueError("Synthesis LLM call failed after retries")

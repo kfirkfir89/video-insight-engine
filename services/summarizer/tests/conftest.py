@@ -4,7 +4,35 @@ import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from src.config import settings as _settings
 from src.models.schemas import ProcessingStatus, ErrorCode
+
+# Names of every per-stage override on the Settings object. Tests never want
+# these to fire — they would wrap a MagicMock with a real ``LLMService`` and
+# trigger live API calls. Kept in sync with config.Settings._STAGE_TO_SETTING.
+_STAGE_OVERRIDE_ATTRS = (
+    "LLM_CLASSIFIER_MODEL",
+    "LLM_CHAPTER_DETECT_MODEL",
+    "LLM_DESCRIPTION_MODEL",
+    "LLM_SYNTHESIS_MODEL",
+    "LLM_ENRICHMENT_MODEL",
+    "LLM_TRANSLATION_MODEL",
+    "LLM_VISION_MODEL",
+)
+
+
+@pytest.fixture(autouse=True)
+def _disable_stage_model_overrides(monkeypatch):
+    """Force every per-stage LLM override to None for the duration of the test.
+
+    Production ships with `LLM_ENRICHMENT_MODEL` and `LLM_VISION_MODEL`
+    pinned to haiku-4.5 in `src/config.py`. Without this fixture, any test
+    that calls a stage function with a `MagicMock` for `llm_service` would
+    trigger `call_llm_with_retry` to replace the mock with a real
+    `LLMService` and make a live API call.
+    """
+    for attr in _STAGE_OVERRIDE_ATTRS:
+        monkeypatch.setattr(_settings, attr, None)
 
 
 def _utc_now() -> datetime:
