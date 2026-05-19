@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from ...config import settings
 from ...utils.json_parsing import parse_json_response
 from ...utils.llm_retry import call_llm_with_retry
 from ...utils.transcript_slicer import slice_transcript_for_chapter
@@ -305,6 +306,7 @@ async def _detect_chapters_with_ai(
             llm_service, prompt,
             max_tokens=2048, timeout=15.0, max_retries=1,
             stage_name="chapter_detect", use_fast_model=True,
+            model_override=settings.get_stage_model("chapter_detect"),
         )
         if not raw:
             return None

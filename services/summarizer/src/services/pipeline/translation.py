@@ -14,6 +14,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ...config import settings
 from ...utils.json_parsing import parse_json_response
 from ...utils.llm_retry import call_llm_with_retry
 from ...utils.language_utils import get_language_name
@@ -124,6 +125,7 @@ async def _translate_json(
             llm_service, prompt,
             max_tokens=16384, timeout=60.0, max_retries=2,
             stage_name=stage_name, json_mode=True, use_fast_model=True,
+            model_override=settings.get_stage_model(stage_name),
         )
         if not raw:
             logger.warning("Translation LLM call failed after retries")

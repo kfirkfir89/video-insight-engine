@@ -7,6 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ...config import settings
 from ...models.pipeline_types import EnrichmentData
 from ...utils.json_parsing import parse_json_response
 from ...utils.llm_retry import call_llm_with_retry
@@ -121,6 +122,7 @@ async def enrich(
             llm_service, prompt,
             max_tokens=8192, timeout=90.0, max_retries=2, stage_name="enrichment",
             json_mode=True, use_fast_model=True,
+            model_override=settings.get_stage_model("enrichment"),
         )
         if not raw:
             logger.warning("Enrichment LLM call failed after retries for %s", primary_tag)

@@ -16,6 +16,8 @@ import os
 import time
 from typing import TYPE_CHECKING, Any
 
+from src.config import settings
+
 if TYPE_CHECKING:
     from src.services.llm_provider import LLMProvider
 
@@ -126,17 +128,23 @@ async def analyze_frames_with_vision(
 
     messages = [{"role": "user", "content": content}]
 
+    # Per-stage vision model override (settings.LLM_VISION_MODEL).  2026-05-19
+    # benchmark (`reports/fast-model-bench-20260519-074647.md`) found
+    # `anthropic/claude-haiku-4-5-20251001` reaches 0.875 scene-match vs the
+    # Sonnet baseline at ~30% of Sonnet's cost.  When unset, falls back to
+    # the caller's provider (primary model). Tests rely on the autouse
+    # ``_disable_stage_model_overrides`` fixture in ``tests/conftest.py`` to
+    # keep this None so MagicMock providers reach the call unmodified.
+    effective_provider = llm_provider
+    vision_model = settings.get_stage_model("vision")
+    if vision_model:
+        from src.services.llm_provider import LLMProvider as _LLMProvider
+        effective_provider = _LLMProvider(model=vision_model, fast_model=vision_model)
+
     started = time.monotonic()
     try:
-        # Vision frame analysis stays on the primary model. Spot-check on
-        # 2026-05-14 (`reports/frame-vision-spotcheck-20260514-101033.json`)
-        # showed gpt-4o-mini agrees with Sonnet on scene_type for only 2/5
-        # frames and diverges on text_visible for every frame. Cost saving
-        # was ~20%, not the ~6× the fast tier achieves on text-only calls —
-        # not worth the OCR/scene regression. Re-evaluate via
-        # `scripts/spotcheck_frame_vision.py` before changing this.
         raw = await asyncio.wait_for(
-            llm_provider.complete_with_messages(
+            effective_provider.complete_with_messages(
                 messages, max_tokens=2000, timeout=timeout, use_fast_model=False,
             ),
             timeout=timeout + 5,  # outer safety net
