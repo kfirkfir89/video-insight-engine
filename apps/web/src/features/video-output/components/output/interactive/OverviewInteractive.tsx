@@ -162,7 +162,7 @@ export const OverviewInteractive = memo(function OverviewInteractive({
       {crossTabLinks && crossTabLinks.length > 0 && onNavigateTab && (
         <FadeIn index={1}>
           <div className="space-y-2">
-            <span className="type-eyebrow px-1">{t.continueExploring}</span>
+            <span className="type-eyebrow px-1 text-[color:var(--vie-accent)]">{t.continueExploring}</span>
             <div
               className="grid gap-2"
               style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}
@@ -243,7 +243,7 @@ export const OverviewInteractive = memo(function OverviewInteractive({
                     a.click();
                     URL.revokeObjectURL(url);
                   }}
-                  className="ms-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/10 transition-colors"
+                  className="ms-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-[color:var(--vie-accent)] hover:bg-[color:var(--vie-accent-muted)] transition-colors"
                   aria-label={`Export ${starredHighlights.size} starred items`}
                 >
                   <Download className="h-3 w-3" aria-hidden="true" />

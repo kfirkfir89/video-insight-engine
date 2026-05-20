@@ -36,7 +36,10 @@ export function GeneratePage() {
 
         <div className="relative max-w-2xl w-full stack-xl py-10">
           <div className="stack-sm text-center">
-            <p className="type-eyebrow text-[0.6875rem] font-mono uppercase tracking-[0.18em] text-muted-foreground/80">
+            {/* Eyebrow diverges from .type-eyebrow defaults: mono family + wider
+                0.18em tracking dial in the "code stamp" feel for the hero copy.
+                Color is muted-foreground/80 so it sits behind the title. */}
+            <p className="type-eyebrow font-mono tracking-[0.18em] text-muted-foreground/80">
               <span className="inline-block h-1 w-1 rounded-full bg-primary align-middle me-2" />
               {/* Default to the returning-user copy while the query is in flight
                   so authenticated users don't see "Welcome" flash into "New summary". */}

@@ -100,6 +100,12 @@ interface UIState {
   selectedVideoIds: string[];
   selectedFolderIds: string[];
 
+  // Favorites — local-only scaffold (NO backend wiring yet).
+  // Persisted via zustand `partialize` so a star survives reloads.
+  // Tracked in dev/active/ROADMAP.md (Priority 4 — "Favorites server sync");
+  // hoist to server-owned `isFavorite` once the endpoint lands.
+  favoriteVideoIds: string[];
+
   // Range selection state
   lastClickedItemId: string | null;  // Anchor for Shift+Click
   itemOrder: string[];  // Flat list of item IDs in display order (prefix: v_ for videos, f_ for folders)
@@ -140,6 +146,10 @@ interface UIState {
   clearSelection: () => void;
   isVideoSelected: (videoId: string) => boolean;
   isFolderSelected: (folderId: string) => boolean;
+
+  // Favorite actions (local-only — see TODO above)
+  toggleFavorite: (videoId: string) => void;
+  isFavorite: (videoId: string) => boolean;
 
   // Range selection actions
   setItemOrder: (items: string[]) => void;
@@ -235,6 +245,9 @@ export const useUIStore = create<UIState>()(
       selectedVideoIds: [],
       selectedFolderIds: [],
 
+      // Favorites (local-only)
+      favoriteVideoIds: [],
+
       // Range selection state
       lastClickedItemId: null,
       itemOrder: [],
@@ -329,6 +342,18 @@ export const useUIStore = create<UIState>()(
       isVideoSelected: (videoId) => get().selectedVideoIds.includes(videoId),
       isFolderSelected: (folderId) => get().selectedFolderIds.includes(folderId),
 
+      // Favorite actions — optimistic local toggle. No network call;
+      // backend wiring tracked in dev/active/ROADMAP.md (Priority 4).
+      toggleFavorite: (videoId) =>
+        set((s) => {
+          const ids = s.favoriteVideoIds;
+          if (ids.includes(videoId)) {
+            return { favoriteVideoIds: ids.filter((id) => id !== videoId) };
+          }
+          return { favoriteVideoIds: [...ids, videoId] };
+        }),
+      isFavorite: (videoId) => get().favoriteVideoIds.includes(videoId),
+
       // Range selection actions
       setItemOrder: (items) => set({ itemOrder: items }),
 
@@ -352,6 +377,7 @@ export const useUIStore = create<UIState>()(
         expandedFolderIds: state.expandedFolderIds,
         sidebarTextSize: state.sidebarTextSize,
         sidebarSortOption: state.sidebarSortOption,
+        favoriteVideoIds: state.favoriteVideoIds,
       }),
     }
   )
@@ -375,3 +401,7 @@ export const useSelectedVideoIds = () => useUIStore((s) => s.selectedVideoIds);
 export const useSelectedFolderIds = () => useUIStore((s) => s.selectedFolderIds);
 export const useSelectionCount = () =>
   useUIStore((s) => s.selectedVideoIds.length + s.selectedFolderIds.length);
+// Favorite selectors
+export const useFavoriteVideoIds = () => useUIStore((s) => s.favoriteVideoIds);
+export const useIsFavorite = (videoId: string) =>
+  useUIStore((s) => s.favoriteVideoIds.includes(videoId));

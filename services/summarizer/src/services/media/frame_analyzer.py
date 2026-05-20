@@ -146,6 +146,8 @@ async def analyze_frames_with_vision(
         raw = await asyncio.wait_for(
             effective_provider.complete_with_messages(
                 messages, max_tokens=2000, timeout=timeout, use_fast_model=False,
+                span_name="frame_vision",
+                span_metadata={"frameCount": len(frame_metadata)},
             ),
             timeout=timeout + 5,  # outer safety net
         )

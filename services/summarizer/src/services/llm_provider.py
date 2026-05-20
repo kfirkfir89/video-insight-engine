@@ -5,6 +5,7 @@ with built-in fallbacks, retries, and cost tracking.
 """
 
 import logging
+import time
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import Any
@@ -20,6 +21,7 @@ from litellm.exceptions import (
 from pydantic import BaseModel
 
 from src.config import settings
+from src.services.llm_telemetry import record_generation, stopwatch_ms_since
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +141,8 @@ class LLMProvider:
         timeout: float | None = None,
         json_mode: bool = False,
         cache_static: str | None = None,
+        span_name: str | None = None,
+        span_metadata: dict[str, Any] | None = None,
     ) -> str:
         """Generate completion from prompt.
 
@@ -175,7 +179,10 @@ class LLMProvider:
             else:
                 messages.append({"role": "user", "content": prompt})
 
-        return await self.complete_with_messages(messages, max_tokens, metadata, timeout=timeout, json_mode=json_mode)
+        return await self.complete_with_messages(
+            messages, max_tokens, metadata, timeout=timeout, json_mode=json_mode,
+            span_name=span_name, span_metadata=span_metadata,
+        )
 
     async def complete_fast(
         self,
@@ -183,6 +190,8 @@ class LLMProvider:
         max_tokens: int = 50,
         timeout: float = 5.0,
         json_mode: bool = False,
+        span_name: str | None = None,
+        span_metadata: dict[str, Any] | None = None,
     ) -> str:
         """Generate quick completion using fast model.
 
@@ -203,9 +212,10 @@ class LLMProvider:
             APIError: General API error
         """
         try:
+            msg_dicts = [{"role": "user", "content": prompt}]
             kwargs: dict[str, Any] = {
                 "model": self._fast_model,
-                "messages": [{"role": "user", "content": prompt}],
+                "messages": msg_dicts,
                 "max_tokens": max_tokens,
                 "timeout": timeout,
                 "num_retries": _LITELLM_NUM_RETRIES,
@@ -213,14 +223,28 @@ class LLMProvider:
             if json_mode:
                 kwargs["response_format"] = {"type": "json_object"}
 
+            start_monotonic = time.monotonic()
             response = await acompletion(**kwargs)
+            latency_ms = stopwatch_ms_since(start_monotonic)
             choice = response.choices[0]
             if choice.finish_reason == "length":
                 logger.warning(
                     "LLM response truncated (finish_reason=length), model=%s, max_tokens=%d",
                     self._fast_model, max_tokens,
                 )
-            return choice.message.content or ""
+            content = choice.message.content or ""
+            if span_name:
+                record_generation(
+                    span_name=span_name,
+                    model=self._fast_model,
+                    msg_dicts=msg_dicts,
+                    content=content,
+                    response=response,
+                    latency_ms=latency_ms,
+                    finish_reason=choice.finish_reason,
+                    extra_metadata=span_metadata,
+                )
+            return content
 
         except RateLimitError as e:
             logger.warning("Rate limited by %s: %s", self._extract_provider(self._fast_model), e)
@@ -240,6 +264,8 @@ class LLMProvider:
         timeout: float | None = None,
         json_mode: bool = False,
         use_fast_model: bool = False,
+        span_name: str | None = None,
+        span_metadata: dict[str, Any] | None = None,
     ) -> str:
         """Generate completion from message list.
 
@@ -250,6 +276,10 @@ class LLMProvider:
             use_fast_model: When True, route to ``self._fast_model``
                 (Haiku/mini/flash-lite). Used by callers that don't need
                 primary-model quality (frame vision, chapter detection).
+            span_name: When non-None, the result is recorded as a Langfuse
+                generation span under this name. Best-effort — observability
+                failures are swallowed.
+            span_metadata: Extra metadata merged into the generation span.
 
         Returns:
             Generated text content
@@ -280,18 +310,33 @@ class LLMProvider:
         if metadata:
             kwargs["metadata"] = metadata
 
+        start_monotonic = time.monotonic()
         response = await self._call_with_error_logging(
             acompletion(**kwargs),
             model=effective_model,
             timeout_value=effective_timeout,
         )
+        latency_ms = stopwatch_ms_since(start_monotonic)
         choice = response.choices[0]
         if choice.finish_reason == "length":
             logger.warning(
                 "LLM response truncated (finish_reason=length), model=%s, max_tokens=%d",
                 effective_model, max_tokens,
             )
-        return choice.message.content or ""
+
+        content = choice.message.content or ""
+        if span_name:
+            record_generation(
+                span_name=span_name,
+                model=effective_model,
+                msg_dicts=msg_dicts,
+                content=content,
+                response=response,
+                latency_ms=latency_ms,
+                finish_reason=choice.finish_reason,
+                extra_metadata=span_metadata,
+            )
+        return content
 
     async def complete_with_tracking(
         self,

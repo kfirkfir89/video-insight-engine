@@ -112,7 +112,7 @@ export const InfoGridInteractive = memo(function InfoGridInteractive({
             </div>
           )}
           <Button variant="ghost" size="icon" onClick={toggleSort} aria-label="Sort alphabetically">
-            <ArrowUpDown className={cn('h-3.5 w-3.5', sortDir && 'text-primary')} />
+            <ArrowUpDown className={cn('h-3.5 w-3.5', sortDir && 'text-[color:var(--vie-accent)]')} />
           </Button>
           <Button variant="ghost" size="icon" onClick={handleBulkCopy} aria-label="Copy all">
             {copiedAll
@@ -166,7 +166,7 @@ export const InfoGridInteractive = memo(function InfoGridInteractive({
                   {sorted.map((item) => (
                     <tr
                       key={item.originalIndex}
-                      className="border-b border-border/20 last:border-0 even:bg-muted/10 hover:bg-primary/5 transition-colors"
+                      className="border-b border-border/20 last:border-0 even:bg-muted/10 hover:bg-[color:var(--vie-accent-muted)] transition-colors motion-reduce:transition-none"
                     >
                       <td className="px-4 py-1.5 font-medium">{item.key}</td>
                       <td className="px-4 py-1.5 text-muted-foreground">{item.value}</td>

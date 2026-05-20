@@ -25,9 +25,10 @@ PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
 
 
 def load_prompt(name: str) -> str:
-    """Load prompt template from file."""
+    """Registry-first prompt loader for description-analyzer prompts."""
+    from src.services.pipeline.prompt_builder import load_prompt_text
     path = PROMPTS_DIR / f"{name}.txt"
-    return path.read_text()
+    return load_prompt_text(path)
 
 
 @dataclass

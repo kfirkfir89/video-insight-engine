@@ -69,8 +69,14 @@ export const ScenarioInteractive = memo(function ScenarioInteractive({
     <GlassCard className="space-y-4">
       {/* Progress + score */}
       <div className="flex items-center justify-between">
-        <div className="text-xs text-muted-foreground/70">
-          Scenario {currentIndex + 1} of {scenarios.length}
+        <div className="inline-flex items-center gap-1.5">
+          <span
+            aria-hidden="true"
+            className="inline-block h-1.5 w-1.5 rounded-full bg-[color:var(--vie-accent)]"
+          />
+          <span className="text-xs text-muted-foreground/70 tabular-nums">
+            {`Scenario ${currentIndex + 1} of ${scenarios.length}`}
+          </span>
         </div>
         {picks.size > 0 && <InlineScore correct={score} total={picks.size} />}
       </div>

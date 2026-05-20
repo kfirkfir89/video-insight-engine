@@ -101,7 +101,7 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
           {/* Track */}
           <div className="relative h-2 w-full rounded-full bg-muted/30 overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-primary to-primary/60 transition-all duration-500"
+              className="h-full bg-[color:var(--vie-accent)] transition-all duration-500 motion-reduce:transition-none"
               style={{ width: `${steps.length > 0 ? ((currentStep + 1) / steps.length) * 100 : 0}%` }}
             />
           </div>
@@ -116,11 +116,11 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
                   <span
                     key={i}
                     className={cn(
-                      'absolute top-0 -translate-x-1/2 w-2 h-2 rounded-full border transition-all duration-200',
+                      'absolute top-0 -translate-x-1/2 w-2 h-2 rounded-full border transition-all duration-200 motion-reduce:transition-none',
                       isDone
-                        ? 'bg-primary border-primary scale-110'
+                        ? 'bg-[color:var(--vie-accent)] border-[color:var(--vie-accent)] scale-110'
                         : isCurrent
-                          ? 'bg-background border-primary ring-2 ring-primary/30'
+                          ? 'bg-background border-[color:var(--vie-accent)] ring-2 ring-[color:var(--vie-accent-muted)]'
                           : 'bg-background border-muted-foreground/30',
                     )}
                     style={{ left: `${leftPercent}%` }}
@@ -202,7 +202,7 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
 
                     {/* Show more toggle for collapsed steps */}
                     {!isActive && step.instruction && step.instruction.length > 100 && (
-                      <span className="text-xs text-primary">Show more</span>
+                      <span className="text-xs text-[color:var(--vie-accent)]">Show more</span>
                     )}
 
                     <div className="flex items-center gap-3 flex-wrap">

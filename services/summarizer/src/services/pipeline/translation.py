@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +17,7 @@ from ...config import settings
 from ...utils.json_parsing import parse_json_response
 from ...utils.llm_retry import call_llm_with_retry
 from ...utils.language_utils import get_language_name
+from .prompt_builder import load_prompt_text
 
 if TYPE_CHECKING:
     from ...services.llm import LLMService
@@ -42,10 +42,9 @@ _LABEL_KEYS = frozenset({
 })
 
 
-@lru_cache(maxsize=1)
 def _load_translate_prompt() -> str:
-    """Load and cache the translation prompt template."""
-    return PROMPT_PATH.read_text()
+    """Registry-first translate prompt. Records version on the active trace."""
+    return load_prompt_text(PROMPT_PATH)
 
 
 def _collect_english_labels(tabs: list[dict[str, Any]]) -> dict[str, str]:

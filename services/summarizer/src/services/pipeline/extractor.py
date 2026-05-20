@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, AsyncGenerator
 
@@ -14,7 +13,13 @@ from ...models.domain_types import validate_domain_output
 from ...utils.json_parsing import parse_json_response, strip_markdown_fences
 from ...utils.llm_retry import call_llm_with_retry
 from .extraction_merger import merge_batch_extractions
-from .prompt_builder import build_extraction_template, build_tab_goals, get_detail_level, get_content_emphasis
+from .prompt_builder import (
+    build_extraction_template,
+    build_tab_goals,
+    get_content_emphasis,
+    get_detail_level,
+    load_prompt_text,
+)
 from .triage import TriageResult
 
 if TYPE_CHECKING:
@@ -59,14 +64,14 @@ def _estimate_tokens(text: str) -> int:
     return int(len(text.split()) * 1.33)
 
 
-@lru_cache(maxsize=16)
 def _load_prompt(path_str: str) -> str:
-    """Load and cache a prompt template from disk.
+    """Registry-first prompt loader for the extractor.
 
-    Callers must pass resolved (absolute) paths so the cache key
-    is stable regardless of working directory.
+    Delegates to :func:`load_prompt_text` so the Langfuse-registered version
+    wins when available; falls back to disk via the cached file loader.
+    Callers must pass resolved (absolute) paths.
     """
-    return Path(path_str).read_text()
+    return load_prompt_text(Path(path_str))
 
 
 def _resolve_strategy(

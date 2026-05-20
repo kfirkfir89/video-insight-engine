@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useRef, memo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { Film } from "lucide-react";
+import { Film, Star } from "lucide-react";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -19,7 +19,7 @@ import { useMoveVideo, useDeleteVideo, useRetryVideo } from "@/hooks/use-videos"
 import { useSidebarTextClasses } from "@/features/sidebar/hooks/use-sidebar-text-size";
 import { useLongPress } from "@/features/sidebar/hooks/use-long-press";
 import { useIsTruncated } from "@/features/sidebar/hooks/use-is-truncated";
-import { useUIStore, useSelectionMode } from "@/stores/ui-store";
+import { useUIStore, useSelectionMode, useIsFavorite } from "@/stores/ui-store";
 
 import type { Video, Folder as FolderData } from "@/types";
 import { VideoContextMenu } from "./VideoContextMenu";
@@ -54,6 +54,17 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
   const selectedVideoIds = useUIStore((s) => s.selectedVideoIds);
   const selectedFolderIds = useUIStore((s) => s.selectedFolderIds);
   const setSelectedFolder = useUIStore((s) => s.setSelectedFolder);
+  const isFavorite = useIsFavorite(video.id);
+  const toggleFavorite = useUIStore((s) => s.toggleFavorite);
+
+  const handleToggleFavorite = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleFavorite(video.id);
+    },
+    [toggleFavorite, video.id]
+  );
 
   // Long press for entering selection mode
   const longPress = useLongPress({
@@ -190,6 +201,30 @@ export const VideoItem = memo(function VideoItem({ video, level, folders = [] }:
             >
               {video.title || "Processing..."}
             </Link>
+
+            {/* Star button — hover-reveal on idle, persistent when starred.
+                Suppressed in selection mode so the checkbox owns the click. */}
+            {!selectionMode && (
+              <button
+                type="button"
+                onClick={handleToggleFavorite}
+                aria-label={isFavorite ? "Remove star" : "Star"}
+                aria-pressed={isFavorite}
+                className={cn(
+                  "shrink-0 h-6 w-6 rounded-md flex items-center justify-center transition-[opacity,color,background-color] duration-150",
+                  "motion-reduce:transition-none",
+                  "hover:bg-accent/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  isFavorite
+                    ? "opacity-100 text-[color:var(--vie-accent)]"
+                    : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Star
+                  className={cn("h-3.5 w-3.5", isFavorite && "fill-[color:var(--vie-accent)]")}
+                  aria-hidden="true"
+                />
+              </button>
+            )}
 
             {/* Status icon and context menu - invisible in selection mode to prevent layout shift */}
             <div className={cn(

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -11,6 +10,7 @@ from ...models.pipeline_types import SynthesisResult
 from ...utils.json_parsing import parse_json_response
 from ...utils.llm_retry import call_llm_with_retry
 from .pipeline_helpers import sanitize_for_prompt
+from .prompt_builder import load_prompt_text
 
 if TYPE_CHECKING:
     from ...services.llm import LLMService
@@ -19,10 +19,9 @@ logger = logging.getLogger(__name__)
 PROMPT_PATH = Path(__file__).parent.parent.parent / "prompts" / "synthesis.txt"
 
 
-@lru_cache(maxsize=1)
 def _load_synthesis_prompt() -> str:
-    """Load and cache the synthesis prompt template."""
-    return PROMPT_PATH.read_text()
+    """Registry-first synthesis prompt. Records version on the active trace."""
+    return load_prompt_text(PROMPT_PATH)
 
 
 async def synthesize(

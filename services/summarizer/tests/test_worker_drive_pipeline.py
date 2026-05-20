@@ -64,7 +64,7 @@ async def test_drive_pipeline_constructs_repository_without_di():
             "acquire_lock",
             new=AsyncMock(return_value=True),
         ),
-        patch("src.routes.stream._produce_to_broker", new=AsyncMock()),
+        patch("src.routes.pipeline_broker.produce_to_broker", new=AsyncMock()),
         patch.object(worker_pipeline, "clear_override"),
     ):
         await worker_pipeline.drive_pipeline(VALID_PAYLOAD)
@@ -91,7 +91,7 @@ async def test_drive_pipeline_uses_default_llm_provider_when_payload_has_none():
             "acquire_lock",
             new=AsyncMock(return_value=True),
         ),
-        patch("src.routes.stream._produce_to_broker", new=AsyncMock()),
+        patch("src.routes.pipeline_broker.produce_to_broker", new=AsyncMock()),
         patch.object(worker_pipeline, "clear_override"),
     ):
         await worker_pipeline.drive_pipeline(VALID_PAYLOAD)
@@ -121,7 +121,7 @@ async def test_drive_pipeline_uses_custom_provider_when_payload_specifies_one():
             "acquire_lock",
             new=AsyncMock(return_value=True),
         ),
-        patch("src.routes.stream._produce_to_broker", new=AsyncMock()),
+        patch("src.routes.pipeline_broker.produce_to_broker", new=AsyncMock()),
         patch.object(worker_pipeline, "clear_override"),
     ):
         await worker_pipeline.drive_pipeline(payload_with_providers)
@@ -147,7 +147,7 @@ async def test_drive_pipeline_raises_when_mongo_row_missing():
             "acquire_lock",
             new=AsyncMock(return_value=True),
         ),
-        patch("src.routes.stream._produce_to_broker", new=AsyncMock()),
+        patch("src.routes.pipeline_broker.produce_to_broker", new=AsyncMock()),
     ):
         with pytest.raises(RuntimeError, match="video_summary not found"):
             await worker_pipeline.drive_pipeline(VALID_PAYLOAD)

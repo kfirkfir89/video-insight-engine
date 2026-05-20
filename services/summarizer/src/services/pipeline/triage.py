@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -20,6 +19,7 @@ from ...shared_config.domain_config import (
 from ...utils.json_parsing import parse_json_response
 from ...utils.llm_retry import call_llm_with_retry
 from .assembly import infer_component
+from .prompt_builder import load_prompt_text
 
 if TYPE_CHECKING:
     from ...services.llm import LLMService
@@ -47,19 +47,17 @@ class TriageResult:
     confidence: float = 0.0
 
 
-@lru_cache(maxsize=1)
 def _load_triage_prompt() -> str:
-    """Load and cache the triage prompt template."""
-    return PROMPT_PATH.read_text()
+    """Registry-first triage prompt. Records version on the active trace."""
+    return load_prompt_text(PROMPT_PATH)
 
 
-@lru_cache(maxsize=1)
 def _load_component_toolkit() -> str:
-    """Load and cache the component toolkit reference."""
-    if COMPONENT_TOOLKIT_PATH.exists():
-        return COMPONENT_TOOLKIT_PATH.read_text()
-    logger.warning("Component toolkit not found at %s", COMPONENT_TOOLKIT_PATH)
-    return ""
+    """Registry-first component toolkit reference. Missing local file → ``""``."""
+    if not COMPONENT_TOOLKIT_PATH.exists():
+        logger.warning("Component toolkit not found at %s", COMPONENT_TOOLKIT_PATH)
+        return ""
+    return load_prompt_text(COMPONENT_TOOLKIT_PATH)
 
 
 # ---------------------------------------------------------------------------

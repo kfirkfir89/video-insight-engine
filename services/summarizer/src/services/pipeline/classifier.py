@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -17,6 +16,7 @@ from ...config import settings
 from ...utils.json_parsing import parse_json_response
 from ...utils.llm_retry import call_llm_with_retry
 from .pipeline_helpers import sanitize_for_prompt
+from .prompt_builder import load_prompt_text
 
 if TYPE_CHECKING:
     from ...services.llm import LLMService
@@ -89,10 +89,9 @@ class ClassificationResult:
     traits: ContentTraits | None = None
 
 
-@lru_cache(maxsize=1)
 def _load_classify_prompt() -> str:
-    """Load and cache the classify prompt template."""
-    return PROMPT_PATH.read_text()
+    """Registry-first classifier prompt. Records version on the active trace."""
+    return load_prompt_text(PROMPT_PATH)
 
 
 async def classify_domain_format(

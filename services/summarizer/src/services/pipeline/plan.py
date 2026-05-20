@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 import re
-from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -17,6 +16,7 @@ from ...utils.json_parsing import parse_json_response
 from ...utils.llm_retry import call_llm_with_retry
 from .assembly import infer_component
 from .pipeline_helpers import sanitize_for_prompt
+from .prompt_builder import load_prompt_text
 
 if TYPE_CHECKING:
     from ...services.llm import LLMService
@@ -29,19 +29,17 @@ COMPONENT_TOOLKIT_PATH = Path(__file__).parent.parent.parent / "prompts" / "comp
 CONFIDENCE_THRESHOLD = 0.6
 
 
-@lru_cache(maxsize=1)
 def _load_plan_prompt() -> str:
-    """Load and cache the plan prompt template."""
-    return PROMPT_PATH.read_text()
+    """Registry-first plan prompt. Records version on the active trace."""
+    return load_prompt_text(PROMPT_PATH)
 
 
-@lru_cache(maxsize=1)
 def _load_component_toolkit() -> str:
-    """Load and cache the component toolkit reference."""
-    if COMPONENT_TOOLKIT_PATH.exists():
-        return COMPONENT_TOOLKIT_PATH.read_text()
-    logger.warning("Component toolkit not found at %s", COMPONENT_TOOLKIT_PATH)
-    return ""
+    """Registry-first component toolkit reference. Missing local file → ``""``."""
+    if not COMPONENT_TOOLKIT_PATH.exists():
+        logger.warning("Component toolkit not found at %s", COMPONENT_TOOLKIT_PATH)
+        return ""
+    return load_prompt_text(COMPONENT_TOOLKIT_PATH)
 
 
 def _build_fallback_plan(category_hint: str | None = None) -> PlanResult:

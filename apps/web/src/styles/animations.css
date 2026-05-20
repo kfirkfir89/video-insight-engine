@@ -148,6 +148,33 @@
     }
   }
 
+  /* ─── Streaming skeleton breath ──────────────────────────
+     Subtle opacity pulse on tab placeholders so the SSE wait
+     reads as activity, not stall. Distinct from `breathe`
+     (slower, narrower amplitude — 0.55→0.85 vs 0.5→1) so it
+     can sit alongside content without competing. */
+  @keyframes skeleton-breathe {
+    0%, 100% { opacity: 0.55; }
+    50%      { opacity: 0.85; }
+  }
+
+  .skeleton-breathe {
+    animation: skeleton-breathe 1.6s ease-in-out infinite;
+  }
+
+  /* ─── Streaming progress shimmer ─────────────────────────
+     Travelling highlight across a width-based progress bar.
+     Pure transform on a 100%-wide gradient child — no layout
+     reflow of siblings. */
+  @keyframes progress-shimmer-travel {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(200%); }
+  }
+
+  .progress-shimmer {
+    animation: progress-shimmer-travel 1.4s linear infinite;
+  }
+
   /* ─── VIE brand mark — signal prism entrance ───────────────
      Body prism planes unfold from the left, then the coral
      signal tip sparks in. Opt-in via `animated` prop, gated
@@ -266,6 +293,17 @@
   .animate-\[emoji-breathe_3s_ease-in-out_infinite\],
   [style*="emoji-breathe"] {
     animation: none !important;
+  }
+
+  /* Streaming skeleton + shimmer: drop the loops, hold a
+     legible resting opacity / position. */
+  .skeleton-breathe {
+    animation: none !important;
+    opacity: 0.7;
+  }
+  .progress-shimmer {
+    animation: none !important;
+    opacity: 0;
   }
 
   /* VIE mark: snap straight to the resting state */

@@ -14,6 +14,7 @@ from src.models.responses import ChatEvent
 from src.repositories.video_repository import MongoVideoRepository, VideoContext
 from src.services.context_builder import ContextBuilder
 from src.services.llm_provider import LLMProvider
+from src.services.observability import session_trace, span
 from src.services.rag import RAGService
 from src.services.tool_router import ActionDispatcher, ToolRouter
 from src.tools.base import BaseTool
@@ -94,19 +95,23 @@ class AssistantService:
         video_id: str,
         message: str,
         history: list[ChatMessage],
+        *,
+        user_id: str | None = None,
+        session_id: str | None = None,
     ) -> AsyncGenerator[str, None]:
         """Stream a chat response about a video.
 
         Routes to a registered tool if intent is detected, otherwise
-        falls back to RAG-powered LLM chat.
-
-        Yields SSE-formatted events: source/tool_result, text tokens,
-        then a done event.
+        falls back to RAG-powered LLM chat. The whole request runs inside
+        a Langfuse session trace (no-op when keys unset) so tool calls and
+        the RAG generation attach as child spans.
 
         Args:
             video_id: YouTube video ID.
             message: User's current message.
             history: Previous conversation messages.
+            user_id: Optional user identifier for the trace.
+            session_id: Optional chat session id for grouping turns.
 
         Yields:
             SSE-formatted strings (``data: {json}\\n\\n``).
@@ -122,18 +127,25 @@ class AssistantService:
             history_len=len(history),
         )
 
-        # Check for tool intent before RAG search
-        intent = self._tool_router.detect_intent(message)
-        if intent is not None:
-            async for event in self._tool_router.route(
-                intent, message, video_id, video_ctx
-            ):
-                yield self._format_sse(event)
-            return
+        async with session_trace(
+            video_id=video_id,
+            user_id=user_id,
+            session_id=session_id,
+            metadata={"historyLen": len(history), "messageLen": len(message)},
+        ):
+            # Check for tool intent before RAG search
+            intent = self._tool_router.detect_intent(message)
+            if intent is not None:
+                async with span("tool", metadata={"intent": intent}):
+                    async for event in self._tool_router.route(
+                        intent, message, video_id, video_ctx,
+                    ):
+                        yield self._format_sse(event)
+                return
 
-        # Default: RAG-powered chat
-        async for sse in self._rag_chat(video_id, message, history, video_ctx):
-            yield sse
+            # Default: RAG-powered chat
+            async for sse in self._rag_chat(video_id, message, history, video_ctx):
+                yield sse
 
     async def _rag_chat(
         self,
@@ -184,6 +196,8 @@ class AssistantService:
             async for token in self._llm.stream_with_messages(
                 messages=messages,
                 max_tokens=2000,
+                span_name="rag_generation",
+                span_metadata={"sourcesCount": len(rag_sources)},
             ):
                 yield self._format_sse(ChatEvent(type="text", content=token))
         except Exception as exc:

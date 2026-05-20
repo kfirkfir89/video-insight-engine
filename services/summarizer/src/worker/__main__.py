@@ -136,6 +136,16 @@ def _redact_url(url: str) -> str:
 
 async def main() -> None:
     """Connect, declare topology, and spin N concurrent consumers."""
+    # Initialize Langfuse observability — no-op when keys are unset. Done
+    # before any pipeline runs so the first job's spans attach to a live
+    # client instead of silently dropping.
+    try:
+        from src.services.observability import init_langfuse
+        client = init_langfuse()
+        logger.info("worker_langfuse_init enabled=%s", client is not None)
+    except Exception as e:
+        logger.warning("worker_langfuse_init_failed error=%s", e)
+
     connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
     logger.info("worker_connected url=%s", _redact_url(settings.RABBITMQ_URL))
 
@@ -176,6 +186,13 @@ async def main() -> None:
             c.cancel()
         await asyncio.gather(*consumers, return_exceptions=True)
         await channel_pool.close()
+
+    # Drain Langfuse buffer so in-flight spans aren't lost on container stop.
+    try:
+        from src.services.observability import flush_langfuse
+        await flush_langfuse()
+    except Exception as e:
+        logger.warning("worker_langfuse_flush_failed error=%s", e)
 
     logger.info("worker_shutdown_complete")
 

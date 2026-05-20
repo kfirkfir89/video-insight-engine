@@ -77,6 +77,19 @@ async function mongodb(fastify: FastifyInstance) {
         { key: { adminId: 1, createdAt: -1 } },
       ]);
 
+      // idempotencyKeys — request-level dedup for POST /api/videos.
+      // The TTL index (expireAfterSeconds: 0) treats `expiresAt` as the
+      // absolute eviction deadline; Mongo reaps lazily (~60s precision) which
+      // is fine for dedup semantics. The videoSummaryId index is sparse
+      // because pending placeholders carry no videoSummaryId until the
+      // pipeline completes.
+      await db.collection('idempotencyKeys').createIndexes([
+        { key: { hash: 1 }, unique: true },
+        { key: { expiresAt: 1 }, expireAfterSeconds: 0 },
+        { key: { videoSummaryId: 1 }, sparse: true },
+        { key: { userId: 1, createdAt: -1 } },
+      ]);
+
       fastify.log.info('MongoDB indexes created');
     } catch (err) {
       fastify.log.warn({ err }, 'Some indexes may already exist or failed to create');

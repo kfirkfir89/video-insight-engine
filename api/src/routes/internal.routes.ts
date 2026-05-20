@@ -35,7 +35,7 @@ const reconcileQuerySchema = z.object({
 });
 
 export async function internalRoutes(fastify: FastifyInstance) {
-  const { costMonitorService } = fastify.container;
+  const { costMonitorService, idempotencyService } = fastify.container;
 
   // POST /internal/status - Receive status updates from summarizer/agent
   fastify.post<{
@@ -86,6 +86,15 @@ export async function internalRoutes(fastify: FastifyInstance) {
             },
           });
         }
+      }
+
+      // On FAILED, drop any idempotency keys pointing at this summary so the
+      // user can retry immediately rather than wait out the TTL. Fire-and-
+      // forget — failure here only degrades dedup, doesn't break anything.
+      if (status === 'failed') {
+        idempotencyService.invalidateByVideoSummaryId(videoSummaryId).catch((err) => {
+          req.log.warn({ err, videoSummaryId }, 'idempotency invalidate on failure failed');
+        });
       }
 
       // On terminal status (completed OR failed), reconcile the user's day

@@ -3,6 +3,8 @@ import type { Db } from 'mongodb';
 import type { FastifyBaseLogger } from 'fastify';
 import { createContainer } from './container.js';
 import { QueuePublisher } from './services/queue-publisher.service.js';
+import { IdempotencyService } from './services/idempotency.service.js';
+import { IdempotencyRepository } from './repositories/idempotency.repository.js';
 
 /**
  * `Db.collection()` is called in every repository constructor. We hand back
@@ -57,5 +59,16 @@ describe('createContainer', () => {
       tier: 'free',
     })).rejects.toThrow('marker');
     expect(called).toBe(1);
+  });
+
+  it('exposes the IdempotencyService and IdempotencyRepository', () => {
+    const container = createContainer(makeMockDb(), mockLogger, {
+      queueChannelSupplier: async () => {
+        throw new Error('not used in this test');
+      },
+    });
+
+    expect(container.idempotencyService).toBeInstanceOf(IdempotencyService);
+    expect(container.idempotencyRepository).toBeInstanceOf(IdempotencyRepository);
   });
 });

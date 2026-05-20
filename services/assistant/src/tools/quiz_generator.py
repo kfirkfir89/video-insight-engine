@@ -102,6 +102,7 @@ class QuizGeneratorTool:
             raw = await fast_llm.complete_with_messages(
                 messages=messages,
                 max_tokens=2000,
+                span_name="tool:quiz_generator",
             )
         except LLMError:
             logger.exception("quiz_generate_llm_failed")

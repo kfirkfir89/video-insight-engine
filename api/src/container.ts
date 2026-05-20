@@ -7,6 +7,7 @@ import { FolderRepository } from './repositories/folder.repository.js';
 import { UserRepository } from './repositories/user.repository.js';
 import { ShareRepository } from './repositories/share.repository.js';
 import { UserCostRepository } from './repositories/user-cost.repository.js';
+import { IdempotencyRepository } from './repositories/idempotency.repository.js';
 
 // Services
 import { AuthService } from './services/auth.service.js';
@@ -20,6 +21,7 @@ import { OgImageService } from './services/og-image.service.js';
 import { PaymentService } from './services/payment.service.js';
 import { CostMonitorService } from './services/cost-monitor.service.js';
 import { QueuePublisher, type ChannelSupplier } from './services/queue-publisher.service.js';
+import { IdempotencyService } from './services/idempotency.service.js';
 
 export interface Container {
   // Repositories
@@ -28,6 +30,7 @@ export interface Container {
   userRepository: UserRepository;
   shareRepository: ShareRepository;
   userCostRepository: UserCostRepository;
+  idempotencyRepository: IdempotencyRepository;
 
   // Services
   authService: AuthService;
@@ -41,6 +44,7 @@ export interface Container {
   paymentService: PaymentService;
   costMonitorService: CostMonitorService;
   queuePublisher: QueuePublisher;
+  idempotencyService: IdempotencyService;
 }
 
 export interface CreateContainerOptions {
@@ -59,6 +63,7 @@ export function createContainer(
   const userRepository = new UserRepository(db);
   const shareRepository = new ShareRepository(db);
   const userCostRepository = new UserCostRepository(db);
+  const idempotencyRepository = new IdempotencyRepository(db);
 
   // Create external clients
   const summarizerClient = new SummarizerClient(logger);
@@ -83,6 +88,7 @@ export function createContainer(
   const shareService = new ShareService(shareRepository, videoRepository, logger);
   const ogImageService = new OgImageService(logger);
   const paymentService = new PaymentService(userRepository, videoRepository, logger);
+  const idempotencyService = new IdempotencyService(idempotencyRepository, logger);
 
   return {
     // Repositories
@@ -91,6 +97,7 @@ export function createContainer(
     userRepository,
     shareRepository,
     userCostRepository,
+    idempotencyRepository,
 
     // Services
     authService,
@@ -104,6 +111,7 @@ export function createContainer(
     paymentService,
     costMonitorService,
     queuePublisher,
+    idempotencyService,
   };
 }
 

@@ -90,6 +90,7 @@ export function RegisterPage() {
 
   return (
     <AuthShell
+      variant="signup"
       title="Create your account"
       subtitle="Turn every video you watch into an interactive study guide."
       footer={
@@ -224,7 +225,7 @@ export function RegisterPage() {
 
         <Button type="submit" className="w-full" disabled={!canSubmit}>
           {loading && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
-          {loading ? "Creating..." : "Create Account"}
+          {loading ? "Creating..." : "Create account"}
         </Button>
       </form>
     </AuthShell>

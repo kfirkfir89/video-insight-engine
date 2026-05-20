@@ -96,6 +96,23 @@ export interface MockContainer {
     addLike: ReturnType<typeof vi.fn>;
     getShareInfo: ReturnType<typeof vi.fn>;
   };
+  idempotencyService: {
+    computeKey: ReturnType<typeof vi.fn>;
+    findHit: ReturnType<typeof vi.fn>;
+    reserveHash: ReturnType<typeof vi.fn>;
+    completeHash: ReturnType<typeof vi.fn>;
+    invalidateByHash: ReturnType<typeof vi.fn>;
+    invalidateStaleCompleted: ReturnType<typeof vi.fn>;
+    invalidateByVideoSummaryId: ReturnType<typeof vi.fn>;
+  };
+  idempotencyRepository: {
+    findByHash: ReturnType<typeof vi.fn>;
+    reserveHash: ReturnType<typeof vi.fn>;
+    completeHash: ReturnType<typeof vi.fn>;
+    invalidateByHash: ReturnType<typeof vi.fn>;
+    invalidateStaleCompleted: ReturnType<typeof vi.fn>;
+    invalidateByVideoSummaryId: ReturnType<typeof vi.fn>;
+  };
 }
 
 export function createMockContainer(): MockContainer {
@@ -208,6 +225,32 @@ export function createMockContainer(): MockContainer {
       hasLiked: vi.fn().mockResolvedValue(false),
       addLike: vi.fn().mockResolvedValue(1),
       getShareInfo: vi.fn(),
+    },
+    idempotencyService: {
+      computeKey: vi.fn().mockReturnValue('test-hash'),
+      findHit: vi.fn().mockResolvedValue(null),
+      reserveHash: vi.fn().mockResolvedValue({
+        created: true,
+        doc: {
+          _id: { toString: () => 'idem-default' },
+          hash: 'test-hash',
+          status: 'pending',
+          userId: { toString: () => 'test-user-id' },
+          youtubeId: 'dQw4w9WgXcQ',
+        },
+      }),
+      completeHash: vi.fn().mockResolvedValue(undefined),
+      invalidateByHash: vi.fn().mockResolvedValue(undefined),
+      invalidateStaleCompleted: vi.fn().mockResolvedValue(undefined),
+      invalidateByVideoSummaryId: vi.fn().mockResolvedValue(undefined),
+    },
+    idempotencyRepository: {
+      findByHash: vi.fn().mockResolvedValue(null),
+      reserveHash: vi.fn().mockResolvedValue({ created: true, doc: {} }),
+      completeHash: vi.fn().mockResolvedValue(undefined),
+      invalidateByHash: vi.fn().mockResolvedValue(undefined),
+      invalidateStaleCompleted: vi.fn().mockResolvedValue(undefined),
+      invalidateByVideoSummaryId: vi.fn().mockResolvedValue(undefined),
     },
   };
 }

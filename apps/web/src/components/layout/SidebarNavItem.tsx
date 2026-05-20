@@ -135,8 +135,8 @@ export const SidebarNavItem = memo(function SidebarNavItem(
         </span>
         <span
           className={cn(
-            // 11px label — tight tracking, single line, font token from body.
-            "text-[11px] leading-none tracking-tight font-medium",
+            // text-xs (0.6875rem ≈ 11px) — tight tracking, single line, body font.
+            "text-xs leading-none tracking-tight font-medium",
             "max-w-[3.25rem] truncate",
           )}
         >

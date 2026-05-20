@@ -57,6 +57,7 @@ export function LoginPage() {
 
   return (
     <AuthShell
+      variant="signin"
       title="Welcome back"
       subtitle="Sign in to keep building your video knowledge base."
       footer={
@@ -120,7 +121,7 @@ export function LoginPage() {
 
         <Button type="submit" className="w-full" disabled={!canSubmit}>
           {loading && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
-          {loading ? "Signing in..." : "Sign In"}
+          {loading ? "Signing in..." : "Sign in"}
         </Button>
       </form>
     </AuthShell>

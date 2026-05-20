@@ -37,7 +37,7 @@ async def drive_pipeline(payload: VideoJobPayload) -> None:
     is a no-op — the existing producer will finish it.
     """
     # Import here to keep cold-start fast and avoid circular imports.
-    from src.routes.stream import _produce_to_broker  # type: ignore[attr-defined]
+    from src.routes.pipeline_broker import produce_to_broker
 
     # FastAPI's Depends() doesn't run outside HTTP requests, so build the
     # repository + LLM service directly. Using the cached mongo client /
@@ -76,7 +76,7 @@ async def drive_pipeline(payload: VideoJobPayload) -> None:
         return  # Treated as success — another producer is already running it.
 
     try:
-        await _produce_to_broker(
+        await produce_to_broker(
             payload.video_summary_id,
             entry,
             repository,

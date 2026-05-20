@@ -30,6 +30,7 @@ import { useFolders } from "@/hooks/use-folders";
 import { getFolderColorStyle } from "@/features/sidebar/lib/style-utils";
 import { cn } from "@/lib/utils";
 import { hasVideoId, hasPlaylistId, isPlaylistPage } from "@/lib/youtube-utils";
+import { showDuplicateToast } from "@/features/video-output/lib/duplicate-toast";
 import type { PlaylistPreview as PlaylistPreviewType } from "@/api/playlists";
 
 type Mode = "video" | "playlist";
@@ -111,6 +112,9 @@ export function AddVideoInput() {
 
         if (result?.video?.id) {
           const videoId = result.video.id;
+          if (result.duplicate) {
+            void showDuplicateToast();
+          }
           withTransitionName(
             formRef.current,
             "vie-input-spine",

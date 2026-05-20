@@ -72,7 +72,7 @@ export const LyricsPlayerInteractive = memo(function LyricsPlayerInteractive({
               size="bare"
               onClick={() => onSeek(currentSection.timestamp!)}
               dir="ltr"
-              className="text-xs text-primary gap-1"
+              className="text-xs text-[color:var(--vie-accent)] gap-1"
             >
               <Clock className="h-3 w-3" aria-hidden="true" />
               {formatTime(currentSection.timestamp)}

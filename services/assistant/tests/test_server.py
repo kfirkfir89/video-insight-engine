@@ -65,6 +65,53 @@ class TestChatEndpoint:
         # Assert
         assert response.status_code == 422
 
+    async def test_should_forward_user_and_session_headers_to_service(self):
+        """``X-User-Id`` / ``X-Session-Id`` must reach ``AssistantService.chat`` so
+        Langfuse session traces can group turns under one user/session."""
+        from httpx import ASGITransport, AsyncClient
+        from src.server import app
+
+        captured: dict = {}
+
+        async def _spy_chat(*, video_id, message, history, user_id, session_id, **_):
+            captured["video_id"] = video_id
+            captured["message"] = message
+            captured["history"] = history
+            captured["user_id"] = user_id
+            captured["session_id"] = session_id
+            yield 'data: {"type": "done", "content": ""}\n\n'
+
+        from unittest.mock import AsyncMock
+
+        spy_service = AsyncMock()
+        spy_service.chat = _spy_chat
+        app.state.assistant_service = spy_service
+
+        transport = ASGITransport(app=app)
+        try:
+            async with AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                headers={
+                    "X-Internal-Secret": "dev-internal-secret-change-me",
+                    "X-User-Id": "user-42",
+                    "X-Session-Id": "sess-abc",
+                },
+            ) as client:
+                resp = await client.post(
+                    "/chat",
+                    json={"video_id": "abc123", "message": "hello"},
+                )
+                assert resp.status_code == 200
+                # Drain stream so the generator body runs and captured[] is populated.
+                _ = resp.content
+        finally:
+            app.state.assistant_service = None
+
+        assert captured.get("user_id") == "user-42"
+        assert captured.get("session_id") == "sess-abc"
+        assert captured.get("video_id") == "abc123"
+
 
 class TestActionEndpoint:
     """POST /action endpoint tests — see test_action.py for richer coverage."""

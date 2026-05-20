@@ -106,7 +106,7 @@ export const SpotExplorer = memo(function SpotExplorer({
               </div>
               {/* Show more toggle */}
               {hasExpandable && !isExpanded && (
-                <span className="text-xs text-primary mt-1 inline-block">Show more</span>
+                <span className="text-xs text-[color:var(--vie-accent)] mt-1 inline-block">Show more</span>
               )}
             </div>
 
@@ -147,7 +147,7 @@ export const SpotExplorer = memo(function SpotExplorer({
                       href={`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(spot.bookingSearch)}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-[color:var(--vie-accent)] hover:underline"
                     >
                       Search Booking
                     </a>
