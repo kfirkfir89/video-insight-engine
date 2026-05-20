@@ -163,7 +163,7 @@ export const ExerciseInteractive = memo(function ExerciseInteractive({
       </div>
       <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
         <div
-          className="h-full w-full rounded-full bg-primary origin-left transition-transform duration-500 ease-out motion-reduce:transition-none rtl:origin-right"
+          className="h-full w-full rounded-full bg-[color:var(--vie-accent)] origin-left transition-transform duration-500 ease-out motion-reduce:transition-none rtl:origin-right"
           style={{ transform: `scaleX(${totalSets > 0 ? doneSets / totalSets : 0})` }}
           role="progressbar"
           aria-valuenow={doneSets}

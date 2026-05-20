@@ -18,11 +18,128 @@ EXAMPLES_DIR = PROMPTS_DIR / "examples"
 # Allowed schema names — alphanumeric + underscore only (no path traversal)
 _SAFE_NAME_RE = re.compile(r"^[a-z0-9_]+$")
 
+# Subdirectory → Langfuse name-segment. Mirrors ``scripts/register_prompts.py``
+# so the registry name we look up matches the name the uploader registered.
+_SUBDIR_LABEL: dict[str, str] = {
+    "schemas": "schema",
+    "enrich": "enrich",
+    "examples": "example",
+    "detection": "detection",
+}
+
+
+def _langfuse_name_for(path: Path) -> str | None:
+    """Map a prompts-dir path to its registered Langfuse name.
+
+    Returns ``None`` when the path lies outside ``PROMPTS_DIR`` — those files
+    are unregistered, so a registry lookup would always miss anyway.
+    """
+    try:
+        rel = path.relative_to(PROMPTS_DIR)
+    except ValueError:
+        return None
+    parts = rel.parts
+    stem = path.stem
+    if len(parts) == 1:
+        return f"summarizer:{stem}"
+    sub = _SUBDIR_LABEL.get(parts[0], parts[0] or "misc")
+    return f"summarizer:{sub}:{stem}"
+
 
 @lru_cache(maxsize=32)
-def _load_text(path_str: str) -> str:
-    """Load and cache a text file from disk."""
+def _read_file_cached(path_str: str) -> str:
+    """Disk-only cached loader. Indirection point for tests."""
     return Path(path_str).read_text()
+
+
+def _load_text(path_str: str) -> str:
+    """Load a prompt file, preferring the Langfuse-registered version.
+
+    For paths under ``PROMPTS_DIR`` we delegate to
+    :func:`load_prompt_with_fallback` so the registry version (if any)
+    wins. Paths outside the prompts dir bypass the registry entirely.
+    """
+    return load_prompt_text(Path(path_str))
+
+
+def load_prompt_text(path: Path) -> str:
+    """Public registry-first loader for any prompt file under ``PROMPTS_DIR``.
+
+    Use this from every pipeline phase that needs a prompt template — it
+    is the single place that decides between Langfuse and disk, and it
+    records the prompt version on the active trace so the resulting
+    generation span carries the link in its metadata.
+
+    Falls back to the in-process file cache when the path is outside
+    ``PROMPTS_DIR`` (unregistered) or when the registry has no entry.
+    Defensive: paths that resolve outside ``PROMPTS_DIR`` (symlink
+    traversal) are rejected with a logged warning and an empty result,
+    matching the prior path-safety contract enforced by
+    ``enrichment._load_prompt``.
+    """
+    resolved = path.resolve()
+    if not _is_under_prompts_dir(resolved):
+        logger.warning("Prompt path outside PROMPTS_DIR rejected: %s", path)
+        return ""
+    langfuse_name = _langfuse_name_for(path)
+    if langfuse_name is None:
+        return _read_file_cached(str(path))
+    return load_prompt_with_fallback(langfuse_name=langfuse_name, fallback_path=path)
+
+
+def _is_under_prompts_dir(resolved_path: Path) -> bool:
+    """``True`` when ``resolved_path`` (already-resolved) lives under PROMPTS_DIR."""
+    try:
+        resolved_path.relative_to(PROMPTS_DIR.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def load_prompt_with_fallback(*, langfuse_name: str, fallback_path: Path) -> str:
+    """Fetch a prompt from Langfuse, falling back to a local ``.txt`` file.
+
+    The Langfuse fetch is best-effort:
+      * When Langfuse is disabled (no keys), the local file is used.
+      * When the prompt isn't registered yet, the local file is used.
+      * Any SDK exception is swallowed by ``fetch_prompt_with_obj``.
+
+    Side effect: a successful Langfuse fetch records the full Prompt
+    object via :func:`record_active_prompt` so subsequent LLM generations
+    get both the ``promptVersions`` metadata field AND the native
+    ``trace.generation(prompt=...)`` cross-reference in the Langfuse UI.
+    Recording is explicit — callers can also call ``fetch_prompt_with_obj``
+    + ``record_active_prompt`` themselves if they want different semantics.
+    """
+    text = _try_fetch_from_registry(langfuse_name)
+    if text is not None:
+        return text
+    return _read_file_cached(str(fallback_path))
+
+
+def _try_fetch_from_registry(langfuse_name: str) -> str | None:
+    """Attempt a registry fetch; record the Prompt on success. ``None`` on any failure."""
+    try:
+        from src.services.observability import (
+            fetch_prompt_with_obj,
+            record_active_prompt,
+        )
+    except Exception:  # noqa: BLE001 — observability import must never crash
+        return None
+    try:
+        obj = fetch_prompt_with_obj(langfuse_name)
+    except Exception:  # noqa: BLE001
+        return None
+    if obj is None:
+        return None
+    text = getattr(obj, "prompt", None)
+    if not isinstance(text, str):
+        return None
+    try:
+        record_active_prompt(langfuse_name, obj)
+    except Exception:  # noqa: BLE001 — recording is best-effort
+        pass
+    return text
 
 
 def build_tab_goals(triage_tabs: list[dict]) -> str:

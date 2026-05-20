@@ -78,6 +78,7 @@ class ConceptExplainTool:
             explanation = await self._llm.complete_with_messages(
                 messages=messages,
                 max_tokens=2000,
+                span_name="tool:concept_explain",
             )
         except LLMError:
             logger.exception("concept_explain_llm_failed", video_id=video_id)

@@ -72,6 +72,16 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "console"
 
+    # ─── Langfuse observability ─────────────────────────────────────────
+    # Leave keys blank to disable — every Langfuse helper is no-op when
+    # init returns None, so tests and offline dev never hit the network.
+    LANGFUSE_PUBLIC_KEY: str | None = None
+    LANGFUSE_SECRET_KEY: str | None = None
+    LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+    # User-id propagation policy. See summarizer/src/config.py for semantics.
+    LANGFUSE_USER_ID_MODE: str = "identity"
+    LANGFUSE_USER_ID_HASH_SALT: str = ""
+
     @property
     def llm_model(self) -> str:
         """Get the configured LLM model with provider prefix."""

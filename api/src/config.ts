@@ -51,6 +51,14 @@ const envSchema = z.object({
   // Admin endpoints for /api/admin/queue/* and DLQ replay. Different from
   // INTERNAL_SECRET so a leaked admin key cannot impersonate the summarizer.
   ADMIN_API_KEY: z.string().min(8).default('dev-admin-key-change-me'),
+  // ─── Idempotency ────────────────────────────────────────────────────
+  // Canonical pipeline version string baked into idempotency hashes. Bump
+  // this when prompts, schemas, or any other pipeline output-shaping logic
+  // changes — every stale key auto-misses on the next submit.
+  PIPELINE_VERSION: z.string().min(1).default('v1'),
+  // TTL window for an idempotency hit. 24h is long enough for accidental
+  // double-submits and short enough that "I want to retry tomorrow" still works.
+  IDEMPOTENCY_TTL_SECONDS: z.string().default('86400').transform(Number),
 });
 
 const parsedConfig = envSchema.parse(process.env);

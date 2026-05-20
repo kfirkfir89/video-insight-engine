@@ -4,6 +4,8 @@ motor>=3.3.0
 qdrant-client>=1.7.0
 sentence-transformers>=2.2.0
 litellm>=1.80.0
+# LLM observability — no-op when LANGFUSE_PUBLIC_KEY/SECRET_KEY are unset.
+langfuse>=2.50.0,<3
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
 structlog>=24.0.0

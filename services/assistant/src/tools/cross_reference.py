@@ -112,6 +112,7 @@ class CrossReferenceTool:
             comparison = await self._llm.complete_with_messages(
                 messages=messages,
                 max_tokens=2000,
+                span_name="tool:cross_reference",
             )
         except LLMError:
             logger.exception("cross_reference_llm_failed")

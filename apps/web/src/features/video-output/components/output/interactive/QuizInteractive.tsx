@@ -122,8 +122,14 @@ export const QuizInteractive = memo(function QuizInteractive({
     <GlassCard variant="elevated" className="space-y-4">
       {/* Score + progress + streak */}
       <div className="flex items-center justify-between">
-        <div className="text-xs font-medium tabular-nums tracking-wide text-muted-foreground/70">
-          Q {currentIndex + 1} of {questions.length}
+        <div className="inline-flex items-center gap-1.5">
+          <span
+            aria-hidden="true"
+            className="inline-block h-1.5 w-1.5 rounded-full bg-[color:var(--vie-accent)]"
+          />
+          <span className="text-xs font-medium tabular-nums tracking-wide text-muted-foreground/70">
+            {`Q ${currentIndex + 1} of ${questions.length}`}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           {streak >= 2 && (

@@ -120,6 +120,11 @@ class TestCallLlmWithRetry:
 
         mock_llm.call_llm.assert_called_once_with(
             "my prompt", max_tokens=8192, timeout=30.0, json_mode=False, cache_static=None,
+            span_name="triage",
+            span_metadata={
+                "attempt": 1, "maxAttempts": 1,
+                "useFastModel": False, "modelOverride": None,
+            },
         )
 
     @pytest.mark.asyncio

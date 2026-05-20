@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { PanelLeft, PanelLeftClose, LogOut, Keyboard } from "lucide-react";
+import { PanelLeft, PanelLeftClose, LogOut, Keyboard, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VieLogotype } from "@/components/brand/VieMark";
 import {
@@ -25,7 +25,12 @@ import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useSidebarToggle } from "@/hooks/use-sidebar-toggle";
 import { getInitials } from "@/lib/string-utils";
+import { getCmdGlyph } from "@/lib/platform";
 import { cn } from "@/lib/utils";
+
+// Module-level — the platform doesn't change mid-session, so resolve once
+// and keep the SSR-safe navigator guard out of render entirely.
+const CMD_GLYPH = getCmdGlyph();
 
 export function AppHeader() {
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
@@ -48,6 +53,10 @@ export function AppHeader() {
   }, [toggleSidebar]);
 
   const openShortcuts = useUIStore((s) => s.openShortcutsModal);
+
+  const openPalette = () => {
+    window.dispatchEvent(new CustomEvent("vie:open-command-palette"));
+  };
 
   return (
     <>
@@ -83,8 +92,34 @@ export function AppHeader() {
 
         <div className="flex-1" />
 
-        {/* Right: theme + user */}
+        {/* Right: command-palette hint + theme + user.
+            The chip is a discoverable surface for power users — clicking it
+            opens the palette, the kbd glyphs cue the shortcut. Hidden on
+            touch viewports where keyboard shortcuts don't apply. */}
         <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={openPalette}
+            aria-label="Open command palette"
+            className={cn(
+              "hidden md:inline-flex items-center gap-2 h-9 px-3 rounded-md",
+              "text-muted-foreground hover:text-foreground",
+              "bg-muted/40 hover:bg-muted/70 ring-1 ring-border/50",
+              "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            )}
+          >
+            <Search className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="type-caption text-foreground/70 leading-none">Search</span>
+            <span aria-hidden="true" className="inline-flex items-center gap-0.5">
+              <kbd className="px-1.5 py-0.5 rounded bg-background/70 ring-1 ring-border/60 font-mono tabular-nums text-[10px] leading-none">
+                {CMD_GLYPH}
+              </kbd>
+              <kbd className="px-1.5 py-0.5 rounded bg-background/70 ring-1 ring-border/60 font-mono tabular-nums text-[10px] leading-none">
+                K
+              </kbd>
+            </span>
+          </button>
+
           <ThemeToggle />
 
           {isAuthenticated && user && (
@@ -107,7 +142,7 @@ export function AppHeader() {
               }
             >
               <VieMenuHeader>
-                <p className="type-eyebrow text-xs text-muted-foreground/80">
+                <p className="type-eyebrow text-muted-foreground/80">
                   Signed in as
                 </p>
                 <p className="text-sm font-semibold truncate mt-0.5">{user.name || "User"}</p>

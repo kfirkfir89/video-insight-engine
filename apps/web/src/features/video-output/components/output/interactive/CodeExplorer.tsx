@@ -49,7 +49,7 @@ export const CodeExplorer = memo(function CodeExplorer({
     <GlassCard key={index} variant="default" className="space-y-3 p-0 overflow-hidden">
       {/* Language badge — filename lives in terminal chrome below */}
       <div className="flex items-center gap-1.5 px-4 pt-4 text-xs text-muted-foreground">
-        <FileCode className="h-3.5 w-3.5" aria-hidden="true" />
+        <FileCode className="h-3.5 w-3.5 text-[color:var(--vie-accent)]" aria-hidden="true" />
         <span className="ms-auto">
           <Badge variant="muted" className="text-xs">{snippet.language}</Badge>
         </span>

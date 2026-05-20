@@ -234,6 +234,58 @@ describe('internal routes', () => {
         );
       });
 
+      it('should invalidate idempotency keys when a video transitions to failed (so the user can retry immediately)', async () => {
+        const videoSummaryId = new ObjectId().toHexString();
+        const userId = 'failed-user-789';
+
+        const mockUpdateMany = vi.fn().mockResolvedValue({ modifiedCount: 1 });
+        app.mongo.db.collection = vi.fn().mockReturnValue({ updateMany: mockUpdateMany });
+        app.broadcast = vi.fn();
+        mockContainer.costMonitorService.reconcileUserDay.mockResolvedValueOnce(0);
+
+        await app.inject({
+          method: 'POST',
+          url: '/internal/status',
+          headers: {
+            'content-type': 'application/json',
+            'x-internal-secret': INTERNAL_SECRET,
+          },
+          payload: {
+            type: 'video.status',
+            payload: { videoSummaryId, userId, status: 'failed' },
+          },
+        });
+
+        expect(mockContainer.idempotencyService.invalidateByVideoSummaryId).toHaveBeenCalledWith(
+          videoSummaryId,
+        );
+      });
+
+      it('should NOT invalidate idempotency keys when a video completes successfully', async () => {
+        const videoSummaryId = new ObjectId().toHexString();
+        const userId = 'success-user-001';
+
+        const mockUpdateMany = vi.fn().mockResolvedValue({ modifiedCount: 1 });
+        app.mongo.db.collection = vi.fn().mockReturnValue({ updateMany: mockUpdateMany });
+        app.broadcast = vi.fn();
+        mockContainer.costMonitorService.reconcileUserDay.mockResolvedValueOnce(0);
+
+        await app.inject({
+          method: 'POST',
+          url: '/internal/status',
+          headers: {
+            'content-type': 'application/json',
+            'x-internal-secret': INTERNAL_SECRET,
+          },
+          payload: {
+            type: 'video.status',
+            payload: { videoSummaryId, userId, status: 'completed' },
+          },
+        });
+
+        expect(mockContainer.idempotencyService.invalidateByVideoSummaryId).not.toHaveBeenCalled();
+      });
+
       it('should look up users in userVideos when the completion event has no userId', async () => {
         const videoSummaryId = new ObjectId().toHexString();
         const sharedUserA = new ObjectId();

@@ -75,7 +75,9 @@ export function SharePage() {
     return (
       <div className="surface-ambient relative min-h-dvh flex flex-col items-center justify-center gap-6 px-4 overflow-hidden">
         <div className="stack-sm text-center max-w-md">
-          <p className="type-eyebrow text-[0.6875rem] font-mono uppercase tracking-[0.18em] text-muted-foreground/80">
+          {/* Eyebrow diverges from .type-eyebrow defaults: mono family + wider
+              0.18em tracking match the Generate page hero stamp. */}
+          <p className="type-eyebrow font-mono tracking-[0.18em] text-muted-foreground/80">
             <span className="inline-block h-1 w-1 rounded-full bg-primary align-middle me-2" />
             404 · Share not found
           </p>
@@ -113,8 +115,10 @@ export function SharePage() {
             aria-label="VIE home"
           >
             <VieLogotype size="md" animated />
+            {/* Divergence from .type-eyebrow: mono family + 0.15em tracking
+                for the secondary "shared with you" stamp next to the logotype. */}
             <span
-              className="hidden sm:inline-flex items-center font-mono text-[0.625rem] text-muted-foreground uppercase tracking-[0.15em] ms-1"
+              className="type-eyebrow hidden sm:inline-flex items-center font-mono tracking-[0.15em] ms-1"
               aria-hidden="true"
             >
               · shared with you
@@ -151,7 +155,7 @@ export function SharePage() {
                   </p>
                 )}
               </div>
-              <p className="mt-6 text-center text-xs text-muted-foreground/70 tracking-wide uppercase">
+              <p className="type-eyebrow mt-6 text-center text-muted-foreground/70">
                 Shared via Video Insight Engine
               </p>
             </div>

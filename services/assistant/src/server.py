@@ -26,6 +26,7 @@ from src.repositories.video_repository import MongoVideoRepository
 from src.services.assistant import AssistantService
 from src.services.context_builder import ContextBuilder
 from src.services.llm_provider import LLMProvider
+from src.services.observability import flush_langfuse, init_langfuse
 from src.services.rag import RAGService
 from src.tools.concept_explain import ConceptExplainTool
 from src.tools.cross_reference import CrossReferenceTool
@@ -93,6 +94,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan: initialise dependencies and register callbacks."""
     validate_internal_secret()
 
+    # Langfuse observability — no-op when LANGFUSE_PUBLIC_KEY/SECRET_KEY are unset.
+    init_langfuse()
+
     # MongoDB
     mongo_client = AsyncIOMotorClient(settings.MONGODB_URI)
     db = mongo_client.get_default_database()
@@ -156,6 +160,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
     # Cleanup
+    await flush_langfuse()
     mongo_client.close()
     if usage_callback:
         try:
@@ -228,11 +233,18 @@ def create_app() -> FastAPI:
         if service is None:
             raise HTTPException(status_code=503, detail="Service not ready")
 
+        # vie-api forwards X-User-Id; X-Session-Id is optional and groups
+        # consecutive chat turns under one Langfuse session.
+        user_id = req.headers.get("X-User-Id")
+        session_id = req.headers.get("X-Session-Id")
+
         return StreamingResponse(
             service.chat(
                 video_id=request.video_id,
                 message=request.message,
                 history=request.conversation_history,
+                user_id=user_id,
+                session_id=session_id,
             ),
             media_type="text/event-stream",
             headers={

@@ -73,6 +73,14 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         logger.warning("llm_usage_callback_failed", error=str(e))
 
+    # Initialize Langfuse observability — no-op when keys are unset.
+    try:
+        from src.services.observability import init_langfuse
+        client = init_langfuse()
+        logger.info("langfuse_init", enabled=client is not None)
+    except Exception as e:
+        logger.warning("langfuse_init_failed", error=str(e))
+
     yield
 
     # Shutdown worker pool
@@ -92,6 +100,13 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             _usage_callback.shutdown_sync()
         except Exception as e:
             logger.warning("callback_shutdown_failed", error=str(e))
+
+    # Drain Langfuse buffer so in-flight spans aren't lost on container stop.
+    try:
+        from src.services.observability import flush_langfuse
+        await flush_langfuse()
+    except Exception as e:
+        logger.warning("langfuse_flush_failed", error=str(e))
 
 
 app = FastAPI(title="vie-summarizer", lifespan=lifespan)

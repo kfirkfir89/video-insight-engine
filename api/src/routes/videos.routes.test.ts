@@ -438,4 +438,274 @@ describe('videos routes', () => {
       expect(response.statusCode).toBe(400);
     });
   });
+
+  describe('POST /api/videos — idempotency gate', () => {
+    const VALID_YT_URL = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+
+    const completedHit = (userVideoId: string, summaryId: string) => ({
+      created: false,
+      doc: {
+        _id: { toString: () => 'idem1' },
+        hash: 'test-hash',
+        status: 'completed' as const,
+        userId: { toString: () => 'test-user-id' },
+        videoSummaryId: { toString: () => summaryId },
+        userVideoId: { toString: () => userVideoId },
+        youtubeId: 'dQw4w9WgXcQ',
+      },
+    });
+
+    const pendingHit = () => ({
+      created: false,
+      doc: {
+        _id: { toString: () => 'idem-pending' },
+        hash: 'test-hash',
+        status: 'pending' as const,
+        userId: { toString: () => 'test-user-id' },
+        youtubeId: 'dQw4w9WgXcQ',
+      },
+    });
+
+    const freshReserve = () => ({
+      created: true,
+      doc: {
+        _id: { toString: () => 'idem-new' },
+        hash: 'test-hash',
+        status: 'pending' as const,
+        userId: { toString: () => 'test-user-id' },
+        youtubeId: 'dQw4w9WgXcQ',
+      },
+    });
+
+    it('returns the cached videoSummaryId without reserving cost or calling createVideo on a duplicate completed hit', async () => {
+      const userVideoId = '507f1f77bcf86cd799439011';
+      const summaryId = '507f191e810c19729de860ea';
+      mockContainer.idempotencyService.reserveHash.mockResolvedValue(completedHit(userVideoId, summaryId));
+      mockContainer.videoRepository.findUserVideo.mockResolvedValue({
+        _id: { toString: () => userVideoId },
+        videoSummaryId: { toString: () => summaryId },
+        youtubeId: 'dQw4w9WgXcQ',
+        title: 'Cached Title',
+        channel: 'Cached Channel',
+        duration: 100,
+        thumbnailUrl: 'https://example.com/thumb.jpg',
+        status: 'completed',
+      });
+      mockContainer.videoRepository.findCacheById.mockResolvedValue({
+        title: 'Summary Title',
+        channel: 'Summary Channel',
+        duration: 100,
+        thumbnailUrl: 'https://example.com/thumb.jpg',
+        status: 'completed',
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/videos',
+        headers: { authorization: authHeader, 'content-type': 'application/json' },
+        payload: { url: VALID_YT_URL },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.duplicate).toBe(true);
+      expect(body.cached).toBe(true);
+      expect(body.video.id).toBe(userVideoId);
+      expect(body.video.videoSummaryId).toBe(summaryId);
+      expect(body.video.title).toBe('Summary Title');
+      expect(body.video.channel).toBe('Summary Channel');
+
+      // No reservation, no createVideo on a hit — that's the whole point.
+      expect(mockContainer.costMonitorService.reserveUserCost).not.toHaveBeenCalled();
+      expect(mockContainer.videoService.createVideo).not.toHaveBeenCalled();
+    });
+
+    it('returns 409 when the hash exists in pending state (another request is in-flight)', async () => {
+      mockContainer.idempotencyService.reserveHash.mockResolvedValue(pendingHit());
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/videos',
+        headers: { authorization: authHeader, 'content-type': 'application/json' },
+        payload: { url: VALID_YT_URL },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error).toBe('IDEMPOTENCY_IN_FLIGHT');
+
+      // No work happens for the late caller.
+      expect(mockContainer.costMonitorService.reserveUserCost).not.toHaveBeenCalled();
+      expect(mockContainer.videoService.createVideo).not.toHaveBeenCalled();
+    });
+
+    it('falls through to fresh creation when the completed hash points to a deleted userVideo', async () => {
+      // First reserve attempt finds a stale completed row pointing at a deleted userVideo.
+      // After scoped-invalidate, the retry reserves cleanly.
+      mockContainer.idempotencyService.reserveHash
+        .mockResolvedValueOnce(completedHit('gone1', 'sumX'))
+        .mockResolvedValueOnce(freshReserve());
+
+      mockContainer.videoRepository.findUserVideo.mockResolvedValue(null);
+      mockContainer.videoService.createVideo.mockResolvedValue({
+        video: { id: 'newUV', videoSummaryId: 'newSum', status: 'pending' },
+        cached: false,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/videos',
+        headers: { authorization: authHeader, 'content-type': 'application/json' },
+        payload: { url: VALID_YT_URL },
+      });
+
+      expect(response.statusCode).toBe(201);
+      // Stale-hit cleanup is scoped to the (hash, observed summaryId) pair so a
+      // concurrent fresh reservation cannot be accidentally deleted.
+      expect(mockContainer.idempotencyService.invalidateStaleCompleted).toHaveBeenCalledWith(
+        'test-hash',
+        'sumX',
+      );
+      expect(mockContainer.idempotencyService.reserveHash).toHaveBeenCalledTimes(2);
+      expect(mockContainer.costMonitorService.reserveUserCost).toHaveBeenCalled();
+      expect(mockContainer.videoService.createVideo).toHaveBeenCalled();
+    });
+
+    it('completes the hash with real IDs after a fresh successful creation', async () => {
+      mockContainer.idempotencyService.reserveHash.mockResolvedValue(freshReserve());
+      mockContainer.videoService.createVideo.mockResolvedValue({
+        video: { id: 'uv1', videoSummaryId: 'sum1', status: 'pending' },
+        cached: false,
+      });
+
+      await app.inject({
+        method: 'POST',
+        url: '/api/videos',
+        headers: { authorization: authHeader, 'content-type': 'application/json' },
+        payload: { url: VALID_YT_URL },
+      });
+
+      expect(mockContainer.idempotencyService.completeHash).toHaveBeenCalledWith({
+        hash: 'test-hash',
+        videoSummaryId: 'sum1',
+        userVideoId: 'uv1',
+      });
+    });
+
+    it('invalidates the reserved hash when createVideo throws', async () => {
+      mockContainer.idempotencyService.reserveHash.mockResolvedValue(freshReserve());
+      mockContainer.videoService.createVideo.mockRejectedValue(new Error('downstream-blew-up'));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/videos',
+        headers: { authorization: authHeader, 'content-type': 'application/json' },
+        payload: { url: VALID_YT_URL },
+      });
+
+      expect(response.statusCode).toBe(500);
+      expect(mockContainer.idempotencyService.invalidateByHash).toHaveBeenCalledWith('test-hash');
+    });
+
+    it('invalidates the reserved hash when reserveUserCost throws DailyLimitReachedError', async () => {
+      const { DailyLimitReachedError } = await import('../utils/errors.js');
+      mockContainer.idempotencyService.reserveHash.mockResolvedValue(freshReserve());
+      mockContainer.costMonitorService.reserveUserCost.mockRejectedValue(
+        new DailyLimitReachedError(2, '2026-05-15T00:00:00.000Z'),
+      );
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/videos',
+        headers: { authorization: authHeader, 'content-type': 'application/json' },
+        payload: { url: VALID_YT_URL },
+      });
+
+      expect(response.statusCode).toBe(429);
+      expect(mockContainer.idempotencyService.invalidateByHash).toHaveBeenCalledWith('test-hash');
+      expect(mockContainer.videoService.createVideo).not.toHaveBeenCalled();
+    });
+
+    it('skips idempotency entirely when bypassCache is true', async () => {
+      mockContainer.videoService.createVideo.mockResolvedValue({
+        video: { id: 'uv1', videoSummaryId: 'sum1', status: 'pending' },
+        cached: false,
+      });
+
+      await app.inject({
+        method: 'POST',
+        url: '/api/videos',
+        headers: { authorization: authHeader, 'content-type': 'application/json' },
+        payload: { url: VALID_YT_URL, bypassCache: true },
+      });
+
+      expect(mockContainer.idempotencyService.reserveHash).not.toHaveBeenCalled();
+      expect(mockContainer.idempotencyService.completeHash).not.toHaveBeenCalled();
+    });
+
+    it('passes the Idempotency-Key HTTP header to computeKey when supplied', async () => {
+      mockContainer.idempotencyService.reserveHash.mockResolvedValue(freshReserve());
+      mockContainer.videoService.createVideo.mockResolvedValue({
+        video: { id: 'uv1', videoSummaryId: 'sum1', status: 'pending' },
+        cached: false,
+      });
+
+      await app.inject({
+        method: 'POST',
+        url: '/api/videos',
+        headers: {
+          authorization: authHeader,
+          'content-type': 'application/json',
+          'idempotency-key': 'client-supplied-uuid',
+        },
+        payload: { url: VALID_YT_URL },
+      });
+
+      expect(mockContainer.idempotencyService.computeKey).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'test-user-id',
+          youtubeId: 'dQw4w9WgXcQ',
+          clientKey: 'client-supplied-uuid',
+        }),
+      );
+    });
+
+    it('does not enqueue a queue job on idempotency hit (cost protection)', async () => {
+      mockContainer.idempotencyService.reserveHash.mockResolvedValue(completedHit('uv1', 'sumX'));
+      mockContainer.videoRepository.findUserVideo.mockResolvedValue({
+        _id: { toString: () => 'uv1' },
+        videoSummaryId: { toString: () => 'sumX' },
+        status: 'completed',
+      });
+      mockContainer.videoRepository.findCacheById.mockResolvedValue(null);
+
+      await app.inject({
+        method: 'POST',
+        url: '/api/videos',
+        headers: { authorization: authHeader, 'content-type': 'application/json' },
+        payload: { url: VALID_YT_URL },
+      });
+
+      // createVideo is the entry point to both HTTP-summarizer and the queue
+      // publisher — bypassing it is the canonical cost-protection guarantee.
+      expect(mockContainer.videoService.createVideo).not.toHaveBeenCalled();
+      expect(mockContainer.queuePublisher.publishVideoJob).not.toHaveBeenCalled();
+      expect(mockContainer.summarizerClient.triggerSummarization).not.toHaveBeenCalled();
+      expect(mockContainer.userCostRepository.incrementDailyCost).not.toHaveBeenCalled();
+    });
+
+    it('rejects an Idempotency-Key header that is too long (>255 chars)', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/videos',
+        headers: {
+          authorization: authHeader,
+          'content-type': 'application/json',
+          'idempotency-key': 'a'.repeat(300),
+        },
+        payload: { url: VALID_YT_URL },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+  });
 });

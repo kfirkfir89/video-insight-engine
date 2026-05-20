@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { useAddVideo } from '@/hooks/use-videos';
 import { hasPlaylistId, hasVideoId, isYouTubeUrl } from '@/lib/youtube-utils';
 import { cn } from '@/lib/utils';
+import { showDuplicateToast } from '@/features/video-output/lib/duplicate-toast';
 
 interface BoardInlinePasteProps {
   /** Folder to add the video into — passed from the current Board selection.
@@ -58,6 +59,9 @@ export const BoardInlinePaste = memo(function BoardInlinePaste({
         folderId: folderId ?? undefined,
       });
       if (result?.video?.id) {
+        if (result.duplicate) {
+          void showDuplicateToast();
+        }
         navigate(`/video/${result.video.id}`);
       }
     } catch (err) {

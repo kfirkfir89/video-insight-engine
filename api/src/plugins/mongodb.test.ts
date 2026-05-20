@@ -134,6 +134,16 @@ describe('MongoDB plugin', () => {
       expect(emailIndex?.unique).toBe(true);
     });
 
+    it('should create a sparse videoSummaryId index on idempotencyKeys so pending placeholders are excluded', async () => {
+      const indexes = await app.mongo.db.collection('idempotencyKeys').indexes();
+
+      const videoSummaryIndex = indexes.find(idx =>
+        idx.key && 'videoSummaryId' in idx.key
+      );
+      expect(videoSummaryIndex).toBeDefined();
+      expect(videoSummaryIndex?.sparse).toBe(true);
+    });
+
   });
 
   describe('connection cleanup', () => {

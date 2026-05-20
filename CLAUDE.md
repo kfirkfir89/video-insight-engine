@@ -62,7 +62,9 @@ video-insight-engine/
 | Service docs | [docs/SERVICE-API.md](./docs/SERVICE-API.md), [SERVICE-SUMMARIZER.md](./docs/SERVICE-SUMMARIZER.md), [SERVICE-ASSISTANT.md](./docs/SERVICE-ASSISTANT.md) |
 | Frontend patterns | [docs/FRONTEND.md](./docs/FRONTEND.md) |
 | LLM cost & cache crediting | [docs/llm-cost-model.md](./docs/llm-cost-model.md) |
+| LLM tracing, prompt registry, faithfulness | [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md) |
 | RAG chunker, embeddings, `/library/search` | [docs/RAG.md](./docs/RAG.md) |
+| Request idempotency, `PIPELINE_VERSION` bumps | [docs/IDEMPOTENCY.md](./docs/IDEMPOTENCY.md) |
 
 ## Quick Start
 

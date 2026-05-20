@@ -127,6 +127,23 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "console"  # "console" or "json"
 
+    # ─── Langfuse observability ─────────────────────────────────────────
+    # Leave keys blank to disable — every Langfuse helper is no-op when
+    # init returns None, so tests and offline dev never hit the network.
+    LANGFUSE_PUBLIC_KEY: str | None = None
+    LANGFUSE_SECRET_KEY: str | None = None
+    LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+    # Faithfulness judge: fraction of extracted items to spot-check (0 disables).
+    LANGFUSE_FAITHFULNESS_SAMPLE_RATE: float = 0.2
+    # User-id propagation policy for Langfuse traces. Options:
+    #   - "identity" (default): forward the internal user id as-is.
+    #   - "hash":     SHA-256 of "<salt>::<id>" truncated to 16 chars.
+    #   - "omit":     never include user_id in traces.
+    # When compliance forbids per-user identifiers leaving the host, use
+    # "omit"; for support-driven debugging keep "identity".
+    LANGFUSE_USER_ID_MODE: str = "identity"
+    LANGFUSE_USER_ID_HASH_SALT: str = ""
+
     # S3 — uses existing vie-transcripts bucket for all media (frames, transcripts, audio)
     S3_BUCKET: str = "vie-transcripts"
     S3_PRESIGNED_URL_EXPIRY: int = 3600  # Presigned URL validity in seconds (1 hour)

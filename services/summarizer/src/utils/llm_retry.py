@@ -124,15 +124,23 @@ async def call_llm_with_retry(
 
     for attempt in range(max_retries + 1):
         start = time.monotonic()
+        span_metadata = {
+            "attempt": attempt + 1,
+            "maxAttempts": max_retries + 1,
+            "useFastModel": use_fast_model,
+            "modelOverride": model_override,
+        }
         try:
             if use_fast_model:
                 raw = await llm_service.call_llm_fast(
                     prompt, max_tokens=max_tokens, timeout=timeout, json_mode=json_mode,
+                    span_name=stage_name, span_metadata=span_metadata,
                 )
             else:
                 raw = await llm_service.call_llm(
                     prompt, max_tokens=max_tokens, timeout=timeout,
                     json_mode=json_mode, cache_static=cache_static,
+                    span_name=stage_name, span_metadata=span_metadata,
                 )
             duration = time.monotonic() - start
 

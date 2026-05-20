@@ -32,7 +32,17 @@ export function OutputSkeleton({ sections, streamingState }: OutputSkeletonProps
       {/* Content skeleton */}
       <div className="flex flex-col gap-3">
         {[1, 2, 3, 4].map((i) => (
-          <GlassCard key={i} className={cn('animate-pulse', i <= 1 && 'opacity-100', i > 1 && 'opacity-60')}>
+          <GlassCard
+            key={i}
+            className={cn(
+              'skeleton-breathe motion-reduce:animate-none',
+              // Stagger the breath so the four cards don't pulse in lockstep —
+              // reads as activity instead of a single global heartbeat.
+              i === 2 && '[animation-delay:200ms]',
+              i === 3 && '[animation-delay:400ms]',
+              i === 4 && '[animation-delay:600ms]',
+            )}
+          >
             <div className="flex flex-col gap-2">
               <div className="h-4 w-1/3 rounded bg-muted" />
               <div className="h-3 w-full rounded bg-muted/60" />

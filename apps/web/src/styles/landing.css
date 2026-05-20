@@ -15,6 +15,118 @@
   overflow: clip;
 }
 
+/* ── Hero ambient orbs ──────────────────────────────
+   Two soft chromatic blooms behind the headline. Scoped to a
+   hero-only wrapper so they don't bleed into the bento section.
+   Decoration only — pointer-events disabled, z-index recessed.
+   Drift on a slow linear cycle; collapses to static on reduced-motion. */
+.landing-hero-orbs {
+  position: relative;
+  isolation: isolate;
+}
+.landing-hero-orbs::before,
+.landing-hero-orbs::after {
+  content: "";
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: -1;
+  will-change: transform;
+}
+.landing-hero-orbs::before {
+  /* Coral/honey warm orb — drifts in from the top-left edge */
+  inset: -10rem auto auto -10rem;
+  width: 32rem;
+  height: 32rem;
+  background: radial-gradient(
+    circle,
+    oklch(from var(--vie-coral) l c h / 0.55),
+    oklch(from var(--vie-honey) l c h / 0.35) 45%,
+    transparent 70%
+  );
+  opacity: 0.22;
+  animation: landing-orb-drift-a 22s linear infinite alternate;
+}
+.landing-hero-orbs::after {
+  /* Mint/sky cool orb — settles at the bottom-right */
+  inset: auto -12rem -14rem auto;
+  width: 36rem;
+  height: 36rem;
+  background: radial-gradient(
+    circle,
+    oklch(from var(--vie-mint) l c h / 0.5),
+    oklch(from var(--vie-sky) l c h / 0.3) 45%,
+    transparent 70%
+  );
+  opacity: 0.2;
+  animation: landing-orb-drift-b 26s linear infinite alternate;
+}
+[data-theme="dark"] .landing-hero-orbs::before {
+  opacity: 0.18;
+}
+[data-theme="dark"] .landing-hero-orbs::after {
+  opacity: 0.16;
+}
+@keyframes landing-orb-drift-a {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(3rem, 2rem, 0); }
+}
+@keyframes landing-orb-drift-b {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-2.5rem, -1.5rem, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-hero-orbs::before,
+  .landing-hero-orbs::after {
+    animation: none;
+  }
+}
+/* On small screens, soften the bloom so it doesn't overpower the column. */
+@media (max-width: 720px) {
+  .landing-hero-orbs::before {
+    width: 22rem;
+    height: 22rem;
+    filter: blur(60px);
+  }
+  .landing-hero-orbs::after {
+    width: 24rem;
+    height: 24rem;
+    filter: blur(60px);
+  }
+}
+
+/* ── Hero entry stagger ─────────────────────────────
+   Each child gets a fade-up keyed off its --enter-delay.
+   Reduced-motion collapses to a no-op (no animation, no transform). */
+.landing-hero-enter {
+  opacity: 0;
+  transform: translateY(16px);
+  animation: fadeUp 0.7s var(--ease-out-quint) both;
+  animation-delay: var(--enter-delay, 0ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-hero-enter {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+}
+
+/* ── Demo console wrapper — adds a deep on-brand drop glow ──
+   Faint primary-tinted shadow lifts the streaming console
+   off the page; the wrapper owns visual weight so the inner
+   .landing-console keeps its own quieter rest shadow. */
+.landing-demo-frame {
+  border-radius: 1rem;
+  box-shadow: 0 24px 80px -28px oklch(from var(--primary) l c h / 0.25);
+}
+[data-theme="dark"] .landing-demo-frame {
+  box-shadow:
+    0 30px 100px -32px oklch(from var(--primary) l c h / 0.35),
+    0 0 0 1px oklch(from var(--primary) l c h / 0.06);
+}
+
 /* Subtle grid paper — dense dots tinted toward foreground.
    Strong enough to register, weak enough to recede under content. */
 .landing-grid-paper::before {

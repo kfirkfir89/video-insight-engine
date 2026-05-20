@@ -303,6 +303,36 @@ For long videos (>30 min), extraction uses chunked batching (2-5 additional call
 
 ---
 
+## Observability Layer
+
+Every pipeline run is wrapped in a [Langfuse](https://langfuse.com) trace named `pipeline:{videoSummaryId}` so each LLM call surfaces as a generation span with input/output/cost/latency. The layer is **optional**: every helper no-ops when `LANGFUSE_PUBLIC_KEY`/`SECRET_KEY` are unset.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Pipeline run                                                    │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ Langfuse trace (pipeline:{videoSummaryId})              │   │
+│  │   ├── generation: classifier                             │   │
+│  │   ├── generation: plan                                   │   │
+│  │   ├── generation: extraction (× chunks)                  │   │
+│  │   ├── generation: synthesis                              │   │
+│  │   ├── generation: enrichment                             │   │
+│  │   ├── generation: translation_* (conditional)            │   │
+│  │   └── score: faithfulness (sampled, non-blocking)        │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+- **Trace boundary**: opened in `routes/stream.py::stream_summarization` via `pipeline_trace(...)`, closed automatically on exit. The trace handle lives in an asyncio `ContextVar` so concurrent runs don't collide.
+- **Generation spans**: emitted by `LLMProvider.complete_with_messages` and `complete_fast` whenever a caller passes `span_name`. `call_llm_with_retry` threads its `stage_name` through automatically, so every stage gets per-attempt visibility for free.
+- **Prompts**: synced via `scripts/register_prompts.py`. Call sites can opt into registry-first loading with `load_prompt_with_fallback`.
+- **Faithfulness judge**: `services/pipeline/faithfulness.py` runs as a fire-and-forget task after extraction. Sampling rate is `LANGFUSE_FAITHFULNESS_SAMPLE_RATE` (default 0.2).
+- **Assistant**: separate trace per chat session (`chat:{videoId}`); tool calls attach as named spans.
+
+See [OBSERVABILITY.md](./OBSERVABILITY.md) for the full guide.
+
+---
+
 ## Network Topology
 
 ```

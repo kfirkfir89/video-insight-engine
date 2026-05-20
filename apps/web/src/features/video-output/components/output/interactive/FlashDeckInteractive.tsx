@@ -249,7 +249,7 @@ export const FlashDeckInteractive = memo(function FlashDeckInteractive({
             <div
               className={cn(
                 'absolute inset-0 flex flex-col items-center justify-center',
-                'rounded-2xl border border-primary/30 bg-primary/5 p-6 text-center shadow-2xl',
+                'rounded-2xl border border-[color:var(--vie-accent-border)] bg-[color:var(--vie-accent-muted)] p-6 text-center shadow-2xl',
               )}
               style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
             >

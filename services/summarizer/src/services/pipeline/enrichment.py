@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import logging
-from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -12,6 +11,7 @@ from ...models.pipeline_types import EnrichmentData
 from ...utils.json_parsing import parse_json_response
 from ...utils.llm_retry import call_llm_with_retry
 from .pipeline_helpers import truncate_json_safely, sanitize_for_prompt
+from .prompt_builder import load_prompt_text
 
 if TYPE_CHECKING:
     from ...services.llm import LLMService
@@ -22,11 +22,13 @@ logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
 
 
-@lru_cache(maxsize=16)
 def _load_prompt(prompt_path: str) -> str | None:
-    """Load and cache prompt template from disk. Path-traversal safe.
+    """Registry-first enrichment prompt loader. Path-traversal safe.
 
-    NOTE: Cached for process lifetime — prompt file changes require process restart.
+    Resolves the candidate path and rejects anything outside ``PROMPTS_DIR``.
+    Then delegates to :func:`load_prompt_text` which prefers the Langfuse
+    registry version and falls back to the on-disk file via the
+    process-wide ``_read_file_cached`` cache.
     """
     p = Path(prompt_path).resolve()
     if not p.is_relative_to(PROMPTS_DIR.resolve()):
@@ -34,7 +36,7 @@ def _load_prompt(prompt_path: str) -> str | None:
         return None
     if not p.exists():
         return None
-    return p.read_text()
+    return load_prompt_text(p)
 
 # Loaded from domains.json["enrichment"] — maps content tag → prompt filename.
 # Only tags listed there trigger the enrichment stage.

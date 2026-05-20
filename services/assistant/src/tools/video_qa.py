@@ -76,6 +76,7 @@ class VideoQATool:
             answer = await self._llm.complete_with_messages(
                 messages=messages,
                 max_tokens=1500,
+                span_name="tool:video_qa",
             )
         except LLMError:
             logger.exception("video_qa_llm_failed", video_id=video_id)

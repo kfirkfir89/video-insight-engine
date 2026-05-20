@@ -112,7 +112,7 @@ export function SidebarToolbar() {
                 clearSearch();
                 setActivePanel(null);
               }}
-              placeholder="Search folders and videos..."
+              placeholder="Search…"
             />
           </div>
         )}
@@ -158,7 +158,10 @@ function ToolbarButton({ icon: Icon, label, tooltip, active, disabled, onClick }
           disabled={disabled}
           className={cn(
             "group flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 transition-colors",
-            "hover:bg-accent/70",
+            // Inactive hover: icon + label brighten to foreground for stronger
+            // affordance — defaulting to muted-foreground/80 made the toolbar
+            // feel passive even on hover.
+            "hover:bg-accent/70 hover:[&_svg]:text-foreground hover:[&_span]:text-foreground",
             active && "text-primary bg-primary/8",
             disabled && "opacity-35 cursor-not-allowed hover:bg-transparent",
           )}
@@ -166,14 +169,14 @@ function ToolbarButton({ icon: Icon, label, tooltip, active, disabled, onClick }
         >
           <Icon
             className={cn(
-              "h-4 w-4",
+              "h-4 w-4 transition-colors",
               active ? "text-primary" : "text-muted-foreground",
             )}
           />
           <span
             className={cn(
-              "text-[10px] font-medium leading-none tracking-wide",
-              active ? "text-primary" : "text-muted-foreground/80",
+              "text-[10px] font-medium leading-none tracking-wide transition-colors",
+              active ? "text-primary" : "text-muted-foreground",
             )}
           >
             {label}

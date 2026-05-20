@@ -165,12 +165,24 @@ export function SidebarSection() {
             )
           ) : (
             <>
+              {filteredFolders.length > 0 && (
+                <SectionHeader label="Folders" count={filteredFolders.length} />
+              )}
               <FolderTree
                 folders={filteredFolders}
                 videos={filteredVideos}
                 allFolders={folders}
               />
 
+              {/* Soft divider — border/40 keeps the rhythm without shouting.
+                  Only shows when both folders AND unassigned videos exist. */}
+              {filteredFolders.length > 0 && unassignedVideos.length > 0 && (
+                <div className="mx-3 my-2 border-t border-border/40" aria-hidden="true" />
+              )}
+
+              {unassignedVideos.length > 0 && (
+                <SectionHeader label="Recent" count={unassignedVideos.length} />
+              )}
               <UnassignedVideosList
                 videos={unassignedVideos}
                 folders={folders}
@@ -182,6 +194,30 @@ export function SidebarSection() {
           <div className="min-h-16" />
         </div>
       </ScrollArea>
+    </div>
+  );
+}
+
+interface SectionHeaderProps {
+  label: string;
+  count: number;
+}
+
+/**
+ * Section header rendered above grouped lists (Folders / Recent).
+ *
+ * Uses `.type-eyebrow` (uppercase 11px / 0.08em tracking / weight 600) so
+ * the label reads as a section divider, not a generic header. Counts use
+ * `.tabular-nums` per DESIGN.md §3 Tabular-Figure Rule — proportional
+ * digits in counts are a tell that nobody tuned it.
+ */
+function SectionHeader({ label, count }: SectionHeaderProps) {
+  return (
+    <div className="flex items-baseline gap-2 px-4 pt-3 pb-1.5">
+      <span className="type-eyebrow">{label}</span>
+      <span className="text-[10px] tabular-nums text-muted-foreground/60 leading-none">
+        {count}
+      </span>
     </div>
   );
 }

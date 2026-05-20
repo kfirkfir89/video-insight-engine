@@ -7,7 +7,7 @@ import { useProcessingStore } from "@/features/video-output/stores/processing-st
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
-import { Loader2, ArrowLeft, RefreshCw, AlertCircle } from "lucide-react";
+import { Loader2, ArrowLeft, RefreshCw, AlertCircle, PauseCircle } from "lucide-react";
 import { OutputRouter } from "@/features/video-output/components/OutputRouter";
 import { VideoPlayerProvider } from "@/features/video-output/contexts/VideoPlayerContext";
 
@@ -147,8 +147,17 @@ export function VideoDetailPage() {
   if (isLoading) {
     return (
       <Layout>
-        <div className="flex justify-center p-4 md:p-6 py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4 text-center">
+          <div className="icon-glow mb-5">
+            <Loader2
+              className="h-14 w-14 animate-spin text-primary motion-reduce:animate-none"
+              aria-hidden="true"
+            />
+          </div>
+          <p className="type-eyebrow">Loading your video</p>
+          <p className="type-caption mt-2 max-w-xs">
+            Pulling the stream — a few seconds, tops.
+          </p>
         </div>
       </Layout>
     );
@@ -158,13 +167,22 @@ export function VideoDetailPage() {
   if (error || !video || !mergedVideo) {
     return (
       <Layout>
-        <div className="text-center p-4 md:p-6 py-12 space-y-2">
-          <p className="type-h3">We couldn&apos;t load this video</p>
-          <p className="type-caption max-w-sm mx-auto">
-            It may have been deleted, or you might not have access. Try going back to your library.
+        <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4 py-12 text-center">
+          <div className="icon-glow mb-5">
+            <AlertCircle
+              className="h-14 w-14 text-destructive"
+              aria-hidden="true"
+            />
+          </div>
+          <h1 className="type-page-title text-balance">
+            We couldn&apos;t load this video
+          </h1>
+          <p className="type-caption mt-3 max-w-sm text-pretty">
+            It may have been deleted, or you might not have access. Try going
+            back to your library.
           </p>
-          <Link to="/board">
-            <Button variant="outline" className="mt-4">
+          <Link to="/board" className="mt-6">
+            <Button variant="outline">
               <ArrowLeft className="me-2 h-4 w-4" /> Back to library
             </Button>
           </Link>
@@ -200,38 +218,59 @@ export function VideoDetailPage() {
 
     return (
       <Layout>
-        <div className="mx-auto max-w-xl p-4 md:p-6 py-12">
+        <div className="mx-auto max-w-xl px-4 py-12 md:px-6">
           <div className="flex flex-col items-center text-center">
-            <AlertCircle className="h-12 w-12 text-destructive mb-4" aria-hidden="true" />
-            <h2 className="text-xl font-semibold mb-2">We couldn't summarize this video</h2>
-            <p className="text-muted-foreground mb-6">
-              Something went wrong while processing. Here are the most likely reasons:
+            <div className="icon-glow mb-5">
+              <AlertCircle
+                className="h-14 w-14 text-destructive"
+                aria-hidden="true"
+              />
+            </div>
+            <h1 className="type-page-title text-balance">
+              We couldn&apos;t summarize this video
+            </h1>
+            <p className="type-caption mt-3 max-w-md text-pretty">
+              Something went wrong while processing. Here are the most likely
+              reasons:
             </p>
           </div>
 
-          <ul className="space-y-3 mb-8 text-sm">
-            {possibleCauses.map((cause) => (
-              <li key={cause.title} className="rounded-lg border border-border/50 bg-muted/20 p-3">
-                <p className="font-medium text-foreground">{cause.title}</p>
-                <p className="text-muted-foreground mt-1">{cause.remedy}</p>
+          <ul className="mt-8 mb-8 space-y-3">
+            {possibleCauses.map((cause, index) => (
+              <li
+                key={cause.title}
+                className="flex gap-3 rounded-xl border border-border/60 bg-card p-4 shadow-xs transition-shadow hover:shadow-sm"
+              >
+                <span
+                  aria-hidden="true"
+                  className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-mono tabular-nums text-muted-foreground"
+                >
+                  {index + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-base font-semibold text-foreground">
+                    {cause.title}
+                  </p>
+                  <p className="type-caption mt-1">{cause.remedy}</p>
+                </div>
               </li>
             ))}
           </ul>
 
-          <div className="flex gap-3 justify-center">
-            <Link to="/board">
-              <Button variant="outline">
-                <ArrowLeft className="me-2 h-4 w-4" /> Back
-              </Button>
-            </Link>
+          <div className="flex justify-center gap-3">
             <Button onClick={handleRetry} disabled={retryVideo.isPending}>
               {retryVideo.isPending ? (
-                <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                <Loader2 className="me-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
               ) : (
                 <RefreshCw className="me-2 h-4 w-4" />
               )}
               Retry
             </Button>
+            <Link to="/board">
+              <Button variant="outline">
+                <ArrowLeft className="me-2 h-4 w-4" /> Back
+              </Button>
+            </Link>
           </div>
         </div>
       </Layout>
@@ -250,22 +289,29 @@ export function VideoDetailPage() {
   if (isProcessing && isCancelled) {
     return (
       <Layout>
-        <div className="text-center p-4 md:p-6 py-12 space-y-3 max-w-md mx-auto">
-          <p className="type-h3">You stopped watching this stream</p>
-          <p className="type-caption">
-            Processing is still running in the background. Resume to reattach to
-            the live stream, or come back later — the video will be ready when
-            you do.
+        <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4 py-12 text-center">
+          <div className="icon-glow mb-5">
+            <PauseCircle
+              className="h-14 w-14 text-primary"
+              aria-hidden="true"
+            />
+          </div>
+          <h1 className="type-page-title text-balance">
+            You stopped watching this stream
+          </h1>
+          <p className="type-caption mt-3 max-w-sm text-pretty">
+            Processing is still running in the background. Resume to reattach,
+            or come back later — the video will be ready when you do.
           </p>
-          <div className="flex gap-3 justify-center pt-2">
+          <div className="mt-6 flex justify-center gap-3">
+            <Button onClick={handleResumeStream}>
+              <RefreshCw className="me-2 h-4 w-4" /> Resume
+            </Button>
             <Link to="/board">
               <Button variant="outline">
                 <ArrowLeft className="me-2 h-4 w-4" /> Back to library
               </Button>
             </Link>
-            <Button onClick={handleResumeStream}>
-              <RefreshCw className="me-2 h-4 w-4" /> Resume
-            </Button>
           </div>
         </div>
       </Layout>
@@ -275,14 +321,22 @@ export function VideoDetailPage() {
   // Issue #13: Error boundary fallback for rendering errors from malformed streaming state
   const errorFallback = (
     <Layout>
-      <div className="text-center p-4 md:p-6 py-12">
-        <p className="type-h3 text-destructive">Something broke while rendering this video</p>
+      <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4 py-12 text-center">
+        <div className="icon-glow mb-5">
+          <AlertCircle
+            className="h-14 w-14 text-destructive"
+            aria-hidden="true"
+          />
+        </div>
+        <h1 className="type-page-title text-balance text-destructive">
+          Something broke while rendering this video
+        </h1>
         <Button
           variant="outline"
-          className="mt-4"
+          className="mt-6"
           onClick={() => window.location.reload()}
         >
-          Reload Page
+          <RefreshCw className="me-2 h-4 w-4" /> Reload page
         </Button>
       </div>
     </Layout>

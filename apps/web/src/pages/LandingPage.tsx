@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { FormEvent, ReactElement } from "react";
+import type { CSSProperties, FormEvent, ReactElement } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { ArrowRight, Play } from "lucide-react";
 
@@ -66,21 +66,33 @@ export function LandingPage(): ReactElement {
         {/* ── Editorial hero: headline left, live demo right ── */}
         <section
           aria-labelledby="landing-headline"
-          className="pt-8 sm:pt-12 lg:pt-20"
+          className="landing-hero-orbs pt-8 sm:pt-12 lg:pt-20"
         >
           <div className="landing-hero-grid">
             <div className="flex flex-col justify-center gap-8">
               <div>
-                <div className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.15em] text-muted-foreground mb-6">
+                <div
+                  className="landing-hero-enter inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.15em] text-muted-foreground mb-6"
+                  style={{ "--enter-delay": "0ms" } as CSSProperties}
+                >
                   <span className="h-1 w-1 rounded-full bg-primary" aria-hidden="true" />
                   Watch less · Learn everything
                 </div>
-                <h1 id="landing-headline" className="landing-display text-balance">
+                <h1
+                  id="landing-headline"
+                  className="landing-hero-enter type-hero-xl text-balance text-foreground"
+                  style={{ "--enter-delay": "120ms" } as CSSProperties}
+                >
                   Any YouTube video,
                   <br />
-                  turned into an app you can use.
+                  <span className="text-foreground/85">
+                    turned into an app you can use.
+                  </span>
                 </h1>
-                <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground text-pretty">
+                <p
+                  className="landing-hero-enter mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground text-pretty"
+                  style={{ "--enter-delay": "240ms" } as CSSProperties}
+                >
                   Paste a link. VIE extracts the lecture, the recipe, the code,
                   the chapters — as structured, interactive surfaces. Not a
                   transcript. Not a summary. A thing you can study from.
@@ -89,7 +101,8 @@ export function LandingPage(): ReactElement {
 
               <form
                 onSubmit={handleSubmit}
-                className="flex flex-col gap-3 max-w-xl"
+                className="landing-hero-enter flex flex-col gap-3 max-w-xl"
+                style={{ "--enter-delay": "360ms" } as CSSProperties}
                 noValidate
               >
                 <div className="landing-input" data-invalid={isInvalid ? "true" : "false"}>
@@ -109,7 +122,10 @@ export function LandingPage(): ReactElement {
                   <Button
                     type="submit"
                     size="default"
-                    className={cn("cta-magnetic rounded-[10px] px-5 font-semibold shrink-0")}
+                    className={cn(
+                      "cta-magnetic rounded-[10px] px-5 font-semibold shrink-0 scale-pulse-once",
+                    )}
+                    style={{ animationDelay: "1.2s" }}
                     disabled={!trimmed || isInvalid}
                   >
                     Summarize
@@ -146,7 +162,10 @@ export function LandingPage(): ReactElement {
             </div>
 
             {/* Right column — the live streaming demo (hero asset) */}
-            <div className="relative flex items-stretch">
+            <div
+              className="landing-hero-enter landing-demo-frame relative flex items-stretch w-full self-stretch"
+              style={{ "--enter-delay": "300ms" } as CSSProperties}
+            >
               <div className="w-full self-stretch">
                 <StreamingDemoLoop tabPortalId="hero-tab-strip" />
               </div>
@@ -154,7 +173,11 @@ export function LandingPage(): ReactElement {
           </div>
 
           {/* Tab strip — portaled here from StreamingDemoLoop */}
-          <div id="hero-tab-strip" className="mt-6" />
+          <div
+            id="hero-tab-strip"
+            className="landing-hero-enter mt-6"
+            style={{ "--enter-delay": "480ms" } as CSSProperties}
+          />
         </section>
 
         {/* ── Proof section: 12-col bento ── */}
@@ -197,11 +220,14 @@ export function LandingPage(): ReactElement {
         <section className="pt-20 sm:pt-28">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 py-10 border-t border-border/60">
             <div>
-              <h2 className="font-display font-bold text-3xl md:text-4xl leading-tight tracking-[-0.02em] text-foreground">
+              <h2 className="type-page-title text-foreground">
                 Paste a link. Get the app.
               </h2>
               <p className="text-muted-foreground mt-1.5">
                 Free to try. Sign in takes a keystroke.
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                No card needed · About a minute from paste to playable summary
               </p>
             </div>
             <div className="flex items-center gap-2">

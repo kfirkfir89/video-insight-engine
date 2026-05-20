@@ -281,7 +281,8 @@ async def _detect_chapters_with_ai(
         if not prompt_path.exists():
             logger.warning("chapter_detect.txt prompt not found, skipping AI detection")
             return None
-        _CHAPTER_DETECT_PROMPT = prompt_path.read_text()
+        from src.services.pipeline.prompt_builder import load_prompt_text
+        _CHAPTER_DETECT_PROMPT = load_prompt_text(prompt_path)
 
     words = transcript.split()
     first_500 = " ".join(words[:500])

@@ -21,6 +21,7 @@ import type { PlaylistPreview as PlaylistPreviewType } from '@/api/playlists';
 import { PlaylistPreview } from '@/components/playlists/PlaylistPreview';
 import type { Folder as FolderEntity } from '@/types';
 import { SAMPLE_VIDEO } from '@/features/video-output/lib/onboarding-constants';
+import { showDuplicateToast } from '@/features/video-output/lib/duplicate-toast';
 import { ApiError } from '@/api/client';
 import { DailyLimitCallout } from '@/components/usage/DailyLimitCallout';
 
@@ -106,6 +107,12 @@ export function VideoIntakeForm({ className }: VideoIntakeFormProps) {
         });
         if (result?.video?.id) {
           const videoId = result.video.id;
+          // Idempotency hit: server returned the existing videoSummary instead
+          // of starting a new pipeline. Surface a low-key toast so the user
+          // understands their submit was redirected rather than ignored.
+          if (result.duplicate) {
+            void showDuplicateToast();
+          }
           withTransitionName(
             formRef.current,
             'vie-input-spine',

@@ -7,7 +7,7 @@ for all LLM interactions.
 
 import asyncio
 import logging
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 from src.config import settings
 from src.services.llm_provider import LLMProvider
@@ -41,7 +41,10 @@ class LLMService:
         return self._provider.model
 
     async def call_llm_fast(
-        self, prompt: str, max_tokens: int = 4096, timeout: float | None = None, json_mode: bool = False,
+        self, prompt: str, max_tokens: int = 4096, timeout: float | None = None,
+        json_mode: bool = False,
+        span_name: str | None = None,
+        span_metadata: dict[str, Any] | None = None,
     ) -> str:
         """Make an async LLM call using the fast model.
 
@@ -50,6 +53,9 @@ class LLMService:
             max_tokens: Maximum tokens in response
             timeout: Per-call timeout override (seconds). Falls back to 15s default.
             json_mode: When True, request JSON-only output from the model.
+            span_name: When non-None, record the call as a Langfuse generation
+                span. Best-effort — observability failures are swallowed.
+            span_metadata: Extra metadata merged into the generation span.
 
         Returns:
             Generated text content
@@ -57,12 +63,16 @@ class LLMService:
         effective_timeout = timeout if timeout is not None else 15.0
         async with asyncio.timeout(effective_timeout):
             return await self._provider.complete_fast(
-                prompt, max_tokens=max_tokens, timeout=effective_timeout, json_mode=json_mode,
+                prompt, max_tokens=max_tokens, timeout=effective_timeout,
+                json_mode=json_mode,
+                span_name=span_name, span_metadata=span_metadata,
             )
 
     async def call_llm(
         self, prompt: str, max_tokens: int = 2000, timeout: float | None = None,
         json_mode: bool = False, cache_static: str | None = None,
+        span_name: str | None = None,
+        span_metadata: dict[str, Any] | None = None,
     ) -> str:
         """Make an async LLM call.
 
@@ -72,6 +82,9 @@ class LLMService:
             timeout: Per-call timeout override (seconds). Falls back to LLM_TIMEOUT_SECONDS.
             json_mode: When True, request JSON-only output from the model.
             cache_static: Static prompt content for Anthropic prompt caching.
+            span_name: When non-None, record the call as a Langfuse generation
+                span. Best-effort — observability failures are swallowed.
+            span_metadata: Extra metadata merged into the generation span.
 
         Returns:
             Generated text content
@@ -84,6 +97,7 @@ class LLMService:
             return await self._provider.complete(
                 prompt, max_tokens=max_tokens, timeout=effective_timeout,
                 json_mode=json_mode, cache_static=cache_static,
+                span_name=span_name, span_metadata=span_metadata,
             )
 
     async def stream_llm(
