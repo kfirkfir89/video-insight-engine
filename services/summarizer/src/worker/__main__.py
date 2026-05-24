@@ -22,9 +22,10 @@ from src.logging_config import configure_structlog, get_logger
 from src.worker.payload import VideoJobPayload
 from src.worker.pipeline import drive_pipeline
 from src.worker.runner import WorkerRunner
+from src.worker.sentry_bootstrap import init_sentry_for_worker
 from src.worker.topology import QueueTopology, queue_arguments
 
-configure_structlog(json_format=settings.log_format == "json")
+configure_structlog(json_format=settings.LOG_FORMAT == "json", service_name="vie-summarizer-worker")
 logger = get_logger(__name__)
 
 
@@ -136,6 +137,16 @@ def _redact_url(url: str) -> str:
 
 async def main() -> None:
     """Connect, declare topology, and spin N concurrent consumers."""
+    # Sentry first — boot-time exceptions in Langfuse init or aio-pika should
+    # surface in Sentry rather than disappearing into journald. Use structlog
+    # kwargs so `enabled`/`error` stay queryable per the log-shape contract
+    # (services/summarizer/tests/test_logging_shape.py).
+    try:
+        enabled = init_sentry_for_worker()
+        logger.info("worker_sentry_init", enabled=enabled)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("worker_sentry_init_failed", error=str(e))
+
     # Initialize Langfuse observability — no-op when keys are unset. Done
     # before any pipeline runs so the first job's spans attach to a live
     # client instead of silently dropping.

@@ -1,7 +1,18 @@
 import { buildApp } from './app.js';
 import { config } from './config.js';
+import { initSentry } from './plugins/sentry.js';
 
 export async function startServer(): Promise<void> {
+  // Init Sentry BEFORE the app builds so any boot-time exception (config
+  // parsing, plugin load failure) lands in Sentry instead of disappearing
+  // into the journald log. Empty DSN → no-op.
+  initSentry({
+    dsn: config.SENTRY_DSN,
+    environment: config.SENTRY_ENVIRONMENT ?? config.NODE_ENV,
+    release: config.SENTRY_RELEASE,
+    tracesSampleRate: config.SENTRY_TRACES_SAMPLE_RATE,
+  });
+
   const app = await buildApp();
 
   // Process handlers for uncaught errors

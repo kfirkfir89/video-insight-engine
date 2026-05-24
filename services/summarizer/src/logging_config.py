@@ -30,19 +30,40 @@ except ImportError:
 
 def get_log_level() -> int:
     """Get log level from settings."""
-    level = getattr(settings, "log_level", "INFO").upper()
+    level = settings.LOG_LEVEL.upper()
     return getattr(logging, level, logging.INFO)
 
 
-def configure_structlog(json_format: bool = False) -> None:
+def _add_service_processor(service_name: str) -> Processor:
+    """Return a structlog processor that stamps every log line with `service`.
+
+    Keeps the JSON shape consistent across services so a log aggregator can
+    filter / group by `service` without each log line having to mention it
+    explicitly.
+    """
+    from structlog.types import EventDict
+
+    def _processor(_logger: Any, _method_name: str, event_dict: EventDict) -> EventDict:
+        event_dict.setdefault("service", service_name)
+        return event_dict
+
+    return _processor
+
+
+def configure_structlog(json_format: bool = False, service_name: str = "vie-summarizer") -> None:
     """
     Configure structlog for the application.
 
     Args:
         json_format: If True, use JSON output. Otherwise, use colored console output.
+        service_name: Stamped on every log line as ``service``. Override to
+            ``vie-summarizer-worker`` from the worker entrypoint so log
+            consumers can tell the SSE-driving FastAPI process apart from the
+            queue-driven worker.
     """
     # Shared processors for all formats
     shared_processors: list[Processor] = [
+        _add_service_processor(service_name),
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),

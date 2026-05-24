@@ -53,6 +53,17 @@ async function mongodb(fastify: FastifyInstance) {
       await db.collection('users').createIndexes([
         { key: { email: 1 }, unique: true },
         { key: { tier: 1 } },
+        // GDPR scheduler scans for `hardDeleteAt <= now` among soft-deleted
+        // accounts. Sparse on hardDeleteAt keeps the index tiny.
+        { key: { hardDeleteAt: 1 }, sparse: true },
+      ]);
+
+      // userDeletions audit — read by email-hash lookup and by original user
+      // ID. Retained indefinitely (no TTL).
+      await db.collection('userDeletions').createIndexes([
+        { key: { originalUserId: 1 } },
+        { key: { emailHash: 1 } },
+        { key: { completedAt: -1 } },
       ]);
 
       // shareLikes indexes

@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { vi } from 'vitest';
 import { buildApp } from '../app.js';
+import * as softDeleteCache from '../utils/soft-delete-cache.js';
 
 // Mock container services for route testing
 export interface MockContainer {
@@ -112,6 +113,32 @@ export interface MockContainer {
     invalidateByHash: ReturnType<typeof vi.fn>;
     invalidateStaleCompleted: ReturnType<typeof vi.fn>;
     invalidateByVideoSummaryId: ReturnType<typeof vi.fn>;
+  };
+  userRepository: {
+    findById: ReturnType<typeof vi.fn>;
+    findByEmail: ReturnType<typeof vi.fn>;
+    findByUsername: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    updateLastLogin: ReturnType<typeof vi.fn>;
+    updateAndReturnPrevious: ReturnType<typeof vi.fn>;
+    getTier: ReturnType<typeof vi.fn>;
+    findByPaddleCustomerId: ReturnType<typeof vi.fn>;
+    markSoftDeleted: ReturnType<typeof vi.fn>;
+    clearSoftDelete: ReturnType<typeof vi.fn>;
+    findExpiredSoftDeletes: ReturnType<typeof vi.fn>;
+    hardDelete: ReturnType<typeof vi.fn>;
+  };
+  userDeletionRepository: {
+    insert: ReturnType<typeof vi.fn>;
+    findByOriginalUserId: ReturnType<typeof vi.fn>;
+    findByEmailHash: ReturnType<typeof vi.fn>;
+  };
+  userDeletionService: {
+    requestDeletion: ReturnType<typeof vi.fn>;
+    cancelDeletion: ReturnType<typeof vi.fn>;
+    executeHardDelete: ReturnType<typeof vi.fn>;
+    runScheduledDeletions: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -252,6 +279,38 @@ export function createMockContainer(): MockContainer {
       invalidateStaleCompleted: vi.fn().mockResolvedValue(undefined),
       invalidateByVideoSummaryId: vi.fn().mockResolvedValue(undefined),
     },
+    userRepository: {
+      // Default: every authenticated test user is active. Override in
+      // soft-delete tests by mocking findById to return `{ deletedAt: ... }`.
+      findById: vi.fn().mockResolvedValue({
+        _id: { toString: () => testUser.userId },
+        email: testUser.email,
+        deletedAt: null,
+      }),
+      findByEmail: vi.fn().mockResolvedValue(null),
+      findByUsername: vi.fn().mockResolvedValue(null),
+      create: vi.fn(),
+      update: vi.fn().mockResolvedValue(undefined),
+      updateLastLogin: vi.fn().mockResolvedValue(undefined),
+      updateAndReturnPrevious: vi.fn(),
+      getTier: vi.fn().mockResolvedValue('free'),
+      findByPaddleCustomerId: vi.fn().mockResolvedValue(null),
+      markSoftDeleted: vi.fn(),
+      clearSoftDelete: vi.fn(),
+      findExpiredSoftDeletes: vi.fn().mockResolvedValue([]),
+      hardDelete: vi.fn().mockResolvedValue(true),
+    },
+    userDeletionRepository: {
+      insert: vi.fn(),
+      findByOriginalUserId: vi.fn().mockResolvedValue(null),
+      findByEmailHash: vi.fn().mockResolvedValue(null),
+    },
+    userDeletionService: {
+      requestDeletion: vi.fn(),
+      cancelDeletion: vi.fn(),
+      executeHardDelete: vi.fn(),
+      runScheduledDeletions: vi.fn().mockResolvedValue({ processed: 0, succeeded: 0, failed: 0, failures: [] }),
+    },
   };
 }
 
@@ -269,6 +328,11 @@ export async function getAuthHeader(app: FastifyInstance): Promise<string> {
 
 // Build app with mock container for testing
 export async function buildTestApp(mockContainer?: Partial<MockContainer>): Promise<FastifyInstance> {
+  // Drop any cached soft-delete verdicts from prior specs in the same vitest
+  // worker — otherwise a stale `false` entry would let a test that re-mocks
+  // `findById` to return a deleted user slip through the JWT auth hook.
+  softDeleteCache._resetForTests();
+
   const app = await buildApp({
     logger: false,
     // Pass container overrides to buildApp for proper injection

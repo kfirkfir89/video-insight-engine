@@ -82,6 +82,13 @@ class Settings(BaseSettings):
     LANGFUSE_USER_ID_MODE: str = "identity"
     LANGFUSE_USER_ID_HASH_SALT: str = ""
 
+    # ─── Sentry error tracking ──────────────────────────────────────────
+    # Empty DSN -> SDK no-ops. Lets dev/CI run without a live project.
+    SENTRY_DSN: str = ""
+    SENTRY_ENVIRONMENT: str | None = None
+    SENTRY_RELEASE: str | None = None
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.0
+
     @property
     def llm_model(self) -> str:
         """Get the configured LLM model with provider prefix."""

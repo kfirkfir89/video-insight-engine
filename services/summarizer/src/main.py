@@ -5,6 +5,8 @@ from typing import Annotated
 
 from fastapi import FastAPI, Depends
 
+from llm_common.sentry_init import init_sentry_from_settings
+
 from src.config import settings
 from src.logging_config import configure_structlog, get_logger
 from src.middleware import add_request_context_middleware
@@ -25,8 +27,19 @@ from src.utils.worker_pool import shutdown_pool
 from src.services.cache.response_cache import response_cache
 
 # Configure structured logging (JSON in production, console in development)
-configure_structlog(json_format=settings.log_format == "json")
+configure_structlog(json_format=settings.LOG_FORMAT == "json")
 logger = get_logger(__name__)
+
+
+def _init_sentry_from_settings() -> bool:
+    """Boot Sentry from summarizer settings.
+
+    Thin local wrapper over the shared :func:`init_sentry_from_settings` —
+    kept so tests can patch this single entry point. Empty ``SENTRY_DSN``
+    no-ops downstream (production-safe default for dev/CI).
+    """
+    return init_sentry_from_settings(settings, service="vie-summarizer")
+
 
 _usage_callback = None
 
@@ -38,6 +51,14 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     # Validate secrets before anything else
     from src.config import validate_secrets
     validate_secrets()
+
+    # Sentry first — so a failure inside any subsequent boot step surfaces
+    # with full stack traces in Sentry rather than vanishing into journald.
+    try:
+        sentry_enabled = _init_sentry_from_settings()
+        logger.info("sentry_init", enabled=sentry_enabled)
+    except Exception as exc:  # noqa: BLE001 - boot must not depend on observability
+        logger.warning("sentry_init_failed", error=str(exc))
 
     # Preload spaCy model to avoid blocking the event loop on first request.
     # Fail hard if model missing — pipeline will crash on first video otherwise.

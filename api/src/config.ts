@@ -59,6 +59,17 @@ const envSchema = z.object({
   // TTL window for an idempotency hit. 24h is long enough for accidental
   // double-submits and short enough that "I want to retry tomorrow" still works.
   IDEMPOTENCY_TTL_SECONDS: z.string().default('86400').transform(Number),
+  // ─── Sentry ─────────────────────────────────────────────────────────
+  // Empty DSN disables the SDK entirely — the init helper no-ops and the
+  // plugin's hooks become cheap pass-throughs. Lets dev/CI run without
+  // provisioning a project.
+  SENTRY_DSN: z.string().default(''),
+  SENTRY_ENVIRONMENT: z.string().optional(),
+  // Set by CI to the deploy SHA so events are linkable to releases.
+  SENTRY_RELEASE: z.string().optional(),
+  // 0 → performance tracing off (errors still captured). 0.1 in prod is a
+  // good starting point; 1.0 in dev to see every transaction while iterating.
+  SENTRY_TRACES_SAMPLE_RATE: z.string().default('0').transform(Number),
 });
 
 const parsedConfig = envSchema.parse(process.env);

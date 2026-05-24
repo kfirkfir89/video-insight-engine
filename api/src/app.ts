@@ -1,4 +1,5 @@
-import Fastify, { FastifyInstance, FastifyServerOptions } from 'fastify';
+import Fastify from 'fastify';
+import type { FastifyInstance, FastifyServerOptions } from 'fastify';
 import { ZodError } from 'zod';
 import { config } from './config.js';
 import { AppError, DailyLimitReachedError } from './utils/errors.js';
@@ -13,6 +14,8 @@ import { rateLimitPlugin } from './plugins/rate-limit.js';
 import { websocketPlugin } from './plugins/websocket.js';
 import { tierPlugin } from './plugins/tier.js';
 import { rabbitmqPlugin } from './plugins/rabbitmq.js';
+import { genRequestId, requestIdPlugin } from './plugins/request-id.js';
+import { sentryFastifyPlugin } from './plugins/sentry.js';
 
 // Routes
 import { authRoutes } from './routes/auth.routes.js';
@@ -28,6 +31,7 @@ import { overrideRoutes } from './routes/override.routes.js';
 import { paymentRoutes } from './routes/payment.routes.js';
 import { preferencesRoutes, userUsageRoutes } from './routes/preferences.routes.js';
 import { adminQueueRoutes } from './routes/admin/queue.routes.js';
+import { userMeRoutes, adminUsersRoutes } from './routes/users.routes.js';
 
 export interface BuildAppOptions {
   logger?: FastifyServerOptions['logger'];
@@ -43,8 +47,15 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   const isDev = config.NODE_ENV === 'development';
 
   const fastify = Fastify({
+    // Plugin reads/validates x-request-id manually via genReqId so we keep the
+    // value validation in one place. requestIdHeader is false to opt out of
+    // Fastify's built-in header parsing (which doesn't validate the value).
+    requestIdHeader: false,
+    requestIdLogLabel: 'requestId',
+    genReqId: genRequestId,
     logger: options?.logger ?? {
       level: isDev ? 'debug' : 'info',
+      base: { service: 'vie-api' },
       ...(isDev && {
         transport: {
           target: 'pino-pretty',
@@ -75,6 +86,12 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   }
 
   // Register plugins
+  // request-id must be first so every other plugin's logs include it.
+  await fastify.register(requestIdPlugin);
+  // Sentry plugin registers an onError hook — must come after request-id so
+  // captured events carry the requestId tag, but before any route registration
+  // so route handler errors are funneled through it.
+  await fastify.register(sentryFastifyPlugin);
   await fastify.register(helmetPlugin);
   await fastify.register(corsPlugin);
   await fastify.register(rateLimitPlugin);
@@ -175,8 +192,10 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   await fastify.register(paymentRoutes, { prefix: '/api/payments' });
   await fastify.register(preferencesRoutes, { prefix: '/api/users/me/preferences' });
   await fastify.register(userUsageRoutes, { prefix: '/api/users/me/usage' });
+  await fastify.register(userMeRoutes, { prefix: '/api/users/me' });
   await fastify.register(internalRoutes, { prefix: '/internal' });
   await fastify.register(adminQueueRoutes, { prefix: '/api/admin/queue' });
+  await fastify.register(adminUsersRoutes, { prefix: '/api/admin/users' });
 
   // SSR routes (top-level, no /api prefix — for social media crawlers)
   await fastify.register(ssrRoutes);

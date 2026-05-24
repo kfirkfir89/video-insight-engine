@@ -325,6 +325,37 @@ describe('SummarizerClient', () => {
         expect(JSON.parse(options.body)).toEqual(request);
       });
 
+      it('should forward X-Request-ID header when requestId is supplied', async () => {
+        mockFetch.mockResolvedValueOnce({ ok: true });
+
+        const request: SummarizeRequest = {
+          ...baseRequest,
+          requestId: 'req-edge-abc123def',
+        };
+
+        client.triggerSummarization(request);
+        await new Promise(resolve => setImmediate(resolve));
+
+        const [, options] = mockFetch.mock.calls[0];
+        expect(options.headers).toMatchObject({
+          'Content-Type': 'application/json',
+          'X-Request-ID': 'req-edge-abc123def',
+        });
+        // requestId is sent as a header, not in the body — keeps the payload
+        // compatible with the existing Pydantic schema on the summarizer side.
+        expect(JSON.parse(options.body).requestId).toBeUndefined();
+      });
+
+      it('should omit X-Request-ID header when requestId is not supplied', async () => {
+        mockFetch.mockResolvedValueOnce({ ok: true });
+
+        client.triggerSummarization(baseRequest);
+        await new Promise(resolve => setImmediate(resolve));
+
+        const [, options] = mockFetch.mock.calls[0];
+        expect(options.headers).not.toHaveProperty('X-Request-ID');
+      });
+
       it('should handle request without userId', async () => {
         mockFetch.mockResolvedValueOnce({ ok: true });
 

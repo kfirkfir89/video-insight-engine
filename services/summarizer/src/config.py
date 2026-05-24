@@ -124,8 +124,8 @@ class Settings(BaseSettings):
     WHISPER_MAX_DURATION_MINUTES: int = 600
 
     # Logging
-    log_level: str = "INFO"
-    log_format: str = "console"  # "console" or "json"
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "console"  # "console" or "json"
 
     # ─── Langfuse observability ─────────────────────────────────────────
     # Leave keys blank to disable — every Langfuse helper is no-op when
@@ -143,6 +143,14 @@ class Settings(BaseSettings):
     # "omit"; for support-driven debugging keep "identity".
     LANGFUSE_USER_ID_MODE: str = "identity"
     LANGFUSE_USER_ID_HASH_SALT: str = ""
+
+    # ─── Sentry error tracking ──────────────────────────────────────────
+    # Empty DSN -> SDK no-ops. Lets dev/CI run without a live project.
+    SENTRY_DSN: str = ""
+    SENTRY_ENVIRONMENT: str | None = None  # Falls back to ENVIRONMENT when unset.
+    SENTRY_RELEASE: str | None = None  # Usually the deploy SHA.
+    # 0 disables performance tracing (errors still capture). 0.1 in prod, 1.0 in dev.
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.0
 
     # S3 — uses existing vie-transcripts bucket for all media (frames, transcripts, audio)
     S3_BUCKET: str = "vie-transcripts"

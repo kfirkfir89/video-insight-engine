@@ -20,7 +20,13 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+import structlog
 from pydantic import ValidationError
+
+from llm_common.sentry_init import (
+    capture_exception_with_context,
+    pipeline_stage_transaction,
+)
 
 from src.worker.payload import VideoJobPayload
 
@@ -72,19 +78,52 @@ class WorkerRunner:
             await message.reject(requeue=False)
             return JobOutcome.PERMANENT_FAILURE
 
-        try:
-            await self._run_pipeline(payload)
-        except Exception as exc:
-            return await self._handle_failure(message, payload, exc)
-
-        await message.ack()
-        logger.info(
-            "worker_job_done video=%s attempt=%d request=%s",
-            payload.video_summary_id,
-            payload.attempt,
-            payload.request_id,
+        # Bind ids on the structlog contextvar stack so every log line emitted
+        # during pipeline execution (including code that doesn't have a payload
+        # in scope) is tagged with the request_id. Cleared in `finally` so the
+        # next job on this worker starts with an empty context.
+        structlog.contextvars.bind_contextvars(
+            request_id=payload.request_id,
+            video_summary_id=payload.video_summary_id,
+            youtube_id=payload.youtube_id,
+            user_id=payload.user_id,
+            attempt=payload.attempt,
         )
-        return JobOutcome.SUCCESS
+
+        try:
+            # One transaction per job — sampled per SENTRY_TRACES_SAMPLE_RATE.
+            # Let pipeline exceptions bubble out of the with-block so Sentry's
+            # transaction ``__exit__`` records ``internal_error`` status on the
+            # trace (matching the actual outcome); then catch outside the with
+            # to dispatch retry vs. DLQ. ``_handle_failure`` still emits the
+            # Sentry *event* only for terminal failures, so retries don't
+            # generate alert noise.
+            # When Sentry is disabled the context manager is a no-op.
+            pipeline_exc: Exception | None = None
+            try:
+                with pipeline_stage_transaction(
+                    "worker.process_message",
+                    videoSummaryId=payload.video_summary_id,
+                    youtubeId=payload.youtube_id,
+                    tier=payload.tier,
+                ):
+                    await self._run_pipeline(payload)
+            except Exception as exc:
+                pipeline_exc = exc
+
+            if pipeline_exc is not None:
+                return await self._handle_failure(message, payload, pipeline_exc)
+
+            await message.ack()
+            logger.info(
+                "worker_job_done video=%s attempt=%d request=%s",
+                payload.video_summary_id,
+                payload.attempt,
+                payload.request_id,
+            )
+            return JobOutcome.SUCCESS
+        finally:
+            structlog.contextvars.clear_contextvars()
 
     async def _handle_failure(
         self,
@@ -100,6 +139,17 @@ class WorkerRunner:
                 self._max_retries,
                 exc,
                 exc_info=exc,
+            )
+            # Terminal failure — fan the exception out to Sentry so the
+            # operator sees a single event per dead-lettered job (rather than
+            # one per retry, which would be alert noise).
+            capture_exception_with_context(
+                exc,
+                videoSummaryId=payload.video_summary_id,
+                youtubeId=payload.youtube_id,
+                requestId=payload.request_id,
+                attempt=str(payload.attempt),
+                outcome="dlq",
             )
             await message.reject(requeue=False)
             return JobOutcome.PERMANENT_FAILURE

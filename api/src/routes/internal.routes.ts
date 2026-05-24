@@ -34,8 +34,15 @@ const reconcileQuerySchema = z.object({
   userId: z.string().regex(/^[a-f0-9]{24}$/i, 'userId must be a 24-char hex ObjectId').optional(),
 });
 
+const runDeletionsBodySchema = z
+  .object({
+    /** Cap how many users this run will process. Defaults to the service-side batch size. */
+    limit: z.number().int().positive().max(500).optional(),
+  })
+  .optional();
+
 export async function internalRoutes(fastify: FastifyInstance) {
-  const { costMonitorService, idempotencyService } = fastify.container;
+  const { costMonitorService, idempotencyService, userDeletionService } = fastify.container;
 
   // POST /internal/status - Receive status updates from summarizer/agent
   fastify.post<{
@@ -173,5 +180,33 @@ export async function internalRoutes(fastify: FastifyInstance) {
 
     const result = await costMonitorService.reconcileAllUsersForDay(dateKey);
     return { dateKey, ...result };
+  });
+
+  // POST /internal/run-deletions — sweep `users.hardDeleteAt <= now()` and
+  // run the GDPR cascade for each. Driven by an external cron (k8s CronJob,
+  // GitHub Actions schedule, host crontab — anything that can curl). Daily
+  // is the recommended cadence; running more often is harmless because
+  // every step is idempotent. See `docs/GDPR.md` for runbook.
+  fastify.post<{
+    Body: z.infer<typeof runDeletionsBodySchema>;
+  }>('/run-deletions', async (req, reply) => {
+    const secret = req.headers['x-internal-secret'];
+    if (secret !== config.INTERNAL_SECRET) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+
+    const parsed = runDeletionsBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Bad Request',
+        message: parsed.error.errors[0]?.message ?? 'Invalid body',
+      });
+    }
+
+    const result = await userDeletionService.runScheduledDeletions(
+      new Date(),
+      parsed.data?.limit,
+    );
+    return result;
   });
 }

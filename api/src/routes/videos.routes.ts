@@ -215,6 +215,7 @@ export async function videosRoutes(fastify: FastifyInstance) {
           bypassCache: input.bypassCache,
           providers: input.providers,
           tier: req.tier.name,
+          requestId: req.id,
         }
       );
     } catch (err) {
