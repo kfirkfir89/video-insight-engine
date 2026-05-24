@@ -2,7 +2,12 @@ import { FastifyBaseLogger } from 'fastify';
 import bcrypt from 'bcrypt';
 import { UserRepository } from '../repositories/user.repository.js';
 import { RegisterInput, LoginInput } from '../schemas/auth.schema.js';
-import { EmailExistsError, InvalidCredentialsError, UserNotFoundError } from '../utils/errors.js';
+import {
+  AccountDeletionPendingError,
+  EmailExistsError,
+  InvalidCredentialsError,
+  UserNotFoundError,
+} from '../utils/errors.js';
 
 export class AuthService {
   constructor(
@@ -42,6 +47,13 @@ export class AuthService {
       throw new InvalidCredentialsError();
     }
 
+    // Reject login for accounts in the soft-delete grace window. Returning
+    // 403 (not 401) tells the frontend to redirect to the recovery flow
+    // instead of prompting for credentials again.
+    if (user.deletedAt) {
+      throw new AccountDeletionPendingError();
+    }
+
     await this.userRepository.updateLastLogin(user._id.toString());
 
     return {
@@ -55,6 +67,9 @@ export class AuthService {
     const user = await this.userRepository.findById(userId);
     if (!user) {
       throw new UserNotFoundError();
+    }
+    if (user.deletedAt) {
+      throw new AccountDeletionPendingError();
     }
 
     return {

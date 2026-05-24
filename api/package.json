@@ -20,6 +20,7 @@
     "@fastify/rate-limit": "^9.1.0",
     "@fastify/websocket": "^10.0.0",
     "@modelcontextprotocol/sdk": "^1.25.2",
+    "@sentry/node": "^10.53.1",
     "@vie/types": "workspace:^",
     "ai": "^6.0.27",
     "amqplib": "^0.10.9",

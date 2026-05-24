@@ -242,4 +242,111 @@ describe('UserRepository', () => {
       expect(user1.email).not.toBe(user2.email);
     });
   });
+
+  describe('soft-delete (GDPR)', () => {
+    it('markSoftDeleted should set deletedAt and hardDeleteAt', async () => {
+      const user = await repository.create(createUserData());
+      const hardDelete = new Date('2026-06-20T00:00:00Z');
+
+      const result = await repository.markSoftDeleted(user._id.toString(), hardDelete);
+
+      expect(result).not.toBeNull();
+      expect(result!.deletedAt).toBeInstanceOf(Date);
+      expect(result!.hardDeleteAt).toEqual(hardDelete);
+    });
+
+    it('markSoftDeleted should honor an explicit deletedAt for clock injection in tests', async () => {
+      const user = await repository.create(createUserData());
+      const frozenNow = new Date('2026-05-20T12:00:00Z');
+      const hardDelete = new Date('2026-06-19T12:00:00Z');
+
+      const result = await repository.markSoftDeleted(
+        user._id.toString(),
+        hardDelete,
+        frozenNow,
+      );
+
+      expect(result!.deletedAt).toEqual(frozenNow);
+      expect(result!.updatedAt).toEqual(frozenNow);
+    });
+
+    it('markSoftDeleted should be a no-op when deletedAt is already set', async () => {
+      const user = await repository.create(createUserData());
+      await repository.markSoftDeleted(user._id.toString(), new Date('2026-06-01'));
+
+      const result = await repository.markSoftDeleted(
+        user._id.toString(),
+        new Date('2026-07-01'),
+      );
+
+      // The conditional filter must not overwrite an existing soft-delete
+      // timestamp — otherwise a second cancel→re-delete race would reset
+      // the clock and extend the grace window.
+      expect(result).toBeNull();
+      const refreshed = await repository.findById(user._id.toString());
+      expect(refreshed?.hardDeleteAt).toEqual(new Date('2026-06-01'));
+    });
+
+    it('clearSoftDelete should restore an account', async () => {
+      const user = await repository.create(createUserData());
+      await repository.markSoftDeleted(user._id.toString(), new Date('2026-06-01'));
+
+      const restored = await repository.clearSoftDelete(user._id.toString());
+
+      expect(restored).not.toBeNull();
+      expect(restored!.deletedAt).toBeNull();
+      expect(restored!.hardDeleteAt).toBeNull();
+    });
+
+    it('findExpiredSoftDeletes should return only past-due, non-legal-hold rows', async () => {
+      const now = new Date('2026-05-20T12:00:00Z');
+      // Three users: one expired, one not yet expired, one on legal hold.
+      const expired = await repository.create(createUserData({ email: 'exp@x' }));
+      const upcoming = await repository.create(createUserData({ email: 'up@x' }));
+      const held = await repository.create(createUserData({ email: 'held@x' }));
+      await repository.markSoftDeleted(expired._id.toString(), new Date('2026-05-19T00:00:00Z'));
+      await repository.markSoftDeleted(upcoming._id.toString(), new Date('2026-06-19T00:00:00Z'));
+      await repository.markSoftDeleted(held._id.toString(), new Date('2026-05-19T00:00:00Z'));
+      await repository.update(held._id.toString(), { legalHold: true });
+
+      const results = await repository.findExpiredSoftDeletes(now);
+
+      const ids = results.map(r => r._id.toString());
+      expect(ids).toContain(expired._id.toString());
+      expect(ids).not.toContain(upcoming._id.toString());
+      expect(ids).not.toContain(held._id.toString());
+    });
+
+    it('findExpiredSoftDeletes should project _id only — no passwordHash or other PII fields leaked', async () => {
+      const now = new Date('2026-05-20T12:00:00Z');
+      const target = await repository.create(createUserData({ email: 'lean@x' }));
+      await repository.markSoftDeleted(target._id.toString(), new Date('2026-05-19T00:00:00Z'));
+
+      const results = await repository.findExpiredSoftDeletes(now);
+
+      expect(results).toHaveLength(1);
+      const row = results[0] as Record<string, unknown>;
+      expect(row._id).toBeDefined();
+      // Sensitive fields must not be returned — protects against accidental
+      // logging leaks downstream.
+      expect(row.passwordHash).toBeUndefined();
+      expect(row.preferences).toBeUndefined();
+      expect(row.usage).toBeUndefined();
+      expect(row.paddleCustomerId).toBeUndefined();
+    });
+
+    it('hardDelete should remove the user document', async () => {
+      const user = await repository.create(createUserData());
+
+      const removed = await repository.hardDelete(user._id.toString());
+
+      expect(removed).toBe(true);
+      expect(await repository.findById(user._id.toString())).toBeNull();
+    });
+
+    it('hardDelete should return false when user does not exist', async () => {
+      const removed = await repository.hardDelete(new ObjectId().toString());
+      expect(removed).toBe(false);
+    });
+  });
 });

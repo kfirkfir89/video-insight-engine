@@ -107,14 +107,17 @@ describe('assistant routes', () => {
       expect(response.headers['content-type']).toBe('text/event-stream');
       expect(response.headers['cache-control']).toBe('no-cache');
       expect(response.body).toBe(sseData);
-      expect(mockContainer.assistantClient.chat).toHaveBeenCalledWith({
-        videoId: validVideoSummaryId,
-        message: 'Explain this video',
-        conversationHistory: [
-          { role: 'user', content: 'Hi' },
-          { role: 'assistant', content: 'Hello!' },
-        ],
-      });
+      expect(mockContainer.assistantClient.chat).toHaveBeenCalledWith(
+        expect.objectContaining({
+          videoId: validVideoSummaryId,
+          message: 'Explain this video',
+          conversationHistory: [
+            { role: 'user', content: 'Hi' },
+            { role: 'assistant', content: 'Hello!' },
+          ],
+          requestId: expect.any(String),
+        }),
+      );
     });
 
     it('should return 502 when assistant service is unavailable', async () => {
@@ -154,11 +157,37 @@ describe('assistant routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(mockContainer.assistantClient.chat).toHaveBeenCalledWith({
-        videoId: validVideoSummaryId,
-        message: 'Summarize the key points',
-        conversationHistory: undefined,
+      expect(mockContainer.assistantClient.chat).toHaveBeenCalledWith(
+        expect.objectContaining({
+          videoId: validVideoSummaryId,
+          message: 'Summarize the key points',
+          conversationHistory: undefined,
+        }),
+      );
+    });
+
+    it('should forward the Fastify request id as the assistant requestId', async () => {
+      mockContainer.videoRepository.userHasAccessToSummary.mockResolvedValue(true);
+
+      const encoder = new TextEncoder();
+      const mockStream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
+          controller.close();
+        },
       });
+      mockContainer.assistantClient.chat.mockResolvedValue(mockStream);
+
+      const incoming = 'edge-chat-req-123abc';
+      await app.inject({
+        method: 'POST',
+        url: `/api/videos/${validVideoSummaryId}/chat`,
+        headers: { authorization: authHeader, 'x-request-id': incoming },
+        payload: { message: 'hi' },
+      });
+
+      const arg = mockContainer.assistantClient.chat.mock.calls[0][0];
+      expect(arg.requestId).toBe(incoming);
     });
   });
 
@@ -225,12 +254,15 @@ describe('assistant routes', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual(successEnvelope);
-      expect(mockContainer.assistantClient.action).toHaveBeenCalledWith({
-        videoId: validVideoSummaryId,
-        userId: 'test-user-id',
-        action: 'save_note',
-        params: { text: 'remember this' },
-      });
+      expect(mockContainer.assistantClient.action).toHaveBeenCalledWith(
+        expect.objectContaining({
+          videoId: validVideoSummaryId,
+          userId: 'test-user-id',
+          action: 'save_note',
+          params: { text: 'remember this' },
+          requestId: expect.any(String),
+        }),
+      );
     });
 
     it('should propagate non-200 status from assistant', async () => {

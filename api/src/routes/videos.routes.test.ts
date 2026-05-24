@@ -137,14 +137,40 @@ describe('videos routes', () => {
       expect(mockContainer.videoService.createVideo).toHaveBeenCalledWith(
         'test-user-id',
         'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-        {
+        expect.objectContaining({
           folderId: undefined,
           bypassCache: false,
           providers: undefined,
           tier: 'free',
-        }
+          requestId: expect.any(String),
+        })
       );
       expect(response.json()).toEqual(mockResult);
+    });
+
+    it('should pass req.id to videoService.createVideo for downstream propagation', async () => {
+      const mockResult = {
+        video: { id: 'v1', status: 'pending' },
+        cached: false,
+      };
+      mockContainer.videoService.createVideo.mockResolvedValue(mockResult);
+
+      const incoming = 'frontend-trace-abc12345';
+      await app.inject({
+        method: 'POST',
+        url: '/api/videos',
+        headers: {
+          authorization: authHeader,
+          'content-type': 'application/json',
+          'x-request-id': incoming,
+        },
+        payload: {
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        },
+      });
+
+      const optionsArg = mockContainer.videoService.createVideo.mock.calls[0][2];
+      expect(optionsArg.requestId).toBe(incoming);
     });
 
     it('should accept optional folderId', async () => {
@@ -171,12 +197,12 @@ describe('videos routes', () => {
       expect(mockContainer.videoService.createVideo).toHaveBeenCalledWith(
         'test-user-id',
         'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-        {
+        expect.objectContaining({
           folderId: '507f1f77bcf86cd799439011',
           bypassCache: false,
           providers: undefined,
           tier: 'free',
-        }
+        })
       );
     });
 

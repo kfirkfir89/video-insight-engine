@@ -1,4 +1,4 @@
-import { FastifyBaseLogger } from 'fastify';
+import type { FastifyBaseLogger } from 'fastify';
 import { config } from '../config.js';
 
 export type Provider = 'anthropic' | 'openai' | 'gemini';
@@ -15,6 +15,12 @@ export interface SummarizeRequest {
   url: string;
   userId?: string;
   providers?: ProviderConfig;
+  /**
+   * Correlates this dispatch with the originating Fastify request. Forwarded
+   * as the `X-Request-ID` header so the summarizer pipeline binds it to its
+   * structlog contextvars and Langfuse trace tags.
+   */
+  requestId?: string;
 }
 
 const SUMMARIZER_TIMEOUT_MS = 10000; // 10 seconds
@@ -48,6 +54,14 @@ export class SummarizerClient {
   constructor(private readonly logger: FastifyBaseLogger) {}
 
   triggerSummarization(request: SummarizeRequest): void {
+    // The header is the propagation channel; strip requestId from the body so
+    // we don't break the summarizer's Pydantic schema (which doesn't declare it).
+    const { requestId, ...bodyFields } = request;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (requestId) {
+      headers['X-Request-ID'] = requestId;
+    }
+
     // Fire and forget with retry logic - but don't block the caller
     (async () => {
       let lastError: Error | null = null;
@@ -58,8 +72,8 @@ export class SummarizerClient {
             `${config.SUMMARIZER_URL}/summarize`,
             {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(request),
+              headers,
+              body: JSON.stringify(bodyFields),
             },
             SUMMARIZER_TIMEOUT_MS
           );

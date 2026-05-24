@@ -13,6 +13,12 @@ export interface CreateVideoOptions {
   bypassCache?: boolean;
   providers?: ProviderConfig;
   tier: UserTier;
+  /**
+   * Originating Fastify `request.id`. Flows into the queue payload (as the
+   * publisher's `requestId`) AND the legacy HTTP fallback (as `X-Request-ID`)
+   * so the downstream pipeline binds the same id no matter which path runs.
+   */
+  requestId?: string;
 }
 
 // Maximum versions to keep per video (prevents unbounded storage growth)
@@ -57,6 +63,7 @@ export class VideoService {
       tier: UserTier;
       providers?: ProviderConfig;
       bypassCache?: boolean;
+      requestId?: string;
     },
   ): Promise<void> {
     if (config.USE_QUEUE_PIPELINE) {
@@ -69,6 +76,7 @@ export class VideoService {
           tier: payload.tier,
           providers: payload.providers,
           bypassCache: payload.bypassCache,
+          requestId: payload.requestId,
         });
         return;
       } catch (err) {
@@ -83,6 +91,7 @@ export class VideoService {
             err,
             videoSummaryId: payload.videoSummaryId,
             youtubeId: payload.youtubeId,
+            requestId: payload.requestId,
           },
           'Queue publish failed, falling back to HTTP summarizer call',
         );
@@ -95,11 +104,12 @@ export class VideoService {
       url: payload.url,
       userId: payload.userId,
       providers: payload.providers,
+      requestId: payload.requestId,
     });
   }
 
   async createVideo(userId: string, url: string, options: CreateVideoOptions) {
-    const { folderId, bypassCache = false, providers, tier } = options;
+    const { folderId, bypassCache = false, providers, tier, requestId } = options;
     const youtubeId = extractYoutubeId(url);
     if (!youtubeId) {
       throw new InvalidYouTubeUrlError();
@@ -170,6 +180,7 @@ export class VideoService {
             tier,
             providers,
             bypassCache: true,
+            requestId,
           });
 
           return {
@@ -284,6 +295,7 @@ export class VideoService {
         userId,
         tier,
         providers,
+        requestId,
       });
 
       const userVideo = await this.videoRepository.createUserVideo({
@@ -324,6 +336,7 @@ export class VideoService {
       userId,
       tier,
       providers,
+      requestId,
     });
 
     const userVideo = await this.videoRepository.createUserVideo({

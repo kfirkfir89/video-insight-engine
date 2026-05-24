@@ -17,6 +17,7 @@ from typing import Any, AsyncGenerator
 
 from litellm.exceptions import APIError as LitellmAPIError, RateLimitError, Timeout as LitellmTimeout
 import redis.exceptions as redis_exceptions
+import structlog
 
 from llm_common.context import llm_video_id_var  # noqa: F401 — used in phases
 
@@ -262,6 +263,13 @@ async def stream_summarization(
         # produced zero spans and dashboards under-counted the actual
         # request volume. ``cacheHit`` is set via ``update_trace_metadata``
         # once the cache lookup resolves.
+        # ``requestId`` is pulled from structlog contextvars (the worker binds
+        # it from the queue payload) so Sentry events, log lines, and Langfuse
+        # traces share the same correlation id. Only added when present —
+        # the SSE-direct path (e.g. dev override) doesn't bind one and we don't
+        # want ``null`` polluting Langfuse dashboards.
+        request_id = structlog.contextvars.get_contextvars().get("request_id")
+
         trace_tags = [f"youtubeId:{youtube_id}", f"videoSummaryId:{video_summary_id}"]
         trace_metadata: dict[str, Any] = {
             "youtubeId": youtube_id,
@@ -269,6 +277,9 @@ async def stream_summarization(
             "userId": entry.get("userId"),
             "language": entry.get("language"),
         }
+        if request_id:
+            trace_tags.append(f"requestId:{request_id}")
+            trace_metadata["requestId"] = request_id
         async with pipeline_trace(
             video_summary_id, tags=trace_tags, metadata=trace_metadata,
             user_id=entry.get("userId"),

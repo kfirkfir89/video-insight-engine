@@ -823,4 +823,59 @@ describe('internal routes', () => {
       expect(mockContainer.costMonitorService.reconcileUserDay).not.toHaveBeenCalled();
     });
   });
+
+  describe('POST /internal/run-deletions', () => {
+    it('should return 401 without x-internal-secret', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/internal/run-deletions',
+        payload: {},
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should invoke runScheduledDeletions and return its result', async () => {
+      mockContainer.userDeletionService.runScheduledDeletions.mockResolvedValue({
+        processed: 3,
+        succeeded: 2,
+        failed: 1,
+        failures: [{ userId: 'abc', error: 'boom' }],
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/internal/run-deletions',
+        headers: {
+          'x-internal-secret': INTERNAL_SECRET,
+          'content-type': 'application/json',
+        },
+        payload: { limit: 10 },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        processed: 3,
+        succeeded: 2,
+        failed: 1,
+        failures: [{ userId: 'abc', error: 'boom' }],
+      });
+      // First arg is a Date, second is the limit; verify limit forwarded.
+      const call = mockContainer.userDeletionService.runScheduledDeletions.mock.calls[0];
+      expect(call[0]).toBeInstanceOf(Date);
+      expect(call[1]).toBe(10);
+    });
+
+    it('should reject limit outside the allowed range', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/internal/run-deletions',
+        headers: {
+          'x-internal-secret': INTERNAL_SECRET,
+          'content-type': 'application/json',
+        },
+        payload: { limit: 9999 },
+      });
+      expect(response.statusCode).toBe(400);
+    });
+  });
 });

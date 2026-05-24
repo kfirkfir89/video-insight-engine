@@ -36,13 +36,27 @@ def get_log_level() -> int:
     return getattr(logging, level, logging.INFO)
 
 
-def configure_structlog(json_format: bool = False) -> None:
+def _add_service_processor(service_name: str) -> Processor:
+    """Return a structlog processor that stamps every log line with `service`."""
+    from structlog.types import EventDict
+
+    def _processor(_logger: Any, _method_name: str, event_dict: EventDict) -> EventDict:
+        event_dict.setdefault("service", service_name)
+        return event_dict
+
+    return _processor
+
+
+def configure_structlog(json_format: bool = False, service_name: str = "vie-assistant") -> None:
     """Configure structlog for the application.
 
     Args:
         json_format: If True, use JSON output. Otherwise, use colored console output.
+        service_name: Stamped on every log line as ``service`` so log
+            aggregators can filter cross-service traffic by source.
     """
     shared_processors: list[Processor] = [
+        _add_service_processor(service_name),
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),

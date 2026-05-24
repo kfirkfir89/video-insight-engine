@@ -15,6 +15,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 
+from llm_common.middleware import add_request_context_middleware
+from llm_common.sentry_init import init_sentry_from_settings
+
 from src.config import settings, validate_internal_secret
 from src.exceptions import AppError, NotFoundError, ValidationError
 from src.logging_config import configure_structlog, get_logger
@@ -89,10 +92,26 @@ async def _verify_internal_secret(
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
+def _init_sentry_from_settings() -> bool:
+    """Boot Sentry from assistant settings.
+
+    Thin local wrapper over the shared :func:`init_sentry_from_settings` —
+    kept so tests can patch this single entry point. Empty DSN no-ops.
+    """
+    return init_sentry_from_settings(settings, service="vie-assistant")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan: initialise dependencies and register callbacks."""
     validate_internal_secret()
+
+    # Sentry first — every other lifespan step's boot errors flow through it.
+    try:
+        sentry_enabled = _init_sentry_from_settings()
+        logger.info("sentry_init", enabled=sentry_enabled)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("sentry_init_failed", error=str(exc))
 
     # Langfuse observability — no-op when LANGFUSE_PUBLIC_KEY/SECRET_KEY are unset.
     init_langfuse()
@@ -172,6 +191,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     application = FastAPI(title="vie-assistant", lifespan=lifespan)
+    add_request_context_middleware(application)
 
     # --- Exception handlers ---
 

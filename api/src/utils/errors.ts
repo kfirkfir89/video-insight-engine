@@ -270,3 +270,22 @@ export class QueuePublishError extends AppError {
     this.name = 'QueuePublishError';
   }
 }
+
+// GDPR / account-deletion errors
+export class AccountDeletionPendingError extends AppError {
+  constructor() {
+    super(
+      'ACCOUNT_DELETION_PENDING',
+      403,
+      'This account is scheduled for deletion. Contact support to cancel.',
+    );
+    this.name = 'AccountDeletionPendingError';
+  }
+}
+
+export class AccountAlreadyDeletedError extends AppError {
+  constructor() {
+    super('ACCOUNT_ALREADY_DELETED', 409, 'Account is already scheduled for deletion');
+    this.name = 'AccountAlreadyDeletedError';
+  }
+}

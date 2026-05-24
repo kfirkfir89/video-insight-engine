@@ -25,12 +25,27 @@ export interface UserDocument {
   paddleCustomerId?: string;
   paddleSubscriptionId?: string;
   tierUpdatedAt?: Date;
+  // GDPR soft-delete (Art. 17)
+  // `deletedAt` set → user has requested erasure. Auth rejects login.
+  // `hardDeleteAt` is the scheduled wall-clock time the cascade fires (default +30d).
+  // `legalHold: true` blocks the scheduler from running the cascade even after hardDeleteAt.
+  deletedAt?: Date | null;
+  hardDeleteAt?: Date | null;
+  legalHold?: boolean;
 }
 
 export interface CreateUserData {
   email: string;
   passwordHash: string;
   name: string;
+}
+
+/**
+ * Slim projection returned by `findExpiredSoftDeletes`. Carries only `_id`
+ * so callers cannot accidentally log password hashes or other PII.
+ */
+export interface ExpiredSoftDeleteSummary {
+  _id: ObjectId;
 }
 
 export class UserRepository {
@@ -107,5 +122,59 @@ export class UserRepository {
       { $set: { ...updates, updatedAt: new Date() } },
       { returnDocument: 'before' }
     );
+  }
+
+  /**
+   * Mark a user for deletion. Idempotent: a second call returns null without
+   * resetting the timer. `deletedAt` is supplied by the caller so the service
+   * can use an injected clock in tests.
+   */
+  async markSoftDeleted(
+    userId: string,
+    hardDeleteAt: Date,
+    deletedAt: Date = new Date(),
+  ): Promise<UserDocument | null> {
+    return this.collection.findOneAndUpdate(
+      { _id: new ObjectId(userId), deletedAt: { $in: [null, undefined] } },
+      { $set: { deletedAt, hardDeleteAt, updatedAt: deletedAt } },
+      { returnDocument: 'after' }
+    );
+  }
+
+  /** Restore a soft-deleted account if the 30-day window has not closed. */
+  async clearSoftDelete(userId: string): Promise<UserDocument | null> {
+    return this.collection.findOneAndUpdate(
+      { _id: new ObjectId(userId) },
+      { $set: { deletedAt: null, hardDeleteAt: null, updatedAt: new Date() } },
+      { returnDocument: 'after' }
+    );
+  }
+
+  /**
+   * Users whose hard-delete window has elapsed and who aren't on legal hold.
+   * Projects to `_id` only — the scheduler only needs IDs to feed into the
+   * cascade, and never touching `passwordHash` here eliminates a logging-leak
+   * surface (any downstream `logger.info({ users })` would have dumped them).
+   */
+  async findExpiredSoftDeletes(
+    now: Date,
+    limit = 50,
+  ): Promise<ExpiredSoftDeleteSummary[]> {
+    const cursor = this.collection.find(
+      {
+        deletedAt: { $ne: null },
+        hardDeleteAt: { $lte: now },
+        legalHold: { $ne: true },
+      },
+      { projection: { _id: 1 } },
+    );
+    const docs = (await cursor.limit(limit).toArray()) as unknown as ExpiredSoftDeleteSummary[];
+    return docs;
+  }
+
+  /** Final hard delete. Repositories below the saga should already have run. */
+  async hardDelete(userId: string): Promise<boolean> {
+    const result = await this.collection.deleteOne({ _id: new ObjectId(userId) });
+    return result.deletedCount === 1;
   }
 }

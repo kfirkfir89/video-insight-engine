@@ -64,6 +64,7 @@ export async function assistantRoutes(fastify: FastifyInstance) {
         videoId: videoSummaryId,
         message: parsed.data.message,
         conversationHistory: parsed.data.conversationHistory,
+        requestId: req.id,
       });
 
       // Set SSE headers and pipe the stream directly
@@ -130,6 +131,7 @@ export async function assistantRoutes(fastify: FastifyInstance) {
         userId: req.user.userId,
         action: parsed.data.action satisfies AssistantAction,
         params: parsed.data.params,
+        requestId: req.id,
       });
 
       return reply.status(status).send(body);

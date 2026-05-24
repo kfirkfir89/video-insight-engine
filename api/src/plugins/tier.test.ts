@@ -65,12 +65,12 @@ describe('tier plugin', () => {
     expect(mockContainer.videoService.createVideo).toHaveBeenCalledWith(
       expect.any(String),
       expect.any(String),
-      {
+      expect.objectContaining({
         folderId: undefined,
         bypassCache: false,
         providers: undefined,
         tier: 'free',
-      }
+      })
     );
   });
 });

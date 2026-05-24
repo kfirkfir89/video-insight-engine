@@ -1,4 +1,4 @@
-import { FastifyBaseLogger } from 'fastify';
+import type { FastifyBaseLogger } from 'fastify';
 import { config } from '../config.js';
 import { ServiceTimeoutError, ServiceUnavailableError } from '../utils/errors.js';
 
@@ -11,6 +11,8 @@ export interface AssistantChatOptions {
   videoId: string;
   message: string;
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  /** Forwarded as `X-Request-ID` header so the assistant binds it on contextvars. */
+  requestId?: string;
 }
 
 export interface AssistantActionOptions {
@@ -18,6 +20,8 @@ export interface AssistantActionOptions {
   userId: string;
   action: AssistantAction;
   params?: Record<string, string | number | boolean>;
+  /** Forwarded as `X-Request-ID` header so the assistant binds it on contextvars. */
+  requestId?: string;
 }
 
 export interface AssistantActionResponse {
@@ -41,13 +45,18 @@ export class AssistantClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ASSISTANT_TIMEOUT_MS);
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Internal-Secret': config.INTERNAL_SECRET,
+    };
+    if (options.requestId) {
+      headers['X-Request-ID'] = options.requestId;
+    }
+
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Internal-Secret': config.INTERNAL_SECRET,
-        },
+        headers,
         body: JSON.stringify({
           video_id: options.videoId,
           message: options.message,
@@ -97,14 +106,19 @@ export class AssistantClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ACTION_TIMEOUT_MS);
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Internal-Secret': config.INTERNAL_SECRET,
+      'X-User-Id': options.userId,
+    };
+    if (options.requestId) {
+      headers['X-Request-ID'] = options.requestId;
+    }
+
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Internal-Secret': config.INTERNAL_SECRET,
-          'X-User-Id': options.userId,
-        },
+        headers,
         body: JSON.stringify({
           video_id: options.videoId,
           action: options.action,

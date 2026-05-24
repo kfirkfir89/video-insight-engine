@@ -10,9 +10,10 @@ Used by both summarizer and assistant services.
 """
 
 import logging
+import re
 import time
 import uuid
-from typing import Callable
+from typing import Awaitable, Callable
 
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -23,6 +24,20 @@ logger = structlog.get_logger(__name__)
 
 # Header name for request ID (can be provided by client or generated)
 REQUEST_ID_HEADER = "X-Request-ID"
+
+# Mirror the API gateway's validation: only ASCII safe chars, 8–128 long.
+# Strict enough to reject log-injection attempts (newlines, control chars,
+# unicode tricks) before the value is bound to structlog contextvars or
+# promoted to a Sentry tag. Internal callers and tests that bypass the API
+# gateway still go through this guard.
+#
+# `\A` / `\Z` (not `^` / `$`): Python's `$` matches end-of-string OR just
+# before a final `\n`, so `^[A-Za-z0-9_-]{8,128}$` with `re.match` would
+# accept "abcd1234\n" and let the newline through into structlog contextvars
+# and the X-Request-ID response header. The API gateway's JS regex doesn't
+# have this quirk, so without strict end-of-string anchors the two sides
+# diverge for exactly the payload this pattern is supposed to defend against.
+_REQUEST_ID_PATTERN = re.compile(r"\A[A-Za-z0-9_-]{8,128}\Z")
 
 # Paths that should not be logged (health checks, readiness probes)
 SILENT_PATHS = frozenset({"/health", "/healthz", "/ready"})
@@ -49,13 +64,20 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self,
         request: Request,
-        call_next: Callable[[Request], Response],
+        call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
         # Skip logging for health checks to reduce noise
         is_silent = request.url.path in SILENT_PATHS
 
-        # Get or generate request ID
-        request_id = request.headers.get(REQUEST_ID_HEADER) or str(uuid.uuid4())[:8]
+        # Get or generate request ID. Honor an incoming header only when it
+        # matches the safe pattern — otherwise fall through to a fresh UUID.
+        # This prevents log-injection / Sentry-tag pollution from forged
+        # headers when something bypasses API-side validation.
+        incoming = request.headers.get(REQUEST_ID_HEADER)
+        if incoming and _REQUEST_ID_PATTERN.match(incoming):
+            request_id = incoming
+        else:
+            request_id = str(uuid.uuid4())
 
         # Bind context for all logs in this request
         structlog.contextvars.clear_contextvars()

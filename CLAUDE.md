@@ -62,9 +62,10 @@ video-insight-engine/
 | Service docs | [docs/SERVICE-API.md](./docs/SERVICE-API.md), [SERVICE-SUMMARIZER.md](./docs/SERVICE-SUMMARIZER.md), [SERVICE-ASSISTANT.md](./docs/SERVICE-ASSISTANT.md) |
 | Frontend patterns | [docs/FRONTEND.md](./docs/FRONTEND.md) |
 | LLM cost & cache crediting | [docs/llm-cost-model.md](./docs/llm-cost-model.md) |
-| LLM tracing, prompt registry, faithfulness | [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md) |
+| LLM tracing, prompt registry, faithfulness, request-id, Sentry | [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md) |
 | RAG chunker, embeddings, `/library/search` | [docs/RAG.md](./docs/RAG.md) |
 | Request idempotency, `PIPELINE_VERSION` bumps | [docs/IDEMPOTENCY.md](./docs/IDEMPOTENCY.md) |
+| GDPR Art. 17 cascade deletion, soft-delete window, audit | [docs/GDPR.md](./docs/GDPR.md), [docs/PRIVACY.md](./docs/PRIVACY.md) |
 
 ## Quick Start
 

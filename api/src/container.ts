@@ -8,6 +8,7 @@ import { UserRepository } from './repositories/user.repository.js';
 import { ShareRepository } from './repositories/share.repository.js';
 import { UserCostRepository } from './repositories/user-cost.repository.js';
 import { IdempotencyRepository } from './repositories/idempotency.repository.js';
+import { UserDeletionRepository } from './repositories/user-deletion.repository.js';
 
 // Services
 import { AuthService } from './services/auth.service.js';
@@ -22,6 +23,7 @@ import { PaymentService } from './services/payment.service.js';
 import { CostMonitorService } from './services/cost-monitor.service.js';
 import { QueuePublisher, type ChannelSupplier } from './services/queue-publisher.service.js';
 import { IdempotencyService } from './services/idempotency.service.js';
+import { UserDeletionService } from './services/user-deletion.service.js';
 
 export interface Container {
   // Repositories
@@ -31,6 +33,7 @@ export interface Container {
   shareRepository: ShareRepository;
   userCostRepository: UserCostRepository;
   idempotencyRepository: IdempotencyRepository;
+  userDeletionRepository: UserDeletionRepository;
 
   // Services
   authService: AuthService;
@@ -45,6 +48,7 @@ export interface Container {
   costMonitorService: CostMonitorService;
   queuePublisher: QueuePublisher;
   idempotencyService: IdempotencyService;
+  userDeletionService: UserDeletionService;
 }
 
 export interface CreateContainerOptions {
@@ -64,6 +68,7 @@ export function createContainer(
   const shareRepository = new ShareRepository(db);
   const userCostRepository = new UserCostRepository(db);
   const idempotencyRepository = new IdempotencyRepository(db);
+  const userDeletionRepository = new UserDeletionRepository(db);
 
   // Create external clients
   const summarizerClient = new SummarizerClient(logger);
@@ -89,6 +94,12 @@ export function createContainer(
   const ogImageService = new OgImageService(logger);
   const paymentService = new PaymentService(userRepository, videoRepository, logger);
   const idempotencyService = new IdempotencyService(idempotencyRepository, logger);
+  const userDeletionService = new UserDeletionService(
+    db,
+    userRepository,
+    userDeletionRepository,
+    logger,
+  );
 
   return {
     // Repositories
@@ -98,6 +109,7 @@ export function createContainer(
     shareRepository,
     userCostRepository,
     idempotencyRepository,
+    userDeletionRepository,
 
     // Services
     authService,
@@ -112,6 +124,7 @@ export function createContainer(
     costMonitorService,
     queuePublisher,
     idempotencyService,
+    userDeletionService,
   };
 }
 

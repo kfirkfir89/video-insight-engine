@@ -142,6 +142,75 @@ scripts/run_eval.py                # run pipeline on golden + score
 dev/golden-dataset/videos.yaml     # 20 curated entries
 ```
 
+## Request tracing & Sentry
+
+Every HTTP request to the API gets a UUID v4 stamped on the `x-request-id` response header. That id flows end-to-end:
+
+- **API → frontend**: header echoed on every response (set in `api/src/plugins/request-id.ts`).
+- **API → RabbitMQ**: `requestId` field on the queue payload (`api/src/services/queue-topology.ts`).
+- **API → summarizer HTTP fallback**: `X-Request-ID` header on `triggerSummarization` (`api/src/services/summarizer-client.ts`).
+- **API → assistant**: `X-Request-ID` header on `/chat` and `/action` (`api/src/services/assistant-client.ts`).
+- **Worker**: the runner binds `request_id`, `video_summary_id`, `youtube_id`, `user_id`, `attempt` to structlog contextvars before driving the pipeline. Every log line and Langfuse trace tag inside the pipeline carries them automatically.
+- **Assistant**: `add_request_context_middleware` reads the header (or generates one) and binds it on contextvars.
+
+### Log line shape
+
+JSON logs in every service carry, at minimum:
+
+```json
+{
+  "timestamp": "2026-05-20T10:30:00.000Z",
+  "level": "info",
+  "service": "vie-api | vie-summarizer | vie-summarizer-worker | vie-assistant",
+  "requestId": "<uuid>",
+  "userId": "<optional>",
+  "videoSummaryId": "<optional>",
+  "stage": "<optional>",
+  "msg": "<event name>"
+}
+```
+
+The `service` field is stamped by a structlog processor (or pino `base`) so log aggregators can filter without callers having to mention it. Other fields appear only when bound on contextvars (Python) or attached to `req.log` (Node).
+
+### Cross-system lookup
+
+Given a `request-id`:
+
+| Where | How |
+|-------|-----|
+| API pino logs | `grep '"requestId":"<id>"'` in service stdout (or your log aggregator) |
+| Summarizer / assistant structlog | same — the id is on every line via contextvars |
+| Worker structlog | same — bound on entry, cleared on exit |
+| Langfuse trace | search traces by tag `requestId:<id>` |
+| Sentry event | search events by tag `requestId:<id>` |
+
+Or run `./scripts/find-request.sh <request-id>` from the repo root — it greps docker logs across all three services in parallel.
+
+### Sentry init
+
+`@sentry/node` is installed in the API; `sentry-sdk[fastapi]` in summarizer + assistant. All three services share the same env contract:
+
+```
+SENTRY_DSN=                       # empty -> SDK no-ops
+SENTRY_ENVIRONMENT=production     # defaults to NODE_ENV / ENVIRONMENT
+SENTRY_RELEASE=                   # usually the deploy SHA
+SENTRY_TRACES_SAMPLE_RATE=0.1     # 0.0–1.0; 0 disables performance traces
+```
+
+The shared `llm_common.sentry_init` module hosts the Python init + `before_send` PII filter; the Node side has the same logic in `api/src/plugins/sentry.ts`. Both:
+
+- Strip sensitive headers: `Authorization`, `Cookie`, `Set-Cookie`, `X-Internal-Secret`, `X-Admin-Key`, `X-CSRF-Token`, `X-API-Key`, `Proxy-Authorization`.
+- Scrub URL query strings for credential params (`token`, `access_token`, `refresh_token`, `id_token`, `code`, `state`, `api_key`, `apikey`, `key`, `password`, `secret`) on `request.url`, `request.query_string`, and the `route` tag. Needed because the WebSocket upgrade path puts the JWT in `?token=`.
+- Drop `user.email`, and drop `user.id` / `user.username` if either embeds an email.
+- Recurse the email redactor over `request.data`, `extra`, `contexts`, `breadcrumbs[*].data`, and `exception.values[*].value` (so a logger that includes a body or stack message can't leak addresses).
+- Promote the `request_id` contextvar / `req.id` to a Sentry tag named `requestId`.
+
+The `X-Request-ID` header is validated on both sides — `^[A-Za-z0-9_-]{8,128}$`. Forged headers (newline injection, control chars, semicolons) fall through to a fresh UUID so they cannot pollute log lines or Sentry tag space.
+
+Worker DLQ failures fire one Sentry event per dead-lettered job — retries don't (alert noise).
+
+The API's `onError` hook only captures errors whose effective status is ≥500. Status is resolved via `effectiveStatusCode` across three shapes: Fastify-native `.statusCode` (rate limit, schema validation), project `AppError` subclasses (`NotFoundError`, `ValidationError`, etc.) via `.status`, and `ZodError` thrown by route-boundary `.parse()` calls (always 400). Without all three checks, expected client outcomes would land in Sentry as 500-class noise.
+
 ## Related docs
 
 - [llm-cost-model.md](./llm-cost-model.md) — local cost ledger (complement, not replacement)

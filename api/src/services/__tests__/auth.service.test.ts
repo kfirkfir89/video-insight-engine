@@ -5,6 +5,7 @@ import { ObjectId } from 'mongodb';
 import { AuthService } from '../auth.service.js';
 import { UserRepository, UserDocument } from '../../repositories/user.repository.js';
 import {
+  AccountDeletionPendingError,
   EmailExistsError,
   InvalidCredentialsError,
   UserNotFoundError,
@@ -219,6 +220,16 @@ describe('AuthService', () => {
       expect(result).toHaveProperty('id');
       expect(result).toHaveProperty('email');
       expect(result).toHaveProperty('name');
+    });
+
+    it('should reject login for soft-deleted accounts with AccountDeletionPendingError', async () => {
+      const mockUser = createMockUser({ deletedAt: new Date('2026-05-19T00:00:00Z') });
+      mockUserRepository.findByEmail.mockResolvedValue(mockUser);
+      vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
+
+      await expect(authService.login(validInput)).rejects.toThrow(AccountDeletionPendingError);
+      // Soft-deleted login should NOT extend the session window.
+      expect(mockUserRepository.updateLastLogin).not.toHaveBeenCalled();
     });
 
     it('should use same error for non-existent user and wrong password', async () => {

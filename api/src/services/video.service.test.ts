@@ -324,6 +324,64 @@ describe('VideoService', () => {
         expect(mockQueuePublisher.publishVideoJob).toHaveBeenCalledTimes(1);
         expect(mockSummarizerClient.triggerSummarization).not.toHaveBeenCalled();
       });
+
+      it('should forward requestId into the queue payload', async () => {
+        const youtubeId = 'dQw4w9WgXcQ';
+        const videoSummaryId = 'summary-req-id';
+
+        mockVideoRepository.findUserVideoByYoutubeId.mockResolvedValue(null);
+        mockVideoRepository.findCacheByYoutubeId.mockResolvedValue(null);
+        mockVideoRepository.createCacheEntry.mockResolvedValue({
+          _id: { toString: () => videoSummaryId },
+          youtubeId,
+          status: 'pending',
+        });
+        mockVideoRepository.createUserVideo.mockResolvedValue({
+          _id: { toString: () => 'userVideo-req' },
+          videoSummaryId: { toString: () => videoSummaryId },
+          youtubeId,
+          status: 'pending',
+        });
+
+        await videoService.createVideo(
+          'user-q',
+          'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          { tier: 'free', requestId: 'req-from-route-abc12' },
+        );
+
+        const arg = mockQueuePublisher.publishVideoJob.mock.calls[0][0];
+        expect(arg.requestId).toBe('req-from-route-abc12');
+      });
+    });
+
+    describe('request-id propagation (HTTP fallback)', () => {
+      it('should forward requestId to the summarizer client when not using the queue', async () => {
+        const youtubeId = 'dQw4w9WgXcQ';
+        const videoSummaryId = 'summary-http-req';
+
+        mockVideoRepository.findUserVideoByYoutubeId.mockResolvedValue(null);
+        mockVideoRepository.findCacheByYoutubeId.mockResolvedValue(null);
+        mockVideoRepository.createCacheEntry.mockResolvedValue({
+          _id: { toString: () => videoSummaryId },
+          youtubeId,
+          status: 'pending',
+        });
+        mockVideoRepository.createUserVideo.mockResolvedValue({
+          _id: { toString: () => 'userVideo-http-req' },
+          videoSummaryId: { toString: () => videoSummaryId },
+          youtubeId,
+          status: 'pending',
+        });
+
+        await videoService.createVideo(
+          'user-http',
+          'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          { tier: 'free', requestId: 'req-http-fallback-99' },
+        );
+
+        const call = mockSummarizerClient.triggerSummarization.mock.calls[0][0];
+        expect(call.requestId).toBe('req-http-fallback-99');
+      });
     });
   });
 });
