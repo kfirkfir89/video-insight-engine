@@ -19,7 +19,7 @@ from litellm.exceptions import APIError as LitellmAPIError, RateLimitError, Time
 import redis.exceptions as redis_exceptions
 import structlog
 
-from llm_common.context import llm_video_id_var  # noqa: F401 — used in phases
+from llm_common.context import llm_feature_var, llm_video_id_var  # noqa: F401 — used in phases
 
 from src.config import settings
 from src.exceptions import TranscriptError
@@ -89,6 +89,13 @@ def _launch_faithfulness_check(ctx: PipelineContext) -> asyncio.Task[None] | Non
         return None
 
     async def _run() -> None:
+        # asyncio.create_task snapshots the parent task's ContextVars at spawn
+        # time, which means this task inherits "summarize:extraction" from the
+        # extraction phase that just ran. Without this re-set, every judge LLM
+        # call is attributed to extraction in cost tracking instead of its
+        # own stage. Setting it inside the spawned task is scoped to this task
+        # only — it doesn't leak back to the parent.
+        llm_feature_var.set("summarize:faithfulness")
         try:
             await run_faithfulness_check(
                 llm_service=ctx.llm_service,

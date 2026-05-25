@@ -181,6 +181,13 @@ services:
       TRANSCRIPT_CLEANING_ENABLED: ${TRANSCRIPT_CLEANING_ENABLED:-true}
       # Scene-based frame extraction (additive to timestamp extraction)
       SCENE_EXTRACTION_ENABLED: ${SCENE_EXTRACTION_ENABLED:-true}
+      # Langfuse observability — keys blank → SDK init is a no-op.
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+      LANGFUSE_FAITHFULNESS_SAMPLE_RATE: ${LANGFUSE_FAITHFULNESS_SAMPLE_RATE:-0.2}
+      LANGFUSE_USER_ID_MODE: ${LANGFUSE_USER_ID_MODE:-identity}
+      LANGFUSE_USER_ID_HASH_SALT: ${LANGFUSE_USER_ID_HASH_SALT:-}
     networks:
       - vie-network
     depends_on:
@@ -247,6 +254,13 @@ services:
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-vie}:${RABBITMQ_DEFAULT_PASS:-vie-dev}@vie-rabbitmq:5672/
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
       WORKER_MAX_RETRIES: ${WORKER_MAX_RETRIES:-3}
+      # Langfuse observability — keys blank → SDK init is a no-op.
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+      LANGFUSE_FAITHFULNESS_SAMPLE_RATE: ${LANGFUSE_FAITHFULNESS_SAMPLE_RATE:-0.2}
+      LANGFUSE_USER_ID_MODE: ${LANGFUSE_USER_ID_MODE:-identity}
+      LANGFUSE_USER_ID_HASH_SALT: ${LANGFUSE_USER_ID_HASH_SALT:-}
     networks:
       - vie-network
     depends_on:
@@ -289,6 +303,12 @@ services:
       INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
       MAX_CONTEXT_CHUNKS: 8
       MAX_CONVERSATION_TURNS: 20
+      # Langfuse observability — keys blank → SDK init is a no-op.
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+      LANGFUSE_USER_ID_MODE: ${LANGFUSE_USER_ID_MODE:-identity}
+      LANGFUSE_USER_ID_HASH_SALT: ${LANGFUSE_USER_ID_HASH_SALT:-}
     networks:
       - vie-network
     depends_on:

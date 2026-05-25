@@ -33,9 +33,11 @@ EXPLORATION — user browses and discovers:
 
   comparison
     CREATES: Side-by-side data table or pros/cons columns
-    GOOD FOR: Helping user decide between options, weighing trade-offs
+    GOOD FOR: X vs Y decisions — two named products, two approaches, two methods explicitly weighed against each other.
     NEEDS: pros[], cons[], or comparison rows with feature/left/right
     DATASOURCE: "tech.cheatSheet", "learning.concepts", "learning.keyPoints", or "review.pros" — assembler converts all shapes
+    NEVER USE FOR: term definitions, glossaries, lists of concepts the video introduces without weighing alternatives. Definitions go to info_grid (browse) or flash_deck (memorize). Use comparison only when the speaker says "X is better than Y because…".
+    LIMIT: at most 10 comparison rows. Pick the 10 most decision-relevant.
 
   gallery
     CREATES: Image grid with captions and lightbox

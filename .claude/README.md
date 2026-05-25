@@ -323,7 +323,7 @@ Runs the full completion workflow.
 ✅ Code quality good
 
 ### 5. Documentation
-✅ Updated docs/CACHING.md
+✅ Updated docs/INFRASTRUCTURE.md (caching section)
 
 ---
 **Task complete! Run /ship when ready to deploy.**
@@ -347,7 +347,7 @@ Updates project documentation for recent changes.
 /update-docs added Redis caching layer
 
 → Checks docs/ARCHITECTURE.md
-→ Updates docs/CACHING.md
+→ Updates docs/INFRASTRUCTURE.md (caching section)
 → Updates CLAUDE.md tech stack
 → Reports what was changed
 ```

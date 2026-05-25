@@ -25,13 +25,12 @@ Check and update relevant files in `docs/`:
 | Change Type          | Files to Check                                      |
 | -------------------- | --------------------------------------------------- |
 | New API endpoints    | `docs/API-REFERENCE.md`                             |
-| Architecture changes | `docs/ARCHITECTURE.md`, `docs/PROJECT-STRUCTURE.md` |
+| Architecture changes | `docs/ARCHITECTURE.md`                              |
 | New service          | `docs/SERVICE-*.md` (create if needed)              |
 | Data model changes   | `docs/DATA-MODELS.md`                               |
 | Security changes     | `docs/SECURITY.md`                                  |
 | Error handling       | `docs/ERROR-HANDLING.md`                            |
-| Caching changes      | `docs/CACHING.md`                                   |
-| Infrastructure       | `docs/INFRASTRUCTURE.md`                            |
+| Caching changes      | `docs/INFRASTRUCTURE.md`                            |
 | Cross-cutting        | `docs/CROSS-CUTTING.md`                             |
 | Frontend changes     | `docs/FRONTEND.md`                                  |
 
@@ -69,8 +68,8 @@ Check if changes affect:
   - Added new /api/cache endpoints
 - ✏️ Updated: docs/ARCHITECTURE.md
   - Added caching layer diagram
-- ➕ Created: docs/CACHING.md
-  - New caching strategy documentation
+- ➕ Added: docs/INFRASTRUCTURE.md "Caching layers" section
+  - Documented new cache strategy
 
 #### CLAUDE.md
 - ✏️ Updated: Tech stack table (added Redis)

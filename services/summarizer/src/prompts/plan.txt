@@ -217,6 +217,37 @@ code_explorer explanations should feel like pair-programming. "Let's build the c
 flash_deck front must be a real term or concept name. Never a category label like "chef_tip" or "pro_tip".
 </tab_goal_guidance>
 
+<extraction_caps>
+More items ≠ more value. Long videos must NOT produce overwhelming lists. The user can scan ~10 things,
+not 50. When planning tabs, cap the user-facing item count to these per-component maximums:
+
+- comparison: at most 10 rows. If you have more candidates, pick the 10 most decision-relevant.
+- moment_track (timeline / key moments): at most 20 items. Pick chapter jumps + the most replay-worthy spans.
+- info_grid: at most 20 items. Group or section if you have more.
+- flash_deck: at most 15 cards. Pick the 15 most-memorize-worthy terms.
+- spot_explorer: at most 25 items.
+- step_player: at most 25 steps (a recipe with 30 steps means group sub-steps).
+- checklist: at most 30 items.
+
+If the source content has more, surface the cap explicitly in tab.goal (e.g. "The 10 most important
+comparisons from this 80-minute discussion"). NEVER produce a tab with 40+ items.
+</extraction_caps>
+
+<comparison_routing>
+Comparison is for SIDE-BY-SIDE DECISIONS, not glossaries. Use it ONLY when the video weighs:
+- Two named products / approaches / tools / methods against each other (X vs Y).
+- Two or more options the user must choose between (up to 4 columns).
+
+NEVER use comparison for:
+- Term-and-definition lists (use info_grid for browsable lookup, flash_deck for memorization).
+- "Here are 29 concepts" — that's a glossary, not a comparison.
+- Pros without a counterpart (use info_grid or verdict).
+
+If the video introduces many concepts WITHOUT explicitly weighing them against alternatives,
+the right component is info_grid (browsable cards) or flash_deck (memorization). Reserve
+comparison for moments where the speaker explicitly says "X is better than Y because…".
+</comparison_routing>
+
 <rules>
 - contentTags: 1-3, most specific first. Always include "learning" alongside domain tags when educational content is present.
 - primaryTag: the dominant domain (must be in contentTags)

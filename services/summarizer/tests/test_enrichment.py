@@ -385,3 +385,65 @@ class TestEnrichSynthesisFallback:
         prompt = call_args[0][0] if call_args[0] else call_args[1].get("prompt", "")
         assert "Python" in prompt
         assert "Should not be used" not in prompt
+
+
+class TestOutputCaps:
+    """Hard caps on enrichment output regardless of LLM compliance with the prompt."""
+
+    @pytest.mark.asyncio
+    async def test_quiz_is_truncated_to_max(self, mock_llm):
+        """An over-generous LLM that returns 20 quiz questions must be capped at 12."""
+        oversized = {
+            "quiz": [
+                {"question": f"Q{i}", "options": ["a", "b", "c", "d"], "correctIndex": 0, "explanation": "e"}
+                for i in range(20)
+            ],
+            "flashcards": [{"front": f"F{i}", "back": "b"} for i in range(5)],
+        }
+        _set_llm_return(mock_llm, json.dumps(oversized))
+        result = await enrich(mock_llm, "tech", {"concepts": [{"name": "x"}]}, "T")
+        assert result is not None
+        assert result.quiz is not None
+        assert len(result.quiz) == 12
+
+    @pytest.mark.asyncio
+    async def test_flashcards_are_truncated_to_max(self, mock_llm):
+        """LLM returning 25 flashcards (e.g. legacy language prompt) must be capped at 15."""
+        oversized = {
+            "quiz": [{"question": "q", "options": ["a", "b", "c", "d"], "correctIndex": 0, "explanation": "e"}],
+            "flashcards": [{"front": f"F{i}", "back": "b"} for i in range(25)],
+        }
+        _set_llm_return(mock_llm, json.dumps(oversized))
+        result = await enrich(mock_llm, "language", {"vocabulary": [{"term": "x"}]}, "T")
+        assert result is not None
+        assert result.flashcards is not None
+        assert len(result.flashcards) == 15
+
+    @pytest.mark.asyncio
+    async def test_within_cap_passes_unchanged(self, mock_llm):
+        """Output already within caps must not be touched."""
+        compliant = {
+            "quiz": [{"question": f"Q{i}", "options": ["a", "b", "c", "d"], "correctIndex": 0, "explanation": "e"} for i in range(5)],
+            "flashcards": [{"front": f"F{i}", "back": "b"} for i in range(8)],
+        }
+        _set_llm_return(mock_llm, json.dumps(compliant))
+        result = await enrich(mock_llm, "tech", {"concepts": [{"name": "x"}]}, "T")
+        assert result is not None
+        assert result.quiz is not None
+        assert result.flashcards is not None
+        assert len(result.quiz) == 5
+        assert len(result.flashcards) == 8
+
+    @pytest.mark.asyncio
+    async def test_max_tokens_is_16384(self, mock_llm):
+        """Regression: previous 8192 limit caused finish_reason=length on long videos.
+
+        Bumped to 16384 so dense enrichment output isn't truncated mid-JSON.
+        """
+        _set_llm_return(mock_llm, json.dumps({
+            "quiz": [{"question": "q", "options": ["a", "b", "c", "d"], "correctIndex": 0, "explanation": "e"}],
+            "flashcards": [{"front": "F", "back": "b"}],
+        }))
+        await enrich(mock_llm, "tech", {"concepts": [{"name": "x"}]}, "T")
+        call_kwargs = mock_llm.call_llm_fast.call_args.kwargs
+        assert call_kwargs.get("max_tokens") == 16384

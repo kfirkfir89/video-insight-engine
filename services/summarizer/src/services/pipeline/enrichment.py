@@ -21,6 +21,15 @@ from ...shared_config.domain_config import get_enrichment_map
 logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
 
+# Hard caps on enrichment output — applied after LLM validation regardless
+# of video length. The LLM is also instructed to respect these via the
+# scaling_rules section in each enrich_*.txt prompt, but we enforce in code
+# as a backstop: large videos otherwise produce 20+ quiz questions / 25+
+# flashcards that the user will never consume.
+_MAX_QUIZ_QUESTIONS = 12
+_MAX_FLASHCARDS = 15
+_MAX_SCENARIOS = 6
+
 
 def _load_prompt(prompt_path: str) -> str | None:
     """Registry-first enrichment prompt loader. Path-traversal safe.
@@ -57,6 +66,24 @@ def _is_nonempty(value: Any) -> bool:
 def _has_meaningful_data(extraction: dict) -> bool:
     """Check if extraction has any non-empty arrays or non-trivial string values."""
     return any(_is_nonempty(v) for v in extraction.values())
+
+
+def _apply_output_caps(data: EnrichmentData) -> None:
+    """Truncate quiz / flashcards / scenarios to the per-video hard caps in-place.
+
+    The LLM is also instructed via scaling_rules, but we enforce here
+    so the saved output is always within budget regardless of prompt drift.
+    Matches the in-place pattern of `_cap_tab_items` in assembly/core.py.
+    """
+    if data.quiz and len(data.quiz) > _MAX_QUIZ_QUESTIONS:
+        logger.info("Enrichment: capping quiz from %d → %d", len(data.quiz), _MAX_QUIZ_QUESTIONS)
+        data.quiz = data.quiz[:_MAX_QUIZ_QUESTIONS]
+    if data.flashcards and len(data.flashcards) > _MAX_FLASHCARDS:
+        logger.info("Enrichment: capping flashcards from %d → %d", len(data.flashcards), _MAX_FLASHCARDS)
+        data.flashcards = data.flashcards[:_MAX_FLASHCARDS]
+    if data.scenarios and len(data.scenarios) > _MAX_SCENARIOS:
+        logger.info("Enrichment: capping scenarios from %d → %d", len(data.scenarios), _MAX_SCENARIOS)
+        data.scenarios = data.scenarios[:_MAX_SCENARIOS]
 
 
 async def enrich(
@@ -122,7 +149,7 @@ async def enrich(
 
         raw = await call_llm_with_retry(
             llm_service, prompt,
-            max_tokens=8192, timeout=90.0, max_retries=2, stage_name="enrichment",
+            max_tokens=16384, timeout=90.0, max_retries=2, stage_name="enrichment",
             json_mode=True, use_fast_model=True,
             model_override=settings.get_stage_model("enrichment"),
         )
@@ -136,7 +163,9 @@ async def enrich(
             logger.warning("Empty enrichment response for %s", primary_tag)
             return None
 
-        return EnrichmentData.model_validate(data)
+        result = EnrichmentData.model_validate(data)
+        _apply_output_caps(result)
+        return result
 
     except (ValueError, json.JSONDecodeError) as e:
         logger.error("Enrichment failed for %s: %s — skipping", primary_tag, e)

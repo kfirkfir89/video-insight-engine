@@ -63,6 +63,16 @@ class Settings(BaseSettings):
     LLM_ENRICHMENT_MODEL: str | None = "anthropic/claude-haiku-4-5-20251001"
     LLM_TRANSLATION_MODEL: str | None = None
     LLM_VISION_MODEL: str | None = "anthropic/claude-haiku-4-5-20251001"
+    # Extraction model override. Default `None` falls through to the primary
+    # model (claude-sonnet-4-6 in production), preserving the current cost
+    # profile. Set to "anthropic/claude-haiku-4-5-20251001" or another model
+    # to A/B against Sonnet without rebuilding. Unlike EXTRACTION_USE_FAST_FIRST
+    # (which routes the FIRST pass to the fast tier and escalates retries to
+    # primary), this override pins ALL extraction passes — including retries —
+    # to the chosen model. Use when you want a clean A/B with no escalation
+    # noise; use EXTRACTION_USE_FAST_FIRST when you want a cost-saving first
+    # pass with Sonnet as a safety net on failure.
+    LLM_EXTRACTION_MODEL: str | None = None
 
     # Provider API Keys (set for providers you use)
     ANTHROPIC_API_KEY: str | None = None
@@ -90,7 +100,12 @@ class Settings(BaseSettings):
 
     # Chapter-based chunked extraction
     CHAPTER_BATCH_SIZE: int = 3
-    CHUNKED_EXTRACTION_THRESHOLD: int = 1800  # seconds (30 min) — videos longer than this use chunked extraction
+    # Videos longer than this run chapter detection + chunked-batch extraction
+    # (parallel Sonnet calls). Lowered 1800→900 on 2026-05-24 to halve the
+    # wallclock for 15–30 min videos at the cost of a small chapter_detect
+    # call (~$0.01) per newly-eligible video. Cost is roughly neutral once
+    # prompt caching kicks in across the parallel batches.
+    CHUNKED_EXTRACTION_THRESHOLD: int = 900  # seconds (15 min)
     MAX_TOKENS_PER_BATCH: int = 50000  # conservative token limit per extraction batch
     CHUNKED_EXTRACTION_TIMEOUT: float = 300.0  # 5 min — per-batch timeout for chunked extraction
     # Parallel concurrency for the chunked extraction batches. Defaults to 2
@@ -132,7 +147,7 @@ class Settings(BaseSettings):
     # init returns None, so tests and offline dev never hit the network.
     LANGFUSE_PUBLIC_KEY: str | None = None
     LANGFUSE_SECRET_KEY: str | None = None
-    LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+    LANGFUSE_BASE_URL: str = "https://cloud.langfuse.com"
     # Faithfulness judge: fraction of extracted items to spot-check (0 disables).
     LANGFUSE_FAITHFULNESS_SAMPLE_RATE: float = 0.2
     # User-id propagation policy for Langfuse traces. Options:
@@ -258,6 +273,7 @@ class Settings(BaseSettings):
         "description_analysis": "LLM_DESCRIPTION_MODEL",
         "synthesis": "LLM_SYNTHESIS_MODEL",
         "enrichment": "LLM_ENRICHMENT_MODEL",
+        "extraction": "LLM_EXTRACTION_MODEL",
         "translation": "LLM_TRANSLATION_MODEL",
         "translation_tabs": "LLM_TRANSLATION_MODEL",
         "translation_meta": "LLM_TRANSLATION_MODEL",

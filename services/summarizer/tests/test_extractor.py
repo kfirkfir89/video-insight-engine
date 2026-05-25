@@ -458,3 +458,135 @@ class TestForceSplitBySentences:
         transcript = " ".join(["word"] * 25000)
         result = _force_split_by_sentences(transcript, 3600)
         assert result == []  # single "sentence" — no split possible
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LLM_EXTRACTION_MODEL per-stage override
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# These tests pin the contract that LLM_EXTRACTION_MODEL flows through every
+# extraction call site to call_llm_with_retry. The override is the operator's
+# explicit "use this exact model for extraction" knob — it must reach the
+# wire on the single, overflow, and chunked-batch paths, otherwise long
+# videos (which use chunked) would silently keep paying for Sonnet while
+# the env var lies about a swap.
+
+
+class TestExtractionModelOverride:
+    """LLM_EXTRACTION_MODEL must be threaded to every extraction call site."""
+
+    def test_settings_returns_none_when_extraction_override_unset(self, monkeypatch):
+        """Default: no override → primary model wins (Sonnet in production)."""
+        from src.config import settings
+        monkeypatch.setattr(settings, "LLM_EXTRACTION_MODEL", None)
+        assert settings.get_stage_model("extraction") is None
+
+    def test_settings_returns_env_value_when_extraction_override_set(self, monkeypatch):
+        """Operator-set value flows through get_stage_model."""
+        from src.config import settings
+        monkeypatch.setattr(
+            settings, "LLM_EXTRACTION_MODEL", "anthropic/claude-haiku-4-5-20251001",
+        )
+        assert settings.get_stage_model("extraction") == "anthropic/claude-haiku-4-5-20251001"
+
+    @pytest.mark.asyncio
+    @patch("src.services.pipeline.extractor.validate_domain_output")
+    @patch("src.services.pipeline.extractor.call_llm_with_retry", new_callable=AsyncMock)
+    @patch("src.services.pipeline.extractor.build_extraction_template", return_value="template {transcript}")
+    @patch("src.services.pipeline.extractor._load_prompt", return_value="")
+    async def test_single_path_threads_extraction_override(
+        self, mock_prompt, mock_template, mock_llm_retry, mock_validate,
+        mock_llm, learning_triage, monkeypatch,
+    ):
+        """Short videos (<SINGLE_THRESHOLD) → _single_extraction must forward LLM_EXTRACTION_MODEL."""
+        from src.config import settings
+        monkeypatch.setattr(settings, "LLM_EXTRACTION_MODEL", "anthropic/claude-haiku-4-5-20251001")
+        mock_llm_retry.return_value = json.dumps({"keyPoints": [], "concepts": [], "takeaways": [], "timestamps": []})
+        mock_validate.return_value = {"learning": {"keyPoints": [], "concepts": [], "takeaways": [], "timestamps": []}}
+
+        short_transcript = _make_transcript(SINGLE_THRESHOLD - 100)
+        async for _ in extract(mock_llm, learning_triage, short_transcript, {"title": "T", "duration": 120}):
+            pass
+
+        assert mock_llm_retry.called
+        kwargs = mock_llm_retry.call_args.kwargs
+        assert kwargs.get("model_override") == "anthropic/claude-haiku-4-5-20251001"
+        assert kwargs.get("stage_name") == "extraction"
+
+    @pytest.mark.asyncio
+    @patch("src.services.pipeline.extractor.validate_domain_output")
+    @patch("src.services.pipeline.extractor.call_llm_with_retry", new_callable=AsyncMock)
+    @patch("src.services.pipeline.extractor.build_extraction_template", return_value="template {transcript}")
+    @patch("src.services.pipeline.extractor._load_prompt", return_value="")
+    async def test_overflow_path_threads_extraction_override(
+        self, mock_prompt, mock_template, mock_llm_retry, mock_validate,
+        mock_llm, learning_triage, monkeypatch,
+    ):
+        """Medium videos with chapters → _overflow_extraction must forward the override."""
+        from src.config import settings
+        monkeypatch.setattr(settings, "LLM_EXTRACTION_MODEL", "openai/gpt-4o-mini")
+        mock_llm_retry.return_value = json.dumps({"keyPoints": [], "concepts": [], "takeaways": [], "timestamps": []})
+        mock_validate.return_value = {"learning": {"keyPoints": [], "concepts": [], "takeaways": [], "timestamps": []}}
+
+        medium_transcript = _make_transcript(SINGLE_THRESHOLD + 100)
+        async for _ in extract(mock_llm, learning_triage, medium_transcript, {"title": "T", "duration": 300}):
+            pass
+
+        assert mock_llm_retry.called
+        kwargs = mock_llm_retry.call_args.kwargs
+        assert kwargs.get("model_override") == "openai/gpt-4o-mini"
+
+    @pytest.mark.asyncio
+    @patch("src.services.pipeline.extractor.validate_domain_output")
+    @patch("src.services.pipeline.extractor.call_llm_with_retry", new_callable=AsyncMock)
+    @patch("src.services.pipeline.extractor.build_extraction_template", return_value="template {transcript}")
+    @patch("src.services.pipeline.extractor._load_prompt", return_value="")
+    async def test_chunked_batches_thread_extraction_override(
+        self, mock_prompt, mock_template, mock_llm_retry, mock_validate,
+        mock_llm, learning_triage, monkeypatch,
+    ):
+        """The cost-heavy path: every chunked batch call must carry the override.
+
+        Long videos route through _chunked_extraction → _run_batch_extraction,
+        which assigns its own stage_name (e.g. "extraction_batch1") for
+        observability. The model lookup must still resolve from the
+        "extraction" key, not the per-batch span name.
+        """
+        from src.config import settings
+        monkeypatch.setattr(settings, "LLM_EXTRACTION_MODEL", "anthropic/claude-haiku-4-5-20251001")
+        mock_llm_retry.return_value = json.dumps({"keyPoints": [], "concepts": [], "takeaways": [], "timestamps": []})
+        mock_validate.return_value = {"learning": {"keyPoints": [], "concepts": [], "takeaways": [], "timestamps": []}}
+
+        very_long_transcript = _make_transcript(OVERFLOW_THRESHOLD + 100, with_sentences=True)
+        async for _ in extract(mock_llm, learning_triage, very_long_transcript, {"title": "T", "duration": 60 * 60}):
+            pass
+
+        assert mock_llm_retry.call_count >= 1, "Chunked path should make at least one batch call"
+        # Every call_llm_with_retry invocation must carry the override — there's
+        # no excuse for a batch slipping through on Sonnet when the operator
+        # asked for Haiku.
+        for call in mock_llm_retry.call_args_list:
+            assert call.kwargs.get("model_override") == "anthropic/claude-haiku-4-5-20251001", (
+                f"Batch call missed the model_override: stage_name={call.kwargs.get('stage_name')!r}"
+            )
+
+    @pytest.mark.asyncio
+    @patch("src.services.pipeline.extractor.validate_domain_output")
+    @patch("src.services.pipeline.extractor.call_llm_with_retry", new_callable=AsyncMock)
+    @patch("src.services.pipeline.extractor.build_extraction_template", return_value="template {transcript}")
+    @patch("src.services.pipeline.extractor._load_prompt", return_value="")
+    async def test_default_passes_none_as_model_override(
+        self, mock_prompt, mock_template, mock_llm_retry, mock_validate,
+        mock_llm, learning_triage,
+    ):
+        """When LLM_EXTRACTION_MODEL is unset (the default), the kwarg must be
+        explicitly None — not omitted, not a stale value from another stage."""
+        # conftest._disable_stage_model_overrides already forces None
+        mock_llm_retry.return_value = json.dumps({"keyPoints": [], "concepts": [], "takeaways": [], "timestamps": []})
+        mock_validate.return_value = {"learning": {"keyPoints": [], "concepts": [], "takeaways": [], "timestamps": []}}
+
+        short_transcript = _make_transcript(SINGLE_THRESHOLD - 100)
+        async for _ in extract(mock_llm, learning_triage, short_transcript, {"title": "T", "duration": 120}):
+            pass
+
+        assert mock_llm_retry.call_args.kwargs.get("model_override") is None

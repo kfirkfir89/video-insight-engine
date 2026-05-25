@@ -43,8 +43,9 @@ Scenarios: Present real-world situations where the learner uses the language.
 <scaling_rules>
 Scale the number of items to the extraction density:
 - Light content (fewer than 10 vocab items): 4 quiz, 8 flashcards, 2 scenarios
-- Medium content (10-25 vocab items): 7 quiz, 15 flashcards, 4 scenarios
-- Dense content (more than 25 vocab items): 10 quiz, 25 flashcards, 6 scenarios
+- Medium content (10-25 vocab items): 7 quiz, 12 flashcards, 4 scenarios
+- Dense content (more than 25 vocab items): 10 quiz, 15 flashcards, 6 scenarios
+HARD CAPS (do not exceed regardless of video length): max 12 quiz questions, max 15 flashcards, max 6 scenarios.
 </scaling_rules>
 
 Return valid JSON with keys: quiz, flashcards, scenarios

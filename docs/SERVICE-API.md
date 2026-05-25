@@ -1,6 +1,6 @@
 # Service: vie-api
 
-Node.js backend service. REST API + MCP client + WebSocket.
+Node.js backend service. REST API + WebSocket + SSE.
 
 ---
 
@@ -15,7 +15,6 @@ Node.js backend service. REST API + MCP client + WebSocket.
 | @fastify/jwt              | Authentication    |
 | @fastify/websocket        | Real-time updates |
 | mongodb                   | Database driver   |
-| @modelcontextprotocol/sdk | MCP client        |
 | Vitest                    | Testing           |
 
 ---
@@ -34,53 +33,53 @@ api/
     ├── container.ts              # Dependency injection container
     │
     ├── plugins/
-    │   ├── mongodb.ts            # Database connection
-    │   ├── jwt.ts                # Authentication
-    │   ├── cors.ts               # CORS configuration
-    │   ├── websocket.ts          # Real-time updates
-    │   └── mcp.ts                # MCP client (legacy, unused)
-    │
-    ├── repositories/
-    │   ├── video.repository.ts   # Video data access
-    │   └── share.repository.ts   # Share data access (v1.4)
-    │
-    ├── routes/
-    │   ├── auth.routes.ts
-    │   ├── folders.routes.ts
-    │   ├── videos.routes.ts
-    │   ├── playlists.routes.ts
-    │   ├── explain.routes.ts
-    │   ├── stream.routes.ts      # SSE proxy to summarizer
-    │   ├── share.routes.ts       # Share creation + public access (v1.4)
-    │   ├── ssr.routes.ts         # /s/:slug server-rendered share pages (v1.4)
-    │   ├── override.routes.ts    # Category override (v1.4)
-    │   └── payment.routes.ts     # Paddle webhooks + checkout (v1.4)
-    │
-    ├── schemas/
-    │   ├── video.schema.ts       # Video validation schemas
-    │   ├── share.schema.ts       # Share validation schemas (v1.4)
-    │   └── payment.schema.ts     # Payment validation schemas (v1.4)
-    │
-    ├── services/
-    │   ├── auth.service.ts
-    │   ├── folder.service.ts
-    │   ├── video.service.ts      # + expiration logic (v1.4)
-    │   ├── playlist.service.ts
-    │   ├── summarizer-client.ts  # HTTP client for summarizer
-    │   ├── assistant-client.ts   # HTTP client for assistant (RAG chat)
-    │   ├── share.service.ts      # Share creation, public access (v1.4)
-    │   ├── og-image.service.ts   # OG image generation (v1.4)
-    │   ├── payment.service.ts    # Paddle webhook + checkout (v1.4)
-    │   └── cost-monitor.service.ts # Daily LLM spend monitoring (v1.4)
-    │
-    ├── plugins/
     │   ├── mongodb.ts            # Database connection + indexes
     │   ├── jwt.ts                # Authentication
     │   ├── cors.ts               # CORS configuration
     │   ├── websocket.ts          # Real-time updates
-    │   ├── mcp.ts                # MCP client (legacy, unused)
-    │   ├── rate-limit.ts         # Rate limiting (+ tier-aware, v1.4)
-    │   └── tier.ts               # Tier decoration per request (v1.4)
+    │   ├── rate-limit.ts         # Rate limiting (tier-aware)
+    │   ├── tier.ts               # Tier decoration per request
+    │   ├── request-id.ts         # X-Request-ID propagation
+    │   └── sentry.ts             # Sentry init + PII filter
+    │
+    ├── repositories/
+    │   ├── video.repository.ts
+    │   ├── share.repository.ts
+    │   ├── user.repository.ts
+    │   └── user-deletion.repository.ts
+    │
+    ├── routes/
+    │   ├── admin/                # Admin-only endpoints (queue, users)
+    │   ├── auth.routes.ts
+    │   ├── folders.routes.ts
+    │   ├── videos.routes.ts
+    │   ├── playlists.routes.ts
+    │   ├── assistant.routes.ts   # /api/assistant/* (RAG chat + actions)
+    │   ├── stream.routes.ts      # SSE proxy to summarizer
+    │   ├── share.routes.ts       # Share creation + public access
+    │   ├── ssr.routes.ts         # /s/:slug server-rendered share pages
+    │   ├── override.routes.ts    # Category override
+    │   ├── payment.routes.ts     # Paddle webhooks + checkout
+    │   ├── internal.routes.ts    # Internal service-to-service calls
+    │   ├── preferences.routes.ts # User preferences
+    │   └── users.routes.ts       # User profile + GDPR deletion
+    │
+    ├── schemas/
+    │   ├── video.schema.ts
+    │   ├── share.schema.ts
+    │   └── payment.schema.ts
+    │
+    ├── services/
+    │   ├── auth.service.ts
+    │   ├── folder.service.ts
+    │   ├── video.service.ts
+    │   ├── playlist.service.ts
+    │   ├── summarizer-client.ts  # HTTP client for summarizer
+    │   ├── assistant-client.ts   # HTTP client for assistant (RAG chat)
+    │   ├── share.service.ts
+    │   ├── og-image.service.ts
+    │   ├── payment.service.ts
+    │   └── cost-monitor.service.ts
     │
     ├── templates/
     │   └── share-page.ts         # HTML template for /s/:slug (v1.4)
@@ -225,47 +224,25 @@ export class UnauthorizedError extends AppError {
 All protected routes verify resource ownership before operations:
 
 ```typescript
-// src/routes/explain.routes.ts
-export async function explainRoutes(fastify: FastifyInstance) {
+// src/routes/assistant.routes.ts
+export async function assistantRoutes(fastify: FastifyInstance) {
   const { assistantClient, videoRepository } = fastify.container;
 
-  fastify.get('/:videoSummaryId/:targetType/:targetId', {
-    preHandler: [fastify.authenticate],
-  }, async (req, reply) => {
-    const { videoSummaryId, targetType, targetId } = req.params;
-
-    // Authorization check - verify user has access
-    const hasAccess = await videoRepository.userHasAccessToSummary(
-      req.user.userId,
-      videoSummaryId
-    );
-    if (!hasAccess) {
-      throw new VideoNotFoundError();
-    }
-
-    const result = await assistantClient.explainAuto(videoSummaryId, targetType, targetId);
-    return result;
-  });
-
-  fastify.post('/video-chat', {
+  fastify.post('/chat', {
     preHandler: [fastify.authenticate],
   }, async (req, reply) => {
     const userId = req.user.userId;
 
-    // Authorization check - verify user has access to video
+    // Authorization check — verify user has access to the video
     const hasAccess = await videoRepository.userHasAccessToSummary(
-      req.user.userId,
-      req.body.videoSummaryId
+      userId,
+      req.body.videoSummaryId,
     );
     if (!hasAccess) {
       throw new VideoNotFoundError();
     }
 
-    const result = await assistantClient.videoChat({
-      ...req.body,
-      userId,
-    });
-    return result;
+    return assistantClient.chat({ ...req.body, userId });
   });
 }
 ```
@@ -277,8 +254,8 @@ export async function explainRoutes(fastify: FastifyInstance) {
 All request input is validated with Zod schemas with appropriate limits:
 
 ```typescript
-// src/routes/explain.routes.ts
-const videoChatBodySchema = z.object({
+// src/routes/assistant.routes.ts
+const chatBodySchema = z.object({
   videoSummaryId: z.string().min(1),
   message: z.string().min(1).max(10000),  // Max length to prevent abuse
   chatHistory: z.array(z.object({
@@ -288,7 +265,7 @@ const videoChatBodySchema = z.object({
 });
 
 // In route handler
-const parsed = explainChatBodySchema.safeParse(req.body);
+const parsed = chatBodySchema.safeParse(req.body);
 if (!parsed.success) {
   return reply.status(400).send({
     error: 'Bad Request',
@@ -336,8 +313,8 @@ export async function buildTestApp(mockContainer?: Partial<MockContainer>): Prom
 ### Route Testing Pattern
 
 ```typescript
-// src/routes/explain.routes.test.ts
-describe('explain routes', () => {
+// src/routes/assistant.routes.test.ts
+describe('assistant routes', () => {
   let app: FastifyInstance;
   let mockContainer: MockContainer;
   let authHeader: string;
@@ -353,9 +330,10 @@ describe('explain routes', () => {
     mockContainer.videoRepository.userHasAccessToSummary.mockResolvedValue(false);
 
     const response = await app.inject({
-      method: 'GET',
-      url: '/api/explain/video123/section/section456',
+      method: 'POST',
+      url: '/api/assistant/chat',
       headers: { authorization: authHeader },
+      payload: { videoSummaryId: 'video123', message: 'hello' },
     });
 
     expect(response.statusCode).toBe(404);

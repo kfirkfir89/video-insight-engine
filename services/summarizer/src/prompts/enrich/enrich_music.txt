@@ -62,6 +62,7 @@ Scale the number of items to the video's depth:
 - Short video (under 10 min): 3-4 quiz, 4-6 flashcards, 1-2 scenarios
 - Medium video (10-30 min): 5-7 quiz, 6-10 flashcards, 2-3 scenarios
 - Long video (30+ min): 8-12 quiz, 10-15 flashcards, 3-5 scenarios
+HARD CAPS (do not exceed regardless of video length): max 12 quiz questions, max 15 flashcards, max 6 scenarios.
 </scaling_rules>
 
 Return valid JSON with keys: quiz, flashcards, scenarios

@@ -14,7 +14,7 @@ You are a Principal AI Integration Engineer. Audit project infrastructure and do
 ## Audit Phases
 
 1. **Gather context** — project structure, .claude/ contents, docs/ contents
-2. **Core alignment** — CLAUDE.md, README.md, skill-rules.json, PROJECT-STRUCTURE.md must agree on paths, names, ports, env vars
+2. **Core alignment** — CLAUDE.md, README.md, skill-rules.json must agree on paths, names, ports, env vars
 3. **Doc consistency** — find duplications, contradictions, missing cross-references, outdated info, gaps
 4. **Claude infrastructure** — verify all skill paths, resource files, hook files, command files, agent files exist
 5. **Architecture review** — data model supports features, caching strategy sound, API contracts complete, error codes consistent

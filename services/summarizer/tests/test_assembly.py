@@ -1505,6 +1505,68 @@ class TestPostProcessing:
         _post_process_tabs(tabs)
         assert not tabs[0]["label"].startswith("🍝")
 
+    def test_caps_oversized_comparison_to_10(self):
+        """Regression: a 29-row comparison (the Yann LeCun video bug) must be capped to 10."""
+        from src.services.pipeline.assembly.core import _post_process_tabs
+        tabs = [
+            {
+                "id": "concepts",
+                "label": "Concepts",
+                "component": "comparison",
+                "emoji": "⚖️",
+                "props": {"comparisons": [{"feature": f"f{i}", "left": "L", "right": "R"} for i in range(29)]},
+            },
+        ]
+        _post_process_tabs(tabs)
+        assert len(tabs[0]["props"]["comparisons"]) == 10
+        # Count-derived label uses the capped count, not the original 29
+        assert tabs[0]["label"].startswith("10 ")
+
+    def test_caps_oversized_moment_track_to_20(self):
+        """Regression: 55-item timelines must be capped to 20."""
+        from src.services.pipeline.assembly.core import _post_process_tabs
+        tabs = [
+            {
+                "id": "key_moments",
+                "label": "Key Moments",
+                "component": "moment_track",
+                "emoji": "⏱️",
+                "props": {"items": [{"time": f"{i}:00", "seconds": i * 60, "label": f"m{i}"} for i in range(55)]},
+            },
+        ]
+        _post_process_tabs(tabs)
+        assert len(tabs[0]["props"]["items"]) == 20
+
+    def test_caps_oversized_info_grid_to_20(self):
+        from src.services.pipeline.assembly.core import _post_process_tabs
+        tabs = [
+            {
+                "id": "facts",
+                "label": "Facts",
+                "component": "info_grid",
+                "emoji": "📋",
+                "props": {"items": [{"key": f"k{i}", "value": "v"} for i in range(40)]},
+            },
+        ]
+        _post_process_tabs(tabs)
+        assert len(tabs[0]["props"]["items"]) == 20
+
+    def test_within_cap_passes_unchanged(self):
+        """Tabs already within the cap must not be touched."""
+        from src.services.pipeline.assembly.core import _post_process_tabs
+        original = [{"feature": f"f{i}", "left": "L", "right": "R"} for i in range(5)]
+        tabs = [
+            {
+                "id": "compare",
+                "label": "Compare",
+                "component": "comparison",
+                "emoji": "⚖️",
+                "props": {"comparisons": list(original)},
+            },
+        ]
+        _post_process_tabs(tabs)
+        assert tabs[0]["props"]["comparisons"] == original
+
 
 # ─── Domain Requirement Validation ───
 

@@ -342,6 +342,7 @@ async def _single_extraction(
         max_tokens=16384, timeout=240.0, max_retries=2, stage_name="extraction",
         json_mode=True, cache_static=cache_static or None,
         use_fast_model=use_fast_model,
+        model_override=settings.get_stage_model("extraction"),
     )
     if not raw:
         raise ValueError("Extraction LLM call failed after retries")
@@ -386,6 +387,7 @@ async def _overflow_extraction(
         max_tokens=32768, timeout=timeout, max_retries=2, stage_name="extraction",
         json_mode=True, cache_static=cache_static or None,
         use_fast_model=use_fast_model,
+        model_override=settings.get_stage_model("extraction"),
     )
     if not raw:
         raise ValueError("Extraction LLM call failed after retries")
@@ -501,6 +503,7 @@ async def _run_batch_extraction(
         cache_static=cache_static or None,
         use_fast_model=use_fast_model,
         propagate_rate_limit=True,
+        model_override=settings.get_stage_model("extraction"),
     )
     if not raw:
         return None

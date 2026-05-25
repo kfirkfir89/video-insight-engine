@@ -36,7 +36,22 @@ logger = logging.getLogger(__name__)
 
 _MAX_SAMPLES_PER_VIDEO = 6
 _JUDGE_TIMEOUT_SECONDS = 20.0
-_TRANSCRIPT_BUDGET_CHARS = 12_000
+# Transcript window passed to the judge LLM (call_llm_fast path).
+#
+# Sized for the default fast tier — Anthropic Haiku-4.5, 200K-token context;
+# 80K chars ≈ 20K tokens leaves ample room for the judge prompt + claim.
+# The previous 12K budget meant videos longer than ~12 minutes only showed
+# the judge their opening, so claims from later chapters were never in-window
+# and the judge always returned `false`.
+#
+# WARNING for operators: this constant is coupled to the judge model's
+# context window. If LLM_FAST_MODEL or a per-stage faithfulness override
+# routes the judge through a smaller-context model (e.g. an 8K-context
+# legacy model), this budget will overflow the model's prompt limit and
+# every judge call will error out. The diagnostic log in
+# `run_faithfulness_check` emits `truncated=True` when the input transcript
+# exceeds the budget; watch for that signal when swapping models.
+_TRANSCRIPT_BUDGET_CHARS = 80_000
 _CLAIM_BUDGET_CHARS = 400
 
 
@@ -157,7 +172,17 @@ async def _judge_one(llm_service: LLMService, transcript: str, claim: str) -> bo
     except Exception as exc:  # noqa: BLE001 — judge errors must not crash pipeline
         logger.debug("Faithfulness judge call failed: %s", exc)
         return None
-    return _parse_judge_response(raw or "")
+    verdict = _parse_judge_response(raw or "")
+    # DEBUG-level: per-claim raw bodies are noisy at 6 lines per video and
+    # carry transcript-derived text that shouldn't routinely ship to log
+    # aggregators. The one-line run summary (in run_faithfulness_check) is
+    # the production-visible signal; enable DEBUG locally to dig into a
+    # specific run.
+    logger.debug(
+        "[faithfulness] claim=%r verdict=%s raw=%r",
+        claim[:120], verdict, (raw or "")[:200],
+    )
+    return verdict
 
 
 # ─── Orchestrator ───────────────────────────────────────────────────────
@@ -183,6 +208,17 @@ async def run_faithfulness_check(
     if not sample:
         logger.debug("Faithfulness: no claims to sample for %s", youtube_id)
         return None
+
+    transcript_len = len(transcript)
+    transcript_truncated = transcript_len > _TRANSCRIPT_BUDGET_CHARS
+    logger.info(
+        "[faithfulness] video=%s claims_total=%d sample_size=%d "
+        "transcript_chars=%d window_chars=%d truncated=%s",
+        youtube_id, len(claims), len(sample),
+        transcript_len,
+        min(transcript_len, _TRANSCRIPT_BUDGET_CHARS),
+        transcript_truncated,
+    )
 
     # ``return_exceptions=True`` so one unexpected raise inside ``_judge_one``
     # (e.g. a transport error escaping ``call_llm_with_retry``) only loses that
