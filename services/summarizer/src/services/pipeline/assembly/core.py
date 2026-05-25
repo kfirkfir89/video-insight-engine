@@ -240,6 +240,37 @@ _COUNT_KEYS: dict[str, str] = {
     "lyrics_player": "sections",
 }
 
+# Per-component user-facing item caps. Long videos otherwise produce
+# unscannable lists (29-row "comparisons", 55-item timelines). The Plan
+# prompt instructs the model to respect these; we enforce in code as
+# a backstop so output stays within budget regardless of prompt drift.
+_TAB_ITEM_CAPS: dict[str, int] = {
+    "comparison": 10,
+    "moment_track": 20,
+    "info_grid": 20,
+    "flash_deck": 15,
+    "spot_explorer": 25,
+    "step_player": 25,
+    "checklist": 30,
+}
+
+
+def _cap_tab_items(component: str, props: dict) -> None:
+    """Truncate the user-facing list on a tab if it exceeds the cap."""
+    cap = _TAB_ITEM_CAPS.get(component)
+    if cap is None:
+        return
+    list_key = _COUNT_KEYS.get(component)
+    if not list_key:
+        return
+    items = props.get(list_key)
+    if isinstance(items, list) and len(items) > cap:
+        logger.info(
+            "Assembly: capping %s.%s from %d → %d",
+            component, list_key, len(items), cap,
+        )
+        props[list_key] = items[:cap]
+
 
 def _post_process_tabs(tabs: list[dict]) -> None:
     """Apply post-processing rules to assembled tabs in-place."""
@@ -247,6 +278,12 @@ def _post_process_tabs(tabs: list[dict]) -> None:
         label = tab.get("label", "")
         props = tab.get("props", {})
         emoji = tab.get("emoji", "")
+
+        # Enforce per-component item caps before any count-derived labels
+        # are computed, so e.g. "29 Comparisons" gets relabeled to "10".
+        component = tab.get("component", "")
+        if isinstance(props, dict) and component:
+            _cap_tab_items(component, props)
 
         if emoji and label.startswith(emoji):
             label = label[len(emoji):].lstrip()
@@ -270,7 +307,6 @@ def _post_process_tabs(tabs: list[dict]) -> None:
                                     if m:
                                         item[field] = "Introduction" if idx_in_list == 0 else f"Part {m.group(1)}"
 
-        component = tab.get("component", "")
         if component not in _NO_COUNT_COMPONENTS and isinstance(props, dict):
             if not re.match(r'^\d+\s', label):
                 count_key = _COUNT_KEYS.get(component)

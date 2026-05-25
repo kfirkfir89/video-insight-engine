@@ -209,6 +209,39 @@ async def test_judge_errors_dont_crash():
 
 
 @pytest.mark.asyncio
+async def test_transcript_window_covers_long_videos():
+    """Regression: an 80K-char transcript (≈ 80-min video) must reach the judge.
+
+    Previously the budget was 12K chars, which truncated everything past
+    the opening 12 minutes — claims from later chapters were never in-window
+    and the judge always returned `false`, dragging the score to 0/N.
+    """
+    assert fh._TRANSCRIPT_BUDGET_CHARS >= 60_000
+
+
+@pytest.mark.asyncio
+async def test_run_logs_diagnostic_summary(caplog):
+    """Every run should emit a one-line summary with transcript size + sample size."""
+    llm = _llm_returning(['{"grounded": true}', '{"grounded": true}'])
+    extraction = {"key_points": [
+        {"text": "claim one with enough characters to be considered"},
+        {"text": "claim two with enough characters to be considered"},
+    ]}
+    with caplog.at_level("INFO"):
+        await fh.run_faithfulness_check(
+            llm_service=llm,
+            transcript="t" * 5000,
+            extraction_data=extraction,
+            youtube_id="vid-log",
+            sample_rate=1.0,
+        )
+    summary = [r for r in caplog.records if "[faithfulness]" in r.getMessage() and "claims_total" in r.getMessage()]
+    assert summary, "expected one diagnostic summary log line per run"
+    assert "vid-log" in summary[0].getMessage()
+    assert "truncated=False" in summary[0].getMessage()
+
+
+@pytest.mark.asyncio
 async def test_judge_exception_returns_none_verdict():
     """An exception inside call_llm_with_retry is logged and treated as None."""
     llm = MagicMock()

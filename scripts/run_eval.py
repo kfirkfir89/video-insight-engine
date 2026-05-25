@@ -278,7 +278,7 @@ def post_to_langfuse(results: list[EvalResult], run_name: str) -> None:
     except ImportError:
         logger.warning("Langfuse SDK not installed — skipping run upload")
         return
-    host = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
+    host = os.environ.get("LANGFUSE_BASE_URL", "https://cloud.langfuse.com")
     client = Langfuse(public_key=public, secret_key=secret, host=host)
 
     for r in results:

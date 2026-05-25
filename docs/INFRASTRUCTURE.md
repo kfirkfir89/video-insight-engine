@@ -14,10 +14,41 @@ Docker setup, networking, and environment configuration.
 | vie-assistant  | ./services/assistant    | 8001       | Python RAG + chat  |
 | vie-admin      | ./services/admin        | 8002       | Admin dashboard    |
 | vie-mongodb    | mongo:7                 | 27017      | Database           |
-| vie-redis      | redis:7-alpine          | 6379       | Response cache     |
+| vie-redis      | redis:7-alpine          | 6379       | Response cache + pipeline lock |
 | vie-qdrant     | qdrant/qdrant:latest    | 6333/6334  | Vector DB (RAG)    |
 | vie-rabbitmq   | rabbitmq:3.13-mgmt      | 5672/15672 | Job queue (AMQP + Management UI) |
 | vie-summarizer-worker | (shares vie-summarizer image) | —  | RabbitMQ consumer for video pipeline jobs |
+
+---
+
+## Caching layers
+
+Process once, reuse forever. Three layers absorb identical work across users so the same YouTube video costs the LLM provider once, not N times.
+
+| Layer | Store   | Keyed by              | Holds                                |
+| ----- | ------- | --------------------- | ------------------------------------ |
+| L1    | Redis   | `youtube_id`          | Full VIEResponse JSON (instant serve) |
+| L2    | MongoDB | `youtubeId` field     | Persistent video summary + assembled tabs |
+| L3    | S3      | `youtube_id` prefix   | Extracted scene frames (skip re-extraction) |
+
+### Shared vs per-user
+
+System caches are shared across users (same video → same summary). User data is **never** cached at the system level.
+
+| Data                | Cache scope | Why                                       |
+| ------------------- | ----------- | ----------------------------------------- |
+| VIEResponse         | Shared (L1) | Same video deterministically yields same output |
+| Video summaries     | Shared (L2) | Persistent across restarts                |
+| System expansions   | Shared (L2) | Same section ⇒ same explanation           |
+| Video frames        | Shared (L3) | Frame extraction is expensive             |
+| User chats          | Per-user (uncached) | Personalised, contextual responses |
+| Folders / notes     | Per-user (uncached) | Identity-bound state               |
+
+### Concurrent submission
+
+Two users submitting the same video simultaneously do not double-bill. The first request writes a `status: "processing"` row to `videoSummaryCache`; the second request sees it, attaches to the SSE event stream via the Redis pipeline lock (`pipeline_event_stream.acquire_lock`), and receives the same result once the first run reaches `status: "completed"`.
+
+Cache invalidation is **versioned, not time-based**: same video always produces the same summary at a given `PIPELINE_VERSION`. Bumping the version regenerates on next request (see [`IDEMPOTENCY.md`](./IDEMPOTENCY.md)).
 
 ---
 

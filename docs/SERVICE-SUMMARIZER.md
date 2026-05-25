@@ -698,7 +698,7 @@ Hard character limit per model before every LLM call:
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
-| `CHUNKED_EXTRACTION_THRESHOLD` | 1800 (30 min) | Duration threshold for chunked path |
+| `CHUNKED_EXTRACTION_THRESHOLD` | 900 (15 min) | Duration threshold for chunked path |
 | `MAX_TOKENS_PER_BATCH` | 50000 | Max tokens per extraction batch |
 | `CHAPTER_BATCH_SIZE` | 3 | Chapters per batch target |
 | `EXTRACTION_PARALLEL_BATCHES` | 2 | Semaphore bound for parallel chunked batches |

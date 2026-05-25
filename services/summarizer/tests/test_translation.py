@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, patch
 from src.services.pipeline.translation import (
     translate_assembled_output,
     _translate_json,
+    _collect_english_labels,
+    _apply_translated_labels,
 )
 
 
@@ -251,3 +253,121 @@ class TestTranslateJson:
         result = await _translate_json(mock_llm_service, original, "es", "test_stage")
 
         assert result == original
+
+
+# ─── Cross-tab link label translation ───
+
+
+class TestCrossTabLinkTranslation:
+    """Cross-tab links carry English labels ("Test yourself", "Compare options")
+    that must be reverse-translated to the video's language. The labels live
+    inside tab["crossTabLinks"][i]["label"] — a different shape from the regular
+    UI label keys, so it has its own collect / apply path that needs coverage.
+    """
+
+    def test_collect_picks_up_cross_tab_link_labels(self):
+        """_collect_english_labels must namespace link labels under 'link:' to avoid colliding with UI-label keys."""
+        tabs = [
+            {
+                "id": "overview",
+                "component": "overview",
+                "props": {"nextLabel": "Next"},
+                "crossTabLinks": [
+                    {"targetTab": "quiz", "label": "Test yourself"},
+                    {"targetTab": "compare", "label": "Compare options"},
+                ],
+            },
+        ]
+        labels = _collect_english_labels(tabs)
+        assert labels.get("nextLabel") == "Next"
+        assert labels.get("link:Test yourself") == "Test yourself"
+        assert labels.get("link:Compare options") == "Compare options"
+
+    def test_apply_writes_translated_link_labels_back(self):
+        """Translation result must overwrite the English label on each cross-tab link."""
+        tabs = [
+            {
+                "id": "overview",
+                "component": "overview",
+                "props": {"nextLabel": "Next"},
+                "crossTabLinks": [
+                    {"targetTab": "quiz", "label": "Test yourself"},
+                    {"targetTab": "compare", "label": "Compare options"},
+                ],
+            },
+        ]
+        translations = {
+            "nextLabel": "Siguiente",
+            "link:Test yourself": "Pruébate",
+            "link:Compare options": "Comparar opciones",
+        }
+        _apply_translated_labels(tabs, translations)
+        assert tabs[0]["props"]["nextLabel"] == "Siguiente"
+        assert tabs[0]["crossTabLinks"][0]["label"] == "Pruébate"
+        assert tabs[0]["crossTabLinks"][1]["label"] == "Comparar opciones"
+
+    def test_apply_leaves_unmapped_link_labels_unchanged(self):
+        """A link with no matching translation must keep its original English label,
+        rather than being blanked out — partial failure must degrade gracefully."""
+        tabs = [
+            {
+                "id": "overview",
+                "component": "overview",
+                "props": {},
+                "crossTabLinks": [
+                    {"targetTab": "quiz", "label": "Test yourself"},
+                    {"targetTab": "x", "label": "Some other link"},
+                ],
+            },
+        ]
+        translations = {"link:Test yourself": "Pruébate"}
+        _apply_translated_labels(tabs, translations)
+        assert tabs[0]["crossTabLinks"][0]["label"] == "Pruébate"
+        # Unmapped link survives with English label intact
+        assert tabs[0]["crossTabLinks"][1]["label"] == "Some other link"
+
+    @patch("src.services.pipeline.translation.parse_json_response")
+    @patch("src.services.pipeline.translation._load_translate_prompt")
+    @patch("src.services.pipeline.translation.call_llm_with_retry")
+    async def test_translate_assembled_output_reverse_translates_link_labels(
+        self, mock_llm, mock_prompt, mock_parse, mock_llm_service,
+    ):
+        """End-to-end: when a non-English video has cross-tab links, the
+        third LLM call collects link labels, translates them, and writes
+        them back into the original tabs in-place."""
+        mock_prompt.return_value = "Translate from {source_language}:\n{content_json}"
+
+        tabs = [
+            {
+                "id": "overview",
+                "label": "Resumen",
+                "emoji": "📋",
+                "component": "overview",
+                "props": {},
+                "crossTabLinks": [{"targetTab": "quiz", "label": "Test yourself"}],
+            },
+            {
+                "id": "quiz",
+                "label": "Quiz",
+                "emoji": "❓",
+                "component": "quiz",
+                "props": {},
+                "crossTabLinks": [],
+            },
+        ]
+        meta = {"title": "Mi video"}
+        synthesis = {"summary": "Sobre programacion"}
+
+        translated_tabs = [{"id": "overview", "label": "Overview", "emoji": "📋", "component": "overview", "props": {}, "crossTabLinks": []}]
+        translated_meta = {"meta": {"title": "My video"}, "synthesis": {"summary": "About programming"}}
+        translated_labels = {"link:Test yourself": "Pruébate"}
+
+        mock_llm.side_effect = ["raw_tabs", "raw_meta", "raw_labels"]
+        mock_parse.side_effect = [translated_tabs, translated_meta, translated_labels]
+
+        await translate_assembled_output(mock_llm_service, tabs, meta, synthesis, "es")
+
+        # The third LLM call is the label-translation call
+        assert mock_llm.call_count == 3
+        # The original-language tabs have their cross-tab link relabeled in-place
+        assert tabs[0]["crossTabLinks"][0]["label"] == "Pruébate"

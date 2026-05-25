@@ -66,6 +66,7 @@ Scale the number of items to the extraction density:
 - Light content (fewer than 5 concepts or key points): 4 quiz, 6 flashcards, 2 scenarios
 - Medium content (5-10 concepts or key points): 7 quiz, 10 flashcards, 4 scenarios
 - Dense content (more than 10 concepts or key points): 10 quiz, 15 flashcards, 6 scenarios
+HARD CAPS (do not exceed regardless of video length): max 12 quiz questions, max 15 flashcards, max 6 scenarios.
 </scaling_rules>
 
 Return valid JSON with keys: quiz, flashcards, scenarios

@@ -13,7 +13,7 @@ Everything is **best-effort**: every Langfuse call is wrapped in try/except, all
    ```
    LANGFUSE_PUBLIC_KEY=pk_…
    LANGFUSE_SECRET_KEY=sk_…
-   LANGFUSE_HOST=https://cloud.langfuse.com
+   LANGFUSE_BASE_URL=https://cloud.langfuse.com
    LANGFUSE_FAITHFULNESS_SAMPLE_RATE=0.2
    ```
 
@@ -114,7 +114,7 @@ Dry-run mode (`--dry-run`) substitutes a perfect-response stub for the live pipe
 
 ## Operational watch-outs
 
-- **Third-party data flow**: enabling Langfuse ships prompts and outputs to whatever host `LANGFUSE_HOST` points at (cloud.langfuse.com by default). Treat that flow like any other external dependency.
+- **Third-party data flow**: enabling Langfuse ships prompts and outputs to whatever host `LANGFUSE_BASE_URL` points at (cloud.langfuse.com by default). Treat that flow like any other external dependency.
 - **Redaction model**: `langfuse_client.redact_pii` strips a short fixed list of patterns — emails, long phone-shaped digit runs, JWTs (`eyJ...`), AWS access-key IDs (`AKIA…`/`ASIA…`/…), Anthropic keys (`sk-ant-…`), OpenAI keys (`sk-…`), GitHub PATs (`ghp_/ghu_/ghs_/gho_/ghr_…`), and `Bearer <token>` headers. Names, addresses, account numbers and free-form PII are **not** detected. If your compliance posture needs more, extend the pattern list in one place and re-run the test suite. The same redactor runs recursively over Anthropic structured content blocks (frame-vision OCR text included).
 - **User-id propagation**: by default the internal user id is forwarded on the trace (helpful for support debugging). Set `LANGFUSE_USER_ID_MODE=hash` to forward a deterministic 16-char SHA-256 derivative instead (combine with `LANGFUSE_USER_ID_HASH_SALT` so a leaked trace export isn't trivially correlatable), or `LANGFUSE_USER_ID_MODE=omit` to strip the id entirely.
 - **Payload size**: prompts/outputs are truncated at 50KB before upload (`truncate_payload`). The truncation marker is a fixed string — the original length is deliberately not encoded so a downstream viewer can't infer pre-redaction size from the trace.

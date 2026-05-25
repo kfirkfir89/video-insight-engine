@@ -169,7 +169,7 @@ def init_langfuse() -> Any | None:
     if not public or not secret:
         logger.info("Langfuse keys not set — observability disabled")
         return None
-    host = getattr(settings, "LANGFUSE_HOST", "https://cloud.langfuse.com")
+    host = getattr(settings, "LANGFUSE_BASE_URL", "https://cloud.langfuse.com")
     try:
         _client = Langfuse(public_key=public, secret_key=secret, host=host)
         logger.info("Langfuse initialized (host=%s)", host)
