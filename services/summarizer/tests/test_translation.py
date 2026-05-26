@@ -181,6 +181,38 @@ class TestTranslateAssembledOutput:
         assert tabs_en == sample_tabs  # Falls back to original
         assert meta_en == translated_meta_synthesis["meta"]
 
+    @patch("src.services.pipeline.translation._load_translate_prompt")
+    @patch("src.services.pipeline.translation.call_llm_with_retry")
+    async def test_should_unwrap_tabs_when_llm_returns_wrapper_dict(
+        self, mock_llm, mock_prompt, mock_llm_service, sample_tabs, sample_meta, sample_synthesis,
+    ):
+        """Some models wrap the tab list in {tabs: [...]} — the translator must unwrap it.
+
+        Before the unwrap was added, models returning `{"tabs": [...]}` instead of a bare
+        list triggered the non-list fallback and the user saw the untranslated
+        original-language content. Regression for the Mendelssohn rescue path.
+        """
+        mock_prompt.return_value = "Translate from {source_language}:\n{content_json}"
+
+        translated_tabs = [
+            {"id": "overview", "label": "Overview", "emoji": "📋", "component": "overview", "props": {"title": "Video summary"}},
+        ]
+        translated_meta_synthesis = {
+            "meta": {"title": "My Video", "description": "A description", "duration": 600},
+            "synthesis": {"summary": "About programming", "highlights": []},
+        }
+        mock_llm.side_effect = [
+            json.dumps({"tabs": translated_tabs}),  # wrapped in {"tabs": [...]}
+            json.dumps(translated_meta_synthesis),
+        ]
+
+        tabs_en, meta_en, _synth_en = await translate_assembled_output(
+            mock_llm_service, sample_tabs, sample_meta, sample_synthesis, "es",
+        )
+
+        assert tabs_en == translated_tabs  # Unwrapped, not the original Spanish
+        assert meta_en == translated_meta_synthesis["meta"]
+
 
 # ─── _translate_json ───
 

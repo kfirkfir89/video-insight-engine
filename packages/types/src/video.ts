@@ -127,4 +127,12 @@ export interface VideoResponse {
   language?: string;
   /** Whether the video content is in a right-to-left language. */
   isRTL?: boolean;
+  /** English translation of tabs (populated for non-English videos). */
+  tabs_en?: unknown[];
+  /** English translation of meta (populated for non-English videos). */
+  meta_en?: Record<string, unknown>;
+  /** English translation of synthesis (populated for non-English videos). */
+  synthesis_en?: Record<string, unknown>;
+  /** Set when the pipeline forced the language to English (e.g. instrumental music). */
+  forceEnglishReason?: "sound_only";
 }

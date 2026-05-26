@@ -9,8 +9,8 @@
 #   2. Restart     — docker compose restart of the two services that init Langfuse
 #   3. Verify env  — keys visible inside the running container
 #   4. Verify init — container logs show "Langfuse initialized" not "Langfuse keys not set"
-#   5. Dry-run     — scripts/register_prompts.py --dry-run (no uploads)
-#   6. Commit      — scripts/register_prompts.py --commit (gated on y/n)
+#   5. Dry-run     — host-side dry run of scripts/register_prompts.py (no uploads)
+#   6. Commit      — gated `docker compose run --rm vie-langfuse-init` (real upload, same env as runtime containers)
 #   7. Hand-off    — print next manual steps (process one video → check trace)
 #
 # Stops before the golden-dataset eval — that takes ~2h and spends real LLM budget.
@@ -98,21 +98,24 @@ fi
 
 # ─── Step 5: dry-run prompt registry ────────────────────────────────────
 step "5/7  Dry-run prompt registry sync (no uploads)"
-# Export the .env vars into this script's environment so the python script can read them.
+# Host-side dry run to preview what the init container would upload. The
+# script reads from the host's environment; load .env so it can connect.
 set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
-python3 scripts/register_prompts.py --dry-run
+python3 scripts/register_prompts.py
 green "✓ Dry-run complete."
 
 # ─── Step 6: gated commit ───────────────────────────────────────────────
 step "6/7  Commit prompts to Langfuse registry"
-yellow "About to upload prompts to: $HOST_VALUE"
+yellow "About to upload prompts to: $HOST_VALUE (via vie-langfuse-init container)"
 read -r -p "  Proceed with upload? [y/N] " answer
 case "${answer,,}" in
   y|yes)
-    python3 scripts/register_prompts.py --commit
+    # Run the same init container the stack uses on `docker compose up`.
+    # Guarantees the upload lands in the same project the pipeline reads from.
+    docker compose run --rm vie-langfuse-init
     green "✓ Prompts committed to Langfuse."
     ;;
   *)

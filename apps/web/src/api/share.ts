@@ -16,6 +16,14 @@ export interface SharedOutput {
   status: string;
   meta: VIEResponseMeta | null;
   tabs: TabEntry[] | null;
+  /** English-translated tabs (populated for non-English videos). Preferred for shared rendering. */
+  tabs_en?: TabEntry[] | null;
+  /** English-translated meta (populated for non-English videos). Preferred for shared rendering. */
+  meta_en?: VIEResponseMeta | null;
+  /** English-translated synthesis (populated for non-English videos). */
+  synthesis_en?: Record<string, unknown> | null;
+  /** Set when the pipeline overrode the language to English (e.g., instrumental music). */
+  forceEnglishReason?: "sound_only";
   shareSlug: string;
   viewsCount: number;
   likesCount: number;

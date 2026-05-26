@@ -51,14 +51,18 @@ export function SharePage() {
     };
   }, [shareData?.title]);
 
-  // Extract tabs and meta from share data
+  // Extract tabs and meta from share data. Shared output pages are the
+  // "viral" surface, so prefer the English-translated variant when present
+  // so anyone can read them regardless of the source video's language.
   const tabs = useMemo((): TabEntry[] | null => {
+    const englishTabs = shareData?.tabs_en;
+    if (Array.isArray(englishTabs) && englishTabs.length > 0) return englishTabs as TabEntry[];
     return (shareData?.tabs as TabEntry[] | undefined) ?? null;
-  }, [shareData?.tabs]);
+  }, [shareData?.tabs, shareData?.tabs_en]);
 
   const meta = useMemo(() => {
-    return shareData?.meta ?? null;
-  }, [shareData?.meta]);
+    return shareData?.meta_en ?? shareData?.meta ?? null;
+  }, [shareData?.meta, shareData?.meta_en]);
 
   const synthesis = useMemo(() => buildSynthesisFromMeta(meta), [meta]);
 

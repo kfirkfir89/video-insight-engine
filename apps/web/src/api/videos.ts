@@ -34,6 +34,14 @@ export interface VideoDetail {
   folderId: string | null;
   meta: VIEResponseMeta | null;
   tabs: TabEntry[] | null;
+  /** English-translated tabs (populated by the translation phase for non-English videos). */
+  tabs_en?: TabEntry[] | null;
+  /** English-translated meta (populated by the translation phase for non-English videos). */
+  meta_en?: VIEResponseMeta | null;
+  /** English-translated synthesis (populated by the translation phase for non-English videos). */
+  synthesis_en?: Record<string, unknown> | null;
+  /** Set when the pipeline overrode the language to English (e.g., instrumental music). */
+  forceEnglishReason?: "sound_only";
 }
 
 export const videosApi = {

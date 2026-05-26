@@ -3,7 +3,13 @@
 # ================================================
 dev/research/*
 dev/completed/*
+dev/golden-dataset/
 .claude/skills/impeccable2
+
+# Skill / audit workspaces (generated artifacts, not source-of-truth)
+.impeccable/
+audit/
+reports/
 # Environment
 .env
 .env.local

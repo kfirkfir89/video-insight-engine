@@ -181,8 +181,73 @@ def score_entry(expected: dict[str, Any], actual: dict[str, Any]) -> EvalResult:
     )
 
 
+# ─── Auth ──────────────────────────────────────────────────────────────
+# POST /api/videos requires JWT auth. We auto-provision a dedicated eval user
+# (register-then-login) on first run; subsequent runs short-circuit to login.
+# Credentials come from the env — there is intentionally NO committed default
+# password, because the script auto-registers an account on first run and a
+# committed default would mean every checkout shares a known-credential user.
+_EVAL_EMAIL_DEFAULT = "eval@vie.local"
+_EVAL_NAME_DEFAULT = "Eval Runner"
+
+
+def _resolve_eval_credentials() -> tuple[str, str, str]:
+    """Return ``(email, password, name)`` for the eval user.
+
+    Requires ``EVAL_USER_PASSWORD`` in the environment — refuses to fall back
+    to a committed default so we never silently provision an account whose
+    credentials are checked into the repo. Set it once in your local ``.env``
+    (8+ chars, upper/lower/digit to clear the API's Zod regex) and re-runs are
+    a no-op on the registration step.
+    """
+    email = os.environ.get("EVAL_USER_EMAIL", _EVAL_EMAIL_DEFAULT)
+    name = os.environ.get("EVAL_USER_NAME", _EVAL_NAME_DEFAULT)
+    password = os.environ.get("EVAL_USER_PASSWORD")
+    if not password:
+        raise RuntimeError(
+            "EVAL_USER_PASSWORD is not set. Pick a local-only password "
+            "(8+ chars, upper/lower/digit, e.g. EvalRunner2026!), add it to "
+            "your .env, and re-run. The script intentionally does NOT carry a "
+            "committed default so eval users are never created with a known "
+            "password baked into the repo."
+        )
+    return email, password, name
+
+
+async def authenticate(api_url: str) -> str:
+    """Return a JWT access token for the dedicated eval user.
+
+    Tries register first (idempotent first-run setup). On 409 ("email exists"),
+    falls through to login. Raises on any other failure so the caller doesn't
+    silently run the eval against an unauthenticated API.
+    """
+    import httpx
+
+    email, password, name = _resolve_eval_credentials()
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        register = await client.post(
+            f"{api_url}/api/auth/register",
+            json={"email": email, "password": password, "name": name},
+        )
+        if register.status_code == 201:
+            logger.info("Auth: registered new eval user %s", email)
+            return register.json()["accessToken"]
+        # 409 = email already exists → expected on every run after the first.
+        if register.status_code != 409:
+            register.raise_for_status()  # surface unexpected failures
+
+        login = await client.post(
+            f"{api_url}/api/auth/login",
+            json={"email": email, "password": password},
+        )
+        login.raise_for_status()
+        logger.info("Auth: logged in as existing eval user %s", email)
+        return login.json()["accessToken"]
+
+
 # ─── Pipeline invocation ───────────────────────────────────────────────
-async def _run_pipeline(api_url: str, url: str) -> dict[str, Any]:
+async def run_pipeline(api_url: str, url: str, token: str) -> dict[str, Any]:
     """POST to the local vie-api and consume the SSE stream until ``complete``.
 
     Returns the assembled response dict (``meta`` + ``tabs``). Raises on
@@ -190,18 +255,27 @@ async def _run_pipeline(api_url: str, url: str) -> dict[str, Any]:
     """
     import httpx
 
-    async with httpx.AsyncClient(timeout=600.0) as client:
+    headers = {"Authorization": f"Bearer {token}"}
+    async with httpx.AsyncClient(timeout=600.0, headers=headers) as client:
         resp = await client.post(f"{api_url}/api/videos", json={"url": url})
         resp.raise_for_status()
         body = resp.json()
-        video_summary_id = body.get("videoSummaryId") or body.get("id")
-        if not video_summary_id:
-            raise RuntimeError(f"No videoSummaryId in response: {body}")
+        # POST /api/videos returns {"video": {"id", "videoSummaryId", ...}, "cached": bool}.
+        # `video.id` is the userVideo id used by GET /api/videos/:id; `videoSummaryId`
+        # is kept for logging / future stream-route needs. Fall back to flat keys for
+        # forward-compat in case the response shape ever flattens.
+        video = body.get("video") or {}
+        user_video_id = video.get("id") or body.get("id")
+        video_summary_id = video.get("videoSummaryId") or body.get("videoSummaryId")
+        if not user_video_id:
+            raise RuntimeError(f"No video.id in response: {body}")
 
         # Poll the GET endpoint until status==completed (simpler than parsing SSE).
-        for _ in range(120):
+        # 360 × 5s = 30 min cap. Real pipeline runs land 12-20 min on a fresh
+        # video; 30 gives buffer without burning an hour on a wedged worker.
+        for _ in range(360):
             await asyncio.sleep(5)
-            r = await client.get(f"{api_url}/api/videos/{video_summary_id}")
+            r = await client.get(f"{api_url}/api/videos/{user_video_id}")
             if r.status_code == 404:
                 continue
             data = r.json()
@@ -210,7 +284,9 @@ async def _run_pipeline(api_url: str, url: str) -> dict[str, Any]:
                     "meta": data.get("meta") or data.get("assembledMeta") or {},
                     "tabs": data.get("tabs") or data.get("assembledTabs") or [],
                 }
-        raise TimeoutError(f"Video {video_summary_id} did not complete within 10 min")
+        raise TimeoutError(
+            f"Video {video_summary_id or user_video_id} did not complete within 30 min"
+        )
 
 
 def _stub_actual(expected: dict[str, Any]) -> dict[str, Any]:
@@ -301,6 +377,11 @@ async def _run_all(args) -> int:
         records = records[: args.limit]
     logger.info("Running eval on %d entries (dry_run=%s)", len(records), args.dry_run)
 
+    # Acquire the JWT once. Skipped for dry-run (no HTTP calls happen there).
+    token: str | None = None
+    if not args.dry_run:
+        token = await authenticate(args.api_url)
+
     results: list[EvalResult] = []
     for rec in records:
         rid = rec.get("id", "?")
@@ -315,7 +396,11 @@ async def _run_all(args) -> int:
             ))
             continue
         try:
-            actual = _stub_actual(rec) if args.dry_run else await _run_pipeline(args.api_url, url)
+            actual = (
+                _stub_actual(rec)
+                if args.dry_run
+                else await run_pipeline(args.api_url, url, token or "")
+            )
         except Exception as exc:  # noqa: BLE001
             logger.warning("Pipeline failed for %s: %s", rid, exc)
             results.append(EvalResult(

@@ -50,6 +50,14 @@ def build_frontend_response(doc: dict) -> dict:
         result["language"] = doc["language"]
     if doc.get("isRTL") is not None:
         result["isRTL"] = doc["isRTL"]
+    if doc.get("tabs_en"):
+        result["tabs_en"] = doc["tabs_en"]
+    if doc.get("meta_en"):
+        result["meta_en"] = doc["meta_en"]
+    if doc.get("synthesis_en"):
+        result["synthesis_en"] = doc["synthesis_en"]
+    if doc.get("force_english_reason"):
+        result["forceEnglishReason"] = doc["force_english_reason"]
     return result
 
 

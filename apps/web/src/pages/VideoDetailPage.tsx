@@ -124,24 +124,30 @@ export function VideoDetailPage() {
     };
   }, [video, streamMetadata, streamDuration]);
 
-  // Resolve tabs: prefer streaming tabs, then cached tabs from API
+  // Resolve tabs: prefer streaming tabs, then English translation, then native cached tabs.
+  // The English variant is populated by the translation phase for non-English videos so
+  // shared output pages render in a globally-readable language by default.
   const resolvedTabs = useMemo((): TabEntry[] | null => {
     if (streamTabs.length > 0) return streamTabs;
+    const englishTabs = video?.tabs_en;
+    if (Array.isArray(englishTabs) && englishTabs.length > 0) return englishTabs as TabEntry[];
     if (video?.tabs && Array.isArray(video.tabs) && video.tabs.length > 0) return video.tabs as TabEntry[];
     return null;
-  }, [video?.tabs, streamTabs]);
+  }, [video?.tabs, video?.tabs_en, streamTabs]);
 
-  // Resolve meta: prefer streaming meta, then cached meta from API
+  // Resolve meta: prefer streaming meta, then English translation, then native cached meta.
   const resolvedMeta = useMemo(() => {
     if (streamMeta) return streamMeta;
+    if (video?.meta_en) return video.meta_en as typeof video.meta;
     return video?.meta ?? null;
-  }, [video?.meta, streamMeta]);
+  }, [video?.meta, video?.meta_en, streamMeta]);
 
   // Resolve synthesis for TLDR/takeaways display
   const synthesis = useMemo(() => {
     if (streamSynthesis) return streamSynthesis;
+    if (video?.synthesis_en) return video.synthesis_en as unknown as typeof streamSynthesis;
     return buildSynthesisFromMeta(resolvedMeta);
-  }, [streamSynthesis, resolvedMeta]);
+  }, [streamSynthesis, resolvedMeta, video?.synthesis_en]);
 
   // Loading state
   if (isLoading) {

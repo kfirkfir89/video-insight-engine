@@ -17,8 +17,8 @@ Everything is **best-effort**: every Langfuse call is wrapped in try/except, all
    LANGFUSE_FAITHFULNESS_SAMPLE_RATE=0.2
    ```
 
-4. Restart the summarizer + assistant containers. Submit a video. The trace appears under **Traces** in the Langfuse UI within seconds.
-5. Register prompts: `python3 scripts/register_prompts.py --commit` (idempotent — re-runs only upload changed prompts).
+4. Restart the stack with `docker compose up -d`. The `vie-langfuse-init` service runs once on boot, syncs every local prompt to the configured project under `label="production"`, then exits. Downstream services do **not** block on it — the sync runs in parallel with summarizer/assistant startup, and if the race loses (Langfuse 404 during boot), the runtime falls back to the bundled local `.txt` prompts. Late uploads take effect on the next video run.
+5. Submit a video. The trace appears under **Traces** in the Langfuse UI within seconds.
 
 To run **without** Langfuse: leave the keys blank. The pipeline behaves identically.
 
@@ -70,12 +70,16 @@ The uploader (`scripts/register_prompts.py`) refuses to ship any prompt that exc
 Updating prompts:
 
 ```bash
-# Edit the .txt file locally, then sync:
-python3 scripts/register_prompts.py            # dry run, no commits
-python3 scripts/register_prompts.py --commit   # actually upload
+# Edit the .txt file locally, then sync (uses the same .env as the runtime
+# containers — guarantees the upload lands in the same project the pipeline
+# reads from):
+docker compose run --rm vie-langfuse-init
+
+# Or for a dry run from the host (no Langfuse calls):
+python3 scripts/register_prompts.py
 ```
 
-A new version is created only when content differs from the latest registered version.
+A new version is created only when the production-labelled server version differs from the local file. If a prompt exists in the project but lacks the `production` label, the script re-uploads to apply it — so partial earlier runs heal on the next sync.
 
 ## Faithfulness judge
 
@@ -91,15 +95,29 @@ Tuning:
 
 ## Golden dataset + eval
 
-`dev/golden-dataset/videos.yaml` lists 20 hand-curated videos with expected tabs, components, and key content terms. Two scripts work with it:
+`dev/golden-dataset/videos.yaml` lists 20 hand-curated videos with expected tabs, components, and key content terms. Two scripts work with it. Run them **inside the summarizer container** so they pick up the same env (Langfuse keys, LLM provider keys) as the runtime, and so the in-cluster `vie-api` hostname is reachable:
 
 ```bash
-# One-time: upload the dataset to Langfuse for visual diffing
-python3 scripts/build_golden_dataset.py --dataset-name vie-golden-v1
+# 1. Prompts: auto-synced on `docker compose up` by vie-langfuse-init.
+#    To force a manual resync after editing a prompt file:
+docker compose run --rm vie-langfuse-init
 
-# Per-release: run the pipeline against every entry and score the output
-python3 scripts/run_eval.py --output reports/ --fail-under 0.7
+# 2. One-time: upload the dataset to Langfuse for visual diffing
+docker compose exec vie-summarizer python scripts/build_golden_dataset.py --dataset-name vie-golden-v1
+
+# 3. Per-release: run the pipeline against every entry and score the output.
+#    --api-url override is required from inside the container — the script's
+#    default of http://localhost:3000 would hit the summarizer itself instead
+#    of the API. Real run: ~60-90 min, ~$3-5 in LLM cost.
+docker compose exec vie-summarizer python scripts/run_eval.py \
+  --api-url http://vie-api:3000 \
+  --output reports/ --fail-under 0.7
+
+# Smoke-test the wiring without spending any LLM budget:
+docker compose exec vie-summarizer python scripts/run_eval.py --dry-run
 ```
+
+Host-side invocation (`python3 scripts/run_eval.py ...`) also works against a locally running stack — `--api-url` then defaults correctly to `http://localhost:3000`.
 
 Scoring (`scripts/run_eval.py`):
 

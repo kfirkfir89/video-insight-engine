@@ -4,6 +4,73 @@ version: '3.8'
 # Video Insight Engine - Production
 # ============================================
 
+# ----------------------------------------
+# Shared env (YAML anchors)
+# ----------------------------------------
+# Explicit allow-list per Python service. api-only secrets (JWT_SECRET,
+# MONGO_ROOT_PASS, ADMIN_API_KEY) intentionally do not appear here — they
+# must NOT propagate into the Python container if the service is compromised.
+x-summarizer-env: &summarizer-env
+  PYTHONUNBUFFERED: "1"
+  LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+  LLM_FAST_PROVIDER: ${LLM_FAST_PROVIDER:-}
+  LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
+  LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-4096}
+  LLM_FAST_MAX_TOKENS: ${LLM_FAST_MAX_TOKENS:-2048}
+  LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60.0}
+  LLM_NUM_RETRIES: ${LLM_NUM_RETRIES:-2}
+  LLM_EXTRACTION_MODEL: ${LLM_EXTRACTION_MODEL:-}
+  LLM_ENRICHMENT_MODEL: ${LLM_ENRICHMENT_MODEL:-}
+  LLM_VISION_MODEL: ${LLM_VISION_MODEL:-}
+  LLM_DESCRIPTION_MODEL: ${LLM_DESCRIPTION_MODEL:-}
+  LLM_SYNTHESIS_MODEL: ${LLM_SYNTHESIS_MODEL:-}
+  LLM_TRANSLATION_MODEL: ${LLM_TRANSLATION_MODEL:-}
+  EXTRACTION_USE_FAST_FIRST: ${EXTRACTION_USE_FAST_FIRST:-false}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  INTERNAL_SECRET: ${INTERNAL_SECRET}
+  WEBSHARE_PROXY_USERNAME: ${WEBSHARE_PROXY_USERNAME:-}
+  WEBSHARE_PROXY_PASSWORD: ${WEBSHARE_PROXY_PASSWORD:-}
+  TRANSCRIPT_CLEANING_ENABLED: ${TRANSCRIPT_CLEANING_ENABLED:-true}
+  S3_BUCKET: ${S3_BUCKET:-vie-transcripts}
+  S3_PRESIGNED_URL_EXPIRY: ${S3_PRESIGNED_URL_EXPIRY:-3600}
+  AWS_REGION: ${AWS_REGION:-us-east-1}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+  AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
+  FRAME_EXTRACTION_ENABLED: ${FRAME_EXTRACTION_ENABLED:-true}
+  SCENE_EXTRACTION_ENABLED: ${SCENE_EXTRACTION_ENABLED:-true}
+  LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+  LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+  LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+  LANGFUSE_FAITHFULNESS_SAMPLE_RATE: ${LANGFUSE_FAITHFULNESS_SAMPLE_RATE:-0.2}
+  LANGFUSE_USER_ID_MODE: ${LANGFUSE_USER_ID_MODE:-identity}
+  LANGFUSE_USER_ID_HASH_SALT: ${LANGFUSE_USER_ID_HASH_SALT:-}
+
+x-assistant-env: &assistant-env
+  PYTHONUNBUFFERED: "1"
+  LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+  LLM_FAST_PROVIDER: ${LLM_FAST_PROVIDER:-}
+  LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
+  LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60.0}
+  LLM_NUM_RETRIES: ${LLM_NUM_RETRIES:-2}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  INTERNAL_SECRET: ${INTERNAL_SECRET}
+  LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+  LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+  LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+  LANGFUSE_USER_ID_MODE: ${LANGFUSE_USER_ID_MODE:-identity}
+  LANGFUSE_USER_ID_HASH_SALT: ${LANGFUSE_USER_ID_HASH_SALT:-}
+
 services:
   # ----------------------------------------
   # Infrastructure
@@ -50,6 +117,15 @@ services:
       SUMMARIZER_URL: http://vie-summarizer:8000
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      # S3 — read-path frame URL re-signer (api/src/utils/refresh-frame-urls.ts).
+      # Blank S3_BUCKET → re-signer is a no-op. Must mirror the summarizer's
+      # bucket/credentials so re-signed URLs point at the same objects.
+      S3_BUCKET: ${S3_BUCKET:-vie-transcripts}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
+      FRAME_URL_TTL_SECONDS: ${FRAME_URL_TTL_SECONDS:-21600}
     networks:
       - vie-network
     depends_on:
@@ -60,6 +136,33 @@ services:
         limits:
           memory: 512M
 
+  # ----------------------------------------
+  # Langfuse Prompt Sync (one-shot init)
+  # ----------------------------------------
+  # Syncs local prompt templates to Langfuse under label="production", then
+  # exits. Non-blocking: downstream services boot in parallel and fall back to
+  # local .txt prompts if a Langfuse fetch 404s during the race window.
+  # Failure modes (blank keys, network error) all exit 0 — see register_prompts.py.
+  vie-langfuse-init:
+    build:
+      context: ./services/summarizer
+      dockerfile: Dockerfile.prod
+    image: vie-summarizer:latest
+    container_name: vie-langfuse-init
+    restart: "no"
+    command: ["python", "/repo/scripts/register_prompts.py", "--commit"]
+    working_dir: /repo
+    environment:
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+    volumes:
+      - ./scripts:/repo/scripts:ro
+      - ./services/summarizer/src/prompts:/repo/services/summarizer/src/prompts:ro
+      - ./services/assistant/src/utils/prompt_templates.py:/repo/services/assistant/src/utils/prompt_templates.py:ro
+    networks:
+      - vie-network
+
   vie-summarizer:
     build:
       context: ./services/summarizer
@@ -67,21 +170,8 @@ services:
     container_name: vie-summarizer
     restart: always
     environment:
-      PYTHONUNBUFFERED: 1
+      <<: *summarizer-env
       MONGODB_URI: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASS}@vie-mongodb:27017/video-insight-engine?authSource=admin
-      # Multi-provider LLM config
-      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
-      LLM_FAST_PROVIDER: ${LLM_FAST_PROVIDER:-}
-      LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
-      LLM_MODEL: ${LLM_MODEL:-}
-      LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
-      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-4096}
-      LLM_FAST_MAX_TOKENS: ${LLM_FAST_MAX_TOKENS:-2048}
-      # Provider API keys
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      LOG_LEVEL: info
     networks:
       - vie-network
     depends_on:
@@ -99,24 +189,13 @@ services:
     container_name: vie-assistant
     restart: always
     environment:
-      PYTHONUNBUFFERED: 1
-      ASSISTANT_PORT: 8001
+      <<: *assistant-env
+      ASSISTANT_PORT: "8001"
       MONGODB_URI: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASS}@vie-mongodb:27017/video-insight-engine?authSource=admin
       QDRANT_URL: http://vie-qdrant:6333
       QDRANT_COLLECTION: transcript_chunks
-      # Multi-provider LLM config
-      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
-      LLM_FAST_PROVIDER: ${LLM_FAST_PROVIDER:-}
-      LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
-      LLM_MODEL: ${LLM_MODEL:-}
-      LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
-      # Provider API keys
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      LOG_LEVEL: info
-      MAX_CONTEXT_CHUNKS: 8
-      MAX_CONVERSATION_TURNS: 20
+      MAX_CONTEXT_CHUNKS: "8"
+      MAX_CONVERSATION_TURNS: "20"
     networks:
       - vie-network
     depends_on:

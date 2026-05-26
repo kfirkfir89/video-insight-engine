@@ -307,7 +307,6 @@ def _translate_sync(audio_path: Path, client: OpenAI | None = None) -> dict:
                 model="whisper-1",
                 file=f,
                 response_format="verbose_json",
-                timestamp_granularities=["segment"],
             )
         raw_segments = response.segments if hasattr(response, "segments") else []
         segments = [

@@ -164,7 +164,7 @@ Theme uses `data-theme` attribute on `<html>` with three modes:
 - **Display**: Bricolage Grotesque (weight 800; H1 / page titles / marketing headlines)
 - **Body**: Hanken Grotesk (H3 / H4 / body / UI controls) — `system-ui, -apple-system, "Segoe UI"` fallbacks
 - **Mono**: JetBrains Mono (code, kbd keys, timestamps; calt disabled in code surfaces)
-- **No-Inter Rule**: Inter / DM Sans / Plus Jakarta are banned in `apps/web/src/` — they signal the generic-AI-tool look. See [DESIGN.md](../DESIGN.md) §Typography for the full ramp + `.type-*` semantic utilities (`.type-page-title`, `.type-eyebrow`, `.type-caption`, `.type-hero-xl`).
+- **No-Inter Rule**: Inter / DM Sans / Plus Jakarta are banned in `apps/web/src/` — they signal the generic-AI-tool look. Use `.type-*` semantic utilities defined in `apps/web/src/index.css` (`.type-page-title`, `.type-eyebrow`, `.type-caption`, `.type-hero-xl`) for the full ramp.
 - Loaded via `<link>` in `index.html` with `font-display: swap`
 
 ---

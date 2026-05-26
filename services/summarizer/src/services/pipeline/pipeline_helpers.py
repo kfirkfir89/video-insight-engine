@@ -7,7 +7,6 @@ Contains self-contained utilities:
 - Duration validation
 - Segment normalization
 - Metadata text builder
-- Presigned URL refresh
 - JSON truncation
 """
 
@@ -24,7 +23,6 @@ if TYPE_CHECKING:
 from src.config import settings
 from src.exceptions import TranscriptError
 from src.models.schemas import ErrorCode, TranscriptSegment
-from src.services.media.s3_client import s3_client
 
 logger = logging.getLogger(__name__)
 
@@ -180,45 +178,6 @@ def build_metadata_text(video_data: Any) -> str:
         chapter_titles = [ch.title for ch in video_data.chapters]
         parts.append(f"Chapters: {', '.join(chapter_titles)}")
     return "\n\n".join(parts)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Presigned URL Refresh
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def refresh_presigned_url(block_or_frame: dict, key: str) -> bool:
-    """Refresh a single presigned URL. Returns True on success."""
-    try:
-        block_or_frame["imageUrl"] = s3_client.generate_presigned_url(key)
-        return True
-    except Exception as e:
-        logger.warning("Failed to refresh presigned URL for %s: %s", key, e)
-        return False
-
-
-def refresh_frame_urls(chapters: list[dict]) -> None:
-    """Refresh presigned URLs for visual blocks with s3_key.
-
-    Handles both single-frame visuals (top-level s3_key) and
-    multi-frame visuals (frames[].s3_key for slideshow/gallery).
-    """
-    refreshed = 0
-    for chapter in chapters:
-        for block in chapter.get("content", []):
-            if block.get("type") != "visual":
-                continue
-            s3_key = block.get("s3_key")
-            if s3_key and s3_key.startswith("videos/"):
-                if refresh_presigned_url(block, s3_key):
-                    refreshed += 1
-            for frame in block.get("frames", []):
-                frame_key = frame.get("s3_key")
-                if frame_key and frame_key.startswith("videos/"):
-                    if refresh_presigned_url(frame, frame_key):
-                        refreshed += 1
-    if refreshed:
-        logger.debug("Refreshed %d presigned frame URLs", refreshed)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

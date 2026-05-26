@@ -195,14 +195,16 @@ def _load_assistant_prompts() -> dict[str, str]:
 
 
 def _already_synced(client, name: str, content: str) -> bool:
-    """Return True when the latest server version matches local content.
+    """Return True when the production-labelled server version matches local content.
 
-    Any lookup failure (404, transient error) returns False — meaning we
-    upload to be safe. This keeps the registration script resilient against
-    server-side state drift.
+    Scoped to ``label="production"`` so a content-equal version that lacks
+    the production label correctly reports as "not synced" — the runtime
+    fetches prompts by label, so an unlabelled match is useless. Any lookup
+    failure (404 / missing label / transient error) returns False, triggering
+    an upload that (re)applies the label.
     """
     try:
-        existing = client.get_prompt(name)
+        existing = client.get_prompt(name, label="production")
     except Exception:  # noqa: BLE001 — broad on purpose, see docstring
         return False
     existing_text = getattr(existing, "prompt", None)
@@ -228,7 +230,14 @@ def upload_prompt(client, record: PromptRecord, *, dry_run: bool) -> str:
 
 
 def _build_client():
-    """Initialize a Langfuse client from env vars, or exit."""
+    """Initialize a Langfuse client, or return None when Langfuse is disabled.
+
+    Returns ``None`` when ``LANGFUSE_PUBLIC_KEY`` / ``LANGFUSE_SECRET_KEY`` are
+    blank — this is the "observability not configured" path and is normal for
+    fresh dev setups. ``main()`` short-circuits on ``None`` and exits 0, so
+    when this script runs as a one-shot init container it won't block
+    downstream services for users who haven't signed up for Langfuse.
+    """
     try:
         from langfuse import Langfuse  # type: ignore
     except ImportError as exc:
@@ -238,7 +247,8 @@ def _build_client():
     secret = os.environ.get("LANGFUSE_SECRET_KEY")
     host = os.environ.get("LANGFUSE_BASE_URL", "https://cloud.langfuse.com")
     if not public or not secret:
-        sys.exit("LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY must be set")
+        logger.info("Langfuse not configured (LANGFUSE_PUBLIC_KEY/SECRET_KEY blank) — skipping prompt sync")
+        return None
     return Langfuse(public_key=public, secret_key=secret, host=host)
 
 
@@ -264,6 +274,10 @@ def main() -> int:
 
     logger.info("Discovered %d prompts (dry_run=%s)", len(records), dry_run)
     client = None if dry_run else _build_client()
+    if not dry_run and client is None:
+        # _build_client logged the reason (e.g. Langfuse disabled). Exit 0 so
+        # the init container doesn't block downstream services in compose.
+        return 0
 
     summary: dict[str, int] = {}
     for record in records:
