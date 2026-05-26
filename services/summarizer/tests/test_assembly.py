@@ -937,6 +937,25 @@ class TestFrameUtilities:
         inject_frame_thumbnails(items, [])
         assert "thumbnailUrl" not in items[0]
 
+    def test_inject_frame_thumbnails_preserves_s3_key(self):
+        """API re-signs URLs at read time from s3Key, so the injector MUST
+        carry s3_key through alongside the at-generation-time thumbnailUrl."""
+        items = [{"label": "Intro", "seconds": 5}]
+        frames = [
+            {"timestamp": 10.0, "s3_url": "fresh-url", "s3_key": "videos/abc/frames/10.jpg"},
+        ]
+        inject_frame_thumbnails(items, frames)
+        assert items[0]["thumbnailUrl"] == "fresh-url"
+        assert items[0]["s3Key"] == "videos/abc/frames/10.jpg"
+
+    def test_inject_frame_thumbnails_no_s3_key_no_field(self):
+        """Frames without s3_key (e.g. dev fixtures) should not add an s3Key field."""
+        items = [{"label": "Intro", "seconds": 5}]
+        frames = [{"timestamp": 10.0, "s3_url": "url1"}]
+        inject_frame_thumbnails(items, frames)
+        assert items[0]["thumbnailUrl"] == "url1"
+        assert "s3Key" not in items[0]
+
 
 # ─── Gallery Tab Assembly ───
 

@@ -1,6 +1,87 @@
 # ============================================
 # Video Insight Engine - Development
 # ============================================
+
+# ----------------------------------------
+# Shared env (YAML anchors)
+# ----------------------------------------
+# Explicit per-service env preserves least-privilege: api-only secrets
+# (JWT_SECRET, MONGO_ROOT_PASS, ADMIN_API_KEY) do NOT bleed into Python
+# services. When adding a new variable that a Python service needs, add it
+# here — do not switch the service to `env_file: .env`, that re-introduces
+# the secret-leak vector.
+x-summarizer-env: &summarizer-env
+  PYTHONUNBUFFERED: "1"
+  # Multi-provider LLM
+  LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+  LLM_FAST_PROVIDER: ${LLM_FAST_PROVIDER:-}
+  LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
+  LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-4096}
+  LLM_FAST_MAX_TOKENS: ${LLM_FAST_MAX_TOKENS:-2048}
+  LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60.0}
+  LLM_NUM_RETRIES: ${LLM_NUM_RETRIES:-2}
+  # Per-stage model overrides (blank → primary model)
+  LLM_EXTRACTION_MODEL: ${LLM_EXTRACTION_MODEL:-}
+  LLM_ENRICHMENT_MODEL: ${LLM_ENRICHMENT_MODEL:-}
+  LLM_VISION_MODEL: ${LLM_VISION_MODEL:-}
+  LLM_DESCRIPTION_MODEL: ${LLM_DESCRIPTION_MODEL:-}
+  LLM_SYNTHESIS_MODEL: ${LLM_SYNTHESIS_MODEL:-}
+  LLM_TRANSLATION_MODEL: ${LLM_TRANSLATION_MODEL:-}
+  EXTRACTION_USE_FAST_FIRST: ${EXTRACTION_USE_FAST_FIRST:-false}
+  # Provider API keys
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  # Common
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
+  # Transcript / proxy
+  WEBSHARE_PROXY_USERNAME: ${WEBSHARE_PROXY_USERNAME:-}
+  WEBSHARE_PROXY_PASSWORD: ${WEBSHARE_PROXY_PASSWORD:-}
+  TRANSCRIPT_CLEANING_ENABLED: ${TRANSCRIPT_CLEANING_ENABLED:-true}
+  # S3 media storage
+  S3_BUCKET: ${S3_BUCKET:-vie-transcripts}
+  S3_PRESIGNED_URL_EXPIRY: ${S3_PRESIGNED_URL_EXPIRY:-3600}
+  AWS_REGION: ${AWS_REGION:-us-east-1}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+  AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
+  # Frame extraction
+  FRAME_EXTRACTION_ENABLED: ${FRAME_EXTRACTION_ENABLED:-true}
+  SCENE_EXTRACTION_ENABLED: ${SCENE_EXTRACTION_ENABLED:-true}
+  # Langfuse — keys blank → SDK no-ops
+  LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+  LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+  LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+  LANGFUSE_FAITHFULNESS_SAMPLE_RATE: ${LANGFUSE_FAITHFULNESS_SAMPLE_RATE:-0.2}
+  LANGFUSE_USER_ID_MODE: ${LANGFUSE_USER_ID_MODE:-identity}
+  LANGFUSE_USER_ID_HASH_SALT: ${LANGFUSE_USER_ID_HASH_SALT:-}
+
+x-assistant-env: &assistant-env
+  PYTHONUNBUFFERED: "1"
+  # Multi-provider LLM
+  LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+  LLM_FAST_PROVIDER: ${LLM_FAST_PROVIDER:-}
+  LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
+  LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60.0}
+  LLM_NUM_RETRIES: ${LLM_NUM_RETRIES:-2}
+  # Provider API keys
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
+  # Langfuse — keys blank → SDK no-ops
+  LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+  LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+  LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+  LANGFUSE_USER_ID_MODE: ${LANGFUSE_USER_ID_MODE:-identity}
+  LANGFUSE_USER_ID_HASH_SALT: ${LANGFUSE_USER_ID_HASH_SALT:-}
+
 services:
   # ----------------------------------------
   # Infrastructure
@@ -115,6 +196,20 @@ services:
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-vie}:${RABBITMQ_DEFAULT_PASS:-vie-dev}@vie-rabbitmq:5672/
       USE_QUEUE_PIPELINE: ${USE_QUEUE_PIPELINE:-false}
       ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key-change-me}
+      # Sentry — empty DSN = SDK no-ops
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+      # S3 — read-path frame URL re-signer (api/src/utils/refresh-frame-urls.ts).
+      # Blank S3_BUCKET → re-signer is a no-op. Must mirror the summarizer's
+      # bucket/credentials so re-signed URLs point at the same objects.
+      S3_BUCKET: ${S3_BUCKET:-vie-transcripts}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
+      FRAME_URL_TTL_SECONDS: ${FRAME_URL_TTL_SECONDS:-21600}
     networks:
       - vie-network
     depends_on:
@@ -129,6 +224,43 @@ services:
       retries: 5
       start_period: 15s
 
+  # ----------------------------------------
+  # Langfuse Prompt Sync (one-shot init)
+  # ----------------------------------------
+  # Runs once at stack start, registers every local prompt template under
+  # label="production" in the configured Langfuse project, then exits.
+  #
+  # Downstream services do NOT depend on this completing — that would make
+  # every `docker compose up` block on Langfuse connectivity. The summarizer
+  # runtime falls back to local .txt prompts on any 404, so racing here is
+  # safe: late uploads just take effect on subsequent video runs.
+  #
+  # Failure modes are all non-fatal (script exits 0):
+  #   - Langfuse keys blank → "not configured, skipping" log, exit 0.
+  #   - Network/auth error → individual prompt errors logged, exit 0.
+  #
+  # To force a resync mid-session (e.g. after editing a prompt file):
+  #   docker compose run --rm vie-langfuse-init
+  vie-langfuse-init:
+    image: vie-summarizer:latest
+    container_name: vie-langfuse-init
+    build:
+      context: .
+      dockerfile: services/summarizer/Dockerfile
+    restart: "no"
+    command: ["python", "/repo/scripts/register_prompts.py", "--commit"]
+    working_dir: /repo
+    environment:
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+    volumes:
+      - ./scripts:/repo/scripts:ro
+      - ./services/summarizer/src/prompts:/repo/services/summarizer/src/prompts:ro
+      - ./services/assistant/src/utils/prompt_templates.py:/repo/services/assistant/src/utils/prompt_templates.py:ro
+    networks:
+      - vie-network
+
   vie-summarizer:
     build:
       context: .
@@ -140,54 +272,25 @@ services:
       - "8000:8000"
     volumes:
       - ./services/summarizer/src:/app/src:ro
-      - ./services/summarizer/scripts:/app/scripts:ro
+      # Repo-root scripts/ — register_prompts, build_golden_dataset, run_eval, etc.
+      # Mounted at /app/scripts so `docker compose exec vie-summarizer python scripts/X.py`
+      # resolves to repo-root scripts.
+      - ./scripts:/app/scripts:ro
+      # Service-internal maintenance scripts (backfill, benchmark, verify_rag).
+      # Live at /app/services-scripts because they collide with the repo-root mount
+      # above; they still import from `src.services.vector.*` correctly because the
+      # `src/` mount is unchanged and WORKDIR=/app.
+      - ./services/summarizer/scripts:/app/services-scripts:ro
+      # Golden dataset + dev fixtures consumed by scripts/build_golden_dataset.py
+      # and scripts/run_eval.py (both compute REPO_ROOT=/app and read dev/...).
+      - ./dev:/app/dev:ro
       - ./packages/shared/src/config/domains.json:/app/shared/domains.json:ro
     environment:
-      PYTHONUNBUFFERED: 1
+      <<: *summarizer-env
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
-      # Multi-provider LLM configuration
-      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
-      LLM_FAST_PROVIDER: ${LLM_FAST_PROVIDER:-}
-      LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
-      LLM_MODEL: ${LLM_MODEL:-}
-      LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
-      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-4096}
-      LLM_FAST_MAX_TOKENS: ${LLM_FAST_MAX_TOKENS:-2048}
-      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60.0}
-      LLM_NUM_RETRIES: ${LLM_NUM_RETRIES:-2}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
-      WEBSHARE_PROXY_USERNAME: ${WEBSHARE_PROXY_USERNAME:-}
-      WEBSHARE_PROXY_PASSWORD: ${WEBSHARE_PROXY_PASSWORD:-}
-      # S3 Media Storage
-      S3_BUCKET: ${S3_BUCKET:-vie-transcripts}
-      S3_PRESIGNED_URL_EXPIRY: ${S3_PRESIGNED_URL_EXPIRY:-3600}
-      AWS_REGION: ${AWS_REGION:-us-east-1}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      # Custom S3 endpoint (LocalStack for offline development)
-      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
-      # Frame extraction (visual blocks)
-      FRAME_EXTRACTION_ENABLED: ${FRAME_EXTRACTION_ENABLED:-true}
-      # Qdrant vector DB
       QDRANT_HOST: vie-qdrant
-      QDRANT_PORT: 6333
-      # Redis response cache
+      QDRANT_PORT: "6333"
       REDIS_URL: redis://vie-redis:6379
-      # Advanced transcript cleaning
-      TRANSCRIPT_CLEANING_ENABLED: ${TRANSCRIPT_CLEANING_ENABLED:-true}
-      # Scene-based frame extraction (additive to timestamp extraction)
-      SCENE_EXTRACTION_ENABLED: ${SCENE_EXTRACTION_ENABLED:-true}
-      # Langfuse observability — keys blank → SDK init is a no-op.
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
-      LANGFUSE_FAITHFULNESS_SAMPLE_RATE: ${LANGFUSE_FAITHFULNESS_SAMPLE_RATE:-0.2}
-      LANGFUSE_USER_ID_MODE: ${LANGFUSE_USER_ID_MODE:-identity}
-      LANGFUSE_USER_ID_HASH_SALT: ${LANGFUSE_USER_ID_HASH_SALT:-}
     networks:
       - vie-network
     depends_on:
@@ -217,50 +320,29 @@ services:
     command: ["python", "-m", "src.worker"]
     volumes:
       - ./services/summarizer/src:/app/src:ro
-      - ./services/summarizer/scripts:/app/scripts:ro
+      # Repo-root scripts/ — register_prompts, build_golden_dataset, run_eval, etc.
+      # Mounted at /app/scripts so `docker compose exec vie-summarizer python scripts/X.py`
+      # resolves to repo-root scripts.
+      - ./scripts:/app/scripts:ro
+      # Service-internal maintenance scripts (backfill, benchmark, verify_rag).
+      # Live at /app/services-scripts because they collide with the repo-root mount
+      # above; they still import from `src.services.vector.*` correctly because the
+      # `src/` mount is unchanged and WORKDIR=/app.
+      - ./services/summarizer/scripts:/app/services-scripts:ro
+      # Golden dataset + dev fixtures consumed by scripts/build_golden_dataset.py
+      # and scripts/run_eval.py (both compute REPO_ROOT=/app and read dev/...).
+      - ./dev:/app/dev:ro
       - ./packages/shared/src/config/domains.json:/app/shared/domains.json:ro
     environment:
-      PYTHONUNBUFFERED: 1
+      <<: *summarizer-env
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
-      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
-      LLM_FAST_PROVIDER: ${LLM_FAST_PROVIDER:-}
-      LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
-      LLM_MODEL: ${LLM_MODEL:-}
-      LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
-      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-4096}
-      LLM_FAST_MAX_TOKENS: ${LLM_FAST_MAX_TOKENS:-2048}
-      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60.0}
-      LLM_NUM_RETRIES: ${LLM_NUM_RETRIES:-2}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
-      WEBSHARE_PROXY_USERNAME: ${WEBSHARE_PROXY_USERNAME:-}
-      WEBSHARE_PROXY_PASSWORD: ${WEBSHARE_PROXY_PASSWORD:-}
-      S3_BUCKET: ${S3_BUCKET:-vie-transcripts}
-      S3_PRESIGNED_URL_EXPIRY: ${S3_PRESIGNED_URL_EXPIRY:-3600}
-      AWS_REGION: ${AWS_REGION:-us-east-1}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
-      FRAME_EXTRACTION_ENABLED: ${FRAME_EXTRACTION_ENABLED:-true}
       QDRANT_HOST: vie-qdrant
-      QDRANT_PORT: 6333
+      QDRANT_PORT: "6333"
       REDIS_URL: redis://vie-redis:6379
-      TRANSCRIPT_CLEANING_ENABLED: ${TRANSCRIPT_CLEANING_ENABLED:-true}
-      SCENE_EXTRACTION_ENABLED: ${SCENE_EXTRACTION_ENABLED:-true}
-      # Worker-specific
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-vie}:${RABBITMQ_DEFAULT_PASS:-vie-dev}@vie-rabbitmq:5672/
+      # Worker-specific
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
       WORKER_MAX_RETRIES: ${WORKER_MAX_RETRIES:-3}
-      # Langfuse observability — keys blank → SDK init is a no-op.
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
-      LANGFUSE_FAITHFULNESS_SAMPLE_RATE: ${LANGFUSE_FAITHFULNESS_SAMPLE_RATE:-0.2}
-      LANGFUSE_USER_ID_MODE: ${LANGFUSE_USER_ID_MODE:-identity}
-      LANGFUSE_USER_ID_HASH_SALT: ${LANGFUSE_USER_ID_HASH_SALT:-}
     networks:
       - vie-network
     depends_on:
@@ -283,32 +365,13 @@ services:
     volumes:
       - ./services/assistant/src:/app/src:ro
     environment:
-      PYTHONUNBUFFERED: 1
-      ASSISTANT_PORT: 8001
+      <<: *assistant-env
+      ASSISTANT_PORT: "8001"
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
       QDRANT_URL: http://vie-qdrant:6333
       QDRANT_COLLECTION: transcript_chunks
-      # Multi-provider LLM configuration
-      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
-      LLM_FAST_PROVIDER: ${LLM_FAST_PROVIDER:-}
-      LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
-      LLM_MODEL: ${LLM_MODEL:-}
-      LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
-      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60.0}
-      LLM_NUM_RETRIES: ${LLM_NUM_RETRIES:-2}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
-      MAX_CONTEXT_CHUNKS: 8
-      MAX_CONVERSATION_TURNS: 20
-      # Langfuse observability — keys blank → SDK init is a no-op.
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
-      LANGFUSE_USER_ID_MODE: ${LANGFUSE_USER_ID_MODE:-identity}
-      LANGFUSE_USER_ID_HASH_SALT: ${LANGFUSE_USER_ID_HASH_SALT:-}
+      MAX_CONTEXT_CHUNKS: "8"
+      MAX_CONVERSATION_TURNS: "20"
     networks:
       - vie-network
     depends_on:
@@ -342,6 +405,11 @@ services:
       VIE_SUMMARIZER_URL: http://vie-summarizer:8000
       VIE_ASSISTANT_URL: http://vie-assistant:8001
       ALERT_COST_THRESHOLD_USD: ${ALERT_COST_THRESHOLD_USD:-0.50}
+      # Sentry — empty DSN = SDK no-ops
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
     networks:
       - vie-network
     depends_on:

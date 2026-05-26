@@ -179,6 +179,13 @@ async def translate_assembled_output(
     meta_en = meta_synthesis_en.get("meta", meta) if isinstance(meta_synthesis_en, dict) else meta
     synthesis_en = meta_synthesis_en.get("synthesis", synthesis) if isinstance(meta_synthesis_en, dict) else synthesis
 
+    # The model occasionally returns the wrapper object ``{"tabs": [...]}`` instead
+    # of a bare list. Unwrap that one shape — wider key sets were too permissive
+    # and would silently accept structurally-wrong payloads (e.g. ``{"data": [...]}``
+    # from a totally different schema) as if they were translated tabs.
+    if isinstance(tabs_en, dict) and isinstance(tabs_en.get("tabs"), list):
+        tabs_en = tabs_en["tabs"]
+
     # Ensure tabs_en is a list
     if not isinstance(tabs_en, list):
         logger.warning("Translation returned non-list for tabs, using original")

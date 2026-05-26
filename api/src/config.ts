@@ -70,6 +70,20 @@ const envSchema = z.object({
   // 0 → performance tracing off (errors still captured). 0.1 in prod is a
   // good starting point; 1.0 in dev to see every transaction while iterating.
   SENTRY_TRACES_SAMPLE_RATE: z.string().default('0').transform(Number),
+  // ─── S3 — frame URL re-signing on the read path ──────────────────────
+  // Empty bucket → re-signer is a no-op (passes saved URLs through). Set
+  // these to the same values the summarizer uses so re-signed URLs land on
+  // the same bucket/endpoint as the originals.
+  S3_BUCKET: z.string().default(''),
+  AWS_REGION: z.string().default('us-east-1'),
+  AWS_ACCESS_KEY_ID: z.string().default(''),
+  AWS_SECRET_ACCESS_KEY: z.string().default(''),
+  // LocalStack endpoint. MUST be browser-reachable (e.g. http://localhost:4566)
+  // — the frontend loads images directly from this URL, so a docker-internal
+  // hostname will fail to resolve from the browser.
+  AWS_ENDPOINT_URL: z.string().default(''),
+  // 6h gives a comfortable session window without making links durably shareable.
+  FRAME_URL_TTL_SECONDS: z.string().default('21600').transform(Number),
 });
 
 const parsedConfig = envSchema.parse(process.env);

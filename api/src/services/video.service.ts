@@ -6,6 +6,7 @@ import { config } from '../config.js';
 import { extractYoutubeId } from '../utils/youtube.js';
 import { InvalidYouTubeUrlError, VideoNotFoundError, VersionCreationError, InvalidCategoryError, QueuePublishError } from '../utils/errors.js';
 import { buildMetaFromDoc, buildTabsFromDoc } from '../utils/meta-builder.js';
+import { refreshFrameUrls } from '../utils/refresh-frame-urls.js';
 import type { UserTier } from '@vie/types';
 
 export interface CreateVideoOptions {
@@ -393,6 +394,15 @@ export class VideoService {
     const doc = (summary as unknown) as Record<string, unknown> | undefined;
     const meta = doc ? buildMetaFromDoc(doc) : null;
     const tabs = doc ? buildTabsFromDoc(doc) : null;
+    const tabsEn = (doc?.tabs_en as unknown[] | undefined) ?? null;
+    // Re-sign embedded S3 image URLs from their durable `s3Key` on BOTH the
+    // native and English-translated tabs. Stored URLs expire on a TTL and may
+    // also point at unreachable LocalStack hostnames in dev — refreshing on
+    // the read path makes both classes of breakage go away. `tabs_en` carries
+    // the same s3Key references the translation phase preserved through, so
+    // non-English videos need the same treatment. No-op when S3 isn't
+    // configured (tests).
+    await Promise.all([refreshFrameUrls(tabs), refreshFrameUrls(tabsEn)]);
 
     return {
       id: video._id.toString(),
@@ -406,6 +416,13 @@ export class VideoService {
       folderId: video.folderId?.toString() || null,
       meta,
       tabs,
+      // English translation surfaces (populated by the summarizer's translation
+      // phase for non-English videos). The frontend prefers these so shared
+      // pages render in a globally-readable language by default.
+      tabs_en: tabsEn,
+      meta_en: doc?.meta_en ?? null,
+      synthesis_en: doc?.synthesis_en ?? null,
+      forceEnglishReason: (doc?.force_english_reason as string | undefined) ?? null,
     };
   }
 

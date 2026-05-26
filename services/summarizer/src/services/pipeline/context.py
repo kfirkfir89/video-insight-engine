@@ -84,6 +84,8 @@ class PipelineContext:
     language: str = "en"  # ISO 639-1 code, defaults to English (the gate)
     is_rtl: bool = False  # Whether language is right-to-left
     audio_path: Path | None = None  # Cached audio file for reuse by translation
+    # Set to "sound_only" when an instrumental/no-speech music video is force-routed to English.
+    force_english_reason: str | None = None
 
     # Translation outputs (populated for non-English videos only)
     tabs_en: list[dict] | None = None

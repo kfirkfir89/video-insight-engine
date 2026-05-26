@@ -48,7 +48,7 @@ _TIP_FIELDS: tuple[str, ...] = (
 
 
 _SPOT_PASSTHROUGH_FIELDS: tuple[str, ...] = (
-    "emoji", "cost", "duration", "mapQuery", "tips", "thumbnailUrl",
+    "emoji", "cost", "duration", "mapQuery", "tips", "thumbnailUrl", "s3Key",
     "pronunciation", "timestamp",
 )
 
@@ -129,6 +129,7 @@ def _normalize_step(item: dict, index: int) -> dict:
         "duration": item.get("duration"),
         "tips": tips,
         **({"thumbnailUrl": item["thumbnailUrl"]} if item.get("thumbnailUrl") else {}),
+        **({"s3Key": item["s3Key"]} if item.get("s3Key") else {}),
     }
 
 
@@ -256,7 +257,7 @@ def _normalize_moment_item(item: Any, index: int) -> dict | None:
     }
     if end_seconds is not None:
         normalized["endSeconds"] = end_seconds
-    for key in ("description", "mood", "emoji", "speaker", "thumbnailUrl"):
+    for key in ("description", "mood", "emoji", "speaker", "thumbnailUrl", "s3Key"):
         value = item.get(key)
         if value is not None and value != "":
             normalized[key] = value

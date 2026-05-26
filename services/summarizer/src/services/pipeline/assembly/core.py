@@ -93,7 +93,12 @@ def inject_frame_thumbnails(
     frames: list[dict],
     all_frames: list[dict] | None = None,
 ) -> list[dict]:
-    """Add thumbnailUrl to items that have timestamp/startTime fields."""
+    """Add thumbnailUrl + s3Key to items that have timestamp/startTime fields.
+
+    s3Key is the durable S3 object key; the API regenerates a fresh presigned
+    URL from it on every read. thumbnailUrl is the at-generation-time URL —
+    used by the SSE stream for immediate display.
+    """
     if not frames:
         return items
 
@@ -109,12 +114,15 @@ def inject_frame_thumbnails(
                 ts_float = None
             if ts_float is not None:
                 nearest = find_nearest_frame(ts_float, match_pool)
+                source: dict | None = None
                 if nearest and nearest.get("s3_url"):
-                    item["thumbnailUrl"] = nearest["s3_url"]
+                    source = nearest
                 elif nearest and s3_frames:
-                    s3_nearest = find_nearest_frame(ts_float, s3_frames)
-                    if s3_nearest:
-                        item["thumbnailUrl"] = s3_nearest.get("s3_url", "")
+                    source = find_nearest_frame(ts_float, s3_frames)
+                if source:
+                    item["thumbnailUrl"] = source.get("s3_url", "")
+                    if source.get("s3_key"):
+                        item["s3Key"] = source["s3_key"]
     return items
 
 
@@ -771,6 +779,7 @@ def assemble_response(
                 "caption": caption,
                 "timestamp": ts,
                 "thumbnailUrl": f.get("s3_url", ""),
+                **({"s3Key": f["s3_key"]} if f.get("s3_key") else {}),
             })
 
         has_enough_frames = len(gallery_images) > 8

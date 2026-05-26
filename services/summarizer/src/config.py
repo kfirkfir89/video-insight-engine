@@ -198,6 +198,12 @@ class Settings(BaseSettings):
     # Advanced transcript cleaning (spaCy + TF-IDF)
     TRANSCRIPT_CLEANING_ENABLED: bool = True
 
+    # Sound-only force-English: when a music-category video has words-per-second
+    # below this threshold, override the detected language to English. Whisper
+    # hallucinates languages on instrumental audio; vocal songs stay well above
+    # this floor (a sparse vocal song is ~0.33 wps, an instrumental is ~0.03).
+    MUSIC_LANGUAGE_FORCE_EN_WPS: float = 0.15
+
     # Scene-based frame extraction (additive to timestamp extraction)
     SCENE_EXTRACTION_ENABLED: bool = True
     SCENE_THRESHOLD: float = 0.3

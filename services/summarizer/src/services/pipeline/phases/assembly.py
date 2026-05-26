@@ -91,6 +91,7 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
         "tabs": assembled.get("tabs", []),
         "language": ctx.language,
         "isRTL": ctx.is_rtl,
+        "force_english_reason": ctx.force_english_reason,
         "pipeline": {
             "triage": ctx.triage_dict,
             "extraction": ctx.extraction_data,

@@ -55,6 +55,28 @@ async def run_phase_transcript(ctx: PipelineContext) -> AsyncGenerator[str, None
         ctx.is_rtl = is_rtl(transcript_data.language)
         logger.info("Pipeline language set: %s (RTL: %s)", ctx.language, ctx.is_rtl)
 
+    # Sound-only detection: a music-category video with essentially no speech
+    # means Whisper hallucinated a language on instrumental audio. Force English
+    # so downstream prompts produce coherent output instead of fabricated
+    # foreign-language content.
+    from src.utils.language_utils import is_sound_only_video
+    raw_text = transcript_data.raw_text or ""
+    if is_sound_only_video(
+        is_music=is_music,
+        language=ctx.language,
+        raw_text=raw_text,
+        duration=video_data.duration or 0,
+        wps_threshold=settings.MUSIC_LANGUAGE_FORCE_EN_WPS,
+    ):
+        logger.warning(
+            "Sound-only music video detected; overriding language %r -> en "
+            "(word_count=%d, duration=%ds)",
+            ctx.language, len(raw_text.split()), video_data.duration or 0,
+        )
+        ctx.language = "en"
+        ctx.is_rtl = False
+        ctx.force_english_reason = "sound_only"
+
     yield sse_event("transcript_ready", {"duration": video_data.duration})
     ctx.clean_text = clean_transcript(transcript_data.raw_text)
 

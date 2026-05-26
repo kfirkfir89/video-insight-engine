@@ -72,6 +72,26 @@ def is_rtl(language: str) -> bool:
     return language in RTL_LANGUAGES
 
 
+def is_sound_only_video(
+    is_music: bool,
+    language: str | None,
+    raw_text: str,
+    duration: int,
+    wps_threshold: float,
+) -> bool:
+    """True when a music-category video has essentially no speech.
+
+    A music video with a few hallucinated words across many minutes is almost
+    always instrumental (trance, opera passages, ambient, piano sonata). Vocal
+    songs sit well above the threshold because Whisper transcribes real lyrics.
+    """
+    if not is_music or not language or language == "en":
+        return False
+    word_count = len(raw_text.split())
+    safe_duration = max(duration or 1, 1)
+    return (word_count / safe_duration) < wps_threshold
+
+
 def get_language_name(code: str) -> str:
     """Get human-readable language name from ISO 639-1 code."""
     return _LANGUAGE_NAMES.get(code, code.upper())
