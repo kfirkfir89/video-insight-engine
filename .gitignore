@@ -48,6 +48,14 @@ htmlcov/
 playwright-report/
 test-results/
 perf-*.png
+.playwright-mcp/
+
+# Local screenshots / scratch images at repo root
+/landing-light.png
+/login.png
+
+# Local Docker BuildKit config
+/buildkitd.toml
 
 # Docker
 docker-compose.override.yml
