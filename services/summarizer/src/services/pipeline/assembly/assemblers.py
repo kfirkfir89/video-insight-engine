@@ -134,24 +134,37 @@ def _normalize_step(item: dict, index: int) -> dict:
 
 
 def _to_flash_card(item: dict) -> dict:
-    """Convert a domain object to {front, back, emoji} flash card format."""
+    """Convert a domain object to {front, back, emoji} flash card format.
+
+    Card backs concatenate raw values without English category prefixes
+    ("Form: ", "Duration: ", "Level: ", "Modifications: ", "Example: ").
+    The card's ``front`` already carries the term/name — the back just
+    needs the explanation content, and prefix labels would leak English
+    into non-English flashcards. Values are joined by " · " so the
+    structure is still visible.
+    """
     if "front" in item and "back" in item:
         return item
     if "name" in item and "definition" in item:
         return {"front": item["name"], "back": item["definition"], "emoji": item.get("emoji")}
     if "name" in item and ("formCues" in item or "duration" in item):
-        back_parts = []
+        back_parts: list[str] = []
         if item.get("formCues"):
-            back_parts.append("Form: " + ", ".join(item["formCues"]) if isinstance(item["formCues"], list) else str(item["formCues"]))
+            cues = item["formCues"]
+            back_parts.append(", ".join(cues) if isinstance(cues, list) else str(cues))
         if item.get("duration"):
-            back_parts.append(f"Duration: {item['duration']}")
+            back_parts.append(str(item["duration"]))
         if item.get("difficulty"):
-            back_parts.append(f"Level: {item['difficulty']}")
+            back_parts.append(str(item["difficulty"]))
         if item.get("modifications"):
             mods = item["modifications"]
             if isinstance(mods, list) and mods:
-                back_parts.append("Modifications: " + ", ".join(mods))
-        return {"front": item["name"], "back": " | ".join(back_parts) or item.get("description", ""), "emoji": item.get("emoji")}
+                back_parts.append(", ".join(mods))
+        return {
+            "front": item["name"],
+            "back": " · ".join(p for p in back_parts if p) or item.get("description", ""),
+            "emoji": item.get("emoji"),
+        }
     if "name" in item:
         return {"front": item["name"], "back": item.get("description") or item.get("text") or "", "emoji": item.get("emoji")}
     if "word" in item:
@@ -159,14 +172,14 @@ def _to_flash_card(item: dict) -> dict:
         if item.get("pronunciation"):
             back_parts.append(f"({item['pronunciation']})")
         if item.get("example"):
-            back_parts.append(f"Example: {item['example']}")
+            back_parts.append(str(item["example"]))
         return {"front": item["word"], "back": " ".join(filter(None, back_parts)), "emoji": item.get("emoji")}
     if "term" in item:
         return {"front": item["term"], "back": item.get("definition") or item.get("description") or "", "emoji": item.get("emoji")}
     if "title" in item:
         return {"front": item["title"], "back": item.get("description") or item.get("text") or "", "emoji": item.get("emoji")}
     if "text" in item and "front" not in item:
-        return {"front": item.get("type", "Tip"), "back": item["text"], "emoji": item.get("emoji")}
+        return {"front": item.get("type", ""), "back": item["text"], "emoji": item.get("emoji")}
     if "aspect" in item and "detail" in item:
         return {"front": item["aspect"], "back": item["detail"], "emoji": item.get("emoji")}
     if "fact" in item:
@@ -473,144 +486,230 @@ def assemble_code_explorer(
     snippets = [s for s in (_normalize_code_snippet(item) for item in data) if s is not None]
     if not snippets:
         return None
-    return {
-        "snippets": snippets,
-        "showAllLabel": "Show all",
-        "stepThroughLabel": "Step through",
-        "copyLabel": "Copy code",
-        "copiedLabel": "Copied",
-        "nextLabel": "Next",
-        "previousLabel": "Previous",
-    }
+    return {"snippets": snippets}
+
+
+def _has_pair_side(value: Any) -> bool:
+    """A comparison side is "present" when it carries any non-empty content.
+
+    Numeric zero is legitimate content (a free-tier product priced at $0, a
+    "0 GB" storage row), so test for ``None`` and empty-after-strip explicitly
+    rather than relying on Python truthiness. The prior ``or ""`` coercion
+    dropped rows whose numeric side was 0/False — exactly the kind of
+    quantitative comparison this component is supposed to surface.
+    """
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip() != ""
+    if isinstance(value, bool):
+        # Booleans are valid (e.g. "supports HDR: True vs False"). True/False
+        # both count as present.
+        return True
+    if isinstance(value, (int, float)):
+        # Any numeric value is present — including 0 and 0.0.
+        return True
+    # Lists / dicts: present if non-empty.
+    if isinstance(value, (list, dict)):
+        return len(value) > 0
+    # Unknown shape — coerce to string and check.
+    return str(value).strip() != ""
+
+
+def _is_real_comparison_pair(row: dict) -> bool:
+    """A row counts only if BOTH sides carry content. Single-side rows are
+    just info_grid in disguise and degrade the comparison UX — they render
+    as half-empty rows next to the real pairs."""
+    return _has_pair_side(row.get("thisProduct")) and _has_pair_side(row.get("competitor"))
+
+
+# Comparison tabs need at least two real pairs to justify the side-by-side
+# layout. A single pair renders as an info_grid in disguise and was the
+# audited "comparison with one row" failure mode — fall through to None so
+# the caller can route the data into info_grid / flash_deck instead.
+_MIN_COMPARISON_ROWS = 2
 
 
 def assemble_comparison(
     tab: dict, data: Any, extraction: dict, enrichment: dict | None,
 ) -> dict | None:
-    # Derive product label from review extraction or video title
+    """Build comparison props with strict pair requirements.
+
+    Requires at least 2 rows where BOTH sides have content — otherwise the
+    output is the audited "video title as column header / empty third column"
+    failure mode. When the LLM produced single-sided items (concepts with no
+    competitor), this routes through to None so the data can flow into
+    info_grid or flash_deck via the fallback layer instead.
+
+    The leftLabel/rightLabel are only set when the data is actually a product
+    review with an explicit competitor — never from the video title.
+    """
     review_data = extraction.get("review") if isinstance(extraction, dict) else None
     product_name: str | None = None
     if isinstance(review_data, dict):
-        product_name = review_data.get("product") or None
-    if not product_name:
-        video_meta = tab.get("_video_meta") or {}
-        title = video_meta.get("title", "")
-        if title:
-            product_name = title
+        candidate = review_data.get("product")
+        if isinstance(candidate, str) and candidate.strip():
+            product_name = candidate.strip()
+
+    pros: list[str] = []
+    cons: list[str] = []
+    rows: list[dict] = []
 
     if isinstance(data, dict):
-        pros = data.get("pros") or []
-        cons = data.get("cons") or []
-        comparisons = data.get("comparisons") or []
-        if pros or cons or comparisons:
-            normalized = [_normalize_comparison(c) for c in comparisons if isinstance(c, dict)]
-            if not pros and not cons and normalized:
-                for c in normalized:
-                    feature = c.get("feature", "")
-                    if not feature:
-                        continue
-                    winner = c.get("winner", "")
-                    if winner == "left":
-                        pros.append(feature)
-                    elif winner == "right":
-                        cons.append(feature)
-                    elif winner == "tie":
-                        pass
-                    elif c.get("thisProduct") and not c.get("competitor"):
-                        pros.append(feature)
-            competitor_name = _first_competitor_name(normalized)
-            result = {
-                "pros": pros, "cons": cons, "comparisons": normalized,
-                "leftLabel": product_name or "",
-                "rightLabel": competitor_name,
-                "leftColumnLabel": "Description",
-                "rightColumnLabel": "Example",
-                "goForItLabel": "Go for it if...",
-            }
-            return result
-
-    if isinstance(data, list) and len(data) > 0:
-        rows: list[dict] = []
+        pros = list(data.get("pros") or [])
+        cons = list(data.get("cons") or [])
+        raw_rows = data.get("comparisons") or []
+        rows = [_normalize_comparison(c) for c in raw_rows if isinstance(c, dict)]
+    elif isinstance(data, list):
         for item in data:
             if not isinstance(item, dict):
                 continue
             if "feature" in item and ("thisProduct" in item or "competitor" in item):
                 rows.append(_normalize_comparison(item))
-            elif "title" in item and "description" in item:
-                rows.append({
-                    "feature": item["title"],
-                    "thisProduct": item.get("description", ""),
-                    "competitor": item.get("code", ""),
-                })
-            elif "name" in item and "definition" in item:
-                rows.append({
-                    "feature": f"{item.get('emoji', '')} {item['name']}".strip(),
-                    "thisProduct": item.get("definition", ""),
-                    "competitor": item.get("example") or item.get("analogy") or "",
-                })
-            elif "name" in item and "description" in item:
-                rows.append({
-                    "feature": f"{item.get('emoji', '')} {item['name']}".strip(),
-                    "thisProduct": item.get("description", ""),
-                    "competitor": "",
-                })
-            elif "title" in item and "detail" in item:
-                rows.append({
-                    "feature": f"{item.get('emoji', '')} {item['title']}".strip(),
-                    "thisProduct": item.get("detail", ""),
-                    "competitor": "",
-                })
-        if rows:
-            competitor_name = _first_competitor_name(rows)
-            result = {
-                "pros": [], "cons": [], "comparisons": rows,
-                "leftLabel": product_name or "",
-                "rightLabel": competitor_name,
-                "leftColumnLabel": "Description",
-                "rightColumnLabel": "Example",
-                "goForItLabel": "Go for it if...",
-            }
-            return result
 
-    return None
+    rows = [
+        r for r in rows
+        if str(r.get("feature") or "").strip() and _is_real_comparison_pair(r)
+    ]
+
+    # When the LLM tagged winners on real-pair rows but didn't emit pros/cons
+    # explicitly, derive them from the winner field. Keeps the "Go for it /
+    # Skip it" recommendation section populated on review tabs that focus on
+    # the table rather than separately listing pros and cons.
+    if rows and not pros and not cons:
+        for row in rows:
+            feature = str(row.get("feature") or "").strip()
+            if not feature:
+                continue
+            winner = str(row.get("winner") or "").strip().lower()
+            if winner == "left":
+                pros.append(feature)
+            elif winner == "right":
+                cons.append(feature)
+
+    # Enforce the documented contract: a comparison tab needs either ≥2 real
+    # pairs OR a populated pros/cons set. A lone row with no pros/cons is the
+    # "info_grid in disguise" failure mode the refactor was supposed to close.
+    if len(rows) < _MIN_COMPARISON_ROWS and not pros and not cons:
+        return None
+
+    competitor_name = _first_competitor_name(rows) if rows else ""
+
+    return {
+        "pros": pros,
+        "cons": cons,
+        "comparisons": rows,
+        "leftLabel": product_name or "",
+        "rightLabel": competitor_name,
+    }
+
+
+_INFO_KEY_FIELDS: tuple[str, ...] = (
+    "key", "name", "title", "label", "term", "word", "phrase",
+    "aspect", "role", "type", "fact", "concept",
+)
+_INFO_VALUE_FIELDS: tuple[str, ...] = (
+    "value", "definition", "description", "detail", "explanation",
+    "text", "translation", "answer", "meaning",
+)
+_INFO_EVIDENCE_FIELDS: tuple[str, ...] = (
+    "example", "source", "context", "pronunciation", "note",
+    "analogy", "quote",
+)
+
+
+def _normalize_info_grid_item(item: Any) -> dict | None:
+    """Coerce diverse LLM-emit shapes into {key, value, evidence?, emoji?}.
+
+    Returns None when the item lacks either key OR value — those would render
+    as empty cards and are the root cause of the wall-of-empty-grid bug.
+    """
+    if isinstance(item, str):
+        text = item.strip()
+        return {"key": text, "value": ""} if text else None
+    if not isinstance(item, dict):
+        return None
+
+    # Credits-style: {role, name} — role labels the position (key), name
+    # identifies who fills it (value). Handle explicitly because both fields
+    # fall in the priority key-field list and would otherwise collide.
+    role = str(item.get("role") or "").strip()
+    name = str(item.get("name") or "").strip()
+    if role and name and not any(item.get(f) for f in _INFO_VALUE_FIELDS):
+        result: dict[str, Any] = {"key": role, "value": name}
+        if item.get("emoji"):
+            result["emoji"] = item["emoji"]
+        return result
+
+    if "key" in item and "value" in item:
+        key_clean = str(item["key"]).strip()
+        value_clean = str(item.get("value") or "").strip()
+        if not key_clean or not value_clean:
+            return None
+        result: dict[str, Any] = {"key": key_clean, "value": value_clean}
+        if item.get("emoji"):
+            result["emoji"] = item["emoji"]
+        for ev_field in _INFO_EVIDENCE_FIELDS:
+            ev = item.get(ev_field)
+            if isinstance(ev, str) and ev.strip():
+                result["evidence"] = ev.strip()
+                break
+        return result
+
+    key_raw = ""
+    for field in _INFO_KEY_FIELDS:
+        candidate = item.get(field)
+        if isinstance(candidate, str) and candidate.strip():
+            key_raw = candidate.strip()
+            break
+    if not key_raw:
+        return None
+
+    value_raw = ""
+    for field in _INFO_VALUE_FIELDS:
+        candidate = item.get(field)
+        if isinstance(candidate, str) and candidate.strip():
+            value_raw = candidate.strip()
+            break
+    if not value_raw:
+        return None
+
+    result = {"key": key_raw, "value": value_raw}
+    if item.get("emoji"):
+        result["emoji"] = item["emoji"]
+
+    for ev_field in _INFO_EVIDENCE_FIELDS:
+        ev = item.get(ev_field)
+        if isinstance(ev, str) and ev.strip() and ev.strip() != value_raw:
+            result["evidence"] = ev.strip()
+            break
+
+    if item.get("timestamp") is not None:
+        result["timestamp"] = item["timestamp"]
+
+    return result
 
 
 def assemble_info_grid(
     tab: dict, data: Any, extraction: dict, enrichment: dict | None,
 ) -> dict | None:
+    """Normalize diverse list/dict shapes into InfoGridItem[].
+
+    Drops items that can't produce both a key and a value — they'd render as
+    empty cards. If every item is dropped, returns None so the orchestrator
+    can route the data through a fallback layer instead of shipping an empty
+    grid (the audited "8 empty cards" failure mode).
+    """
     if isinstance(data, list) and len(data) >= 1:
-        pairs = []
-        for item in data:
-            if isinstance(item, dict):
-                if "key" in item and "value" in item:
-                    pairs.append(item)
-                elif "name" in item and "value" in item:
-                    pairs.append({"key": item["name"], "value": item["value"]})
-                elif "label" in item and "value" in item:
-                    pairs.append({"key": item["label"], "value": item["value"]})
-                elif "label" in item and "description" in item:
-                    pairs.append({"key": item["label"], "value": item["description"]})
-                elif "name" in item and "description" in item:
-                    pairs.append({"key": item["name"], "value": item["description"]})
-                elif "name" in item and "explanation" in item:
-                    pairs.append({"key": item["name"], "value": item["explanation"]})
-                elif "role" in item and "name" in item:
-                    pairs.append({"key": item["role"], "value": item["name"]})
-                elif "type" in item and "text" in item:
-                    pairs.append({"key": item["type"], "value": item["text"]})
-                elif "title" in item and "description" in item:
-                    pairs.append({"key": item["title"], "value": item["description"]})
-                elif "title" in item and "value" in item:
-                    pairs.append({"key": item["title"], "value": item["value"]})
-                else:
-                    pairs.append(item)
-            elif isinstance(item, str):
-                pairs.append({"key": item, "value": ""})
+        pairs = [
+            p for p in (_normalize_info_grid_item(item) for item in data)
+            if p is not None
+        ]
         return {"items": pairs} if pairs else None
     if isinstance(data, dict) and data:
         pairs = [{"key": str(k), "value": str(v)} for k, v in data.items()
-                 if isinstance(v, (str, int, float, bool))]
-        return {"items": pairs} if pairs else {"data": data}
+                 if isinstance(v, (str, int, float, bool)) and str(v).strip()]
+        return {"items": pairs} if pairs else None
     return None
 
 
@@ -656,9 +755,7 @@ def assemble_checklist(
         else:
             items.append({"label": str(item)})
 
-    _TAB_LABELS = {"ingredients": "Ingredients", "packing": "Pack List", "materials": "Materials", "tools": "Tools"}
-    tab_label = _TAB_LABELS.get(tab.get("id", ""), tab.get("label", "Checklist"))
-    return {"items": items, "tabLabel": tab_label, "ingredientsLabel": tab_label}
+    return {"items": items}
 
 
 def assemble_step_player(
@@ -669,28 +766,12 @@ def assemble_step_player(
     steps = [_normalize_step(item, i) for i, item in enumerate(data) if isinstance(item, dict)]
     if not steps:
         return None
-    return {
-        "steps": steps,
-        "doneLabel": "Done",
-        "undoLabel": "Undo",
-        "nextLabel": "Next",
-        "previousLabel": "Previous",
-    }
+    return {"steps": steps}
 
 
 def assemble_exercise_tracker(
     tab: dict, data: Any, extraction: dict, enrichment: dict | None,
 ) -> dict | None:
-    _exercise_labels = {
-        "formCueLabel": "Form cue",
-        "hideFormCueLabel": "Hide form cue",
-        "durationLabel": "Duration",
-        "equipmentLabel": "Equipment",
-        "completeSetLabel": "Complete Set",
-        "doneLabel": "Done",
-        "celebrationTitle": "Workout complete!",
-        "celebrationSubtitle": "All sets finished. Great effort!",
-    }
     if isinstance(data, dict):
         raw_exercises = data.get("exercises") or []
         warmup = data.get("warmup") or []
@@ -698,7 +779,7 @@ def assemble_exercise_tracker(
         exercises = [e for e in (_normalize_exercise(item) for item in raw_exercises) if e is not None] if isinstance(raw_exercises, list) else []
         if not exercises and not warmup:
             return None
-        props: dict[str, Any] = {"exercises": exercises, **_exercise_labels}
+        props: dict[str, Any] = {"exercises": exercises}
         if warmup:
             props["warmup"] = warmup
         if cooldown:
@@ -706,7 +787,7 @@ def assemble_exercise_tracker(
         return props
     if isinstance(data, list) and len(data) > 0:
         exercises = [e for e in (_normalize_exercise(item) for item in data) if e is not None]
-        return {"exercises": exercises, **_exercise_labels} if exercises else None
+        return {"exercises": exercises} if exercises else None
     return None
 
 
@@ -718,15 +799,7 @@ def assemble_quiz(
     questions = [q for q in (_normalize_quiz_question(item) for item in data) if q is not None]
     if not questions:
         return None
-    return {
-        "questions": questions,
-        "correctLabel": "Correct",
-        "tryAgainLabel": "Try Again",
-        "reviewLabel": "Review",
-        "missedLabel": "missed",
-        "nextLabel": "Next",
-        "previousLabel": "Previous",
-    }
+    return {"questions": questions}
 
 
 def assemble_flash_deck(
@@ -755,14 +828,7 @@ def assemble_flash_deck(
                         words = new_front.split()[:8]
                         new_front = " ".join(words)
                     card["front"] = new_front
-    return {
-        "cards": cards,
-        "gotItLabel": "Got it!",
-        "reviewAgainLabel": "Review again",
-        "cardsReviewedLabel": "Cards reviewed",
-        "nextLabel": "Next",
-        "previousLabel": "Previous",
-    }
+    return {"cards": cards}
 
 
 def assemble_scenario(
@@ -773,12 +839,7 @@ def assemble_scenario(
     scenarios = [s for s in (_normalize_scenario_item(item) for item in data) if s is not None]
     if not scenarios:
         return None
-    return {
-        "scenarios": scenarios,
-        "correctLabel": "Correct",
-        "nextLabel": "Next",
-        "previousLabel": "Previous",
-    }
+    return {"scenarios": scenarios}
 
 
 def assemble_verdict(
@@ -791,8 +852,6 @@ def assemble_verdict(
         "bottomLine": data.get("bottomLine", ""),
         "bestFor": data.get("bestFor", []),
         "notFor": data.get("notFor", []),
-        "priceLabel": "Price",
-        "scoreLabel": "Score",
     }
 
 
@@ -920,12 +979,7 @@ def assemble_overview(
     if set(result.keys()) <= {"emoji"}:
         return None
 
-    return {
-        "data": result,
-        "durationLabel": "Duration",
-        "levelLabel": "Level",
-        "itemsLabel": "Items",
-    }
+    return {"data": result}
 
 
 def assemble_gallery(

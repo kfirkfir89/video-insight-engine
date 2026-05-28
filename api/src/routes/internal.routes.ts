@@ -42,7 +42,13 @@ const runDeletionsBodySchema = z
   .optional();
 
 export async function internalRoutes(fastify: FastifyInstance) {
-  const { costMonitorService, idempotencyService, userDeletionService } = fastify.container;
+  const {
+    costMonitorService,
+    idempotencyService,
+    dispatchGuardService,
+    userDeletionService,
+    videoRepository,
+  } = fastify.container;
 
   // POST /internal/status - Receive status updates from summarizer/agent
   fastify.post<{
@@ -98,10 +104,59 @@ export async function internalRoutes(fastify: FastifyInstance) {
       // On FAILED, drop any idempotency keys pointing at this summary so the
       // user can retry immediately rather than wait out the TTL. Fire-and-
       // forget — failure here only degrades dedup, doesn't break anything.
+      //
+      // Also force-release the dispatch guard so branch D (failed-retry) in
+      // createVideo can re-dispatch instead of being silenced by the 900s TTL.
+      // We gate the release on `videoRepository.tryClaimDispatchRelease(...)`:
+      // that's an atomic Mongo find-and-update guaranteeing only ONE concurrent
+      // FAILED event (per terminal-failure transition on the row) will reach
+      // the release call. The two gates inside `tryClaimDispatchRelease` —
+      // `status: 'failed'` and `dispatchGuardReleasedAt < updatedAt` — together
+      // make duplicate FAILED events idempotent AND make a stale FAILED that
+      // arrives after a user-driven retry a no-op.
+      //
+      // The blind DEL (`token: null`) is still the right semantic here because
+      // the original publisher's token isn't available cross-process. The
+      // residual retry-between-events race (microseconds between the Mongo
+      // claim and the Redis release) is documented inside
+      // `tryClaimDispatchRelease` and bounded by the summarizer's own
+      // per-`video_summary_id` lock.
       if (status === 'failed') {
         idempotencyService.invalidateByVideoSummaryId(videoSummaryId).catch((err) => {
           req.log.warn({ err, videoSummaryId }, 'idempotency invalidate on failure failed');
         });
+
+        // Awaited (not fire-and-forget) so we can gate the Redis release on
+        // the Mongo claim. The added latency is one Mongo round-trip on the
+        // FAILED status callback path — an internal-only, low-rate endpoint
+        // where the additional ~5-15ms is invisible.
+        let claimed: boolean;
+        try {
+          claimed = await videoRepository.tryClaimDispatchRelease(videoSummaryId);
+        } catch (err) {
+          // If the claim itself errored (Mongo blip), fall back to the
+          // pre-fix behaviour: best-effort blind release. Worst case is the
+          // old race window, which is strictly no worse than where we were.
+          req.log.warn(
+            { err, videoSummaryId },
+            'tryClaimDispatchRelease failed; falling back to unconditional release',
+          );
+          claimed = true;
+        }
+
+        if (claimed) {
+          await dispatchGuardService.release(videoSummaryId, null).catch((err) => {
+            req.log.warn(
+              { err, videoSummaryId },
+              'dispatch-guard release on failure failed',
+            );
+          });
+        } else {
+          req.log.debug(
+            { videoSummaryId },
+            'dispatch-guard release skipped (duplicate FAILED event or row no longer failed)',
+          );
+        }
       }
 
       // On terminal status (completed OR failed), reconcile the user's day

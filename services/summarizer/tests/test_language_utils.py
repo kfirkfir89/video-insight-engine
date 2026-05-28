@@ -101,6 +101,34 @@ class TestNormalizeLanguageCode:
         """Numeric input returns None."""
         assert normalize_language_code("12") is None
 
+    def test_should_map_whisper_language_name_to_code(self):
+        """Whisper returns language as a NAME — must map to the right ISO code."""
+        assert normalize_language_code("chinese") == "zh"
+        assert normalize_language_code("hebrew") == "he"
+        assert normalize_language_code("english") == "en"
+        assert normalize_language_code("japanese") == "ja"
+        assert normalize_language_code("arabic") == "ar"
+
+    def test_should_map_iso_639_3_to_639_1(self):
+        """Three-letter ISO codes map to two-letter codes correctly."""
+        assert normalize_language_code("chi") == "zh"
+        assert normalize_language_code("zho") == "zh"
+        assert normalize_language_code("jpn") == "ja"
+        assert normalize_language_code("heb") == "he"
+        assert normalize_language_code("ara") == "ar"
+        assert normalize_language_code("eng") == "en"
+
+    def test_should_reject_unsupported_two_letter_codes(self):
+        """Bogus two-letter strings (Chamorro 'ch', invented 'jp') are rejected."""
+        assert normalize_language_code("ch") is None
+        assert normalize_language_code("jp") is None
+        assert normalize_language_code("xy") is None
+
+    def test_should_handle_underscore_locale_format(self):
+        """Some sources use 'en_US' with underscores instead of dashes."""
+        assert normalize_language_code("en_US") == "en"
+        assert normalize_language_code("zh_Hans") == "zh"
+
 
 class TestDetectLanguageByScript:
     """Tests for detect_language_by_script()."""

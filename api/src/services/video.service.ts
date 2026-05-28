@@ -2,11 +2,14 @@ import { FastifyBaseLogger } from 'fastify';
 import { VideoRepository, VideoSummaryCacheDocument } from '../repositories/video.repository.js';
 import { SummarizerClient, type ProviderConfig } from './summarizer-client.js';
 import { QueuePublisher } from './queue-publisher.service.js';
+import { IdempotencyService } from './idempotency.service.js';
+import type { IDispatchGuard } from './dispatch-guard.service.js';
 import { config } from '../config.js';
 import { extractYoutubeId } from '../utils/youtube.js';
 import { InvalidYouTubeUrlError, VideoNotFoundError, VersionCreationError, InvalidCategoryError, QueuePublishError } from '../utils/errors.js';
 import { buildMetaFromDoc, buildTabsFromDoc } from '../utils/meta-builder.js';
 import { refreshFrameUrls } from '../utils/refresh-frame-urls.js';
+import { parseSourceLanguage } from '../utils/source-language.js';
 import type { UserTier } from '@vie/types';
 
 export interface CreateVideoOptions {
@@ -24,6 +27,15 @@ export interface CreateVideoOptions {
 
 // Maximum versions to keep per video (prevents unbounded storage growth)
 const MAX_VERSIONS_PER_VIDEO = 5;
+
+// A pending/processing cache row whose `updatedAt` is older than this is
+// treated as stalled — most likely a worker died without flipping the row
+// to `failed`. We re-dispatch through the standard path; the dispatch-guard
+// (15-min Redis TTL) and the summarizer's per-videoSummaryId lock keep us
+// safe from racing a still-live producer. 30 minutes is generous against
+// the longest legitimately-long pipeline runs and short enough that a
+// stuck row doesn't trap attachers indefinitely.
+const PIPELINE_STALL_THRESHOLD_MS = 30 * 60 * 1000;
 
 // Expiration TTLs by tier
 const EXPIRATION_DAYS: Record<UserTier, number | null> = {
@@ -46,6 +58,8 @@ export class VideoService {
     private readonly videoRepository: VideoRepository,
     private readonly summarizerClient: SummarizerClient,
     private readonly queuePublisher: QueuePublisher,
+    private readonly idempotencyService: IdempotencyService,
+    private readonly dispatchGuard: IDispatchGuard,
     private readonly logger: FastifyBaseLogger
   ) {}
 
@@ -66,47 +80,122 @@ export class VideoService {
       bypassCache?: boolean;
       requestId?: string;
     },
-  ): Promise<void> {
-    if (config.USE_QUEUE_PIPELINE) {
-      try {
-        await this.queuePublisher.publishVideoJob({
+  ): Promise<{ dispatched: boolean }> {
+    // Belt-and-suspenders: even though Step 1's content-addressed upsert
+    // already collapses concurrent submits at the cache row, this guard
+    // catches the narrower window where two API replicas might race outside
+    // Mongo's serialization, or where dispatchPipeline is called twice for
+    // the same row (e.g. failed-retry firing while a prior dispatch is still
+    // in-flight). The guard fails open on Redis outage — the summarizer's
+    // own per-videoSummaryId lock is the last line of defense.
+    //
+    // Return value contract: `dispatched: false` when the guard rejected us
+    // (someone else owns the run). Callers use this to skip side-effects
+    // that should only happen on a real publish — e.g. bumping retryCount.
+    const guard = await this.dispatchGuard.acquire(payload.videoSummaryId);
+    if (!guard.acquired) {
+      this.logger.info(
+        {
           videoSummaryId: payload.videoSummaryId,
-          youtubeId: payload.youtubeId,
-          url: payload.url,
-          userId: payload.userId,
-          tier: payload.tier,
-          providers: payload.providers,
-          bypassCache: payload.bypassCache,
-          requestId: payload.requestId,
-        });
-        return;
-      } catch (err) {
-        // Only swallow broker-side / validation failures (QueuePublishError).
-        // Anything else is a real bug and should surface to the caller —
-        // masking it with the HTTP fallback would hide schema regressions.
-        if (!(err instanceof QueuePublishError)) {
-          throw err;
-        }
-        this.logger.error(
-          {
-            err,
-            videoSummaryId: payload.videoSummaryId,
-            youtubeId: payload.youtubeId,
-            requestId: payload.requestId,
-          },
-          'Queue publish failed, falling back to HTTP summarizer call',
-        );
-      }
+          reason: 'already_dispatched',
+        },
+        'dispatch-guard already held; skipping publish',
+      );
+      return { dispatched: false };
     }
 
-    this.summarizerClient.triggerSummarization({
-      videoSummaryId: payload.videoSummaryId,
-      youtubeId: payload.youtubeId,
-      url: payload.url,
-      userId: payload.userId,
-      providers: payload.providers,
-      requestId: payload.requestId,
-    });
+    // Wrap the entire publish path so any throw (broker outage, schema bug,
+    // HTTP fallback exception) releases the guard via the Lua CAS before
+    // propagating. Without this the guard sits held for the full TTL
+    // (DISPATCH_GUARD_TTL_SECONDS), silently blocking the user's retries.
+    try {
+      if (config.USE_QUEUE_PIPELINE) {
+        try {
+          // `bypassCache` is carried on the queue payload for wire-format
+          // mirroring but is NOT consumed by the summarizer pipeline — the
+          // cache-bypass semantic is fully implemented here at the API layer
+          // (a fresh version row → fresh `videoSummaryId` → fresh pipeline
+          // run). The summarizer simply processes whatever id it's given.
+          // The HTTP-fallback path below intentionally omits the field for
+          // the same reason; both paths are correct as-is.
+          await this.queuePublisher.publishVideoJob({
+            videoSummaryId: payload.videoSummaryId,
+            youtubeId: payload.youtubeId,
+            url: payload.url,
+            userId: payload.userId,
+            tier: payload.tier,
+            providers: payload.providers,
+            bypassCache: payload.bypassCache,
+            requestId: payload.requestId,
+          });
+          return { dispatched: true };
+        } catch (err) {
+          // Only swallow broker-side / validation failures (QueuePublishError).
+          // Anything else is a real bug and should surface to the caller —
+          // masking it with the HTTP fallback would hide schema regressions.
+          if (!(err instanceof QueuePublishError)) {
+            throw err;
+          }
+          this.logger.error(
+            {
+              err,
+              videoSummaryId: payload.videoSummaryId,
+              youtubeId: payload.youtubeId,
+              requestId: payload.requestId,
+            },
+            'Queue publish failed, falling back to HTTP summarizer call',
+          );
+        }
+      }
+
+      this.summarizerClient.triggerSummarization({
+        videoSummaryId: payload.videoSummaryId,
+        youtubeId: payload.youtubeId,
+        url: payload.url,
+        userId: payload.userId,
+        providers: payload.providers,
+        requestId: payload.requestId,
+      });
+      return { dispatched: true };
+    } catch (err) {
+      // Release the guard first so a retry can re-acquire immediately.
+      await this.dispatchGuard.release(payload.videoSummaryId, guard.token);
+      // Mark the cache row failed so subsequent attachers (same user via
+      // alreadyExists, cross-user via upsertCacheByDedupKey) hit the
+      // failed-retry branch instead of attaching to a corpse. Best-effort:
+      // we still throw the original error to surface a 500 to the caller.
+      await this.videoRepository
+        .updateCacheEntry(payload.videoSummaryId, {
+          status: 'failed',
+          errorCode: 'DISPATCH_FAILED',
+          errorMessage: err instanceof Error ? err.message : String(err),
+        })
+        .catch((markErr: unknown) =>
+          this.logger.error(
+            { err: markErr, videoSummaryId: payload.videoSummaryId },
+            'Failed to mark cache row failed after dispatch error',
+          ),
+        );
+      throw err;
+    }
+  }
+
+  /**
+   * Pro/team users attaching to a row originally created by a free-tier user
+   * inherit the free TTL — the row would be hard-deleted by Mongo's
+   * `expiresAt` TTL index even though the paid user expects forever. Clear
+   * the TTL when a no-expiration tier attaches.
+   *
+   * Idempotent: a no-op if the row already has no `expiresAt` or if the
+   * attacher's own tier also expires.
+   */
+  private async upgradeExpiresAtIfNeeded(
+    cached: VideoSummaryCacheDocument,
+    tier: UserTier,
+  ): Promise<void> {
+    if (cached.expiresAt && calculateExpiresAt(tier) === null) {
+      await this.videoRepository.clearExpiresAt(cached._id.toString());
+    }
   }
 
   async createVideo(userId: string, url: string, options: CreateVideoOptions) {
@@ -143,8 +232,16 @@ export class VideoService {
 
         // Only proceed if we determined a version to create
         if (newVersion && newVersion > 0) {
-          // 2. Create new version entry
+          // 2. Create new version entry — dedupKey is versioned so two concurrent
+          //    Retry clicks that compute the same newVersion collide on the
+          //    partial unique index, triggering the E11000 → VersionCreationError
+          //    path below instead of silently producing two duplicate rows.
           const expiresAt = calculateExpiresAt(tier);
+          const dedupKey = this.idempotencyService.computeContentKey({
+            youtubeId,
+            providers,
+            version: newVersion,
+          });
           const cacheEntry = await this.videoRepository.createCacheEntry({
             youtubeId,
             url,
@@ -152,6 +249,7 @@ export class VideoService {
             version: newVersion,
             isLatest: true,
             retryCount: 0,
+            dedupKey,
             ...(expiresAt && { expiresAt }),
           });
 
@@ -237,11 +335,68 @@ export class VideoService {
       }
     }
 
-    // Check cache (latest version only)
-    const cached = await this.videoRepository.findCacheByYoutubeId(youtubeId, true);
+    // Content-addressed dedup — the atomic upsert collapses concurrent
+    // cross-user submissions for the same (youtubeId, providers, version=1)
+    // onto a single cache row. Exactly one caller sees wasInsert=true and
+    // is responsible for dispatching the pipeline; the rest attach.
+    const expiresAtForNew = calculateExpiresAt(tier);
+    const dedupKey = this.idempotencyService.computeContentKey({
+      youtubeId,
+      providers,
+      version: 1,
+    });
+    const { doc: cached, wasInsert } = await this.videoRepository.upsertCacheByDedupKey({
+      youtubeId,
+      url,
+      status: 'pending',
+      version: 1,
+      isLatest: true,
+      retryCount: 0,
+      dedupKey,
+      ...(expiresAtForNew && { expiresAt: expiresAtForNew }),
+    });
 
-    if (cached?.status === 'completed') {
-      // Cache HIT
+    if (wasInsert) {
+      // We won the race — create the user-video first so a dispatch failure
+      // doesn't strand the originator without a row, then dispatch the
+      // pipeline. Attachers from later submits (or earlier in-progress runs)
+      // will branch into the !wasInsert paths below.
+      const userVideo = await this.videoRepository.createUserVideo({
+        userId,
+        videoSummaryId: cached._id.toString(),
+        youtubeId,
+        status: 'pending',
+        folderId,
+      });
+
+      await this.dispatchPipeline({
+        videoSummaryId: cached._id.toString(),
+        youtubeId,
+        url,
+        userId,
+        tier,
+        providers,
+        requestId,
+      });
+
+      return {
+        video: {
+          id: userVideo._id.toString(),
+          videoSummaryId: cached._id.toString(),
+          youtubeId,
+          status: 'pending',
+        },
+        cached: false,
+      };
+    }
+
+    // wasInsert === false: we attached to a row another caller (or a prior
+    // pipeline run) already created. Pro/team attaching → clear any inherited
+    // free-tier TTL on the cache row before we proceed. Then branch on
+    // current status.
+    await this.upgradeExpiresAtIfNeeded(cached, tier);
+
+    if (cached.status === 'completed') {
       const userVideo = await this.videoRepository.createUserVideo({
         userId,
         videoSummaryId: cached._id.toString(),
@@ -265,31 +420,21 @@ export class VideoService {
       };
     }
 
-    if (cached?.status === 'processing' || cached?.status === 'pending') {
-      // Already processing or pending
+    if (cached.status === 'failed') {
+      // Existing row failed — retry the pipeline against the SAME row.
+      // Order: userVideo first (so a dispatch error doesn't lose the user's
+      // row), then dispatch, then increment retryCount ONLY when we actually
+      // published. Without the dispatched-gate, concurrent attachers each
+      // bump the counter even though only one publish happens.
       const userVideo = await this.videoRepository.createUserVideo({
         userId,
         videoSummaryId: cached._id.toString(),
         youtubeId,
-        status: cached.status,
+        status: 'pending',
         folderId,
       });
 
-      return {
-        video: {
-          id: userVideo._id.toString(),
-          videoSummaryId: cached._id.toString(),
-          status: cached.status,
-        },
-        cached: false,
-      };
-    }
-
-    if (cached?.status === 'failed') {
-      // Previous attempt failed - retry summarization
-      await this.videoRepository.incrementRetryCount(cached._id.toString());
-
-      await this.dispatchPipeline({
+      const { dispatched } = await this.dispatchPipeline({
         videoSummaryId: cached._id.toString(),
         youtubeId,
         url,
@@ -299,12 +444,55 @@ export class VideoService {
         requestId,
       });
 
+      if (dispatched) {
+        await this.videoRepository.incrementRetryCount(cached._id.toString());
+      }
+
+      return {
+        video: {
+          id: userVideo._id.toString(),
+          videoSummaryId: cached._id.toString(),
+          status: 'pending',
+        },
+        cached: false,
+      };
+    }
+
+    // status === 'pending' or 'processing' — attach to the in-flight run.
+    // Before attaching blindly, check whether the producer is actually alive.
+    // A row last touched >30min ago almost certainly belongs to a worker
+    // that died mid-pipeline without flipping the row to `failed`; a fresh
+    // attacher there would wait forever. Re-dispatch instead — the
+    // dispatch-guard rejects a live re-publish, and the summarizer's own
+    // per-videoSummaryId lock catches any race.
+    const ageMs = Date.now() - cached.updatedAt.getTime();
+    if (ageMs > PIPELINE_STALL_THRESHOLD_MS) {
+      this.logger.warn(
+        {
+          videoSummaryId: cached._id.toString(),
+          status: cached.status,
+          ageMs,
+          thresholdMs: PIPELINE_STALL_THRESHOLD_MS,
+        },
+        'Attaching to in-flight row exceeded stall threshold — re-dispatching',
+      );
+
       const userVideo = await this.videoRepository.createUserVideo({
         userId,
         videoSummaryId: cached._id.toString(),
         youtubeId,
         status: 'pending',
         folderId,
+      });
+
+      await this.dispatchPipeline({
+        videoSummaryId: cached._id.toString(),
+        youtubeId,
+        url,
+        userId,
+        tier,
+        providers,
+        requestId,
       });
 
       return {
@@ -317,45 +505,26 @@ export class VideoService {
       };
     }
 
-    // Cache MISS - create entry and trigger summarization via HTTP
-    const expiresAtForNew = calculateExpiresAt(tier);
-    const cacheEntry = await this.videoRepository.createCacheEntry({
-      youtubeId,
-      url,
-      status: 'pending',
-      version: 1,
-      isLatest: true,
-      retryCount: 0,
-      ...(expiresAtForNew && { expiresAt: expiresAtForNew }),
-    });
-
-    // Trigger summarization (queue or HTTP based on USE_QUEUE_PIPELINE flag)
-    await this.dispatchPipeline({
-      videoSummaryId: cacheEntry._id.toString(),
-      youtubeId,
-      url,
-      userId,
-      tier,
-      providers,
-      requestId,
-    });
-
+    // `attached: true` tells the route to refund this caller's cost
+    // reservation (they didn't trigger work; the SSE stream will deliver
+    // the producer's events). Same semantic as a cache hit, different label
+    // for observability.
     const userVideo = await this.videoRepository.createUserVideo({
       userId,
-      videoSummaryId: cacheEntry._id.toString(),
+      videoSummaryId: cached._id.toString(),
       youtubeId,
-      status: 'pending',
+      status: cached.status,
       folderId,
     });
 
     return {
       video: {
         id: userVideo._id.toString(),
-        videoSummaryId: cacheEntry._id.toString(),
-        youtubeId,
-        status: 'pending',
+        videoSummaryId: cached._id.toString(),
+        status: cached.status,
       },
       cached: false,
+      attached: true,
     };
   }
 
@@ -394,15 +563,17 @@ export class VideoService {
     const doc = (summary as unknown) as Record<string, unknown> | undefined;
     const meta = doc ? buildMetaFromDoc(doc) : null;
     const tabs = doc ? buildTabsFromDoc(doc) : null;
-    const tabsEn = (doc?.tabs_en as unknown[] | undefined) ?? null;
-    // Re-sign embedded S3 image URLs from their durable `s3Key` on BOTH the
-    // native and English-translated tabs. Stored URLs expire on a TTL and may
-    // also point at unreachable LocalStack hostnames in dev — refreshing on
-    // the read path makes both classes of breakage go away. `tabs_en` carries
-    // the same s3Key references the translation phase preserved through, so
-    // non-English videos need the same treatment. No-op when S3 isn't
-    // configured (tests).
-    await Promise.all([refreshFrameUrls(tabs), refreshFrameUrls(tabsEn)]);
+    // Source-language nested block — present only for non-English videos
+    // whose translation phase completed. Top-level tabs are always
+    // English-primary; this carries the original-language artifact for the
+    // FE toggle. Zod-validated at the DB → API boundary so a summarizer
+    // shape drift surfaces as "no translation" instead of leaking malformed
+    // data to the FE. Refresh S3 URLs on its tabs too.
+    const sourceLanguage = parseSourceLanguage(doc?.sourceLanguage);
+    await Promise.all([
+      refreshFrameUrls(tabs),
+      sourceLanguage ? refreshFrameUrls(sourceLanguage.tabs) : Promise.resolve(),
+    ]);
 
     return {
       id: video._id.toString(),
@@ -416,13 +587,10 @@ export class VideoService {
       folderId: video.folderId?.toString() || null,
       meta,
       tabs,
-      // English translation surfaces (populated by the summarizer's translation
-      // phase for non-English videos). The frontend prefers these so shared
-      // pages render in a globally-readable language by default.
-      tabs_en: tabsEn,
-      meta_en: doc?.meta_en ?? null,
-      synthesis_en: doc?.synthesis_en ?? null,
-      forceEnglishReason: (doc?.force_english_reason as string | undefined) ?? null,
+      // sourceLanguage is conditional — omitted entirely for English-source
+      // videos rather than serialized as `null`. The FE checks presence to
+      // decide whether to render the language toggle.
+      ...(sourceLanguage ? { sourceLanguage } : {}),
     };
   }
 

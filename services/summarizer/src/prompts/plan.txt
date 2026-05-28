@@ -83,11 +83,24 @@ Create 4-6 interactive tabs using the component toolkit below.
       "emoji": "📅",
       "component": "spot_explorer",
       "dataSource": "travel.itinerary",
-      "goal": "Browsable day-by-day plan with spots, costs, and map links"
+      "goal": "Browsable day-by-day plan with spots, costs, and map links",
+      "outboundLinks": {{
+        "<another-tab-id-you-also-planned>": "<2-5 word call-to-action label, in the same language as the rest of your output>"
+      }}
     }}
   ]
 }}
 </output_schema>
+
+<outbound_links_instructions>
+For every tab you emit, include an `outboundLinks` map: a dict whose keys are the IDs of OTHER tabs you ALSO planned (never reference an id that isn't in your tabs array), and whose values are short 2–5 word navigation labels.
+
+The label is a call-to-action — what the viewer should DO at the target tab ("Learn the concepts", "Check ingredients", "Try the code"). Write each label in the SAME LANGUAGE as the rest of your output (the video's language). For an English video output English labels; for a Hebrew video output Hebrew labels; etc.
+
+These labels are pipeline output — they flow through the translation walker, so the English-primary surface gets English labels even when you wrote Hebrew here, and the original-language toggle keeps your source-language labels intact. Hardcoded English here would defeat that flow.
+
+Only include outbound entries that make semantic sense (overview→content tab, content tab→test, etc.). Omit `outboundLinks` entirely on a tab that has no good outbound suggestions — the assembler will fall back to using the target tab's own label.
+</outbound_links_instructions>
 
 <examples>
 <example>
@@ -134,33 +147,70 @@ Video: "React Server Components Explained" (25 min, tech tutorial)
   "userGoal": "Implement React Server Components in my Next.js project",
   "confidence": 0.93,
   "tabs": [
-    {{"id": "overview", "label": "📋 Overview", "emoji": "📋", "component": "overview", "dataSource": "meta", "goal": "What RSC changes and why it matters for your Next.js app."}},
     {{"id": "build_steps", "label": "🔨 6 Build Steps", "emoji": "🔨", "component": "step_player", "dataSource": "tech.snippets", "goal": "Let's build it together — each snippet adds one RSC pattern to your app."}},
     {{"id": "code", "label": "💻 8 Code Snippets", "emoji": "💻", "component": "code_explorer", "dataSource": "tech.snippets", "goal": "Grab these and paste into your editor. Each builds on the last."}},
-    {{"id": "concepts", "label": "🧠 Key Concepts", "emoji": "🧠", "component": "flash_deck", "dataSource": "learning.concepts", "goal": "Flip through RSC concepts until they stick."}}
+    {{"id": "concepts", "label": "🧠 5 Key Concepts", "emoji": "🧠", "component": "flash_deck", "dataSource": "learning.concepts", "goal": "Flip through RSC concepts until they stick."}},
+    {{"id": "moments", "label": "🎬 Key Moments", "emoji": "🎬", "component": "moment_track", "dataSource": "learning.timestamps", "goal": "Jump to any concept demonstration in the video."}}
+  ]
+}}
+</example>
+
+<example>
+Video: "What Are Transformers?" (28 min, 3Blue1Brown — ML concepts with rich animations)
+{{
+  "reasoning": "Animated explainer with on-screen diagrams the speaker walks through. The whole video is concept definitions paired with visual demonstrations. Users will rewatch frames to internalize the math intuition. Concepts → flash_deck. Visual demos → moment_track with endSeconds.",
+  "identity": {{"creatorType": "math educator", "tone": "calm-educational", "audience": "intermediate"}},
+  "corePromise": "Build a mental model for how transformers attend across tokens",
+  "uniqueAngle": "Diagrams that *show* attention happening, not just describe it",
+  "extractionGuidance": {{
+    "primaryFocus": "Every concept the speaker names (attention, embedding, residual stream, MLP, etc.) with one-sentence definition",
+    "watchOutFor": "Many concepts have visual demonstrations — capture the timestamp of each demo so frames can attach"
+  }},
+  "itemCounts": {{"concepts": 12, "timestamps": 10, "tips": 0, "ingredients": 0, "spots": 0, "exercises": 0, "songs": 0, "products": 0, "codeSnippets": 0, "steps": 0}},
+  "contentTags": ["learning", "tech"],
+  "modifiers": [],
+  "primaryTag": "learning",
+  "userGoal": "Build intuition for the transformer architecture",
+  "confidence": 0.94,
+  "tabs": [
+    {{"id": "concepts", "label": "🧠 12 Core Concepts", "emoji": "🧠", "component": "flash_deck", "dataSource": "learning.concepts", "goal": "Each card is one transformer concept. Flip to see the precise definition."}},
+    {{"id": "moments", "label": "🎬 10 Demonstrations", "emoji": "🎬", "component": "moment_track", "dataSource": "learning.timestamps", "goal": "Jump to the exact moment each concept is shown on screen."}},
+    {{"id": "quiz", "label": "✅ Test Yourself", "emoji": "✅", "component": "quiz", "dataSource": "enrichment.quiz", "goal": "Five questions to check what stuck."}}
   ]
 }}
 </example>
 </examples>
 
 <domain_requirements>
-Domain-required components — if the domain is present in contentTags, these components MUST appear:
+Domain-required components — if the domain is present in contentTags, these components MUST appear. The assembler does NOT enforce per-domain required components; missing them is a silent planning bug that ships a malformed tab layout, so treat this section as a hard contract on your side:
+
 - food: MUST include `checklist` (ingredients) + `step_player` (recipe steps)
 - project: MUST include `checklist` (materials) + `step_player` (build steps)
-- review: MUST include `verdict` + `comparison`
+- review: MUST include `comparison` (folds verdict score + recommendation into the same tab)
 - fitness: MUST include `exercise_tracker`
 - travel: MUST include `spot_explorer` (itinerary)
 - music: MUST include `lyrics_player` when lyrics are available in the transcript
-- language: MUST include `spot_explorer` (phrases), SHOULD include `step_player` (drills) and `flash_deck` (vocabulary)
-- science: MUST include `spot_explorer` (concepts), SHOULD include `info_grid` (key facts)
-- ALL domains: SHOULD include `overview` as the first or second tab
+- language: MUST include `spot_explorer` (phrases) AND `flash_deck` (vocabulary) when the
+  extraction has at least 3 vocabulary items with definition shape
+- science: MUST include `flash_deck` (concepts) when extraction has at least 3 concept-definition
+  pairs. Add `moment_track` if the video has demonstrations.
+- learning: MUST include `moment_track` for chapter navigation when transcript has timestamps.
+- tech (with has_code=true): MUST include `code_explorer`.
+- ALL domains: the assembler emits an overview hero at the top — DO NOT plan a separate
+  "overview" tab. The first tab you design IS the first user-facing content tab.
 
 flash_deck restrictions:
-- flash_deck is for study material ONLY — concepts a student would memorize.
+- flash_deck is for memorization of concept-definition pairs. Each card front must be a real
+  term or concept; the back is the definition.
+- Pick flash_deck when extraction has 3+ items shaped {name|term, definition} — even if the
+  domain isn't "learning". Concepts in science, tech terms, language vocabulary all qualify.
 - Maximum 1 flash_deck per video.
-- Never use flash_deck for: tips, features, analysis, trivia.
-- Do not use flash_deck for: chef tips → use info_grid; product features → use info_grid; song analysis → use overview.
+- Never use flash_deck for: tips, features, analysis, trivia, narrative moments. Those go to
+  info_grid (browse) or moment_track (jump).
+
+quiz / scenario restrictions:
 - quiz and scenario tabs are only for learning and tech domains.
+- Both pull from enrichment.* — they're added when extraction supports a knowledge check.
 </domain_requirements>
 
 <routing_matrix>
@@ -186,7 +236,9 @@ Detect intent from video title and content structure:
 └──────────┴──────────────────────────┴────────────────────────────┴─────────────────────────┘
 
 Every video has ONE primary intent. Pick the column, use those components as required tabs.
-Overview is always the first tab regardless of intent.
+The first content tab YOU design is what users see first — make it the primary value tab
+(the action / the comparison / the timeline), not a meta summary. The overview hero is
+emitted automatically by the page chrome above your tabs.
 </routing_matrix>
 
 <format_routing>
@@ -234,19 +286,65 @@ comparisons from this 80-minute discussion"). NEVER produce a tab with 40+ items
 </extraction_caps>
 
 <comparison_routing>
-Comparison is for SIDE-BY-SIDE DECISIONS, not glossaries. Use it ONLY when the video weighs:
-- Two named products / approaches / tools / methods against each other (X vs Y).
-- Two or more options the user must choose between (up to 4 columns).
+Comparison is for SIDE-BY-SIDE DECISIONS, not glossaries. Use it ONLY when ALL of these
+conditions are met:
+- The video explicitly weighs Option A against Option B on the SAME criteria.
+- You have at least 3 comparison rows (features being weighed).
+- Each row has substance on BOTH sides — not "A is X, B is unspecified".
+- A user can DECIDE between A and B after reading the table.
+
+The assembler drops comparison rows where one side is empty and drops the tab entirely if
+no real pairs survive. Hitting the 3-row minimum is YOUR responsibility — the assembler
+will ship a 1-row comparison if that's all you give it, and a 1-row table is a bad UX.
 
 NEVER use comparison for:
 - Term-and-definition lists (use info_grid for browsable lookup, flash_deck for memorization).
 - "Here are 29 concepts" — that's a glossary, not a comparison.
-- Pros without a counterpart (use info_grid or verdict).
+- Pros without a counterpart (use info_grid).
+- Reviews where only one product is examined — fold the verdict into overview meta instead.
 
 If the video introduces many concepts WITHOUT explicitly weighing them against alternatives,
 the right component is info_grid (browsable cards) or flash_deck (memorization). Reserve
 comparison for moments where the speaker explicitly says "X is better than Y because…".
 </comparison_routing>
+
+<density_gates>
+Target density per component — plan within these so the tab feels substantial. The assembler
+ENFORCES a few of these (marked ✓); the rest are advisory and rely on you to plan correctly,
+because a 1-item info_grid is technically a valid tab but a bad UX.
+
+- info_grid: 3-20 items, each value ≤ 120 chars (≈20 words). Long paragraphs collapse
+  into a wall of text — split into multiple short cells OR move to spot_explorer.
+  ✓ enforced: items normalized (key + value both required, empty items dropped).
+- comparison: ≥3 rows with both sides filled.
+  ✓ enforced: single-side rows dropped; tab returned only if any real pair survives.
+- flash_deck: 3-15 cards, front ≤40 chars, back ≤180.
+- spot_explorer: 2-25 items.  ✓ enforced: minimum 2 items via `_MIN_SPOTS`.
+- step_player: 3-25 steps.
+- moment_track: 3-20 items.
+- quiz: 2-8 questions.
+- exercise_tracker: 2-25 exercises.
+- checklist: 3-30 items.
+
+If your extraction has fewer items than the target, route the data to a different
+component or fold it into overview/info_grid via the fallback layer.
+</density_gates>
+
+<frame_intelligence>
+Components are frame-aware. When you pick step_player, moment_track, code_explorer, or
+exercise_tracker — AND the items carry a timestamp — the assembler attaches the nearest
+vision-LLM frame caption, OCR text, and educational rationale automatically. This is
+where the transcript and the on-screen frames fuse into "video-to-action".
+
+To maximize frame evidence:
+- Set `timestamp` (seconds) on every step_player step.
+- Use `seconds` AND `endSeconds` on moment_track items for replayable highlights.
+- Set `timestamp` on each code_explorer snippet.
+- Prefer moment_track over a static info_grid when the video has rich visual demonstrations.
+
+Standalone gallery is auto-appended ONLY when ≥10 vision captions are high quality — you
+don't need to plan a gallery tab.
+</frame_intelligence>
 
 <rules>
 - contentTags: 1-3, most specific first. Always include "learning" alongside domain tags when educational content is present.

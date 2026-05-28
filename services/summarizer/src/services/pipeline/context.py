@@ -84,13 +84,14 @@ class PipelineContext:
     language: str = "en"  # ISO 639-1 code, defaults to English (the gate)
     is_rtl: bool = False  # Whether language is right-to-left
     audio_path: Path | None = None  # Cached audio file for reuse by translation
-    # Set to "sound_only" when an instrumental/no-speech music video is force-routed to English.
-    force_english_reason: str | None = None
 
-    # Translation outputs (populated for non-English videos only)
-    tabs_en: list[dict] | None = None
-    meta_en: dict[str, Any] | None = None
-    synthesis_en: dict[str, Any] | None = None
+    # Source-language artifact for non-English videos. The top-level tabs/meta/
+    # synthesis on this context are ALWAYS the English-primary payload after
+    # the translation phase runs; this dict stashes the original-language
+    # version so it can be persisted alongside as ``sourceLanguage``.
+    # Shape: {"code", "name", "isRTL", "tabs", "meta", "synthesis"}.
+    # None for English-source videos and for sound-only music-override videos.
+    source_language: dict[str, Any] | None = None
 
     # Per-phase timing (phase_name → seconds)
     phase_times: dict[str, float] = field(default_factory=dict)

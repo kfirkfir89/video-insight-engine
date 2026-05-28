@@ -225,11 +225,14 @@ export async function videosRoutes(fastify: FastifyInstance) {
     }
 
     // Cached videos run no pipeline, so no llm_usage rows will arrive — refund now.
+    // Attached videos (cross-user single-flight: the upsert in createVideo
+    // returned an existing in-flight row) behave identically — this caller
+    // didn't trigger work, the LLM usage will land on the originator's run.
     // Swallow refund errors: the user's video is already created, and the nightly
     // reconcile will heal a stuck reservation if the refund Mongo call transiently fails.
-    if (result.cached) {
+    if (result.cached || result.attached) {
       await costMonitorService.refundReservation(reservation).catch((err) => {
-        req.log.warn({ err, userId: req.user.userId }, 'cached-video refund failed; nightly reconcile will recover');
+        req.log.warn({ err, userId: req.user.userId }, 'cached/attached-video refund failed; nightly reconcile will recover');
       });
     }
 
@@ -238,13 +241,17 @@ export async function videosRoutes(fastify: FastifyInstance) {
     // of retries — so on missing IDs or a Mongo error, invalidate instead so
     // the next submit can re-reserve.
     if (hash) {
+      // Capture into a `const` so TS narrowing holds inside the `.catch`
+      // callback below — without this, a future edit that reassigns `hash`
+      // would silently turn `stableHash.slice(0, 8)` into a possible-null call.
+      const stableHash = hash;
       if (result.video?.id && result.video?.videoSummaryId) {
         await idempotencyService.completeHash({
-          hash,
+          hash: stableHash,
           videoSummaryId: result.video.videoSummaryId,
           userVideoId: result.video.id,
         }).catch((err) => {
-          req.log.warn({ err, hashPrefix: hash.slice(0, 8) }, 'idempotency complete failed; invalidating placeholder');
+          req.log.warn({ err, hashPrefix: stableHash.slice(0, 8) }, 'idempotency complete failed; invalidating placeholder');
           return unwindHash();
         });
       } else {

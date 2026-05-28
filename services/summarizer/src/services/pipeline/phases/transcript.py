@@ -68,6 +68,11 @@ async def run_phase_transcript(ctx: PipelineContext) -> AsyncGenerator[str, None
         duration=video_data.duration or 0,
         wps_threshold=settings.MUSIC_LANGUAGE_FORCE_EN_WPS,
     ):
+        # Sound-only override: instrumental/no-speech music whose Whisper
+        # output is hallucinated foreign-language fragments. Pin to English
+        # so downstream prompts produce coherent content. The pipeline never
+        # builds a sourceLanguage block here — the FE language toggle is
+        # presence-driven and stays hidden, which is the right UX.
         logger.warning(
             "Sound-only music video detected; overriding language %r -> en "
             "(word_count=%d, duration=%ds)",
@@ -75,7 +80,6 @@ async def run_phase_transcript(ctx: PipelineContext) -> AsyncGenerator[str, None
         )
         ctx.language = "en"
         ctx.is_rtl = False
-        ctx.force_english_reason = "sound_only"
 
     yield sse_event("transcript_ready", {"duration": video_data.duration})
     ctx.clean_text = clean_transcript(transcript_data.raw_text)

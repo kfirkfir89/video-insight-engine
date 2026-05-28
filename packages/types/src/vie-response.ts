@@ -70,7 +70,23 @@ export interface TriageResult {
 // Shared Item Types
 // ─────────────────────────────────────────────────────
 
-export interface SpotItem {
+/** Frame-evidence fields the assembler attaches via `inject_frame_thumbnails`
+ *  when a vision-LLM caption is available for the item's timestamp. Extended by
+ *  `SpotItem`, `StepItem`, and `MomentItem` — the three item shapes that carry
+ *  per-row timestamps. Components rendering those rows pick up these props
+ *  uniformly so frame intelligence reaches the UI. */
+export interface FrameEvidence {
+  /** Vision-LLM single-line caption for the frame at this timestamp. */
+  frameCaption?: string;
+  /** Vision-LLM rationale for why this frame supports/illustrates the row. */
+  frameEvidence?: string;
+  /** On-screen text (Tesseract OCR or vision-read) visible in the frame. */
+  frameOcr?: string;
+  /** Scene type — "slide", "code", "diagram", "demo", "whiteboard", etc. */
+  frameSceneType?: string;
+}
+
+export interface SpotItem extends FrameEvidence {
   name: string;
   emoji: string;
   description: string;
@@ -90,7 +106,7 @@ export interface TipItem {
   text: string;
 }
 
-export interface StepItem {
+export interface StepItem extends FrameEvidence {
   number: number;
   title?: string;
   instruction: string;
@@ -117,7 +133,7 @@ export interface KeyPointItem {
   timestamp?: number;
 }
 
-export interface MomentItem {
+export interface MomentItem extends FrameEvidence {
   time: string;
   seconds: number;
   /** Present ⇒ clip (span worth re-watching). Absent ⇒ moment (navigation point). */

@@ -88,16 +88,73 @@ def find_nearest_frame(
     return None
 
 
+# Scene types that should never feed a frame thumbnail — these are filler
+# (presenter face, video opener) and adding them as "evidence" pretends the
+# frame supports the claim when it doesn't. Talking_head frames pass through
+# only when the vision LLM marks them as educationally valuable.
+_NON_EVIDENCE_SCENE_TYPES: frozenset[str] = frozenset({
+    "talking_head", "intro", "outro", "transition", "black", "logo",
+})
+
+
+def _attach_frame_metadata(
+    item: dict,
+    source_frame: dict,
+    frame_descriptions: list[dict] | None,
+) -> None:
+    """Enrich an item with frame thumb + (when available) vision metadata.
+
+    Vision descriptions carry the actual semantic payload — scene_type,
+    educational_value, and a one-line `content` caption — but they're cheap
+    to look up and the audit showed they're computed and thrown away. Here we
+    fuse them onto the item so MomentTrack/StepPlayer/CodeExplorer/Comparison
+    can render evidence captions alongside the thumbnail.
+    """
+    item["thumbnailUrl"] = source_frame.get("s3_url", "")
+    if source_frame.get("s3_key"):
+        item["s3Key"] = source_frame["s3_key"]
+    if source_frame.get("ocr_text") and not item.get("frameOcr"):
+        item["frameOcr"] = source_frame["ocr_text"]
+
+    if not frame_descriptions:
+        return
+    desc = find_description_for_frame(source_frame, frame_descriptions)
+    if not desc:
+        return
+
+    scene_type = str(desc.get("scene_type") or "").strip().lower()
+    educational = str(desc.get("educational_value") or "").strip()
+    # Skip filler scenes unless the vision LLM explicitly flagged them as
+    # carrying educational signal — protects against pasting random presenter
+    # crops next to substantive content rows.
+    if scene_type in _NON_EVIDENCE_SCENE_TYPES and not educational:
+        return
+
+    caption = str(desc.get("content") or "").strip()
+    if caption:
+        item["frameCaption"] = caption
+    if scene_type:
+        item["frameSceneType"] = scene_type
+    if educational:
+        item["frameEvidence"] = educational
+    text_visible = str(desc.get("text_visible") or "").strip()
+    if text_visible and not item.get("frameOcr"):
+        item["frameOcr"] = text_visible
+
+
 def inject_frame_thumbnails(
     items: list[dict],
     frames: list[dict],
     all_frames: list[dict] | None = None,
+    frame_descriptions: list[dict] | None = None,
 ) -> list[dict]:
-    """Add thumbnailUrl + s3Key to items that have timestamp/startTime fields.
+    """Add thumbnailUrl + optional vision metadata to items with timestamps.
 
     s3Key is the durable S3 object key; the API regenerates a fresh presigned
     URL from it on every read. thumbnailUrl is the at-generation-time URL —
-    used by the SSE stream for immediate display.
+    used by the SSE stream for immediate display. When frame_descriptions is
+    provided, also attaches frameCaption / frameSceneType / frameEvidence /
+    frameOcr so downstream components can render evidence inline.
     """
     if not frames:
         return items
@@ -107,22 +164,22 @@ def inject_frame_thumbnails(
 
     for item in items:
         ts = item.get("timestamp") or item.get("startTime") or item.get("seconds") or item.get("time")
-        if ts is not None:
-            try:
-                ts_float = float(ts) if not isinstance(ts, str) else None
-            except (ValueError, TypeError):
-                ts_float = None
-            if ts_float is not None:
-                nearest = find_nearest_frame(ts_float, match_pool)
-                source: dict | None = None
-                if nearest and nearest.get("s3_url"):
-                    source = nearest
-                elif nearest and s3_frames:
-                    source = find_nearest_frame(ts_float, s3_frames)
-                if source:
-                    item["thumbnailUrl"] = source.get("s3_url", "")
-                    if source.get("s3_key"):
-                        item["s3Key"] = source["s3_key"]
+        if ts is None:
+            continue
+        try:
+            ts_float = float(ts) if not isinstance(ts, str) else None
+        except (ValueError, TypeError):
+            ts_float = None
+        if ts_float is None:
+            continue
+        nearest = find_nearest_frame(ts_float, match_pool)
+        source: dict | None = None
+        if nearest and nearest.get("s3_url"):
+            source = nearest
+        elif nearest and s3_frames:
+            source = find_nearest_frame(ts_float, s3_frames)
+        if source:
+            _attach_frame_metadata(item, source, frame_descriptions)
     return items
 
 
@@ -218,11 +275,18 @@ _COMPONENT_REQUIRED_LISTS: dict[str, str] = {
 }
 
 
+
 def _validate_assembled_props(component: str, props: dict) -> bool:
-    """Validate assembled props — return False if the tab should be dropped."""
+    """Validate assembled props — return False if the tab should be dropped.
+
+    Only enforces the required list (must be non-empty). Per-component density
+    minimums live inside the individual assemblers (e.g. spot_explorer's
+    `_MIN_SPOTS`, comparison's real-pair check) so we can keep their thresholds
+    co-located with their normalization logic.
+    """
     required_key = _COMPONENT_REQUIRED_LISTS.get(component)
     if required_key is None:
-        return True  # No known required list — let it pass
+        return True
     data_list = props.get(required_key)
     if not isinstance(data_list, list) or len(data_list) == 0:
         logger.warning(
@@ -699,9 +763,15 @@ def assemble_response(
             props = None
 
         if props is not None and frames:
-            for key in ("items", "spots", "steps", "images"):
+            for key in ("items", "spots", "steps", "images", "snippets",
+                        "comparisons", "exercises"):
                 if key in props and isinstance(props[key], list):
-                    inject_frame_thumbnails(props[key], frames, all_frames=all_frames)
+                    inject_frame_thumbnails(
+                        props[key],
+                        frames,
+                        all_frames=all_frames,
+                        frame_descriptions=frame_descriptions,
+                    )
 
         if props is None:
             if data_resolved or data is not None:
@@ -733,8 +803,23 @@ def assemble_response(
         assembled_tabs, synthesis, video_meta, extraction, enrichment, primary_tag,
     )
 
-    # Resolve cross-tab links
+    # Resolve cross-tab links. ``outboundLinks`` on each source tab carries
+    # Plan-generated CTA labels in source language; cross_tab.py uses them
+    # as link text and falls back to the target tab's own label when an
+    # entry is missing.
     all_assembled_tab_ids = {t["id"] for t in assembled_tabs}
+    plan_outbound_by_tab: dict[str, dict[str, str]] = {}
+    for raw_tab in raw_tabs:
+        if not isinstance(raw_tab, dict):
+            continue
+        tid = raw_tab.get("id", "")
+        links_map = raw_tab.get("outboundLinks")
+        if isinstance(tid, str) and tid and isinstance(links_map, dict):
+            plan_outbound_by_tab[tid] = {
+                k: v for k, v in links_map.items()
+                if isinstance(k, str) and isinstance(v, str)
+            }
+
     globally_linked: set[str] = set()
     for tab in assembled_tabs:
         links = resolve_cross_tab_links(
@@ -743,6 +828,7 @@ def assemble_response(
             component=tab.get("component"),
             all_tabs=assembled_tabs,
             primary_tag=primary_tag,
+            outbound_links=plan_outbound_by_tab.get(tab["id"]),
         )
         deduped = []
         for link in links:
@@ -782,9 +868,18 @@ def assemble_response(
                 **({"s3Key": f["s3_key"]} if f.get("s3_key") else {}),
             })
 
-        has_enough_frames = len(gallery_images) > 8
-        has_good_captions = non_generic_count > len(gallery_images) * 0.5
-        if gallery_images and has_enough_frames and has_good_captions:
+        # Gallery is the lowest-signal tab on the rail — auto-append only when
+        # captions are largely non-generic (≥70%, was 50%) and we have enough
+        # frames to feel like a real gallery, not a 3-photo afterthought. Also
+        # skip for content types where a frame strip never adds value:
+        # podcast/narrative/music are mostly talking-head footage; pure audio
+        # books, lectures with one slide, etc. drown the page in noise.
+        has_enough_frames = len(gallery_images) >= 10
+        has_good_captions = non_generic_count >= len(gallery_images) * 0.7
+        _NO_GALLERY_DOMAINS = {"narrative", "music"}
+        _domain_blocked = primary_tag in _NO_GALLERY_DOMAINS
+        if (gallery_images and has_enough_frames and has_good_captions
+                and not _domain_blocked):
             layout = "grid" if len(gallery_images) > 10 else "carousel"
             assembled_tabs.append({
                 "id": "frames-gallery",

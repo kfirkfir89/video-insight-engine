@@ -198,7 +198,7 @@ export const VideoHero = memo(function VideoHero({
             'text-xl md:text-2xl',
           )}
         >
-          {title || 'Processing…'}
+          {title || t.processing}
         </h2>
 
         {youtubeId && (
@@ -212,12 +212,12 @@ export const VideoHero = memo(function VideoHero({
               {isPlayerOpen ? (
                 <>
                   <X className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  Hide
+                  {t.hide}
                 </>
               ) : (
                 <>
                   <Play className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  Watch
+                  {t.watch}
                 </>
               )}
             </button>

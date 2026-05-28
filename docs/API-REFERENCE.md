@@ -310,9 +310,23 @@ Get video with summary.
         "timestamp": "02:30"
       }
     ]
+  },
+
+  // sourceLanguage — present ONLY for non-English videos whose translation
+  // phase completed. English-source videos and sound-only videos omit
+  // this field entirely (not `null`). The FE presence-checks it to decide
+  // whether to render the language toggle.
+  "sourceLanguage": {
+    "code": "he",
+    "name": "עברית",
+    "isRTL": true,
+    "tabs": [/* TabEntry[] in the source language — mirrors top-level shape */],
+    "meta": {/* VIEResponseMeta in the source language */}
   }
 }
 ```
+
+The same `sourceLanguage` block is included on the public share endpoint (`GET /share/:slug`) and is consumed by `apps/web/src/api/share.ts` + `apps/web/src/api/videos.ts`.
 
 ---
 

@@ -181,15 +181,21 @@ One entry per YouTube video. Shared across all users.
     seoDescription: string
   } | null,
 
-  // Multi-language support (non-English videos only)
-  language: string | null,              // ISO 639-1 code ("en", "he", "ar", etc.)
-  isRTL: boolean | null,               // Whether language is right-to-left
-  synthesis_en: {                       // English translation of synthesis (non-English only)
-    tldr: string,
-    keyTakeaways: string[],
-    masterSummary: string
-  } | null,
-  tabs_en: TabEntry[] | null,           // English-translated tabs (non-English only)
+  // Multi-language support
+  // For non-English videos the translation phase promotes English to the
+  // top-level `tabs`/`meta` and stashes the original-language artifact
+  // under `sourceLanguage`. The legacy `tabs_en`/`meta_en`/`synthesis_en`
+  // /`forceEnglishReason` fields were removed in dev-1-ux (replaced by the
+  // single nested block below).
+  language: string | null,              // ISO 639-1 code; always "en" once translation completes
+  isRTL: boolean | null,               // Mirrors `language`; always false post-translation for non-English videos
+  sourceLanguage: {                     // Omitted (NOT null) for English-source and sound-only videos
+    code: string,                       // ISO 639-1 code of the original ("he", "ar", ...)
+    name: string,                       // Native name ("עברית", "العربية")
+    isRTL: boolean,                     // Original-language direction
+    tabs: TabEntry[],                   // Source-language tabs (mirror of top-level shape)
+    meta: VIEResponseMeta               // Source-language meta
+  } | undefined,
 
   // v2 Assembly output (component-addressed tabs)
   assembledMeta: {
@@ -227,7 +233,20 @@ One entry per YouTube video. Shared across all users.
   likesCount: number,               // Default: 0
   likedIps: string[],               // Hashed IPs for dedup
 
+  // Cross-user content-addressed dedup (dev-1-ux)
+  // SHA-256(youtubeId : PIPELINE_VERSION : providersHash : v<version>).
+  // Two different users submitting the same video collapse onto a single
+  // row via the partial unique index. See docs/IDEMPOTENCY.md.
+  // Legacy pre-backfill rows lack this field; the index is `{ $exists: true }`
+  // partial so they coexist until backfilled.
+  dedupKey: string | undefined,
+
   // Expiration (v1.4) — TTL index fires on non-null Date
+  // Tier-driven: free = createdAt + 30d, pro/team = null (never).
+  // Cross-user attach: when a pro/team user attaches to a row originally
+  // created by a free-tier user, `clearExpiresAt()` unsets this field so
+  // the row isn't hard-deleted under the paid user. Most-privileged
+  // attacher upgrades the row for everyone.
   expiresAt: Date | null,           // null = never expires (pro/team), Date = will be removed
 
   // Cache metadata
@@ -265,6 +284,7 @@ One entry per YouTube video. Shared across all users.
 { outputType: 1 }                   // v1.4 — filter by output type
 { shareSlug: 1 }                    // v1.4 — unique sparse (only indexed when non-null)
 { expiresAt: 1 }                    // v1.4 — TTL index (expireAfterSeconds: 0)
+{ dedupKey: 1 }                     // dev-1-ux — unique partial { $exists: true }; powers upsertCacheByDedupKey
 ```
 
 ---

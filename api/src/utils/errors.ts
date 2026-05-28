@@ -132,6 +132,16 @@ export class VersionCreationError extends AppError {
   }
 }
 
+/** Generic database / driver-shape error. Use when the driver returns an
+ *  unexpected response shape (e.g. `upsert` with no returned document) — not
+ *  for normal query failures, which propagate as MongoDB driver errors. */
+export class DatabaseError extends AppError {
+  constructor(message: string) {
+    super('DATABASE_ERROR', 500, message);
+    this.name = 'DatabaseError';
+  }
+}
+
 // Playlist-specific errors
 export class InvalidPlaylistUrlError extends AppError {
   constructor() {

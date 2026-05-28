@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { IdempotencyService } from '../idempotency.service.js';
+import { IdempotencyService, computeContentKey } from '../idempotency.service.js';
 import type { IdempotencyRepository } from '../../repositories/idempotency.repository.js';
 
 const mockLogger = {
@@ -172,6 +172,131 @@ describe('IdempotencyService', () => {
         clientKey: 'some-key',
       });
       expect(a).not.toBe(b);
+    });
+  });
+
+  describe('computeContentKey', () => {
+    it('produces a 64-char hex SHA-256 string', () => {
+      const hash = service.computeContentKey({
+        youtubeId: 'dQw4w9WgXcQ',
+        version: 1,
+      });
+      expect(hash).toMatch(/^[a-f0-9]{64}$/);
+    });
+
+    it('returns identical hashes for identical inputs', () => {
+      const a = service.computeContentKey({ youtubeId: 'abc12345678', version: 1 });
+      const b = service.computeContentKey({ youtubeId: 'abc12345678', version: 1 });
+      expect(a).toBe(b);
+    });
+
+    it('is user-independent — two distinct users cannot diverge', () => {
+      // The whole point: no userId in the payload, so cross-user submissions
+      // for the same content converge on one row via the upsert layer.
+      const a = service.computeContentKey({ youtubeId: 'abc12345678', version: 1 });
+      const b = service.computeContentKey({ youtubeId: 'abc12345678', version: 1 });
+      expect(a).toBe(b);
+    });
+
+    it('returns different hashes for different youtubeIds', () => {
+      const a = service.computeContentKey({ youtubeId: 'abc12345678', version: 1 });
+      const b = service.computeContentKey({ youtubeId: 'xyz12345678', version: 1 });
+      expect(a).not.toBe(b);
+    });
+
+    it('returns different hashes for different versions', () => {
+      // bypassCache version-bump must produce a distinct key — otherwise the
+      // new attempt would attach to the stale row and never run.
+      const v1 = service.computeContentKey({ youtubeId: 'abc12345678', version: 1 });
+      const v2 = service.computeContentKey({ youtubeId: 'abc12345678', version: 2 });
+      expect(v1).not.toBe(v2);
+    });
+
+    it('returns different hashes for different provider configs', () => {
+      const a = service.computeContentKey({
+        youtubeId: 'abc12345678',
+        version: 1,
+        providers: { default: 'anthropic' },
+      });
+      const b = service.computeContentKey({
+        youtubeId: 'abc12345678',
+        version: 1,
+        providers: { default: 'openai' },
+      });
+      expect(a).not.toBe(b);
+    });
+
+    it('treats absent providers and `undefined` providers as the same hash', () => {
+      // Legacy rows have no providers field; new submits without an override
+      // pass `undefined`. Backfill correctness depends on these matching.
+      const a = service.computeContentKey({ youtubeId: 'abc12345678', version: 1 });
+      const b = service.computeContentKey({
+        youtubeId: 'abc12345678',
+        version: 1,
+        providers: undefined,
+      });
+      expect(a).toBe(b);
+    });
+
+    it('is stable regardless of key insertion order in providers', () => {
+      const a = service.computeContentKey({
+        youtubeId: 'abc12345678',
+        version: 1,
+        providers: { default: 'anthropic', fast: 'openai', fallback: 'gemini' },
+      });
+      const b = service.computeContentKey({
+        youtubeId: 'abc12345678',
+        version: 1,
+        providers: { fallback: 'gemini', default: 'anthropic', fast: 'openai' },
+      });
+      expect(a).toBe(b);
+    });
+
+    it('shares canonicalization with computeKey so equivalent provider configs match across hash families', () => {
+      // If the two hash families ever disagreed on whether two configs are
+      // equivalent, the route-level gate would dedup but the cache-layer
+      // upsert would not (or vice versa). They must use the exact same
+      // canonicalizeProviders implementation.
+      const minimal = { default: 'anthropic' } as const;
+      const expanded = { default: 'anthropic', fallback: undefined } as const;
+      const a = service.computeContentKey({
+        youtubeId: 'abc12345678',
+        version: 1,
+        providers: minimal,
+      });
+      const b = service.computeContentKey({
+        youtubeId: 'abc12345678',
+        version: 1,
+        providers: expanded,
+      });
+      expect(a).toBe(b);
+    });
+
+    it('does not collide with the user-scoped computeKey for any realistic input', () => {
+      // Different payload shape entirely (no userId, no clientKey, has v{N}).
+      // This is more of a sanity guard than a strict requirement, but a
+      // collision would indicate a payload-construction mistake.
+      const content = service.computeContentKey({ youtubeId: 'abc12345678', version: 1 });
+      const user = service.computeKey({ userId: 'u1', youtubeId: 'abc12345678' });
+      expect(content).not.toBe(user);
+    });
+  });
+
+  describe('module-level computeContentKey (for one-off callers)', () => {
+    it('produces the same hash as the service method for identical inputs', () => {
+      // The mongodb plugin's backfill loop uses the module-level function
+      // because constructing IdempotencyService just for a hash is overkill.
+      // The two paths MUST agree or the backfill would write keys that don't
+      // match what new submits compute.
+      const a = computeContentKey({ youtubeId: 'abc12345678', version: 1 });
+      const b = service.computeContentKey({ youtubeId: 'abc12345678', version: 1 });
+      expect(a).toBe(b);
+    });
+
+    it('treats absent providers and explicit undefined the same way', () => {
+      const a = computeContentKey({ youtubeId: 'abc12345678', version: 1 });
+      const b = computeContentKey({ youtubeId: 'abc12345678', version: 1, providers: undefined });
+      expect(a).toBe(b);
     });
   });
 

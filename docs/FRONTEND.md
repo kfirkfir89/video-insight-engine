@@ -206,6 +206,27 @@ OutputRouter
 
 Components use `useLabels()` for translatable strings (Next, Previous, Done, etc.) instead of hardcoded English. Currently supports: English, Hebrew, Arabic.
 
+### Source-Language Toggle (`LanguageToggle`)
+
+For non-English videos the backend promotes English to primary and nests the original-language artifact under `video.sourceLanguage` (see [API-REFERENCE.md](./API-REFERENCE.md#get-videosid) and [DATA-MODELS.md](./DATA-MODELS.md#videoSummaryCache)). The FE renders a toggle so users can flip between the English-primary view and the original.
+
+- **Component**: `apps/web/src/features/video-output/components/LanguageToggle.tsx` — WAI-ARIA radiogroup, arrow-key navigable, `lang` attribute applied per pill (assistive-tech announces the right language for each label).
+- **Persistence**: `localStorage` key `vie:prefersOriginalLang` (cross-video, cross-session). A Hebrew speaker who toggles to the original once lands on the original on every subsequent video and every reload. Reading is guarded against private-mode `SecurityError` — falls back to English-primary.
+- **Render gate**: only render the toggle when `video.sourceLanguage` is present AND `sourceLanguage.tabs.length > 0`. English-source and sound-only videos omit `sourceLanguage` entirely (not `null`).
+- **Consumption pattern** (`apps/web/src/pages/VideoDetailPage.tsx`):
+  ```tsx
+  const sourceLanguage = video?.sourceLanguage ?? null;
+  const canToggleLanguage = !!sourceLanguage && sourceLanguage.tabs.length > 0;
+
+  // RTL streaming gate — see warning below.
+  const useOriginal = !isProcessing && showOriginal && canToggleLanguage;
+
+  const resolvedTabs = useOriginal ? sourceLanguage!.tabs : video.tabs;
+  const resolvedMeta = useOriginal ? sourceLanguage!.meta : video.meta;
+  ```
+
+> **⚠️ RTL streaming gate (gotcha)**: `useOriginal` MUST be gated on `!isProcessing` (or `!isStreaming` — same idea). Streamed content during the pipeline is always English-shape; `sourceLanguage` is only populated after the final translation phase. Without the gate, a Hebrew user with `showOriginal=true` persisted would land on a streaming page that flips `dir="rtl"` on the wrapper while LTR-English stream content loads inside — full-page layout misalignment until the stream completes.
+
 ---
 
 # Styling - Tailwind v4

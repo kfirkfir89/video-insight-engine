@@ -6,6 +6,7 @@ import type { ProcessingStatus } from './common.js';
 import type { OutputType } from './output-types.js';
 import type { PlaylistInfo } from './playlist.js';
 import type { ShareInfo } from './share.js';
+import type { TabEntry, VIEResponseMeta } from './vie-response.js';
 
 // ─────────────────────────────────────────────────────
 // Video Context
@@ -127,12 +128,24 @@ export interface VideoResponse {
   language?: string;
   /** Whether the video content is in a right-to-left language. */
   isRTL?: boolean;
-  /** English translation of tabs (populated for non-English videos). */
-  tabs_en?: unknown[];
-  /** English translation of meta (populated for non-English videos). */
-  meta_en?: Record<string, unknown>;
-  /** English translation of synthesis (populated for non-English videos). */
-  synthesis_en?: Record<string, unknown>;
-  /** Set when the pipeline forced the language to English (e.g. instrumental music). */
-  forceEnglishReason?: "sound_only";
+  /** Original-language artifact for non-English videos. Top-level tabs/meta
+   *  are ALWAYS the English-primary payload; this nested block carries the
+   *  source-language version so the FE can offer a toggle. **Omitted entirely**
+   *  for English-source videos and for sound-only music videos forced to
+   *  English — never serialized as `null`. */
+  sourceLanguage?: SourceLanguageBlock;
+}
+
+/** Source-language nested block — present only when top-level tabs are a
+ *  translation. `code` is ISO 639-1, `name` is the native-script display
+ *  ("עברית"), `isRTL` is precomputed for direction routing. The tabs/meta
+ *  mirror the top-level shapes; the only difference is language. Synthesis
+ *  is derived from meta on the FE (buildSynthesisFromMeta) so it's not
+ *  carried here. */
+export interface SourceLanguageBlock {
+  code: string;
+  name: string;
+  isRTL: boolean;
+  tabs: TabEntry[];
+  meta: VIEResponseMeta;
 }

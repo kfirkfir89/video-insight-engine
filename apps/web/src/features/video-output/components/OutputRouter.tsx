@@ -40,6 +40,9 @@ interface OutputRouterProps {
    *  surfaces a Cancel control after a brief delay (so it doesn't compete
    *  with the peak moment). */
   onCancelStream?: () => void;
+  /** Optional toggle for switching between original-language and English
+   *  content. Rendered at the top of the content area when present. */
+  languageToggle?: React.ReactNode;
 }
 
 export function OutputRouter({
@@ -59,6 +62,7 @@ export function OutputRouter({
   streamPhase,
   extractionProgress,
   onCancelStream,
+  languageToggle,
 }: OutputRouterProps) {
   const primaryTag = useMemo((): ContentTag => {
     const raw = typeof meta?.primaryTag === 'string' ? meta.primaryTag : '';
@@ -105,6 +109,13 @@ export function OutputRouter({
   return (
     <DirectionProvider language={language} isRTL={isRTLProp ?? isRTLLanguage(language)}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-3 pt-3 pb-8 md:px-6 md:pt-5 md:pb-12">
+        {/* Language toggle is intentionally pinned to the LTR-end (page right)
+            regardless of content direction. Rationale: English is the default
+            pill and English readers expect controls on the right; flipping
+            with RTL would put the active control where the eye doesn't look. */}
+        {languageToggle ? (
+          <div dir="ltr" className="flex justify-end">{languageToggle}</div>
+        ) : null}
         {hasData && tabDefs.length > 0 ? (
           <TabCoordinationProvider videoId={videoSummaryId} initialTab={initialTab}>
             <TabStateProvider videoId={videoSummaryId}>

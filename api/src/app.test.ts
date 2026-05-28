@@ -35,6 +35,10 @@ describe('buildApp', () => {
       expect(app.container.assistantClient).toBeDefined();
       expect(app.container.videoService).toBeDefined();
       expect(app.container.queuePublisher).toBeDefined();
+      // Redis plugin wires the dispatchGuardService — must be present so
+      // dispatchPipeline doesn't go through the no-op fallback in prod.
+      expect(app.container.dispatchGuardService).toBeDefined();
+      expect(app.redis).toBeDefined();
 
       await app.close();
     });

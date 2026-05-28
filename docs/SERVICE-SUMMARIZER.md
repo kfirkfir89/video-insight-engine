@@ -191,9 +191,9 @@ content into Qdrant for the assistant to retrieve:
 | `store_default_output_chunks` | `source="default_output"` | assembly (English videos) / translation (non-English videos) | Per-component chunking of the assembled tabs via `output_chunker.py` — emits one chunk per natural retrieval unit (one `keyTakeaways[i]`, one quiz question, one comparison row, etc.) |
 
 For non-English videos, output indexing is deferred to the translation phase
-so it embeds `ctx.tabs_en` (English) instead of source-language strings —
-the embedding model is English-trained, and embedding source-language tabs
-on it produces poor retrieval quality.
+so it embeds the promoted English `ctx.assembled_tabs` instead of
+source-language strings — the embedding model is English-trained, and
+embedding source-language tabs on it produces poor retrieval quality.
 
 Both paths pre-delete by `(video_id, source)` before upsert (and pre-delete
 runs *before* chunking, so a chunker exception still cleans up prior runs'
@@ -345,12 +345,44 @@ The pipeline uses 3-6 LLM calls with a plan-first architecture:
 
 10. TRANSLATION (non-English videos only, ~5-15s)
     └─▶ Triggered when ctx.language != "en" (detected from transcript)
-    └─▶ Translates assembled tabs + synthesis to English via LLM
-    └─▶ Whisper translate: audio → English text for Qdrant embeddings
-    └─▶ Stores dual-language data: tabs_en, synthesis_en, meta_en
-    └─▶ Qdrant stores English text + text_original for cross-language RAG
-    └─▶ language_instruction injected into all LLM phases (plan, extraction, synthesis, enrichment)
-    └─▶ Non-blocking: translation failure keeps original-language output
+    └─▶ translate_to_source() — single flat-list LLM call
+    │   └─▶ Walks the assembled tree, collects every translatable prose
+    │   │   string into one flat list (`_collect_strings` + `_SKIP_KEYS`
+    │   │   leaf-only deny-list for structural/asset/enum keys)
+    │   └─▶ One Haiku call via src/prompts/translate_flat.txt (replaces
+    │   │   the deleted src/prompts/translate.txt; flat-list contract
+    │   │   means the model returns a list of equal length, applied
+    │   │   back into a deep copy via `_set_at_path`)
+    │   └─▶ Mirror detection: rejects output if all 3 longest strings are
+    │       byte-identical AND >50% of all strings are byte-identical
+    │       (small-payload threshold: 33% over fewer than 10 strings).
+    │       Protects against the "small model echoes input" failure mode.
+    │   └─▶ `_SKIP_KEYS` denies: id, component, language, url, s3Key, code,
+    │       timestamp, time, seconds, startSeconds, endSeconds, emoji,
+    │       correctIndex, difficulty, mood, sets, frameCaption,
+    │       frameSceneType, frameEvidence. Notably does NOT deny
+    │       reps/rest/duration — the fitness schema emits prose at
+    │       those keys ("30 שניות", "AMRAP", "until failure").
+    └─▶ Promote English to primary on ctx.assembled_tabs / ctx.assembled_meta
+    │   and stash the original-language artifact under sourceLanguage
+    │   = {code, name, isRTL, tabs, meta} (tabs/meta deep-copied so a
+    │   downstream mutation of ctx.assembled_tabs can't corrupt the
+    │   persisted source block).
+    └─▶ Whisper translate (audio → English text) feeds the Qdrant
+    │   embedding path so RAG search works cross-language.
+    └─▶ Owns the Redis response-cache write for non-English videos:
+    │   assembly phase intentionally SKIPS the cache write when
+    │   ctx.language != "en". Translation then writes the final
+    │   English-primary payload (including the sourceLanguage block)
+    │   to Redis. Without this split, source-language tabs would
+    │   freeze into Redis for the full TTL and silently break the
+    │   FE language toggle on every cache hit.
+    └─▶ language_instruction injected into upstream LLM phases (plan,
+    │   extraction, synthesis, enrichment) — produces source-language
+    │   output that this phase then translates.
+    └─▶ Non-blocking: any failure (LLM error, mirror, length mismatch)
+        returns the input unchanged with no sourceLanguage key — the FE
+        simply renders no language toggle.
 ```
 
 ---

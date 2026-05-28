@@ -11,6 +11,7 @@ export interface MockContainer {
     findUserVideo: ReturnType<typeof vi.fn>;
     findCacheById: ReturnType<typeof vi.fn>;
     updateCacheEntry: ReturnType<typeof vi.fn>;
+    tryClaimDispatchRelease: ReturnType<typeof vi.fn>;
   };
   videoService: {
     createVideo: ReturnType<typeof vi.fn>;
@@ -99,12 +100,17 @@ export interface MockContainer {
   };
   idempotencyService: {
     computeKey: ReturnType<typeof vi.fn>;
+    computeContentKey: ReturnType<typeof vi.fn>;
     findHit: ReturnType<typeof vi.fn>;
     reserveHash: ReturnType<typeof vi.fn>;
     completeHash: ReturnType<typeof vi.fn>;
     invalidateByHash: ReturnType<typeof vi.fn>;
     invalidateStaleCompleted: ReturnType<typeof vi.fn>;
     invalidateByVideoSummaryId: ReturnType<typeof vi.fn>;
+  };
+  dispatchGuardService: {
+    acquire: ReturnType<typeof vi.fn>;
+    release: ReturnType<typeof vi.fn>;
   };
   idempotencyRepository: {
     findByHash: ReturnType<typeof vi.fn>;
@@ -150,6 +156,9 @@ export function createMockContainer(): MockContainer {
       findUserVideo: vi.fn(),
       findCacheById: vi.fn(),
       updateCacheEntry: vi.fn(),
+      // Default: claim succeeds, so the FAILED-handler tests that don't
+      // override this continue to see `dispatchGuardService.release` called.
+      tryClaimDispatchRelease: vi.fn().mockResolvedValue(true),
     },
     videoService: {
       createVideo: vi.fn(),
@@ -255,6 +264,7 @@ export function createMockContainer(): MockContainer {
     },
     idempotencyService: {
       computeKey: vi.fn().mockReturnValue('test-hash'),
+      computeContentKey: vi.fn().mockReturnValue('test-content-key'),
       findHit: vi.fn().mockResolvedValue(null),
       reserveHash: vi.fn().mockResolvedValue({
         created: true,
@@ -270,6 +280,12 @@ export function createMockContainer(): MockContainer {
       invalidateByHash: vi.fn().mockResolvedValue(undefined),
       invalidateStaleCompleted: vi.fn().mockResolvedValue(undefined),
       invalidateByVideoSummaryId: vi.fn().mockResolvedValue(undefined),
+    },
+    dispatchGuardService: {
+      // Default: every acquire wins. Tests for the dispatch-guard behaviour
+      // override this to simulate the "already dispatched" branch.
+      acquire: vi.fn().mockResolvedValue({ acquired: true, token: 'test-token' }),
+      release: vi.fn().mockResolvedValue(undefined),
     },
     idempotencyRepository: {
       findByHash: vi.fn().mockResolvedValue(null),

@@ -97,18 +97,106 @@ def get_language_name(code: str) -> str:
     return _LANGUAGE_NAMES.get(code, code.upper())
 
 
-def normalize_language_code(raw: str | None) -> str | None:
-    """Normalize a language code to 2-letter ISO 639-1.
+# Native-script display names — used by the pipeline when building the
+# ``sourceLanguage`` block so the FE can render a pill in the user's own
+# script (e.g. "עברית" for Hebrew). Mirrors apps/web's NATIVE_LANGUAGE_NAMES.
+_NATIVE_NAMES: dict[str, str] = {
+    "en": "English",
+    "he": "עברית",
+    "ar": "العربية",
+    "fa": "فارسی",
+    "ur": "اردو",
+    "yi": "ייִדיש",
+    "zh": "中文",
+    "ja": "日本語",
+    "ko": "한국어",
+    "es": "Español",
+    "fr": "Français",
+    "de": "Deutsch",
+    "it": "Italiano",
+    "pt": "Português",
+    "ru": "Русский",
+    "hi": "हिन्दी",
+    "tr": "Türkçe",
+    "pl": "Polski",
+    "nl": "Nederlands",
+    "el": "Ελληνικά",
+    "th": "ไทย",
+    "vi": "Tiếng Việt",
+    "id": "Bahasa Indonesia",
+    "uk": "Українська",
+    "cs": "Čeština",
+    "sv": "Svenska",
+    "da": "Dansk",
+    "no": "Norsk",
+    "fi": "Suomi",
+    "ro": "Română",
+    "hu": "Magyar",
+}
 
-    Handles codes like 'en-US', 'zh-Hans', 'pt-BR', etc.
-    Returns None for empty/invalid input.
+
+def get_native_name(code: str) -> str:
+    """Native-script display name for an ISO 639-1 code.
+
+    Falls back to ``get_language_name`` (English name) for codes without a
+    native-script entry, and to the uppercased code for unknown codes.
+    """
+    return _NATIVE_NAMES.get(code) or get_language_name(code)
+
+
+SUPPORTED_LANGS: frozenset[str] = frozenset(_LANGUAGE_NAMES.keys())
+
+# Inverse of _LANGUAGE_NAMES: Whisper's API returns language as a name
+# ("chinese", "hebrew") rather than an ISO code. Without this map "chinese"
+# would be truncated to "ch" — Chamorro, not Chinese — and the pipeline would
+# emit garbage downstream.
+_NAME_TO_CODE: dict[str, str] = {name.lower(): code for code, name in _LANGUAGE_NAMES.items()}
+
+# ISO 639-2/3 three-letter → ISO 639-1 two-letter. yt-dlp and some legacy
+# caption tracks return three-letter codes; the prior implementation truncated
+# them to invalid two-letter codes ("jpn" → "jp", "chi" → "ch").
+_ALPHA3_TO_ALPHA2: dict[str, str] = {
+    "eng": "en", "heb": "he", "ara": "ar", "per": "fa", "fas": "fa",
+    "urd": "ur", "yid": "yi", "spa": "es", "fre": "fr", "fra": "fr",
+    "ger": "de", "deu": "de", "ita": "it", "por": "pt", "rus": "ru",
+    "jpn": "ja", "kor": "ko", "chi": "zh", "zho": "zh", "hin": "hi",
+    "tur": "tr", "pol": "pl", "dut": "nl", "nld": "nl", "swe": "sv",
+    "dan": "da", "nor": "no", "fin": "fi", "ell": "el", "gre": "el",
+    "cze": "cs", "ces": "cs", "rum": "ro", "ron": "ro", "hun": "hu",
+    "tha": "th", "vie": "vi", "ind": "id", "may": "ms", "msa": "ms",
+    "ukr": "uk", "bul": "bg", "hrv": "hr", "slo": "sk", "slk": "sk",
+    "slv": "sl", "lit": "lt", "lav": "lv", "est": "et", "tam": "ta",
+    "tel": "te", "ben": "bn", "mal": "ml", "mar": "mr", "guj": "gu",
+    "kan": "kn", "swa": "sw", "afr": "af", "cat": "ca", "baq": "eu",
+    "eus": "eu", "glg": "gl", "srp": "sr",
+}
+
+
+def normalize_language_code(raw: str | None) -> str | None:
+    """Normalize anything-language-shaped to a supported ISO 639-1 code.
+
+    Accepts BCP-47 region tags (``en-US`` → ``en``, ``zh-Hans`` → ``zh``),
+    ISO 639-2/3 three-letter codes (``chi`` → ``zh``, ``jpn`` → ``ja``),
+    and language names returned by the Whisper API (``chinese`` → ``zh``,
+    ``hebrew`` → ``he``).
+
+    Returns ``None`` for empty, malformed, or unsupported input — never an
+    unsupported 2-letter code (e.g. ``ch`` for Chamorro). Returning None is
+    safe: downstream callers gate on language presence and default to English.
     """
     if not raw:
         return None
-    # Take first 2 chars, lowercase
-    code = raw.strip().lower()[:2]
-    if len(code) == 2 and code.isalpha():
-        return code
+    s = raw.strip().lower()
+    if not s:
+        return None
+
+    head = s.split("-")[0].split("_")[0]
+    if len(head) == 2 and head in SUPPORTED_LANGS:
+        return head
+    if len(head) == 3 and head in _ALPHA3_TO_ALPHA2:
+        return _ALPHA3_TO_ALPHA2[head]
+    if s in _NAME_TO_CODE:
+        return _NAME_TO_CODE[s]
     return None
 
 

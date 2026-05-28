@@ -287,8 +287,8 @@ If no intent matches, the message falls through to the default RAG chat path (se
 4. **Search** Qdrant for top-k chunks filtered by `video_ids` (single-video uses `MatchValue`; multi-video uses `MatchAny`) and optionally by `sources` (subset of `transcript`/`default_output`)
 5. **Deduplicate** near-identical chunks using cosine similarity (threshold: 0.95)
 6. **Build** system prompt with video metadata + RAG chunks + conversation history
-   - Uses `text_original` when user language matches video language (non-English)
-   - Uses `synthesis_en` for English users on non-English videos
+   - Uses `text_original` (Qdrant payload) when user language matches video language (non-English)
+   - Uses the English-primary `meta`/`tabs` (with the original artifact nested under `sourceLanguage`) for English users on non-English videos — replaces the legacy `synthesis_en`/`tabs_en` triple
    - Appends language instruction for non-English responses
 7. **Stream** LLM response token by token via SSE
 
