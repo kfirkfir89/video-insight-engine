@@ -1,4 +1,4 @@
-import type { TabEntry, VIEResponseMeta } from "@vie/types";
+import type { TabEntry, VIEResponseMeta, SourceLanguageBlock } from "@vie/types";
 import { request } from "./client";
 
 interface ShareLinkResponse {
@@ -16,14 +16,10 @@ export interface SharedOutput {
   status: string;
   meta: VIEResponseMeta | null;
   tabs: TabEntry[] | null;
-  /** English-translated tabs (populated for non-English videos). Preferred for shared rendering. */
-  tabs_en?: TabEntry[] | null;
-  /** English-translated meta (populated for non-English videos). Preferred for shared rendering. */
-  meta_en?: VIEResponseMeta | null;
-  /** English-translated synthesis (populated for non-English videos). */
-  synthesis_en?: Record<string, unknown> | null;
-  /** Set when the pipeline overrode the language to English (e.g., instrumental music). */
-  forceEnglishReason?: "sound_only";
+  /** Original-language nested artifact for non-English source videos. Top-level
+   *  tabs/meta are always English-primary on share pages. Truly-optional —
+   *  never serialized as `null`. */
+  sourceLanguage?: SourceLanguageBlock;
   shareSlug: string;
   viewsCount: number;
   likesCount: number;

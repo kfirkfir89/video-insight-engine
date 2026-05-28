@@ -128,11 +128,13 @@ class TestCrossTabLinks:
         assert links == []
 
     def test_component_link_travel_flow(self):
-        """Travel domain: overview → spot_explorer → budget."""
+        """Travel domain: overview → spot_explorer → budget. Label text
+        comes from the Plan's outboundLinks when provided; otherwise falls
+        back to the target tab's own label."""
         all_tabs = [
-            {"id": "overview", "component": "overview"},
-            {"id": "itinerary", "component": "spot_explorer"},
-            {"id": "budget", "component": "budget"},
+            {"id": "overview", "component": "overview", "label": "Overview"},
+            {"id": "itinerary", "component": "spot_explorer", "label": "7 Day Itinerary"},
+            {"id": "budget", "component": "budget", "label": "Budget"},
         ]
         links = resolve_cross_tab_links(
             "overview",
@@ -140,6 +142,7 @@ class TestCrossTabLinks:
             component="overview",
             all_tabs=all_tabs,
             primary_tag="travel",
+            outbound_links={"itinerary": "See the itinerary"},
         )
         assert len(links) >= 1
         assert links[0]["targetTab"] == "itinerary"
@@ -224,7 +227,9 @@ class TestAssembleChecklist:
         ]
         result = assemble_checklist({"id": "ingredients"}, data, {}, None)
         assert result is not None
-        assert result["tabLabel"] == "Ingredients"
+        # tabLabel is no longer injected by the backend — the FE derives the
+        # section heading from the (translated) tab.label. Only the items
+        # contract matters here.
         assert result["items"][0]["label"] == "2 cups flour"
         assert result["items"][1]["label"] == "to taste salt"
 
@@ -299,45 +304,86 @@ class TestAssembleComparison:
         assert assemble_comparison({}, "not a dict", {}, None) is None
         assert assemble_comparison({}, 42, {}, None) is None
 
-    def test_cheat_sheet_list_produces_comparison_rows(self):
+    def test_cheat_sheet_list_no_longer_coerced(self):
+        # Cheat-sheet shape {title, description, code} no longer silently coerces
+        # to comparison rows — that produced the audited "video title as column
+        # header / empty third column" rendering on review videos. The data
+        # belongs in code_explorer or info_grid.
         data = [
             {"title": "useState", "description": "Manages local state", "code": "const [s, setS] = useState(0)"},
             {"title": "useEffect", "description": "Runs side effects", "code": "useEffect(() => {}, [])"},
         ]
-        result = assemble_comparison({}, data, {}, None)
-        assert result is not None
-        assert result["pros"] == []
-        assert result["cons"] == []
-        assert len(result["comparisons"]) == 2
-        assert result["comparisons"][0]["feature"] == "useState"
-        assert result["comparisons"][0]["thisProduct"] == "Manages local state"
-        assert result["comparisons"][0]["competitor"] == "const [s, setS] = useState(0)"
+        assert assemble_comparison({}, data, {}, None) is None
 
-    def test_concepts_list_produces_comparison_rows(self):
+    def test_concepts_list_no_longer_coerced(self):
+        # Concept shape {name, definition, example} routes to flash_deck or
+        # info_grid now, not comparison. Single-sided definitions were the
+        # source of the audited "8 empty cards" failure mode.
         data = [
             {"name": "MCP", "emoji": "🔌", "definition": "Model Context Protocol", "example": "LLM tool calls"},
             {"name": "Skills", "emoji": "🧠", "definition": "Predefined agent behaviors", "analogy": "Function library"},
         ]
-        result = assemble_comparison({}, data, {}, None)
-        assert result is not None
-        assert len(result["comparisons"]) == 2
-        assert result["comparisons"][0]["feature"] == "🔌 MCP"
-        assert result["comparisons"][0]["thisProduct"] == "Model Context Protocol"
-        assert result["comparisons"][0]["competitor"] == "LLM tool calls"
-        assert result["comparisons"][1]["feature"] == "🧠 Skills"
-        assert result["comparisons"][1]["competitor"] == "Function library"
+        assert assemble_comparison({}, data, {}, None) is None
 
-    def test_key_points_list_produces_comparison_rows(self):
+    def test_key_points_list_no_longer_coerced(self):
+        # Key-points shape {title, detail} is single-sided — not a comparison.
+        # The new contract requires both `thisProduct` and `competitor` filled
+        # on each row before the row counts as a real pair.
         data = [
             {"emoji": "⚡", "title": "Speed", "detail": "MCP is faster for tool execution"},
             {"emoji": "🔧", "title": "Flexibility", "detail": "Skills are more reusable"},
         ]
+        assert assemble_comparison({}, data, {}, None) is None
+
+    def test_real_comparison_pair_accepted(self):
+        # Properly-shaped comparison data DOES go through.
+        data = [
+            {"feature": "Battery", "thisProduct": "12 hours", "competitor": "8 hours", "winner": "left"},
+            {"feature": "Price", "thisProduct": "$1299", "competitor": "$999", "winner": "right"},
+            {"feature": "Weight", "thisProduct": "1.4kg", "competitor": "1.6kg", "winner": "left"},
+        ]
+        result = assemble_comparison({}, data, {"review": {"product": "Laptop A"}}, None)
+        assert result is not None
+        assert len(result["comparisons"]) == 3
+        assert result["leftLabel"] == "Laptop A"
+
+    def test_numeric_zero_sides_preserved(self):
+        """Numeric 0 / False are legitimate content (free tier price, "no" on a
+        feature row). The prior `or ""` truthiness check dropped these — they
+        must survive the real-pair filter.
+        """
+        data = [
+            # $0 free-tier vs $19 paid — a real and useful comparison.
+            {"feature": "Monthly price", "thisProduct": 0, "competitor": 19},
+            # Boolean feature comparison.
+            {"feature": "Offline mode", "thisProduct": False, "competitor": True},
+            # Real-pair string row to satisfy the 2-row minimum threshold even
+            # if the numeric/bool rows were ever to drop.
+            {"feature": "Storage", "thisProduct": "100 GB", "competitor": "50 GB"},
+        ]
         result = assemble_comparison({}, data, {}, None)
         assert result is not None
-        assert len(result["comparisons"]) == 2
-        assert result["comparisons"][0]["feature"] == "⚡ Speed"
-        assert result["comparisons"][0]["thisProduct"] == "MCP is faster for tool execution"
-        assert result["comparisons"][0]["competitor"] == ""
+        # All three rows must survive — none of them are "single-sided".
+        features = [r["feature"] for r in result["comparisons"]]
+        assert "Monthly price" in features
+        assert "Offline mode" in features
+        assert "Storage" in features
+
+    def test_single_sided_rows_dropped_but_pros_cons_kept(self):
+        # A comparison dict with pros/cons but no real-pair rows should still
+        # surface — the frontend renders the pros/cons section even when the
+        # main table is empty.
+        data = {
+            "pros": ["Fast"],
+            "cons": ["Expensive"],
+            "comparisons": [
+                {"feature": "Speed", "thisProduct": "Fast", "competitor": ""},
+            ],
+        }
+        result = assemble_comparison({}, data, {}, None)
+        assert result is not None
+        assert result["pros"] == ["Fast"]
+        assert result["comparisons"] == []
 
     def test_empty_list_returns_none(self):
         assert assemble_comparison({}, [], {}, None) is None
@@ -617,9 +663,10 @@ class TestMaterialsStepsCrossLinks:
         assert any(l["targetTab"] == "materials" for l in links)
 
     def test_materials_to_steps(self):
+        # Legacy ID rule fires structurally; label falls back to the target
+        # tab's own label when no all_tabs / outbound_links provided.
         links = resolve_cross_tab_links("materials", {"materials", "steps"})
         assert any(l["targetTab"] == "steps" for l in links)
-        assert any(l["label"] == "Start building" for l in links)
 
 
 # ─── Registry Coverage ───
@@ -879,12 +926,12 @@ class TestMomentTrackFallback:
     def test_music_cross_tab_links_use_moment_track(self):
         """Music-domain cross-tab rules resolve to moment_track, not clip_player."""
         from src.services.pipeline.assembly.cross_tab import _COMPONENT_LINK_RULES
-        source_components = {(src, tgt, domain) for src, tgt, _label, domain in _COMPONENT_LINK_RULES}
+        source_components = {(src, tgt, domain) for src, tgt, domain in _COMPONENT_LINK_RULES}
         assert ("lyrics_player", "moment_track", "music") in source_components
         assert ("moment_track", "info_grid", "music") in source_components
         # Confirm the old clip_player rules are gone
         clip_player_rules = [
-            (src, tgt) for src, tgt, _label, _domain in _COMPONENT_LINK_RULES
+            (src, tgt) for src, tgt, _domain in _COMPONENT_LINK_RULES
             if src == "clip_player" or tgt == "clip_player"
         ]
         assert clip_player_rules == []
@@ -1160,22 +1207,21 @@ class TestFlexChecklist:
 class TestFlexComparison:
     """Tests for cross-domain comparison input shapes."""
 
-    def test_name_description_shape(self):
+    def test_name_description_shape_routes_elsewhere(self):
+        # {name, description} is single-sided — belongs in info_grid or
+        # spot_explorer, never in comparison. The previous coercion produced
+        # the audited "column 3 empty" rendering on review videos.
         data = [
             {"name": "React", "emoji": "⚛️", "description": "Component-based UI library"},
             {"name": "Vue", "emoji": "💚", "description": "Progressive framework"},
         ]
-        result = assemble_comparison({}, data, {}, None)
-        assert result is not None
-        assert len(result["comparisons"]) == 2
-        assert result["comparisons"][0]["feature"] == "⚛️ React"
-        assert result["comparisons"][0]["thisProduct"] == "Component-based UI library"
+        assert assemble_comparison({}, data, {}, None) is None
 
-    def test_existing_cheatsheet_still_works(self):
+    def test_cheatsheet_routes_to_code_explorer_not_comparison(self):
+        # {title, description, code} is code-snippet-shaped — route via
+        # code_explorer. Comparison no longer coerces this shape.
         data = [{"title": "useState", "description": "State hook", "code": "const [x, setX] = useState()"}]
-        result = assemble_comparison({}, data, {}, None)
-        assert result is not None
-        assert result["comparisons"][0]["feature"] == "useState"
+        assert assemble_comparison({}, data, {}, None) is None
 
     def test_empty_returns_none(self):
         assert assemble_comparison({}, [], {}, None) is None
@@ -1246,6 +1292,194 @@ class TestFlexInfoGrid:
         assert result is not None
         assert result["items"][0]["key"] == "Past perfect tense"
         assert result["items"][0]["value"] == "Use had + past participle"
+
+    # ─── Audited-bug regression tests ──────────────────────────────
+    # The following shapes were ALL silently producing empty-card grids on
+    # real videos (Stocks "8 Key Signals", Transformers "14 Core Concepts",
+    # Karpathy "14 Core Concepts", Travel "60 Insider Tips"). Each shape now
+    # has explicit normalizer coverage.
+
+    def test_name_definition_shape_concepts(self):
+        # Most common concept shape from the LLM. Was the root cause of half
+        # the audited empty-grid renderings.
+        data = [
+            {"name": "MCP", "definition": "Model Context Protocol"},
+            {"name": "Attention", "definition": "Weighted sum over token embeddings"},
+        ]
+        result = assemble_info_grid({}, data, {}, None)
+        assert result is not None
+        assert result["items"][0]["key"] == "MCP"
+        assert result["items"][0]["value"] == "Model Context Protocol"
+
+    def test_name_definition_example_shape(self):
+        # Example field surfaces as `evidence` so the card has supporting
+        # context without crowding the primary value text.
+        data = [{"name": "Tokenization", "definition": "Splitting text into units",
+                 "example": "'Hello world' → ['Hello', 'world']"}]
+        result = assemble_info_grid({}, data, {}, None)
+        assert result is not None
+        assert result["items"][0]["value"] == "Splitting text into units"
+        assert result["items"][0]["evidence"] == "'Hello world' → ['Hello', 'world']"
+
+    def test_title_detail_source_science_keyfacts(self):
+        # science.keyFacts shape — title→key, detail→value, source→evidence.
+        data = [{"emoji": "🔬", "title": "Heat capacity",
+                 "detail": "Water has higher heat capacity than air",
+                 "source": "Physics 101 chapter 4"}]
+        result = assemble_info_grid({}, data, {}, None)
+        assert result is not None
+        assert result["items"][0]["key"] == "Heat capacity"
+        assert result["items"][0]["evidence"] == "Physics 101 chapter 4"
+
+    def test_aspect_detail_music_analysis(self):
+        # music.analysis shape — aspect→key, detail→value.
+        data = [{"aspect": "Tempo", "detail": "Steady 120 BPM", "emoji": "🎵"}]
+        result = assemble_info_grid({}, data, {}, None)
+        assert result is not None
+        assert result["items"][0]["key"] == "Tempo"
+        assert result["items"][0]["value"] == "Steady 120 BPM"
+
+    def test_phrase_translation_context_language(self):
+        # language.phrases shape — phrase→key, translation→value, context→evidence.
+        data = [{"phrase": "Quel dommage", "translation": "What a shame",
+                 "context": "Said when something unfortunate happens"}]
+        result = assemble_info_grid({}, data, {}, None)
+        assert result is not None
+        assert result["items"][0]["key"] == "Quel dommage"
+        assert result["items"][0]["value"] == "What a shame"
+        assert result["items"][0]["evidence"].startswith("Said when")
+
+    def test_term_definition_shape(self):
+        data = [{"term": "ReLU", "definition": "Rectified Linear Unit — max(0, x)"}]
+        result = assemble_info_grid({}, data, {}, None)
+        assert result is not None
+        assert result["items"][0]["key"] == "ReLU"
+
+    def test_fact_explanation_shape(self):
+        data = [{"fact": "DNA stores genetic information", "explanation": "Via base-pair sequences"}]
+        result = assemble_info_grid({}, data, {}, None)
+        assert result is not None
+        assert result["items"][0]["key"] == "DNA stores genetic information"
+
+    def test_drops_items_with_no_value(self):
+        # Headline-only items with no body text produce empty cards — these
+        # were the visible failure mode. Drop them silently so the surviving
+        # items still render cleanly.
+        data = [
+            {"name": "Real concept", "definition": "Has substance"},
+            {"name": "Empty"},  # ← dropped
+            {"name": "", "definition": "no key"},  # ← dropped
+        ]
+        result = assemble_info_grid({}, data, {}, None)
+        assert result is not None
+        assert len(result["items"]) == 1
+        assert result["items"][0]["key"] == "Real concept"
+
+    def test_returns_none_when_nothing_normalizes(self):
+        # Every item fails normalization → no items → drop the tab so the
+        # fallback layer can route the data elsewhere.
+        data = [{"only": "garbage"}, {"more": "garbage"}]
+        assert assemble_info_grid({}, data, {}, None) is None
+
+    def test_drops_items_with_empty_value_in_key_value_shape(self):
+        # Regression: the {key, value} early-return branch previously let
+        # items with empty `value` pass through, producing the very
+        # empty-card grid this normalizer was meant to prevent. The fallback
+        # path correctly required non-empty value; the early branch must do
+        # the same so both paths are symmetric.
+        data = [
+            {"key": "Real", "value": "Has body"},
+            {"key": "Empty value", "value": ""},  # ← must be dropped
+            {"key": "Whitespace", "value": "   "},  # ← must be dropped
+            {"key": "", "value": "no key"},  # ← already covered
+        ]
+        result = assemble_info_grid({}, data, {}, None)
+        assert result is not None
+        assert len(result["items"]) == 1
+        assert result["items"][0]["key"] == "Real"
+
+    def test_drops_comparison_single_sided_rows_per_row(self):
+        # Regression: previously a comparison with any one real-pair row kept
+        # ALL rows including single-sided ones, which rendered as half-empty
+        # rows next to the real pairs. Now single-sided rows are dropped
+        # individually so the table only contains usable comparisons.
+        from src.services.pipeline.assembly.assemblers import assemble_comparison
+
+        data = [
+            {"feature": "Battery", "thisProduct": "12h", "competitor": "8h"},
+            {"feature": "Camera", "thisProduct": "12MP", "competitor": ""},  # ← drop
+            {"feature": "Weight", "thisProduct": "", "competitor": "1.6kg"},  # ← drop
+            {"feature": "Price", "thisProduct": "$999", "competitor": "$1099"},
+        ]
+        result = assemble_comparison(
+            {}, data, {"review": {"product": "Phone A"}}, None,
+        )
+        assert result is not None
+        # Only the two genuine pair rows survive.
+        assert len(result["comparisons"]) == 2
+        features = [r["feature"] for r in result["comparisons"]]
+        assert features == ["Battery", "Price"]
+
+
+class TestFrameMetadataInjection:
+    """Tests for the assembler's frame-metadata wiring (Phase 2)."""
+
+    def test_attaches_vision_caption_to_item(self):
+        from src.services.pipeline.assembly.core import inject_frame_thumbnails
+
+        frames = [
+            {"timestamp": 60.0, "s3_url": "https://s3/frame60.jpg", "s3_key": "frame60"},
+        ]
+        descriptions = [{
+            "timestamp_sec": 60.0,
+            "scene_type": "code",
+            "content": "Python function implementing binary search",
+            "text_visible": "def binary_search(arr, target):",
+            "educational_value": "Shows the exact implementation discussed",
+        }]
+        items = [{"timestamp": 60.0, "label": "Binary search demo"}]
+        inject_frame_thumbnails(items, frames, frame_descriptions=descriptions)
+
+        assert items[0]["thumbnailUrl"] == "https://s3/frame60.jpg"
+        assert items[0]["frameCaption"] == "Python function implementing binary search"
+        assert items[0]["frameSceneType"] == "code"
+        assert items[0]["frameOcr"] == "def binary_search(arr, target):"
+        assert items[0]["frameEvidence"].startswith("Shows the exact")
+
+    def test_skips_talking_head_without_educational_value(self):
+        from src.services.pipeline.assembly.core import inject_frame_thumbnails
+
+        frames = [{"timestamp": 30.0, "s3_url": "https://s3/f30.jpg"}]
+        descriptions = [{
+            "timestamp_sec": 30.0,
+            "scene_type": "talking_head",
+            "content": "Presenter looking at camera",
+            "educational_value": "",
+        }]
+        items = [{"timestamp": 30.0, "label": "Intro"}]
+        inject_frame_thumbnails(items, frames, frame_descriptions=descriptions)
+
+        # Thumbnail is still attached (presenter shot is still SOME visual),
+        # but the caption isn't — we don't pretend the frame illustrates the
+        # claim when it's just a face.
+        assert items[0]["thumbnailUrl"] == "https://s3/f30.jpg"
+        assert "frameCaption" not in items[0]
+
+    def test_keeps_talking_head_when_marked_educational(self):
+        from src.services.pipeline.assembly.core import inject_frame_thumbnails
+
+        frames = [{"timestamp": 30.0, "s3_url": "https://s3/f30.jpg"}]
+        descriptions = [{
+            "timestamp_sec": 30.0,
+            "scene_type": "talking_head",
+            "content": "Presenter holding the product up",
+            "educational_value": "Shows scale of the device next to a hand",
+        }]
+        items = [{"timestamp": 30.0, "label": "Size demo"}]
+        inject_frame_thumbnails(items, frames, frame_descriptions=descriptions)
+
+        assert items[0]["frameCaption"] == "Presenter holding the product up"
+        assert "frameEvidence" in items[0]
 
 
 class TestSpotExplorerEmptyFiltering:
@@ -1371,12 +1605,15 @@ class TestComparisonProductLabel:
         assert result is not None
         assert result["leftLabel"] == "Pixel 8 Pro"
 
-    def test_product_from_video_meta_fallback(self):
+    def test_no_video_title_fallback(self):
+        # Video title MUST NOT be used as leftLabel — that produced the audited
+        # "I'm Doubling Down On 2 Stocks Before June" column header on the
+        # stocks Risk Check tab. Only review.product is allowed as the label.
         data = {"pros": ["Great"], "cons": [], "comparisons": []}
         tab = {"_video_meta": {"title": "Claude Code is unusable now"}}
         result = assemble_comparison(tab, data, {}, None)
         assert result is not None
-        assert result["leftLabel"] == "Claude Code is unusable now"
+        assert result["leftLabel"] == ""
 
     def test_empty_label_when_no_product(self):
         data = {"pros": ["Good"], "cons": [], "comparisons": []}
@@ -1385,7 +1622,7 @@ class TestComparisonProductLabel:
         assert result["leftLabel"] == ""
         assert result["rightLabel"] == ""
 
-    def test_review_product_takes_priority_over_title(self):
+    def test_review_product_used_when_explicit(self):
         data = {"pros": ["Fast"], "cons": [], "comparisons": []}
         tab = {"_video_meta": {"title": "Is Pixel 8 Worth It?"}}
         extraction = {"review": {"product": "Google Pixel 8 Pro"}}
@@ -1393,14 +1630,15 @@ class TestComparisonProductLabel:
         assert result is not None
         assert result["leftLabel"] == "Google Pixel 8 Pro"
 
-    def test_product_label_on_list_input(self):
+    def test_list_with_no_real_pairs_returns_none(self):
+        # Single-side rows used to coerce into comparison rows via the title
+        # → feature, description → thisProduct, code → competitor pathway.
+        # The new contract requires actual A-vs-B pairs.
         data = [
             {"title": "Battery", "description": "5000mAh", "code": "All day"},
         ]
         tab = {"_video_meta": {"title": "Phone Review"}}
-        result = assemble_comparison(tab, data, {}, None)
-        assert result is not None
-        assert result["leftLabel"] == "Phone Review"
+        assert assemble_comparison(tab, data, {}, None) is None
 
 
 class TestNewCrossTabLinks:
@@ -2314,3 +2552,60 @@ class TestOverviewFirst:
         assert result["tabs"][0]["component"] == "overview"
         data = result["tabs"][0]["props"]["data"]
         assert data["itemCount"] == len(result["tabs"]) - 1
+
+
+# ─── Flashcard prefix cleanup ───
+
+
+class TestFlashCardNoEnglishPrefixes:
+    """`_to_flash_card` historically prepended English category labels
+    ("Form: ", "Duration: ", "Level: ", "Modifications: ", "Example: ")
+    when building cards from exercise/vocab/tip data. Those prefixes
+    leak English into non-English flashcards. The new contract emits
+    only the raw value — the card's `front` already carries the term."""
+
+    def test_exercise_card_has_no_form_or_duration_prefix(self):
+        from src.services.pipeline.assembly.assemblers import _to_flash_card
+        card = _to_flash_card({
+            "name": "Plank",
+            "formCues": ["Keep your hips level", "Engage your core"],
+            "duration": "30 seconds",
+            "difficulty": "intermediate",
+        })
+        assert card["front"] == "Plank"
+        back = card["back"]
+        assert "Form:" not in back
+        assert "Duration:" not in back
+        assert "Level:" not in back
+        # The actual content survives, separated cleanly.
+        assert "Keep your hips level" in back
+        assert "30 seconds" in back
+        assert "intermediate" in back
+
+    def test_exercise_card_with_modifications_drops_prefix(self):
+        from src.services.pipeline.assembly.assemblers import _to_flash_card
+        card = _to_flash_card({
+            "name": "Push-up",
+            "formCues": ["Straight back"],
+            "modifications": ["Knee push-up", "Wall push-up"],
+        })
+        assert "Modifications:" not in card["back"]
+        assert "Knee push-up" in card["back"]
+
+    def test_vocab_card_drops_example_prefix(self):
+        from src.services.pipeline.assembly.assemblers import _to_flash_card
+        card = _to_flash_card({
+            "word": "Ephemeral",
+            "definition": "Lasting for a very short time",
+            "example": "Cherry blossoms are ephemeral",
+        })
+        assert card["front"] == "Ephemeral"
+        assert "Example:" not in card["back"]
+        assert "Lasting for a very short time" in card["back"]
+        assert "Cherry blossoms are ephemeral" in card["back"]
+
+    def test_preserves_pre_built_front_back(self):
+        from src.services.pipeline.assembly.assemblers import _to_flash_card
+        # Standard front+back input passes through untouched.
+        card = _to_flash_card({"front": "Q", "back": "A", "emoji": "💡"})
+        assert card == {"front": "Q", "back": "A", "emoji": "💡"}

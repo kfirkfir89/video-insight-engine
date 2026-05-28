@@ -51,13 +51,15 @@ class MongoDBVideoRepository:
     # Allowlist of fields the pipeline may write via save_structured_result.
     # New pipeline uses meta+tabs as the canonical shape.
     _ALLOWED_RESULT_KEYS = frozenset({
-        "meta", "tabs", "triage", "synthesis", "enrichment",
+        "meta", "tabs", "triage", "enrichment",
         "assembledMeta", "assembledTabs", "pipeline",
         "status", "title", "creator", "duration", "thumbnailUrl",
         "youtubeId", "rawTranscriptRef", "generation",
         "descriptionAnalysis", "channel", "processedAt", "processingTimeMs",
-        # Language support
-        "language", "isRTL", "tabs_en", "meta_en", "synthesis_en", "force_english_reason",
+        # Language support — sourceLanguage is the nested original-language block
+        # written by the translation phase for non-English videos. Top-level
+        # tabs/meta/synthesis are English-primary post-translation.
+        "language", "isRTL", "sourceLanguage",
         # Backward compat: older pipeline shapes / Redis-cached docs may include these
         "output", "summary", "outputType", "context", "intent",
     })

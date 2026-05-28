@@ -2,6 +2,13 @@
 
 Personal video knowledge management system — YouTube URL to interactive knowledge app.
 
+## ⚠️ Working-tree safety — READ FIRST
+
+**NEVER run any working-tree-mutating git command without explicit, current-turn user permission.** This includes `git commit`, `git push`, `git stash`, `git stash pop`, `git reset --hard`, `git checkout -- <file>` (to discard), `git clean`, `git rebase`, force-push, or branch deletion. Read-only ops (`git status`, `git diff`, `git log`, `git show`) are fine.
+
+- **`git stash` is BANNED for "let me quickly test against the clean tree" use cases.** Looks reversible — isn't. Hooks that auto-write files (session snapshots, log files) can fire between stash and pop, causing the pop to fail and stranding ALL modified files inside the stash. Happened 2026-05-28; nearly lost a day's work. If you need to compare against the clean tree, read files via `git show HEAD:<path>`, spawn an Agent in `isolation: worktree` mode, or just ask.
+- "Continue", "go ahead", "finish it", "do what's needed" are NOT commit/stash authorization. Only an explicit verb in the current turn ("commit", "stash", "push", "ship") counts.
+
 ## Tech Stack
 
 | Service | Tech | Port |
@@ -64,7 +71,7 @@ video-insight-engine/
 | LLM cost & cache crediting | [docs/llm-cost-model.md](./docs/llm-cost-model.md) |
 | LLM tracing, prompt registry, faithfulness, request-id, Sentry | [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md) |
 | RAG chunker, embeddings, `/library/search` | [docs/RAG.md](./docs/RAG.md) |
-| Request idempotency, `PIPELINE_VERSION` bumps | [docs/IDEMPOTENCY.md](./docs/IDEMPOTENCY.md) |
+| Request idempotency, cross-user dedup, dispatch guard, `PIPELINE_VERSION` bumps | [docs/IDEMPOTENCY.md](./docs/IDEMPOTENCY.md) |
 | GDPR Art. 17 cascade deletion, soft-delete window, audit | [docs/GDPR.md](./docs/GDPR.md), [docs/PRIVACY.md](./docs/PRIVACY.md) |
 
 ## Quick Start

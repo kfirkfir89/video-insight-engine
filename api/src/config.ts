@@ -59,6 +59,27 @@ const envSchema = z.object({
   // TTL window for an idempotency hit. 24h is long enough for accidental
   // double-submits and short enough that "I want to retry tomorrow" still works.
   IDEMPOTENCY_TTL_SECONDS: z.string().default('86400').transform(Number),
+  // ─── Redis (dispatch guard + future caches) ─────────────────────────
+  // MUST point at the same Redis instance the summarizer uses (defined in
+  // services/summarizer/src/config.py:PIPELINE_LOCK_TTL_SECONDS context).
+  // The dispatch guard is API-side only — it prevents publishing duplicate
+  // queue messages for the same video_summary_id — but lives in the same
+  // namespace as the summarizer's pipeline lock for operational coherence.
+  REDIS_URL: z.string().default('redis://vie-redis:6379'),
+  // TTL on the per-(video_summary_id) dispatch guard. Must exceed the
+  // summarizer's PIPELINE_LOCK_TTL_SECONDS (default 600s) so a slow run
+  // doesn't drop the guard mid-pipeline and let a parallel publish slip
+  // through. 900s = 50% headroom. internal.routes releases the guard on
+  // terminal FAILED status so the user-initiated retry doesn't wait this out.
+  DISPATCH_GUARD_TTL_SECONDS: z.string().default('900').transform(Number),
+  // Kill switch for the one-shot `videoSummaryCache.dedupKey` backfill that
+  // runs in `plugins/mongodb.ts`. Defaults OFF because the very first prod
+  // deploy on a large collection would otherwise scan-the-world during the
+  // onReady hook and stall the health check. Flip ON explicitly for the
+  // intentional deploy that performs the migration, then turn it back off.
+  // The backfill ALSO now runs off the ready path (setImmediate) so even
+  // when enabled it doesn't block readiness.
+  RUN_DEDUP_BACKFILL: z.string().default('false').transform(v => v === 'true'),
   // ─── Sentry ─────────────────────────────────────────────────────────
   // Empty DSN disables the SDK entirely — the init helper no-ops and the
   // plugin's hooks become cheap pass-throughs. Lets dev/CI run without
@@ -84,6 +105,18 @@ const envSchema = z.object({
   AWS_ENDPOINT_URL: z.string().default(''),
   // 6h gives a comfortable session window without making links durably shareable.
   FRAME_URL_TTL_SECONDS: z.string().default('21600').transform(Number),
+  // ─── Trust proxy ────────────────────────────────────────────────────
+  // OFF by default — `req.ip` returns the direct-TCP-connection address.
+  // Behind a CDN / load balancer / ingress, that's the proxy's IP and ALL
+  // visitors collapse to one identity (breaks share-view dedup and
+  // IP-keyed rate limits). Flip ON in deployments where the upstream is a
+  // trusted proxy that sets `X-Forwarded-For`; Fastify will then derive
+  // `req.ip` from the rightmost-untrusted hop.
+  //
+  // Accepts: "true"/"false" (trust any/no upstream), an integer hop count
+  // ("1" → trust last hop only), or a comma-separated CIDR list
+  // ("10.0.0.0/8,172.16.0.0/12") for a stricter allowlist.
+  TRUST_PROXY: z.string().default('false'),
 });
 
 const parsedConfig = envSchema.parse(process.env);
@@ -130,10 +163,25 @@ function buildAllowedOrigins(): string[] {
 // Test mode rate limit multiplier to avoid test interference
 const TEST_RATE_LIMIT_MULTIPLIER = 20;
 
+// Convert TRUST_PROXY env string into the value Fastify's `trustProxy` option
+// accepts. We support boolean/integer/string forms with the same precedence as
+// Fastify itself so deployments can opt in via the simplest form that works.
+function parseTrustProxy(raw: string): boolean | number | string[] {
+  const lowered = raw.trim().toLowerCase();
+  if (lowered === '' || lowered === 'false' || lowered === '0') return false;
+  if (lowered === 'true') return true;
+  // Pure integer → number of hops to trust (Fastify accepts this directly).
+  if (/^\d+$/.test(lowered)) return Number(lowered);
+  // Comma-separated list of CIDRs / IPs → allowlist of trusted upstreams.
+  return raw.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
 export const config = {
   ...parsedConfig,
   // Computed property: list of all allowed CORS origins
   ALLOWED_ORIGINS: buildAllowedOrigins(),
+  // Computed property: Fastify-shaped trustProxy value
+  TRUST_PROXY_VALUE: parseTrustProxy(parsedConfig.TRUST_PROXY),
   // Computed rate limits - higher in test mode to avoid interference
   RATE_LIMITS: {
     PLAYLIST_PREVIEW: parsedConfig.NODE_ENV === 'test'

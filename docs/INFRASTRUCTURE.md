@@ -14,7 +14,7 @@ Docker setup, networking, and environment configuration.
 | vie-assistant  | ./services/assistant    | 8001       | Python RAG + chat  |
 | vie-admin      | ./services/admin        | 8002       | Admin dashboard    |
 | vie-mongodb    | mongo:7                 | 27017      | Database           |
-| vie-redis      | redis:7-alpine          | 6379       | Response cache + pipeline lock |
+| vie-redis      | redis:7-alpine          | 6379       | Response cache (summarizer) + pipeline lock (summarizer) + dispatch guard (api) |
 | vie-qdrant     | qdrant/qdrant:latest    | 6333/6334  | Vector DB (RAG)    |
 | vie-rabbitmq   | rabbitmq:3.13-mgmt      | 5672/15672 | Job queue (AMQP + Management UI) |
 | vie-summarizer-worker | (shares vie-summarizer image) | —  | RabbitMQ consumer for video pipeline jobs |
@@ -27,7 +27,8 @@ Process once, reuse forever. Three layers absorb identical work across users so 
 
 | Layer | Store   | Keyed by              | Holds                                |
 | ----- | ------- | --------------------- | ------------------------------------ |
-| L1    | Redis   | `youtube_id`          | Full VIEResponse JSON (instant serve) |
+| L0    | Redis   | `vie:api:dispatched:<videoSummaryId>` | Dispatch guard (api). SET NX EX, 900s TTL. Released on terminal FAILED (internal.routes.ts) or on dispatch throw (dispatch-guard.service.ts catch). Fail-open on Redis error. See [IDEMPOTENCY.md](./IDEMPOTENCY.md#dispatch-guard-publish-layer). |
+| L1    | Redis   | `vie:response:<youtube_id>` | Full VIEResponse JSON (instant serve). Written by the summarizer; for non-English videos the **translation phase** owns the write (assembly phase intentionally skips Redis when `ctx.language != "en"`). Allowlisted top-level keys only: `youtubeId`, `title`, `creator`, `channel`, `duration`, `thumbnailUrl`, `status`, `meta`, `tabs`, `language`, `isRTL`, `sourceLanguage` (`_SAFE_KEYS` in `services/summarizer/src/services/cache/response_cache.py`). |
 | L2    | MongoDB | `youtubeId` field     | Persistent video summary + assembled tabs |
 | L3    | S3      | `youtube_id` prefix   | Extracted scene frames (skip re-extraction) |
 
@@ -46,9 +47,15 @@ System caches are shared across users (same video → same summary). User data i
 
 ### Concurrent submission
 
-Two users submitting the same video simultaneously do not double-bill. The first request writes a `status: "processing"` row to `videoSummaryCache`; the second request sees it, attaches to the SSE event stream via the Redis pipeline lock (`pipeline_event_stream.acquire_lock`), and receives the same result once the first run reaches `status: "completed"`.
+Two users submitting the same video simultaneously do not double-bill. The flow is layered:
 
-Cache invalidation is **versioned, not time-based**: same video always produces the same summary at a given `PIPELINE_VERSION`. Bumping the version regenerates on next request (see [`IDEMPOTENCY.md`](./IDEMPOTENCY.md)).
+1. **Cross-user dedup at the cache row** — `VideoRepository.upsertCacheByDedupKey()` collapses concurrent submits with the same content-addressed `dedupKey` onto a single `videoSummaryCache` row via a partial unique index. Exactly one caller sees `wasInsert: true` and is responsible for dispatching.
+2. **Dispatch guard (L0)** — the publisher acquires a Redis lock (`vie:api:dispatched:<videoSummaryId>`) before publishing to RabbitMQ. Belt-and-suspenders against API replicas racing outside Mongo's serialization window.
+3. **Pipeline lock (summarizer)** — even if (1) and (2) both fail open, the summarizer's per-video lock (`pipeline_event_stream.acquire_lock`) is the last line of defense: the second consumer attaches to the SSE event stream and receives the same result once the first run reaches `status: "completed"`.
+
+**Same Redis instance** for all three uses (api dispatch guard + summarizer response cache + summarizer pipeline lock). Operational coherence: `REDIS_URL` in `api/src/config.ts` and `services/summarizer/src/config.py` must resolve to the same instance.
+
+Cache invalidation is **versioned, not time-based**: same video always produces the same summary at a given `PIPELINE_VERSION`. Bumping the version invalidates both the cross-user `dedupKey` and the per-user idempotency hash atomically (see [`IDEMPOTENCY.md`](./IDEMPOTENCY.md)).
 
 ---
 
@@ -256,9 +263,15 @@ SUMMARIZER_URL=http://localhost:8000
 INTERNAL_SECRET=change-this-for-inter-service-auth
 
 # ────────────────────────────────────────────────────
-# Redis (Response Cache)
+# Redis — shared across api (dispatch guard) and summarizer
+# (response cache + per-video pipeline lock). MUST resolve
+# to the same instance in both services.
 # ────────────────────────────────────────────────────
 REDIS_URL=redis://vie-redis:6379
+
+# TTL on the api's dispatch-guard key (vie:api:dispatched:<videoSummaryId>).
+# Must exceed the summarizer's PIPELINE_LOCK_TTL_SECONDS (default 600s).
+DISPATCH_GUARD_TTL_SECONDS=900
 
 # ────────────────────────────────────────────────────
 # Qdrant (Vector DB for RAG)

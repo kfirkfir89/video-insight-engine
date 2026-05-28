@@ -325,6 +325,37 @@ describe('videos routes', () => {
       expect(response.statusCode).toBe(201);
       expect(mockContainer.costMonitorService.refundReservation).toHaveBeenCalledWith(reservation);
     });
+
+    it('should refund the reservation when the caller attaches to an in-flight pipeline', async () => {
+      // Cross-user dedup: user 2 submits the same youtubeId while user 1's
+      // pipeline is still pending. The upsert in createVideo returns the
+      // existing row with `attached: true`. The route must refund because
+      // user 2 isn't triggering any LLM work — they're just attaching to
+      // the SSE stream of the run user 1 started. Same semantic as a cache
+      // hit, different label.
+      const reservation = { userId: 'test-user-id', dateKey: '2026-05-14', amountUsd: 0.15 };
+      mockContainer.costMonitorService.reserveUserCost.mockResolvedValue(reservation);
+      mockContainer.videoService.createVideo.mockResolvedValue({
+        video: { id: 'v2', videoSummaryId: 'shared-summary', status: 'processing' },
+        cached: false,
+        attached: true,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/videos',
+        headers: {
+          authorization: authHeader,
+          'content-type': 'application/json',
+        },
+        payload: {
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mockContainer.costMonitorService.refundReservation).toHaveBeenCalledWith(reservation);
+    });
   });
 
   describe('DELETE /api/videos/:id', () => {

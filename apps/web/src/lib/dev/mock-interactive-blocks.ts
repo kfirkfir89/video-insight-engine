@@ -341,15 +341,28 @@ export function createMockOverview() {
 }
 
 export function createMockInfoGrid() {
+  // Showcases the three card shapes the normalizer produces: bare key/value
+  // (reference rows), key/value with `evidence` (term + definition + example),
+  // and emoji-prefixed entries. Mixing them in one mock lets us verify that
+  // the live design-system page matches what real videos ship.
   return {
     items: [
       { key: 'Framework', value: 'React 19' },
-      { key: 'Language', value: 'TypeScript 5.4' },
-      { key: 'Bundler', value: 'Vite 5' },
-      { key: 'Styling', value: 'Tailwind v4' },
-      { key: 'State', value: 'Zustand' },
-      { key: 'Testing', value: 'Vitest' },
-      { key: 'E2E', value: 'Playwright' },
+      { key: 'Bundler', value: 'Vite 6' },
+      {
+        key: 'Attention',
+        value: 'Weighted sum of token embeddings, where weights come from query·key dot products.',
+        evidence: "Demonstrated at 4:32 with the 'cat sat on the mat' example.",
+        emoji: '🧠',
+      },
+      {
+        key: 'Tokenization',
+        value: 'Splitting text into discrete units before embedding.',
+        evidence: "'Hello world' → ['Hello', 'world']",
+      },
+      { key: 'State', value: 'Zustand', emoji: '🗂️' },
+      { key: 'Testing', value: 'Vitest + Playwright' },
+      { key: 'Styling', value: 'Tailwind v4', emoji: '🎨' },
       { key: 'CI/CD', value: 'GitHub Actions' },
     ],
   };

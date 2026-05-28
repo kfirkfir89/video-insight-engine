@@ -68,6 +68,33 @@ class TestResponseCache:
         assert result is False
 
     @pytest.mark.asyncio
+    async def test_set_response_default_safe_keys_includes_language_fields(self, cache, mock_redis):
+        """Non-English videos must round-trip ``language``/``isRTL``/``sourceLanguage``.
+
+        Without these in the default allowlist, the FE language toggle never
+        renders for cached non-English videos — the translation phase's work
+        is dropped on the Redis write boundary.
+        """
+        data = {
+            "meta": {"title": "Test"},
+            "tabs": [],
+            "language": "en",
+            "isRTL": False,
+            "sourceLanguage": {"code": "he", "name": "עברית", "isRTL": True, "tabs": [], "meta": {}},
+            "internalDebugField": "should be dropped",
+        }
+
+        await cache.set_response("video123", data)
+
+        call_args = mock_redis.set.call_args
+        cached = json.loads(call_args[0][1])
+        assert "language" in cached
+        assert "isRTL" in cached
+        assert "sourceLanguage" in cached
+        assert cached["sourceLanguage"]["code"] == "he"
+        assert "internalDebugField" not in cached
+
+    @pytest.mark.asyncio
     async def test_invalidate_success(self, cache, mock_redis):
         result = await cache.invalidate("video123")
 

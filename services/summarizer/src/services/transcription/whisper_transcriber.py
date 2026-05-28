@@ -11,6 +11,7 @@ import asyncio
 import logging
 import tempfile
 import uuid
+from collections import Counter
 from pathlib import Path
 
 from openai import OpenAI
@@ -24,6 +25,7 @@ from src.models.schemas import (
 )
 from src.exceptions import TranscriptError
 from src.services.media.download_utils import download_youtube_audio
+from src.utils.language_utils import normalize_language_code
 
 logger = logging.getLogger(__name__)
 
@@ -234,11 +236,14 @@ def _transcribe_chunked_sync(
     """
     all_text: list[str] = []
     all_segments: list[dict] = []
+    detected_languages: list[str] = []
     client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
     for chunk_path, offset_ms in chunks:
         result = _transcribe_sync(chunk_path, is_music=is_music, client=client)
         all_text.append(result["text"])
+        if result.get("language"):
+            detected_languages.append(result["language"])
 
         offset_sec = offset_ms / 1000.0
         for seg in result.get("segments", []):
@@ -248,9 +253,29 @@ def _transcribe_chunked_sync(
                 "end": seg.get("end", 0) + offset_sec,
             })
 
+    # Without this, chunked Whisper would always return ``language=None`` even
+    # when every chunk individually detected the same language — observed on
+    # an Arabic football video where 2 chunks said "arabic" but the combined
+    # result dropped the field, downstream defaulted to English, and
+    # translation never ran. Normalize at the boundary because Whisper returns
+    # a name ("chinese", "hebrew"); callers that truncate to 2 chars would
+    # produce invalid codes like "ch" (Chamorro).
+    #
+    # ``Counter.most_common`` is deterministic on ties — it preserves insertion
+    # order from the input list (dict insertion-ordered since Python 3.7). The
+    # earlier ``max(set(...), key=...count)`` form iterated a hash-randomized
+    # set, so a 2-chunk mixed-language input could swing winners across runs.
+    combined_language = (
+        normalize_language_code(
+            Counter(detected_languages).most_common(1)[0][0]
+        )
+        if detected_languages else None
+    )
+
     return {
         "text": " ".join(all_text),
         "segments": all_segments,
+        "language": combined_language,
     }
 
 

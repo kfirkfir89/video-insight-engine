@@ -91,7 +91,6 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
         "tabs": assembled.get("tabs", []),
         "language": ctx.language,
         "isRTL": ctx.is_rtl,
-        "force_english_reason": ctx.force_english_reason,
         "pipeline": {
             "triage": ctx.triage_dict,
             "extraction": ctx.extraction_data,
@@ -109,12 +108,16 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
 
     await asyncio.to_thread(ctx.repository.save_structured_result, ctx.video_summary_id, result)
 
-    # Build frontend response for Redis cache
-    from src.routes.cached_response import build_frontend_response
-    frontend_response = build_frontend_response(result)
-
-    # Cache in Redis (non-blocking, best-effort)
-    if settings.REDIS_ENABLED:
+    # Cache in Redis (non-blocking, best-effort).
+    # English-source videos: cache the assembled payload now — there is no
+    # translation phase to wait for. Non-English: skip; the translation phase
+    # runs next, promotes English to primary, and writes the final payload to
+    # Redis. Caching here for non-English would freeze the source-language
+    # tabs into Redis for the entire TTL, silently bypassing translation on
+    # every cache hit and breaking the FE language toggle.
+    if settings.REDIS_ENABLED and ctx.language == "en":
+        from src.routes.cached_response import build_frontend_response
+        frontend_response = build_frontend_response(result)
         try:
             await response_cache.set_response(ctx.youtube_id, frontend_response)
         except (OSError, ConnectionError) as e:
@@ -159,9 +162,9 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
 
         # Index assembled output content (tabs + props) alongside transcript.
         # English videos: index here. Non-English videos: deferred to the
-        # translation phase, which has the English-translated ``ctx.tabs_en``
-        # — embedding source-language text on an English-trained model
-        # produces poor retrieval quality.
+        # translation phase, which promotes English tabs onto
+        # ``ctx.assembled_tabs`` and indexes those — embedding source-language
+        # text on an English-trained model produces poor retrieval quality.
         if ctx.language == "en":
             output_task = asyncio.create_task(
                 store_default_output_chunks(

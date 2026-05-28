@@ -261,6 +261,138 @@ describe('internal routes', () => {
         );
       });
 
+      it('should release the dispatch guard on FAILED so user-initiated retry can re-dispatch immediately', async () => {
+        // Step 3 belt-and-suspenders: without this release, the 900s guard
+        // TTL would keep the dispatcher silent for 15 minutes after a failed
+        // run — the user clicks Retry, the route goes through branch D
+        // (failed-cached-retry → dispatchPipeline), but the guard.acquire
+        // returns acquired:false and nothing publishes.
+        const videoSummaryId = new ObjectId().toHexString();
+        const userId = 'failed-retry-user';
+
+        const mockUpdateMany = vi.fn().mockResolvedValue({ modifiedCount: 1 });
+        app.mongo.db.collection = vi.fn().mockReturnValue({ updateMany: mockUpdateMany });
+        app.broadcast = vi.fn();
+        mockContainer.costMonitorService.reconcileUserDay.mockResolvedValueOnce(0);
+
+        await app.inject({
+          method: 'POST',
+          url: '/internal/status',
+          headers: {
+            'content-type': 'application/json',
+            'x-internal-secret': INTERNAL_SECRET,
+          },
+          payload: {
+            type: 'video.status',
+            payload: { videoSummaryId, userId, status: 'failed' },
+          },
+        });
+
+        // Force-release with token=null because the original publisher's
+        // token isn't available cross-process.
+        expect(mockContainer.dispatchGuardService.release).toHaveBeenCalledWith(
+          videoSummaryId,
+          null,
+        );
+      });
+
+      it('should SKIP dispatch-guard release when tryClaimDispatchRelease returns false (duplicate FAILED event)', async () => {
+        // Regression for the duplicate-FAILED race: summarizer status
+        // callbacks can fire twice on transient HTTP retry, and the second
+        // event would previously do a blind DEL of whatever's in the Redis
+        // lock — potentially wiping a fresh dispatch's lock acquired between
+        // events. tryClaimDispatchRelease's atomic find-and-update returns
+        // false on the second event; the handler must short-circuit.
+        const videoSummaryId = new ObjectId().toHexString();
+        const userId = 'duplicate-failed-user';
+
+        const mockUpdateMany = vi.fn().mockResolvedValue({ modifiedCount: 1 });
+        app.mongo.db.collection = vi.fn().mockReturnValue({ updateMany: mockUpdateMany });
+        app.broadcast = vi.fn();
+        mockContainer.costMonitorService.reconcileUserDay.mockResolvedValueOnce(0);
+        // Simulate "this is a duplicate FAILED event" — the first event already
+        // claimed the release, so this second one sees the field set.
+        mockContainer.videoRepository.tryClaimDispatchRelease.mockResolvedValueOnce(false);
+
+        await app.inject({
+          method: 'POST',
+          url: '/internal/status',
+          headers: {
+            'content-type': 'application/json',
+            'x-internal-secret': INTERNAL_SECRET,
+          },
+          payload: {
+            type: 'video.status',
+            payload: { videoSummaryId, userId, status: 'failed' },
+          },
+        });
+
+        expect(mockContainer.videoRepository.tryClaimDispatchRelease).toHaveBeenCalledWith(
+          videoSummaryId,
+        );
+        expect(mockContainer.dispatchGuardService.release).not.toHaveBeenCalled();
+      });
+
+      it('should still release the guard when tryClaimDispatchRelease errors (Mongo blip fallback)', async () => {
+        // Fallback path: if the claim itself errors, we fall back to the
+        // pre-fix behaviour (unconditional release) so a Mongo outage can't
+        // strand a user retry behind the 900s TTL. Worst case is the original
+        // race window, which is strictly no worse than where we were.
+        const videoSummaryId = new ObjectId().toHexString();
+        const userId = 'mongo-blip-user';
+
+        const mockUpdateMany = vi.fn().mockResolvedValue({ modifiedCount: 1 });
+        app.mongo.db.collection = vi.fn().mockReturnValue({ updateMany: mockUpdateMany });
+        app.broadcast = vi.fn();
+        mockContainer.costMonitorService.reconcileUserDay.mockResolvedValueOnce(0);
+        mockContainer.videoRepository.tryClaimDispatchRelease.mockRejectedValueOnce(
+          new Error('Mongo connection lost'),
+        );
+
+        await app.inject({
+          method: 'POST',
+          url: '/internal/status',
+          headers: {
+            'content-type': 'application/json',
+            'x-internal-secret': INTERNAL_SECRET,
+          },
+          payload: {
+            type: 'video.status',
+            payload: { videoSummaryId, userId, status: 'failed' },
+          },
+        });
+
+        expect(mockContainer.dispatchGuardService.release).toHaveBeenCalledWith(
+          videoSummaryId,
+          null,
+        );
+      });
+
+      it('should NOT release the dispatch guard on COMPLETED (TTL handles natural cleanup)', async () => {
+        const videoSummaryId = new ObjectId().toHexString();
+        const userId = 'completed-user';
+
+        const mockUpdateMany = vi.fn().mockResolvedValue({ modifiedCount: 1 });
+        app.mongo.db.collection = vi.fn().mockReturnValue({ updateMany: mockUpdateMany });
+        app.broadcast = vi.fn();
+        mockContainer.costMonitorService.reconcileUserDay.mockResolvedValueOnce(0);
+
+        await app.inject({
+          method: 'POST',
+          url: '/internal/status',
+          headers: {
+            'content-type': 'application/json',
+            'x-internal-secret': INTERNAL_SECRET,
+          },
+          payload: {
+            type: 'video.status',
+            payload: { videoSummaryId, userId, status: 'completed' },
+          },
+        });
+
+        expect(mockContainer.dispatchGuardService.release).not.toHaveBeenCalled();
+      });
+
       it('should NOT invalidate idempotency keys when a video completes successfully', async () => {
         const videoSummaryId = new ObjectId().toHexString();
         const userId = 'success-user-001';

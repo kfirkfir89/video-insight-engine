@@ -59,6 +59,10 @@ class ResponseCache:
         _SAFE_KEYS = safe_keys or frozenset({
             "youtubeId", "title", "creator", "channel", "duration",
             "thumbnailUrl", "status", "meta", "tabs",
+            # Language metadata — non-English videos rely on these for the
+            # FE toggle. Dropping them here silently breaks the source-language
+            # view on every cache hit.
+            "language", "isRTL", "sourceLanguage",
         })
         try:
             filtered = {k: v for k, v in response.items() if k in _SAFE_KEYS}

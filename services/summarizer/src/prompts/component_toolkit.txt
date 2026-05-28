@@ -1,120 +1,169 @@
 <component_toolkit>
-COMPONENT TOOLKIT:
-Pick the component that matches what the user DOES, not what the data looks like.
-Tab IDs are free-form (any unique snake_case). Components are the routing key.
+COMPONENT TOOLKIT — "Video to Action"
+Every interactive must let the user DO something with the content:
+follow steps, jump to a moment, memorize a card, run code, decide between options.
+A component that only displays text is a fail mode — text walls belong in info_grid
+ONLY when they are short reference cells, never long paragraphs.
 
-CROSS-DOMAIN USAGE:
-Components are NOT domain-locked. checklist works for prerequisites (tech), packing lists (travel), and ingredients (food). step_player works for setup guides (tech), cooking steps (food), and itinerary planning (travel). comparison works for tech trade-offs, product features, and concept differences. spot_explorer works for browsable items in any domain — tech resources, learning topics, gear lists. Choose components by UX GOAL, not content domain. Exception: quiz, scenario, and flash_deck are restricted — see LEARNING section for limits.
+ROUTING IS BY USER ACTION, NOT BY DOMAIN. checklist works for prerequisites (tech),
+packing lists (travel), and ingredients (food). step_player works for setup guides (tech),
+recipes (food), and itinerary planning (travel). Components are wayfinding by INTENT.
+
+═══════════════════════════════════════════════════════════════════
+DENSITY GATES (HARD RULES — assembler will drop tabs that violate)
+═══════════════════════════════════════════════════════════════════
+
+| Component         | min items | max items | max chars/cell                   |
+|-------------------|-----------|-----------|----------------------------------|
+| info_grid         | 3         | 20        | 120 chars per value (≈ 20 words) |
+| flash_deck        | 3         | 15        | front ≤ 40, back ≤ 180           |
+| comparison        | 3 rows    | 10        | each side ≤ 80 chars             |
+| spot_explorer     | 2         | 25        | description ≤ 200                |
+| step_player       | 3         | 25        | instruction ≤ 200                |
+| moment_track      | 3         | 20        | label ≤ 60                       |
+| quiz              | 2         | 8         | question ≤ 140                   |
+| exercise_tracker  | 2         | 25        | name ≤ 40                        |
+| checklist         | 3         | 30        | label ≤ 80                       |
+| code_explorer     | 1         | 12        | explanation ≤ 200                |
+
+If your extraction has fewer items than min: pick a DIFFERENT component or
+fold the data into overview/info_grid. NEVER ship a 1-item spot_explorer or a
+2-row comparison.
+
+If a value would exceed max chars: split it into multiple shorter cells OR
+move the long prose to spot_explorer (which has expandable descriptions).
+NEVER pad info_grid cells with 40-word paragraphs — they collapse into a
+wall of text on mobile.
+
+═══════════════════════════════════════════════════════════════════
+WHEN TO PICK EACH COMPONENT
+═══════════════════════════════════════════════════════════════════
 
 EXPLORATION — user browses and discovers:
 
-  overview ⭐ RECOMMENDED AS FIRST OR SECOND TAB
-    CREATES: Landing page with stats, summary, key takeaways, and navigation to other tabs
-    GOOD FOR: Orienting the user — "what is this video about and where should I start?"
-    NEEDS: meta fields (masterSummary, keyTakeaways, descriptionAnalysis)
-    DATASOURCE: "meta"
-
   spot_explorer
-    CREATES: Browsable guide with expandable cards, map links, cost badges, tips
-    GOOD FOR: Places to visit, restaurants to try, products to consider, gear to buy
-    NEEDS: Array of items with name, emoji, description, cost, mapQuery or actionUrl
-    DATASOURCE: "travel.itinerary", "food.*", or "learning.keyPoints" (for topics/resources as browsable cards)
+    PICK WHEN: You have 2+ items each with a name AND a real description.
+    SHIPS: Browsable cards with expandable detail, thumbnail (if frame
+      available at item's timestamp), map/booking actions.
+    GOOD FOR: Places (travel), products (review), phrases (language),
+      key concepts (science), topics (any), gear/resources (tech).
+    DATASOURCE: travel.itinerary, food.*, learning.keyPoints, science.concepts,
+      language.phrases, review.alternatives.
 
-  info_grid ⭐ GREAT FOR REFERENCE DATA
-    CREATES: Searchable/filterable card grid with key-value pairs, specs, or tag clouds
-    GOOD FOR: Specs, credits, tips, features, metadata — anything users look up, not read linearly
-    NEEDS: Array of items with key, value, optional emoji/category
-    DATASOURCE: Any domain data that is key-value shaped
+  info_grid ⭐ THE REFERENCE TABLE — keep cells SHORT
+    PICK WHEN: You have 3+ short reference rows that users LOOK UP, not READ.
+    SHIPS: Searchable card grid (or table). Optional `evidence` field renders
+      below the value in italic for sources/examples.
+    GOOD FOR: Specs, glossary terms, credits, quick tips, ingredient swaps,
+      key facts with sources.
+    SHAPE: Each item = { key, value, evidence?, emoji? }. ALL fields short.
+    NEVER USE FOR:
+      • Definitions of complex concepts → use flash_deck instead
+      • Step-by-step processes → use step_player
+      • Comparisons with two sides → use comparison
+      • Anything where the value runs longer than ~20 words
 
   code_explorer
-    CREATES: Syntax-highlighted code with step-through navigation and copy button
-    GOOD FOR: Code to copy, commands to run, patterns to reference
-    NEEDS: Array of snippets with code, language, explanation, filename
+    PICK WHEN: The video shows code, commands, or shell snippets on screen.
+    SHIPS: Syntax-highlighted code with copy button, step-through navigation,
+      and (when a frame is available) the on-screen code thumbnail beside it.
+    SHAPE: { code, language, explanation, filename?, timestamp? }.
 
   comparison
-    CREATES: Side-by-side data table or pros/cons columns
-    GOOD FOR: X vs Y decisions — two named products, two approaches, two methods explicitly weighed against each other.
-    NEEDS: pros[], cons[], or comparison rows with feature/left/right
-    DATASOURCE: "tech.cheatSheet", "learning.concepts", "learning.keyPoints", or "review.pros" — assembler converts all shapes
-    NEVER USE FOR: term definitions, glossaries, lists of concepts the video introduces without weighing alternatives. Definitions go to info_grid (browse) or flash_deck (memorize). Use comparison only when the speaker says "X is better than Y because…".
-    LIMIT: at most 10 comparison rows. Pick the 10 most decision-relevant.
+    PICK WHEN: The video EXPLICITLY weighs Option A against Option B on the
+      SAME criteria for at LEAST 3 features. Both sides must have substance.
+    SHIPS: 3-column table (Feature / A / B) with winner highlighting + a
+      pros/cons summary card.
+    NEVER USE FOR:
+      • Glossaries or term definitions ("X is when…")
+      • Lists of N concepts the video introduces
+      • Single-sided pros without a counterpart
+      • Reviews where only one product is examined → use verdict-folded-into-overview
+    DATASOURCE: review.comparisons, tech.cheatSheet (only when paired).
 
-  gallery
-    CREATES: Image grid with captions and lightbox
-    GOOD FOR: Visual reference — dishes, views, products, before/after
-    NEEDS: Array of images with caption and optional tags
-
-ACTION — user completes tasks:
+ACTION — user completes a task:
 
   checklist
-    CREATES: Checkable list with progress bar and celebration on completion
-    GOOD FOR: Items to buy, pack, prepare, collect — things user checks off in REAL LIFE
-    NEEDS: Array of items with label, optional amount/unit/group/note
-    NOTE: For items the user checks off in real life — shopping, packing, prep tasks.
+    PICK WHEN: User physically checks items off in real life (shopping, packing).
+    SHAPE: Array of items with label, optional amount/unit/group/note.
 
-  step_player ⭐ GREAT FOR ANY ORDERED PROCESS
-    CREATES: Step-through guide with inline timers, tips, and completion tracking
-    GOOD FOR: Ordered processes — cooking, building, installing, assembling, setup guides
-    NEEDS: Array of numbered steps with instruction, optional duration/tip/safetyNote
-    DATASOURCE: "project.steps" for build guides, "food.steps" for recipes, "fitness.exercises" for workouts
+  step_player ⭐ ORDERED PROCESSES — the heart of "video to action"
+    PICK WHEN: 3+ ordered steps. ALWAYS prefer step_player over a numbered list.
+    SHIPS: Step-through guide with inline timer, tips, completion tracking,
+      and a frame thumbnail per step (auto-attached when timestamp matches).
+    GOOD FOR: Cooking, building, installing, assembling, setup, multi-stage
+      processes in ANY domain.
+    DATASOURCE: food.steps, project.steps, tech.setup, language.drills,
+      science.experiments.
 
   exercise_tracker
-    CREATES: Exercise cards with set tracking, rest timers, form cue expansion
-    GOOD FOR: Workouts to follow at the gym or at home
-    NEEDS: Array of exercises with name, sets, reps, rest, formCues, modifications
+    PICK WHEN: The video is a workout session with sets/reps/timer structure.
+    SHIPS: Exercise cards with set tracking, rest timers, form cue expansion.
 
-LEARNING — user tests understanding:
-  LIMIT: quiz and scenario are for learning and tech domains ONLY.
+LEARNING — user tests understanding (LIMITED to learning + tech domains):
 
   quiz
-    CREATES: Scored multiple-choice test with explanations and celebration
-    GOOD FOR: Testing knowledge retention, exam prep, self-assessment
-    NEEDS: Array of questions with options, correctIndex, explanation
-    DATASOURCE: ALWAYS "enrichment.quiz" — quiz data ONLY comes from enrichment
-    DOMAIN LIMIT: learning and tech only
+    PICK WHEN: The user wants to verify what they retained.
+    SHIPS: Scored multi-choice with explanations.
+    DATASOURCE: ALWAYS enrichment.quiz.
 
   flash_deck
-    CREATES: Flip cards with front/back, navigation, progress tracking
-    GOOD FOR: Memorizing concepts, vocabulary, patterns, API reference, theory
-    NEEDS: Array of items with front (term/question/code) and back (definition/answer)
-    DATASOURCE: "enrichment.flashcards" (preferred) OR "{domain}.concepts" from extraction
-    LIMIT: Maximum 1 flash_deck tab per video. Study material ONLY — concepts a student would memorize.
-    NEVER USE FOR: tips, features, analysis, trivia, chef tips, product features, song analysis.
-    front must be a real term or concept name. Never a category label like "chef_tip" or "pro_tip".
+    PICK WHEN: 3+ concept-definition pairs the user would MEMORIZE.
+    SHIPS: Flip cards with progress.
+    NEVER USE FOR: tips, features, song analysis, chef tips, trivia, narrative
+      moments. `front` must be a real term or concept name, never a category
+      label like "chef_tip" or "pro_tip".
+    DATASOURCE: enrichment.flashcards (preferred), learning.concepts (if at
+      least 3 items have {name, definition} shape).
 
   scenario
-    CREATES: "Which X for Y?" challenges with option grid, scoring, explanations
-    GOOD FOR: Testing applied knowledge, decision-making practice
-    NEEDS: Array of scenarios with question, options (one correct), explanations
-    DATASOURCE: ALWAYS "enrichment.scenarios" — scenario data ONLY comes from enrichment
-    DOMAIN LIMIT: learning and tech only
+    PICK WHEN: There are 2+ applied-knowledge "what would you do?" cases.
+    SHIPS: Multi-choice with context and explanations.
+    DATASOURCE: ALWAYS enrichment.scenarios.
 
-MEDIA — user watches/listens:
+MEDIA — user navigates the source video:
 
-  moment_track
-    CREATES: Vertical track where chronological markers (dots) and curated
-      highlights (capsules sized by duration) sit on the same spine.
-    GOOD FOR: Navigation + highlight reels in one tab. Points for chapter jumps
-      and topic transitions; spans for demos, punchlines, pivotal arguments.
-    NEEDS: items[] with { time, seconds, label } required; optional endSeconds,
-      description, mood, emoji, speaker, tags, thumbnailUrl.
+  moment_track ⭐ THE TIMELINE — frame-aware
+    PICK WHEN: There are 3+ navigable points in the video worth jumping to.
+    SHIPS: Vertical timeline where points (dots) and highlight spans (capsules)
+      share one spine. Each expanded item shows a frame thumbnail + on-screen
+      caption + OCR when the vision LLM extracted them — this is where the
+      transcript and the frames fuse into a single artifact.
+    SHAPE: items[] with { time, seconds, label } required; optional endSeconds,
+      description, mood, emoji, speaker, tags. The assembler attaches
+      thumbnailUrl, frameCaption, frameOcr, frameEvidence, frameSceneType
+      automatically when frames are available.
     USE endSeconds ONLY for replayable highlights worth re-watching as a span
-      (typical 15s–3min). OMIT endSeconds for navigation points (chapters,
-      topic transitions) — the user jumps to these, they don't re-watch them.
-    MIXING both kinds in the same items[] is encouraged when content justifies
-      it (e.g., narrative video with 6 chapter points + 3 highlight spans).
-    VALID DATASOURCES: learning.timestamps, narrative.keyMoments, music.structure.
+      (typical 15s–3min). OMIT endSeconds for navigation points.
+    DATASOURCE: learning.timestamps, narrative.keyMoments, music.structure.
       YouTube chapters auto-fill as a fallback.
 
   lyrics_player
-    CREATES: Song structure display with synced lyrics and section navigation
-    GOOD FOR: Following along with music, analyzing song structure
-    NEEDS: Song sections with name, lines, timestamps, optional analysis
+    PICK WHEN: Music video with lyrics + section structure.
+    SHIPS: Section nav with synced lyrics.
 
-DISPLAY — user reads (USE SPARINGLY — max 1 display tab per output):
+DISPLAY — user reads (MAX 1 per output, last resort):
 
-  verdict — Score ring + recommendation badge + best-for/not-for lists
-  budget — Total + category breakdown bars + saving tips
+  verdict — Score + bottom line + best-for / not-for. Only for review-domain
+    where the video reaches a single recommendation. Otherwise fold the
+    conclusion into the overview hero.
+  budget — Total + category breakdown + saving tips. Travel/finance only.
+
+═══════════════════════════════════════════════════════════════════
+ANTI-PATTERNS (the assembler will drop these — don't plan them)
+═══════════════════════════════════════════════════════════════════
+
+✗ info_grid with 2 items                → 3 minimum; otherwise use overview.
+✗ comparison with 1 row, or with one    → at least 3 rows AND both sides
+   side empty                              filled; otherwise route to info_grid.
+✗ flash_deck for tips/features/trivia   → forbidden; use info_grid.
+✗ gallery as a primary tab               → frames live INSIDE moment_track /
+                                            step_player / code_explorer now.
+                                            Standalone gallery is auto-appended
+                                            ONLY when ≥10 high-quality vision
+                                            captions exist.
+✗ verdict for non-review domain          → verdict is review-only.
+✗ Two tabs covering the same data        → pick one component per concept.
 
 <valid_datasources>
 tech: tech.snippets, tech.patterns, tech.cheatSheet, tech.setup.commands, tech.topics

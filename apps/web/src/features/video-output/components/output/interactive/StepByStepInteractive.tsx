@@ -239,14 +239,28 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
                     )}
                   </div>
 
-                  {/* Right: 72px thumbnail */}
+                  {/* Right: thumbnail + optional frame caption stack. Mobile
+                      keeps the 72×72 thumbnail (parity with the pre-frame
+                      design); the figcaption is sm+ only because the caption
+                      crowds the row at <640px. */}
                   {step.thumbnailUrl && (
-                    <img
-                      src={step.thumbnailUrl}
-                      alt={step.title || `Step ${step.number}`}
-                      loading="lazy"
-                      className="w-[72px] h-[72px] rounded-lg object-cover shrink-0 border border-border/30"
-                    />
+                    <figure className="shrink-0 flex flex-col gap-1 w-[72px] sm:w-[120px]">
+                      <img
+                        src={step.thumbnailUrl}
+                        alt={step.frameCaption || step.title || `Step ${step.number}`}
+                        loading="lazy"
+                        className="w-[72px] sm:w-[120px] h-[72px] rounded-lg object-cover border border-border/30"
+                      />
+                      {(step.frameCaption || step.frameOcr) && (
+                        <figcaption className="hidden sm:block text-[11px] leading-snug text-muted-foreground/90 break-words">
+                          {step.frameOcr ? (
+                            <span className="font-mono">&ldquo;{step.frameOcr}&rdquo;</span>
+                          ) : (
+                            step.frameCaption
+                          )}
+                        </figcaption>
+                      )}
+                    </figure>
                   )}
 
                   {/* Complete button */}

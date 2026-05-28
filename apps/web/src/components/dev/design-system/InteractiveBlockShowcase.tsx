@@ -202,10 +202,13 @@ function ExerciseDemo() {
 
 function MomentTrackDemo() {
   const { lastNav, onNavigateTab } = useNavHandler();
-  // Mix the timeline points with the clip dataset to showcase points + spans together
+  // Mix the timeline points with the clip dataset to showcase points + spans
+  // together. The first clip carries frame metadata (caption + OCR + scene
+  // type + educational rationale) — expand it to see how vision intelligence
+  // surfaces as evidence rather than a passive thumbnail.
   const items = [
     ...timeline.map((t) => ({ ...t, endSeconds: undefined as number | undefined })),
-    ...clips.clips.map((c: Record<string, unknown>) => ({
+    ...clips.clips.map((c: Record<string, unknown>, idx: number) => ({
       label: c.label as string,
       seconds: (c.startSeconds as number) ?? 0,
       endSeconds: c.endSeconds as number | undefined,
@@ -214,6 +217,17 @@ function MomentTrackDemo() {
       description: c.description as string | undefined,
       tags: c.tags as string[] | undefined,
       thumbnailUrl: c.thumbnailUrl as string | undefined,
+      // Synthetic frame-evidence on the first clip so the showcase renders
+      // the "On screen" callout the real pipeline produces for frame-aware
+      // moments. Mirrors the data the assembler attaches at runtime.
+      ...(idx === 0
+        ? {
+            frameCaption: 'Animated diagram of attention weights between tokens',
+            frameSceneType: 'diagram',
+            frameOcr: 'Q·Kᵀ / √d_k',
+            frameEvidence: 'Shows the exact softmax inputs being computed.',
+          }
+        : {}),
     })),
   ].sort((a, b) => a.seconds - b.seconds);
   return (

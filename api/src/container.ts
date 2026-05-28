@@ -1,5 +1,6 @@
 import { Db } from 'mongodb';
 import { FastifyBaseLogger } from 'fastify';
+import { Redis } from 'ioredis';
 
 // Repositories
 import { VideoRepository } from './repositories/video.repository.js';
@@ -23,7 +24,9 @@ import { PaymentService } from './services/payment.service.js';
 import { CostMonitorService } from './services/cost-monitor.service.js';
 import { QueuePublisher, type ChannelSupplier } from './services/queue-publisher.service.js';
 import { IdempotencyService } from './services/idempotency.service.js';
+import { DispatchGuardService, noOpDispatchGuard, type IDispatchGuard } from './services/dispatch-guard.service.js';
 import { UserDeletionService } from './services/user-deletion.service.js';
+import { config } from './config.js';
 
 export interface Container {
   // Repositories
@@ -48,12 +51,16 @@ export interface Container {
   costMonitorService: CostMonitorService;
   queuePublisher: QueuePublisher;
   idempotencyService: IdempotencyService;
+  dispatchGuardService: IDispatchGuard;
   userDeletionService: UserDeletionService;
 }
 
 export interface CreateContainerOptions {
   /** Supplier for a confirm channel — wired up by the rabbitmq plugin. */
   queueChannelSupplier?: ChannelSupplier;
+  /** Redis client — wired up by the redis plugin. Optional so tests can pass
+   *  an in-memory stub instead of standing up a real Redis. */
+  redisClient?: Redis;
 }
 
 export function createContainer(
@@ -84,16 +91,33 @@ export function createContainer(
     });
   const queuePublisher = new QueuePublisher(channelSupplier, logger);
 
-  // Create services with injected dependencies
+  // Create services with injected dependencies.
+  // Order matters: idempotencyService and dispatchGuardService are constructed
+  // first because videoService depends on both — content-addressed dedup-key
+  // computation and the Redis-backed publish guard, respectively.
+  const idempotencyService = new IdempotencyService(idempotencyRepository, logger);
+  // Tests that don't exercise dispatch can pass a stub Redis; production wires
+  // in the real client via the redisPlugin. Without a Redis client we fall back
+  // to the exported `noOpDispatchGuard`, which satisfies IDispatchGuard and
+  // always reports acquired — same semantics as the fail-open Redis path.
+  const dispatchGuardService: IDispatchGuard = options.redisClient
+    ? new DispatchGuardService(options.redisClient, config.DISPATCH_GUARD_TTL_SECONDS, logger)
+    : noOpDispatchGuard;
   const authService = new AuthService(userRepository, logger);
-  const videoService = new VideoService(videoRepository, summarizerClient, queuePublisher, logger);
+  const videoService = new VideoService(
+    videoRepository,
+    summarizerClient,
+    queuePublisher,
+    idempotencyService,
+    dispatchGuardService,
+    logger,
+  );
   const folderService = new FolderService(folderRepository, logger);
   const costMonitorService = new CostMonitorService(db, logger, userCostRepository);
   const playlistService = new PlaylistService(videoService, folderService, summarizerClient, logger, costMonitorService);
   const shareService = new ShareService(shareRepository, videoRepository, logger);
   const ogImageService = new OgImageService(logger);
   const paymentService = new PaymentService(userRepository, videoRepository, logger);
-  const idempotencyService = new IdempotencyService(idempotencyRepository, logger);
   const userDeletionService = new UserDeletionService(
     db,
     userRepository,
@@ -124,6 +148,7 @@ export function createContainer(
     costMonitorService,
     queuePublisher,
     idempotencyService,
+    dispatchGuardService,
     userDeletionService,
   };
 }

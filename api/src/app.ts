@@ -14,6 +14,7 @@ import { rateLimitPlugin } from './plugins/rate-limit.js';
 import { websocketPlugin } from './plugins/websocket.js';
 import { tierPlugin } from './plugins/tier.js';
 import { rabbitmqPlugin } from './plugins/rabbitmq.js';
+import { redisPlugin } from './plugins/redis.js';
 import { genRequestId, requestIdPlugin } from './plugins/request-id.js';
 import { sentryFastifyPlugin } from './plugins/sentry.js';
 
@@ -53,6 +54,12 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
     requestIdHeader: false,
     requestIdLogLabel: 'requestId',
     genReqId: genRequestId,
+    // When enabled (TRUST_PROXY env), `req.ip` is derived from X-Forwarded-For
+    // instead of the direct TCP connection. Necessary in any deployment behind
+    // a CDN, LB, or ingress — otherwise share-view dedup and IP-keyed rate
+    // limits all collapse to the proxy's single IP. Default is `false` so
+    // local-dev (no proxy) keeps the safe direct-connection behaviour.
+    trustProxy: config.TRUST_PROXY_VALUE,
     logger: options?.logger ?? {
       level: isDev ? 'debug' : 'info',
       base: { service: 'vie-api' },
@@ -98,6 +105,10 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   await fastify.register(mongodbPlugin);
   await fastify.register(jwtPlugin);
   await fastify.register(websocketPlugin);
+  // Redis is unconditionally registered — the dispatchGuardService wraps every
+  // dispatchPipeline call and fails open if Redis is unreachable, so the plugin
+  // is harmless even in environments without a working Redis.
+  await fastify.register(redisPlugin);
 
   // RabbitMQ is only required when USE_QUEUE_PIPELINE is on. Registering
   // conditionally means dev environments without RabbitMQ still boot cleanly
@@ -112,6 +123,7 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
     : undefined;
   const container = createContainer(fastify.mongo.db, fastify.log, {
     queueChannelSupplier: channelSupplier,
+    redisClient: fastify.redis,
   });
   if (options?.container) {
     Object.assign(container, options.container);

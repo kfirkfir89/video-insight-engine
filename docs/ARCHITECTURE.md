@@ -39,10 +39,12 @@ System overview and data flows.
 | -------------- | -------------- | -------------- | -------------------------------- |
 | vie-web        | vie-api        | HTTP/SSE       | API calls, streaming updates     |
 | vie-api        | vie-mongodb    | MongoDB driver | Data operations                  |
-| vie-api        | vie-summarizer | HTTP POST      | Trigger summarization            |
+| vie-api        | vie-summarizer | HTTP POST      | Trigger summarization (legacy path; queue path uses RabbitMQ) |
 | vie-api        | vie-assistant  | HTTP           | Explain + RAG video chat         |
+| vie-api        | vie-rabbitmq   | AMQP           | Publish video.process jobs (when `USE_QUEUE_PIPELINE=true`) |
+| vie-api        | vie-redis      | Redis          | Dispatch guard (`vie:api:dispatched:*`) — same instance as the summarizer; see [IDEMPOTENCY.md](./IDEMPOTENCY.md#dispatch-guard-publish-layer) |
 | vie-summarizer | vie-mongodb    | MongoDB driver | Save structured results          |
-| vie-summarizer | vie-redis      | Redis          | Response caching                 |
+| vie-summarizer | vie-redis      | Redis          | Response cache + per-video pipeline lock (same instance the api uses for the dispatch guard) |
 | vie-summarizer | vie-qdrant     | HTTP           | Vector storage (background)      |
 | vie-summarizer | S3             | HTTP           | Frame + transcript storage       |
 | vie-summarizer | LLM APIs       | HTTP           | LiteLLM (Anthropic/OpenAI/Google)|
@@ -201,15 +203,20 @@ Content type is determined by a **plan phase** that runs a classifier (fast mode
 │     ├── Frame thumbnail injection                                          │
 │     └── Cross-tab link resolution                                          │
 │                                                                             │
-│  8. TRANSLATION (non-English only, 1-2 LLM calls)                         │
-│     ├── Translates assembled tabs + synthesis to English                   │
-│     ├── Stores dual-language data (original + English)                     │
+│  8. TRANSLATION (conditional — non-English only, 1-2 LLM calls)           │
+│     ├── translate_to_source(): one flat-list Haiku call,                   │
+│     │   mirror-detection, deep-copy into nested sourceLanguage block       │
+│     ├── Promotes English to top-level tabs/meta; stashes original under    │
+│     │   `sourceLanguage = {code, name, isRTL, tabs, meta}`                 │
+│     ├── OWNS the Redis response-cache write for non-English videos         │
+│     │   (assembly skips Redis when ctx.language != "en")                    │
 │     └── English Qdrant embeddings for cross-language RAG search            │
 │                                                                             │
 │  9. SAVE + STREAM COMPLETE                                                 │
 │     ├── SSE: tab_ready events (progressive rendering)                      │
-│     ├── Store to MongoDB (meta + tabs + language + isRTL)                  │
-│     ├── Store to Redis (response cache)                                    │
+│     ├── Store to MongoDB (meta + tabs + language + isRTL + sourceLanguage) │
+│     ├── Store to Redis — English videos: written in this phase;            │
+│     │   non-English: written in the translation phase above                │
 │     └── SSE: complete + done + [DONE]                                      │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘

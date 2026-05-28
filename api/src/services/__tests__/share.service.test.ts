@@ -170,6 +170,9 @@ describe('ShareService', () => {
 
       const result = await service.getPublicSummary(slug, '127.0.0.1');
 
+      // sourceLanguage is omitted entirely (not serialized as null) when
+      // the source video is English / no translation produced — FE relies
+      // on presence/absence to decide whether to render the toggle.
       expect(result).toEqual({
         id: docId.toString(),
         youtubeId: 'dQw4w9WgXcQ',
@@ -180,15 +183,12 @@ describe('ShareService', () => {
         status: 'completed',
         meta: null,
         tabs: null,
-        tabs_en: null,
-        meta_en: null,
-        synthesis_en: null,
-        forceEnglishReason: null,
         shareSlug: slug,
         viewsCount: 42,
         likesCount: 7,
         sharedAt: '2025-06-15T10:00:00.000Z',
       });
+      expect(result).not.toHaveProperty('sourceLanguage');
 
       expect(mockShareRepo.findBySlug).toHaveBeenCalledWith(slug);
       // incrementViewsDedup should be called with slug and IP hash (fire and forget)

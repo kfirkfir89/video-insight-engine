@@ -1,4 +1,5 @@
 import { Db, ObjectId, Collection } from 'mongodb';
+import { DatabaseError } from '../utils/errors.js';
 
 export interface VideoSummaryCacheDocument {
   _id: ObjectId;
@@ -17,9 +18,20 @@ export interface VideoSummaryCacheDocument {
   outputType?: string;
   version: number;
   isLatest: boolean;
+  /** Content-addressed dedup key — SHA-256 of (youtubeId, PIPELINE_VERSION,
+   *  providers, version). Used by `upsertCacheByDedupKey` to collapse
+   *  cross-user submissions for the same content onto a single cache row.
+   *  Legacy rows pre-Step-1 lack this field; the unique index is partial on
+   *  `{$exists: true}` so they coexist until the backfill catches them. */
+  dedupKey?: string;
   retryCount: number;
   errorCode?: string;
   errorMessage?: string;
+  /** Timestamp of the most recent successful dispatch-guard release. Set by
+   *  `tryClaimDispatchRelease` so duplicate FAILED events (from summarizer
+   *  status-callback retries) become a no-op instead of racing to blind-DEL a
+   *  freshly-acquired lock. Not user-facing. */
+  dispatchGuardReleasedAt?: Date;
   processedAt?: Date;
   processingTimeMs?: number;
   createdAt: Date;
@@ -78,6 +90,9 @@ export interface CreateVideoSummaryData {
   isLatest: boolean;
   retryCount: number;
   expiresAt?: Date;
+  /** Optional on the input shape so legacy callers compile during migration.
+   *  Required for `upsertCacheByDedupKey` (enforced at the method signature). */
+  dedupKey?: string;
 }
 
 export interface CreateUserVideoData {
@@ -125,6 +140,68 @@ export class VideoRepository {
     return { ...doc, _id: result.insertedId } as VideoSummaryCacheDocument;
   }
 
+  /**
+   * Atomic content-addressed cache row upsert. Concurrent callers with the
+   * same `dedupKey` collapse onto a single row via the partial unique index
+   * on `videoSummaryCache.dedupKey`; exactly one caller sees `wasInsert: true`
+   * and is responsible for dispatching the pipeline. The rest get the existing
+   * row back (`wasInsert: false`) and attach to its in-flight or completed
+   * state.
+   *
+   * Uses `$setOnInsert` so a late submitter cannot stomp the original row's
+   * `url`, `status`, or any other field — the row's state is owned by the
+   * original winner and the in-progress pipeline.
+   */
+  async upsertCacheByDedupKey(
+    data: CreateVideoSummaryData & { dedupKey: string },
+  ): Promise<{ doc: VideoSummaryCacheDocument; wasInsert: boolean }> {
+    const now = new Date();
+    const insertDoc: Omit<VideoSummaryCacheDocument, '_id'> = {
+      ...data,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const result = await this.cacheCollection.findOneAndUpdate(
+      { dedupKey: data.dedupKey },
+      { $setOnInsert: insertDoc },
+      {
+        upsert: true,
+        returnDocument: 'after',
+        includeResultMetadata: true,
+      },
+    );
+
+    // With upsert: true + returnDocument: 'after', the driver always returns
+    // a doc. `lastErrorObject.updatedExisting` discriminates: false on insert,
+    // true on attach. `upserted` (an ObjectId when inserted) is the secondary
+    // signal — we prefer `updatedExisting` because it's typed more explicitly.
+    const wasInsert = result.lastErrorObject?.updatedExisting === false;
+    if (!result.value) {
+      // Should be unreachable with upsert: true + returnDocument: 'after',
+      // but the driver types mark `value` optional so we guard explicitly.
+      // DatabaseError → mapped to a 500 by the global error handler, not a
+      // raw Error which leaks "Error" as the name in logs / Sentry breadcrumbs.
+      throw new DatabaseError('upsertCacheByDedupKey: driver returned no document despite upsert');
+    }
+    return { doc: result.value, wasInsert };
+  }
+
+  /**
+   * Force-unset the TTL on a cache row. Called when a pro/team user attaches
+   * to a row originally created by a free-tier user — without this, MongoDB's
+   * TTL index would hard-delete the row 30 days later and break the paid
+   * user's video. Pre-cross-user-dedup, each user owned their own row so the
+   * inserter's tier was the only voice; now the most-privileged attacher
+   * upgrades the row for everyone.
+   */
+  async clearExpiresAt(id: string): Promise<void> {
+    await this.cacheCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $unset: { expiresAt: '' }, $set: { updatedAt: new Date() } },
+    );
+  }
+
   async updateCacheEntry(id: string, updates: Partial<VideoSummaryCacheDocument>): Promise<void> {
     await this.cacheCollection.updateOne(
       { _id: new ObjectId(id) },
@@ -151,10 +228,58 @@ export class VideoRepository {
     await this.cacheCollection.updateOne(
       { _id: new ObjectId(id) },
       {
+        // Bumping retryCount means a fresh dispatch is about to run, so
+        // reset the release marker — a future FAILED for THIS run should be
+        // free to claim release. The `$unset` is harmless on rows that have
+        // never set the field.
         $set: { status: 'pending', updatedAt: new Date() },
+        $unset: { dispatchGuardReleasedAt: '' },
         $inc: { retryCount: 1 },
       }
     );
+  }
+
+  /**
+   * Atomically claim the right to release the dispatch guard for a FAILED
+   * cache row. Returns `true` exactly once per terminal-failure transition —
+   * subsequent duplicate FAILED events from summarizer status-callback
+   * retries see `false` and correctly skip releasing the Redis lock.
+   *
+   * Two gates:
+   *   1. `status: 'failed'` — if a user-driven retry has already flipped the
+   *      row back to `pending`/`processing`, the stale FAILED event is a
+   *      no-op. Without this, a late-arriving FAILED could clear a fresh
+   *      dispatch's Redis lock (a duplicate-event manifestation of the
+   *      retry-between-events race).
+   *   2. `$expr: lt(dispatchGuardReleasedAt, updatedAt)` — the most recent
+   *      `updatedAt` change came from the summarizer writing `status=failed`
+   *      (the trigger for this FAILED event). If we already marked released
+   *      AFTER that updatedAt, this is a duplicate event from the same
+   *      failure. `dispatchGuardReleasedAt` missing OR strictly older than
+   *      `updatedAt` ⇒ first-event semantics.
+   *
+   * Residual race (irreducible without summarizer-side cooperation): between
+   * THIS update committing and the caller's Redis release running,
+   * `createVideo`'s failed-retry branch could acquire a new lock. The
+   * subsequent release would then wipe the new lock. The summarizer's per-
+   * `video_summary_id` pipeline lock at
+   * `services/summarizer/src/services/cache/pipeline_event_stream.py` is the
+   * documented last line of defense for that microsecond window.
+   */
+  async tryClaimDispatchRelease(id: string): Promise<boolean> {
+    const result = await this.cacheCollection.findOneAndUpdate(
+      {
+        _id: new ObjectId(id),
+        status: 'failed',
+        $or: [
+          { dispatchGuardReleasedAt: { $exists: false } },
+          { $expr: { $lt: ['$dispatchGuardReleasedAt', '$updatedAt'] } },
+        ],
+      },
+      { $set: { dispatchGuardReleasedAt: new Date() } },
+      { returnDocument: 'after', projection: { _id: 1 } },
+    );
+    return !!result;
   }
 
   async getVersions(youtubeId: string, limit: number): Promise<VideoSummaryCacheDocument[]> {

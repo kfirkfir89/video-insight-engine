@@ -144,6 +144,137 @@ describe('MongoDB plugin', () => {
       expect(videoSummaryIndex?.sparse).toBe(true);
     });
 
+    it('should create a partial unique index on videoSummaryCache.dedupKey (Step 1c)', async () => {
+      // Partial-on-$exists so legacy rows (no dedupKey) don't trip the
+      // constraint. Without unique:true the cross-user dedup at the upsert
+      // layer is unenforced.
+      const indexes = await app.mongo.db.collection('videoSummaryCache').indexes();
+
+      const dedupIndex = indexes.find(
+        (idx) => idx.key && 'dedupKey' in idx.key && Object.keys(idx.key).length === 1,
+      );
+      expect(dedupIndex).toBeDefined();
+      expect(dedupIndex?.unique).toBe(true);
+      expect(dedupIndex?.partialFilterExpression).toEqual({ dedupKey: { $exists: true } });
+    });
+
+  });
+
+  describe('dedupKey backfill (Step 1a)', () => {
+    let app: FastifyInstance;
+
+    beforeAll(async () => {
+      const { mongodbPlugin } = await import('./mongodb.js');
+      app = Fastify({ logger: false });
+      await app.register(mongodbPlugin);
+    });
+
+    afterAll(async () => {
+      await app.close();
+    });
+
+    beforeEach(async () => {
+      // Drop the dedupKey index between scenarios so we can pre-seed legacy
+      // rows AND ensure the plugin's startup hook recreates it deterministically.
+      await app.mongo.db.collection('videoSummaryCache').deleteMany({});
+      try {
+        await app.mongo.db.collection('videoSummaryCache').dropIndex('dedupKey_1');
+      } catch {
+        /* index may not exist yet */
+      }
+    });
+
+    it('should populate dedupKey on legacy rows missing the field', async () => {
+      const { computeContentKey } = await import('../services/idempotency.service.js');
+      const { runDedupKeyBackfill } = await import('./mongodb.js');
+
+      // Pre-seed two legacy rows (no dedupKey field).
+      await app.mongo.db.collection('videoSummaryCache').insertMany([
+        { youtubeId: 'legacy-001', version: 1, status: 'completed', isLatest: true, retryCount: 0 },
+        { youtubeId: 'legacy-002', version: 1, status: 'completed', isLatest: true, retryCount: 0 },
+      ]);
+
+      await runDedupKeyBackfill(app.mongo.db, app.log);
+
+      const rows = await app.mongo.db
+        .collection('videoSummaryCache')
+        .find({})
+        .toArray();
+
+      const byYoutubeId = Object.fromEntries(rows.map((r) => [r.youtubeId, r]));
+      expect(byYoutubeId['legacy-001'].dedupKey).toBe(
+        computeContentKey({ youtubeId: 'legacy-001', providers: undefined, version: 1 }),
+      );
+      expect(byYoutubeId['legacy-002'].dedupKey).toBe(
+        computeContentKey({ youtubeId: 'legacy-002', providers: undefined, version: 1 }),
+      );
+    });
+
+    it('should be idempotent — running twice is a no-op', async () => {
+      const { runDedupKeyBackfill } = await import('./mongodb.js');
+
+      await app.mongo.db.collection('videoSummaryCache').insertOne({
+        youtubeId: 'legacy-idem',
+        version: 1,
+        status: 'completed',
+        isLatest: true,
+        retryCount: 0,
+      });
+
+      await runDedupKeyBackfill(app.mongo.db, app.log);
+      const afterFirst = await app.mongo.db
+        .collection('videoSummaryCache')
+        .findOne({ youtubeId: 'legacy-idem' });
+
+      await runDedupKeyBackfill(app.mongo.db, app.log);
+      const afterSecond = await app.mongo.db
+        .collection('videoSummaryCache')
+        .findOne({ youtubeId: 'legacy-idem' });
+
+      expect(afterSecond?.dedupKey).toBe(afterFirst?.dedupKey);
+    });
+
+    it('should skip rows that already have dedupKey (predicate scoped)', async () => {
+      const { runDedupKeyBackfill } = await import('./mongodb.js');
+
+      await app.mongo.db.collection('videoSummaryCache').insertOne({
+        youtubeId: 'already-keyed',
+        version: 1,
+        status: 'completed',
+        isLatest: true,
+        retryCount: 0,
+        dedupKey: 'pre-existing-key-do-not-touch',
+      });
+
+      await runDedupKeyBackfill(app.mongo.db, app.log);
+
+      const row = await app.mongo.db
+        .collection('videoSummaryCache')
+        .findOne({ youtubeId: 'already-keyed' });
+      expect(row?.dedupKey).toBe('pre-existing-key-do-not-touch');
+    });
+
+    it('should default missing version to 1 (legacy rows from v1.0 with no version field)', async () => {
+      const { computeContentKey } = await import('../services/idempotency.service.js');
+      const { runDedupKeyBackfill } = await import('./mongodb.js');
+
+      // Some very-legacy rows pre-date the version field entirely.
+      await app.mongo.db.collection('videoSummaryCache').insertOne({
+        youtubeId: 'no-version',
+        status: 'completed',
+        isLatest: true,
+        retryCount: 0,
+      });
+
+      await runDedupKeyBackfill(app.mongo.db, app.log);
+
+      const row = await app.mongo.db
+        .collection('videoSummaryCache')
+        .findOne({ youtubeId: 'no-version' });
+      expect(row?.dedupKey).toBe(
+        computeContentKey({ youtubeId: 'no-version', providers: undefined, version: 1 }),
+      );
+    });
   });
 
   describe('connection cleanup', () => {

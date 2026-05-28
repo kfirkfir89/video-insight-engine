@@ -6,6 +6,13 @@ export interface Labels {
   next: string;
   previous: string;
   prev: string;
+  // Hero chrome
+  processing: string;
+  hide: string;
+  watch: string;
+  // Language toggle (announced to screen readers; the visible pill labels
+  // are the language names themselves and stay in their native script).
+  contentLanguage: string;
   // Actions
   done: string;
   undo: string;
@@ -57,6 +64,10 @@ const EN: Labels = {
   next: 'Next',
   previous: 'Previous',
   prev: 'Prev',
+  processing: 'Processing…',
+  hide: 'Hide',
+  watch: 'Watch',
+  contentLanguage: 'Content language',
   done: 'Done',
   undo: 'Undo',
   copy: 'Copy',
@@ -138,6 +149,10 @@ const TRANSLATIONS: Record<string, Labels> = {
     next: 'הבא',
     previous: 'הקודם',
     prev: 'הקודם',
+    processing: 'מעבד…',
+    hide: 'הסתר',
+    watch: 'צפה',
+    contentLanguage: 'שפת התוכן',
     done: 'בוצע',
     undo: 'ביטול',
     copy: 'העתק',
@@ -216,6 +231,10 @@ const TRANSLATIONS: Record<string, Labels> = {
     next: 'التالي',
     previous: 'السابق',
     prev: 'السابق',
+    processing: 'جاري المعالجة…',
+    hide: 'إخفاء',
+    watch: 'شاهد',
+    contentLanguage: 'لغة المحتوى',
     done: 'تم',
     undo: 'تراجع',
     copy: 'نسخ',

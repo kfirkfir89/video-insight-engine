@@ -1,5 +1,5 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useVideo, useRetryVideo } from "@/hooks/use-videos";
 import { useSummaryStream } from "@/features/video-output/hooks/use-summary-stream";
 import { useCelebrationTrigger } from "@/features/video-output/hooks/use-celebration-trigger";
@@ -9,12 +9,18 @@ import { Button } from "@/components/ui/button";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { Loader2, ArrowLeft, RefreshCw, AlertCircle, PauseCircle } from "lucide-react";
 import { OutputRouter } from "@/features/video-output/components/OutputRouter";
+import { LanguageToggle } from "@/features/video-output/components/LanguageToggle";
 import { VideoPlayerProvider } from "@/features/video-output/contexts/VideoPlayerContext";
 
 import { Confetti } from "@/components/ui/Confetti";
 import { buildSynthesisFromMeta } from "@/features/video-output/lib/synthesis-utils";
 import { shouldOpenStreamForStatus } from "@/features/video-output/lib/streaming/should-open-stream";
 import type { TabEntry } from "@vie/types";
+
+// localStorage key for the cross-video language preference. Scoped under
+// the `vie:` namespace so future preferences share a namespace and don't
+// collide with third-party libraries dumping into root keys.
+const LANGUAGE_PREFERENCE_KEY = "vie:prefersOriginalLang";
 
 export function VideoDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -124,30 +130,74 @@ export function VideoDetailPage() {
     };
   }, [video, streamMetadata, streamDuration]);
 
-  // Resolve tabs: prefer streaming tabs, then English translation, then native cached tabs.
-  // The English variant is populated by the translation phase for non-English videos so
-  // shared output pages render in a globally-readable language by default.
+  // Language view: top-level tabs/meta are always English-primary. The
+  // sourceLanguage block, when present, carries the original-language
+  // artifact. Default = English (top-level). Toggle reveals the original.
+  // No special case for sound-only — sourceLanguage is simply absent there.
+  const sourceLanguage = video?.sourceLanguage ?? null;
+  const canToggleLanguage = !!sourceLanguage && sourceLanguage.tabs.length > 0;
+
+  // Persist the language preference across videos and sessions. A Hebrew
+  // or Arabic speaker who toggles to the original language once expects to
+  // land on the original on every subsequent video and on every reload —
+  // the previous "reset on id change" behaviour penalised exactly the users
+  // the toggle was built for. localStorage holds the cross-video preference;
+  // per-video sourceLanguage presence is enforced separately via
+  // canToggleLanguage so English-only videos still render the EN view.
+  const [showOriginal, setShowOriginal] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(LANGUAGE_PREFERENCE_KEY) === '1';
+    } catch {
+      // Private mode / storage disabled — fall back to English-primary.
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(LANGUAGE_PREFERENCE_KEY, showOriginal ? '1' : '0');
+    } catch {
+      // No-op — non-persistent preference is acceptable in restricted storage.
+    }
+  }, [showOriginal]);
+
+  // While the stream is open, content is streaming-priority (always English-
+  // shape during the pipeline; sourceLanguage isn't populated until the final
+  // translation phase). Gating ``useOriginal`` on ``!isProcessing`` keeps the
+  // page direction (displayIsRTL below) aligned with the streamed tabs/meta —
+  // otherwise a Hebrew speaker with showOriginal=true persisted gets RTL
+  // direction wrapping LTR-English streamed content.
+  const useOriginal = !isProcessing && showOriginal && canToggleLanguage;
+
   const resolvedTabs = useMemo((): TabEntry[] | null => {
     if (streamTabs.length > 0) return streamTabs;
-    const englishTabs = video?.tabs_en;
-    if (Array.isArray(englishTabs) && englishTabs.length > 0) return englishTabs as TabEntry[];
-    if (video?.tabs && Array.isArray(video.tabs) && video.tabs.length > 0) return video.tabs as TabEntry[];
-    return null;
-  }, [video?.tabs, video?.tabs_en, streamTabs]);
+    if (useOriginal && sourceLanguage) return sourceLanguage.tabs;
+    const englishTabs = video?.tabs;
+    return Array.isArray(englishTabs) && englishTabs.length > 0
+      ? (englishTabs as TabEntry[])
+      : null;
+  }, [streamTabs, useOriginal, sourceLanguage, video?.tabs]);
 
-  // Resolve meta: prefer streaming meta, then English translation, then native cached meta.
   const resolvedMeta = useMemo(() => {
     if (streamMeta) return streamMeta;
-    if (video?.meta_en) return video.meta_en as typeof video.meta;
+    if (useOriginal && sourceLanguage) return sourceLanguage.meta;
     return video?.meta ?? null;
-  }, [video?.meta, video?.meta_en, streamMeta]);
+  }, [streamMeta, useOriginal, sourceLanguage, video?.meta]);
 
-  // Resolve synthesis for TLDR/takeaways display
+  // Synthesis is always derived from meta — meta is the superset (carries
+  // tldr / masterSummary / keyTakeaways / seoDescription). `resolvedMeta`
+  // already routes to sourceLanguage.meta when the toggle is active, so
+  // the derivation produces correct source-language synthesis automatically.
   const synthesis = useMemo(() => {
     if (streamSynthesis) return streamSynthesis;
-    if (video?.synthesis_en) return video.synthesis_en as unknown as typeof streamSynthesis;
     return buildSynthesisFromMeta(resolvedMeta);
-  }, [streamSynthesis, resolvedMeta, video?.synthesis_en]);
+  }, [streamSynthesis, resolvedMeta]);
+
+  const displayLanguage = useOriginal && sourceLanguage
+    ? sourceLanguage.code
+    : (resolvedMeta?.language ?? "en");
+  const displayIsRTL = useOriginal && sourceLanguage
+    ? sourceLanguage.isRTL
+    : (resolvedMeta?.isRTL ?? false);
 
   // Loading state
   if (isLoading) {
@@ -364,11 +414,21 @@ export function VideoDetailPage() {
             youtubeId={video.youtubeId}
             creator={mergedVideo.creator ?? undefined}
             duration={mergedVideo.duration}
-            language={resolvedMeta?.language}
-            isRTL={resolvedMeta?.isRTL}
+            language={displayLanguage}
+            isRTL={displayIsRTL}
             streamPhase={phase}
             extractionProgress={extractionProgress}
             onCancelStream={isStreaming ? handleCancelStream : undefined}
+            languageToggle={
+              canToggleLanguage && sourceLanguage ? (
+                <LanguageToggle
+                  showOriginal={showOriginal}
+                  onChange={setShowOriginal}
+                  originalName={sourceLanguage.name}
+                  originalCode={sourceLanguage.code}
+                />
+              ) : null
+            }
           />
           <Confetti trigger={confettiTrigger} />
         </Layout>

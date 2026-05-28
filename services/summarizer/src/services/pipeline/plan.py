@@ -87,6 +87,17 @@ def _validate_tabs(tabs: list[dict]) -> list[dict]:
         if not component:
             component = infer_component(tid)
 
+        # ``outboundLinks`` is an LLM-generated map of {target_tab_id: label}
+        # in source language. Cross-tab resolution reads these to build the
+        # per-link CTA text — keeps the labels in the same language as the
+        # rest of the assembled output so the walker can translate them.
+        raw_links = tab.get("outboundLinks")
+        outbound_links: dict[str, str] = {}
+        if isinstance(raw_links, dict):
+            for target_id, lbl in raw_links.items():
+                if isinstance(target_id, str) and isinstance(lbl, str) and lbl.strip():
+                    outbound_links[target_id] = lbl.strip()
+
         valid_tabs.append({
             "id": tid,
             "label": tab["label"],
@@ -94,6 +105,7 @@ def _validate_tabs(tabs: list[dict]) -> list[dict]:
             "dataSource": tab.get("dataSource", ""),
             "component": component,
             "goal": tab.get("goal", ""),
+            "outboundLinks": outbound_links,
         })
 
     return valid_tabs

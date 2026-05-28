@@ -45,6 +45,15 @@ interface ComposableOutputProps {
   videoSummaryId?: string;
 }
 
+// Strip an assembler-produced count prefix ("10 Ingredients" → "Ingredients").
+// The lookahead `(?=\p{L})` keeps numeric content like "1.5 cups" or
+// "5-Star Recipe" intact — we only drop the leading digits when the next
+// non-whitespace char is a letter in any script. Returns the original label
+// unchanged when no prefix is found, so callers can fall back to a default.
+function stripCountPrefix(label: string): string {
+  return label.replace(/^\d+\s+(?=\p{L})/u, '');
+}
+
 // ─── Component Registry (v2: component name → renderer) ───
 
 interface NavProps {
@@ -52,6 +61,10 @@ interface NavProps {
   onNavigateTab: (id: string) => void;
   onSeek?: (seconds: number) => void;
   tabId?: string;
+  /** Current tab's display label (e.g. "10 Ingredients") with count prefix
+   *  intact. Renderers that want a section-heading version strip the prefix
+   *  themselves. Sourced from the translated `tab.label`. */
+  tabLabel?: string;
   currentTime?: number;
   contentTag?: string;
   /** Full tab list — used by hub-style renderers (overview) to build sibling
@@ -217,7 +230,7 @@ const COMPONENT_REGISTRY: Record<string, (props: Record<string, unknown>, nav: N
   checklist: (props, nav) => (
     <ChecklistInteractive
       items={Array.isArray(props.items) ? props.items as Array<{ label: string; note?: string; emoji?: string }> : []}
-      tabLabel={typeof props.tabLabel === 'string' ? props.tabLabel : 'Items'}
+      tabLabel={stripCountPrefix(nav.tabLabel ?? '') || 'Items'}
       groups={Array.isArray(props.groups) ? props.groups as string[] : undefined}
       scalable={typeof props.scalable === 'boolean' ? props.scalable : undefined}
       baseServings={typeof props.baseServings === 'number' ? props.baseServings : undefined}
@@ -390,7 +403,7 @@ export const ComposableOutput = memo(function ComposableOutput({
       tips: stepTab.props.tips as string[] | undefined,
       scalable: checklistTab.props.scalable as boolean | undefined,
       baseServings: checklistTab.props.baseServings as number | undefined,
-      tabLabel: (checklistTab.props.tabLabel as string) ?? 'Ingredients',
+      tabLabel: stripCountPrefix(checklistTab.label ?? '') || 'Ingredients',
     };
   }, [primaryTag, tabs]);
 
@@ -413,6 +426,7 @@ export const ComposableOutput = memo(function ComposableOutput({
       onNavigateTab,
       onSeek: seekTo,
       tabId: tab.id,
+      tabLabel: tab.label,
       currentTime,
       allTabs: tabs,
       videoId: videoSummaryId,

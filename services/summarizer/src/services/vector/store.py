@@ -136,9 +136,9 @@ async def store_default_output_chunks(
     ``tab_component`` and ``prop_path`` so the assistant can filter to either
     transcript-only, output-only, or combined retrieval.
 
-    For non-English videos, callers should pass the English-translated
-    ``tabs`` (via ``ctx.tabs_en``) so embeddings stay in the same language as
-    the (English-trained) embedding model — see translation phase.
+    For non-English videos, callers pass the English-primary tabs (the
+    translation phase promotes them onto ``ctx.assembled_tabs``) so embeddings
+    stay in the same language as the (English-trained) embedding model.
 
     Designed to run as a background task — never raises.
     """

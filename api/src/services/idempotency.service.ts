@@ -18,6 +18,16 @@ export interface ComputeKeyInput {
   clientKey?: string;
 }
 
+export interface ComputeContentKeyInput {
+  youtubeId: string;
+  providers?: ProviderConfig;
+  /** Version of the cache row this key addresses. Starts at 1 for fresh
+   *  submissions; bypassCache version-bumps increment. Including version means
+   *  two concurrent first-time submits collapse onto v1, but a deliberate
+   *  Retry that allocates v2 produces a distinct key. */
+  version: number;
+}
+
 export interface ReserveInput {
   hash: string;
   userId: string;
@@ -43,8 +53,14 @@ const PROVIDER_KEYS = ['default', 'fast', 'fallback'] as const satisfies readonl
  * Stable canonical serialization of provider overrides. Keys are emitted in
  * sorted order so two equivalent configs (e.g. `{default: 'anthropic'}` vs
  * `{default: 'anthropic', fallback: undefined}`) produce the same string.
+ *
+ * Exported so the cross-user content-addressed dedup key (computed by
+ * `computeContentKey` and used as the `videoSummaryCache.dedupKey`) shares
+ * the exact canonicalization with the user-scoped `computeKey` — diverging
+ * here would let two hash families disagree on whether two provider configs
+ * are equivalent.
  */
-function canonicalizeProviders(providers: ProviderConfig | undefined): string {
+export function canonicalizeProviders(providers: ProviderConfig | undefined): string {
   if (!providers) return '';
   const sortedKeys = [...PROVIDER_KEYS].sort();
   const ordered: Record<string, string> = {};
@@ -52,6 +68,23 @@ function canonicalizeProviders(providers: ProviderConfig | undefined): string {
     ordered[key] = String(providers[key] ?? '');
   }
   return JSON.stringify(ordered);
+}
+
+/**
+ * Module-level computation of the content-addressed dedup key. The
+ * `IdempotencyService.computeContentKey` method delegates here so that
+ * one-off callers (the mongodb plugin's backfill loop, scripts, etc.) can
+ * reuse the exact derivation without spinning up a service instance.
+ */
+export function computeContentKey(input: ComputeContentKeyInput): string {
+  const providersHash = canonicalizeProviders(input.providers);
+  const payload = [
+    input.youtubeId,
+    config.PIPELINE_VERSION,
+    providersHash,
+    `v${input.version}`,
+  ].join(':');
+  return createHash('sha256').update(payload).digest('hex');
 }
 
 export class IdempotencyService {
@@ -83,6 +116,24 @@ export class IdempotencyService {
       clientPart,
     ].join(':');
     return createHash('sha256').update(payload).digest('hex');
+  }
+
+  /**
+   * User-independent content-addressed hash used as `videoSummaryCache.dedupKey`.
+   *
+   * Two distinct users submitting the same `youtubeId` (same providers, same
+   * PIPELINE_VERSION) compute the same key and converge on a single cache row
+   * via `videoRepository.upsertCacheByDedupKey`. The route-level `computeKey`
+   * stays user-scoped for per-user double-submit protection; this key powers
+   * the cross-user single-flight at the cache layer.
+   *
+   * `version` is part of the key so that a bypassCache version bump (which
+   * deliberately starts a fresh pipeline run) produces a distinct hash from
+   * the existing row, while two concurrent first-time submits both targeting
+   * v1 collapse correctly.
+   */
+  computeContentKey(input: ComputeContentKeyInput): string {
+    return computeContentKey(input);
   }
 
   /** Strong-consistency lookup; null when the hash is fresh. */

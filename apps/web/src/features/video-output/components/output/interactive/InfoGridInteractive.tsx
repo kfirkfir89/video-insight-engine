@@ -10,6 +10,9 @@ type InfoGridMode = 'key_value' | 'table' | 'tag_cloud';
 interface InfoGridItem {
   key: string;
   value: string;
+  /** Optional supporting example, source, or context — shown in muted italic below the value. */
+  evidence?: string;
+  emoji?: string;
 }
 
 interface InfoGridSection {
@@ -27,6 +30,30 @@ interface InfoGridInteractiveProps {
 
 type SortDir = 'asc' | 'desc' | null;
 
+interface NormalizedItem extends InfoGridItem {
+  originalIndex: number;
+}
+
+function normalizeItems(raw: InfoGridItem[]): NormalizedItem[] {
+  return raw
+    .map((item, i) => {
+      const key = (item?.key ?? '').trim();
+      const value = (item?.value ?? '').trim();
+      // Cards without a key are empty rectangles — drop them. A key with no
+      // value is a degenerate "headline tile"; we keep those so terms-only
+      // glossaries still surface.
+      if (!key) return null;
+      return {
+        key,
+        value,
+        evidence: item.evidence?.trim() || undefined,
+        emoji: item.emoji,
+        originalIndex: i,
+      } as NormalizedItem;
+    })
+    .filter((item): item is NormalizedItem => item !== null);
+}
+
 export const InfoGridInteractive = memo(function InfoGridInteractive({
   items,
   mode = 'key_value',
@@ -40,15 +67,16 @@ export const InfoGridInteractive = memo(function InfoGridInteractive({
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }, []);
 
-  const showSearch = items.length > 8;
+  const cleanItems = useMemo(() => normalizeItems(items), [items]);
+  const showSearch = cleanItems.length > 8;
 
   const filtered = useMemo(() => {
-    if (!searchQuery.trim()) return items.map((item, i) => ({ ...item, originalIndex: i }));
+    if (!searchQuery.trim()) return cleanItems;
     const q = searchQuery.toLowerCase();
-    return items
-      .map((item, i) => ({ ...item, originalIndex: i }))
-      .filter((item) => item.key.toLowerCase().includes(q) || item.value.toLowerCase().includes(q));
-  }, [items, searchQuery]);
+    return cleanItems.filter(
+      (item) => item.key.toLowerCase().includes(q) || item.value.toLowerCase().includes(q),
+    );
+  }, [cleanItems, searchQuery]);
 
   const sorted = useMemo(() => {
     if (!sortDir) return filtered;
@@ -57,6 +85,16 @@ export const InfoGridInteractive = memo(function InfoGridInteractive({
       return sortDir === 'asc' ? cmp : -cmp;
     });
   }, [filtered, sortDir]);
+
+  // Pick a layout density that respects value length — short reference cards
+  // pack tighter, paragraph-shaped cards need real reading width so the eye
+  // doesn't ladder down 12 lines per cell. Computed from the VISIBLE set so
+  // the grid retightens after a filter narrows results to short rows.
+  const longestValue = useMemo(
+    () => sorted.reduce((max, i) => Math.max(max, i.value.length), 0),
+    [sorted],
+  );
+  const gridMinWidth = longestValue > 120 ? 280 : longestValue > 60 ? 220 : 160;
 
   const toggleSort = useCallback(() => {
     setSortDir((prev) => (prev === null ? 'asc' : prev === 'asc' ? 'desc' : null));
@@ -72,23 +110,32 @@ export const InfoGridInteractive = memo(function InfoGridInteractive({
     } catch { /* clipboard API may fail in insecure contexts */ }
   }, [sorted]);
 
-  if (items.length === 0) return null;
+  if (cleanItems.length === 0) return null;
 
-  const renderGridCell = (item: { key: string; value: string; originalIndex: number }, displayIndex: number) => (
+  const renderGridCell = (item: NormalizedItem, displayIndex: number) => (
     <FadeIn key={item.originalIndex} index={displayIndex}>
-      <GlassCard variant="outlined" className="h-full p-3 space-y-1">
-        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/70 block">
-          {item.key}
+      <GlassCard variant="outlined" className="h-full p-3 space-y-1.5">
+        <span className="flex items-baseline gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground/70">
+          {item.emoji ? <span aria-hidden="true">{item.emoji}</span> : null}
+          <span className="break-words">{item.key}</span>
         </span>
-        <p className="text-sm font-medium leading-snug break-words">
-          {item.value}
-        </p>
+        {item.value ? (
+          <p className="text-sm font-medium leading-snug break-words">{item.value}</p>
+        ) : null}
+        {item.evidence ? (
+          <p className="text-xs italic leading-snug text-muted-foreground/80 break-words">
+            {item.evidence}
+          </p>
+        ) : null}
       </GlassCard>
     </FadeIn>
   );
 
   const renderGrid = (gridItems: typeof sorted) => (
-    <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
+    <div
+      className="grid gap-2"
+      style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${gridMinWidth}px, 1fr))` }}
+    >
       {gridItems.map((item, i) => renderGridCell(item, i))}
     </div>
   );

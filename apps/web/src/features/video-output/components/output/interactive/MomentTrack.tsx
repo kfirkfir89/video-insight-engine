@@ -22,6 +22,14 @@ export interface MomentItem {
   speaker?: string;
   tags?: string[];
   thumbnailUrl?: string;
+  /** One-line vision caption for the frame at this timestamp. */
+  frameCaption?: string;
+  /** Vision LLM rationale for why this frame is educationally valuable. */
+  frameEvidence?: string;
+  /** On-screen text (OCR or LLM-read) visible in the frame. */
+  frameOcr?: string;
+  /** "slide", "code", "diagram", "demo", etc. — used to badge the moment. */
+  frameSceneType?: string;
 }
 
 interface MomentTrackProps {
@@ -413,6 +421,35 @@ export const MomentTrack = memo(function MomentTrack({
                             <p className="text-sm leading-relaxed text-muted-foreground">
                               {item.description}
                             </p>
+                          )}
+                          {(item.frameCaption || item.frameOcr || item.frameEvidence) && (
+                            <div className="rounded-md border border-border/40 bg-muted/15 px-3 py-2 space-y-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground/80">
+                                  On screen
+                                </span>
+                                {item.frameSceneType && (
+                                  <Badge variant="muted" className="text-[10px] font-medium capitalize">
+                                    {item.frameSceneType.replace(/_/g, ' ')}
+                                  </Badge>
+                                )}
+                              </div>
+                              {item.frameCaption && (
+                                <p className="text-sm leading-snug text-foreground/90">
+                                  {item.frameCaption}
+                                </p>
+                              )}
+                              {item.frameOcr && (
+                                <p className="text-xs leading-snug text-muted-foreground font-mono break-words">
+                                  &ldquo;{item.frameOcr}&rdquo;
+                                </p>
+                              )}
+                              {item.frameEvidence && (
+                                <p className="text-xs italic leading-snug text-muted-foreground/80">
+                                  {item.frameEvidence}
+                                </p>
+                              )}
+                            </div>
                           )}
                           {item.tags && item.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1">

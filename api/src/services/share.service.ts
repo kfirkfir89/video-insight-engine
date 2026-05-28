@@ -8,6 +8,8 @@ import {
 } from '../utils/errors.js';
 import { buildMetaFromDoc, buildTabsFromDoc, type NormalizedMeta } from '../utils/meta-builder.js';
 import { refreshFrameUrls } from '../utils/refresh-frame-urls.js';
+import { parseSourceLanguage } from '../utils/source-language.js';
+import type { SourceLanguageBlock } from '@vie/types';
 
 const SLUG_LENGTH = 10;
 
@@ -22,10 +24,7 @@ interface PublicSummaryResponse {
   status: string;
   meta: NormalizedMeta | null;
   tabs: unknown[] | null;
-  tabs_en: unknown[] | null;
-  meta_en: unknown | null;
-  synthesis_en: unknown | null;
-  forceEnglishReason: string | null;
+  sourceLanguage?: SourceLanguageBlock;
   shareSlug: string;
   viewsCount: number;
   likesCount: number;
@@ -104,13 +103,15 @@ export class ShareService {
     const docAsRecord = doc as unknown as Record<string, unknown>;
     const meta = buildMetaFromDoc(docAsRecord);
     const tabs = buildTabsFromDoc(docAsRecord);
-    const tabsEn = (docAsRecord.tabs_en as unknown[] | undefined) ?? null;
-    // Re-sign embedded S3 image URLs on both the native and English-translated
-    // tabs. Stored URLs expire on a TTL and may point at unreachable LocalStack
-    // hostnames in dev — refreshing on the read path makes both classes of
-    // breakage go away. Shared pages are the viral surface; broken images here
-    // are externally visible. No-op when S3 isn't configured (tests).
-    await Promise.all([refreshFrameUrls(tabs), refreshFrameUrls(tabsEn)]);
+    // Source-language nested block — original-language artifact for non-English
+    // videos. Top-level tabs are always English-primary. Zod-validated at the
+    // DB → API boundary so a summarizer shape drift surfaces as "no
+    // translation" instead of leaking malformed data to a viral share page.
+    const sourceLanguage = parseSourceLanguage(docAsRecord.sourceLanguage);
+    await Promise.all([
+      refreshFrameUrls(tabs),
+      sourceLanguage ? refreshFrameUrls(sourceLanguage.tabs) : Promise.resolve(),
+    ]);
 
     return {
       id: doc._id.toString(),
@@ -122,12 +123,10 @@ export class ShareService {
       status: doc.status || 'completed',
       meta,
       tabs,
-      // Shared output pages are viral by intent; the FE prefers these so
-      // non-English videos render in English for any visitor.
-      tabs_en: tabsEn,
-      meta_en: docAsRecord.meta_en ?? null,
-      synthesis_en: docAsRecord.synthesis_en ?? null,
-      forceEnglishReason: (docAsRecord.force_english_reason as string | undefined) ?? null,
+      // sourceLanguage omitted entirely for English-source videos rather
+      // than serialized as `null`. The FE checks presence to decide whether
+      // to render the language toggle on the share page.
+      ...(sourceLanguage ? { sourceLanguage } : {}),
       shareSlug: slug,
       viewsCount: doc.viewsCount ?? 0,
       likesCount: doc.likesCount ?? 0,

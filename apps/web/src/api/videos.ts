@@ -1,6 +1,6 @@
 import { request } from "./client";
 import type { Video } from "@/types";
-import type { TabEntry, VIEResponseMeta } from "@vie/types";
+import type { TabEntry, VIEResponseMeta, SourceLanguageBlock } from "@vie/types";
 
 export interface ListVideosParams {
   folderId?: string;
@@ -34,14 +34,11 @@ export interface VideoDetail {
   folderId: string | null;
   meta: VIEResponseMeta | null;
   tabs: TabEntry[] | null;
-  /** English-translated tabs (populated by the translation phase for non-English videos). */
-  tabs_en?: TabEntry[] | null;
-  /** English-translated meta (populated by the translation phase for non-English videos). */
-  meta_en?: VIEResponseMeta | null;
-  /** English-translated synthesis (populated by the translation phase for non-English videos). */
-  synthesis_en?: Record<string, unknown> | null;
-  /** Set when the pipeline overrode the language to English (e.g., instrumental music). */
-  forceEnglishReason?: "sound_only";
+  /** Original-language nested artifact. Absent for English-source videos and
+   *  for sound-only music videos forced to English. When present, the FE
+   *  renders a toggle to view the original-language tabs/meta. Always
+   *  truly-optional (never serialized as `null`). */
+  sourceLanguage?: SourceLanguageBlock;
 }
 
 export const videosApi = {

@@ -46,7 +46,11 @@ On `status: 'failed'` from the summarizer, `idempotencyService.invalidateByVideo
 
 ## Hash inputs
 
-The hash is the SHA-256 of `userId:youtubeId:PIPELINE_VERSION:providersHash`.
+The system uses **two key shapes** in different layers:
+
+### Per-user idempotency hash (request layer)
+
+SHA-256 of `userId:youtubeId:PIPELINE_VERSION:providersHash`. Owned by `idempotencyService.computeKey()`; gates `POST /api/videos` against the same user double-submitting.
 
 - **`userId`** — namespaces per user so cross-user collisions are impossible.
 - **`youtubeId`** — the canonical 11-char ID (URL params stripped upstream).
@@ -57,12 +61,37 @@ When a client supplies an `Idempotency-Key` header (Stripe convention), the head
 
 The header is validated to 1-255 printable ASCII characters (`/^[\x21-\x7E]{1,255}$/`); other values return HTTP 400 `INVALID_IDEMPOTENCY_KEY`.
 
+### Cross-user content-addressed key (cache layer)
+
+SHA-256 of `youtubeId:PIPELINE_VERSION:providersHash:v<version>`. **No `userId`** — that's the point: two different users submitting the same video collapse onto a single `videoSummaryCache` row instead of running the pipeline twice.
+
+Owned by `computeContentKey()` (free function in `api/src/services/idempotency.service.ts`, also exposed as `IdempotencyService.computeContentKey()`). Stored as `videoSummaryCache.dedupKey` with a partial unique index on `{$exists: true}` so legacy pre-backfill rows coexist.
+
+Entry point: `VideoRepository.upsertCacheByDedupKey(...) → { doc, wasInsert }` — atomic `findOneAndUpdate` with `$setOnInsert`. Exactly one concurrent caller sees `wasInsert: true` and is responsible for dispatching the pipeline; the rest attach to the existing row.
+
+`version` is included so a `bypassCache` version-bump (which deliberately starts a fresh pipeline run) produces a distinct key from the existing row, while two concurrent first-time submits both targeting `v1` collapse correctly.
+
+### Dispatch guard (publish layer)
+
+Belt-and-suspenders Redis lock above the content-addressed upsert. The upsert collapses concurrent submits at the cache row; the dispatch guard catches the narrower window where two API replicas race outside Mongo's serialization, or where `dispatchPipeline` is called twice for the same row (e.g. a failed-retry firing while a prior dispatch is still in-flight).
+
+- **Files**: `api/src/services/dispatch-guard.service.ts` + `api/src/plugins/redis.ts`.
+- **Key**: `vie:api:dispatched:<videoSummaryId>`.
+- **Acquire**: `SET NX EX <DISPATCH_GUARD_TTL_SECONDS>` — atomic. On win, the caller gets a token (`randomUUID`) it must pass to `release()`.
+- **Release**: Lua compare-and-delete using the token (safe even if a fresh attempt re-acquired after TTL expiry). With `token: null`, blind `DEL` — used by `internal.routes.ts` on terminal FAILED status from the summarizer.
+- **Release on throw**: `dispatchPipeline()` wraps the entire publish path in try/catch and releases the guard if any publish call throws, so a transient broker error doesn't strand the guard for the full TTL.
+- **Fail-open contract**: any Redis error returns `acquired: true` so the caller proceeds. Rationale — the summarizer's per-`video_summary_id` lock at `services/summarizer/src/services/cache/pipeline_event_stream.py` is the last line of defense and dedups even if we double-publish; a Redis outage silently dropping user submissions would be far worse.
+- **TTL**: `DISPATCH_GUARD_TTL_SECONDS` defaults to 900s. **Must exceed** the summarizer's `PIPELINE_LOCK_TTL_SECONDS` (default 600s) so the guard doesn't expire while the pipeline lock is still held — 50% headroom by default.
+- **REDIS_URL**: Both the API (dispatch guard) and the summarizer (pipeline lock + response cache) must point at the **same** Redis instance for operational coherence.
+
 ## Configuration
 
 | Env var | Default | Purpose |
 |---------|---------|---------|
-| `PIPELINE_VERSION` | `v1` | Canonical version string baked into every hash. Bump on prompt/schema/pipeline changes. |
-| `IDEMPOTENCY_TTL_SECONDS` | `86400` (24h) | Per-key TTL. Long enough for accidental double-submits; short enough that "I want to retry tomorrow" works. |
+| `PIPELINE_VERSION` | `v1` | Canonical version string baked into both the per-user idempotency hash AND the cross-user `dedupKey`. Bump on prompt/schema/pipeline changes. |
+| `IDEMPOTENCY_TTL_SECONDS` | `86400` (24h) | Per-key TTL for `idempotencyKeys`. Long enough for accidental double-submits; short enough that "I want to retry tomorrow" works. |
+| `REDIS_URL` | `redis://vie-redis:6379` | Redis connection for the dispatch guard. Must be the same instance the summarizer uses for its per-video pipeline lock. |
+| `DISPATCH_GUARD_TTL_SECONDS` | `900` | TTL on `vie:api:dispatched:<videoSummaryId>`. Must exceed the summarizer's `PIPELINE_LOCK_TTL_SECONDS` (default 600s). |
 
 ## When to bump `PIPELINE_VERSION`
 
@@ -82,6 +111,8 @@ Do **NOT** bump for:
 - Frontend-only changes
 
 **Rule of thumb**: if a user re-running the same video would get a different result, bump.
+
+> **Note**: bumping `PIPELINE_VERSION` invalidates **both** the per-user idempotency hash AND the cross-user content-addressed `dedupKey` — same input, different version = different keys in both layers, so every stale row is bypassed atomically on the next request.
 
 ### Procedure
 

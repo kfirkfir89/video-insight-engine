@@ -51,18 +51,18 @@ export function SharePage() {
     };
   }, [shareData?.title]);
 
-  // Extract tabs and meta from share data. Shared output pages are the
-  // "viral" surface, so prefer the English-translated variant when present
-  // so anyone can read them regardless of the source video's language.
+  // Shared output pages are the viral surface — render the English-primary
+  // top-level tabs (always present post-translation). The source-language
+  // nested block is intentionally ignored on share pages: anonymous visitors
+  // can't reasonably opt into a language they don't read.
   const tabs = useMemo((): TabEntry[] | null => {
-    const englishTabs = shareData?.tabs_en;
-    if (Array.isArray(englishTabs) && englishTabs.length > 0) return englishTabs as TabEntry[];
-    return (shareData?.tabs as TabEntry[] | undefined) ?? null;
-  }, [shareData?.tabs, shareData?.tabs_en]);
+    const topTabs = shareData?.tabs;
+    return Array.isArray(topTabs) && topTabs.length > 0
+      ? (topTabs as TabEntry[])
+      : null;
+  }, [shareData?.tabs]);
 
-  const meta = useMemo(() => {
-    return shareData?.meta_en ?? shareData?.meta ?? null;
-  }, [shareData?.meta, shareData?.meta_en]);
+  const meta = useMemo(() => shareData?.meta ?? null, [shareData?.meta]);
 
   const synthesis = useMemo(() => buildSynthesisFromMeta(meta), [meta]);
 

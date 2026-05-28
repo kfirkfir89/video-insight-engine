@@ -5,6 +5,7 @@ import { createContainer } from './container.js';
 import { QueuePublisher } from './services/queue-publisher.service.js';
 import { IdempotencyService } from './services/idempotency.service.js';
 import { IdempotencyRepository } from './repositories/idempotency.repository.js';
+import { VideoService } from './services/video.service.js';
 
 /**
  * `Db.collection()` is called in every repository constructor. We hand back
@@ -70,5 +71,22 @@ describe('createContainer', () => {
 
     expect(container.idempotencyService).toBeInstanceOf(IdempotencyService);
     expect(container.idempotencyRepository).toBeInstanceOf(IdempotencyRepository);
+  });
+
+  it('wires the IdempotencyService into the VideoService for content-addressed dedup', () => {
+    // VideoService needs IdempotencyService to compute the dedupKey for
+    // upsertCacheByDedupKey. If the container wiring regresses, cross-user
+    // dedup silently breaks (the upsert would receive an undefined key).
+    const container = createContainer(makeMockDb(), mockLogger, {
+      queueChannelSupplier: async () => {
+        throw new Error('not used in this test');
+      },
+    });
+
+    expect(container.videoService).toBeInstanceOf(VideoService);
+    // Probe the private field via index access — sturdier than fragile mocks
+    // and proves the constructor injection happened.
+    expect((container.videoService as unknown as { idempotencyService: IdempotencyService }).idempotencyService)
+      .toBe(container.idempotencyService);
   });
 });
