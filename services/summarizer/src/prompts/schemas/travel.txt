@@ -43,10 +43,13 @@ Extract a complete, actionable trip plan.
     {
       "item": "Destination-specific item",
       "category": "Essentials | Clothing | Electronics | Documents | Health",
-      "essential": true
+      "essential": true,
+      "weight": 0.4,
+      "emoji": "🎒"
     }
   ],
-> UI: Packing list → ChecklistInteractive with progress bar. Fill category for grouping headers, essential for priority badges.
+> UI: Packing list → PackingMission drag-into-suitcase. `weight` powers the kg tally as items move into the suitcase; `essential` flags items that fire the missing-essentials warning when the user has packed >80% of non-essentials but skipped a flagged one.
+> REQUIRED for weight: numeric kg estimate per item (e.g. 0.2 for sunscreen, 1.5 for hiking boots, 0.05 for charger cable). Estimate when the video doesn't state weight — better an approximate tally than no tally. Omit `weight` entirely (don't use 0) if you genuinely can't estimate.
 
   "accommodationTips": [
     {"text": "Where to stay, neighborhood recommendation", "type": "tip | warning | info"}

@@ -9,6 +9,7 @@ downstream cross_tab.py consumer.
 from __future__ import annotations
 
 from src.services.pipeline.plan import _validate_tabs
+from src.shared_config.domain_config import valid_components
 
 
 class TestValidateTabsOutboundLinks:
@@ -93,3 +94,25 @@ class TestValidateTabsOutboundLinks:
         ]
         result = _validate_tabs(tabs)
         assert result[0]["outboundLinks"] == {"concepts": "ללמוד את המושגים"}
+
+
+class TestVerdictNeverStandalone:
+    """`verdict` is a retired component name (1C). It must never reach the
+    frontend as a standalone component: the verdict score / bottom-line folds
+    into the comparison ReviewSummary header instead. Locking this in code so a
+    future edit to the component list can't silently reintroduce the audited
+    'verdict renders as raw DisplaySection' regression."""
+
+    def test_verdict_is_not_a_valid_component(self):
+        assert "verdict" not in valid_components()
+
+    def test_explicit_verdict_component_coerced_to_comparison(self):
+        tabs = [{"id": "verdict", "label": "Verdict", "component": "verdict",
+                 "dataSource": "review.verdict"}]
+        result = _validate_tabs(tabs)
+        assert result[0]["component"] == "comparison"
+
+    def test_verdict_tab_id_infers_comparison(self):
+        tabs = [{"id": "verdict", "label": "Verdict", "dataSource": "review.verdict"}]
+        result = _validate_tabs(tabs)
+        assert result[0]["component"] == "comparison"

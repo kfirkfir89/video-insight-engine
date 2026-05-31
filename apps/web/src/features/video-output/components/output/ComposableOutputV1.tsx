@@ -2,17 +2,17 @@ import { type ReactNode } from 'react';
 import type { TravelDay, SpotItem, FlashcardItem } from '@vie/types';
 import {
   ChecklistInteractive,
-  QuizInteractive,
   FlashDeckInteractive,
-  ScenarioInteractive,
   SpotExplorer,
   StepByStepInteractive,
-  ExerciseInteractive,
   MomentTrack,
   type MomentItem,
-  CodeExplorer,
   ComparisonInteractive,
-  VerdictInteractive,
+  // Video-to-action overhaul: legacy tab-ids forward to the new components
+  CodePlayground,
+  QuizArena,
+  WorkoutRoom,
+  type QuizArenaQuestion,
 } from './interactive';
 import { formatTimestamp } from './display-type-guards';
 
@@ -148,13 +148,27 @@ export function renderInteractive(
     case 'tools':
       return <ChecklistInteractive items={normalizeChecklistItems(data)} tabLabel={CHECKLIST_TAB_LABELS[tabId] ?? tabId} {...nav} />;
     case 'quizzes':
-      return <QuizInteractive questions={arr} {...nav} />;
+      return <QuizArena questions={arr as QuizArenaQuestion[]} {...nav} />;
     case 'flashcards':
       return <FlashDeckInteractive cards={arr} {...nav} />;
     case 'concepts':
       return <FlashDeckInteractive cards={normalizeFlashcards(data) as FlashcardItem[]} {...nav} />;
-    case 'scenarios':
-      return <ScenarioInteractive scenarios={arr} {...nav} />;
+    case 'scenarios': {
+      // Legacy `scenarios` tab → QuizArena absorbs scenarios via context+kind
+      const scenarios = Array.isArray(arr) ? arr as Array<Record<string, unknown>> : [];
+      const questions: QuizArenaQuestion[] = scenarios.map((s) => {
+        const options = Array.isArray(s.options) ? s.options as Array<{ text: string; correct: boolean; explanation?: string }> : [];
+        return {
+          question: typeof s.question === 'string' ? s.question : '',
+          options: options.map((o) => o.text || ''),
+          correctIndex: Math.max(0, options.findIndex((o) => o.correct)),
+          explanation: options.find((o) => o.correct)?.explanation,
+          context: typeof s.context === 'string' ? s.context : undefined,
+          kind: 'scenario' as const,
+        };
+      });
+      return <QuizArena questions={questions} {...nav} />;
+    }
     case 'itinerary': {
       const { spots, sections } = normalizeItineraryProps(data);
       return <SpotExplorer spots={spots} sections={sections} {...nav} />;
@@ -169,7 +183,7 @@ export function renderInteractive(
       const exercises = Array.isArray(obj.exercises) ? obj.exercises : arr;
       const warmup = Array.isArray(obj.warmup) ? obj.warmup : undefined;
       const cooldown = Array.isArray(obj.cooldown) ? obj.cooldown : undefined;
-      return <ExerciseInteractive exercises={exercises} warmup={warmup} cooldown={cooldown} {...nav} />;
+      return <WorkoutRoom exercises={exercises} warmup={warmup as never} cooldown={cooldown as never} />;
     }
     case 'key_moments':
     case 'timestamps':
@@ -178,7 +192,7 @@ export function renderInteractive(
       return <MomentTrack items={normalizeMomentItems(data)} {...nav} />;
     case 'code':
     case 'cheat_sheet':
-      return <CodeExplorer snippets={arr} {...nav} />;
+      return <CodePlayground snippets={arr as never} />;
     case 'pros_cons': {
       const obj = (typeof data === 'object' && data !== null && !Array.isArray(data)) ? data as Record<string, unknown> : {};
       const comparisons = Array.isArray(obj.comparisons) ? obj.comparisons : [];
@@ -189,16 +203,18 @@ export function renderInteractive(
     case 'verdict': {
       if (typeof data !== 'object' || data === null || Array.isArray(data)) return null;
       const v = data as Record<string, unknown>;
+      const bottomLine = typeof v.bottomLine === 'string' ? v.bottomLine : '';
+      if (!bottomLine) return null;
       return (
-        <VerdictInteractive
-          product={(v.product as string) ?? ''}
-          score={v.score as number | undefined}
-          maxScore={v.maxScore as number | undefined}
-          badge={(v.badge as string) ?? 'neutral'}
-          bottomLine={String(v.bottomLine || '')}
-          bestFor={Array.isArray(v.bestFor) ? v.bestFor : undefined}
-          notFor={Array.isArray(v.notFor) ? v.notFor : undefined}
-          price={v.price as string | undefined}
+        <ComparisonInteractive
+          verdict={{
+            badge: typeof v.badge === 'string' ? v.badge : undefined,
+            bottomLine,
+            bestFor: Array.isArray(v.bestFor) ? (v.bestFor as string[]) : undefined,
+            notFor: Array.isArray(v.notFor) ? (v.notFor as string[]) : undefined,
+            score: typeof v.score === 'number' ? v.score : undefined,
+            maxScore: typeof v.maxScore === 'number' ? v.maxScore : undefined,
+          }}
           {...nav}
         />
       );

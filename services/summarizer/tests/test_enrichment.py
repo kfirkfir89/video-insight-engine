@@ -263,8 +263,9 @@ class TestEnrichmentMap:
             assert domain in ENRICHMENT_MAP, f"{domain} missing from ENRICHMENT_MAP"
 
     def test_supported_tags_count(self):
-        # 10 primary domains + "default" entry
-        assert len(ENRICHMENT_MAP) == 11
+        # 10 enriched domains + podcast + gaming + "default" entry
+        # (news + sport have no enrichment)
+        assert len(ENRICHMENT_MAP) == 13
 
     def test_each_domain_has_own_prompt(self):
         """Each domain maps to its own prompt file in enrich/ subfolder."""

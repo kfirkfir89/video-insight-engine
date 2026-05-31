@@ -60,6 +60,12 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
     ctx.assembled_tabs = assembled.get("tabs", [])
     ctx.assembled_meta = assembled.get("meta", {})
 
+    # Surface the extraction coverage metric (how far the timestamped output
+    # reaches vs. duration, + dropped-batch counts) for per-doc monitoring.
+    coverage = getattr(ctx, "extraction_coverage", None)
+    if coverage and ctx.assembled_meta is not None:
+        ctx.assembled_meta["extractionCoverage"] = coverage
+
     # Emit tab_ready events (progressive rendering)
     for tab in assembled.get("tabs", []):
         yield sse_event("tab_ready", tab)

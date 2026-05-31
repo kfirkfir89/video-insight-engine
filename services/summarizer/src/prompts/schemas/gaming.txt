@@ -1,0 +1,96 @@
+<domain_schema name="gaming">
+GAMING DATA — GamingData schema
+
+Extract structured gaming / gameplay / playthrough content.
+
+THINKING GUIDE:
+- Gaming content shows someone PLAYING — the value is the highlights worth
+  re-watching, the build/loadout worth copying, the route worth following,
+  and the rankings the creator argues for.
+- Highlights are the moments that matter: clutch plays, big fails, boss kills,
+  turning points. Set a timestamp on each so the viewer can jump.
+- The loadout is the gear / perks / settings / build the creator runs — a
+  checklist the viewer can replicate.
+- The walkthrough is the ordered route through a level / quest / match.
+- Rankings are the creator's tier opinions (characters, weapons, maps, agents).
+  This is the gaming signature — surface the ranking as a draggable tier list.
+
+{
+  "title": "The game / video focus in one line, or null",
+  "highlights": [
+    {
+      "label": "What happens at this moment",
+      "description": "1 sentence of detail",
+      "timestamp": 0
+    }
+  ],
+> UI: highlights → MomentTrack. Set timestamp (seconds) so viewers jump to each play.
+  "loadout": [
+    {
+      "item": "Weapon, perk, gear, or setting",
+      "category": "Optional grouping (weapons, perks, settings)",
+      "note": "Why it's picked, short"
+    }
+  ],
+> UI: loadout → Checklist. The viewer ticks off what they've copied.
+  "walkthrough": [
+    {
+      "instruction": "What to do at this stage",
+      "timestamp": 0
+    }
+  ],
+> UI: walkthrough → StepFlowCanvas. Ordered route stages; 6+ stages drive the canvas graph.
+  "rankings": [
+    {
+      "item": "Thing being ranked (character, weapon, map)",
+      "tier": "S | A | B | C | D",
+      "reason": "Why it sits in that tier, short",
+      "emoji": "relevant emoji"
+    }
+  ]
+> UI: rankings → TierList. tier is the creator's SUGGESTED placement (the viewer can override + reorder). Use only S/A/B/C/D. When the creator gives no tier, omit it — the viewer places it.
+}
+
+// Example for a shooter loadout / tier video:
+{
+  "title": "Best agents and loadout for ranked",
+  "highlights": [
+    {"label": "1v3 clutch on B site", "description": "Wins the round with a flick.", "timestamp": 95},
+    {"label": "Ace round", "description": "Five kills with the rifle.", "timestamp": 410},
+    {"label": "Whiffed easy shot", "description": "Misses an open frag, loses the duel.", "timestamp": 720}
+  ],
+  "loadout": [
+    {"item": "Vandal", "category": "weapons", "note": "One-tap rifle, best for aim duels"},
+    {"item": "Light shields", "category": "economy", "note": "Saves credits on eco rounds"},
+    {"item": "400 DPI / 0.4 sens", "category": "settings", "note": "Creator's mouse settings"}
+  ],
+  "walkthrough": [
+    {"instruction": "Buy phase — coordinate utility with the team", "timestamp": 30},
+    {"instruction": "Take map control mid before the push", "timestamp": 120},
+    {"instruction": "Execute B with smokes, plant default", "timestamp": 210},
+    {"instruction": "Hold post-plant crossfire", "timestamp": 280}
+  ],
+  "rankings": [
+    {"item": "Jett", "tier": "S", "reason": "Top entry duelist, high skill ceiling", "emoji": "🌪️"},
+    {"item": "Sage", "tier": "A", "reason": "Wall + heal carry low ranks", "emoji": "🧊"},
+    {"item": "Yoru", "tier": "C", "reason": "Hard to use, niche value", "emoji": "👤"}
+  ]
+}
+
+SCALING (video is {duration_minutes} minutes):
+- Under 10 min: 3-6 highlights, 3-8 loadout items, 4-8 walkthrough stages, 4-8 rankings
+- 10-30 min: 5-12 highlights, 4-15 loadout items, 6-15 walkthrough stages, 5-15 rankings
+- Over 30 min: 8-20 highlights, 6-25 loadout items, 8-25 walkthrough stages, 8-20 rankings
+
+RULES:
+- A ranking's tier MUST be one of: S, A, B, C, D (uppercase). Omit when the
+  creator does not state one — never invent a tier.
+- Preserve exact stats, sensitivities, and version numbers; do not round.
+- highlights timestamps must be ascending, in seconds.
+- One item per ranking row — do not collapse two characters into one row.
+
+COMMON MISTAKES:
+- Putting everything in S tier — a tier list that doesn't discriminate is useless.
+- Treating the walkthrough as unordered tips — it is a sequence.
+- Mixing loadout (what to equip) with walkthrough (what to do) — keep them apart.
+</domain_schema>

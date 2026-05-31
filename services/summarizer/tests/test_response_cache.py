@@ -4,7 +4,13 @@ import json
 import pytest
 from unittest.mock import AsyncMock
 
+from src.config import settings
 from src.services.cache.response_cache import ResponseCache
+
+# Cache keys are namespaced by PIPELINE_VERSION (interactive-overhaul-v2 1D) so
+# a schema bump auto-invalidates stale docs. Derive the expected key from
+# settings so a future version bump doesn't break these tests.
+_KEY = f"vie:response:{settings.PIPELINE_VERSION}:video123"
 
 
 class TestResponseCache:
@@ -28,7 +34,7 @@ class TestResponseCache:
         result = await cache.get_response("video123")
 
         assert result == data
-        mock_redis.get.assert_called_once_with("vie:response:video123")
+        mock_redis.get.assert_called_once_with(_KEY)
 
     @pytest.mark.asyncio
     async def test_get_response_miss(self, cache, mock_redis):
@@ -56,7 +62,7 @@ class TestResponseCache:
         assert result is True
         mock_redis.set.assert_called_once()
         call_args = mock_redis.set.call_args
-        assert call_args[0][0] == "vie:response:video123"
+        assert call_args[0][0] == _KEY
 
     @pytest.mark.asyncio
     async def test_set_response_connection_error(self, cache, mock_redis):
@@ -99,7 +105,7 @@ class TestResponseCache:
         result = await cache.invalidate("video123")
 
         assert result is True
-        mock_redis.delete.assert_called_once_with("vie:response:video123")
+        mock_redis.delete.assert_called_once_with(_KEY)
 
     @pytest.mark.asyncio
     async def test_exists_true(self, cache, mock_redis):

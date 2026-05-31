@@ -8,8 +8,10 @@ from src.services.pipeline.post_processor import (
     merge_narrative,
     resolve_celebrations,
     validate_extraction_counts,
+    compute_extraction_coverage,
     _count_items_at_path,
     COMPLETENESS_THRESHOLD,
+    COVERAGE_GATE_RATIO,
 )
 from src.models.pipeline_types import PlanResult, ItemCounts
 
@@ -318,3 +320,42 @@ class TestValidateExtractionCounts:
         warnings = validate_extraction_counts(manifest, data)
         assert "exercises" in warnings
         assert warnings["exercises"]["extracted"] == 0
+
+
+class TestComputeExtractionCoverage:
+    def test_full_coverage_passes_gate(self):
+        data = {"learning": {"timestamps": [{"seconds": 0}, {"seconds": 16000}]}}
+
+        coverage = compute_extraction_coverage(data, 16789)
+
+        assert coverage is not None
+        assert coverage["maxTimestamp"] == 16000
+        assert coverage["ratio"] >= COVERAGE_GATE_RATIO
+
+    def test_truncated_coverage_trips_gate(self):
+        # The regression: 4.5h video whose timeline stops at 1:34:56 (5696s).
+        data = {"learning": {"timestamps": [
+            {"time": "0:00", "seconds": 0},
+            {"time": "1:34:56", "seconds": 5696},
+        ]}}
+
+        coverage = compute_extraction_coverage(data, 16789)
+
+        assert coverage is not None
+        assert coverage["ratio"] < COVERAGE_GATE_RATIO
+        assert coverage["tailMissingSeconds"] == 16789 - 5696
+
+    def test_parses_string_offsets_in_narrative(self):
+        data = {"narrative": {"keyMoments": [
+            {"timestamp": "2:00"}, {"timestamp": "1:20:00"},
+        ]}}
+
+        coverage = compute_extraction_coverage(data, 5000)
+
+        assert coverage is not None
+        assert coverage["maxTimestamp"] == 4800  # 1:20:00
+
+    def test_returns_none_without_timestamps_or_duration(self):
+        assert compute_extraction_coverage({"learning": {}}, 1000) is None
+        assert compute_extraction_coverage(None, 1000) is None
+        assert compute_extraction_coverage({"learning": {"timestamps": [{"seconds": 5}]}}, 0) is None

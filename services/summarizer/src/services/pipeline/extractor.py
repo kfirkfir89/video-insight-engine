@@ -136,6 +136,7 @@ async def extract(
     extra_instruction: str = "",
     language_instruction: str = "",
     force_primary_model: bool = False,
+    frame_context: str = "",
 ) -> AsyncGenerator[dict, None]:
     """Adaptive extraction yielding progress events and final result.
 
@@ -180,6 +181,7 @@ async def extract(
         content_emphasis=content_emphasis,
         video_context=video_context,
         language_instruction=language_instruction,
+        frame_context=frame_context,
     )
 
     if extra_instruction:
@@ -410,31 +412,44 @@ async def _overflow_extraction(
 def batch_chapters(
     chapters: list[ChapterChunk],
     max_tokens_per_batch: int | None = None,
+    max_minutes_per_batch: float | None = None,
 ) -> list[list[ChapterChunk]]:
-    """Group chapters into batches that fit within token limits.
+    """Group chapters into batches that fit within token AND span limits.
 
-    Groups chapters sequentially until approaching the token limit,
-    then starts a new batch. Never splits a single chapter.
+    Groups chapters sequentially, closing the current batch when adding the
+    next chapter would exceed either the token limit OR the wall-clock span
+    limit. The span cap stops a token-light but multi-hour batch from being
+    handed to the fast model in one call (which front-loads and drops the
+    tail). Never splits a single chapter.
 
     Args:
         chapters: List of ChapterChunks to batch.
         max_tokens_per_batch: Max tokens per batch. Defaults to config value.
+        max_minutes_per_batch: Max wall-clock span per batch. Defaults to config.
 
     Returns:
         List of batches, each a list of ChapterChunks.
     """
-    limit = max_tokens_per_batch or settings.MAX_TOKENS_PER_BATCH
+    token_limit = max_tokens_per_batch or settings.MAX_TOKENS_PER_BATCH
+    minute_limit = max_minutes_per_batch or settings.MAX_MINUTES_PER_BATCH
+    span_limit = minute_limit * 60.0
     batches: list[list[ChapterChunk]] = []
     current_batch: list[ChapterChunk] = []
     current_tokens = 0
+    current_span = 0.0
 
     for chapter in chapters:
-        if current_tokens + chapter.token_estimate > limit and current_batch:
+        ch_span = max(0.0, chapter.end_seconds - chapter.start_seconds)
+        over_tokens = current_tokens + chapter.token_estimate > token_limit
+        over_span = current_span + ch_span > span_limit
+        if (over_tokens or over_span) and current_batch:
             batches.append(current_batch)
             current_batch = []
             current_tokens = 0
+            current_span = 0.0
         current_batch.append(chapter)
         current_tokens += chapter.token_estimate
+        current_span += ch_span
 
     if current_batch:
         batches.append(current_batch)
@@ -656,12 +671,25 @@ async def _chunked_extraction(
     if successful == 0:
         raise ValueError("All extraction batches failed")
 
+    if successful < num_batches:
+        # Surface dropped batches: a lost late batch silently truncates
+        # coverage even though the run still "succeeds".
+        logger.warning(
+            "Chunked extraction dropped %d/%d batches — output may be incomplete",
+            num_batches - successful, num_batches,
+        )
+
     merged = merge_batch_extractions(batch_results, triage_result.content_tags)
 
     yield {"event": "extraction_progress", "section": "validation", "percent": 85}
     validated = validate_domain_output(triage_result.content_tags, triage_result.modifiers, merged)
 
     yield {"event": "extraction_progress", "section": "all", "percent": 100}
-    yield {"event": "extraction_complete", "data": validated}
+    yield {
+        "event": "extraction_complete",
+        "data": validated,
+        "batches_total": num_batches,
+        "batches_succeeded": successful,
+    }
 
 

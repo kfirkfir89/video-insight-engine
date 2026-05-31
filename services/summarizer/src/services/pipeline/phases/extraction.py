@@ -18,7 +18,12 @@ from src.services.pipeline.extraction_quality import (
 )
 from src.services.pipeline.extractor import extract
 from src.services.pipeline.pipeline_helpers import normalize_segments, sse_event, truncate_json_safely
-from src.services.pipeline.post_processor import validate_extraction_counts
+from src.services.pipeline.prompt_builder import format_gallery_frames_for_extraction
+from src.services.pipeline.post_processor import (
+    COVERAGE_GATE_RATIO,
+    compute_extraction_coverage,
+    validate_extraction_counts,
+)
 from src.services.pipeline.synthesis import synthesize
 from src.utils.language_utils import build_language_instruction
 
@@ -26,6 +31,41 @@ if TYPE_CHECKING:
     from src.services.pipeline.context import PipelineContext
 
 logger = logging.getLogger(__name__)
+
+
+def _record_extraction_coverage(
+    ctx: PipelineContext,
+    batches_total: int | None,
+    batches_succeeded: int | None,
+) -> None:
+    """Compute + store the extraction coverage metric and warn on under-coverage.
+
+    Detects the failure where a long video's timestamped content stops far
+    short of its duration (the 4.5h-video-stops-at-1:34 bug). Stored on the
+    context so the assembly phase can surface it into meta.
+    """
+    duration = float(getattr(ctx.video_data, "duration", 0) or 0)
+    coverage = compute_extraction_coverage(ctx.extraction_data, duration)
+    if coverage is None:
+        return
+
+    if batches_total is not None:
+        coverage["batchesTotal"] = batches_total
+        coverage["batchesSucceeded"] = batches_succeeded
+        coverage["batchesDropped"] = batches_total - (batches_succeeded or 0)
+
+    ctx.extraction_coverage = coverage
+
+    dropped = coverage.get("batchesDropped", 0)
+    if coverage["ratio"] < COVERAGE_GATE_RATIO or dropped:
+        logger.warning("pipeline.extraction_coverage", extra={
+            "video_id": ctx.video_summary_id,
+            "max_timestamp": coverage["maxTimestamp"],
+            "duration": coverage["duration"],
+            "ratio": coverage["ratio"],
+            "tail_missing_seconds": coverage["tailMissingSeconds"],
+            "batches_dropped": dropped,
+        })
 
 
 async def _attempt_synthesis_fed_retry(
@@ -129,11 +169,21 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
                     seg_as_dicts.append(d)
             seg_dicts = normalize_segments(seg_as_dicts)
 
+            # Tier 2 of chapter detection: author-listed timestamps from the
+            # video description (used when YouTube has no native chapters).
+            description_chapters = None
+            da = ctx.description_analysis
+            if da is not None and getattr(da, "timestamps", None):
+                description_chapters = [
+                    {"seconds": t.seconds, "label": t.label} for t in da.timestamps
+                ]
+
             chapters = await split_transcript_into_chapters(
                 video_data=video_info,
                 segments=seg_dicts,
                 transcript=ctx.clean_text,
                 llm_service=ctx.llm_service,
+                description_chapters=description_chapters,
             )
             ctx.chapters = chapters
             logger.info("Prepared %d chapters for chunked extraction", len(chapters))
@@ -142,12 +192,22 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
             chapters = None
 
     lang_instruction = build_language_instruction(ctx.language)
+    # Frames (stage 2b) are ready before extraction (stage 4) — fold their
+    # captions into the prompt so the LLM can ground visual claims and warrant a
+    # filmstrip/diagram. Bounded to 12 captioned frames to cap token cost.
+    frame_context = format_gallery_frames_for_extraction(
+        ctx.scene_frames_gallery, ctx.frame_descriptions,
+    )
+    batches_total: int | None = None
+    batches_succeeded: int | None = None
     try:
-        async for evt in extract(ctx.llm_service, ctx.triage, ctx.clean_text, video_info, chapters=chapters, video_context=ctx.video_dna_compact, language_instruction=lang_instruction):
+        async for evt in extract(ctx.llm_service, ctx.triage, ctx.clean_text, video_info, chapters=chapters, video_context=ctx.video_dna_compact, language_instruction=lang_instruction, frame_context=frame_context):
             event_name = evt["event"]
             yield sse_event(event_name, {k: v for k, v in evt.items() if k != "event"})
             if event_name == "extraction_complete":
                 ctx.extraction_data = evt.get("data")
+                batches_total = evt.get("batches_total")
+                batches_succeeded = evt.get("batches_succeeded")
     except (ValueError, asyncio.TimeoutError) as e:
         logger.warning("[pipeline] Extraction raised %s for video_id=%s: %s — continuing with empty extraction", type(e).__name__, ctx.video_summary_id, e)
 
@@ -165,6 +225,8 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
             for k, d in ctx.extraction_data.items() if isinstance(d, dict)
         } if isinstance(ctx.extraction_data, dict) else {},
     })
+
+    _record_extraction_coverage(ctx, batches_total, batches_succeeded)
 
     # Quality check + conditional synthesis-fed retry.
     # Count validation runs alongside the quality check so that a hard miss

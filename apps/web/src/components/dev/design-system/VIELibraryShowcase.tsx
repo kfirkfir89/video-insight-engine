@@ -593,6 +593,21 @@ function OutputHelpersSection() {
 
   return (
     <Section title="Output Helpers" description="Higher-level composed components used by the output system.">
+      <div className="mb-4 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+        <p className="mb-1 font-semibold text-foreground">Component tier model (interactive-overhaul-v2 P2)</p>
+        <p>
+          Every output component has a tier in <code className="rounded bg-muted px-1">domains.json</code>:
+          {' '}<span className="font-medium text-foreground">primary</span> components are planner-selectable
+          standalone tabs; <span className="font-medium text-foreground">secondary</span> components
+          (<code className="rounded bg-muted px-1">stat_banner</code>, <code className="rounded bg-muted px-1">tip_callout</code>,
+          {' '}<code className="rounded bg-muted px-1">summary_header</code>, <code className="rounded bg-muted px-1">diagram_card</code>,
+          {' '}<code className="rounded bg-muted px-1">frame_strip</code>, <code className="rounded bg-muted px-1">quick_quiz</code>)
+          {' '}are attachment-only — rendered above/below a primary, never standalone — and live in the
+          {' '}<span className="font-medium text-foreground">Interactive</span> showcase tab.
+          {' '}<span className="font-medium text-foreground">display</span> (<code className="rounded bg-muted px-1">display_section</code>)
+          {' '}is the last-resort fallback shown below.
+        </p>
+      </div>
       <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
         <DemoCard label="DisplaySection — Key Points" type="output/DisplaySection">
           <DisplaySection data={sampleData.keyPoints} />

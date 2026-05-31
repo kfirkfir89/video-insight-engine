@@ -277,7 +277,7 @@ class TestAssemblyWithFrameDescriptions:
                 break
 
         assert gallery_tab is not None, "Gallery tab not found"
-        images = gallery_tab["props"]["images"]
+        images = gallery_tab["props"]["frames"]
         assert len(images) == len(_GALLERY_FRAMES)
 
         # Frame at 12s should have vision description as caption
@@ -302,7 +302,7 @@ class TestAssemblyWithFrameDescriptions:
         )
 
         gallery_tab = next(t for t in result["tabs"] if t["id"] == "frames-gallery")
-        images = gallery_tab["props"]["images"]
+        images = gallery_tab["props"]["frames"]
 
         # Frame at 35s has no vision description but has OCR text
         frame_35 = next(img for img in images if img["timestamp"] == 35.0)
@@ -322,7 +322,7 @@ class TestAssemblyWithFrameDescriptions:
         )
 
         gallery_tab = next(t for t in result["tabs"] if t["id"] == "frames-gallery")
-        images = gallery_tab["props"]["images"]
+        images = gallery_tab["props"]["frames"]
 
         # Without vision, frame_12 should use OCR text
         frame_12 = next(img for img in images if img["timestamp"] == 12.0)
@@ -453,7 +453,7 @@ class TestFullChainIntegration:
         gallery = next((t for t in assembled["tabs"] if t["id"] == "frames-gallery"), None)
         assert gallery is not None
 
-        captions = [img["caption"] for img in gallery["props"]["images"]]
+        captions = [img["caption"] for img in gallery["props"]["frames"]]
         # At least one caption should come from vision (not generic "Moment at")
         vision_captions = [c for c in captions if "Moment at" not in c]
         assert len(vision_captions) >= 1, f"No vision captions found: {captions}"
@@ -489,7 +489,7 @@ class TestFullChainIntegration:
         # Gallery should still exist with OCR/generic captions
         gallery = next((t for t in assembled["tabs"] if t["id"] == "frames-gallery"), None)
         assert gallery is not None
-        captions = [img["caption"] for img in gallery["props"]["images"]]
+        captions = [img["caption"] for img in gallery["props"]["frames"]]
         # All captions should be OCR or generic (no vision)
         assert all("VISUAL" not in c for c in captions)
 

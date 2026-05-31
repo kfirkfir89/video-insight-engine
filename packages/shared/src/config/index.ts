@@ -12,7 +12,21 @@ import domainsJson from './domains.json' with { type: 'json' };
 // ─────────────────────────────────────────────────────
 
 /** Primary content domain tag — one per domain in domains.json. */
-export type ContentTag = 'learning' | 'tech' | 'fitness' | 'food' | 'music' | 'travel' | 'review' | 'project';
+export type ContentTag =
+  | 'learning'
+  | 'tech'
+  | 'fitness'
+  | 'food'
+  | 'music'
+  | 'travel'
+  | 'review'
+  | 'project'
+  | 'language'
+  | 'science'
+  | 'podcast'
+  | 'news'
+  | 'gaming'
+  | 'sport';
 
 /** Modifier tag — cross-domain enrichment layer. */
 export type Modifier = 'narrative' | 'finance';
@@ -46,8 +60,16 @@ interface ModifierEntry {
   label: string;
 }
 
+/** Component hierarchy tier. `primary` = planner-selectable standalone tab;
+ *  `secondary` = attachment-only (never standalone); `display` = last-resort
+ *  fallback renderer. */
+export type ComponentTier = 'primary' | 'secondary' | 'display';
+
 interface DomainsConfig {
   components: string[];
+  /** Optional so the `?? {}` read below stays meaningful for older/partial
+   *  configs that predate the tier map (mirrors the Python `.get(...)`). */
+  componentTiers?: Record<string, ComponentTier>;
   domains: Record<ContentTag, DomainEntry>;
   modifiers: Record<Modifier, ModifierEntry>;
   enrichment: Record<string, string>;
@@ -65,6 +87,19 @@ export const CONTENT_TAG_VALUES: readonly ContentTag[] = Object.keys(config.doma
 
 /** All valid modifier names, derived from JSON keys. */
 export const MODIFIER_VALUES: readonly Modifier[] = Object.keys(config.modifiers) as Modifier[];
+
+/** Component name → tier (primary | secondary | display). */
+export const COMPONENT_TIERS: Readonly<Record<string, ComponentTier>> = config.componentTiers ?? {};
+
+/** Secondary-tier (attachment-only) component names. */
+export const SECONDARY_COMPONENTS: readonly string[] = Object.entries(COMPONENT_TIERS)
+  .filter(([, tier]) => tier === 'secondary')
+  .map(([name]) => name);
+
+/** Get a component's tier, defaulting to `primary` for unmapped names. */
+export function componentTier(name: string): ComponentTier {
+  return COMPONENT_TIERS[name] ?? 'primary';
+}
 
 // ─────────────────────────────────────────────────────
 // Accessors

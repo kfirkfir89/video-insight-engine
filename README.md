@@ -446,6 +446,8 @@ video-insight-engine/
 
 📖 **[Full Documentation →](./CLAUDE.md)**
 
+🧠 **LLM onboarding briefing:** paste **[PROJECT-BRIEFING.md](./PROJECT-BRIEFING.md)** (full) or **[PROJECT-BRIEFING-TLDR.md](./PROJECT-BRIEFING-TLDR.md)** (quick) into any LLM chat to give it full project context in one shot.
+
 ---
 
 ## Roadmap

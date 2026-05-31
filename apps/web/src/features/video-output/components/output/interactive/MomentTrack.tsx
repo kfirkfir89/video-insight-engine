@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Clock, Play, Share2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Badge, FadeIn, GlassCard } from '@/components/vie';
+import { Badge, FadeIn, GlassCard, VisualEvidence } from '@/components/vie';
 import { useTabState } from '@/features/video-output/contexts/TabStateContext';
 import { cn } from '@/lib/utils';
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
@@ -143,8 +143,14 @@ export const MomentTrack = memo(function MomentTrack({
 
   const totalDuration = useMemo(() => {
     if (items.length === 0) return 0;
-    const last = items[items.length - 1];
-    return Math.max(last.endSeconds ?? last.seconds, last.seconds) || 1;
+    // Don't assume the last item is the latest — scan for the maximum end time
+    // so capsule-height ratios stay correct even when `items` is unsorted.
+    let max = 0;
+    for (const item of items) {
+      const end = Math.max(item.endSeconds ?? item.seconds, item.seconds);
+      if (end > max) max = end;
+    }
+    return max || 1;
   }, [items]);
 
   const toggleExpand = (index: number, currentlyExpanded: boolean): void => {
@@ -422,35 +428,12 @@ export const MomentTrack = memo(function MomentTrack({
                               {item.description}
                             </p>
                           )}
-                          {(item.frameCaption || item.frameOcr || item.frameEvidence) && (
-                            <div className="rounded-md border border-border/40 bg-muted/15 px-3 py-2 space-y-1">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground/80">
-                                  On screen
-                                </span>
-                                {item.frameSceneType && (
-                                  <Badge variant="muted" className="text-[10px] font-medium capitalize">
-                                    {item.frameSceneType.replace(/_/g, ' ')}
-                                  </Badge>
-                                )}
-                              </div>
-                              {item.frameCaption && (
-                                <p className="text-sm leading-snug text-foreground/90">
-                                  {item.frameCaption}
-                                </p>
-                              )}
-                              {item.frameOcr && (
-                                <p className="text-xs leading-snug text-muted-foreground font-mono break-words">
-                                  &ldquo;{item.frameOcr}&rdquo;
-                                </p>
-                              )}
-                              {item.frameEvidence && (
-                                <p className="text-xs italic leading-snug text-muted-foreground/80">
-                                  {item.frameEvidence}
-                                </p>
-                              )}
-                            </div>
-                          )}
+                          <VisualEvidence
+                            caption={item.frameCaption}
+                            ocr={item.frameOcr}
+                            sceneType={item.frameSceneType}
+                            evidence={item.frameEvidence}
+                          />
                           {item.tags && item.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1">
                               {item.tags.map((tag, i) => (

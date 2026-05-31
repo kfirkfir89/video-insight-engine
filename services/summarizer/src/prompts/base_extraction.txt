@@ -11,6 +11,13 @@ User goal: {user_goal}
 {video_context}
 </video_context>
 
+<key_frames>
+Captioned keyframes sampled from the video (timestamp — caption [scene type]).
+Use these to ground visual claims, name on-screen artifacts, and decide whether a
+filmstrip / diagram is warranted. Do NOT invent frames that aren't listed.
+{frame_context}
+</key_frames>
+
 <instructions>
 Read the video context above. It tells you who made this, what makes it special, and what to watch out for.
 Match the creator's energy. Prioritize what the extraction guidance highlights.

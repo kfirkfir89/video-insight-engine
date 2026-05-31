@@ -27,6 +27,11 @@ from src.services.pipeline.assembly import (
     assemble_code_explorer,
     assemble_quiz,
     assemble_scenario,
+    assemble_connect_canvas,
+    assemble_diagram_card,
+    assemble_claims_tracker,
+    assemble_tier_list,
+    assemble_formation_diagram,
     _chapters_to_moments,
     _normalize_code_snippet,
     _normalize_moment_item,
@@ -82,10 +87,17 @@ class TestInferComponent:
     def test_known_tab_ids(self):
         assert infer_component("itinerary") == "spot_explorer"
         assert infer_component("ingredients") == "checklist"
-        assert infer_component("exercises") == "exercise_tracker"
-        assert infer_component("quizzes") == "quiz"
-        assert infer_component("code") == "code_explorer"
-        assert infer_component("verdict") == "verdict"
+        # Video-to-action overhaul: renamed component routes
+        assert infer_component("exercises") == "workout_room"
+        assert infer_component("quizzes") == "quiz_arena"
+        assert infer_component("code") == "code_playground"
+        # Verdict tab IDs now route to comparison (verdict folds into ReviewSummary header)
+        assert infer_component("verdict") == "comparison"
+        # New overhaul-era routes
+        assert infer_component("concepts") == "concept_canvas"
+        assert infer_component("packing") == "packing_mission"
+        assert infer_component("gallery") == "video_filmstrip"
+        assert infer_component("lyrics") == "lyrics_karaoke"
 
     def test_unknown_tab_id(self):
         assert infer_component("unknown_tab") == "display_section"
@@ -394,12 +406,29 @@ class TestAssembleComparison:
 
 
 class TestAssembleVerdict:
-    def test_valid_verdict(self):
+    """assemble_verdict was retired as a standalone component; cached
+    `assembledTabs` rows still reference component key "verdict" so the
+    assembler now emits ComparisonInteractive-shaped props with the verdict
+    folded under `verdict`. ReviewSummary in ComparisonInteractive renders it."""
+
+    def test_valid_verdict_returns_comparison_shape(self):
         data = {"badge": "recommended", "bottomLine": "Great product", "bestFor": ["students"], "notFor": ["pros"]}
         result = assemble_verdict({}, data, {}, None)
         assert result is not None
-        assert result["badge"] == "recommended"
-        assert result["bottomLine"] == "Great product"
+        assert result["comparisons"] == []
+        assert result["pros"] == []
+        assert result["cons"] == []
+        assert result["verdict"]["badge"] == "recommended"
+        assert result["verdict"]["bottomLine"] == "Great product"
+        assert result["verdict"]["bestFor"] == ["students"]
+        assert result["verdict"]["notFor"] == ["pros"]
+
+    def test_includes_score_when_provided(self):
+        data = {"badge": "best_in_class", "bottomLine": "Top pick", "score": 8.5, "maxScore": 10}
+        result = assemble_verdict({}, data, {}, None)
+        assert result is not None
+        assert result["verdict"]["score"] == 8.5
+        assert result["verdict"]["maxScore"] == 10
 
     def test_empty(self):
         assert assemble_verdict({}, None, {}, None) is None
@@ -447,7 +476,13 @@ class TestAssembleResponse:
         extraction = {
             "learning": {
                 "keyPoints": [{"title": "Point 1", "detail": "Detail 1"}],
-                "concepts": [{"name": "Concept 1", "definition": "Def 1"}],
+                # concept_canvas (post-overhaul) requires ≥2 concepts; provide
+                # two so the canvas assembler can produce a tab and the test
+                # exercises the new routing path.
+                "concepts": [
+                    {"name": "Concept 1", "definition": "Def 1", "connections": ["Concept 2"]},
+                    {"name": "Concept 2", "definition": "Def 2", "connections": ["Concept 1"]},
+                ],
             },
         }
         result = assemble_response(triage, extraction, None, None)
@@ -457,7 +492,8 @@ class TestAssembleResponse:
         assert result["meta"]["primaryTag"] == "learning"
         assert len(result["tabs"]) == 2
         assert result["tabs"][0]["component"] == "display_section"
-        assert result["tabs"][1]["component"] == "flash_deck"
+        # "concepts" tab routes to concept_canvas post-overhaul (was flash_deck).
+        assert result["tabs"][1]["component"] == "concept_canvas"
 
     def test_drops_empty_tabs(self):
         triage = self._make_triage()
@@ -489,7 +525,11 @@ class TestAssembleResponse:
                     ]},
                 ],
                 "budget": {"total": 2000, "currency": "USD", "breakdown": [{"item": "Hotels", "amount": 1200}]},
-                "packingList": [{"item": "Sunscreen", "category": "Essentials", "essential": True}],
+                # packing_mission needs ≥2 items post-overhaul
+                "packingList": [
+                    {"item": "Sunscreen", "category": "Essentials", "essential": True},
+                    {"item": "Charger", "category": "Tech", "essential": True},
+                ],
             },
         }
         result = assemble_response(triage, extraction, None, None)
@@ -502,14 +542,19 @@ class TestAssembleResponse:
         assert result["tabs"][2]["component"] == "budget"
         assert result["tabs"][2]["props"]["total"] == 2000
         assert result["tabs"][2]["props"]["currency"] == "USD"
-        assert result["tabs"][3]["component"] == "checklist"
+        # Travel packing tab routes to packing_mission post-overhaul.
+        assert result["tabs"][3]["component"] == "packing_mission"
 
     def test_cross_tab_links_resolved(self):
         triage = self._make_triage(tabs=[
             {"id": "concepts", "label": "Concepts", "emoji": "📚", "dataSource": "learning.concepts"},
             {"id": "quizzes", "label": "Quiz", "emoji": "❓", "dataSource": "enrichment.quiz"},
         ])
-        extraction = {"learning": {"concepts": [{"name": "A", "definition": "B"}]}}
+        # concept_canvas requires ≥2 concepts post-overhaul
+        extraction = {"learning": {"concepts": [
+            {"name": "A", "definition": "B", "connections": ["C"]},
+            {"name": "C", "definition": "D", "connections": ["A"]},
+        ]}}
         enrichment = {"quiz": [{"question": "Q1", "options": ["a", "b"], "correctIndex": 0, "explanation": "E"}]}
         result = assemble_response(triage, extraction, enrichment, None)
 
@@ -563,7 +608,9 @@ class TestAssembleResponse:
         result = assemble_response(triage, extraction, None, None)
 
         assert len(result["tabs"]) == 1
-        assert result["tabs"][0]["component"] == "exercise_tracker"
+        # Video-to-action overhaul: "exercises" tab now routes to workout_room
+        # (was exercise_tracker). The assembler shares the same data contract.
+        assert result["tabs"][0]["component"] == "workout_room"
         assert len(result["tabs"][0]["props"]["exercises"]) == 1
 
     def test_description_analysis_in_meta(self):
@@ -674,18 +721,33 @@ class TestMaterialsStepsCrossLinks:
 
 class TestRegistryCoverage:
     def test_all_registered(self):
+        # 2026-05-29 cleanup: legacy aliases removed. P2 added 6 secondary-tier
+        # assemblers; P3B added `connect_canvas` (primary); P5b added
+        # `claims_tracker`; P5c/d added `tier_list` + `formation_diagram`
+        # (primaries). The registry now holds 22 primaries + display_section +
+        # 6 secondaries = 29.
         expected = {
-            "spot_explorer", "moment_track", "code_explorer", "comparison", "gallery",
-            "info_grid", "checklist", "step_player", "exercise_tracker",
-            "quiz", "flash_deck", "scenario",
-            "lyrics_player",
-            "verdict", "budget", "overview", "display_section",
+            # primary (22)
+            "spot_explorer", "moment_track", "comparison",
+            "info_grid", "checklist", "step_player",
+            "flash_deck",
+            "budget", "overview",
+            "concept_canvas", "connect_canvas", "step_flow_canvas",
+            "comparison_radar",
+            "code_playground", "quiz_arena", "packing_mission",
+            "workout_room", "lyrics_karaoke", "video_filmstrip",
+            "claims_tracker", "tier_list", "formation_diagram",
+            # display
+            "display_section",
+            # secondary (6, P2)
+            "stat_banner", "tip_callout", "summary_header",
+            "diagram_card", "frame_strip", "quick_quiz",
         }
         assert set(ASSEMBLER_REGISTRY.keys()) == expected
 
-    def test_registry_has_17_entries(self):
-        # 18 before merging timeline+clip_player into moment_track
-        assert len(ASSEMBLER_REGISTRY) == 17
+    def test_registry_has_29_entries(self):
+        # 27 → 29 after adding `tier_list` + `formation_diagram` (P5c/d).
+        assert len(ASSEMBLER_REGISTRY) == 29
 
     def test_all_assemblers_handle_none(self):
         for name, assembler in ASSEMBLER_REGISTRY.items():
@@ -694,10 +756,107 @@ class TestRegistryCoverage:
 
     def test_all_assemblers_handle_empty_list(self):
         for name, assembler in ASSEMBLER_REGISTRY.items():
-            if name in ("overview", "display_section", "comparison", "verdict", "budget", "info_grid", "lyrics_player"):
-                continue  # These expect dict or use extraction directly, not list
+            # Assemblers that expect a dict / read extraction directly
+            if name in (
+                "overview", "display_section",
+                "comparison", "comparison_radar",
+                "budget", "info_grid",
+                "lyrics_karaoke",
+            ):
+                continue
             result = assembler({}, [], {}, None)
             assert result is None, f"{name} should return None for empty list"
+
+
+# ─── ConnectCanvas (P3B) — answer key derived from concept connections ───
+
+
+class TestAssembleConnectCanvas:
+    def _concepts(self) -> list[dict]:
+        return [
+            {"name": "Embedding", "definition": "Maps tokens to vectors.", "connections": ["Attention"]},
+            {"name": "Attention", "definition": "Weights tokens.", "connections": ["Embedding", "Residual"]},
+            {"name": "Residual", "definition": "Skip connection.", "connections": ["Attention"]},
+        ]
+
+    def test_derives_pairs_from_connections(self):
+        result = assemble_connect_canvas({}, self._concepts(), {}, None)
+        assert result is not None
+        pairs = result["pairs"]
+        assert len(pairs) >= 2
+        for pair in pairs:
+            assert pair["prompt"]
+            assert pair["match"]
+            # match must resolve to a real concept name (the answer key)
+            assert pair["match"] in {"Embedding", "Attention", "Residual"}
+            assert pair["match"] != pair["prompt"]
+
+    def test_answer_key_matches_a_real_connection(self):
+        result = assemble_connect_canvas({}, self._concepts(), {}, None)
+        by_prompt = {p["prompt"]: p["match"] for p in result["pairs"]}
+        # Embedding connects to Attention in the source graph
+        assert by_prompt["Embedding"] == "Attention"
+
+    def test_returns_none_without_resolvable_connections(self):
+        concepts = [
+            {"name": "A", "definition": "x", "connections": ["Nonexistent"]},
+            {"name": "B", "definition": "y", "connections": []},
+        ]
+        assert assemble_connect_canvas({}, concepts, {}, None) is None
+
+    def test_returns_none_below_min_pairs(self):
+        concepts = [{"name": "A", "definition": "x", "connections": ["B"]}]
+        assert assemble_connect_canvas({}, concepts, {}, None) is None
+
+    def test_accepts_dict_wrapped_concepts(self):
+        result = assemble_connect_canvas({}, {"concepts": self._concepts()}, {}, None)
+        assert result is not None and len(result["pairs"]) >= 2
+
+
+# ─── DiagramCard (P3A) — nodes + edges from connections / step order ───
+
+
+class TestAssembleDiagramCard:
+    def test_builds_edges_from_connections(self):
+        data = [
+            {"label": "Client", "connections": ["Gateway"]},
+            {"label": "Gateway", "connections": ["Service"]},
+            {"label": "Service", "connections": []},
+        ]
+        result = assemble_diagram_card({}, data, {}, None)
+        assert result is not None
+        assert [n["label"] for n in result["nodes"]] == ["Client", "Gateway", "Service"]
+        # Edges are index-addressed: Client(0)->Gateway(1), Gateway(1)->Service(2)
+        assert {"source": 0, "target": 1} in result["edges"]
+        assert {"source": 1, "target": 2} in result["edges"]
+
+    def test_no_edges_key_without_connections(self):
+        data = [{"label": "Step 1"}, {"label": "Step 2"}, {"label": "Step 3"}]
+        result = assemble_diagram_card({}, data, {}, None)
+        assert result is not None
+        # No connections → frontend renders a sequential chain; no edges emitted.
+        assert "edges" not in result
+
+    def test_drops_self_and_out_of_range_edges(self):
+        data = [
+            {"label": "A", "connections": ["A", "Ghost"]},
+            {"label": "B", "connections": ["A"]},
+        ]
+        result = assemble_diagram_card({}, data, {}, None)
+        assert result is not None
+        edges = result.get("edges", [])
+        # self-edge (A->A) and ghost target dropped; only B(1)->A(0) survives
+        assert {"source": 0, "target": 0} not in edges
+        assert {"source": 1, "target": 0} in edges
+
+    def test_caps_at_eight_nodes(self):
+        data = [{"label": f"N{i}"} for i in range(12)]
+        result = assemble_diagram_card({}, data, {}, None)
+        assert result is not None
+        assert len(result["nodes"]) == 8
+
+    def test_returns_none_below_two_nodes(self):
+        assert assemble_diagram_card({}, [{"label": "only"}], {}, None) is None
 
 
 # ─── Sync Guard: domains.json ↔ ASSEMBLER_REGISTRY ───
@@ -705,10 +864,12 @@ class TestRegistryCoverage:
 
 class TestSyncGuard:
     def test_assembler_registry_matches_domains_json_components(self):
-        """domains.json components[] must match ASSEMBLER_REGISTRY keys — catch drift.
+        """domains.json components[] must all have an ASSEMBLER_REGISTRY entry,
+        and every registry key must be a known component — primary (components[]),
+        secondary (componentTiers), or the display_section fallback.
 
-        display_section is excluded: it's an internal fallback assembler, not a
-        triage-visible component (triage should never output component: "display_section").
+        interactive-overhaul-v2 P2 split components into tiers: primaries are
+        planner-selectable; secondaries are attachment-only. Both are assemblable.
         """
         import json
         from pathlib import Path
@@ -716,19 +877,25 @@ class TestSyncGuard:
         domains_path = Path(__file__).resolve().parent.parent.parent.parent / "packages" / "shared" / "src" / "config" / "domains.json"
         config = json.loads(domains_path.read_text())
         json_components = frozenset(config["components"])
-        # display_section is an internal fallback — not exposed to triage LLM
-        registry_keys = frozenset(ASSEMBLER_REGISTRY.keys()) - {"display_section"}
+        secondaries = frozenset(
+            name for name, tier in config.get("componentTiers", {}).items()
+            if tier == "secondary"
+        )
+        registry_keys = frozenset(ASSEMBLER_REGISTRY.keys())
 
+        # Every primary component must be assemblable.
         in_json_not_registry = json_components - registry_keys
-        in_registry_not_json = registry_keys - json_components
-
         assert not in_json_not_registry, (
             f"components[] in domains.json but NOT in ASSEMBLER_REGISTRY: {in_json_not_registry}. "
             "Add the assembler function and register it."
         )
-        assert not in_registry_not_json, (
-            f"ASSEMBLER_REGISTRY keys NOT in domains.json components[]: {in_registry_not_json}. "
-            "Add the component name to domains.json components[]."
+
+        # Every registry key must be a known primary, secondary, or the fallback.
+        known = json_components | secondaries | {"display_section"}
+        orphan_registry = registry_keys - known
+        assert not orphan_registry, (
+            f"ASSEMBLER_REGISTRY keys with no tier/component: {orphan_registry}. "
+            "Add the name to domains.json components[] (primary) or componentTiers (secondary)."
         )
 
 
@@ -927,7 +1094,7 @@ class TestMomentTrackFallback:
         """Music-domain cross-tab rules resolve to moment_track, not clip_player."""
         from src.services.pipeline.assembly.cross_tab import _COMPONENT_LINK_RULES
         source_components = {(src, tgt, domain) for src, tgt, domain in _COMPONENT_LINK_RULES}
-        assert ("lyrics_player", "moment_track", "music") in source_components
+        assert ("lyrics_karaoke", "moment_track", "music") in source_components
         assert ("moment_track", "info_grid", "music") in source_components
         # Confirm the old clip_player rules are gone
         clip_player_rules = [
@@ -1009,7 +1176,7 @@ class TestFrameUtilities:
 
 class TestGalleryTabAssembly:
     def test_gallery_tab_created_when_curated_frames(self):
-        """Gallery tab only appears when >8 frames AND >50% non-generic captions."""
+        """Filmstrip tab only appears when >8 frames AND >50% non-generic captions."""
         triage = {
             "contentTags": ["learning"],
             "primaryTag": "learning",
@@ -1024,7 +1191,9 @@ class TestGalleryTabAssembly:
         result = assemble_response(triage, extraction, None, None, frames=frames)
         gallery_tabs = [t for t in result["tabs"] if t["id"] == "frames-gallery"]
         assert len(gallery_tabs) == 1
-        assert gallery_tabs[0]["component"] == "gallery"
+        # The standalone gallery component was retired; frames surface as a
+        # video_filmstrip scrubber.
+        assert gallery_tabs[0]["component"] == "video_filmstrip"
 
     def test_no_gallery_with_few_frames(self):
         """Gallery tab NOT created when <=8 frames."""
@@ -1072,11 +1241,11 @@ class TestGalleryTabAssembly:
         result = assemble_response(triage, extraction, None, None, frames=frames)
         gallery_tabs = [t for t in result["tabs"] if t["id"] == "frames-gallery"]
         assert len(gallery_tabs) == 1
-        images = gallery_tabs[0]["props"]["images"]
+        strip_frames = gallery_tabs[0]["props"]["frames"]
         # First 3 should be sorted by timestamp
-        assert images[0]["timestamp"] == 10.0
-        assert images[1]["timestamp"] == 30.0
-        assert images[2]["timestamp"] == 60.0
+        assert strip_frames[0]["timestamp"] == 10
+        assert strip_frames[1]["timestamp"] == 30
+        assert strip_frames[2]["timestamp"] == 60
 
     def test_gallery_not_created_for_few_generic_frames(self):
         """Few frames without OCR text → no gallery tab."""
@@ -1087,13 +1256,14 @@ class TestGalleryTabAssembly:
         gallery_tabs = [t for t in result["tabs"] if t["id"] == "frames-gallery"]
         assert len(gallery_tabs) == 0
 
-    def test_gallery_layout_grid_for_many_frames(self):
+    def test_gallery_filmstrip_holds_all_frames(self):
         triage = {"contentTags": ["learning"], "primaryTag": "learning", "tabs": []}
         extraction = {"learning": {"summary": "Test"}}
         frames = [{"timestamp": float(i * 10), "s3_url": f"url{i}", "index": i, "ocr_text": f"Slide {i}"} for i in range(15)]
         result = assemble_response(triage, extraction, None, None, frames=frames)
         gallery_tab = [t for t in result["tabs"] if t["id"] == "frames-gallery"][0]
-        assert gallery_tab["props"]["layout"] == "grid"
+        assert gallery_tab["component"] == "video_filmstrip"
+        assert len(gallery_tab["props"]["frames"]) == 15
 
 
 # ─── Flexible Assembler Tests ───
@@ -1680,7 +1850,7 @@ class TestNewCrossTabLinks:
         """Generic rules fire when no domain-specific rule matches."""
         all_tabs = [
             {"id": "overview", "component": "overview"},
-            {"id": "exercises", "component": "exercise_tracker"},
+            {"id": "exercises", "component": "workout_room"},
         ]
         ids = {"overview", "exercises"}
         links = resolve_cross_tab_links("overview", ids, "overview", all_tabs, "narrative")
@@ -1794,6 +1964,33 @@ class TestPostProcessing:
         _post_process_tabs(tabs)
         assert len(tabs[0]["props"]["items"]) == 20
 
+    def test_moment_track_cap_scales_with_duration_and_spans_video(self):
+        """Long videos: timeline cap scales with duration and keeps items
+        evenly across the whole video (not just the first N)."""
+        from src.services.pipeline.assembly.core import _post_process_tabs
+        # 4.5h video, 72 timestamps spread to the end.
+        items = [{"time": f"{i}:00", "seconds": i * 233, "label": f"m{i}"} for i in range(72)]
+        tabs = [{
+            "id": "key_moments", "label": "Key Moments", "component": "moment_track",
+            "emoji": "⏱️", "props": {"items": list(items)},
+        }]
+        _post_process_tabs(tabs, video_duration=16789)  # ~280 min → cap ~40
+        kept = tabs[0]["props"]["items"]
+        assert 35 <= len(kept) <= 45
+        # First and last moments are preserved → timeline spans the whole video.
+        assert kept[0]["seconds"] == items[0]["seconds"]
+        assert kept[-1]["seconds"] == items[-1]["seconds"]
+
+    def test_evenly_sample_preserves_first_and_last(self):
+        from src.services.pipeline.assembly.core import _evenly_sample
+        items = list(range(100))
+        sampled = _evenly_sample(items, 10)
+        assert sampled[0] == 0
+        assert sampled[-1] == 99
+        assert len(sampled) <= 10
+        # Returns input unchanged when already within cap.
+        assert _evenly_sample([1, 2, 3], 10) == [1, 2, 3]
+
     def test_caps_oversized_info_grid_to_20(self):
         from src.services.pipeline.assembly.core import _post_process_tabs
         tabs = [
@@ -1856,13 +2053,13 @@ class TestDomainRequirementValidation:
         assert flash_tabs[0]["id"] == "concepts"
 
     def test_max_quiz_enforced_for_tech(self):
-        """Multiple quiz tabs in tech → only first kept."""
+        """Multiple quiz_arena tabs in tech → only first kept (post-overhaul: quiz → quiz_arena)."""
         tabs = [
-            {"id": "quiz1", "component": "quiz", "label": "Quiz 1", "goal": "Test"},
-            {"id": "quiz2", "component": "quiz", "label": "Quiz 2", "goal": "Test more"},
+            {"id": "quiz1", "component": "quiz_arena", "label": "Quiz 1", "goal": "Test"},
+            {"id": "quiz2", "component": "quiz_arena", "label": "Quiz 2", "goal": "Test more"},
         ]
         _validate_domain_requirements(tabs, "tech")
-        quiz_tabs = [t for t in tabs if t["component"] == "quiz"]
+        quiz_tabs = [t for t in tabs if t["component"] == "quiz_arena"]
         assert len(quiz_tabs) == 1
 
     def test_no_max_constraints_no_drop(self):
@@ -2609,3 +2806,388 @@ class TestFlashCardNoEnglishPrefixes:
         # Standard front+back input passes through untouched.
         card = _to_flash_card({"front": "Q", "back": "A", "emoji": "💡"})
         assert card == {"front": "Q", "back": "A", "emoji": "💡"}
+
+
+# ─── Phase 5b: claims_tracker (news signature component) ───
+
+
+class TestAssembleClaimsTracker:
+    def test_normalizes_full_claims(self):
+        data = [
+            {"claim": "Jobs created: 1200", "source": "Mayor", "status": "disputed",
+             "sourceCitation": "Analysts say 700", "timestamp": 210},
+            {"claim": "Fares rise 15%", "source": "Authority", "status": "verified"},
+        ]
+        result = assemble_claims_tracker({}, data, {}, None)
+        assert result is not None
+        claims = result["claims"]
+        assert len(claims) == 2
+        assert claims[0]["status"] == "disputed"
+        assert claims[0]["source"] == "Mayor"
+        assert claims[0]["sourceCitation"] == "Analysts say 700"
+        assert claims[0]["timestamp"] == 210
+
+    def test_unknown_status_defaults_to_context(self):
+        data = [
+            {"claim": "A bold assertion", "source": "Pundit", "status": "true"},
+            {"claim": "Another assertion", "source": "Pundit"},
+        ]
+        result = assemble_claims_tracker({}, data, {}, None)
+        assert result["claims"][0]["status"] == "context"
+        assert result["claims"][1]["status"] == "context"
+
+    def test_missing_source_defaults_to_reporter(self):
+        data = [
+            {"claim": "Claim one", "status": "context"},
+            {"claim": "Claim two", "status": "verified"},
+        ]
+        result = assemble_claims_tracker({}, data, {}, None)
+        assert result["claims"][0]["source"] == "Reporter"
+
+    def test_dict_wrapper_with_claims_key(self):
+        data = {"claims": [
+            {"claim": "C1", "source": "S1", "status": "verified"},
+            {"claim": "C2", "source": "S2", "status": "context"},
+        ]}
+        result = assemble_claims_tracker({}, data, {}, None)
+        assert len(result["claims"]) == 2
+
+    def test_drops_claims_with_no_text(self):
+        data = [
+            {"claim": "", "source": "S1", "status": "verified"},
+            {"source": "S2", "status": "context"},
+            {"claim": "Real claim", "source": "S3", "status": "verified"},
+            {"claim": "Second real", "source": "S4", "status": "disputed"},
+        ]
+        result = assemble_claims_tracker({}, data, {}, None)
+        assert len(result["claims"]) == 2
+
+    def test_below_min_returns_none(self):
+        # One real claim is below the 2-claim minimum.
+        result = assemble_claims_tracker({}, [{"claim": "Only one", "source": "S"}], {}, None)
+        assert result is None
+
+    def test_empty_returns_none(self):
+        assert assemble_claims_tracker({}, [], {}, None) is None
+        assert assemble_claims_tracker({}, None, {}, None) is None
+
+
+class TestPodcastAssembly:
+    def _triage(self):
+        return {
+            "contentTags": ["podcast"],
+            "modifiers": [],
+            "primaryTag": "podcast",
+            "userGoal": "Follow the conversation",
+            "tabs": [
+                {"id": "segments", "label": "Segments", "emoji": "🎙️",
+                 "component": "moment_track", "dataSource": "podcast.segments"},
+                {"id": "guests", "label": "Guests", "emoji": "🧑",
+                 "component": "spot_explorer", "dataSource": "podcast.guests"},
+                {"id": "quotes", "label": "Quotes", "emoji": "💬",
+                 "component": "flash_deck", "dataSource": "podcast.quotes"},
+                {"id": "topics", "label": "Topics", "emoji": "🗂️",
+                 "component": "info_grid", "dataSource": "podcast.topics"},
+            ],
+        }
+
+    def test_default_tabs_assemble(self):
+        extraction = {
+            "podcast": {
+                "segments": [
+                    {"title": "Intro", "summary": "Welcome", "timestamp": 0},
+                    {"title": "Deep dive", "summary": "Consensus", "timestamp": 480},
+                    {"title": "Wrap", "summary": "Closing", "timestamp": 900},
+                ],
+                "guests": [
+                    {"name": "Dr. Cho", "role": "Engineer", "description": "Distributed systems"},
+                    {"name": "Sam R", "role": "Host", "description": "Runs the show"},
+                ],
+                "quotes": [
+                    {"quote": "You can't beat physics", "speaker": "Cho"},
+                    {"quote": "Latency is forever", "speaker": "Cho"},
+                    {"quote": "Ship it", "speaker": "Sam"},
+                ],
+                "topics": [
+                    {"topic": "CAP theorem", "detail": "Consistency vs availability"},
+                    {"topic": "Raft", "detail": "Understandable consensus"},
+                    {"topic": "Latency", "detail": "Physics limits"},
+                ],
+            },
+        }
+        out = assemble_response(self._triage(), extraction, None, None)
+        components = [t["component"] for t in out["tabs"]]
+        assert "moment_track" in components
+        assert "spot_explorer" in components
+        assert out["meta"]["primaryTag"] == "podcast"
+        # Segments are the required spine.
+        seg = next(t for t in out["tabs"] if t["component"] == "moment_track")
+        assert len(seg["props"]["items"]) == 3
+
+
+class TestNewsAssembly:
+    def _triage(self):
+        return {
+            "contentTags": ["news"],
+            "modifiers": [],
+            "primaryTag": "news",
+            "userGoal": "Understand the story",
+            "tabs": [
+                {"id": "timeline", "label": "Timeline", "emoji": "🕐",
+                 "component": "moment_track", "dataSource": "news.storyTimeline"},
+                {"id": "entities", "label": "People", "emoji": "👤",
+                 "component": "spot_explorer", "dataSource": "news.entities"},
+                {"id": "claims", "label": "Claims", "emoji": "🔎",
+                 "component": "claims_tracker", "dataSource": "news.claims"},
+                {"id": "context", "label": "Context", "emoji": "🗂️",
+                 "component": "info_grid", "dataSource": "news.context"},
+            ],
+        }
+
+    def test_claims_tracker_and_timeline_assemble(self):
+        extraction = {
+            "news": {
+                "storyTimeline": [
+                    {"label": "Proposed", "description": "Budget submitted", "timestamp": 0},
+                    {"label": "Hearing", "description": "Public split", "timestamp": 320},
+                    {"label": "Vote", "description": "Approved 6-3", "timestamp": 740},
+                ],
+                "entities": [
+                    {"name": "Mayor Diaz", "role": "Sponsor", "description": "Pushed plan"},
+                    {"name": "Transit Authority", "role": "Implementer", "description": "Runs transit"},
+                ],
+                "claims": [
+                    {"claim": "Creates 1200 jobs", "source": "Mayor", "status": "disputed",
+                     "sourceCitation": "Analysts say 700", "timestamp": 210},
+                    {"claim": "Fares rise 15%", "source": "Authority", "status": "verified",
+                     "timestamp": 540},
+                    {"claim": "Structural deficit", "source": "Reporter", "status": "context"},
+                ],
+                "context": [
+                    {"key": "Annual budget", "value": "$3.4B"},
+                    {"key": "Last increase", "value": "2021"},
+                    {"key": "Population", "value": "1.2M"},
+                ],
+            },
+        }
+        out = assemble_response(self._triage(), extraction, None, None)
+        components = [t["component"] for t in out["tabs"]]
+        assert "claims_tracker" in components
+        assert "moment_track" in components
+        assert out["meta"]["primaryTag"] == "news"
+        claims_tab = next(t for t in out["tabs"] if t["component"] == "claims_tracker")
+        assert len(claims_tab["props"]["claims"]) == 3
+        statuses = {c["status"] for c in claims_tab["props"]["claims"]}
+        assert statuses == {"disputed", "verified", "context"}
+
+
+# ─── Phase 5c: tier_list (gaming signature component) ───
+
+
+class TestAssembleTierList:
+    def test_normalizes_full_rankings(self):
+        data = [
+            {"item": "Jett", "tier": "S", "reason": "Top duelist", "emoji": "🌪️"},
+            {"item": "Sage", "tier": "a", "reason": "Carry"},
+            {"item": "Yoru", "tier": "C"},
+        ]
+        result = assemble_tier_list({}, data, {}, None)
+        assert result is not None
+        items = result["items"]
+        assert len(items) == 3
+        assert items[0]["item"] == "Jett"
+        assert items[0]["tier"] == "S"
+        # lowercase tier coerced to uppercase
+        assert items[1]["tier"] == "A"
+        # Yoru had no reason — the key is omitted, not null
+        assert "reason" not in items[2]
+
+    def test_invalid_tier_omitted(self):
+        data = [
+            {"item": "A", "tier": "Z"},
+            {"item": "B", "tier": "S"},
+            {"item": "C"},
+        ]
+        result = assemble_tier_list({}, data, {}, None)
+        assert "tier" not in result["items"][0]
+        assert result["items"][1]["tier"] == "S"
+        assert "tier" not in result["items"][2]
+
+    def test_dict_wrapper_with_rankings_key(self):
+        data = {"rankings": [
+            {"item": "A", "tier": "S"},
+            {"item": "B", "tier": "A"},
+            {"item": "C", "tier": "B"},
+        ]}
+        result = assemble_tier_list({}, data, {}, None)
+        assert len(result["items"]) == 3
+
+    def test_drops_items_with_no_label(self):
+        data = [
+            {"item": "", "tier": "S"},
+            {"tier": "A"},
+            {"item": "Real one", "tier": "B"},
+            {"item": "Real two", "tier": "C"},
+            {"item": "Real three"},
+        ]
+        result = assemble_tier_list({}, data, {}, None)
+        assert len(result["items"]) == 3
+
+    def test_below_min_returns_none(self):
+        result = assemble_tier_list({}, [{"item": "Solo"}, {"item": "Duo"}], {}, None)
+        assert result is None
+
+    def test_empty_returns_none(self):
+        assert assemble_tier_list({}, [], {}, None) is None
+        assert assemble_tier_list({}, None, {}, None) is None
+
+
+# ─── Phase 5d: formation_diagram (sport signature component) ───
+
+
+class TestAssembleFormationDiagram:
+    def _positions(self) -> list[dict]:
+        return [
+            {"player": "Ederson", "role": "GK", "x": 50, "y": 8, "number": 31},
+            {"player": "Walker", "role": "RB", "x": 80, "y": 30, "number": 2},
+            {"player": "Haaland", "role": "ST", "x": 50, "y": 90, "number": 9},
+        ]
+
+    def test_normalizes_positions_from_dict(self):
+        data = {"name": "4-3-3", "team": "City", "positions": self._positions()}
+        result = assemble_formation_diagram({}, data, {}, None)
+        assert result is not None
+        assert result["name"] == "4-3-3"
+        assert result["team"] == "City"
+        assert len(result["positions"]) == 3
+        assert result["positions"][0]["player"] == "Ederson"
+        assert result["positions"][0]["x"] == 50.0
+        assert result["positions"][0]["number"] == 31
+
+    def test_accepts_bare_positions_list(self):
+        result = assemble_formation_diagram({}, self._positions(), {}, None)
+        assert result is not None
+        assert len(result["positions"]) == 3
+
+    def test_clamps_coordinates(self):
+        data = {"positions": [
+            {"player": "A", "x": 150, "y": -20},
+            {"player": "B", "x": 50, "y": 50},
+            {"player": "C", "x": 0, "y": 100},
+        ]}
+        result = assemble_formation_diagram({}, data, {}, None)
+        assert result["positions"][0]["x"] == 100.0
+        assert result["positions"][0]["y"] == 0.0
+
+    def test_drops_positions_without_coords_or_name(self):
+        data = {"positions": [
+            {"player": "", "x": 10, "y": 10},
+            {"player": "NoCoords"},
+            {"player": "Valid1", "x": 10, "y": 10},
+            {"player": "Valid2", "x": 20, "y": 20},
+            {"player": "Valid3", "x": 30, "y": 30},
+        ]}
+        result = assemble_formation_diagram({}, data, {}, None)
+        assert len(result["positions"]) == 3
+
+    def test_below_min_returns_none(self):
+        data = {"positions": [
+            {"player": "A", "x": 10, "y": 10},
+            {"player": "B", "x": 20, "y": 20},
+        ]}
+        assert assemble_formation_diagram({}, data, {}, None) is None
+
+    def test_empty_returns_none(self):
+        assert assemble_formation_diagram({}, [], {}, None) is None
+        assert assemble_formation_diagram({}, None, {}, None) is None
+        assert assemble_formation_diagram({}, {"positions": []}, {}, None) is None
+
+
+class TestGamingAssembly:
+    def _triage(self):
+        return {
+            "contentTags": ["gaming"],
+            "modifiers": [],
+            "primaryTag": "gaming",
+            "userGoal": "Improve at the game",
+            "tabs": [
+                {"id": "highlights", "label": "Highlights", "emoji": "🎬",
+                 "component": "moment_track", "dataSource": "gaming.highlights"},
+                {"id": "loadout", "label": "Loadout", "emoji": "🎒",
+                 "component": "checklist", "dataSource": "gaming.loadout"},
+                {"id": "tier_list", "label": "Tier List", "emoji": "🏆",
+                 "component": "tier_list", "dataSource": "gaming.rankings"},
+            ],
+        }
+
+    def test_default_tabs_assemble(self):
+        extraction = {
+            "gaming": {
+                "highlights": [
+                    {"label": "Clutch", "description": "1v3", "timestamp": 95},
+                    {"label": "Ace", "description": "Five kills", "timestamp": 410},
+                    {"label": "Whiff", "description": "Missed", "timestamp": 720},
+                ],
+                "loadout": [
+                    {"item": "Vandal", "category": "weapons", "note": "One-tap"},
+                    {"item": "Light shields", "category": "economy", "note": "Eco"},
+                    {"item": "0.4 sens", "category": "settings", "note": "Mouse"},
+                ],
+                "rankings": [
+                    {"item": "Jett", "tier": "S", "reason": "Entry"},
+                    {"item": "Sage", "tier": "A", "reason": "Heal"},
+                    {"item": "Yoru", "tier": "C", "reason": "Niche"},
+                ],
+            },
+        }
+        out = assemble_response(self._triage(), extraction, None, None)
+        components = [t["component"] for t in out["tabs"]]
+        assert "tier_list" in components
+        assert "moment_track" in components
+        assert out["meta"]["primaryTag"] == "gaming"
+        tier_tab = next(t for t in out["tabs"] if t["component"] == "tier_list")
+        assert len(tier_tab["props"]["items"]) == 3
+
+
+class TestSportAssembly:
+    def _triage(self):
+        return {
+            "contentTags": ["sport"],
+            "modifiers": [],
+            "primaryTag": "sport",
+            "userGoal": "Understand the match",
+            "tabs": [
+                {"id": "match_events", "label": "Events", "emoji": "⏱️",
+                 "component": "moment_track", "dataSource": "sport.matchEvents"},
+                {"id": "formation", "label": "Formation", "emoji": "📋",
+                 "component": "formation_diagram", "dataSource": "sport.formation"},
+            ],
+        }
+
+    def test_default_tabs_assemble(self):
+        extraction = {
+            "sport": {
+                "matchEvents": [
+                    {"label": "Goal", "description": "Tap-in", "timestamp": 720},
+                    {"label": "Equaliser", "description": "Header", "timestamp": 1980},
+                    {"label": "Winner", "description": "Top corner", "timestamp": 4980},
+                ],
+                "formation": {
+                    "name": "4-3-3",
+                    "team": "City",
+                    "positions": [
+                        {"player": "Ederson", "role": "GK", "x": 50, "y": 8, "number": 31},
+                        {"player": "Rodri", "role": "CDM", "x": 50, "y": 50, "number": 16},
+                        {"player": "Haaland", "role": "ST", "x": 50, "y": 90, "number": 9},
+                    ],
+                },
+            },
+        }
+        out = assemble_response(self._triage(), extraction, None, None)
+        components = [t["component"] for t in out["tabs"]]
+        assert "formation_diagram" in components
+        assert "moment_track" in components
+        assert out["meta"]["primaryTag"] == "sport"
+        formation_tab = next(t for t in out["tabs"] if t["component"] == "formation_diagram")
+        assert len(formation_tab["props"]["positions"]) == 3
+        assert formation_tab["props"]["name"] == "4-3-3"

@@ -184,7 +184,12 @@ async def run_plan(
     try:
         raw = await call_llm_with_retry(
             llm_service, prompt,
-            max_tokens=2048, timeout=30.0, max_retries=2, stage_name="plan",
+            # Plan timeout bumped 30→60s after observing fresh-video failures:
+            # KuXjwB4LzSA (3B1B Convolution) timed out 3× at 30s while Sonnet
+            # processed Arabic auto-translated transcripts + the longer plan
+            # prompt (post-overhaul). 60s gives realistic headroom; the assembler
+            # fallback path still kicks in if all 3 attempts fail.
+            max_tokens=2048, timeout=60.0, max_retries=2, stage_name="plan",
             json_mode=True, cache_static=cache_static,
         )
         if not raw:

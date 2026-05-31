@@ -2,7 +2,7 @@ import { memo, useCallback, useState } from 'react';
 import { ChevronDown, ChevronUp, Star, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SpotItem } from '@vie/types';
-import { GlassCard, FadeIn, SectionNav, Badge, MapLink } from '@/components/vie';
+import { GlassCard, FadeIn, SectionNav, Badge, MapLink, VisualEvidence } from '@/components/vie';
 
 
 interface SpotSection {
@@ -64,9 +64,24 @@ export const SpotExplorer = memo(function SpotExplorer({
       ? (spot.description.length > 80 && !isExpanded ? spot.description.slice(0, 80) + '...' : spot.description)
       : null;
 
+    const hasFrame = Boolean(spot.thumbnailUrl || spot.frameCaption || spot.frameOcr);
+
     return (
       <FadeIn key={spotIndex} index={fadeIdx}>
         <div className="rounded-lg border border-border/50 overflow-hidden">
+          {/* Frame-as-Hero: the supporting frame leads the card at aspect-video,
+              never a sidekick thumbnail (DESIGN.md §6). */}
+          {hasFrame && (
+            <VisualEvidence
+              variant="figure"
+              thumbnailUrl={spot.thumbnailUrl}
+              caption={spot.frameCaption}
+              ocr={spot.frameOcr}
+              sceneType={spot.frameSceneType}
+              evidence={spot.frameEvidence}
+              className="p-3 pb-0"
+            />
+          )}
           <button
             type="button"
             onClick={() => hasExpandable && toggleExpand(spotIndex)}
@@ -110,22 +125,13 @@ export const SpotExplorer = memo(function SpotExplorer({
               )}
             </div>
 
-            {/* Right: 72px thumbnail */}
-            <div className="shrink-0 flex items-center gap-2">
-              {spot.thumbnailUrl && (
-                <img
-                  src={spot.thumbnailUrl}
-                  alt={spot.name}
-                  loading="lazy"
-                  className="w-[72px] h-[72px] rounded-lg object-cover border border-border/30"
-                />
-              )}
-              {hasExpandable && (
-                <span className="text-muted-foreground/50" aria-hidden="true">
-                  {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                </span>
-              )}
-            </div>
+            {/* Right: expand affordance only — the frame now leads the card as
+                a hero banner above (Frame-as-Hero), not a sidekick thumbnail. */}
+            {hasExpandable && (
+              <span className="shrink-0 text-muted-foreground/50 mt-0.5" aria-hidden="true">
+                {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </span>
+            )}
           </button>
 
           {/* Expanded details */}

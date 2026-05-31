@@ -14,11 +14,12 @@ from src.services.pipeline.extractor import (
     _force_split_by_sentences,
     _format_prompt,
     _parse_llm_json,
+    batch_chapters,
     extract,
     SINGLE_THRESHOLD,
     OVERFLOW_THRESHOLD,
 )
-from src.services.transcription.transcript_chunker import FORCE_SPLIT_TARGET_WORDS
+from src.services.transcription.transcript_chunker import ChapterChunk, FORCE_SPLIT_TARGET_WORDS
 from src.services.pipeline.triage import TriageResult
 
 
@@ -315,6 +316,49 @@ class TestStrategySelection:
         assert mock_llm_retry.call_count >= 1
         assert any(e["event"] == "extraction_complete" for e in events)
         assert any(e.get("section") == "chunked" for e in events if e["event"] == "extraction_progress")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Batch span cap (batch_chapters)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _chapter(index: int, start: float, end: float, tokens: int) -> ChapterChunk:
+    return ChapterChunk(
+        index=index, title=f"Ch{index}", start_seconds=start, end_seconds=end,
+        text="x", source="time_split", token_estimate=tokens,
+    )
+
+
+class TestBatchChaptersSpanCap:
+    def test_span_cap_splits_token_light_long_video(self):
+        """A multi-hour run that fits the token cap must still be split by the
+        wall-clock span cap (the 4.5h-in-one-batch bug)."""
+        # 7 chapters × 40 min = 4h40m, only ~1.2K tokens each (8.4K total) —
+        # comfortably under MAX_TOKENS_PER_BATCH but far over the span cap.
+        chapters = [_chapter(i, i * 2400, (i + 1) * 2400, 1200) for i in range(7)]
+
+        batches = batch_chapters(chapters, max_tokens_per_batch=50000, max_minutes_per_batch=40)
+
+        assert len(batches) == 7  # one 40-min chapter per batch
+        # No chapter is ever split across batches.
+        assert sum(len(b) for b in batches) == 7
+
+    def test_token_cap_still_applies_for_dense_short_spans(self):
+        """Tiny spans but heavy token counts must still be split on tokens."""
+        chapters = [_chapter(i, i * 60, (i + 1) * 60, 30000) for i in range(4)]
+
+        batches = batch_chapters(chapters, max_tokens_per_batch=50000, max_minutes_per_batch=40)
+
+        assert len(batches) == 4  # 30K each → only one per 50K batch
+        assert all(len(b) == 1 for b in batches)
+
+    def test_small_video_stays_single_batch(self):
+        chapters = [_chapter(i, i * 300, (i + 1) * 300, 1000) for i in range(4)]  # 20 min total
+
+        batches = batch_chapters(chapters, max_tokens_per_batch=50000, max_minutes_per_batch=40)
+
+        assert len(batches) == 1
+        assert len(batches[0]) == 4
 
 
 # ─────────────────────────────────────────────────────────────────────────────

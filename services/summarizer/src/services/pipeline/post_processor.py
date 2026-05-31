@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+from ...utils.data_helpers import parse_timestamp_to_seconds
 
 if TYPE_CHECKING:
     from ...models.pipeline_types import PlanResult
@@ -227,3 +229,71 @@ def validate_extraction_counts(
             )
 
     return warnings
+
+
+# Ratio below which the extraction is flagged for under-coverage: the latest
+# timestamped item is far short of the video's end (e.g. a 4.5h video whose
+# timeline stops at 1:34 → ratio 0.34).
+COVERAGE_GATE_RATIO = 0.85
+
+# Lists whose items carry a video offset, mapped to the field holding it.
+# Offsets may be int seconds or "M:SS"/"H:MM:SS" strings.
+_TIMESTAMP_PATHS: dict[str, str] = {
+    "learning.timestamps": "seconds",
+    "narrative.keyMoments": "timestamp",
+    "news.storyTimeline": "timestamp",
+}
+
+
+def _collect_offsets(data: dict, list_path: str, field: str) -> list[int]:
+    """Collect parsed second-offsets from the items of a dot-path list."""
+    current: Any = data
+    for part in list_path.split("."):
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+        else:
+            return []
+    if not isinstance(current, list):
+        return []
+
+    offsets: list[int] = []
+    for item in current:
+        if not isinstance(item, dict):
+            continue
+        raw = item.get(field)
+        if raw is None and field != "seconds":
+            raw = item.get("seconds")  # LearningTimestamp carries both
+        secs = parse_timestamp_to_seconds(raw)
+        if secs is not None:
+            offsets.append(secs)
+    return offsets
+
+
+def compute_extraction_coverage(
+    extraction_data: dict | None,
+    duration_seconds: float,
+) -> dict | None:
+    """Compare the latest timestamped extraction offset against video duration.
+
+    Returns ``{maxTimestamp, duration, ratio, tailMissingSeconds}`` or None
+    when there is no duration or no timestamped content to measure. A ratio
+    well below 1.0 means a tail of the video produced no timestamped output —
+    the signature of the under-extraction bug (4.5h video stopping at 1:34).
+    """
+    if not extraction_data or duration_seconds <= 0:
+        return None
+
+    offsets: list[int] = []
+    for list_path, field in _TIMESTAMP_PATHS.items():
+        offsets.extend(_collect_offsets(extraction_data, list_path, field))
+    if not offsets:
+        return None
+
+    max_ts = max(offsets)
+    ratio = max_ts / duration_seconds
+    return {
+        "maxTimestamp": max_ts,
+        "duration": int(duration_seconds),
+        "ratio": round(ratio, 3),
+        "tailMissingSeconds": max(0, int(duration_seconds - max_ts)),
+    }

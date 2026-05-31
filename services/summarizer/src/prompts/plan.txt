@@ -30,7 +30,7 @@ Step 1 — Understand the video:
 
 Step 2 — Classify the content:
 Pick 1-2 content tags (most specific first) and 0-2 modifiers.
-Content tags: learning, tech, fitness, food, music, travel, review, project, language, science
+Content tags: learning, tech, fitness, food, music, travel, review, project, language, science, podcast, news, gaming, sport
 Modifiers: narrative (strong storytelling), finance (specific costs/budgets)
 
 Step 3 — Design the output:
@@ -38,7 +38,7 @@ Create 4-6 interactive tabs using the component toolkit below.
 - First tab: delivers the video's primary value immediately (not an overview)
 - Every tab needs a "goal" explaining what the user DOES with it
 - Use at least 2 interactive components (action, learning, exploration, or media)
-- Maximum 1 display component (verdict, budget)
+- Maximum 1 display component (budget)
 - Tab labels should include specific numbers when known (e.g., "🛒 14 Ingredients")
 - Match components to user actions, not data shape
 </instructions>
@@ -148,9 +148,10 @@ Video: "React Server Components Explained" (25 min, tech tutorial)
   "confidence": 0.93,
   "tabs": [
     {{"id": "build_steps", "label": "🔨 6 Build Steps", "emoji": "🔨", "component": "step_player", "dataSource": "tech.snippets", "goal": "Let's build it together — each snippet adds one RSC pattern to your app."}},
-    {{"id": "code", "label": "💻 8 Code Snippets", "emoji": "💻", "component": "code_explorer", "dataSource": "tech.snippets", "goal": "Grab these and paste into your editor. Each builds on the last."}},
-    {{"id": "concepts", "label": "🧠 5 Key Concepts", "emoji": "🧠", "component": "flash_deck", "dataSource": "learning.concepts", "goal": "Flip through RSC concepts until they stick."}},
-    {{"id": "moments", "label": "🎬 Key Moments", "emoji": "🎬", "component": "moment_track", "dataSource": "learning.timestamps", "goal": "Jump to any concept demonstration in the video."}}
+    {{"id": "code", "label": "💻 8 Code Snippets", "emoji": "💻", "component": "code_playground", "dataSource": "tech.snippets", "goal": "Grab these and paste into your editor. Each builds on the last. Run JS snippets right in the sandbox."}},
+    {{"id": "concepts", "label": "🧠 5 Key Concepts", "emoji": "🧠", "component": "concept_canvas", "dataSource": "learning.concepts", "goal": "Drag concepts around to see how server components, streaming, and suspense connect."}},
+    {{"id": "moments", "label": "🎬 Key Moments", "emoji": "🎬", "component": "moment_track", "dataSource": "learning.timestamps", "goal": "Jump to any concept demonstration in the video."}},
+    {{"id": "quiz", "label": "✅ Test Yourself", "emoji": "✅", "component": "quiz_arena", "dataSource": "enrichment.quiz", "goal": "Check what stuck — streak counter + frame context per question."}}
   ]
 }}
 </example>
@@ -173,9 +174,59 @@ Video: "What Are Transformers?" (28 min, 3Blue1Brown — ML concepts with rich a
   "userGoal": "Build intuition for the transformer architecture",
   "confidence": 0.94,
   "tabs": [
-    {{"id": "concepts", "label": "🧠 12 Core Concepts", "emoji": "🧠", "component": "flash_deck", "dataSource": "learning.concepts", "goal": "Each card is one transformer concept. Flip to see the precise definition."}},
+    {{"id": "concepts", "label": "🧠 12 Core Concepts", "emoji": "🧠", "component": "concept_canvas", "dataSource": "learning.concepts", "goal": "Drag the concepts around — the canvas shows how attention, embeddings, and the residual stream connect."}},
     {{"id": "moments", "label": "🎬 10 Demonstrations", "emoji": "🎬", "component": "moment_track", "dataSource": "learning.timestamps", "goal": "Jump to the exact moment each concept is shown on screen."}},
-    {{"id": "quiz", "label": "✅ Test Yourself", "emoji": "✅", "component": "quiz", "dataSource": "enrichment.quiz", "goal": "Five questions to check what stuck."}}
+    {{"id": "quiz", "label": "✅ Test Yourself", "emoji": "✅", "component": "quiz_arena", "dataSource": "enrichment.quiz", "goal": "Five questions to check what stuck — streak counter included."}}
+  ]
+}}
+</example>
+
+<example>
+Video: "7-Day Tokyo Trip — Packing + Itinerary" (18 min, travel)
+{{
+  "reasoning": "Travel vlogger walking through a packing list AND a daily itinerary. The video has rich scene variety — neon Shibuya, quiet Asakusa, ramen shops, train interiors — so a filmstrip scrubber pays off. Packing items are physical so a drag-into-suitcase mission is the right action component.",
+  "identity": {{"creatorType": "travel vlogger", "tone": "casual-funny", "audience": "first-time visitors"}},
+  "corePromise": "Pack the right things and have a day-by-day plan for Tokyo this week",
+  "uniqueAngle": "Explicit weight tally + essential warnings, not a generic checklist",
+  "extractionGuidance": {{
+    "primaryFocus": "Every packing item with category + weight + essential flag; every itinerary spot with map link and timestamp",
+    "watchOutFor": "Items the vlogger holds up on camera mid-video — capture their timestamps so frames attach"
+  }},
+  "itemCounts": {{"spots": 14, "tips": 0, "exercises": 0, "concepts": 0, "codeSnippets": 0, "ingredients": 0, "songs": 0, "products": 0, "steps": 0}},
+  "contentTags": ["travel"],
+  "modifiers": ["finance"],
+  "primaryTag": "travel",
+  "userGoal": "Pack a 7-day Tokyo trip and follow a day-by-day plan",
+  "confidence": 0.92,
+  "tabs": [
+    {{"id": "packing", "label": "🎒 22 Packing Items", "emoji": "🎒", "component": "packing_mission", "dataSource": "travel.packingList", "goal": "Drag each item into the suitcase. Weight tally updates as you go — essentials flagged."}},
+    {{"id": "itinerary", "label": "📅 7 Days in Tokyo", "emoji": "📅", "component": "spot_explorer", "dataSource": "travel.itinerary", "goal": "Day-by-day plan with costs and map links. Tap any spot for details."}},
+    {{"id": "filmstrip", "label": "🎞️ Tokyo Scenes", "emoji": "🎞️", "component": "video_filmstrip", "dataSource": "travel.itinerary", "goal": "Scrub through the trip — hover a frame for the caption, click to seek."}},
+    {{"id": "budget", "label": "💰 Daily Budget", "emoji": "💰", "component": "budget", "dataSource": "travel.budget", "goal": "Adjust the daily spend sliders to fit your trip style."}}
+  ]
+}}
+</example>
+
+<example>
+Video: "20-Minute HIIT — Full Body" (22 min, fitness)
+{{
+  "reasoning": "Fitness coach running a real-time HIIT session: 12 exercises, set/rep/rest structure, form cues called out on camera. The user will follow along while moving — they need auto-advance, audio cues, and form-cue frames more than they need a glossary.",
+  "identity": {{"creatorType": "fitness coach", "tone": "enthusiastic-fast", "audience": "intermediate"}},
+  "corePromise": "Do a 20-minute HIIT workout with form cues and rest timers handled for you",
+  "uniqueAngle": "Coach demonstrates every exercise with on-camera form corrections — frames let you see what right looks like",
+  "extractionGuidance": {{
+    "primaryFocus": "Every exercise with name, sets, reps OR duration, rest, formCues[], and timestamp",
+    "watchOutFor": "Modifications announced verbally (\"easier version: do it on your knees\") — capture those"
+  }},
+  "itemCounts": {{"exercises": 12, "tips": 0, "concepts": 0, "codeSnippets": 0, "ingredients": 0, "spots": 0, "songs": 0, "products": 0, "steps": 0}},
+  "contentTags": ["fitness"],
+  "modifiers": [],
+  "primaryTag": "fitness",
+  "userGoal": "Follow the HIIT workout end-to-end with no scrubbing",
+  "confidence": 0.96,
+  "tabs": [
+    {{"id": "exercises", "label": "💪 12 Exercises", "emoji": "💪", "component": "workout_room", "dataSource": "fitness.exercises", "goal": "Full-bleed card per exercise — set counter, rest timer with audio cue, form-cue frame loop."}},
+    {{"id": "moments", "label": "🎬 Form Cues", "emoji": "🎬", "component": "moment_track", "dataSource": "fitness.exercises", "goal": "Jump back to any exercise demo. The expanded view shows the on-screen form check."}}
   ]
 }}
 </example>
@@ -185,32 +236,71 @@ Video: "What Are Transformers?" (28 min, 3Blue1Brown — ML concepts with rich a
 Domain-required components — if the domain is present in contentTags, these components MUST appear. The assembler does NOT enforce per-domain required components; missing them is a silent planning bug that ships a malformed tab layout, so treat this section as a hard contract on your side:
 
 - food: MUST include `checklist` (ingredients) + `step_player` (recipe steps)
-- project: MUST include `checklist` (materials) + `step_player` (build steps)
-- review: MUST include `comparison` (folds verdict score + recommendation into the same tab)
-- fitness: MUST include `exercise_tracker`
-- travel: MUST include `spot_explorer` (itinerary)
-- music: MUST include `lyrics_player` when lyrics are available in the transcript
+- project: MUST include `checklist` (materials) + `step_player` (build steps). Use
+  `step_flow_canvas` for builds with 6+ stages.
+- review: MUST include `comparison` (ReviewSummary folds the verdict score + bottom-line
+  +best-for / not-for into the same surface). Use `comparison_radar` when there are 4+ axes
+  the viewer would weight differently.
+- fitness: MUST include `workout_room` (replaces exercise_tracker)
+- travel: MUST include `spot_explorer` (itinerary) AND `packing_mission` when the video
+  yields 4+ packing items. Use `video_filmstrip` when the video has rich on-screen scene
+  variety with 3+ vision-tagged frames.
+- music: MUST include `lyrics_karaoke` (replaces lyrics_player) when lyrics are available
 - language: MUST include `spot_explorer` (phrases) AND `flash_deck` (vocabulary) when the
   extraction has at least 3 vocabulary items with definition shape
-- science: MUST include `flash_deck` (concepts) when extraction has at least 3 concept-definition
-  pairs. Add `moment_track` if the video has demonstrations.
+- science: MUST include `concept_canvas` (replaces flash_deck for concepts) when extraction
+  has at least 2 concepts WITH connections[]. Use `flash_deck` only for flat concept lists
+  with no connections. Add `moment_track` if the video has demonstrations.
 - learning: MUST include `moment_track` for chapter navigation when transcript has timestamps.
-- tech (with has_code=true): MUST include `code_explorer`.
+  Use `concept_canvas` when the video TEACHES relationships between concepts (3Blue1Brown
+  style); use `flash_deck` for flat memorization. Use `quiz_arena` (replaces quiz + scenario)
+  for knowledge checks.
+- tech (with has_code=true): MUST include `code_playground` (replaces code_explorer).
+- podcast: MUST include `moment_track` (segments — set a timestamp on each so the listener
+  can jump). Use `spot_explorer` for guests when the episode has named guests, `flash_deck`
+  for memorable quotes, `info_grid` for the topic index. Podcasts are talking-head — NEVER
+  plan `video_filmstrip`.
+- news: MUST include `claims_tracker` (every factual claim + who said it + verified/disputed/
+  context status). Use `moment_track` for the story timeline, `spot_explorer` for people/orgs,
+  `info_grid` (short cells) for background context. claims_tracker is the news signature —
+  it is what makes a news artifact accountable rather than a summary.
+- gaming: MUST include `tier_list` when the video ranks 4+ items (characters, weapons,
+  maps). Use `moment_track` for highlight plays, `checklist` for the build/loadout, and
+  `step_flow_canvas` for a multi-stage walkthrough (6+ stages). tier_list is the gaming
+  signature — a draggable S/A/B/C/D ranking.
+- sport: MUST include `formation_diagram` when the video shows a lineup/formation with
+  player positions. Use `moment_track` for match events and `comparison` for the stat
+  comparison (two teams/players on the same metrics). formation_diagram is the sport
+  signature — a read-only tactical pitch diagram.
 - ALL domains: the assembler emits an overview hero at the top — DO NOT plan a separate
   "overview" tab. The first tab you design IS the first user-facing content tab.
 
 flash_deck restrictions:
-- flash_deck is for memorization of concept-definition pairs. Each card front must be a real
-  term or concept; the back is the definition.
+- flash_deck is for memorization of FLAT concept-definition pairs. Each card front must be a
+  real term or concept; the back is the definition.
+- If the video TEACHES connections between concepts, use concept_canvas instead — the graph
+  view is the difference between "knowing the words" and "knowing the relationships".
 - Pick flash_deck when extraction has 3+ items shaped {name|term, definition} — even if the
   domain isn't "learning". Concepts in science, tech terms, language vocabulary all qualify.
 - Maximum 1 flash_deck per video.
 - Never use flash_deck for: tips, features, analysis, trivia, narrative moments. Those go to
   info_grid (browse) or moment_track (jump).
 
-quiz / scenario restrictions:
-- quiz and scenario tabs are only for learning and tech domains.
-- Both pull from enrichment.* — they're added when extraction supports a knowledge check.
+quiz_arena restrictions:
+- quiz_arena tabs are only for learning, language, and tech domains.
+- Pulls from enrichment.quiz AND enrichment.scenarios (scenarios surface as quiz items with
+  optional `context` field).
+- Scenario data is absorbed by quiz_arena — there is no separate scenario tab anymore.
+
+retired component names (DO NOT plan new tabs using these names):
+- `verdict` — folded into comparison's ReviewSummary header. Cached "verdict" tabs still
+  render via legacy alias, but DO NOT plan new ones.
+- `scenario` — absorbed into quiz_arena.
+- `gallery` (standalone) — use video_filmstrip when 3+ vision-tagged frames warrant a
+  scrubber. Otherwise frames live INSIDE other components via VisualEvidence.
+- `lyrics_player` — replaced by lyrics_karaoke.
+- `exercise_tracker` — replaced by workout_room.
+- `code_explorer` — replaced by code_playground.
 </domain_requirements>
 
 <routing_matrix>
@@ -220,20 +310,24 @@ Detect intent from video title and content structure:
   - "Explained" / "What is" / definitions / theory → LEARN
   - "vs" / "Review" / "Best" / pros-cons → DECIDE
 
-┌──────────┬──────────────────────────┬────────────────────────────┬─────────────────────────┐
-│ Domain   │ DO something             │ LEARN something            │ DECIDE something        │
-├──────────┼──────────────────────────┼────────────────────────────┼─────────────────────────┤
-│ food     │ step_player + checklist  │ info_grid + flash_deck     │ spot_explorer (methods)  │
-│ project  │ step_player + checklist  │ info_grid (techniques)     │ comparison (skill lvls)  │
-│ tech     │ code_explorer (guided)   │ flash_deck + quiz          │ comparison + verdict     │
-│ review   │ —                        │ info_grid (specs)          │ comparison + verdict     │
-│ travel   │ spot_explorer + budget   │ info_grid (culture/tips)   │ comparison (routes)      │
-│ fitness  │ exercise_tracker         │ flash_deck (form cues)     │ comparison (programs)    │
-│ music    │ lyrics_player            │ info_grid (theory)         │ —                        │
-│ learning │ code_explorer / scenario │ flash_deck + quiz          │ comparison               │
-│ language │ step_player (drills)    │ flash_deck (vocabulary)    │ spot_explorer (phrases)  │
-│ science  │ step_player (labs)      │ flash_deck + quiz          │ comparison (theories)    │
-└──────────┴──────────────────────────┴────────────────────────────┴─────────────────────────┘
+┌──────────┬─────────────────────────────────┬──────────────────────────────────┬───────────────────────────┐
+│ Domain   │ DO something                    │ LEARN something                  │ DECIDE something          │
+├──────────┼─────────────────────────────────┼──────────────────────────────────┼───────────────────────────┤
+│ food     │ step_player + checklist         │ info_grid + flash_deck           │ spot_explorer (methods)   │
+│ project  │ step_flow_canvas + checklist    │ info_grid (techniques)           │ comparison (skill lvls)   │
+│ tech     │ code_playground (guided)        │ concept_canvas + quiz_arena      │ comparison + ReviewSummary│
+│ review   │ —                               │ info_grid (specs)                │ comparison_radar (4+ axes)│
+│ travel   │ spot_explorer + packing_mission │ info_grid + video_filmstrip      │ comparison (routes)       │
+│ fitness  │ workout_room                    │ flash_deck (form cues)           │ comparison (programs)     │
+│ music    │ lyrics_karaoke                  │ info_grid (theory)               │ —                         │
+│ learning │ quiz_arena / step_player        │ concept_canvas OR flash_deck     │ comparison                │
+│ language │ step_player (drills)            │ flash_deck (vocabulary)          │ spot_explorer (phrases)   │
+│ science  │ step_player (labs)              │ concept_canvas + quiz_arena      │ comparison (theories)     │
+│ podcast  │ moment_track (segments)         │ flash_deck (quotes) + info_grid  │ spot_explorer (guests)    │
+│ news     │ moment_track (timeline)         │ info_grid (context)              │ claims_tracker (claims)   │
+│ gaming   │ step_flow_canvas (walkthrough)  │ checklist (loadout)              │ tier_list (rankings)      │
+│ sport    │ moment_track (match events)     │ formation_diagram (lineup)       │ comparison (stat compare) │
+└──────────┴─────────────────────────────────┴──────────────────────────────────┴───────────────────────────┘
 
 Every video has ONE primary intent. Pick the column, use those components as required tabs.
 The first content tab YOU design is what users see first — make it the primary value tab
@@ -244,13 +338,20 @@ emitted automatically by the page chrome above your tabs.
 <format_routing>
 When content_traits are available, use them to override default component choices:
 - has_drills=true → prefer step_player, spot_explorer. AVOID flash_deck (drills are practice, not memorization). Exception: language domain vocabulary tab may use flash_deck.
-- has_narrative=true → prefer moment_track with endSeconds on highlight moments. AVOID flash_deck (stories aren't flashcard material).
+- has_narrative=true → prefer moment_track with endSeconds on highlight moments. AVOID flash_deck.
 - is_list=true → prefer spot_explorer for browsable items. AVOID step_player (lists aren't sequential).
-- has_code=true → MUST include code_explorer tab.
-- has_comparison=true → MUST include comparison tab.
-- has_visual_demo=true → prefer moment_track with endSeconds on the demo spans.
-- is_opinionated=true → prefer info_grid for arguments/points. AVOID quiz (opinions aren't testable).
-- has_steps=true → prefer step_player for sequential instructions.
+- has_code=true → MUST include code_playground tab.
+- has_comparison=true → MUST include comparison tab. If 4+ axes the viewer might weight,
+  upgrade to comparison_radar.
+- has_visual_demo=true → prefer moment_track with endSeconds on the demo spans. When 3+
+  vision-tagged frames span the video, ADD video_filmstrip as a scrubber tab.
+- is_opinionated=true → prefer info_grid for arguments/points. AVOID quiz_arena (opinions aren't testable).
+- has_steps=true → step_player for ≤10 steps; step_flow_canvas for 11+ steps where the
+  visual graph helps the user track progress (multi-stage builds, multi-phase recipes).
+- has_concepts_with_connections=true → use concept_canvas (replaces flash_deck for relational learning).
+  For a learning/science PRACTICE or REVIEW tab where the viewer should test that they
+  understand how concepts relate, use `connect_canvas` (a graded drag-to-connect quiz built
+  from the same concept connections) instead of (or alongside) flash_deck/quiz_arena.
 </format_routing>
 
 <tab_goal_guidance>
@@ -265,7 +366,7 @@ Good: "John uses different techniques at each level. Here's what you need for yo
 Bad: "Copy starter code patterns for browser and Node.js"
 Good: "Grab these and paste into your editor. Each builds on the last."
 
-code_explorer explanations should feel like pair-programming. "Let's build the counter function" not "Counter function implementation."
+code_playground explanations should feel like pair-programming. "Let's build the counter function" not "Counter function implementation."
 flash_deck front must be a real term or concept name. Never a category label like "chef_tip" or "pro_tip".
 </tab_goal_guidance>
 
@@ -301,7 +402,7 @@ NEVER use comparison for:
 - Term-and-definition lists (use info_grid for browsable lookup, flash_deck for memorization).
 - "Here are 29 concepts" — that's a glossary, not a comparison.
 - Pros without a counterpart (use info_grid).
-- Reviews where only one product is examined — fold the verdict into overview meta instead.
+- Reviews where only one product is examined — fold the conclusion into the `comparison` tab's ReviewSummary header (pass `verdict` data through extraction.review.verdict).
 
 If the video introduces many concepts WITHOUT explicitly weighing them against alternatives,
 the right component is info_grid (browsable cards) or flash_deck (memorization). Reserve
@@ -323,7 +424,7 @@ because a 1-item info_grid is technically a valid tab but a bad UX.
 - step_player: 3-25 steps.
 - moment_track: 3-20 items.
 - quiz: 2-8 questions.
-- exercise_tracker: 2-25 exercises.
+- workout_room: 2-25 exercises.
 - checklist: 3-30 items.
 
 If your extraction has fewer items than the target, route the data to a different
@@ -331,39 +432,52 @@ component or fold it into overview/info_grid via the fallback layer.
 </density_gates>
 
 <frame_intelligence>
-Components are frame-aware. When you pick step_player, moment_track, code_explorer, or
-exercise_tracker — AND the items carry a timestamp — the assembler attaches the nearest
-vision-LLM frame caption, OCR text, and educational rationale automatically. This is
-where the transcript and the on-screen frames fuse into "video-to-action".
+Components are frame-aware. When you pick step_player, step_flow_canvas, moment_track,
+code_playground, workout_room, concept_canvas, spot_explorer, or video_filmstrip — AND
+the items carry a timestamp — the assembler attaches the nearest vision-LLM frame
+caption, OCR text, and educational rationale automatically. This is where the transcript
+and the on-screen frames fuse into "video-to-action".
 
 To maximize frame evidence:
-- Set `timestamp` (seconds) on every step_player step.
+- Set `timestamp` (seconds) on every step_player / step_flow_canvas step.
 - Use `seconds` AND `endSeconds` on moment_track items for replayable highlights.
-- Set `timestamp` on each code_explorer snippet.
+- Set `timestamp` on each code_playground snippet.
+- Plan a `video_filmstrip` tab with `dataSource: "frames"` when the video has rich
+  visual variety worth scrubbing — frames data is injected automatically into extraction.
 - Prefer moment_track over a static info_grid when the video has rich visual demonstrations.
-
-Standalone gallery is auto-appended ONLY when ≥10 vision captions are high quality — you
-don't need to plan a gallery tab.
 </frame_intelligence>
 
+<attachments>
+A tab is ONE primary interactive (the `component` you pick) plus optional small
+secondary attachments the assembler adds automatically — a frame strip, a quick
+single-question quiz, a tip, or a one-line summary header. You do NOT choose
+secondary components and they are NOT in the VALID names list below; the
+assembler decides them from the actual data after extraction.
+
+You MAY set `"enrich": true` on a thin tab (one that will have few items) to
+hint that it would benefit from an enriching attachment. This is only a hint —
+the assembler stays authoritative and may ignore or override it.
+</attachments>
+
 <rules>
+**VALID component names (use only these):** `overview`, `spot_explorer`, `moment_track`, `info_grid`, `checklist`, `step_player`, `step_flow_canvas`, `concept_canvas`, `connect_canvas`, `comparison`, `comparison_radar`, `code_playground`, `quiz_arena`, `flash_deck`, `packing_mission`, `workout_room`, `lyrics_karaoke`, `video_filmstrip`, `claims_tracker`, `tier_list`, `formation_diagram`, `budget`.
+
 - contentTags: 1-3, most specific first. Always include "learning" alongside domain tags when educational content is present.
 - primaryTag: the dominant domain (must be in contentTags)
 - confidence: 0.0-1.0
 - tabs: 4-6 tabs, at least 2 using action/learning/exploration/media components
-- maximum 1 display tab (verdict, budget)
+- maximum 1 display tab (budget)
 - Every contentTag must have at least one tab using its domain data
-- dataSource must reference a domain in this video's contentTags. NEVER use "learning.timestamps" for a food video or "travel.itinerary" for a tech video. Each dataSource prefix must match one of the contentTags or modifiers you assigned.
+- dataSource must reference a domain in this video's contentTags. NEVER use "learning.timestamps" for a food video or "travel.itinerary" for a tech video. Each dataSource prefix must match one of the contentTags or modifiers you assigned. EXCEPTION: `dataSource: "frames"` is valid for `video_filmstrip` tabs across any domain — frames data is auto-injected.
 - dataSource must be from the valid datasources listed in the component toolkit
-- component must be one of the 16 registered component names
 - If unsure about content type, use ["learning"] with confidence below 0.6
 - Tab IDs must be unique snake_case
 
 CRITICAL — Ground tabs in the actual transcript:
 - Only design tabs for data the transcript ACTUALLY contains. If you counted 0 items in itemCounts for a category, do NOT assign a tab that needs that data.
-- flash_deck requires specific terms/concepts the viewer would memorize. If the transcript is conversational with no clear definitions, skip flash_deck.
-- step_player requires sequential numbered steps. If the video is a discussion or review, don't force steps.
-- code_explorer requires actual code shown or described. If the video just mentions technology names, use info_grid instead.
+- flash_deck requires specific terms/concepts the viewer would memorize. Prefer `concept_canvas` when concepts have explicit connections to each other. If the transcript is conversational with no clear definitions, skip both.
+- step_player requires sequential numbered steps; use `step_flow_canvas` for 6+ stages. If the video is a discussion or review, don't force steps.
+- code_playground requires actual code shown or described. If the video just mentions technology names, use info_grid instead.
 - Prefer 4 well-populated tabs over 6 tabs where half will be empty.
 - When in doubt, use overview or info_grid — they work with any text content.
 </rules>

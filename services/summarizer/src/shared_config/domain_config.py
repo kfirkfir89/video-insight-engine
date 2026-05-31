@@ -56,6 +56,30 @@ def valid_components() -> frozenset[str]:
     return frozenset(get_config()["components"])
 
 
+def component_tiers() -> dict[str, str]:
+    """Component name → tier ('primary' | 'secondary' | 'display')."""
+    return dict(get_config().get("componentTiers", {}))
+
+
+def component_tier(name: str) -> str:
+    """Tier for a component, defaulting to 'primary' for unmapped names."""
+    return component_tiers().get(name, "primary")
+
+
+def secondary_components() -> frozenset[str]:
+    """Attachment-only (secondary-tier) component names."""
+    return frozenset(
+        name for name, tier in component_tiers().items() if tier == "secondary"
+    )
+
+
+def primary_components() -> frozenset[str]:
+    """Planner-selectable (primary-tier) component names."""
+    return frozenset(
+        name for name, tier in component_tiers().items() if tier == "primary"
+    )
+
+
 # ─────────────────────────────────────────────────────
 # Category mapping
 # ─────────────────────────────────────────────────────

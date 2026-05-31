@@ -1,12 +1,18 @@
 /**
  * Mock data for interactive component showcases — Dev Only
  *
- * Provides sample data for:
- * - Core blocks: FlashCard, ScenarioCard, SpotCard, ScoreRing
- * - Interactive output components: ChecklistInteractive, QuizInteractive,
- *   FlashDeckInteractive, ScenarioInteractive, SpotExplorer,
- *   StepByStepInteractive, ExerciseInteractive, MomentTrack,
- *   CodeExplorer, ComparisonInteractive
+ * Provides sample data for the post-overhaul 16-component interactive layer:
+ * - Retained: MomentTrack, FlashDeck, Comparison (+ verdict), SpotExplorer,
+ *   Checklist, InfoGrid
+ * - New (video-to-action overhaul): VisualEvidence, VideoFilmstrip,
+ *   ConceptCanvas, StepFlowCanvas, ConnectCanvas, CodePlayground,
+ *   QuizArena, PackingMission, WorkoutRoom, LyricsKaraoke
+ *   (the radar-row mock now feeds the unified ComparisonInteractive radar view)
+ *
+ * The retired-component mocks (Verdict, Gallery, LyricsPlayer, CodeExplorer,
+ * Exercise, Scenario) are intentionally kept for backward compatibility with
+ * any remaining consumers (tests, fallbacks) but are no longer wired into the
+ * design-system showcase.
  */
 
 // Production guard
@@ -431,4 +437,477 @@ export function createMockLyrics() {
     ],
     artist: 'Digital Wanderer',
   };
+}
+
+// ── Video-to-Action Overhaul Mock Data (2026-05-28) ──
+
+const PLACEHOLDER_FRAME = (label: string) =>
+  `https://placehold.co/640x360/1a1a2e/ffffff?text=${encodeURIComponent(label)}`;
+
+/**
+ * Sample frame metadata for the VisualEvidence primitive demo — one frame
+ * carries the full vision payload (caption + OCR + scene type + rationale)
+ * so the compact and figure variants both render meaningfully.
+ */
+export function createMockVisualEvidence() {
+  return {
+    thumbnailUrl: PLACEHOLDER_FRAME('attention · 4:32'),
+    caption: 'Animated diagram of attention weights between query and key tokens.',
+    ocr: 'softmax(Q·Kᵀ / √d_k) · V',
+    sceneType: 'diagram',
+    evidence: 'The exact softmax inputs the presenter walks through at 4:32.',
+    timestamp: 272,
+  };
+}
+
+/**
+ * Eight frames spanning a fictional 30-minute video — mixes scene types
+ * (slide, demo, code, diagram, talking_head) so the filmstrip renders the
+ * full caption + OCR vocabulary.
+ */
+export function createMockFilmstripFrames() {
+  return [
+    {
+      thumbnailUrl: PLACEHOLDER_FRAME('Intro · 0:00'),
+      timestamp: 0,
+      caption: 'Title card with the presenter introducing the topic.',
+      sceneType: 'slide',
+    },
+    {
+      thumbnailUrl: PLACEHOLDER_FRAME('Architecture · 1:45'),
+      timestamp: 105,
+      caption: 'High-level architecture diagram showing the data flow.',
+      ocr: 'Client → API → Worker → DB',
+      sceneType: 'diagram',
+    },
+    {
+      thumbnailUrl: PLACEHOLDER_FRAME('Code · 4:20'),
+      timestamp: 260,
+      caption: 'Live editor showing the request handler implementation.',
+      ocr: "fastify.post('/videos', handler)",
+      sceneType: 'code',
+    },
+    {
+      thumbnailUrl: PLACEHOLDER_FRAME('Diagram · 7:30'),
+      timestamp: 450,
+      caption: 'Sequence diagram of the queue retry policy.',
+      sceneType: 'diagram',
+    },
+    {
+      thumbnailUrl: PLACEHOLDER_FRAME('Demo · 11:15'),
+      timestamp: 675,
+      caption: 'Demo: triggering the pipeline and watching live SSE events.',
+      sceneType: 'demo',
+    },
+    {
+      thumbnailUrl: PLACEHOLDER_FRAME('Slide · 15:40'),
+      timestamp: 940,
+      caption: 'Slide listing the three caching layers.',
+      ocr: '1. Redis · 2. Mongo · 3. CDN',
+      sceneType: 'slide',
+    },
+    {
+      thumbnailUrl: PLACEHOLDER_FRAME('Diagram · 21:00'),
+      timestamp: 1260,
+      caption: 'Per-stage cost diagram with model fan-out.',
+      ocr: 'Plan $0.01 · Extract $0.04 · Synth $0.01',
+      sceneType: 'diagram',
+    },
+    {
+      thumbnailUrl: PLACEHOLDER_FRAME('Outro · 27:50'),
+      timestamp: 1670,
+      caption: 'Closing summary with the three key takeaways.',
+      sceneType: 'slide',
+    },
+  ];
+}
+
+/**
+ * Six concepts forming a small relational graph — each lists 1–3 connections
+ * by name so ConceptCanvas wires edges between them. Includes one orphan
+ * (no inbound or outbound connections) to verify the layout still works.
+ */
+export function createMockConcepts() {
+  return [
+    {
+      name: 'Attention',
+      emoji: '🧠',
+      definition: 'A weighted aggregation where each output position attends to every input position.',
+      example: "In 'the cat sat on the mat', 'cat' attends most strongly to 'sat'.",
+      connections: ['Transformer', 'Embedding'],
+    },
+    {
+      name: 'Transformer',
+      emoji: '🤖',
+      definition: 'A sequence model built from stacked attention and feed-forward layers — no recurrence.',
+      example: 'GPT, BERT, and Llama all share the transformer backbone.',
+      connections: ['Attention', 'Embedding', 'Tokenization'],
+    },
+    {
+      name: 'Embedding',
+      emoji: '📐',
+      definition: 'A dense vector representation of a discrete token, learned during training.',
+      example: "'King' - 'Man' + 'Woman' ≈ 'Queen' in word2vec space.",
+      connections: ['Tokenization'],
+    },
+    {
+      name: 'Tokenization',
+      emoji: '✂️',
+      definition: 'Splitting raw text into the discrete units a model consumes.',
+      example: "'Hello world!' → ['Hello', ' world', '!']",
+      connections: ['Embedding'],
+    },
+    {
+      name: 'Softmax',
+      emoji: '📊',
+      definition: 'A normalization that converts an arbitrary vector into a probability distribution.',
+      connections: ['Attention'],
+    },
+    {
+      name: 'Backprop',
+      emoji: '🔁',
+      definition: 'The chain-rule algorithm that propagates gradients backwards through the network.',
+      connections: [],
+    },
+  ];
+}
+
+/**
+ * Six steps suitable for StepFlowCanvas — mixes steps with thumbnails,
+ * durations, tips, and safety notes so all node features render. Numbered
+ * 1–6 with a clear linear progression for the animated-edge demo.
+ */
+export function createMockStepFlowSteps() {
+  return [
+    {
+      number: 1,
+      title: 'Scaffold the project',
+      instruction: 'Run `npm create vite@latest` and pick React + TypeScript.',
+      duration: '2 min',
+      thumbnailUrl: PLACEHOLDER_FRAME('Step 1 · scaffold'),
+    },
+    {
+      number: 2,
+      title: 'Install dependencies',
+      instruction: 'Add Tailwind, shadcn/ui, and @tanstack/react-query.',
+      duration: '3 min',
+      tips: 'Pin major versions in package.json to keep upgrades predictable.',
+    },
+    {
+      number: 3,
+      title: 'Configure Tailwind v4',
+      instruction: 'Replace tailwind.config.js with @theme inline {} in index.css.',
+      duration: '5 min',
+      thumbnailUrl: PLACEHOLDER_FRAME('Step 3 · tailwind'),
+    },
+    {
+      number: 4,
+      title: 'Wire up the router',
+      instruction: 'Define routes in App.tsx and lazy-load each page.',
+      duration: '8 min',
+    },
+    {
+      number: 5,
+      title: 'Hook up auth',
+      instruction: 'Add the JWT interceptor to the fetch client and gate protected routes.',
+      duration: '12 min',
+      safetyNote: 'Never store tokens in localStorage in production — use httpOnly cookies.',
+      thumbnailUrl: PLACEHOLDER_FRAME('Step 5 · auth'),
+    },
+    {
+      number: 6,
+      title: 'Deploy',
+      instruction: 'Push to main and let the CI pipeline ship to Vercel.',
+      duration: '4 min',
+    },
+  ];
+}
+
+/**
+ * Five comparison rows with four+ distinct axes — suitable for a radar
+ * with three or more spokes. Each row has parseable numeric values on
+ * both sides so the unified ComparisonInteractive radar hero's numeric-scoring
+ * branch fires.
+ */
+export function createMockComparisonRadarRows() {
+  return [
+    { feature: 'Camera (MP)', thisProduct: '48', competitor: '50', competitorName: 'Galaxy S24', winner: 'right' as const },
+    { feature: 'Battery (mAh)', thisProduct: '4422', competitor: '4000', competitorName: 'Galaxy S24', winner: 'left' as const },
+    { feature: 'Display (Hz)', thisProduct: '120', competitor: '120', competitorName: 'Galaxy S24', winner: 'tie' as const },
+    { feature: 'Weight (g)', thisProduct: '187', competitor: '227', competitorName: 'Galaxy S24', winner: 'left' as const },
+    { feature: 'Price ($)', thisProduct: '999', competitor: '799', competitorName: 'Galaxy S24', winner: 'right' as const },
+  ];
+}
+
+/**
+ * Five matching pairs for the ConnectCanvas graded quiz. Each prompt connects
+ * to exactly one answer; the right column is shuffled by the component.
+ */
+export function createMockConnectCanvasPairs() {
+  return [
+    { prompt: 'Embedding', match: 'Vector space' },
+    { prompt: 'Attention', match: 'Token weighting' },
+    { prompt: 'Residual stream', match: 'Skip connection' },
+    { prompt: 'Softmax', match: 'Probability distribution' },
+  ];
+}
+
+/**
+ * Three TechSnippet entries (JS, Python, TS) with realistic code — covers
+ * the syntax highlighter's three primary keyword sets and exercises the
+ * Run-iframe path (the JS + TS snippets are flagged runnable).
+ */
+export function createMockCodePlaygroundSnippets() {
+  return [
+    {
+      filename: 'debounce.ts',
+      language: 'typescript',
+      code: `export function debounce<TArgs extends unknown[]>(
+  fn: (...args: TArgs) => void,
+  ms: number,
+): (...args: TArgs) => void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return (...args: TArgs) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
+
+const log = debounce((msg: string) => console.log(msg), 250);
+log('hello');
+log('world');`,
+      explanation: 'A type-safe debounce — the generic captures the wrapped function\'s arg tuple so the returned function preserves its signature.',
+      timestamp: 320,
+    },
+    {
+      filename: 'fizzbuzz.py',
+      language: 'python',
+      code: `def fizzbuzz(n: int) -> list[str]:
+    """Return the FizzBuzz sequence up to n (inclusive)."""
+    out = []
+    for i in range(1, n + 1):
+        if i % 15 == 0:
+            out.append("FizzBuzz")
+        elif i % 3 == 0:
+            out.append("Fizz")
+        elif i % 5 == 0:
+            out.append("Buzz")
+        else:
+            out.append(str(i))
+    return out
+
+
+print(fizzbuzz(15))`,
+      explanation: 'The canonical FizzBuzz, written with type hints and a single pass through the range.',
+    },
+    {
+      filename: 'memo.js',
+      language: 'javascript',
+      code: `function memoize(fn) {
+  const cache = new Map();
+  return (...args) => {
+    const key = JSON.stringify(args);
+    if (cache.has(key)) return cache.get(key);
+    const result = fn(...args);
+    cache.set(key, result);
+    return result;
+  };
+}
+
+const slowSquare = (n) => {
+  console.log('computing', n);
+  return n * n;
+};
+const fastSquare = memoize(slowSquare);
+console.log(fastSquare(7));
+console.log(fastSquare(7));`,
+      explanation: 'Memoization with a JSON-serialized cache key — works for any arity but assumes JSON-safe args.',
+      timestamp: 540,
+    },
+  ];
+}
+
+/**
+ * Four quiz questions mixing standard knowledge checks with one
+ * frame-aware scenario question carrying `context` + `kind:'scenario'`
+ * + thumbnail metadata so the evidence-frame branch renders.
+ */
+export function createMockQuizArenaQuestions() {
+  return [
+    {
+      question: 'Which complexity class describes binary search on a sorted array?',
+      options: ['O(1)', 'O(log n)', 'O(n)', 'O(n log n)'],
+      correctIndex: 1,
+      explanation: 'Each iteration halves the search space, so the worst case is logarithmic.',
+    },
+    {
+      question: 'What does the `await` keyword do?',
+      options: [
+        'Pauses the entire thread',
+        'Blocks the JavaScript engine until the promise resolves',
+        'Suspends the surrounding async function until the awaited promise settles',
+        'Polls the promise every 16 ms',
+      ],
+      correctIndex: 2,
+      explanation: 'Only the surrounding async function suspends — the event loop continues running.',
+    },
+    {
+      question: 'You see this exact stack trace mid-presentation. What is the root cause?',
+      kind: 'scenario' as const,
+      context: 'The presenter has just demonstrated a TypeError thrown by a destructure on an undefined response.',
+      options: [
+        'The API returned a 500 — back-end bug',
+        'The fetch call resolved before the response body was parsed',
+        'The destructure ran before the optional-chain guard, so an undefined response crashed it',
+        'The component re-rendered before state was initialized',
+      ],
+      correctIndex: 2,
+      explanation: 'The classic destructure-before-guard pattern — fix is to either guard with ?? or chain with ?.',
+      thumbnailUrl: PLACEHOLDER_FRAME('Stack · 11:30'),
+      frameCaption: 'Console showing the TypeError at the destructure line.',
+      timestamp: 690,
+    },
+    {
+      question: 'In React, when does useEffect with an empty dependency array run?',
+      options: ['On every render', 'Once after the first commit', 'Never', 'Once before the first render'],
+      correctIndex: 1,
+      explanation: 'An empty deps array means the effect runs once after mount and cleans up at unmount.',
+    },
+  ];
+}
+
+/**
+ * Twelve packing items spanning clothing, electronics, documents, toiletries,
+ * and miscellaneous — with weights, essentials, and emoji icons so all
+ * suitcase-mission visual states are exercised.
+ */
+export function createMockPackingItems() {
+  return [
+    { item: 'Passport', category: 'Documents', essential: true, weight: 0.1, emoji: '🛂' },
+    { item: 'Travel insurance card', category: 'Documents', essential: true, weight: 0.05, emoji: '🩺' },
+    { item: 'Phone charger', category: 'Electronics', essential: true, weight: 0.2, emoji: '🔌' },
+    { item: 'Universal adapter', category: 'Electronics', essential: true, weight: 0.15, emoji: '⚡' },
+    { item: 'Laptop', category: 'Electronics', weight: 1.6, emoji: '💻' },
+    { item: 'Lightweight rain jacket', category: 'Clothing', essential: true, weight: 0.4, emoji: '🧥' },
+    { item: 'Comfortable walking shoes', category: 'Clothing', essential: true, weight: 0.9, emoji: '👟' },
+    { item: 'Two T-shirts', category: 'Clothing', weight: 0.5, emoji: '👕' },
+    { item: 'Toothbrush & travel paste', category: 'Toiletries', weight: 0.1, emoji: '🪥' },
+    { item: 'Sunscreen SPF 50', category: 'Toiletries', weight: 0.15, emoji: '🧴' },
+    { item: 'Reusable water bottle', category: 'Misc', weight: 0.3, emoji: '🚰' },
+    { item: 'Paperback book', category: 'Misc', weight: 0.25, emoji: '📖' },
+  ];
+}
+
+/**
+ * Five workout exercises covering reps, duration, sets, supersets, and
+ * form-cue frames — used by WorkoutRoom for the auto-advance and form-cue
+ * panel demos.
+ */
+export function createMockWorkoutExercises() {
+  return [
+    {
+      name: 'Push-ups',
+      emoji: '💪',
+      sets: 3,
+      reps: '12-15',
+      rest: '60s',
+      difficulty: 'beginner' as const,
+      formCues: ['Keep core engaged', 'Elbows track at 45° — not flared'],
+      modifications: [{ label: 'Easier', description: 'Knee push-ups' }],
+      thumbnailUrl: PLACEHOLDER_FRAME('Push-up form'),
+      frameCaption: 'Side-angle showing neutral spine and 45° elbow position.',
+    },
+    {
+      name: 'Goblet Squats',
+      emoji: '🦵',
+      sets: 4,
+      reps: '10',
+      rest: '60s',
+      difficulty: 'intermediate' as const,
+      formCues: ['Heels stay down', 'Knees track over toes', 'Chest stays up'],
+      modifications: [{ label: 'Easier', description: 'Bodyweight squats' }],
+    },
+    {
+      name: 'Plank',
+      emoji: '🧘',
+      sets: 3,
+      duration: '45s',
+      rest: '30s',
+      difficulty: 'beginner' as const,
+      formCues: ['Straight line from head to heels', 'Don\'t let hips sag'],
+      modifications: [{ label: 'Easier', description: 'Forearm plank on knees' }],
+      thumbnailUrl: PLACEHOLDER_FRAME('Plank form'),
+    },
+    {
+      name: 'Renegade Rows',
+      emoji: '🏋️',
+      sets: 3,
+      reps: '8 per side',
+      rest: '60s',
+      difficulty: 'advanced' as const,
+      formCues: ['Hips stay square to the floor', 'Pull elbow back, not out'],
+      modifications: [{ label: 'Easier', description: 'Drop to a forearm plank between rows' }],
+      supersetWith: 'Push-ups',
+    },
+    {
+      name: 'Burpees',
+      emoji: '🔥',
+      sets: 3,
+      reps: '8',
+      rest: '90s',
+      difficulty: 'advanced' as const,
+      formCues: ['Chest fully touches the floor', 'Full extension at the top'],
+      modifications: [{ label: 'Easier', description: 'Step-back burpees (no jump)' }],
+    },
+  ];
+}
+
+/**
+ * Two sections (verse + chorus + verse) with eight+ timestamped lines —
+ * the first verse carries `words[]` for the word-sync karaoke demo, the
+ * other sections use whole-line timestamps only so both code paths render.
+ */
+export function createMockLyricsKaraokeSections() {
+  return [
+    {
+      name: 'Verse 1',
+      timestamp: 0,
+      lines: [
+        {
+          text: 'Walking through the neon streets',
+          timestamp: 0,
+          words: [
+            { text: 'Walking', startTime: 0, endTime: 0.6 },
+            { text: 'through', startTime: 0.6, endTime: 1.0 },
+            { text: 'the', startTime: 1.0, endTime: 1.2 },
+            { text: 'neon', startTime: 1.2, endTime: 1.7 },
+            { text: 'streets', startTime: 1.7, endTime: 2.4 },
+          ],
+        },
+        {
+          text: 'Where the city never sleeps',
+          timestamp: 4,
+          words: [
+            { text: 'Where', startTime: 4.0, endTime: 4.4 },
+            { text: 'the', startTime: 4.4, endTime: 4.6 },
+            { text: 'city', startTime: 4.6, endTime: 5.1 },
+            { text: 'never', startTime: 5.1, endTime: 5.6 },
+            { text: 'sleeps', startTime: 5.6, endTime: 6.2 },
+          ],
+        },
+        { text: 'Every light a story told', timestamp: 8 },
+        { text: 'In this place of digital gold', timestamp: 12 },
+      ],
+    },
+    {
+      name: 'Chorus',
+      timestamp: 18,
+      lines: [
+        { text: 'We are the signals in the noise', timestamp: 18 },
+        { text: 'Finding meaning, finding voice', timestamp: 22 },
+        { text: 'In a world of endless choice', timestamp: 26 },
+        { text: 'We rise above the static joys', timestamp: 30 },
+      ],
+    },
+  ];
 }

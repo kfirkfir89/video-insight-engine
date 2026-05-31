@@ -826,6 +826,190 @@ class ScienceData(BaseModel):
 
 
 # ─────────────────────────────────────────────────────
+# Podcast (interactive-overhaul-v2 P5a)
+# ─────────────────────────────────────────────────────
+
+
+class PodcastSegment(BaseModel):
+    model_config = {"populate_by_name": True}
+
+    title: str = ""
+    summary: str = ""
+    timestamp: int | None = None
+    end_seconds: int | None = Field(None, alias="endSeconds")
+    speaker: str | None = None
+
+
+class PodcastGuest(BaseModel):
+    name: str
+    role: str | None = None
+    description: str = ""
+    emoji: str = ""
+
+
+class PodcastQuote(BaseModel):
+    quote: str
+    speaker: str | None = None
+    timestamp: int | None = None
+
+
+class PodcastTopic(BaseModel):
+    topic: str
+    detail: str = ""
+
+
+class PodcastData(BaseModel):
+    show: str | None = None
+    host: str | None = None
+    segments: list[PodcastSegment] = []
+    guests: list[PodcastGuest] = []
+    quotes: list[PodcastQuote] = []
+    topics: list[PodcastTopic] = []
+
+
+# ─────────────────────────────────────────────────────
+# News (interactive-overhaul-v2 P5b)
+# ─────────────────────────────────────────────────────
+
+
+class NewsTimelineEvent(BaseModel):
+    label: str
+    description: str = ""
+    timestamp: int | None = None
+
+
+class NewsEntity(BaseModel):
+    name: str
+    role: str | None = None
+    description: str = ""
+    emoji: str = ""
+
+
+class NewsClaim(BaseModel):
+    model_config = {"populate_by_name": True}
+
+    claim: str
+    source: str = "Reporter"
+    status: str = "context"
+    source_citation: str | None = Field(None, alias="sourceCitation")
+    timestamp: int | None = None
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def coerce_status(cls, v: Any) -> str:
+        valid = ("verified", "disputed", "context")
+        return v if v in valid else "context"
+
+
+class NewsContextItem(BaseModel):
+    key: str
+    value: str = ""
+
+
+class NewsData(BaseModel):
+    model_config = {"populate_by_name": True}
+
+    headline: str | None = None
+    story_timeline: list[NewsTimelineEvent] = Field([], alias="storyTimeline")
+    entities: list[NewsEntity] = []
+    claims: list[NewsClaim] = []
+    context: list[NewsContextItem] = []
+
+
+# ─────────────────────────────────────────────────────
+# Gaming (interactive-overhaul-v2 P5c)
+# ─────────────────────────────────────────────────────
+
+
+class GamingHighlight(BaseModel):
+    label: str
+    description: str = ""
+    timestamp: int | None = None
+
+
+class GamingLoadoutItem(BaseModel):
+    item: str
+    category: str | None = None
+    note: str = ""
+
+
+class GamingWalkthroughStep(BaseModel):
+    instruction: str
+    timestamp: int | None = None
+
+
+class GamingRanking(BaseModel):
+    item: str
+    tier: str | None = None
+    reason: str = ""
+    emoji: str = ""
+
+    @field_validator("tier", mode="before")
+    @classmethod
+    def coerce_tier(cls, v: Any) -> str | None:
+        if v is None:
+            return None
+        tier = str(v).strip().upper()
+        return tier if tier in ("S", "A", "B", "C", "D") else None
+
+
+class GamingData(BaseModel):
+    title: str | None = None
+    highlights: list[GamingHighlight] = []
+    loadout: list[GamingLoadoutItem] = []
+    walkthrough: list[GamingWalkthroughStep] = []
+    rankings: list[GamingRanking] = []
+
+
+# ─────────────────────────────────────────────────────
+# Sport (interactive-overhaul-v2 P5d)
+# ─────────────────────────────────────────────────────
+
+
+class SportMatchEvent(BaseModel):
+    label: str
+    description: str = ""
+    timestamp: int | None = None
+
+
+class SportPosition(BaseModel):
+    player: str
+    role: str | None = None
+    x: float = 50.0
+    y: float = 50.0
+    number: int | None = None
+
+
+class SportFormation(BaseModel):
+    name: str | None = None
+    team: str | None = None
+    positions: list[SportPosition] = []
+
+
+class SportStatRow(BaseModel):
+    feature: str
+    left: str = ""
+    right: str = ""
+
+
+class SportStatComparison(BaseModel):
+    model_config = {"populate_by_name": True}
+
+    left_label: str | None = Field(None, alias="leftLabel")
+    right_label: str | None = Field(None, alias="rightLabel")
+    comparisons: list[SportStatRow] = []
+
+
+class SportData(BaseModel):
+    model_config = {"populate_by_name": True}
+
+    title: str | None = None
+    match_events: list[SportMatchEvent] = Field([], alias="matchEvents")
+    formation: SportFormation | None = None
+    stat_comparison: SportStatComparison | None = Field(None, alias="statComparison")
+
+
+# ─────────────────────────────────────────────────────
 # VIEResponse Envelope
 # ─────────────────────────────────────────────────────
 
@@ -899,6 +1083,10 @@ DOMAIN_MODELS: dict[str, type[BaseModel]] = {
     "project": ProjectData,
     "language": LanguageData,
     "science": ScienceData,
+    "podcast": PodcastData,
+    "news": NewsData,
+    "gaming": GamingData,
+    "sport": SportData,
 }
 
 MODIFIER_MODELS: dict[str, type[BaseModel]] = {

@@ -75,6 +75,9 @@ class PipelineContext:
     extraction_data: dict[str, Any] | None = None
     synthesis_dict: dict[str, Any] = field(default_factory=dict)
     enrichment_data: dict[str, Any] | None = None
+    # Coverage metric: how far into the video the timestamped extraction
+    # reaches vs. duration, plus dropped-batch counts. Surfaced into meta.
+    extraction_coverage: dict[str, Any] | None = None
 
     # Assembly outputs (populated by assembly phase)
     assembled_tabs: list[dict] | None = None

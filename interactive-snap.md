@@ -1,0 +1,1863 @@
+- generic [ref=e2]:
+  - generic [ref=e7]:
+    - banner [ref=e8]:
+      - generic [ref=e9]:
+        - generic [ref=e10]:
+          - heading "Design System" [level=1] [ref=e11]
+          - generic [ref=e12]: DEV ONLY
+        - 'button "Theme: Dark. Click for Light." [ref=e13] [cursor=pointer]':
+          - img
+    - generic [ref=e14]:
+      - navigation "Design system sections" [ref=e15]:
+        - tab "Colors & Tokens" [ref=e16]:
+          - img [ref=e17]
+          - text: Colors & Tokens
+        - tab "Typography" [ref=e23]:
+          - img [ref=e24]
+          - text: Typography
+        - tab "Spacing" [ref=e26]:
+          - img [ref=e27]
+          - text: Spacing
+        - tab "UI Primitives" [ref=e33]:
+          - img [ref=e34]
+          - text: UI Primitives
+        - tab "VIE Library" [ref=e39]:
+          - img [ref=e40]
+          - text: VIE Library
+        - tab "Interactive" [active] [selected] [ref=e50]:
+          - img [ref=e51]
+          - text: Interactive
+      - main [ref=e57]:
+        - generic [ref=e522]:
+          - generic [ref=e523]:
+            - heading "Interactive Components" [level=2] [ref=e524]
+            - paragraph [ref=e525]: Live demos of every interactive component. Heavy canvas demos lazy-load.
+          - generic [ref=e526]:
+            - generic [ref=e528]:
+              - generic [ref=e529]:
+                - generic [ref=e530]:
+                  - generic [ref=e531]: "01"
+                  - heading "MomentTrack" [level=3] [ref=e532]
+                - paragraph [ref=e533]: Frame-aware timeline blending navigable moments and replayable spans.
+                - paragraph [ref=e534]:
+                  - generic [ref=e535]: What's new
+                  - generic [ref=e536]: ·
+                  - generic [ref=e537]: VisualEvidence in expanded view
+              - generic [ref=e539]:
+                - generic [ref=e541]:
+                  - button "All moods" [ref=e542]
+                  - button "energetic" [ref=e543]: energetic
+                  - button "thoughtful" [ref=e545]: thoughtful
+                  - button "surprising" [ref=e547]: surprising
+                  - button "calm" [ref=e549]: calm
+                - list "Moment track" [ref=e551]:
+                  - listitem [ref=e553]:
+                    - generic [ref=e559]:
+                      - generic [ref=e560]:
+                        - generic [ref=e561]:
+                          - img [ref=e562]
+                          - text: 0:00
+                        - generic [ref=e565]: 👋
+                      - button "Introduction" [ref=e566]:
+                        - generic [ref=e567]: Introduction
+                        - img [ref=e568]
+                  - listitem [ref=e571]:
+                    - generic [ref=e577]:
+                      - generic [ref=e578]:
+                        - generic [ref=e579]:
+                          - img [ref=e580]
+                          - text: 0:00
+                        - 'generic "Mood: energetic" [ref=e583]':
+                          - generic [ref=e585]: energetic
+                      - button "Opening Hook" [ref=e586]:
+                        - generic [ref=e587]: Opening Hook
+                        - img [ref=e588]
+                  - listitem [ref=e591]:
+                    - generic [ref=e597]:
+                      - generic [ref=e598]:
+                        - generic [ref=e599]:
+                          - img [ref=e600]
+                          - text: 2:15
+                        - generic [ref=e603]: 📚
+                      - button "Core Concepts" [ref=e604]:
+                        - generic [ref=e605]: Core Concepts
+                        - img [ref=e606]
+                  - listitem [ref=e609]:
+                    - generic [ref=e615]:
+                      - generic [ref=e616]:
+                        - generic [ref=e617]:
+                          - img [ref=e618]
+                          - text: 3:05
+                        - 'generic "Mood: thoughtful" [ref=e621]':
+                          - generic [ref=e623]: thoughtful
+                      - button "Key Insight" [ref=e624]:
+                        - generic [ref=e625]: Key Insight
+                        - img [ref=e626]
+                  - listitem [ref=e629]:
+                    - generic [ref=e635]:
+                      - generic [ref=e636]:
+                        - generic [ref=e637]:
+                          - img [ref=e638]
+                          - text: 7:00
+                        - 'generic "Mood: energetic" [ref=e641]':
+                          - generic [ref=e643]: energetic
+                      - button "Live Demo" [ref=e644]:
+                        - generic [ref=e645]: Live Demo
+                        - img [ref=e646]
+                  - listitem [ref=e649]:
+                    - generic [ref=e655]:
+                      - generic [ref=e656]:
+                        - generic [ref=e657]:
+                          - img [ref=e658]
+                          - text: 8:30
+                        - generic [ref=e661]: 💻
+                        - 'generic "Mood: energetic" [ref=e662]':
+                          - generic [ref=e664]: energetic
+                      - button "Live Demo" [ref=e665]:
+                        - generic [ref=e666]: Live Demo
+                        - img [ref=e667]
+                  - listitem [ref=e670]:
+                    - generic [ref=e676]:
+                      - generic [ref=e677]:
+                        - generic [ref=e678]:
+                          - img [ref=e679]
+                          - text: 11:30
+                        - 'generic "Mood: surprising" [ref=e682]':
+                          - generic [ref=e684]: surprising
+                      - button "Plot Twist" [ref=e685]:
+                        - generic [ref=e686]: Plot Twist
+                        - img [ref=e687]
+                  - listitem [ref=e690]:
+                    - generic [ref=e696]:
+                      - generic [ref=e697]:
+                        - generic [ref=e698]:
+                          - img [ref=e699]
+                          - text: 15:00
+                        - 'generic "Mood: calm" [ref=e702]':
+                          - generic [ref=e704]: calm
+                      - button "Wrap Up" [ref=e705]:
+                        - generic [ref=e706]: Wrap Up
+                        - img [ref=e707]
+                  - listitem [ref=e710]:
+                    - generic [ref=e716]:
+                      - generic [ref=e717]:
+                        - generic [ref=e718]:
+                          - img [ref=e719]
+                          - text: 15:45
+                        - generic [ref=e722]: ⚠️
+                      - button "Common Pitfalls" [ref=e723]:
+                        - generic [ref=e724]: Common Pitfalls
+                        - img [ref=e725]
+                  - listitem [ref=e728]:
+                    - generic [ref=e734]:
+                      - generic [ref=e735]:
+                        - generic [ref=e736]:
+                          - img [ref=e737]
+                          - text: 22:00
+                        - generic [ref=e740]: ✨
+                      - button "Best Practices" [ref=e741]:
+                        - generic [ref=e742]: Best Practices
+                        - img [ref=e743]
+                  - listitem [ref=e746]:
+                    - generic [ref=e752]:
+                      - generic [ref=e753]:
+                        - generic [ref=e754]:
+                          - img [ref=e755]
+                          - text: 28:10
+                        - generic [ref=e758]: 🎯
+                      - button "Wrap Up" [ref=e759]:
+                        - generic [ref=e760]: Wrap Up
+                        - img [ref=e761]
+            - generic [ref=e764]:
+              - generic [ref=e765]:
+                - generic [ref=e766]:
+                  - generic [ref=e767]: "02"
+                  - heading "FlashDeckInteractive" [level=3] [ref=e768]
+                - paragraph [ref=e769]: Flip cards for concept-definition pairs the viewer commits to memory.
+                - paragraph [ref=e770]:
+                  - generic [ref=e771]: What's new
+                  - generic [ref=e772]: ·
+                  - generic [ref=e773]: nothing — proven pattern, kept verbatim
+              - generic [ref=e775]:
+                - generic [ref=e777]: 1 of 3
+                - generic [ref=e778]:
+                  - generic [ref=e779]:
+                    - progressbar "Cards reviewed"
+                  - generic [ref=e780]: 0%
+                - button "What is the time complexity of binary search?" [ref=e785] [cursor=pointer]:
+                  - generic [ref=e786]:
+                    - generic [ref=e787]:
+                      - generic [ref=e788]: Algorithms
+                      - generic [ref=e789]: 🔍
+                      - paragraph [ref=e790]: What is the time complexity of binary search?
+                      - generic [ref=e791]:
+                        - text: Tap
+                        - generic [ref=e792]: Space
+                        - text: to flip
+                    - paragraph [ref=e794]: O(log n) — the search space is halved each step.
+                - generic [ref=e795]:
+                  - button "Previous" [disabled]:
+                    - img
+                    - text: Previous
+                  - button "Next" [ref=e796] [cursor=pointer]:
+                    - text: Next
+                    - img
+                - generic "Step progress" [ref=e797]:
+                  - button "Step 1 (current)" [ref=e798] [cursor=pointer]
+                  - button "Step 2" [ref=e800] [cursor=pointer]
+                  - button "Step 3" [ref=e801] [cursor=pointer]
+            - generic [ref=e803]:
+              - generic [ref=e804]:
+                - generic [ref=e805]:
+                  - generic [ref=e806]: "03"
+                  - 'heading "ComparisonInteractive (unified: verdict + radar + table)" [level=3] [ref=e807]'
+                - paragraph [ref=e808]: "One comparison component: verdict header on top, radar hero when ≥3 scoreable axes, table below. Absorbs the retired ComparisonRadar."
+                - paragraph [ref=e809]:
+                  - generic [ref=e810]: What's new
+                  - generic [ref=e811]: ·
+                  - generic [ref=e812]: P3C unified · radar hero (≥3 axes) + weight sliders · ReviewSummary header · table
+              - generic [ref=e814]:
+                - generic [ref=e816]:
+                  - generic [ref=e818]:
+                    - 'img "Score: 8.5 — Score" [ref=e819]':
+                      - generic [ref=e820]:
+                        - img [ref=e821]
+                        - generic [ref=e828]: "8.5"
+                      - generic [ref=e829]: Score
+                    - generic [ref=e830]:
+                      - generic [ref=e831]: Recommended
+                      - paragraph [ref=e832]: The best iPhone ever made, but the incremental upgrades may not justify upgrading from the 15 Pro.
+                  - generic [ref=e833]:
+                    - generic [ref=e834]:
+                      - heading "Best For 3" [level=4] [ref=e835]:
+                        - img [ref=e836]
+                        - text: Best For
+                        - generic [ref=e838]: "3"
+                      - list [ref=e839]:
+                        - listitem [ref=e840]: Photography enthusiasts
+                        - listitem [ref=e842]: Power users
+                        - listitem [ref=e844]: iOS ecosystem fans
+                    - generic [ref=e846]:
+                      - heading "Not For 2" [level=4] [ref=e847]:
+                        - img [ref=e848]
+                        - text: Not For
+                        - generic [ref=e851]: "2"
+                      - list [ref=e852]:
+                        - listitem [ref=e853]: Budget-conscious buyers
+                        - listitem [ref=e855]: Those who need expandable storage
+                - generic [ref=e857]:
+                  - generic [ref=e858]:
+                    - generic [ref=e859]:
+                      - heading "Side-by-side" [level=3] [ref=e860]
+                      - generic [ref=e862]: Tie
+                    - img "Radar comparing This Product and Galaxy S24" [ref=e863]:
+                      - generic [ref=e865]:
+                        - list [ref=e867]:
+                          - listitem [ref=e868]:
+                            - img "Galaxy S24 legend icon" [ref=e869]
+                            - text: Galaxy S24
+                          - listitem [ref=e871]:
+                            - img "This Product legend icon" [ref=e872]
+                            - text: This Product
+                        - application [ref=e874]:
+                          - generic [ref=e894]:
+                            - generic [ref=e897]:
+                              - generic [ref=e899]: Camera (MP)
+                              - generic [ref=e902]: Battery (mAh)
+                              - generic [ref=e905]: Display (Hz)
+                              - generic [ref=e908]: Weight (g)
+                              - generic [ref=e911]: Price ($)
+                            - generic [ref=e913]:
+                              - generic [ref=e915]: "0"
+                              - generic [ref=e917]: "3"
+                              - generic [ref=e919]: "6"
+                              - generic [ref=e921]: "9"
+                              - generic [ref=e923]: "10"
+                  - generic [ref=e924]:
+                    - generic [ref=e925]:
+                      - heading "Tune what matters" [level=4] [ref=e926]
+                      - generic [ref=e927]: This Product 50% · Galaxy S24 50%
+                    - list [ref=e928]:
+                      - listitem [ref=e929]:
+                        - generic [ref=e930]: Camera (MP)
+                        - generic "Weight for Camera (MP)" [ref=e931]:
+                          - slider [ref=e935]
+                        - generic [ref=e936]: "5"
+                      - listitem [ref=e937]:
+                        - generic [ref=e938]: Battery (mAh)
+                        - generic "Weight for Battery (mAh)" [ref=e939]:
+                          - slider [ref=e943]
+                        - generic [ref=e944]: "5"
+                      - listitem [ref=e945]:
+                        - generic [ref=e946]: Display (Hz)
+                        - generic "Weight for Display (Hz)" [ref=e947]:
+                          - slider [ref=e951]
+                        - generic [ref=e952]: "5"
+                      - listitem [ref=e953]:
+                        - generic [ref=e954]: Weight (g)
+                        - generic "Weight for Weight (g)" [ref=e955]:
+                          - slider [ref=e959]
+                        - generic [ref=e960]: "5"
+                      - listitem [ref=e961]:
+                        - generic [ref=e962]: Price ($)
+                        - generic "Weight for Price ($)" [ref=e963]:
+                          - slider [ref=e967]
+                        - generic [ref=e968]: "5"
+                - table [ref=e971]:
+                  - rowgroup [ref=e972]:
+                    - row "Feature This Product Galaxy S24" [ref=e973]:
+                      - columnheader "Feature" [ref=e974]
+                      - columnheader "This Product" [ref=e975]
+                      - columnheader "Galaxy S24" [ref=e976]
+                  - rowgroup [ref=e977]:
+                    - row "Camera (MP) 48 50" [ref=e978] [cursor=pointer]:
+                      - cell "Camera (MP)" [ref=e979]
+                      - cell "48" [ref=e980]
+                      - cell "50" [ref=e981]:
+                        - text: "50"
+                        - img [ref=e982]
+                    - row "Battery (mAh) 4422 4000" [ref=e984] [cursor=pointer]:
+                      - cell "Battery (mAh)" [ref=e985]
+                      - cell "4422" [ref=e986]:
+                        - text: "4422"
+                        - img [ref=e987]
+                      - cell "4000" [ref=e989]
+                    - row "Display (Hz) Tie 120 120" [ref=e990] [cursor=pointer]:
+                      - cell "Display (Hz) Tie" [ref=e991]:
+                        - text: Display (Hz)
+                        - generic [ref=e992]: Tie
+                      - cell "120" [ref=e993]
+                      - cell "120" [ref=e994]
+                    - row "Weight (g) 187 227" [ref=e995] [cursor=pointer]:
+                      - cell "Weight (g)" [ref=e996]
+                      - cell "187" [ref=e997]:
+                        - text: "187"
+                        - img [ref=e998]
+                      - cell "227" [ref=e1000]
+                    - row "Price ($) 999 799" [ref=e1001] [cursor=pointer]:
+                      - cell "Price ($)" [ref=e1002]
+                      - cell "999" [ref=e1003]
+                      - cell "799" [ref=e1004]:
+                        - text: "799"
+                        - img [ref=e1005]
+                - generic [ref=e1008]:
+                  - 'img "Score: 2/5 — This Product" [ref=e1009]':
+                    - generic [ref=e1010]:
+                      - img [ref=e1011]
+                      - generic [ref=e1017]: 2/5
+                    - generic [ref=e1018]: This Product
+                  - generic [ref=e1019]:
+                    - paragraph [ref=e1020]: This Product wins 2 of 5 categories
+                    - paragraph [ref=e1021]: 1 tie
+                - generic [ref=e1022]:
+                  - generic [ref=e1024]:
+                    - button "Go for it if... 4" [ref=e1025]:
+                      - heading "Go for it if... 4" [level=4] [ref=e1026]:
+                        - img [ref=e1027]
+                        - text: Go for it if...
+                        - generic [ref=e1029]: "4"
+                      - img [ref=e1030]
+                    - list [ref=e1032]:
+                      - listitem [ref=e1033]: Excellent camera system
+                      - listitem [ref=e1035]: Premium build quality
+                      - listitem [ref=e1037]: Fast software updates
+                      - listitem [ref=e1039]: Great ecosystem integration
+                  - generic [ref=e1042]:
+                    - button "Skip it if... 3" [ref=e1043]:
+                      - heading "Skip it if... 3" [level=4] [ref=e1044]:
+                        - img [ref=e1045]
+                        - text: Skip it if...
+                        - generic [ref=e1048]: "3"
+                      - img [ref=e1049]
+                    - list [ref=e1051]:
+                      - listitem [ref=e1052]: Expensive
+                      - listitem [ref=e1054]: No expandable storage
+                      - listitem [ref=e1056]: Slow charging vs competitors
+            - generic [ref=e1059]:
+              - generic [ref=e1060]:
+                - generic [ref=e1061]:
+                  - generic [ref=e1062]: "04"
+                  - heading "SpotExplorer" [level=3] [ref=e1063]
+                - paragraph [ref=e1064]: Browsable cards for places, products, or other discrete spots.
+                - paragraph [ref=e1065]:
+                  - generic [ref=e1066]: What's new
+                  - generic [ref=e1067]: ·
+                  - generic [ref=e1068]: Frame thumbnails on cards
+              - generic [ref=e1070]:
+                - navigation "Sections" [ref=e1071]:
+                  - 'button "Day 1: Tokyo" [ref=e1072]': "Day 1: Tokyo"
+                  - 'button "Day 2: Nara & Osaka" [ref=e1073]': "Day 2: Nara & Osaka"
+                - 'heading "Day 1: Tokyo" [level=3] [ref=e1075]'
+                - generic [ref=e1076]:
+                  - generic [ref=e1078]:
+                    - figure [ref=e1079]:
+                      - img "Frame from video" [ref=e1081]
+                    - button "Senso-ji Temple Tokyo's oldest temple 4.7 Show more" [ref=e1082] [cursor=pointer]:
+                      - generic [ref=e1083]: ⛩️
+                      - generic [ref=e1084]:
+                        - generic [ref=e1085]: Senso-ji Temple
+                        - paragraph [ref=e1086]: Tokyo's oldest temple
+                        - generic [ref=e1088]:
+                          - img [ref=e1089]
+                          - text: "4.7"
+                        - generic [ref=e1091]: Show more
+                      - img [ref=e1093]
+                  - generic [ref=e1096]:
+                    - figure [ref=e1097]:
+                      - img "Frame from video" [ref=e1099]
+                    - button "Tokyo Tower Iconic landmark 1,200 4.5 Show more" [ref=e1100] [cursor=pointer]:
+                      - generic [ref=e1101]: 🗼
+                      - generic [ref=e1102]:
+                        - generic [ref=e1103]: Tokyo Tower
+                        - paragraph [ref=e1104]: Iconic landmark
+                        - generic [ref=e1105]:
+                          - generic [ref=e1106]: 1,200
+                          - generic [ref=e1107]:
+                            - img [ref=e1108]
+                            - text: "4.5"
+                        - generic [ref=e1110]: Show more
+                      - img [ref=e1112]
+            - generic [ref=e1115]:
+              - generic [ref=e1116]:
+                - generic [ref=e1117]:
+                  - generic [ref=e1118]: "05"
+                  - heading "ChecklistInteractive" [level=3] [ref=e1119]
+                - paragraph [ref=e1120]: Items the viewer physically checks off — shopping, materials, packing.
+                - paragraph [ref=e1121]:
+                  - generic [ref=e1122]: What's new
+                  - generic [ref=e1123]: ·
+                  - generic [ref=e1124]: Unchanged — battle-tested check pattern
+              - generic [ref=e1126]:
+                - generic [ref=e1128]:
+                  - generic [ref=e1129]: Ingredients
+                  - generic [ref=e1130]: 0%
+                - list [ref=e1133]:
+                  - listitem [ref=e1135]:
+                    - button "2 cups all-purpose flour sifted" [ref=e1136]:
+                      - img [ref=e1138]
+                      - generic [ref=e1140]:
+                        - text: 2 cups all-purpose flour
+                        - paragraph [ref=e1141]: sifted
+                  - listitem [ref=e1143]:
+                    - button "1 cup whole milk" [ref=e1144]:
+                      - img [ref=e1146]
+                      - generic [ref=e1149]: 🥛1 cup whole milk
+                  - listitem [ref=e1151]:
+                    - button "3 large eggs room temperature" [ref=e1152]:
+                      - img [ref=e1154]
+                      - generic [ref=e1156]:
+                        - text: 3 large eggs
+                        - paragraph [ref=e1157]: room temperature
+                  - listitem [ref=e1159]:
+                    - button "½ cup unsalted butter melted" [ref=e1160]:
+                      - img [ref=e1162]
+                      - generic [ref=e1164]:
+                        - generic [ref=e1165]: 🧈½ cup unsalted butter
+                        - paragraph [ref=e1166]: melted
+                  - listitem [ref=e1168]:
+                    - button "1 tsp vanilla extract" [ref=e1169]:
+                      - img [ref=e1171]
+                      - generic [ref=e1173]: 1 tsp vanilla extract
+                  - listitem [ref=e1175]:
+                    - button "Pinch of salt" [ref=e1176]:
+                      - img [ref=e1178]
+                      - generic [ref=e1180]: Pinch of salt
+            - generic [ref=e1182]:
+              - generic [ref=e1183]:
+                - generic [ref=e1184]:
+                  - generic [ref=e1185]: "06"
+                  - heading "InfoGridInteractive" [level=3] [ref=e1186]
+                - paragraph [ref=e1187]: "Short reference rows: specs, glossary, key facts."
+                - paragraph [ref=e1188]:
+                  - generic [ref=e1189]: What's new
+                  - generic [ref=e1190]: ·
+                  - generic [ref=e1191]: Searchable + adaptive grid + evidence field
+              - generic [ref=e1193]:
+                - generic [ref=e1194]:
+                  - button "Sort alphabetically" [ref=e1195] [cursor=pointer]:
+                    - img
+                  - button "Copy all" [ref=e1196] [cursor=pointer]:
+                    - img
+                - generic [ref=e1197]:
+                  - generic [ref=e1199]:
+                    - generic [ref=e1201]: Framework
+                    - paragraph [ref=e1202]: React 19
+                  - generic [ref=e1204]:
+                    - generic [ref=e1206]: Bundler
+                    - paragraph [ref=e1207]: Vite 6
+                  - generic [ref=e1209]:
+                    - generic [ref=e1210]:
+                      - generic [ref=e1211]: 🧠
+                      - generic [ref=e1212]: Attention
+                    - paragraph [ref=e1213]: Weighted sum of token embeddings, where weights come from query·key dot products.
+                    - paragraph [ref=e1214]: Demonstrated at 4:32 with the 'cat sat on the mat' example.
+                  - generic [ref=e1216]:
+                    - generic [ref=e1218]: Tokenization
+                    - paragraph [ref=e1219]: Splitting text into discrete units before embedding.
+                    - paragraph [ref=e1220]: "'Hello world' → ['Hello', 'world']"
+                  - generic [ref=e1222]:
+                    - generic [ref=e1223]:
+                      - generic [ref=e1224]: 🗂️
+                      - generic [ref=e1225]: State
+                    - paragraph [ref=e1226]: Zustand
+                  - generic [ref=e1228]:
+                    - generic [ref=e1230]: Testing
+                    - paragraph [ref=e1231]: Vitest + Playwright
+                  - generic [ref=e1233]:
+                    - generic [ref=e1234]:
+                      - generic [ref=e1235]: 🎨
+                      - generic [ref=e1236]: Styling
+                    - paragraph [ref=e1237]: Tailwind v4
+                  - generic [ref=e1239]:
+                    - generic [ref=e1241]: CI/CD
+                    - paragraph [ref=e1242]: GitHub Actions
+            - generic [ref=e1244]:
+              - generic [ref=e1245]:
+                - generic [ref=e1246]:
+                  - generic [ref=e1247]: "07"
+                  - heading "VisualEvidence (primitive)" [level=3] [ref=e1248]
+                - paragraph [ref=e1249]: The canonical frame-evidence slot — thumbnail + caption + OCR + scene type.
+                - paragraph [ref=e1250]:
+                  - generic [ref=e1251]: What's new
+                  - generic [ref=e1252]: ·
+                  - generic [ref=e1253]: Slot pattern shared across MomentTrack, StepFlow, ConceptCanvas, CodePlayground
+              - generic [ref=e1255]:
+                - generic [ref=e1256]:
+                  - paragraph [ref=e1257]: variant="compact"
+                  - generic [ref=e1258]:
+                    - generic [ref=e1259]:
+                      - generic [ref=e1260]: On screen
+                      - generic [ref=e1261]: diagram
+                      - button "Jump to 4:32" [ref=e1262]:
+                        - img [ref=e1263]
+                        - text: 4:32
+                    - img "Animated diagram of attention weights between query and key tokens." [ref=e1265]
+                    - paragraph [ref=e1266]: Animated diagram of attention weights between query and key tokens.
+                    - paragraph [ref=e1267]: “softmax(Q·Kᵀ / √d_k) · V”
+                    - paragraph [ref=e1268]: The exact softmax inputs the presenter walks through at 4:32.
+                - generic [ref=e1269]:
+                  - paragraph [ref=e1270]: variant="figure"
+                  - figure "Animated diagram of attention weights between query and key tokens. “softmax(Q·Kᵀ / √d_k) · V” The exact softmax inputs the presenter walks through at 4:32." [ref=e1271]:
+                    - generic [ref=e1272]:
+                      - img "Animated diagram of attention weights between query and key tokens." [ref=e1273]
+                      - generic [ref=e1274]: diagram
+                      - button "Jump to 4:32" [ref=e1275]:
+                        - img [ref=e1276]
+                        - text: 4:32
+                    - generic [ref=e1278]:
+                      - paragraph [ref=e1279]: Animated diagram of attention weights between query and key tokens.
+                      - paragraph [ref=e1280]: “softmax(Q·Kᵀ / √d_k) · V”
+                      - paragraph [ref=e1281]: The exact softmax inputs the presenter walks through at 4:32.
+            - generic [ref=e1283]:
+              - generic [ref=e1284]:
+                - generic [ref=e1285]:
+                  - generic [ref=e1286]: "08"
+                  - heading "VideoFilmstrip" [level=3] [ref=e1287]
+                - paragraph [ref=e1288]: Horizontal scrubber of vision-analyzed frames with caption tooltips.
+                - paragraph [ref=e1289]:
+                  - generic [ref=e1290]: What's new
+                  - generic [ref=e1291]: ·
+                  - generic [ref=e1292]: New · scene-type badges · ±5s playhead highlight · tab + overlay modes
+              - generic [ref=e1294]:
+                - paragraph [ref=e1295]: mode="tab"
+                - list "Video frames" [ref=e1296]:
+                  - listitem [ref=e1297]:
+                    - 'button "Jump to 0:00: Title card with the presenter introducing the topic." [ref=e1298]':
+                      - img "Title card with the presenter introducing the topic." [ref=e1299]
+                      - generic [ref=e1300]: 0:00
+                      - tooltip "Title card with the presenter introducing the topic.":
+                        - generic: Title card with the presenter introducing the topic.
+                    - generic [ref=e1301]: 0:00slide
+                  - listitem [ref=e1302]:
+                    - 'button "Jump to 1:45: High-level architecture diagram showing the data flow." [ref=e1303]':
+                      - img "High-level architecture diagram showing the data flow." [ref=e1304]
+                      - generic [ref=e1305]: 1:45
+                      - tooltip "High-level architecture diagram showing the data flow. “Client → API → Worker → DB”":
+                        - generic: High-level architecture diagram showing the data flow.
+                        - generic: “Client → API → Worker → DB”
+                    - generic [ref=e1306]: 1:45diagram
+                  - listitem [ref=e1307]:
+                    - 'button "Jump to 4:20: Live editor showing the request handler implementation." [ref=e1308]':
+                      - img "Live editor showing the request handler implementation." [ref=e1309]
+                      - generic [ref=e1310]: 4:20
+                      - tooltip "Live editor showing the request handler implementation. “fastify.post('/videos', handler)”":
+                        - generic: Live editor showing the request handler implementation.
+                        - generic: “fastify.post('/videos', handler)”
+                    - generic [ref=e1311]: 4:20code
+                  - listitem [ref=e1312]:
+                    - 'button "Jump to 7:30: Sequence diagram of the queue retry policy." [ref=e1313]':
+                      - img "Sequence diagram of the queue retry policy." [ref=e1314]
+                      - generic [ref=e1315]: 7:30
+                      - tooltip "Sequence diagram of the queue retry policy.":
+                        - generic: Sequence diagram of the queue retry policy.
+                    - generic [ref=e1316]: 7:30diagram
+                  - listitem [ref=e1317]:
+                    - 'button "Jump to 11:15: Demo: triggering the pipeline and watching live SSE events." [ref=e1318]':
+                      - 'img "Demo: triggering the pipeline and watching live SSE events." [ref=e1319]'
+                      - generic [ref=e1320]: 11:15
+                      - 'tooltip "Demo: triggering the pipeline and watching live SSE events."':
+                        - generic: "Demo: triggering the pipeline and watching live SSE events."
+                    - generic [ref=e1321]: 11:15demo
+                  - listitem [ref=e1322]:
+                    - 'button "Jump to 15:40: Slide listing the three caching layers." [ref=e1323]':
+                      - img "Slide listing the three caching layers." [ref=e1324]
+                      - generic [ref=e1325]: 15:40
+                      - tooltip "Slide listing the three caching layers. “1. Redis · 2. Mongo · 3. CDN”":
+                        - generic: Slide listing the three caching layers.
+                        - generic: “1. Redis · 2. Mongo · 3. CDN”
+                    - generic [ref=e1326]: 15:40slide
+                  - listitem [ref=e1327]:
+                    - 'button "Jump to 21:00: Per-stage cost diagram with model fan-out." [ref=e1328]':
+                      - img "Per-stage cost diagram with model fan-out." [ref=e1329]
+                      - generic [ref=e1330]: 21:00
+                      - tooltip "Per-stage cost diagram with model fan-out. “Plan $0.01 · Extract $0.04 · Synth $0.01”":
+                        - generic: Per-stage cost diagram with model fan-out.
+                        - generic: “Plan $0.01 · Extract $0.04 · Synth $0.01”
+                    - generic [ref=e1331]: 21:00diagram
+                  - listitem [ref=e1332]:
+                    - 'button "Jump to 27:50: Closing summary with the three key takeaways." [ref=e1333]':
+                      - img "Closing summary with the three key takeaways." [ref=e1334]
+                      - generic [ref=e1335]: 27:50
+                      - tooltip "Closing summary with the three key takeaways.":
+                        - generic: Closing summary with the three key takeaways.
+                    - generic [ref=e1336]: 27:50slide
+                - paragraph [ref=e1337]: mode="overlay"
+                - list "Video frames" [ref=e1338]:
+                  - listitem [ref=e1339]:
+                    - 'button "Jump to 0:00: Title card with the presenter introducing the topic." [ref=e1340]':
+                      - img "Title card with the presenter introducing the topic." [ref=e1341]
+                      - generic [ref=e1342]: 0:00
+                      - tooltip "Title card with the presenter introducing the topic.":
+                        - generic: Title card with the presenter introducing the topic.
+                  - listitem [ref=e1343]:
+                    - 'button "Jump to 1:45: High-level architecture diagram showing the data flow." [ref=e1344]':
+                      - img "High-level architecture diagram showing the data flow." [ref=e1345]
+                      - generic [ref=e1346]: 1:45
+                      - tooltip "High-level architecture diagram showing the data flow. “Client → API → Worker → DB”":
+                        - generic: High-level architecture diagram showing the data flow.
+                        - generic: “Client → API → Worker → DB”
+                  - listitem [ref=e1347]:
+                    - 'button "Jump to 4:20: Live editor showing the request handler implementation." [ref=e1348]':
+                      - img "Live editor showing the request handler implementation." [ref=e1349]
+                      - generic [ref=e1350]: 4:20
+                      - tooltip "Live editor showing the request handler implementation. “fastify.post('/videos', handler)”":
+                        - generic: Live editor showing the request handler implementation.
+                        - generic: “fastify.post('/videos', handler)”
+                  - listitem [ref=e1351]:
+                    - 'button "Jump to 7:30: Sequence diagram of the queue retry policy." [ref=e1352]':
+                      - img "Sequence diagram of the queue retry policy." [ref=e1353]
+                      - generic [ref=e1354]: 7:30
+                      - tooltip "Sequence diagram of the queue retry policy.":
+                        - generic: Sequence diagram of the queue retry policy.
+                  - listitem [ref=e1355]:
+                    - 'button "Jump to 11:15: Demo: triggering the pipeline and watching live SSE events." [ref=e1356]':
+                      - 'img "Demo: triggering the pipeline and watching live SSE events." [ref=e1357]'
+                      - generic [ref=e1358]: 11:15
+                      - 'tooltip "Demo: triggering the pipeline and watching live SSE events."':
+                        - generic: "Demo: triggering the pipeline and watching live SSE events."
+                  - listitem [ref=e1359]:
+                    - 'button "Jump to 15:40: Slide listing the three caching layers." [ref=e1360]':
+                      - img "Slide listing the three caching layers." [ref=e1361]
+                      - generic [ref=e1362]: 15:40
+                      - tooltip "Slide listing the three caching layers. “1. Redis · 2. Mongo · 3. CDN”":
+                        - generic: Slide listing the three caching layers.
+                        - generic: “1. Redis · 2. Mongo · 3. CDN”
+                  - listitem [ref=e1363]:
+                    - 'button "Jump to 21:00: Per-stage cost diagram with model fan-out." [ref=e1364]':
+                      - img "Per-stage cost diagram with model fan-out." [ref=e1365]
+                      - generic [ref=e1366]: 21:00
+                      - tooltip "Per-stage cost diagram with model fan-out. “Plan $0.01 · Extract $0.04 · Synth $0.01”":
+                        - generic: Per-stage cost diagram with model fan-out.
+                        - generic: “Plan $0.01 · Extract $0.04 · Synth $0.01”
+                  - listitem [ref=e1367]:
+                    - 'button "Jump to 27:50: Closing summary with the three key takeaways." [ref=e1368]':
+                      - img "Closing summary with the three key takeaways." [ref=e1369]
+                      - generic [ref=e1370]: 27:50
+                      - tooltip "Closing summary with the three key takeaways.":
+                        - generic: Closing summary with the three key takeaways.
+            - generic [ref=e1372]:
+              - generic [ref=e1373]:
+                - generic [ref=e1374]:
+                  - generic [ref=e1375]: "09"
+                  - heading "ConceptCanvas" [level=3] [ref=e1376]
+                - paragraph [ref=e1377]: Drag-arrangeable concept map (React Flow) with persisted per-video layout.
+                - paragraph [ref=e1378]:
+                  - generic [ref=e1379]: What's new
+                  - generic [ref=e1380]: ·
+                  - generic [ref=e1381]: Drag to reorder · Saves layout · Frame thumbs on nodes
+              - application [ref=e1385]:
+                - generic [ref=e1387]:
+                  - generic:
+                    - generic:
+                      - img:
+                        - group "Edge from concept-0 to concept-1" [ref=e1388] [cursor=pointer]
+                      - img:
+                        - group "Edge from concept-0 to concept-2" [ref=e1391] [cursor=pointer]
+                      - img:
+                        - group "Edge from concept-1 to concept-0" [ref=e1394] [cursor=pointer]
+                      - img:
+                        - group "Edge from concept-1 to concept-2" [ref=e1397] [cursor=pointer]
+                      - img:
+                        - group "Edge from concept-1 to concept-3" [ref=e1400] [cursor=pointer]
+                      - img:
+                        - group "Edge from concept-2 to concept-3" [ref=e1403] [cursor=pointer]
+                      - img:
+                        - group "Edge from concept-3 to concept-2" [ref=e1406] [cursor=pointer]
+                      - img:
+                        - group "Edge from concept-4 to concept-0" [ref=e1409] [cursor=pointer]
+                    - generic:
+                      - group [ref=e1412]:
+                        - button "Attention" [ref=e1416]:
+                          - generic [ref=e1417]: 🧠
+                          - generic [ref=e1418]: Attention
+                      - group [ref=e1420]:
+                        - button "Transformer" [ref=e1424]:
+                          - generic [ref=e1425]: 🤖
+                          - generic [ref=e1426]: Transformer
+                      - group [ref=e1428]:
+                        - button "Embedding" [ref=e1432]:
+                          - generic [ref=e1433]: 📐
+                          - generic [ref=e1434]: Embedding
+                      - group [ref=e1436]:
+                        - button "Tokenization" [ref=e1440]:
+                          - generic [ref=e1441]: ✂️
+                          - generic [ref=e1442]: Tokenization
+                      - group [ref=e1444]:
+                        - button "Softmax" [ref=e1448]:
+                          - generic [ref=e1449]: 📊
+                          - generic [ref=e1450]: Softmax
+                      - group [ref=e1452]:
+                        - button "Backprop" [ref=e1456]:
+                          - generic [ref=e1457]: 🔁
+                          - generic [ref=e1458]: Backprop
+                - img
+                - generic "Control Panel" [ref=e1460]:
+                  - button "Zoom In" [ref=e1461] [cursor=pointer]:
+                    - img [ref=e1462]
+                  - button "Zoom Out" [ref=e1464] [cursor=pointer]:
+                    - img [ref=e1465]
+                  - button "Fit View" [ref=e1467] [cursor=pointer]:
+                    - img [ref=e1468]
+                  - button "Toggle Interactivity" [ref=e1470] [cursor=pointer]:
+                    - img [ref=e1471]
+            - generic [ref=e1475]:
+              - generic [ref=e1476]:
+                - generic [ref=e1477]:
+                  - generic [ref=e1478]: "10"
+                  - heading "StepFlowCanvas" [level=3] [ref=e1479]
+                - paragraph [ref=e1480]: Vertical zigzag step graph (React Flow) — completion lights up edges.
+                - paragraph [ref=e1481]:
+                  - generic [ref=e1482]: What's new
+                  - generic [ref=e1483]: ·
+                  - generic [ref=e1484]: Zigzag node graph · Animated edges on completion
+              - application [ref=e1488]:
+                - generic [ref=e1490]:
+                  - generic:
+                    - generic:
+                      - img:
+                        - group "Edge from step-0 to step-1" [ref=e1491] [cursor=pointer]
+                      - img:
+                        - group "Edge from step-1 to step-2" [ref=e1494] [cursor=pointer]
+                      - img:
+                        - group "Edge from step-2 to step-3" [ref=e1497] [cursor=pointer]
+                      - img:
+                        - group "Edge from step-3 to step-4" [ref=e1500] [cursor=pointer]
+                      - img:
+                        - group "Edge from step-4 to step-5" [ref=e1503] [cursor=pointer]
+                    - generic:
+                      - group [ref=e1506]:
+                        - generic [ref=e1510]:
+                          - generic [ref=e1511]: "1"
+                          - generic [ref=e1512]:
+                            - heading "Scaffold the project" [level=4] [ref=e1513]
+                            - figure [ref=e1514]:
+                              - img "Frame from video" [ref=e1516]
+                            - paragraph [ref=e1517]: "Run `npm create vite@latest` and pick React + TypeScript."
+                            - generic [ref=e1518]:
+                              - img [ref=e1519]
+                              - text: 2 min
+                            - generic [ref=e1522]:
+                              - checkbox "Mark step 1 complete" [ref=e1523]
+                              - generic [ref=e1524]: Mark complete
+                      - group [ref=e1526]:
+                        - generic [ref=e1530]:
+                          - generic [ref=e1531]: "2"
+                          - generic [ref=e1532]:
+                            - heading "Install dependencies" [level=4] [ref=e1533]
+                            - paragraph [ref=e1534]: Add Tailwind, shadcn/ui, and @tanstack/react-query.
+                            - generic [ref=e1535]:
+                              - img [ref=e1536]
+                              - text: 3 min
+                            - generic [ref=e1539]:
+                              - checkbox "Mark step 2 complete" [ref=e1540]
+                              - generic [ref=e1541]: Mark complete
+                      - group [ref=e1543]:
+                        - generic [ref=e1547]:
+                          - generic [ref=e1548]: "3"
+                          - generic [ref=e1549]:
+                            - heading "Configure Tailwind v4" [level=4] [ref=e1550]
+                            - figure [ref=e1551]:
+                              - img "Frame from video" [ref=e1553]
+                            - paragraph [ref=e1554]: "Replace tailwind.config.js with @theme inline {} in index.css."
+                            - generic [ref=e1555]:
+                              - img [ref=e1556]
+                              - text: 5 min
+                            - generic [ref=e1559]:
+                              - checkbox "Mark step 3 complete" [ref=e1560]
+                              - generic [ref=e1561]: Mark complete
+                      - group [ref=e1563]:
+                        - generic [ref=e1567]:
+                          - generic [ref=e1568]: "4"
+                          - generic [ref=e1569]:
+                            - heading "Wire up the router" [level=4] [ref=e1570]
+                            - paragraph [ref=e1571]: Define routes in App.tsx and lazy-load each page.
+                            - generic [ref=e1572]:
+                              - img [ref=e1573]
+                              - text: 8 min
+                            - generic [ref=e1576]:
+                              - checkbox "Mark step 4 complete" [ref=e1577]
+                              - generic [ref=e1578]: Mark complete
+                      - group [ref=e1580]:
+                        - generic [ref=e1584]:
+                          - generic [ref=e1585]: "5"
+                          - generic [ref=e1586]:
+                            - heading "Hook up auth" [level=4] [ref=e1587]
+                            - figure [ref=e1588]:
+                              - img "Frame from video" [ref=e1590]
+                            - paragraph [ref=e1591]: Add the JWT interceptor to the fetch client and gate protected routes.
+                            - generic [ref=e1592]:
+                              - img [ref=e1593]
+                              - text: 12 min
+                            - generic [ref=e1596]:
+                              - checkbox "Mark step 5 complete" [ref=e1597]
+                              - generic [ref=e1598]: Mark complete
+                      - group [ref=e1600]:
+                        - generic [ref=e1604]:
+                          - generic [ref=e1605]: "6"
+                          - generic [ref=e1606]:
+                            - heading "Deploy" [level=4] [ref=e1607]
+                            - paragraph [ref=e1608]: Push to main and let the CI pipeline ship to Vercel.
+                            - generic [ref=e1609]:
+                              - img [ref=e1610]
+                              - text: 4 min
+                            - generic [ref=e1613]:
+                              - checkbox "Mark step 6 complete" [ref=e1614]
+                              - generic [ref=e1615]: Mark complete
+                - img
+                - generic "Control Panel" [ref=e1617]:
+                  - button "Zoom In" [ref=e1618] [cursor=pointer]:
+                    - img [ref=e1619]
+                  - button "Zoom Out" [ref=e1621] [cursor=pointer]:
+                    - img [ref=e1622]
+                  - button "Fit View" [ref=e1624] [cursor=pointer]:
+                    - img [ref=e1625]
+                  - button "Toggle Interactivity" [ref=e1627] [cursor=pointer]:
+                    - img [ref=e1628]
+            - generic [ref=e1632]:
+              - generic [ref=e1633]:
+                - generic [ref=e1634]:
+                  - generic [ref=e1635]: "11"
+                  - heading "ConnectCanvas" [level=3] [ref=e1636]
+                - paragraph [ref=e1637]: Graded drag-to-connect quiz (React Flow) — match left prompts to right answers, scored, best score persisted.
+                - paragraph [ref=e1638]:
+                  - generic [ref=e1639]: What's new
+                  - generic [ref=e1640]: ·
+                  - generic [ref=e1641]: New (P3B) · connectable handles · answer-key from concept connections · localStorage best score
+              - generic [ref=e1643]:
+                - generic [ref=e1644]:
+                  - paragraph [ref=e1645]: Drag from each prompt to its matching answer, then check your work.
+                  - generic [ref=e1646]:
+                    - button "Reset" [ref=e1647]:
+                      - img [ref=e1648]
+                      - text: Reset
+                    - button "Check" [disabled] [ref=e1651]:
+                      - img [ref=e1652]
+                      - text: Check
+                - application [ref=e1655]:
+                  - generic [ref=e1657]:
+                    - generic:
+                      - generic:
+                        - group [ref=e1658] [cursor=pointer]:
+                          - generic [ref=e1662]: Embedding
+                        - group [ref=e1664] [cursor=pointer]:
+                          - generic [ref=e1668]: Attention
+                        - group [ref=e1670] [cursor=pointer]:
+                          - generic [ref=e1674]: Residual stream
+                        - group [ref=e1676] [cursor=pointer]:
+                          - generic [ref=e1680]: Softmax
+                        - group [ref=e1682] [cursor=pointer]:
+                          - generic [ref=e1687]: Token weighting
+                        - group [ref=e1688] [cursor=pointer]:
+                          - generic [ref=e1693]: Probability distribution
+                        - group [ref=e1694] [cursor=pointer]:
+                          - generic [ref=e1699]: Vector space
+                        - group [ref=e1700] [cursor=pointer]:
+                          - generic [ref=e1705]: Skip connection
+                  - img
+                  - generic "Control Panel" [ref=e1706]:
+                    - button "Zoom In" [ref=e1707] [cursor=pointer]:
+                      - img [ref=e1708]
+                    - button "Zoom Out" [ref=e1710] [cursor=pointer]:
+                      - img [ref=e1711]
+                    - button "Fit View" [ref=e1713] [cursor=pointer]:
+                      - img [ref=e1714]
+                    - button "Toggle Interactivity" [ref=e1716] [cursor=pointer]:
+                      - img [ref=e1717]
+            - generic [ref=e1721]:
+              - generic [ref=e1722]:
+                - generic [ref=e1723]:
+                  - generic [ref=e1724]: "12"
+                  - heading "CodePlayground" [level=3] [ref=e1725]
+                - paragraph [ref=e1726]: Syntax-highlighted snippet viewer with a sandboxed Run iframe + copy.
+                - paragraph [ref=e1727]:
+                  - generic [ref=e1728]: What's new
+                  - generic [ref=e1729]: ·
+                  - generic [ref=e1730]: Syntax highlighting · Sandboxed Run iframe · Copy
+              - generic [ref=e1732]:
+                - generic [ref=e1733]:
+                  - button "Previous" [disabled]:
+                    - img
+                    - text: Previous
+                  - button "Next" [ref=e1734] [cursor=pointer]:
+                    - text: Next
+                    - img
+                - generic [ref=e1736]:
+                  - generic [ref=e1737]:
+                    - img [ref=e1738]
+                    - generic [ref=e1743]: debounce.ts
+                    - generic [ref=e1744]: typescript
+                  - paragraph [ref=e1746]: A type-safe debounce — the generic captures the wrapped function's arg tuple so the returned function preserves its signature.
+                  - generic [ref=e1747]:
+                    - generic [ref=e1748]:
+                      - button "Copy" [ref=e1749]:
+                        - img [ref=e1750]
+                        - text: Copy
+                      - button "Run" [ref=e1753]:
+                        - img [ref=e1754]
+                        - text: Run
+                    - code [ref=e1757]: "export function debounce<TArgs extends unknown[]>( fn: (...args: TArgs) => void, ms: number, ): (...args: TArgs) => void { let timer: ReturnType<typeof setTimeout> | null = null; return (...args: TArgs) => { if (timer) clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); }; } const log = debounce((msg: string) => console.log(msg), 250); log('hello'); log('world');"
+                - paragraph [ref=e1758]: 1 / 3
+            - generic [ref=e1760]:
+              - generic [ref=e1761]:
+                - generic [ref=e1762]:
+                  - generic [ref=e1763]: "13"
+                  - heading "QuizArena" [level=3] [ref=e1764]
+                - paragraph [ref=e1765]: Replaces Quiz + Scenario — streak counter, timer, frame evidence per question.
+                - paragraph [ref=e1766]:
+                  - generic [ref=e1767]: What's new
+                  - generic [ref=e1768]: ·
+                  - generic [ref=e1769]: Streak counter · 10s timer · Frame context · Best-score localStorage
+              - generic [ref=e1771]:
+                - generic [ref=e1772]:
+                  - generic [ref=e1775]: Q 1 of 4
+                  - timer "4 seconds remaining" [ref=e2816]:
+                    - generic [ref=e1778]: "4"
+                - paragraph [ref=e1781]: Which complexity class describes binary search on a sorted array?
+                - generic [ref=e1783]:
+                  - button "O(1)" [ref=e1784]
+                  - button "O(log n)" [ref=e1785]
+                  - button "O(n)" [ref=e1786]
+                  - button "O(n log n)" [ref=e1787]
+                - generic [ref=e1788]:
+                  - button "Previous" [disabled]:
+                    - img
+                    - text: Previous
+                  - button "Next" [ref=e1789] [cursor=pointer]:
+                    - text: Next
+                    - img
+                - generic "Step progress" [ref=e1790]:
+                  - button "Step 1 (current)" [ref=e1791] [cursor=pointer]
+                  - button "Step 2" [ref=e1793] [cursor=pointer]
+                  - button "Step 3" [ref=e1794] [cursor=pointer]
+                  - button "Step 4" [ref=e1795] [cursor=pointer]
+            - generic [ref=e1797]:
+              - generic [ref=e1798]:
+                - generic [ref=e1799]:
+                  - generic [ref=e1800]: "14"
+                  - heading "PackingMission" [level=3] [ref=e1801]
+                - paragraph [ref=e1802]: Drag items into a virtual suitcase — weight tally + essential-item warnings.
+                - paragraph [ref=e1803]:
+                  - generic [ref=e1804]: What's new
+                  - generic [ref=e1805]: ·
+                  - generic [ref=e1806]: Drag into suitcase · Weight tally · Essential warnings
+              - generic [ref=e1807]:
+                - generic [ref=e1808]:
+                  - generic [ref=e1809]:
+                    - generic [ref=e1810]: 0 / 12 packed
+                    - generic [ref=e1811]:
+                      - button "All" [ref=e1812]
+                      - button "Documents" [ref=e1813]
+                      - button "Electronics" [ref=e1814]
+                      - button "Clothing" [ref=e1815]
+                      - button "Toiletries" [ref=e1816]
+                      - button "Misc" [ref=e1817]
+                  - generic [ref=e1818]:
+                    - generic [ref=e1819]:
+                      - heading "To pack (12)" [level=4] [ref=e1820]
+                      - list [ref=e1821]:
+                        - listitem [ref=e1823]:
+                          - generic [ref=e1824]:
+                            - button "Drag Passport" [ref=e1825]:
+                              - img [ref=e1826]
+                            - generic [ref=e1833]:
+                              - generic [ref=e1834]:
+                                - generic [ref=e1835]: 🛂
+                                - generic [ref=e1836]: Passport
+                              - generic [ref=e1837]:
+                                - generic [ref=e1838]: essential
+                                - generic [ref=e1839]: Documents
+                                - generic [ref=e1840]: 0.1 kg
+                            - button "Pack Passport" [ref=e1841] [cursor=pointer]:
+                              - img
+                              - text: Pack
+                        - listitem [ref=e1843]:
+                          - generic [ref=e1844]:
+                            - button "Drag Travel insurance card" [ref=e1845]:
+                              - img [ref=e1846]
+                            - generic [ref=e1853]:
+                              - generic [ref=e1854]:
+                                - generic [ref=e1855]: 🩺
+                                - generic [ref=e1856]: Travel insurance card
+                              - generic [ref=e1857]:
+                                - generic [ref=e1858]: essential
+                                - generic [ref=e1859]: Documents
+                                - generic [ref=e1860]: 0.1 kg
+                            - button "Pack Travel insurance card" [ref=e1861] [cursor=pointer]:
+                              - img
+                              - text: Pack
+                        - listitem [ref=e1863]:
+                          - generic [ref=e1864]:
+                            - button "Drag Phone charger" [ref=e1865]:
+                              - img [ref=e1866]
+                            - generic [ref=e1873]:
+                              - generic [ref=e1874]:
+                                - generic [ref=e1875]: 🔌
+                                - generic [ref=e1876]: Phone charger
+                              - generic [ref=e1877]:
+                                - generic [ref=e1878]: essential
+                                - generic [ref=e1879]: Electronics
+                                - generic [ref=e1880]: 0.2 kg
+                            - button "Pack Phone charger" [ref=e1881] [cursor=pointer]:
+                              - img
+                              - text: Pack
+                        - listitem [ref=e1883]:
+                          - generic [ref=e1884]:
+                            - button "Drag Universal adapter" [ref=e1885]:
+                              - img [ref=e1886]
+                            - generic [ref=e1893]:
+                              - generic [ref=e1894]:
+                                - generic [ref=e1895]: ⚡
+                                - generic [ref=e1896]: Universal adapter
+                              - generic [ref=e1897]:
+                                - generic [ref=e1898]: essential
+                                - generic [ref=e1899]: Electronics
+                                - generic [ref=e1900]: 0.1 kg
+                            - button "Pack Universal adapter" [ref=e1901] [cursor=pointer]:
+                              - img
+                              - text: Pack
+                        - listitem [ref=e1903]:
+                          - generic [ref=e1904]:
+                            - button "Drag Laptop" [ref=e1905]:
+                              - img [ref=e1906]
+                            - generic [ref=e1913]:
+                              - generic [ref=e1914]:
+                                - generic [ref=e1915]: 💻
+                                - generic [ref=e1916]: Laptop
+                              - generic [ref=e1917]:
+                                - generic [ref=e1918]: Electronics
+                                - generic [ref=e1919]: 1.6 kg
+                            - button "Pack Laptop" [ref=e1920] [cursor=pointer]:
+                              - img
+                              - text: Pack
+                        - listitem [ref=e1922]:
+                          - generic [ref=e1923]:
+                            - button "Drag Lightweight rain jacket" [ref=e1924]:
+                              - img [ref=e1925]
+                            - generic [ref=e1932]:
+                              - generic [ref=e1933]:
+                                - generic [ref=e1934]: 🧥
+                                - generic [ref=e1935]: Lightweight rain jacket
+                              - generic [ref=e1936]:
+                                - generic [ref=e1937]: essential
+                                - generic [ref=e1938]: Clothing
+                                - generic [ref=e1939]: 0.4 kg
+                            - button "Pack Lightweight rain jacket" [ref=e1940] [cursor=pointer]:
+                              - img
+                              - text: Pack
+                        - listitem [ref=e1942]:
+                          - generic [ref=e1943]:
+                            - button "Drag Comfortable walking shoes" [ref=e1944]:
+                              - img [ref=e1945]
+                            - generic [ref=e1952]:
+                              - generic [ref=e1953]:
+                                - generic [ref=e1954]: 👟
+                                - generic [ref=e1955]: Comfortable walking shoes
+                              - generic [ref=e1956]:
+                                - generic [ref=e1957]: essential
+                                - generic [ref=e1958]: Clothing
+                                - generic [ref=e1959]: 0.9 kg
+                            - button "Pack Comfortable walking shoes" [ref=e1960] [cursor=pointer]:
+                              - img
+                              - text: Pack
+                        - listitem [ref=e1962]:
+                          - generic [ref=e1963]:
+                            - button "Drag Two T-shirts" [ref=e1964]:
+                              - img [ref=e1965]
+                            - generic [ref=e1972]:
+                              - generic [ref=e1973]:
+                                - generic [ref=e1974]: 👕
+                                - generic [ref=e1975]: Two T-shirts
+                              - generic [ref=e1976]:
+                                - generic [ref=e1977]: Clothing
+                                - generic [ref=e1978]: 0.5 kg
+                            - button "Pack Two T-shirts" [ref=e1979] [cursor=pointer]:
+                              - img
+                              - text: Pack
+                        - listitem [ref=e1981]:
+                          - generic [ref=e1982]:
+                            - button "Drag Toothbrush & travel paste" [ref=e1983]:
+                              - img [ref=e1984]
+                            - generic [ref=e1991]:
+                              - generic [ref=e1992]:
+                                - generic [ref=e1993]: 🪥
+                                - generic [ref=e1994]: Toothbrush & travel paste
+                              - generic [ref=e1995]:
+                                - generic [ref=e1996]: Toiletries
+                                - generic [ref=e1997]: 0.1 kg
+                            - button "Pack Toothbrush & travel paste" [ref=e1998] [cursor=pointer]:
+                              - img
+                              - text: Pack
+                        - listitem [ref=e2000]:
+                          - generic [ref=e2001]:
+                            - button "Drag Sunscreen SPF 50" [ref=e2002]:
+                              - img [ref=e2003]
+                            - generic [ref=e2010]:
+                              - generic [ref=e2011]:
+                                - generic [ref=e2012]: 🧴
+                                - generic [ref=e2013]: Sunscreen SPF 50
+                              - generic [ref=e2014]:
+                                - generic [ref=e2015]: Toiletries
+                                - generic [ref=e2016]: 0.1 kg
+                            - button "Pack Sunscreen SPF 50" [ref=e2017] [cursor=pointer]:
+                              - img
+                              - text: Pack
+                        - listitem [ref=e2019]:
+                          - generic [ref=e2020]:
+                            - button "Drag Reusable water bottle" [ref=e2021]:
+                              - img [ref=e2022]
+                            - generic [ref=e2029]:
+                              - generic [ref=e2030]:
+                                - generic [ref=e2031]: 🚰
+                                - generic [ref=e2032]: Reusable water bottle
+                              - generic [ref=e2033]:
+                                - generic [ref=e2034]: Misc
+                                - generic [ref=e2035]: 0.3 kg
+                            - button "Pack Reusable water bottle" [ref=e2036] [cursor=pointer]:
+                              - img
+                              - text: Pack
+                        - listitem [ref=e2038]:
+                          - generic [ref=e2039]:
+                            - button "Drag Paperback book" [ref=e2040]:
+                              - img [ref=e2041]
+                            - generic [ref=e2048]:
+                              - generic [ref=e2049]:
+                                - generic [ref=e2050]: 📖
+                                - generic [ref=e2051]: Paperback book
+                              - generic [ref=e2052]:
+                                - generic [ref=e2053]: Misc
+                                - generic [ref=e2054]: 0.3 kg
+                            - button "Pack Paperback book" [ref=e2055] [cursor=pointer]:
+                              - img
+                              - text: Pack
+                    - generic [ref=e2057]:
+                      - generic [ref=e2058]:
+                        - heading "Suitcase" [level=4] [ref=e2059]:
+                          - img [ref=e2060]
+                          - text: Suitcase
+                        - generic [ref=e2065]: 0 packed
+                      - paragraph [ref=e2066]: Drag items here or tap Pack to add them.
+                - status [ref=e2067]
+            - generic [ref=e2069]:
+              - generic [ref=e2070]:
+                - generic [ref=e2071]:
+                  - generic [ref=e2072]: "15"
+                  - heading "WorkoutRoom" [level=3] [ref=e2073]
+                - paragraph [ref=e2074]: Replaces ExerciseTracker — auto-advance through sets with audio cues + form frames.
+                - paragraph [ref=e2075]:
+                  - generic [ref=e2076]: What's new
+                  - generic [ref=e2077]: ·
+                  - generic [ref=e2078]: Auto-advance · Audio cue · Form-loop frames
+              - generic [ref=e2080]:
+                - generic [ref=e2081]:
+                  - generic [ref=e2082]:
+                    - generic [ref=e2083]: 💪
+                    - heading "Push-ups" [level=3] [ref=e2084]
+                  - paragraph [ref=e2085]: Exercise 1 of 5
+                  - generic [ref=e2087]:
+                    - generic [ref=e2088]: beginner
+                    - generic [ref=e2089]:
+                      - generic [ref=e2090]: "3"
+                      - text: sets
+                    - generic [ref=e2091]:
+                      - generic [ref=e2092]: 12-15
+                      - text: reps
+                - generic [ref=e2093]:
+                  - generic [ref=e2094]:
+                    - img [ref=e2095]
+                    - text: Total progress
+                  - generic [ref=e2101]: 0/16 sets
+                - figure "Side-angle showing neutral spine and 45° elbow position." [ref=e2103]:
+                  - generic [ref=e2104]:
+                    - img "Side-angle showing neutral spine and 45° elbow position." [ref=e2105]
+                    - generic [ref=e2106]: demo
+                  - paragraph [ref=e2108]: Side-angle showing neutral spine and 45° elbow position.
+                - generic [ref=e2109]:
+                  - heading "Form cues" [level=4] [ref=e2110]
+                  - list [ref=e2111]:
+                    - listitem [ref=e2112]:
+                      - generic [ref=e2114]: Keep core engaged
+                    - listitem [ref=e2115]:
+                      - generic [ref=e2117]: Elbows track at 45° — not flared
+                - generic [ref=e2118]:
+                  - generic [ref=e2119]:
+                    - img "0 of 3 sets complete" [ref=e2120]:
+                      - img [ref=e2121]
+                      - img [ref=e2123]
+                      - img [ref=e2125]
+                    - button "Enable audio cues" [ref=e2128] [cursor=pointer]:
+                      - img
+                      - text: Sound off
+                  - generic [ref=e2129]:
+                    - generic [ref=e2130]: Reps
+                    - spinbutton "Reps" [ref=e2131]: "0"
+                    - generic [ref=e2132]: / 12
+                  - button "Complete set" [ref=e2133] [cursor=pointer]:
+                    - img
+                    - text: Complete set
+                - button "Modifications (1)" [ref=e2135]:
+                  - generic [ref=e2136]: Modifications (1)
+                  - img [ref=e2137]
+                - generic [ref=e2139]:
+                  - button "Previous" [disabled]:
+                    - img
+                    - text: Previous
+                  - button "Next" [ref=e2140] [cursor=pointer]:
+                    - text: Next
+                    - img
+            - generic [ref=e2142]:
+              - generic [ref=e2143]:
+                - generic [ref=e2144]:
+                  - generic [ref=e2145]: "16"
+                  - heading "LyricsKaraoke" [level=3] [ref=e2146]
+                - paragraph [ref=e2147]: Word-synced lyric scroller — replaces the static lyrics player.
+                - paragraph [ref=e2148]:
+                  - generic [ref=e2149]: What's new
+                  - generic [ref=e2150]: ·
+                  - generic [ref=e2151]: Word-synced highlight · Section nav · Auto-scroll
+              - generic [ref=e2153]:
+                - generic [ref=e2154]: Digital Wanderer
+                - navigation "Sections" [ref=e2155]:
+                  - button "Verse 1" [ref=e2156]: Verse 1
+                  - button "Chorus" [ref=e2158]: Chorus
+                - list [ref=e2162]:
+                  - listitem [ref=e2163]:
+                    - generic [ref=e2164]:
+                      - generic [ref=e2165]: 0:00
+                      - generic [ref=e2166]:
+                        - generic [ref=e2167]: Walking through the neon streets
+                        - generic: Walking through the neon streets
+                  - listitem [ref=e2168]:
+                    - generic [ref=e2169]:
+                      - generic [ref=e2170]: 0:04
+                      - generic [ref=e2171]:
+                        - generic [ref=e2172]: Where the city never sleeps
+                        - generic: Where the city never sleeps
+                  - listitem [ref=e2173]:
+                    - generic [ref=e2174]:
+                      - generic [ref=e2175]: 0:08
+                      - generic [ref=e2177]: Every light a story told
+                  - listitem [ref=e2178]:
+                    - generic [ref=e2179]:
+                      - generic [ref=e2180]: 0:12
+                      - generic [ref=e2182]: In this place of digital gold
+                  - listitem [ref=e2183]:
+                    - generic [ref=e2184]:
+                      - generic [ref=e2185]: 0:18
+                      - generic [ref=e2187]: We are the signals in the noise
+                  - listitem [ref=e2188]:
+                    - generic [ref=e2189]:
+                      - generic [ref=e2190]: 0:22
+                      - generic [ref=e2192]: Finding meaning, finding voice
+                  - listitem [ref=e2193]:
+                    - generic [ref=e2194]:
+                      - generic [ref=e2195]: 0:26
+                      - generic [ref=e2197]: In a world of endless choice
+                  - listitem [ref=e2198]:
+                    - generic [ref=e2199]:
+                      - generic [ref=e2200]: 0:30
+                      - generic [ref=e2202]: We rise above the static joys
+            - generic [ref=e2204]:
+              - generic [ref=e2205]:
+                - generic [ref=e2206]:
+                  - generic [ref=e2207]: "17"
+                  - heading "StatBanner (secondary)" [level=3] [ref=e2208]
+                - paragraph [ref=e2209]: A row of equal-weight compact stats. Attachment-only — never a standalone tab.
+                - paragraph [ref=e2210]:
+                  - generic [ref=e2211]: What's new
+                  - generic [ref=e2212]: ·
+                  - generic [ref=e2213]: New · equal-weight stats (NOT a hero metric) · no gradient
+              - list "Key stats" [ref=e2215]:
+                - listitem [ref=e2216]:
+                  - generic [ref=e2217]: ⏱️
+                  - generic [ref=e2218]:
+                    - generic [ref=e2219]: Duration
+                    - generic [ref=e2220]: 12 min
+                - listitem [ref=e2221]:
+                  - generic [ref=e2222]: 🪜
+                  - generic [ref=e2223]:
+                    - generic [ref=e2224]: Steps
+                    - generic [ref=e2225]: "8"
+                - listitem [ref=e2226]:
+                  - generic [ref=e2227]: 🎯
+                  - generic [ref=e2228]:
+                    - generic [ref=e2229]: Difficulty
+                    - generic [ref=e2230]: Intermediate
+            - generic [ref=e2232]:
+              - generic [ref=e2233]:
+                - generic [ref=e2234]:
+                  - generic [ref=e2235]: "18"
+                  - heading "TipCallout (secondary)" [level=3] [ref=e2236]
+                - paragraph [ref=e2237]: A single highlighted aside. Full border + bg tint — never a side-stripe.
+                - paragraph [ref=e2238]:
+                  - generic [ref=e2239]: What's new
+                  - generic [ref=e2240]: ·
+                  - generic [ref=e2241]: New · tip / warning / note styles · delegates to Callout primitive
+              - generic [ref=e2243]:
+                - note "Tip" [ref=e2244]:
+                  - generic [ref=e2245]:
+                    - img [ref=e2247]
+                    - paragraph [ref=e2249]: Whisk the eggs while the pan is still cold for a creamier scramble.
+                - note "Warning" [ref=e2250]:
+                  - generic [ref=e2251]:
+                    - img [ref=e2253]
+                    - paragraph [ref=e2255]: "Heads up: Unplug the tool before changing the blade."
+            - generic [ref=e2257]:
+              - generic [ref=e2258]:
+                - generic [ref=e2259]:
+                  - generic [ref=e2260]: "19"
+                  - heading "SummaryHeader (secondary)" [level=3] [ref=e2261]
+                - paragraph [ref=e2262]: One-line orientation banner placed on top of a dense tab.
+                - paragraph [ref=e2263]:
+                  - generic [ref=e2264]: What's new
+                  - generic [ref=e2265]: ·
+                  - generic [ref=e2266]: New · opaque card · breaks up long lists
+              - note [ref=e2268]:
+                - generic [ref=e2269]: 🧭
+                - generic [ref=e2270]:
+                  - generic [ref=e2271]: In short
+                  - paragraph [ref=e2272]: Eight ordered steps take you from raw dough to a finished loaf.
+            - generic [ref=e2274]:
+              - generic [ref=e2275]:
+                - generic [ref=e2276]:
+                  - generic [ref=e2277]: "20"
+                  - heading "DiagramCard (secondary)" [level=3] [ref=e2278]
+                - paragraph [ref=e2279]: Read-only ReactFlow diagram — a pan-only "how the pieces connect" sketch.
+                - paragraph [ref=e2280]:
+                  - generic [ref=e2281]: What's new
+                  - generic [ref=e2282]: ·
+                  - generic [ref=e2283]: P3A · read-only ReactFlow (nodesDraggable=false) · edges from connections / step order
+              - figure "Request lifecycle" [ref=e2285]:
+                - application "Diagram" [ref=e2287]:
+                  - generic [ref=e2289]:
+                    - generic:
+                      - generic:
+                        - img:
+                          - group "Edge from diagram-0 to diagram-1"
+                        - img:
+                          - group "Edge from diagram-1 to diagram-2"
+                        - img:
+                          - group "Edge from diagram-2 to diagram-3"
+                      - generic:
+                        - group:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: 💻
+                                - text: Client
+                              - generic: Sends request
+                        - group:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: 🚪
+                                - text: Gateway
+                              - generic: Auth + route
+                        - group:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: ⚙️
+                                - text: Service
+                              - generic: Business logic
+                        - group:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: 🗄️
+                                - text: DB
+                              - generic: Persist
+                  - img
+                  - generic "Control Panel" [ref=e2298]:
+                    - button "Zoom In" [ref=e2299] [cursor=pointer]:
+                      - img [ref=e2300]
+                    - button "Zoom Out" [ref=e2302] [cursor=pointer]:
+                      - img [ref=e2303]
+                    - button "Fit View" [ref=e2305] [cursor=pointer]:
+                      - img [ref=e2306]
+                    - button "Toggle Interactivity" [ref=e2308] [cursor=pointer]:
+                      - img [ref=e2309]
+                - generic [ref=e2312]: Request lifecycle
+            - generic [ref=e2314]:
+              - generic [ref=e2315]:
+                - generic [ref=e2316]:
+                  - generic [ref=e2317]: "21"
+                  - heading "Attachment layout (primary + secondaries)" [level=3] [ref=e2318]
+                - paragraph [ref=e2319]: "How a tab composes: top summary_header → primary interactive → bottom frame_strip / quick_quiz."
+                - paragraph [ref=e2320]:
+                  - generic [ref=e2321]: What's new
+                  - generic [ref=e2322]: ·
+                  - generic [ref=e2323]: "New · tier model: one primary + optional top/bottom attachments"
+              - generic [ref=e2325]:
+                - note [ref=e2326]:
+                  - generic [ref=e2327]: 🧭
+                  - generic [ref=e2328]:
+                    - generic [ref=e2329]: In short
+                    - paragraph [ref=e2330]: The reviewer scores three phones across battery, camera, and price.
+                - generic [ref=e2331]:
+                  - generic [ref=e2332]:
+                    - generic [ref=e2333]:
+                      - generic [ref=e2334]:
+                        - heading "Side-by-side" [level=3] [ref=e2335]
+                        - generic [ref=e2337]: This Product wins by 4%
+                      - img "Radar comparing This Product and Galaxy S24" [ref=e2338]:
+                        - generic [ref=e2340]:
+                          - list [ref=e2342]:
+                            - listitem [ref=e2343]:
+                              - img "Galaxy S24 legend icon" [ref=e2344]
+                              - text: Galaxy S24
+                            - listitem [ref=e2346]:
+                              - img "This Product legend icon" [ref=e2347]
+                              - text: This Product
+                          - application [ref=e2349]:
+                            - generic [ref=e2365]:
+                              - generic [ref=e2368]:
+                                - generic [ref=e2370]: Camera
+                                - generic [ref=e2372]: Battery
+                                - generic [ref=e2374]: Display
+                                - generic [ref=e2376]: Price
+                              - generic [ref=e2378]:
+                                - generic [ref=e2380]: "0"
+                                - generic [ref=e2382]: "3"
+                                - generic [ref=e2384]: "6"
+                                - generic [ref=e2386]: "9"
+                                - generic [ref=e2388]: "10"
+                    - generic [ref=e2389]:
+                      - generic [ref=e2390]:
+                        - heading "Tune what matters" [level=4] [ref=e2391]
+                        - generic [ref=e2392]: This Product 52% · Galaxy S24 48%
+                      - list [ref=e2393]:
+                        - listitem [ref=e2394]:
+                          - generic [ref=e2395]: Camera
+                          - generic "Weight for Camera" [ref=e2396]:
+                            - slider [ref=e2400]
+                          - generic [ref=e2401]: "5"
+                        - listitem [ref=e2402]:
+                          - generic [ref=e2403]: Battery
+                          - generic "Weight for Battery" [ref=e2404]:
+                            - slider [ref=e2408]
+                          - generic [ref=e2409]: "5"
+                        - listitem [ref=e2410]:
+                          - generic [ref=e2411]: Display
+                          - generic "Weight for Display" [ref=e2412]:
+                            - slider [ref=e2416]
+                          - generic [ref=e2417]: "5"
+                        - listitem [ref=e2418]:
+                          - generic [ref=e2419]: Price
+                          - generic "Weight for Price" [ref=e2420]:
+                            - slider [ref=e2424]
+                          - generic [ref=e2425]: "5"
+                  - table [ref=e2428]:
+                    - rowgroup [ref=e2429]:
+                      - row "Feature This Product Galaxy S24" [ref=e2430]:
+                        - columnheader "Feature" [ref=e2431]
+                        - columnheader "This Product" [ref=e2432]
+                        - columnheader "Galaxy S24" [ref=e2433]
+                    - rowgroup [ref=e2434]:
+                      - row "Camera 48MP triple lens 50MP dual lens" [ref=e2435] [cursor=pointer]:
+                        - cell "Camera" [ref=e2436]
+                        - cell "48MP triple lens" [ref=e2437]
+                        - cell "50MP dual lens" [ref=e2438]
+                      - row "Battery 4,422 mAh 4,000 mAh" [ref=e2439] [cursor=pointer]:
+                        - cell "Battery" [ref=e2440]
+                        - cell "4,422 mAh" [ref=e2441]
+                        - cell "4,000 mAh" [ref=e2442]
+                      - row "Display 6.7\" OLED 120Hz 6.2\" AMOLED 120Hz" [ref=e2443] [cursor=pointer]:
+                        - cell "Display" [ref=e2444]
+                        - cell "6.7\" OLED 120Hz" [ref=e2445]
+                        - cell "6.2\" AMOLED 120Hz" [ref=e2446]
+                      - row "Price $999 $799" [ref=e2447] [cursor=pointer]:
+                        - cell "Price" [ref=e2448]
+                        - cell "$999" [ref=e2449]
+                        - cell "$799" [ref=e2450]
+                  - generic [ref=e2451]:
+                    - generic [ref=e2453]:
+                      - button "Go for it if... 4" [ref=e2454]:
+                        - heading "Go for it if... 4" [level=4] [ref=e2455]:
+                          - img [ref=e2456]
+                          - text: Go for it if...
+                          - generic [ref=e2458]: "4"
+                        - img [ref=e2459]
+                      - list [ref=e2461]:
+                        - listitem [ref=e2462]: Excellent camera system
+                        - listitem [ref=e2464]: Premium build quality
+                        - listitem [ref=e2466]: Fast software updates
+                        - listitem [ref=e2468]: Great ecosystem integration
+                    - generic [ref=e2471]:
+                      - button "Skip it if... 3" [ref=e2472]:
+                        - heading "Skip it if... 3" [level=4] [ref=e2473]:
+                          - img [ref=e2474]
+                          - text: Skip it if...
+                          - generic [ref=e2477]: "3"
+                        - img [ref=e2478]
+                      - list [ref=e2480]:
+                        - listitem [ref=e2481]: Expensive
+                        - listitem [ref=e2483]: No expandable storage
+                        - listitem [ref=e2485]: Slow charging vs competitors
+                - list "Key stats" [ref=e2487]:
+                  - listitem [ref=e2488]:
+                    - generic [ref=e2489]: 🏆
+                    - generic [ref=e2490]:
+                      - generic [ref=e2491]: Winner
+                      - generic [ref=e2492]: Phone B
+                  - listitem [ref=e2493]:
+                    - generic [ref=e2494]: 📊
+                    - generic [ref=e2495]:
+                      - generic [ref=e2496]: Axes
+                      - generic [ref=e2497]: "3"
+            - generic [ref=e2499]:
+              - generic [ref=e2500]:
+                - generic [ref=e2501]:
+                  - generic [ref=e2502]: "22"
+                  - heading "ClaimsTracker" [level=3] [ref=e2503]
+                - paragraph [ref=e2504]: "The news signature surface: every factual claim with who said it and a verified / disputed / context status badge, plus optional source citation and a status filter."
+                - paragraph [ref=e2505]:
+                  - generic [ref=e2506]: What's new
+                  - generic [ref=e2507]: ·
+                  - generic [ref=e2508]: New (P5b) · status badges · disputed-claim filter · seek-to-timestamp
+              - generic [ref=e2510]:
+                - tablist "Filter claims by status" [ref=e2511]:
+                  - tab "All (3)" [selected] [ref=e2512]:
+                    - text: All
+                    - generic [ref=e2513]: (3)
+                  - tab "Verified (1)" [ref=e2514]:
+                    - text: Verified
+                    - generic [ref=e2515]: (1)
+                  - tab "Disputed (1)" [ref=e2516]:
+                    - text: Disputed
+                    - generic [ref=e2517]: (1)
+                  - tab "Context (1)" [ref=e2518]:
+                    - text: Context
+                    - generic [ref=e2519]: (1)
+                - list "Tracked claims" [ref=e2520]:
+                  - listitem [ref=e2522]:
+                    - generic [ref=e2523]:
+                      - generic [ref=e2524]:
+                        - paragraph [ref=e2525]: The plan creates 1,200 jobs
+                        - generic [ref=e2526]:
+                          - img [ref=e2527]
+                          - text: Disputed
+                      - generic [ref=e2529]:
+                        - generic [ref=e2530]: Claimed by Mayor Diaz
+                        - button "Jump to 3:30" [ref=e2531]:
+                          - img [ref=e2532]
+                          - text: 3:30
+                      - paragraph [ref=e2535]: Independent analysts put the figure near 700.
+                  - listitem [ref=e2537]:
+                    - generic [ref=e2538]:
+                      - generic [ref=e2539]:
+                        - paragraph [ref=e2540]: Fares will rise 15% in 2026
+                        - generic [ref=e2541]:
+                          - img [ref=e2542]
+                          - text: Verified
+                      - generic [ref=e2545]:
+                        - generic [ref=e2546]: Claimed by Transit Authority
+                        - button "Jump to 9:00" [ref=e2547]:
+                          - img [ref=e2548]
+                          - text: 9:00
+                      - paragraph [ref=e2551]: Approved fare schedule, council record.
+                  - listitem [ref=e2553]:
+                    - generic [ref=e2554]:
+                      - generic [ref=e2555]:
+                        - paragraph [ref=e2556]: The city faces a structural deficit
+                        - generic [ref=e2557]:
+                          - img [ref=e2558]
+                          - text: Context
+                      - generic [ref=e2560]:
+                        - generic [ref=e2561]: Claimed by Reporter
+                        - button "Jump to 1:00" [ref=e2562]:
+                          - img [ref=e2563]
+                          - text: 1:00
+            - generic [ref=e2567]:
+              - generic [ref=e2568]:
+                - generic [ref=e2569]:
+                  - generic [ref=e2570]: "23"
+                  - heading "TierList" [level=3] [ref=e2571]
+                - paragraph [ref=e2572]: "The gaming signature surface: drag items into S/A/B/C/D tiers. Seeded with the creator's suggested placement; the viewer overrides and the ranking persists per video."
+                - paragraph [ref=e2573]:
+                  - generic [ref=e2574]: What's new
+                  - generic [ref=e2575]: ·
+                  - generic [ref=e2576]: New (P5c) · drag-to-rank · localStorage persistence · reset
+              - generic [ref=e2577]:
+                - generic [ref=e2578]:
+                  - generic [ref=e2579]:
+                    - paragraph [ref=e2580]: Drag items to build your tier list — your ranking saves automatically.
+                    - button "Reset" [ref=e2581] [cursor=pointer]:
+                      - img
+                      - text: Reset
+                  - generic [ref=e2582]:
+                    - generic [ref=e2583]:
+                      - generic [ref=e2584]: S
+                      - button "Drag Jett" [ref=e2586]:
+                        - img [ref=e2587]
+                        - generic [ref=e2594]: 🌪️
+                        - generic [ref=e2595]: Jett
+                    - generic [ref=e2596]:
+                      - generic [ref=e2597]: A
+                      - generic [ref=e2598]:
+                        - button "Drag Sage" [ref=e2599]:
+                          - img [ref=e2600]
+                          - generic [ref=e2607]: 🧊
+                          - generic [ref=e2608]: Sage
+                        - button "Drag Sova" [ref=e2609]:
+                          - img [ref=e2610]
+                          - generic [ref=e2617]: 🏹
+                          - generic [ref=e2618]: Sova
+                    - generic [ref=e2619]:
+                      - generic [ref=e2620]: B
+                      - button "Drag Killjoy" [ref=e2622]:
+                        - img [ref=e2623]
+                        - generic [ref=e2630]: 🤖
+                        - generic [ref=e2631]: Killjoy
+                    - generic [ref=e2632]:
+                      - generic [ref=e2633]: C
+                      - button "Drag Yoru" [ref=e2635]:
+                        - img [ref=e2636]
+                        - generic [ref=e2643]: 👤
+                        - generic [ref=e2644]: Yoru
+                    - generic [ref=e2645]:
+                      - generic [ref=e2646]: D
+                      - generic [ref=e2648]: Drop items here
+                  - generic [ref=e2649]:
+                    - heading "Unranked (1)" [level=4] [ref=e2650]
+                    - generic [ref=e2651]:
+                      - generic [ref=e2652]: —
+                      - button "Drag Mystery pick" [ref=e2654]:
+                        - img [ref=e2655]
+                        - generic [ref=e2662]: ❓
+                        - generic [ref=e2663]: Mystery pick
+                - status [ref=e2664]
+            - generic [ref=e2666]:
+              - generic [ref=e2667]:
+                - generic [ref=e2668]:
+                  - generic [ref=e2669]: "24"
+                  - heading "FormationDiagram" [level=3] [ref=e2670]
+                - paragraph [ref=e2671]: "The sport signature surface: players placed on a pitch by 0-100 x/y coordinates. Read-only ReactFlow (nodesDraggable=false) — a tactical lineup overview."
+                - paragraph [ref=e2672]:
+                  - generic [ref=e2673]: What's new
+                  - generic [ref=e2674]: ·
+                  - generic [ref=e2675]: New (P5d) · read-only ReactFlow pitch · positions by role
+              - figure "City · 4-3-3" [ref=e2677]:
+                - 'application "Formation: City · 4-3-3" [ref=e2679]':
+                  - generic [ref=e2681]:
+                    - generic:
+                      - generic:
+                        - group:
+                          - generic:
+                            - generic: "31"
+                            - generic: Ederson
+                        - group:
+                          - generic:
+                            - generic: "2"
+                            - generic: Walker
+                        - group:
+                          - generic:
+                            - generic: "3"
+                            - generic: Dias
+                        - group:
+                          - generic:
+                            - generic: "5"
+                            - generic: Stones
+                        - group:
+                          - generic:
+                            - generic: "24"
+                            - generic: Gvardiol
+                        - group:
+                          - generic:
+                            - generic: "16"
+                            - generic: Rodri
+                        - group:
+                          - generic:
+                            - generic: "17"
+                            - generic: De Bruyne
+                        - group:
+                          - generic:
+                            - generic: "20"
+                            - generic: Silva
+                        - group:
+                          - generic:
+                            - generic: "47"
+                            - generic: Foden
+                        - group:
+                          - generic:
+                            - generic: "9"
+                            - generic: Haaland
+                        - group:
+                          - generic:
+                            - generic: "10"
+                            - generic: Grealish
+                  - img
+                  - generic "Control Panel" [ref=e2682]:
+                    - button "Zoom In" [ref=e2683] [cursor=pointer]:
+                      - img [ref=e2684]
+                    - button "Zoom Out" [ref=e2686] [cursor=pointer]:
+                      - img [ref=e2687]
+                    - button "Fit View" [ref=e2689] [cursor=pointer]:
+                      - img [ref=e2690]
+                    - button "Toggle Interactivity" [ref=e2692] [cursor=pointer]:
+                      - img [ref=e2693]
+                - generic [ref=e2696]: City · 4-3-3
+            - generic [ref=e2698]:
+              - generic [ref=e2699]:
+                - generic [ref=e2700]:
+                  - generic [ref=e2701]: "25"
+                  - heading "FlowPlayer (enter mode)" [level=3] [ref=e2702]
+                - paragraph [ref=e2703]: "Generalized cooking mode: left context panel + a sequenced action pane with progress, stepper dots, and a completion celebration. Reused across cooking, workout, build, study, explore, practice."
+                - paragraph [ref=e2704]:
+                  - generic [ref=e2705]: What's new
+                  - generic [ref=e2706]: ·
+                  - generic [ref=e2707]: New (P4) · extracted from RecipePlayer · per-mode context + sequence + per-step render slot
+              - generic [ref=e2709]:
+                - generic [ref=e2710]:
+                  - paragraph [ref=e2711]: mode="cooking" (migrated, unchanged)
+                  - generic [ref=e2712]:
+                    - generic [ref=e2713]:
+                      - generic [ref=e2714]:
+                        - img [ref=e2715]: 🍳
+                        - generic [ref=e2716]: Cooking Mode
+                        - generic [ref=e2717]: 0/4 steps
+                      - button "Exit cooking mode" [ref=e2718] [cursor=pointer]:
+                        - img
+                    - generic [ref=e2720]:
+                      - generic [ref=e2722]:
+                        - generic [ref=e2723]:
+                          - generic [ref=e2724]: Ingredients
+                          - generic [ref=e2725]: "4"
+                        - list [ref=e2728]:
+                          - listitem [ref=e2729]:
+                            - generic [ref=e2730]:
+                              - text: Pasta
+                              - generic [ref=e2731]: penne or fusilli
+                          - listitem [ref=e2732]:
+                            - generic [ref=e2733]: Olive oil
+                          - listitem [ref=e2734]:
+                            - generic [ref=e2735]:
+                              - text: Garlic
+                              - generic [ref=e2736]: 3 cloves, minced
+                          - listitem [ref=e2737]:
+                            - generic [ref=e2738]:
+                              - text: Tomato sauce
+                              - generic [ref=e2739]: 1 can
+                      - generic [ref=e2741]:
+                        - generic [ref=e2744]: Step 1 of 4
+                        - generic [ref=e2745]:
+                          - heading "Boil water" [level=3] [ref=e2746]
+                          - paragraph [ref=e2747]: Bring a salted pot of water to a rolling boil.
+                          - generic [ref=e2749]:
+                            - img [ref=e2750]
+                            - text: 5 min
+                          - generic [ref=e2753]:
+                            - generic [ref=e2754]:
+                              - img [ref=e2755]
+                              - generic [ref=e2759]: 5:00
+                            - generic [ref=e2760]:
+                              - button "Start" [ref=e2761] [cursor=pointer]:
+                                - img
+                                - text: Start
+                              - button "Reset timer" [ref=e2762] [cursor=pointer]:
+                                - img
+                                - text: Reset
+                        - generic [ref=e2763]:
+                          - button "Prev" [disabled]:
+                            - img
+                            - text: Prev
+                          - button "Done" [ref=e2764] [cursor=pointer]:
+                            - img
+                            - text: Done
+                          - button "Next" [ref=e2765] [cursor=pointer]:
+                            - text: Next
+                            - img
+                    - generic [ref=e2766]:
+                      - button "Go to step 1" [ref=e2767]
+                      - button "Go to step 2" [ref=e2768]
+                      - button "Go to step 3" [ref=e2769]
+                      - button "Go to step 4" [ref=e2770]
+                - generic [ref=e2771]:
+                  - paragraph [ref=e2772]: mode="build" (tech / project)
+                  - generic [ref=e2773]:
+                    - generic [ref=e2774]:
+                      - generic [ref=e2775]:
+                        - img [ref=e2776]: 🔧
+                        - generic [ref=e2777]: Build Mode
+                        - generic [ref=e2778]: 0/3 steps
+                      - button "Exit build mode" [ref=e2779] [cursor=pointer]:
+                        - img
+                    - generic [ref=e2781]:
+                      - generic [ref=e2783]:
+                        - generic [ref=e2784]:
+                          - generic [ref=e2785]: Materials
+                          - generic [ref=e2786]: "3"
+                        - generic [ref=e2787]:
+                          - generic [ref=e2788]:
+                            - paragraph [ref=e2789]: Materials
+                            - list [ref=e2790]:
+                              - listitem [ref=e2791]:
+                                - generic [ref=e2792]: Node 20+
+                              - listitem [ref=e2793]:
+                                - generic [ref=e2794]: pnpm
+                          - generic [ref=e2795]:
+                            - paragraph [ref=e2796]: Code
+                            - list [ref=e2797]:
+                              - listitem [ref=e2798]:
+                                - generic [ref=e2799]:
+                                  - text: router.ts
+                                  - generic [ref=e2800]: route registry
+                      - generic [ref=e2802]:
+                        - generic [ref=e2805]: Step 1 of 3
+                        - generic [ref=e2806]:
+                          - heading "Scaffold the project" [level=3] [ref=e2807]
+                          - paragraph [ref=e2808]: Run the CLI generator and install dependencies.
+                        - generic [ref=e2809]:
+                          - button "Prev" [disabled]:
+                            - img
+                            - text: Prev
+                          - button "Done" [ref=e2810] [cursor=pointer]:
+                            - img
+                            - text: Done
+                          - button "Next" [ref=e2811] [cursor=pointer]:
+                            - text: Next
+                            - img
+                    - generic [ref=e2812]:
+                      - button "Go to step 1" [ref=e2813]
+                      - button "Go to step 2" [ref=e2814]
+                      - button "Go to step 3" [ref=e2815]
+  - region "Notifications alt+T"

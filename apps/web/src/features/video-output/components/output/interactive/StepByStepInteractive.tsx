@@ -2,7 +2,7 @@ import { memo, useState } from 'react';
 import { Check, AlertTriangle, Lightbulb, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { GlassCard, FadeIn, Timer, BackForward, Stepper, Timestamp, TextBlock } from '@/components/vie';
+import { GlassCard, FadeIn, Timer, BackForward, Stepper, Timestamp, TextBlock, VisualEvidence } from '@/components/vie';
 import { Celebration } from '../Celebration';
 import { useLabels } from '@/lib/i18n';
 
@@ -244,23 +244,13 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
                       design); the figcaption is sm+ only because the caption
                       crowds the row at <640px. */}
                   {step.thumbnailUrl && (
-                    <figure className="shrink-0 flex flex-col gap-1 w-[72px] sm:w-[120px]">
-                      <img
-                        src={step.thumbnailUrl}
-                        alt={step.frameCaption || step.title || `Step ${step.number}`}
-                        loading="lazy"
-                        className="w-[72px] sm:w-[120px] h-[72px] rounded-lg object-cover border border-border/30"
-                      />
-                      {(step.frameCaption || step.frameOcr) && (
-                        <figcaption className="hidden sm:block text-[11px] leading-snug text-muted-foreground/90 break-words">
-                          {step.frameOcr ? (
-                            <span className="font-mono">&ldquo;{step.frameOcr}&rdquo;</span>
-                          ) : (
-                            step.frameCaption
-                          )}
-                        </figcaption>
-                      )}
-                    </figure>
+                    <VisualEvidence
+                      variant="figure"
+                      thumbnailUrl={step.thumbnailUrl}
+                      caption={step.frameCaption}
+                      ocr={step.frameOcr}
+                      className="shrink-0 w-[120px]"
+                    />
                   )}
 
                   {/* Complete button */}

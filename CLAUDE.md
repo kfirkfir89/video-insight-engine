@@ -2,6 +2,8 @@
 
 Personal video knowledge management system — YouTube URL to interactive knowledge app.
 
+> **LLM onboarding:** [PROJECT-BRIEFING.md](./PROJECT-BRIEFING.md) (full) and [PROJECT-BRIEFING-TLDR.md](./PROJECT-BRIEFING-TLDR.md) (quick) are paste-into-any-chat context dumps covering the concept, architecture, workflows, schema, and conventions.
+
 ## ⚠️ Working-tree safety — READ FIRST
 
 **NEVER run any working-tree-mutating git command without explicit, current-turn user permission.** This includes `git commit`, `git push`, `git stash`, `git stash pop`, `git reset --hard`, `git checkout -- <file>` (to discard), `git clean`, `git rebase`, force-push, or branch deletion. Read-only ops (`git status`, `git diff`, `git log`, `git show`) are fine.

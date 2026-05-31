@@ -364,6 +364,69 @@ class TestChunkedExtractionStreamingProgress:
         assert progress[-1]["percent"] == 70
 
     @pytest.mark.asyncio
+    async def test_extraction_complete_carries_batch_counts(self):
+        """extraction_complete must report batches_total + batches_succeeded so
+        the phase can surface dropped batches in the coverage metric."""
+        mock_llm = AsyncMock()
+        mock_llm.model = "anthropic/claude-sonnet-4-6"
+        mock_llm.fast_model = "anthropic/claude-haiku-4-5-20251001"
+
+        triage = _make_triage()
+        chapters = [_make_chapter(i, token_estimate=60_000) for i in range(3)]
+        extraction_data = {"learning": {"keyPoints": [{"title": "A"}]}}
+
+        with patch(
+            "src.services.pipeline.extractor.call_llm_with_retry",
+            new_callable=AsyncMock, return_value=json.dumps(extraction_data),
+        ), patch(
+            "src.services.pipeline.extractor.validate_domain_output",
+            return_value=extraction_data,
+        ):
+            events = []
+            async for evt in _chunked_extraction(mock_llm, triage, "template {transcript}", chapters):
+                events.append(evt)
+
+        complete = [e for e in events if e["event"] == "extraction_complete"][0]
+        assert complete["batches_total"] == 3
+        assert complete["batches_succeeded"] == 3
+
+    @pytest.mark.asyncio
+    async def test_dropped_batch_warns_and_reports_shortfall(self):
+        """A batch that returns no parseable data is dropped — the run still
+        completes but logs a warning and reports the shortfall."""
+        mock_llm = AsyncMock()
+        mock_llm.model = "anthropic/claude-sonnet-4-6"
+        mock_llm.fast_model = "anthropic/claude-haiku-4-5-20251001"
+
+        triage = _make_triage()
+        chapters = [_make_chapter(i, token_estimate=60_000) for i in range(3)]
+        ok = json.dumps({"learning": {"keyPoints": [{"title": "OK"}]}})
+
+        # Batch index 1 returns empty → _run_batch_extraction yields None (dropped).
+        results = [ok, "", ok]
+
+        async def fake_call(*_args, **_kwargs):
+            return results.pop(0)
+
+        with patch(
+            "src.services.pipeline.extractor.call_llm_with_retry", new=fake_call,
+        ), patch(
+            "src.services.pipeline.extractor.validate_domain_output",
+            return_value={"learning": {"keyPoints": []}},
+        ), patch(
+            "src.services.pipeline.extractor.logger.warning",
+        ) as mock_warn:
+            events = []
+            async for evt in _chunked_extraction(mock_llm, triage, "template {transcript}", chapters):
+                events.append(evt)
+
+        complete = [e for e in events if e["event"] == "extraction_complete"][0]
+        assert complete["batches_total"] == 3
+        assert complete["batches_succeeded"] == 2
+        # The dropped batch must surface a warning.
+        assert any("dropped" in str(c.args[0]).lower() for c in mock_warn.call_args_list)
+
+    @pytest.mark.asyncio
     async def test_rate_limited_batch_runs_in_sequential_fallback(self):
         """A 429 on one parallel batch must NOT abort the whole extraction —
         the batch is queued for a sequential second pass with backoff."""
