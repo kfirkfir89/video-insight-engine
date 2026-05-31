@@ -28,7 +28,7 @@ CLASSIFIER_CONFIDENCE_THRESHOLD = 0.6
 
 VALID_DOMAINS: frozenset[str] = frozenset([
     "learning", "tech", "food", "travel", "fitness", "music", "review", "project",
-    "language", "science",
+    "language", "science", "podcast", "news", "gaming", "sport",
 ])
 
 VALID_FORMATS: frozenset[str] = frozenset([

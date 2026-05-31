@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from src.services.pipeline.assembly.assemblers import ASSEMBLER_REGISTRY
+from src.services.pipeline.assembly.assemblers import (
+    ASSEMBLER_REGISTRY,
+    assemble_concept_canvas,
+    assemble_packing_mission,
+    assemble_video_filmstrip,
+)
 from src.services.vector.output_chunker import (
     _COMPONENT_HANDLERS,
     OutputChunk,
@@ -153,7 +158,7 @@ class TestMomentTrack:
 class TestCodeExplorer:
     def test_should_emit_only_explanation_text_not_code(self):
         tab = _tab(
-            "code_explorer",
+            "code_playground",
             {
                 "snippets": [
                     {
@@ -247,7 +252,7 @@ class TestStepPlayer:
 class TestExerciseTracker:
     def test_should_emit_name_and_form_cues(self):
         tab = _tab(
-            "exercise_tracker",
+            "workout_room",
             {
                 "exercises": [
                     {
@@ -270,7 +275,7 @@ class TestExerciseTracker:
 class TestQuiz:
     def test_should_emit_question_correct_answer_and_explanation(self):
         tab = _tab(
-            "quiz",
+            "quiz_arena",
             {
                 "questions": [
                     {
@@ -310,46 +315,35 @@ class TestFlashDeck:
         assert "Transmission Control" in chunks[0].text
 
 
-class TestScenario:
-    def test_should_emit_question_and_correct_explanation(self):
-        tab = _tab(
-            "scenario",
-            {
-                "scenarios": [
-                    {
-                        "question": "A user reports the app is suddenly slow. What is the first thing to check?",
-                        "options": [
-                            {"text": "Restart everything immediately", "correct": False},
-                            {
-                                "text": "Check production metrics for traffic spikes",
-                                "explanation": "Metrics show whether load is the cause before changing code.",
-                                "correct": True,
-                            },
-                        ],
-                    },
-                ],
-            },
-        )
-        chunks = chunk_assembled_tabs([tab])
-        assert "Check production metrics" in chunks[0].text
-        assert "Metrics show" in chunks[0].text
+# Scenario was absorbed into quiz_arena in the video-to-action overhaul — its
+# data now flows through the quiz handler as `{questions}`, so the standalone
+# scenario chunk path was removed (covered by TestQuiz).
 
 
 class TestVerdict:
-    def test_should_emit_bottom_line_and_audience_lists(self):
+    """The standalone verdict component was retired; the verdict now folds into
+    the comparison tab's ReviewSummary header (props.verdict), and the comparison
+    chunk handler emits it under `verdict.*` prop paths."""
+
+    def test_should_emit_nested_verdict_bottom_line_and_audience_lists(self):
         tab = _tab(
-            "verdict",
+            "comparison",
             {
-                "bottomLine": "A solid pick for everyday photographers on a tight budget.",
-                "bestFor": ["Beginners learning manual exposure controls slowly"],
-                "notFor": ["Professionals who shoot in low light frequently in winter"],
+                "comparisons": [
+                    {"feature": "Price", "thisProduct": "$499", "competitor": "$699"},
+                ],
+                "verdict": {
+                    "bottomLine": "A solid pick for everyday photographers on a tight budget.",
+                    "bestFor": ["Beginners learning manual exposure controls slowly"],
+                    "notFor": ["Professionals who shoot in low light frequently in winter"],
+                },
             },
         )
         chunks = chunk_assembled_tabs([tab])
         paths = {c.prop_path for c in chunks}
-        assert "bottomLine" in paths
-        assert "bestFor[0]" in paths
-        assert "notFor[0]" in paths
+        assert "verdict.bottomLine" in paths
+        assert "verdict.bestFor[0]" in paths
+        assert "verdict.notFor[0]" in paths
 
 
 class TestBudget:
@@ -370,21 +364,67 @@ class TestBudget:
         assert "1500" not in chunks[0].text
 
 
-class TestGallery:
-    def test_should_emit_caption_when_present(self):
-        tab = _tab(
-            "gallery",
-            {
-                "images": [
-                    {"url": "https://example/1.jpg", "caption": "Sunset over the canyon at golden hour today."},
-                    {"url": "https://example/2.jpg"},  # no caption
-                ],
-            },
+class TestVideoFilmstrip:
+    """Props are driven through the real assembler so a future shape drift
+    between `assemble_video_filmstrip` and its chunk handler fails the build."""
+
+    def test_should_emit_caption_for_each_frame_from_assembler_shape(self):
+        props = assemble_video_filmstrip(
+            {}, [
+                {"thumbnailUrl": "https://example/1.jpg", "timestamp": 12,
+                 "caption": "Sunset over the canyon at golden hour today."},
+                {"thumbnailUrl": "https://example/2.jpg", "timestamp": 30},  # no caption
+                {"thumbnailUrl": "https://example/3.jpg", "timestamp": 48,
+                 "caption": "Hikers reaching the ridge as the light fades slowly."},
+            ], {}, None,
         )
-        chunks = chunk_assembled_tabs([tab])
-        assert len(chunks) == 1
-        assert chunks[0].prop_path == "images[0].caption"
+        assert props is not None and "frames" in props  # assembler emits {frames}
+        chunks = chunk_assembled_tabs([_tab("video_filmstrip", props)])
+        assert len(chunks) == 2  # only captioned frames produce chunks
+        assert chunks[0].prop_path == "frames[0].caption"
         assert "https" not in chunks[0].text
+
+
+class TestConceptCanvas:
+    """flash_deck promotes to concept_canvas for learning/science; its
+    `{concepts}` shape must stay RAG-retrievable (regression: it was routed to
+    the flash_deck handler that reads `{cards}` and emitted zero chunks)."""
+
+    def test_should_emit_chunk_per_concept_from_assembler_shape(self):
+        props = assemble_concept_canvas(
+            {}, [
+                {"name": "Convolution", "definition": "A sliding-window blend of two functions."},
+                {"name": "Kernel", "definition": "The small weighted window slid across the signal."},
+            ], {}, None,
+        )
+        assert props is not None and "concepts" in props
+        chunks = chunk_assembled_tabs([_tab("concept_canvas", props)])
+        assert len(chunks) == 2
+        assert chunks[0].prop_path == "concepts[0]"
+        assert "Convolution" in chunks[0].text
+        assert "sliding-window" in chunks[0].text
+
+
+class TestPackingMission:
+    """packing_mission emits `{items:[{item}]}` keyed on `item`, not the
+    checklist `label` (regression: checklist handler read `label` and emitted
+    zero chunks). The handler is exercised directly because real packing labels
+    are short enough to fall under the pipeline's 6-word minimum."""
+
+    def test_handler_should_read_item_key_not_label(self):
+        props = assemble_packing_mission(
+            {}, [
+                {"item": "Down jacket", "category": "Clothing"},
+                {"item": "Headlamp"},
+            ], {}, None,
+        )
+        assert props is not None and "items" in props
+        handler = _COMPONENT_HANDLERS["packing_mission"]
+        chunks = handler("packing_tab", "packing_mission", props)
+        assert len(chunks) == 2
+        assert chunks[0].prop_path == "items[0]"
+        assert "Down jacket" in chunks[0].text
+        assert "Clothing" in chunks[0].text
 
 
 class TestClipPlayer:
@@ -409,7 +449,7 @@ class TestClipPlayer:
 class TestLyricsPlayer:
     def test_should_emit_only_section_analysis(self):
         tab = _tab(
-            "lyrics_player",
+            "lyrics_karaoke",
             {
                 "sections": [
                     {

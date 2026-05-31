@@ -21,6 +21,17 @@ class ResponseCache:
         self._url = redis_url or settings.REDIS_URL
         self._client: aioredis.Redis | None = None
 
+    @staticmethod
+    def _key(video_id: str) -> str:
+        """Build the Redis key, namespaced by PIPELINE_VERSION.
+
+        Bumping ``settings.PIPELINE_VERSION`` shifts every key, so stale docs
+        from an incompatible schema/props version become unreachable in Redis
+        and TTL out. This covers the Redis response cache ONLY — persisted
+        MongoDB docs are not version-keyed and still need a reprocess/flush.
+        """
+        return f"vie:response:{settings.PIPELINE_VERSION}:{video_id}"
+
     def _get_client(self) -> aioredis.Redis:
         """Lazy-initialize async Redis client."""
         if self._client is None:
@@ -35,7 +46,7 @@ class ResponseCache:
     async def get_response(self, video_id: str) -> dict | None:
         """Get cached response for a video. Returns None on miss or error."""
         try:
-            data = await self._get_client().get(f"vie:response:{video_id}")
+            data = await self._get_client().get(self._key(video_id))
             if data:
                 return json.loads(data)
             return None
@@ -68,7 +79,7 @@ class ResponseCache:
             filtered = {k: v for k, v in response.items() if k in _SAFE_KEYS}
             serialized = json.dumps(filtered, default=str)
             await self._get_client().set(
-                f"vie:response:{video_id}",
+                self._key(video_id),
                 serialized,
                 ex=settings.REDIS_CACHE_TTL,
             )
@@ -84,7 +95,7 @@ class ResponseCache:
     async def invalidate(self, video_id: str) -> bool:
         """Remove cached response. Returns True on success."""
         try:
-            await self._get_client().delete(f"vie:response:{video_id}")
+            await self._get_client().delete(self._key(video_id))
             logger.debug("Invalidated cache for video %s", video_id)
             return True
         except (aioredis.ConnectionError, aioredis.TimeoutError) as e:
@@ -100,7 +111,7 @@ class ResponseCache:
     async def exists(self, video_id: str) -> bool:
         """Check if response is cached."""
         try:
-            return bool(await self._get_client().exists(f"vie:response:{video_id}"))
+            return bool(await self._get_client().exists(self._key(video_id)))
         except (aioredis.ConnectionError, aioredis.TimeoutError) as e:
             logger.debug("Redis exists check failed for %s: %s", video_id, e)
             return False

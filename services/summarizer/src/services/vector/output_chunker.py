@@ -75,17 +75,27 @@ def chunk_assembled_tabs(tabs: list[dict]) -> list[OutputChunk]:
             continue
 
         handler = _COMPONENT_HANDLERS.get(component)
-        if handler is None:
-            # Unknown component — emit nothing. Add it to the registry first.
-            continue
-
         props = tab.get("props") or {}
-        if not isinstance(props, dict):
-            continue
+        if handler is not None and isinstance(props, dict):
+            for chunk in handler(tab_id, component, props):
+                if _meets_minimum_length(chunk.text):
+                    chunks.append(chunk)
 
-        for chunk in handler(tab_id, component, props):
-            if _meets_minimum_length(chunk.text):
-                chunks.append(chunk)
+        # Secondary-tier attachments (interactive-overhaul-v2 P2) hang off the
+        # tab; route each through its own handler so distilled tips / summaries
+        # stay RAG-retrievable. Derivative content (frames, reused quiz) is
+        # deduplicated downstream by the embedding store.
+        for att in tab.get("attachments") or []:
+            if not isinstance(att, dict):
+                continue
+            att_component = att.get("component") or ""
+            att_handler = _COMPONENT_HANDLERS.get(att_component)
+            att_props = att.get("props") or {}
+            if att_handler is None or not isinstance(att_props, dict):
+                continue
+            for chunk in att_handler(tab_id, att_component, att_props):
+                if _meets_minimum_length(chunk.text):
+                    chunks.append(chunk)
 
     return chunks
 
@@ -232,6 +242,31 @@ def _h_comparison(tab_id: str, component: str, props: dict) -> list[OutputChunk]
         if feature and (this_p or competitor):
             text = f"{feature}: {this_p} vs {competitor}".strip()
             out.append(_make(text, tab_id, component, f"comparisons[{i}]"))
+    # The retired standalone verdict component folds into the comparison tab's
+    # ReviewSummary header (props.verdict); chunk its text here so the review's
+    # bottom-line + audience guidance stays retrievable for RAG.
+    verdict = props.get("verdict")
+    if isinstance(verdict, dict):
+        out.extend(_verdict_chunks(tab_id, component, verdict, prefix="verdict."))
+    return out
+
+
+def _verdict_chunks(
+    tab_id: str, component: str, props: dict, prefix: str = "",
+) -> list[OutputChunk]:
+    """Chunk a verdict block (bottomLine + bestFor/notFor lists)."""
+    out: list[OutputChunk] = []
+    bottom_line = _norm(props.get("bottomLine"))
+    if bottom_line:
+        out.append(_make(bottom_line, tab_id, component, f"{prefix}bottomLine"))
+    for i, item in enumerate(props.get("bestFor") or []):
+        text = _norm(item)
+        if text:
+            out.append(_make(text, tab_id, component, f"{prefix}bestFor[{i}]"))
+    for i, item in enumerate(props.get("notFor") or []):
+        text = _norm(item)
+        if text:
+            out.append(_make(text, tab_id, component, f"{prefix}notFor[{i}]"))
     return out
 
 
@@ -338,48 +373,6 @@ def _h_flash_deck(tab_id: str, component: str, props: dict) -> list[OutputChunk]
     return out
 
 
-def _h_scenario(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
-    out: list[OutputChunk] = []
-    for i, sc in enumerate(props.get("scenarios") or []):
-        if not isinstance(sc, dict):
-            continue
-        question = _norm(sc.get("question"))
-        options = sc.get("options")
-        correct_text = ""
-        correct_explanation = ""
-        if isinstance(options, list):
-            for opt in options:
-                if isinstance(opt, dict) and opt.get("correct"):
-                    correct_text = _norm(opt.get("text"))
-                    correct_explanation = _norm(opt.get("explanation"))
-                    break
-        if not question:
-            continue
-        parts = [question]
-        if correct_text:
-            parts.append(f"Correct: {correct_text}")
-        if correct_explanation:
-            parts.append(f"— {correct_explanation}")
-        out.append(_make(_join_clean(parts), tab_id, component, f"scenarios[{i}]"))
-    return out
-
-
-def _h_verdict(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
-    out: list[OutputChunk] = []
-    bottom_line = _norm(props.get("bottomLine"))
-    if bottom_line:
-        out.append(_make(bottom_line, tab_id, component, "bottomLine"))
-    for i, item in enumerate(props.get("bestFor") or []):
-        text = _norm(item)
-        if text:
-            out.append(_make(text, tab_id, component, f"bestFor[{i}]"))
-    for i, item in enumerate(props.get("notFor") or []):
-        text = _norm(item)
-        if text:
-            out.append(_make(text, tab_id, component, f"notFor[{i}]"))
-    return out
-
-
 def _h_budget(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
     out: list[OutputChunk] = []
     for i, tip in enumerate(props.get("savingTips") or []):
@@ -460,6 +453,176 @@ def _collect_whitelisted_strings(node: Any, out: list[str]) -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────
+# Secondary-tier (attachment-only) handlers — interactive-overhaul-v2 P2.
+# Attachments hang off a primary tab, so their content is largely derivative
+# of the primary. tip_callout / summary_header carry a distilled line worth
+# indexing on its own; stat_banner / diagram_card add short labelled facts;
+# frame_strip / quick_quiz reuse the gallery / quiz handlers verbatim.
+# ──────────────────────────────────────────────────────────────────────
+
+
+def _h_tip_callout(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
+    title = _norm(props.get("title"))
+    text = _norm(props.get("text"))
+    body = _join_clean([f"{title}:" if title else "", text])
+    return [_make(body, tab_id, component, "text")] if text else []
+
+
+def _h_summary_header(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
+    summary = _norm(props.get("summary"))
+    return [_make(summary, tab_id, component, "summary")] if summary else []
+
+
+def _h_stat_banner(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
+    out: list[OutputChunk] = []
+    for i, stat in enumerate(props.get("stats") or []):
+        if not isinstance(stat, dict):
+            continue
+        label = _norm(stat.get("label"))
+        value = _norm(stat.get("value"))
+        if label and value:
+            out.append(_make(f"{label}: {value}", tab_id, component, f"stats[{i}]"))
+    return out
+
+
+def _h_connect_canvas(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
+    """One chunk per matching pair — keeps the concept relationships the quiz
+    tests (prompt ↔ match) retrievable for RAG."""
+    out: list[OutputChunk] = []
+    for i, pair in enumerate(props.get("pairs") or []):
+        if not isinstance(pair, dict):
+            continue
+        prompt = _norm(pair.get("prompt"))
+        match = _norm(pair.get("match"))
+        if not (prompt and match):
+            continue
+        out.append(_make(f"{prompt} — {match}", tab_id, component, f"pairs[{i}]"))
+    return out
+
+
+def _h_diagram_card(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
+    out: list[OutputChunk] = []
+    for i, node in enumerate(props.get("nodes") or []):
+        if not isinstance(node, dict):
+            continue
+        label = _norm(node.get("label"))
+        detail = _norm(node.get("detail"))
+        if not label:
+            continue
+        text = f"{label}. {detail}" if detail else label
+        out.append(_make(text, tab_id, component, f"nodes[{i}]"))
+    return out
+
+
+def _h_claims_tracker(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
+    """One chunk per claim — keeps the assertion, its source, and its
+    verification status retrievable for RAG ("what did X claim about Y?")."""
+    out: list[OutputChunk] = []
+    for i, claim in enumerate(props.get("claims") or []):
+        if not isinstance(claim, dict):
+            continue
+        text_claim = _norm(claim.get("claim"))
+        if not text_claim:
+            continue
+        source = _norm(claim.get("source"))
+        status = _norm(claim.get("status"))
+        citation = _norm(claim.get("sourceCitation"))
+        parts = [text_claim]
+        if source:
+            parts.append(f"(claimed by {source}")
+            parts[-1] += f", {status})" if status else ")"
+        elif status:
+            parts.append(f"({status})")
+        if citation:
+            parts.append(f"Source: {citation}")
+        out.append(_make(_join_clean(parts), tab_id, component, f"claims[{i}]"))
+    return out
+
+
+def _h_tier_list(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
+    """One chunk per ranked item — keeps the creator's tier + reason
+    retrievable for RAG ("what tier is X?")."""
+    out: list[OutputChunk] = []
+    for i, item in enumerate(props.get("items") or []):
+        if not isinstance(item, dict):
+            continue
+        label = _norm(item.get("item"))
+        if not label:
+            continue
+        tier = _norm(item.get("tier"))
+        reason = _norm(item.get("reason"))
+        parts = [label]
+        if tier:
+            parts.append(f"({tier} tier)")
+        if reason:
+            parts.append(reason)
+        out.append(_make(_join_clean(parts), tab_id, component, f"items[{i}]"))
+    return out
+
+
+def _h_formation_diagram(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
+    """One chunk per player position — keeps who lined up where retrievable
+    for RAG ("who played striker?")."""
+    out: list[OutputChunk] = []
+    for i, pos in enumerate(props.get("positions") or []):
+        if not isinstance(pos, dict):
+            continue
+        player = _norm(pos.get("player"))
+        if not player:
+            continue
+        role = _norm(pos.get("role"))
+        text = f"{player} ({role})" if role else player
+        out.append(_make(text, tab_id, component, f"positions[{i}]"))
+    return out
+
+
+def _h_concept_canvas(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
+    """One chunk per concept — concept_canvas emits ``{concepts:[{name,
+    definition,…}]}`` (NOT the flash_deck ``{cards}`` shape), so it needs its
+    own handler or the promoted learning/science deck indexes nothing."""
+    out: list[OutputChunk] = []
+    for i, c in enumerate(props.get("concepts") or []):
+        if not isinstance(c, dict):
+            continue
+        name = _norm(c.get("name"))
+        if not name:
+            continue
+        definition = _norm(c.get("definition"))
+        text = f"{name}. {definition}" if definition else name
+        out.append(_make(text, tab_id, component, f"concepts[{i}]"))
+    return out
+
+
+def _h_packing_mission(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
+    """One chunk per packing item — packing_mission emits ``{items:[{item,…}]}``
+    keyed on ``item`` (NOT the checklist ``label``), so it needs its own handler."""
+    out: list[OutputChunk] = []
+    for i, it in enumerate(props.get("items") or []):
+        if not isinstance(it, dict):
+            continue
+        label = _norm(it.get("item"))
+        if not label:
+            continue
+        category = _norm(it.get("category"))
+        text = f"{label} ({category})" if category else label
+        out.append(_make(text, tab_id, component, f"items[{i}]"))
+    return out
+
+
+def _h_video_filmstrip(tab_id: str, component: str, props: dict) -> list[OutputChunk]:
+    """One chunk per captioned frame — video_filmstrip / frame_strip emit
+    ``{frames:[{caption,…}]}`` (NOT the retired gallery ``{images}`` shape)."""
+    out: list[OutputChunk] = []
+    for i, frame in enumerate(props.get("frames") or []):
+        if not isinstance(frame, dict):
+            continue
+        caption = _norm(frame.get("caption"))
+        if caption:
+            out.append(_make(caption, tab_id, component, f"frames[{i}].caption"))
+    return out
+
+
+# ──────────────────────────────────────────────────────────────────────
 # Registry — authoritative list of supported components.
 # Adding a new render component requires adding a row here.
 # ──────────────────────────────────────────────────────────────────────
@@ -467,26 +630,49 @@ def _collect_whitelisted_strings(node: Any, out: list[str]) -> None:
 _COMPONENT_HANDLERS: dict[str, Callable[[str, str, dict], list[OutputChunk]]] = {
     # ASSEMBLER_REGISTRY components — keep in sync with
     # ``services/summarizer/src/services/pipeline/assembly/assemblers.py``.
+    # Most new components DELEGATE to a legacy assembler (code_playground ->
+    # assemble_code_explorer, etc.), so their props shape is identical and they
+    # reuse the matching ``_h_*`` handler. Components whose assembler emits a
+    # DIFFERENT props shape (concept_canvas/{concepts}, packing_mission/{items
+    # keyed on `item`}, video_filmstrip|frame_strip/{frames}) get a dedicated
+    # handler — reusing the look-alike legacy handler would silently emit zero
+    # chunks and drop the tab from RAG.
     "overview": _h_overview,
     "spot_explorer": _h_spot_explorer,
     "moment_track": _h_moment_track,
-    "code_explorer": _h_code_explorer,
     "comparison": _h_comparison,
     "info_grid": _h_info_grid,
     "checklist": _h_checklist,
     "step_player": _h_step_player,
-    "exercise_tracker": _h_exercise_tracker,
-    "quiz": _h_quiz,
     "flash_deck": _h_flash_deck,
-    "scenario": _h_scenario,
-    "verdict": _h_verdict,
     "budget": _h_budget,
-    "gallery": _h_gallery,
-    "lyrics_player": _h_lyrics_player,
     "display_section": _h_display_section,
-    # Legacy — superseded by ``moment_track``. Retained so historical
-    # MongoDB records keep producing chunks on reprocess. Remove once
-    # ``db.videoSummary.distinct("tabs.component")`` no longer returns them.
+    "code_playground": _h_code_explorer,
+    "workout_room": _h_exercise_tracker,
+    "lyrics_karaoke": _h_lyrics_player,
+    "quiz_arena": _h_quiz,
+    "video_filmstrip": _h_video_filmstrip,
+    "comparison_radar": _h_comparison,
+    "packing_mission": _h_packing_mission,
+    "step_flow_canvas": _h_step_player,
+    "concept_canvas": _h_concept_canvas,
+    "connect_canvas": _h_connect_canvas,
+    "claims_tracker": _h_claims_tracker,
+    "tier_list": _h_tier_list,
+    "formation_diagram": _h_formation_diagram,
+    # Secondary-tier (attachment-only) — interactive-overhaul-v2 P2.
+    "tip_callout": _h_tip_callout,
+    "summary_header": _h_summary_header,
+    "stat_banner": _h_stat_banner,
+    "diagram_card": _h_diagram_card,
+    "frame_strip": _h_video_filmstrip,
+    "quick_quiz": _h_quiz,
+    # Legacy — superseded in the video-to-action overhaul. Retained so historical
+    # MongoDB records keep producing chunks on reprocess. ``gallery`` predates
+    # ``video_filmstrip`` and uses the ``{images}`` shape ``_h_gallery`` reads.
+    # Remove once ``db.videoSummary.distinct("tabs.component")`` no longer
+    # returns them.
     "timeline": _h_timeline,
     "clip_player": _h_clip_player,
+    "gallery": _h_gallery,
 }

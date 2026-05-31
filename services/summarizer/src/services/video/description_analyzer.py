@@ -17,6 +17,7 @@ from litellm import acompletion
 import litellm
 
 from src.config import settings
+from src.utils.data_helpers import parse_timestamp_to_seconds
 from src.utils.json_parsing import parse_json_response
 
 logger = logging.getLogger(__name__)
@@ -61,12 +62,21 @@ class SocialLink:
 
 
 @dataclass
+class DescriptionTimestamp:
+    """A manual chapter marker from the description (e.g. "2:30 Setup")."""
+    time: str       # raw "M:SS" | "H:MM:SS" as written by the creator
+    seconds: int    # parsed offset into the video
+    label: str
+
+
+@dataclass
 class DescriptionAnalysis:
     """Complete analysis of a video description."""
     links: list[DescriptionLink] = field(default_factory=list)
     resources: list[Resource] = field(default_factory=list)
     related_videos: list[RelatedVideo] = field(default_factory=list)
     social_links: list[SocialLink] = field(default_factory=list)
+    timestamps: list[DescriptionTimestamp] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -75,6 +85,10 @@ class DescriptionAnalysis:
             "resources": [{"name": r.name, "url": r.url} for r in self.resources],
             "relatedVideos": [{"title": v.title, "url": v.url} for v in self.related_videos],
             "socialLinks": [{"platform": s.platform, "url": s.url} for s in self.social_links],
+            "timestamps": [
+                {"time": t.time, "seconds": t.seconds, "label": t.label}
+                for t in self.timestamps
+            ],
         }
 
     @property
@@ -82,8 +96,30 @@ class DescriptionAnalysis:
         """Check if any content was extracted."""
         return bool(
             self.links or self.resources or self.related_videos or
-            self.social_links
+            self.social_links or self.timestamps
         )
+
+
+def _parse_timestamps(raw_items: Any) -> list[DescriptionTimestamp]:
+    """Build DescriptionTimestamp entries from raw LLM output.
+
+    Each raw item is expected as {"time": "M:SS"|"H:MM:SS", "label": str}.
+    Entries with an unparseable time or empty label are skipped.
+    """
+    if not isinstance(raw_items, list):
+        return []
+
+    result: list[DescriptionTimestamp] = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        time_raw = str(item.get("time", "")).strip()
+        label = str(item.get("label", "")).strip()
+        seconds = parse_timestamp_to_seconds(time_raw)
+        if seconds is None or not label:
+            continue
+        result.append(DescriptionTimestamp(time=time_raw, seconds=seconds, label=label))
+    return result
 
 
 async def _analyze_description_async(
@@ -144,14 +180,16 @@ async def _analyze_description_async(
                 for s in data.get("socialLinks", [])
                 if s.get("url")
             ],
+            timestamps=_parse_timestamps(data.get("timestamps", [])),
         )
 
         logger.info(
-            "Description analysis complete: %d links, %d resources, %d videos, %d social",
+            "Description analysis complete: %d links, %d resources, %d videos, %d social, %d timestamps",
             len(analysis.links),
             len(analysis.resources),
             len(analysis.related_videos),
             len(analysis.social_links),
+            len(analysis.timestamps),
         )
 
         return analysis

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { VIEResponse, TabEntry } from '@vie/types';
 
 // Mock cross-tab link dependencies
@@ -151,7 +152,7 @@ describe('ComposableOutput', () => {
           id: 'quizzes',
           label: '🧪 Quizzes',
           emoji: '🧪',
-          component: 'quiz',
+          component: 'quiz_arena',
           props: { questions: [{ q: '1' }, { q: '2' }, { q: '3' }] },
         },
         {
@@ -228,6 +229,181 @@ describe('ComposableOutput', () => {
       expect(screen.queryByText('A comprehensive guide…')).not.toBeInTheDocument();
       expect(screen.queryByText(/Long-form duplicate/)).not.toBeInTheDocument();
       expect(screen.queryByText('Profile before optimizing')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('enter mode / FlowPlayer (interactive-overhaul-v2 P4)', () => {
+    function foodTabs(): TabEntry[] {
+      return [
+        {
+          id: 'ingredients',
+          label: '3 Ingredients',
+          emoji: '🛒',
+          component: 'checklist',
+          props: {
+            items: [{ label: 'Pasta' }, { label: 'Olive oil' }, { label: 'Garlic' }],
+            scalable: true,
+            baseServings: 2,
+          },
+        },
+        {
+          id: 'steps',
+          label: 'Steps',
+          emoji: '👨‍🍳',
+          component: 'step_player',
+          props: {
+            steps: [
+              { number: 1, title: 'Boil Water', instruction: 'Bring water to a boil.' },
+              { number: 2, title: 'Cook Pasta', instruction: 'Add pasta, cook al dente.' },
+            ],
+          },
+        },
+      ];
+    }
+
+    it('shows the "Enter Cooking Mode" button on the food path', () => {
+      render(
+        <ComposableOutput
+          response={null}
+          tabs={foodTabs()}
+          activeTab="steps"
+          onNavigateTab={vi.fn()}
+          primaryTag="food"
+        />,
+      );
+      expect(screen.getByRole('button', { name: /Enter Cooking Mode/i })).toBeInTheDocument();
+    });
+
+    it('launches the cooking flow with ingredients context + steps sequence', async () => {
+      const user = userEvent.setup();
+      render(
+        <ComposableOutput
+          response={null}
+          tabs={foodTabs()}
+          activeTab="steps"
+          onNavigateTab={vi.fn()}
+          primaryTag="food"
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: /Enter Cooking Mode/i }));
+
+      // Cooking Mode header + step content (sequence) render.
+      expect(screen.getByText('Cooking Mode')).toBeInTheDocument();
+      expect(screen.getByText('Boil Water')).toBeInTheDocument();
+      // Progress counter reflects the steps sequence (2 steps).
+      expect(screen.getByText('0/2 steps')).toBeInTheDocument();
+      // Ingredient context is present (Pasta is one of the checklist items).
+      expect(screen.getAllByText('Pasta').length).toBeGreaterThan(0);
+      // Exit affordance uses the cooking-mode aria-label (unchanged).
+      expect(screen.getByRole('button', { name: /exit cooking mode/i })).toBeInTheDocument();
+    });
+
+    it('does NOT show an enter-mode button for a non-food domain lacking the required tabs', () => {
+      render(
+        <ComposableOutput
+          response={null}
+          tabs={[
+            { id: 'analysis', label: 'Analysis', emoji: '🎵', component: 'info_grid', props: { items: [{ key: 'k', value: 'v' }] } },
+          ]}
+          activeTab="analysis"
+          onNavigateTab={vi.fn()}
+          primaryTag="music"
+        />,
+      );
+      expect(screen.queryByRole('button', { name: /Enter .* Mode/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('secondary attachments (interactive-overhaul-v2 P2)', () => {
+    function tabWithAttachments(): TabEntry[] {
+      return [
+        {
+          id: 'specs',
+          label: 'Specs',
+          emoji: '📊',
+          component: 'info_grid',
+          props: { items: [{ key: 'CPU', value: 'M2' }] },
+          attachments: [
+            {
+              slot: 'top',
+              component: 'summary_header',
+              props: { summary: 'A quick spec overview', title: 'In short' },
+            },
+            {
+              slot: 'bottom',
+              component: 'stat_banner',
+              props: { stats: [{ label: 'Cores', value: '8' }] },
+            },
+          ],
+        },
+      ];
+    }
+
+    it('renders top and bottom attachments around the primary', () => {
+      render(
+        <ComposableOutput
+          response={null}
+          tabs={tabWithAttachments()}
+          activeTab="specs"
+          onNavigateTab={vi.fn()}
+        />,
+      );
+      // Primary
+      expect(screen.getByText('CPU')).toBeInTheDocument();
+      // Top attachment (summary_header)
+      expect(screen.getByText('A quick spec overview')).toBeInTheDocument();
+      // Bottom attachment (stat_banner)
+      expect(screen.getByText('Cores')).toBeInTheDocument();
+      expect(screen.getByText('8')).toBeInTheDocument();
+    });
+
+    it('renders flat tabs (no attachments) exactly as before', () => {
+      const tabs: TabEntry[] = [
+        {
+          id: 'specs',
+          label: 'Specs',
+          emoji: '📊',
+          component: 'info_grid',
+          props: { items: [{ key: 'CPU', value: 'M2' }] },
+        },
+      ];
+      render(
+        <ComposableOutput
+          response={null}
+          tabs={tabs}
+          activeTab="specs"
+          onNavigateTab={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('CPU')).toBeInTheDocument();
+      // No attachment chrome leaks in.
+      expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    });
+
+    it('ignores attachments referencing an unknown component', () => {
+      const tabs: TabEntry[] = [
+        {
+          id: 'specs',
+          label: 'Specs',
+          emoji: '📊',
+          component: 'info_grid',
+          props: { items: [{ key: 'CPU', value: 'M2' }] },
+          attachments: [
+            { slot: 'top', component: 'does_not_exist', props: {} },
+          ],
+        },
+      ];
+      const { container } = render(
+        <ComposableOutput
+          response={null}
+          tabs={tabs}
+          activeTab="specs"
+          onNavigateTab={vi.fn()}
+        />,
+      );
+      // Primary still renders; unknown attachment is skipped silently.
+      expect(screen.getByText('CPU')).toBeInTheDocument();
+      expect(container.innerHTML).not.toBe('');
     });
   });
 });

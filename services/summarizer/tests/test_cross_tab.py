@@ -106,3 +106,26 @@ class TestResolveCrossTabLinks:
             assert len(rule) == 3, f"Expected 3-tuple (src, tgt, domain), got {rule}"
         for rule in mod._LEGACY_LINK_RULES:
             assert len(rule) == 2, f"Expected 2-tuple (src, tgt), got {rule}"
+
+    def test_no_retired_component_names_in_rules(self):
+        """1D: rules must not reference components retired in the overhaul."""
+        import src.services.pipeline.assembly.cross_tab as mod
+        retired = {"verdict", "code_explorer", "quiz", "exercise_tracker", "lyrics_player", "gallery"}
+        names = {r[0] for r in mod._COMPONENT_LINK_RULES} | {r[1] for r in mod._COMPONENT_LINK_RULES}
+        assert not (names & retired), f"Retired names still in rules: {names & retired}"
+
+    def test_promoted_concept_canvas_links_like_flash_deck(self):
+        """A flash_deck promoted to concept_canvas (1A) still links to the quiz."""
+        all_tabs = [
+            {"id": "concepts", "component": "concept_canvas"},
+            {"id": "quiz", "label": "Test Yourself", "component": "quiz_arena"},
+        ]
+        links = resolve_cross_tab_links(
+            tab_id="concepts",
+            all_tab_ids={"concepts", "quiz"},
+            component="concept_canvas",
+            all_tabs=all_tabs,
+            primary_tag="learning",
+            outbound_links=None,
+        )
+        assert any(l["targetTab"] == "quiz" for l in links)

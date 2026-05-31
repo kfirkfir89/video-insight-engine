@@ -2,31 +2,68 @@
   "components": [
     "spot_explorer",
     "moment_track",
-    "code_explorer",
     "comparison",
-    "gallery",
     "checklist",
     "step_player",
-    "exercise_tracker",
-    "quiz",
     "flash_deck",
-    "scenario",
-    "lyrics_player",
-    "verdict",
     "budget",
     "overview",
-    "info_grid"
+    "info_grid",
+    "concept_canvas",
+    "connect_canvas",
+    "step_flow_canvas",
+    "comparison_radar",
+    "code_playground",
+    "quiz_arena",
+    "packing_mission",
+    "workout_room",
+    "lyrics_karaoke",
+    "video_filmstrip",
+    "claims_tracker",
+    "tier_list",
+    "formation_diagram"
   ],
+  "componentTiers": {
+    "spot_explorer": "primary",
+    "moment_track": "primary",
+    "comparison": "primary",
+    "checklist": "primary",
+    "step_player": "primary",
+    "flash_deck": "primary",
+    "budget": "primary",
+    "overview": "primary",
+    "info_grid": "primary",
+    "concept_canvas": "primary",
+    "connect_canvas": "primary",
+    "step_flow_canvas": "primary",
+    "comparison_radar": "primary",
+    "code_playground": "primary",
+    "quiz_arena": "primary",
+    "packing_mission": "primary",
+    "workout_room": "primary",
+    "lyrics_karaoke": "primary",
+    "video_filmstrip": "primary",
+    "claims_tracker": "primary",
+    "tier_list": "primary",
+    "formation_diagram": "primary",
+    "stat_banner": "secondary",
+    "tip_callout": "secondary",
+    "summary_header": "secondary",
+    "diagram_card": "secondary",
+    "frame_strip": "secondary",
+    "quick_quiz": "secondary",
+    "display_section": "display"
+  },
   "domains": {
     "learning": {
       "emoji": "📚",
       "label": "Learning",
       "gradient": "linear-gradient(135deg, var(--vie-plum), var(--vie-sky))",
       "defaultTabs": [
-        { "id": "key_points", "component": "overview", "dataSource": "learning.keyPoints", "label": "Key Points", "emoji": "💡" },
-        { "id": "concepts", "component": "flash_deck", "dataSource": "learning.concepts", "label": "Concepts", "emoji": "📚" },
-        { "id": "takeaways", "component": "checklist", "dataSource": "learning.takeaways", "label": "Takeaways", "emoji": "🎯" },
-        { "id": "timestamps", "component": "moment_track", "dataSource": "learning.timestamps", "label": "Timestamps", "emoji": "🕐" }
+        { "id": "key_points", "component": "overview", "dataSource": "learning.keyPoints", "label": "Key Points", "emoji": "💡", "goal": "The core ideas the video teaches — read these first." },
+        { "id": "concepts", "component": "concept_canvas", "dataSource": "learning.concepts", "label": "Concepts", "emoji": "📚", "goal": "Drag concepts to see how they connect. Tap any node for definition + example." },
+        { "id": "takeaways", "component": "checklist", "dataSource": "learning.takeaways", "label": "Takeaways", "emoji": "🎯", "goal": "Tick off each takeaway as you internalize it." },
+        { "id": "timestamps", "component": "moment_track", "dataSource": "learning.timestamps", "label": "Timestamps", "emoji": "🕐", "goal": "Jump to any moment in the source video." }
       ]
     },
     "tech": {
@@ -34,9 +71,9 @@
       "label": "Tech",
       "gradient": "linear-gradient(135deg, var(--vie-sky), var(--vie-mint))",
       "defaultTabs": [
-        { "id": "code", "component": "code_explorer", "dataSource": "tech.snippets", "label": "Code", "emoji": "💻" },
-        { "id": "setup", "component": "step_player", "dataSource": "tech.setup", "label": "Setup", "emoji": "⚙️" },
-        { "id": "patterns", "component": "code_explorer", "dataSource": "tech.patterns", "label": "Patterns", "emoji": "🧩" }
+        { "id": "code", "component": "code_playground", "dataSource": "tech.snippets", "label": "Code", "emoji": "💻", "goal": "Every code snippet from the video — copy, run, and adapt." },
+        { "id": "setup", "component": "step_player", "dataSource": "tech.setup", "label": "Setup", "emoji": "⚙️", "goal": "Follow the setup steps in order — get the dev environment ready." },
+        { "id": "patterns", "component": "code_playground", "dataSource": "tech.patterns", "label": "Patterns", "emoji": "🧩", "goal": "The patterns and do/don'ts demonstrated in the video." }
       ]
     },
     "fitness": {
@@ -44,9 +81,9 @@
       "label": "Fitness",
       "gradient": "linear-gradient(135deg, var(--vie-rose), var(--vie-coral))",
       "defaultTabs": [
-        { "id": "exercises", "component": "exercise_tracker", "dataSource": "fitness.exercises", "label": "Exercises", "emoji": "🏋️" },
-        { "id": "timer", "component": "exercise_tracker", "dataSource": "fitness.timer", "label": "Timer", "emoji": "⏱️" },
-        { "id": "tips", "component": "overview", "dataSource": "fitness.tips", "label": "Tips", "emoji": "💡" }
+        { "id": "exercises", "component": "workout_room", "dataSource": "fitness.exercises", "label": "Exercises", "emoji": "🏋️", "goal": "Full-bleed exercise card — sets, reps, rest, audio cue." },
+        { "id": "timer", "component": "workout_room", "dataSource": "fitness.timer", "label": "Timer", "emoji": "⏱️", "goal": "Round-by-round timer that drives the workout pace." },
+        { "id": "tips", "component": "overview", "dataSource": "fitness.tips", "label": "Tips", "emoji": "💡", "goal": "Form tips and scaling cues the coach calls out." }
       ]
     },
     "food": {
@@ -54,9 +91,9 @@
       "label": "Food",
       "gradient": "linear-gradient(135deg, var(--vie-coral), var(--vie-peach))",
       "defaultTabs": [
-        { "id": "ingredients", "component": "checklist", "dataSource": "food.ingredients", "label": "Ingredients", "emoji": "🛒" },
-        { "id": "steps", "component": "step_player", "dataSource": "food.steps", "label": "Steps", "emoji": "👨‍🍳" },
-        { "id": "tips", "component": "overview", "dataSource": "food.tips", "label": "Tips", "emoji": "💡" }
+        { "id": "ingredients", "component": "checklist", "dataSource": "food.ingredients", "label": "Ingredients", "emoji": "🛒", "goal": "Check items off as you shop or set up your mise en place." },
+        { "id": "steps", "component": "step_player", "dataSource": "food.steps", "label": "Steps", "emoji": "👨‍🍳", "goal": "Follow each step with timers. Optional cooking mode pairs steps with ingredients." },
+        { "id": "tips", "component": "overview", "dataSource": "food.tips", "label": "Tips", "emoji": "💡", "goal": "Chef tips and substitutions called out in the video." }
       ]
     },
     "music": {
@@ -64,9 +101,10 @@
       "label": "Music",
       "gradient": "linear-gradient(135deg, var(--vie-rose), var(--vie-plum))",
       "defaultTabs": [
-        { "id": "analysis", "component": "overview", "dataSource": "music.analysis", "label": "Analysis", "emoji": "🎼" },
-        { "id": "structure", "component": "moment_track", "dataSource": "music.structure", "label": "Structure", "emoji": "🎵" },
-        { "id": "credits", "component": "info_grid", "dataSource": "music.credits", "label": "Credits", "emoji": "🎤" }
+        { "id": "analysis", "component": "overview", "dataSource": "music.analysis", "label": "Analysis", "emoji": "🎼", "goal": "What makes this song work — production, arrangement, and lyrical intent." },
+        { "id": "structure", "component": "moment_track", "dataSource": "music.structure", "label": "Structure", "emoji": "🎵", "goal": "Jump to any section — intro, verses, chorus, bridge, outro." },
+        { "id": "lyrics", "component": "lyrics_karaoke", "dataSource": "music.lyrics", "label": "Lyrics", "emoji": "🎤", "goal": "Lyrics sync with playback — active line scales, trailing lines fade." },
+        { "id": "credits", "component": "info_grid", "dataSource": "music.credits", "label": "Credits", "emoji": "🎤", "goal": "Writers, producers, and featured artists." }
       ]
     },
     "travel": {
@@ -74,9 +112,10 @@
       "label": "Travel",
       "gradient": "linear-gradient(135deg, var(--vie-forest), var(--vie-mint))",
       "defaultTabs": [
-        { "id": "itinerary", "component": "spot_explorer", "dataSource": "travel.itinerary", "label": "Itinerary", "emoji": "📅" },
-        { "id": "budget", "component": "budget", "dataSource": "travel.budget", "label": "Budget", "emoji": "💰" },
-        { "id": "packing", "component": "checklist", "dataSource": "travel.packingList", "label": "Pack List", "emoji": "🎒" }
+        { "id": "itinerary", "component": "spot_explorer", "dataSource": "travel.itinerary", "label": "Itinerary", "emoji": "📅", "goal": "Day-by-day plan with spots, costs, and map links." },
+        { "id": "budget", "component": "budget", "dataSource": "travel.budget", "label": "Budget", "emoji": "💰", "goal": "Adjust the category bars to match your trip style." },
+        { "id": "packing", "component": "packing_mission", "dataSource": "travel.packingList", "label": "Pack List", "emoji": "🎒", "goal": "Drag items into the suitcase — weight tally + essential warnings." },
+        { "id": "filmstrip", "component": "video_filmstrip", "dataSource": "frames", "label": "Scenes", "emoji": "🎞️", "goal": "Scrub through the trip — hover a frame for the caption, click to seek." }
       ]
     },
     "review": {
@@ -84,9 +123,9 @@
       "label": "Review",
       "gradient": "linear-gradient(135deg, var(--vie-honey), var(--vie-peach))",
       "defaultTabs": [
-        { "id": "verdict", "component": "verdict", "dataSource": "review.verdict", "label": "Verdict", "emoji": "🏆" },
-        { "id": "pros_cons", "component": "comparison", "dataSource": "review.pros", "label": "Pros & Cons", "emoji": "⚖️" },
-        { "id": "specs", "component": "info_grid", "dataSource": "review.specs", "label": "Specs", "emoji": "📊" }
+        { "id": "pros_cons", "component": "comparison", "dataSource": "review.pros", "label": "Pros & Cons", "emoji": "⚖️", "goal": "The reviewer's verdict — best-for, not-for, score." },
+        { "id": "comparison", "component": "comparison_radar", "dataSource": "review.comparisons", "label": "Comparison", "emoji": "📊", "goal": "Weight each axis to find your personal winner." },
+        { "id": "specs", "component": "info_grid", "dataSource": "review.specs", "label": "Specs", "emoji": "📊", "goal": "Searchable spec table — every number from the review." }
       ]
     },
     "project": {
@@ -94,9 +133,9 @@
       "label": "Project",
       "gradient": "linear-gradient(135deg, var(--vie-honey), var(--vie-forest))",
       "defaultTabs": [
-        { "id": "steps", "component": "step_player", "dataSource": "project.steps", "label": "Steps", "emoji": "📝" },
-        { "id": "materials", "component": "checklist", "dataSource": "project.materials", "label": "Materials", "emoji": "🛒" },
-        { "id": "safety", "component": "overview", "dataSource": "project.safetyWarnings", "label": "Safety", "emoji": "⚠️" }
+        { "id": "steps", "component": "step_player", "dataSource": "project.steps", "label": "Steps", "emoji": "📝", "goal": "Build it step by step — frame thumbnails per step." },
+        { "id": "materials", "component": "checklist", "dataSource": "project.materials", "label": "Materials", "emoji": "🛒", "goal": "Check items off as you gather them." },
+        { "id": "safety", "component": "overview", "dataSource": "project.safetyWarnings", "label": "Safety", "emoji": "⚠️", "goal": "Safety warnings called out by the maker." }
       ]
     },
     "language": {
@@ -104,10 +143,10 @@
       "label": "Language",
       "gradient": "linear-gradient(135deg, var(--vie-plum), var(--vie-coral))",
       "defaultTabs": [
-        { "id": "phrases", "component": "spot_explorer", "dataSource": "language.phrases", "label": "Phrases", "emoji": "💬" },
-        { "id": "rules", "component": "info_grid", "dataSource": "language.rules", "label": "Grammar Rules", "emoji": "📝" },
-        { "id": "drills", "component": "step_player", "dataSource": "language.drills", "label": "Practice Drills", "emoji": "🎯" },
-        { "id": "vocabulary", "component": "flash_deck", "dataSource": "language.vocabulary", "label": "Vocabulary", "emoji": "📖" }
+        { "id": "phrases", "component": "spot_explorer", "dataSource": "language.phrases", "label": "Phrases", "emoji": "💬", "goal": "Useful phrases with pronunciation and context." },
+        { "id": "rules", "component": "info_grid", "dataSource": "language.rules", "label": "Grammar Rules", "emoji": "📝", "goal": "Grammar rules the lesson covers — searchable, with examples." },
+        { "id": "drills", "component": "step_player", "dataSource": "language.drills", "label": "Practice Drills", "emoji": "🎯", "goal": "Drill through the practice exercises the teacher walks." },
+        { "id": "vocabulary", "component": "concept_canvas", "dataSource": "language.vocabulary", "label": "Vocabulary", "emoji": "📖", "goal": "Drag vocabulary nodes — connected by meaning and root." }
       ]
     },
     "science": {
@@ -115,9 +154,52 @@
       "label": "Science",
       "gradient": "linear-gradient(135deg, var(--vie-sky), var(--vie-forest))",
       "defaultTabs": [
-        { "id": "concepts", "component": "spot_explorer", "dataSource": "science.concepts", "label": "Concepts", "emoji": "🧪" },
-        { "id": "key_facts", "component": "info_grid", "dataSource": "science.keyFacts", "label": "Key Facts", "emoji": "📊" },
-        { "id": "experiments", "component": "step_player", "dataSource": "science.experiments", "label": "Experiments", "emoji": "⚗️" }
+        { "id": "concepts", "component": "concept_canvas", "dataSource": "science.concepts", "label": "Concepts", "emoji": "🧪", "goal": "Concepts wired into a graph — drag to explore the relationships." },
+        { "id": "key_facts", "component": "info_grid", "dataSource": "science.keyFacts", "label": "Key Facts", "emoji": "📊", "goal": "Numbers, units, and facts you'll cite — searchable." },
+        { "id": "experiments", "component": "step_player", "dataSource": "science.experiments", "label": "Experiments", "emoji": "⚗️", "goal": "Reproduce the experiment step by step." }
+      ]
+    },
+    "podcast": {
+      "emoji": "🎙️",
+      "label": "Podcast",
+      "gradient": "linear-gradient(135deg, var(--vie-plum), var(--vie-rose))",
+      "defaultTabs": [
+        { "id": "segments", "component": "moment_track", "dataSource": "podcast.segments", "label": "Segments", "emoji": "🎙️", "goal": "Jump to any segment of the conversation — topics, tangents, and big moments." },
+        { "id": "guests", "component": "spot_explorer", "dataSource": "podcast.guests", "label": "Guests", "emoji": "🧑‍🤝‍🧑", "goal": "Who's on the mic — bios, roles, and what they came to talk about." },
+        { "id": "quotes", "component": "flash_deck", "dataSource": "podcast.quotes", "label": "Key Quotes", "emoji": "💬", "goal": "The lines worth remembering — flip through the standout quotes." },
+        { "id": "topics", "component": "info_grid", "dataSource": "podcast.topics", "label": "Topics", "emoji": "🗂️", "goal": "Every topic covered — searchable, with the gist of each." }
+      ]
+    },
+    "news": {
+      "emoji": "📰",
+      "label": "News",
+      "gradient": "linear-gradient(135deg, var(--vie-sky), var(--vie-honey))",
+      "defaultTabs": [
+        { "id": "timeline", "component": "moment_track", "dataSource": "news.storyTimeline", "label": "Story Timeline", "emoji": "🕐", "goal": "How the story unfolded — jump to each development in order." },
+        { "id": "entities", "component": "spot_explorer", "dataSource": "news.entities", "label": "People & Orgs", "emoji": "👤", "goal": "The people, organizations, and places at the center of the story." },
+        { "id": "claims", "component": "claims_tracker", "dataSource": "news.claims", "label": "Claims", "emoji": "🔎", "goal": "Each claim, who said it, and whether it's verified, disputed, or context." },
+        { "id": "context", "component": "info_grid", "dataSource": "news.context", "label": "Context", "emoji": "🗂️", "goal": "Background facts and figures to understand the story — searchable." }
+      ]
+    },
+    "gaming": {
+      "emoji": "🎮",
+      "label": "Gaming",
+      "gradient": "linear-gradient(135deg, var(--vie-plum), var(--vie-mint))",
+      "defaultTabs": [
+        { "id": "highlights", "component": "moment_track", "dataSource": "gaming.highlights", "label": "Highlights", "emoji": "🎬", "goal": "Jump to the big plays — clutch moments, fails, and turning points." },
+        { "id": "loadout", "component": "checklist", "dataSource": "gaming.loadout", "label": "Build / Loadout", "emoji": "🎒", "goal": "The gear, perks, and setup the video runs — tick off what you've copied." },
+        { "id": "walkthrough", "component": "step_flow_canvas", "dataSource": "gaming.walkthrough", "label": "Walkthrough", "emoji": "🗺️", "goal": "Follow the route stage by stage — a visual map of the playthrough." },
+        { "id": "tier_list", "component": "tier_list", "dataSource": "gaming.rankings", "label": "Tier List", "emoji": "🏆", "goal": "Drag items into S/A/B/C/D tiers — your ranking saves automatically." }
+      ]
+    },
+    "sport": {
+      "emoji": "⚽",
+      "label": "Sport",
+      "gradient": "linear-gradient(135deg, var(--vie-forest), var(--vie-honey))",
+      "defaultTabs": [
+        { "id": "match_events", "component": "moment_track", "dataSource": "sport.matchEvents", "label": "Match Events", "emoji": "⏱️", "goal": "Jump to every goal, card, and turning point in order." },
+        { "id": "formation", "component": "formation_diagram", "dataSource": "sport.formation", "label": "Formation", "emoji": "📋", "goal": "See the lineup laid out on the pitch — players positioned by role." },
+        { "id": "stats", "component": "comparison", "dataSource": "sport.statComparison", "label": "Stat Comparison", "emoji": "📊", "goal": "Side-by-side team or player stats — weigh the numbers that matter." }
       ]
     }
   },
@@ -142,15 +224,32 @@
     "review": "enrich/enrich_review.txt",
     "project": "enrich/enrich_project.txt",
     "language": "enrich/enrich_language.txt",
-    "science": "enrich/enrich_science.txt"
+    "science": "enrich/enrich_science.txt",
+    "podcast": "enrich/enrich_study.txt",
+    "gaming": "enrich/enrich_study.txt"
   },
   "categoryMap": {
     "cooking": "food",
     "coding": "tech",
     "education": "learning",
-    "podcast": "learning",
+    "podcast": "podcast",
+    "interview": "podcast",
+    "talk_show": "podcast",
+    "news": "news",
+    "news_commentary": "news",
+    "journalism": "news",
+    "current_events": "news",
+    "politics": "news",
     "reviews": "review",
-    "gaming": "tech",
+    "gaming": "gaming",
+    "gameplay": "gaming",
+    "esports": "gaming",
+    "lets_play": "gaming",
+    "speedrun": "gaming",
+    "sport": "sport",
+    "sports": "sport",
+    "match_analysis": "sport",
+    "highlights": "sport",
     "diy": "project",
     "fitness": "fitness",
     "travel": "travel",

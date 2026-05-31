@@ -48,7 +48,7 @@ class TestClassifyDomainFormat:
     async def test_invalid_domain_returns_none(self, mock_prompt, mock_llm, mock_llm_service):
         """Invalid domain returns None."""
         mock_prompt.return_value = "prompt {title} {channel} {duration_minutes} {tags} {transcript_preview}"
-        mock_llm.return_value = '{"domain": "gaming", "format": "tutorial", "confidence": 0.9}'
+        mock_llm.return_value = '{"domain": "astrology", "format": "tutorial", "confidence": 0.9}'
 
         result = await classify_domain_format(
             title="Test", channel="Ch", duration=60,
@@ -190,6 +190,16 @@ class TestClassifyDomainFormat:
         )
 
         assert result is None
+
+    def test_podcast_and_news_are_valid_domains(self):
+        """interactive-overhaul-v2 P5: podcast + news are classifiable domains."""
+        assert "podcast" in VALID_DOMAINS
+        assert "news" in VALID_DOMAINS
+
+    def test_gaming_and_sport_are_valid_domains(self):
+        """interactive-overhaul-v2 P5c/d: gaming + sport are classifiable domains."""
+        assert "gaming" in VALID_DOMAINS
+        assert "sport" in VALID_DOMAINS
 
     @patch("src.services.pipeline.classifier.call_llm_with_retry")
     @patch("src.services.pipeline.classifier._load_classify_prompt")

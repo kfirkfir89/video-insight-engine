@@ -19,10 +19,11 @@ Extract structured educational content.
       "definition": "Speaker's explanation, not a textbook definition",
       "example": "Example from the video or null",
       "analogy": "Analogy from the video or null",
-      "connections": ["Related concepts mentioned"]
+      "connections": ["Other concept name", "Another concept name"]
     }
   ],
-> UI: Concepts → FlashDeckInteractive flip cards (name=front, definition=back). Fill emoji, example, analogy for richer card backs.
+> UI: Concepts → ConceptCanvas drag-and-drop graph when connections are populated; otherwise falls back to FlashDeck flip cards.
+> REQUIRED: every concept MUST list 1-3 `connections` by EXACT NAME of other concepts in this same `concepts` array. These connections are the spine of the concept_canvas visualization — without them the canvas renders disconnected dots. The speaker draws explicit links ("X enables Y", "Y is a special case of Z", "Z assumes X") — capture those as edges. If no other concept legitimately connects to this one, leave the array empty and the fallback layer routes to flash_deck.
   "takeaways": [
     "Actionable conclusion starting with a verb: Use..., Implement..., Avoid..."
   ],

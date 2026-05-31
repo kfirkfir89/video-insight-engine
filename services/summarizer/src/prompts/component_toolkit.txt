@@ -1,13 +1,25 @@
 <component_toolkit>
-COMPONENT TOOLKIT — "Video to Action"
+COMPONENT TOOLKIT — "Video to Action" (overhaul 2026-05-28)
 Every interactive must let the user DO something with the content:
-follow steps, jump to a moment, memorize a card, run code, decide between options.
-A component that only displays text is a fail mode — text walls belong in info_grid
-ONLY when they are short reference cells, never long paragraphs.
+follow steps, drag items into a suitcase, run code in a sandbox, mark
+sets complete, sync lyrics to playback, drag a concept graph, decide
+between options on a radar.
 
-ROUTING IS BY USER ACTION, NOT BY DOMAIN. checklist works for prerequisites (tech),
-packing lists (travel), and ingredients (food). step_player works for setup guides (tech),
-recipes (food), and itinerary planning (travel). Components are wayfinding by INTENT.
+A component that only displays text is a fail mode — text walls belong
+in info_grid ONLY when they are short reference cells, never long
+paragraphs.
+
+Frame intelligence is woven through this layer: components marked
+frame-aware automatically receive thumbnailUrl + frameCaption +
+frameOcr + frameSceneType + frameEvidence when a vision-LLM caption
+matches the item's timestamp. This is where the transcript and the
+on-screen frames fuse into one artifact. Plan WITH that fusion in mind
+— a step or moment with a known visual is worth more than two without.
+
+ROUTING IS BY USER ACTION, NOT BY DOMAIN. checklist works for materials
+(project) and prerequisites (tech). step_player works for setup guides
+(tech), recipes (food), and language drills. packing_mission is the
+travel-specific drop-zone variant. Components are wayfinding by INTENT.
 
 ═══════════════════════════════════════════════════════════════════
 DENSITY GATES (HARD RULES — assembler will drop tabs that violate)
@@ -18,22 +30,27 @@ DENSITY GATES (HARD RULES — assembler will drop tabs that violate)
 | info_grid         | 3         | 20        | 120 chars per value (≈ 20 words) |
 | flash_deck        | 3         | 15        | front ≤ 40, back ≤ 180           |
 | comparison        | 3 rows    | 10        | each side ≤ 80 chars             |
+| comparison_radar  | 4 axes    | 8         | weighted by user via sliders     |
 | spot_explorer     | 2         | 25        | description ≤ 200                |
-| step_player       | 3         | 25        | instruction ≤ 200                |
+| step_player       | 3         | 10        | instruction ≤ 200                |
+| step_flow_canvas  | 6         | 25        | drives the canvas graph layout   |
 | moment_track      | 3         | 20        | label ≤ 60                       |
-| quiz              | 2         | 8         | question ≤ 140                   |
-| exercise_tracker  | 2         | 25        | name ≤ 40                        |
+| quiz_arena        | 2         | 8         | question ≤ 140, context ≤ 180    |
+| workout_room      | 2         | 25        | name ≤ 40                        |
 | checklist         | 3         | 30        | label ≤ 80                       |
-| code_explorer     | 1         | 12        | explanation ≤ 200                |
+| packing_mission   | 4         | 40        | item ≤ 40, weight optional       |
+| code_playground   | 1         | 12        | explanation ≤ 200                |
+| concept_canvas    | 2         | 30        | definition ≤ 200, connections[]  |
+| connect_canvas    | 2 pairs   | 8         | graded; answer key from connections[] |
+| video_filmstrip   | 3 frames  | 24        | caption ≤ 80                     |
+| claims_tracker    | 2 claims  | 20        | claim ≤ 200, source ≤ 80         |
+| tier_list         | 3 items   | 30        | item ≤ 60, reason ≤ 120          |
+| formation_diagram | 3 players | 23        | player ≤ 40; x/y are 0-100       |
+| lyrics_karaoke    | —         | —         | per-line ≤ 120 chars             |
 
-If your extraction has fewer items than min: pick a DIFFERENT component or
-fold the data into overview/info_grid. NEVER ship a 1-item spot_explorer or a
-2-row comparison.
-
-If a value would exceed max chars: split it into multiple shorter cells OR
-move the long prose to spot_explorer (which has expandable descriptions).
-NEVER pad info_grid cells with 40-word paragraphs — they collapse into a
-wall of text on mobile.
+If your extraction has fewer items than min: pick a DIFFERENT component
+or fold the data into overview/info_grid. NEVER ship a 1-item
+spot_explorer or a 2-row comparison.
 
 ═══════════════════════════════════════════════════════════════════
 WHEN TO PICK EACH COMPONENT
@@ -42,111 +59,165 @@ WHEN TO PICK EACH COMPONENT
 EXPLORATION — user browses and discovers:
 
   spot_explorer
-    PICK WHEN: You have 2+ items each with a name AND a real description.
-    SHIPS: Browsable cards with expandable detail, thumbnail (if frame
-      available at item's timestamp), map/booking actions.
+    PICK WHEN: 2+ items each with a name AND a real description.
+    SHIPS: Browsable cards with expandable detail, thumbnail (when frame
+      available), map/booking actions.
     GOOD FOR: Places (travel), products (review), phrases (language),
-      key concepts (science), topics (any), gear/resources (tech).
-    DATASOURCE: travel.itinerary, food.*, learning.keyPoints, science.concepts,
-      language.phrases, review.alternatives.
+      key facts (science), topics (any).
 
   info_grid ⭐ THE REFERENCE TABLE — keep cells SHORT
-    PICK WHEN: You have 3+ short reference rows that users LOOK UP, not READ.
-    SHIPS: Searchable card grid (or table). Optional `evidence` field renders
-      below the value in italic for sources/examples.
-    GOOD FOR: Specs, glossary terms, credits, quick tips, ingredient swaps,
-      key facts with sources.
-    SHAPE: Each item = { key, value, evidence?, emoji? }. ALL fields short.
+    PICK WHEN: 3+ short reference rows users LOOK UP, not READ.
+    SHIPS: Searchable card grid (or table). Optional `evidence` field
+      renders below the value in italic for sources/examples.
     NEVER USE FOR:
-      • Definitions of complex concepts → use flash_deck instead
-      • Step-by-step processes → use step_player
-      • Comparisons with two sides → use comparison
-      • Anything where the value runs longer than ~20 words
+      • Definitions of complex concepts → use concept_canvas or flash_deck
+      • Step-by-step processes → use step_player / step_flow_canvas
+      • Comparisons with two sides → use comparison / comparison_radar
 
-  code_explorer
-    PICK WHEN: The video shows code, commands, or shell snippets on screen.
-    SHIPS: Syntax-highlighted code with copy button, step-through navigation,
-      and (when a frame is available) the on-screen code thumbnail beside it.
+  concept_canvas  ⭐ NEW — frame-aware
+    PICK WHEN: 2+ concepts with definitions AND meaningful connections[]
+      between them. The video TEACHES how concepts relate, not just lists.
+    SHIPS: Drag-and-drop concept map (React Flow). Each node is a concept
+      card; edges from connections[]. Click a node to expand definition +
+      example + analogy. Positions persist per video to localStorage.
+    GOOD FOR: 3Blue1Brown-style math explainers, science concepts that
+      build on each other, language grammar relationships.
+    DATASOURCE: learning.concepts (must have connections[]).
+    FALLS BACK TO: flash_deck when no connections, info_grid when ≥10 flat
+      definitions, overview when <3 items.
+
+  code_playground  ⭐ NEW — frame-aware
+    PICK WHEN: The video shows runnable code, commands, or shell snippets.
+    SHIPS: Syntax-highlighted code with copy + sandboxed Run iframe
+      (JS/TS/JSX/TSX only). Copy works on every snippet; Run opens a
+      results panel. Frame thumbnail beside the snippet when the code
+      timestamp matches a vision-tagged frame.
     SHAPE: { code, language, explanation, filename?, timestamp? }.
 
   comparison
-    PICK WHEN: The video EXPLICITLY weighs Option A against Option B on the
-      SAME criteria for at LEAST 3 features. Both sides must have substance.
-    SHIPS: 3-column table (Feature / A / B) with winner highlighting + a
-      pros/cons summary card.
-    NEVER USE FOR:
-      • Glossaries or term definitions ("X is when…")
-      • Lists of N concepts the video introduces
-      • Single-sided pros without a counterpart
-      • Reviews where only one product is examined → use verdict-folded-into-overview
-    DATASOURCE: review.comparisons, tech.cheatSheet (only when paired).
+    PICK WHEN: The video EXPLICITLY weighs Option A against Option B on
+      the SAME criteria for 3 features. BOTH sides must have substance.
+    SHIPS: 3-column table with winner highlighting + ReviewSummary header
+      (score ring, best-for / not-for) when the review domain has a
+      verdict. Folds the retired Verdict tab into the same surface.
+
+  comparison_radar  ⭐ NEW
+    PICK WHEN: 4+ axes worth comparing AND the user might weight them
+      differently (a value-seeker vs a performance-seeker). Heavier than
+      comparison but answers "what's best for ME".
+    SHIPS: Recharts radar chart, per-axis weight sliders, weighted
+      winner badge that updates live.
+    FALLS BACK TO: comparison when axes < 4.
+
+  video_filmstrip  ⭐ NEW (replaces standalone gallery) — frame-aware
+    PICK WHEN: 3+ vision-tagged frames worth scrubbing as a strip — the
+      output IS the visual sequence (food plating, travel scenes, art
+      reference).
+    SHIPS: Horizontal scrubber, hover-preview tooltips, click-to-seek.
+    NEVER USE FOR: Podcast / talking-head videos.
+
+  claims_tracker  ⭐ NEW (news signature)
+    PICK WHEN: News / journalism / current-events content makes 2+ factual
+      claims worth holding to account.
+    SHIPS: A list of claims, each with the assertion, who made it, and a status
+      badge — verified (confirmed), disputed (contested), or context (background,
+      not a truth-claim) — plus an optional source citation.
+    SHAPE: { claim, source, status: "verified"|"disputed"|"context",
+      sourceCitation?, timestamp? }.
+    DATASOURCE: news.claims.
+    NEVER USE FOR: opinions presented as facts (those are "context"), or
+      non-news domains.
+
+  tier_list  ⭐ NEW (gaming signature)
+    PICK WHEN: Gaming content RANKS 3+ items (characters, weapons, maps,
+      agents) into tiers worth debating.
+    SHIPS: Draggable S/A/B/C/D tier board. The creator's suggested tier seeds
+      each item; the viewer drags to override and the ranking persists per
+      video to localStorage.
+    SHAPE: { item, tier: "S"|"A"|"B"|"C"|"D", reason?, emoji? }.
+    DATASOURCE: gaming.rankings.
+    NEVER USE FOR: ordered processes (use step_player) or flat lists (info_grid).
+
+  formation_diagram  ⭐ NEW (sport signature)
+    PICK WHEN: Sport content shows a LINEUP / formation with player positions.
+    SHIPS: Read-only ReactFlow pitch — players as nodes positioned by role
+      (pan-only, no dragging). The tactical overview of who lined up where.
+    SHAPE: { name?, team?, positions: [{ player, role?, x, y, number? }] }
+      where x/y are 0-100 pitch percentages.
+    DATASOURCE: sport.formation.
+    NEVER USE FOR: non-positional data — it is a spatial diagram, not a table.
 
 ACTION — user completes a task:
 
   checklist
-    PICK WHEN: User physically checks items off in real life (shopping, packing).
-    SHAPE: Array of items with label, optional amount/unit/group/note.
+    PICK WHEN: User physically checks items off in real life (ingredients,
+      materials, tools).
+    SHAPE: items[] with label, optional amount/unit/group/note.
 
-  step_player ⭐ ORDERED PROCESSES — the heart of "video to action"
-    PICK WHEN: 3+ ordered steps. ALWAYS prefer step_player over a numbered list.
-    SHIPS: Step-through guide with inline timer, tips, completion tracking,
-      and a frame thumbnail per step (auto-attached when timestamp matches).
-    GOOD FOR: Cooking, building, installing, assembling, setup, multi-stage
-      processes in ANY domain.
-    DATASOURCE: food.steps, project.steps, tech.setup, language.drills,
-      science.experiments.
+  packing_mission  ⭐ NEW (travel only)
+    PICK WHEN: Travel packing list with 4+ items. Replaces generic
+      checklist for the travel domain because dragging items into a
+      suitcase makes the task tangible.
+    SHIPS: Two-column drag-and-drop, weight tally, essentials warning,
+      celebration on full pack.
 
-  exercise_tracker
-    PICK WHEN: The video is a workout session with sets/reps/timer structure.
-    SHIPS: Exercise cards with set tracking, rest timers, form cue expansion.
+  step_player ⭐ ORDERED PROCESSES — frame-aware
+    PICK WHEN: 3–10 ordered steps. ALWAYS prefer step_player over a
+      numbered list.
+    SHIPS: Step-through guide with inline timer, tips, completion
+      tracking, frame thumbnail per step (auto-attached at matching
+      timestamps via VisualEvidence).
+    GOOD FOR: Cooking, building, installing, setup, language drills.
 
-LEARNING — user tests understanding (LIMITED to learning + tech domains):
+  step_flow_canvas  ⭐ NEW (for long processes) — frame-aware
+    PICK WHEN: 6+ steps that benefit from a visual map of progress
+      (multi-stage projects, recipes with 8+ stages, complex installs).
+    SHIPS: Zigzag node graph (React Flow), animated edges on completion,
+      thumbnail + checkbox + timer per node.
 
-  quiz
-    PICK WHEN: The user wants to verify what they retained.
-    SHIPS: Scored multi-choice with explanations.
-    DATASOURCE: ALWAYS enrichment.quiz.
+  workout_room  ⭐ NEW (replaces exercise_tracker)
+    PICK WHEN: Workout session with sets/reps/timer structure.
+    SHIPS: Full-bleed exercise card, set counter, rest timer with audio
+      cue (opt-in), form-cue frame loop, modifications panel.
+
+LEARNING — user tests understanding:
+
+  quiz_arena  ⭐ NEW (absorbs scenario)
+    PICK WHEN: 2+ knowledge checks. Accepts both standard quiz items AND
+      scenario items (with optional `context`+`kind:"scenario"`).
+    SHIPS: Single question per screen, streak counter, optional 10s
+      timer, frame context above the question (when extraction has a
+      thumbnail), best-score localStorage, retry + wrong-answer summary.
+    DATASOURCE: enrichment.quiz, enrichment.scenarios.
 
   flash_deck
-    PICK WHEN: 3+ concept-definition pairs the user would MEMORIZE.
-    SHIPS: Flip cards with progress.
-    NEVER USE FOR: tips, features, song analysis, chef tips, trivia, narrative
-      moments. `front` must be a real term or concept name, never a category
-      label like "chef_tip" or "pro_tip".
-    DATASOURCE: enrichment.flashcards (preferred), learning.concepts (if at
-      least 3 items have {name, definition} shape).
-
-  scenario
-    PICK WHEN: There are 2+ applied-knowledge "what would you do?" cases.
-    SHIPS: Multi-choice with context and explanations.
-    DATASOURCE: ALWAYS enrichment.scenarios.
+    PICK WHEN: 3+ concept-definition pairs to MEMORIZE — and there are
+      no meaningful connections between them. If concepts are
+      interrelated, use concept_canvas instead.
+    NEVER USE FOR: tips, features, song analysis, narrative moments.
 
 MEDIA — user navigates the source video:
 
-  moment_track ⭐ THE TIMELINE — frame-aware
-    PICK WHEN: There are 3+ navigable points in the video worth jumping to.
-    SHIPS: Vertical timeline where points (dots) and highlight spans (capsules)
-      share one spine. Each expanded item shows a frame thumbnail + on-screen
-      caption + OCR when the vision LLM extracted them — this is where the
-      transcript and the frames fuse into a single artifact.
-    SHAPE: items[] with { time, seconds, label } required; optional endSeconds,
-      description, mood, emoji, speaker, tags. The assembler attaches
-      thumbnailUrl, frameCaption, frameOcr, frameEvidence, frameSceneType
-      automatically when frames are available.
-    USE endSeconds ONLY for replayable highlights worth re-watching as a span
-      (typical 15s–3min). OMIT endSeconds for navigation points.
+  moment_track ⭐ THE TIMELINE — frame-aware (primary)
+    PICK WHEN: 3+ navigable points in the video worth jumping to.
+    SHIPS: Vertical timeline where points (dots) and highlight spans
+      (capsules) share one spine. Expanded items show VisualEvidence
+      (caption + OCR + scene type) at the matching frame.
+    USE endSeconds ONLY for replayable spans (15s–3min). OMIT for
+      navigation points.
     DATASOURCE: learning.timestamps, narrative.keyMoments, music.structure.
-      YouTube chapters auto-fill as a fallback.
 
-  lyrics_player
+  lyrics_karaoke  ⭐ NEW (replaces lyrics_player)
     PICK WHEN: Music video with lyrics + section structure.
-    SHIPS: Section nav with synced lyrics.
+    SHIPS: Section nav, active-line scaling, word-synced highlight via
+      CSS mask + currentTime, auto-scroll. Falls back to plain scroll
+      when no per-line timestamps.
 
 DISPLAY — user reads (MAX 1 per output, last resort):
 
-  verdict — Score + bottom line + best-for / not-for. Only for review-domain
-    where the video reaches a single recommendation. Otherwise fold the
-    conclusion into the overview hero.
+  verdict — DO NOT plan new "verdict" tabs. The conclusion folds into
+    the ReviewSummary header on comparison. Cached "verdict" tabs still
+    render via the legacy alias.
   budget — Total + category breakdown + saving tips. Travel/finance only.
 
 ═══════════════════════════════════════════════════════════════════
@@ -156,14 +227,42 @@ ANTI-PATTERNS (the assembler will drop these — don't plan them)
 ✗ info_grid with 2 items                → 3 minimum; otherwise use overview.
 ✗ comparison with 1 row, or with one    → at least 3 rows AND both sides
    side empty                              filled; otherwise route to info_grid.
+✗ comparison_radar with <4 axes         → falls back to comparison table.
+✗ concept_canvas with <2 concepts       → falls back to flash_deck / info_grid.
 ✗ flash_deck for tips/features/trivia   → forbidden; use info_grid.
-✗ gallery as a primary tab               → frames live INSIDE moment_track /
-                                            step_player / code_explorer now.
-                                            Standalone gallery is auto-appended
-                                            ONLY when ≥10 high-quality vision
-                                            captions exist.
-✗ verdict for non-review domain          → verdict is review-only.
+✗ standalone "verdict" tab               → fold the conclusion into
+                                             comparison's ReviewSummary OR the
+                                             overview hero. Verdict-as-tab is
+                                             retired.
+✗ standalone "gallery" tab               → use video_filmstrip when 3+
+                                             vision-tagged frames warrant a
+                                             scrubber. Otherwise frames live
+                                             INSIDE moment_track / step_player /
+                                             code_playground via VisualEvidence.
 ✗ Two tabs covering the same data        → pick one component per concept.
+
+<frame_intelligence>
+Components marked "frame-aware" above (moment_track, step_player,
+step_flow_canvas, spot_explorer, code_playground, concept_canvas,
+video_filmstrip, info_grid items with timestamp, comparison rows with
+timestamp) automatically receive these props per item whose `timestamp`
+matches a vision-LLM-tagged frame:
+
+  thumbnailUrl        — Signed S3 URL for the frame.
+  frameCaption        — One-line vision-LLM description of what's on screen.
+  frameEvidence       — Why the frame supports/illustrates the row.
+  frameOcr            — On-screen text (Tesseract OCR or vision-read).
+  frameSceneType      — "slide" | "code" | "diagram" | "demo" | "whiteboard" | etc.
+
+Plan ASSUMING these will populate. Include `timestamp` on every
+extraction item where a screen moment exists in the source. The
+assembler will drop the visual props when no vision-tagged frame
+matches; the renderer degrades gracefully.
+
+Talking-head / intro / outro / transition / logo frames are filtered
+out by the assembler — they get a thumbnail but no caption, so plan
+around real on-screen content.
+</frame_intelligence>
 
 <valid_datasources>
 tech: tech.snippets, tech.patterns, tech.cheatSheet, tech.setup.commands, tech.topics
@@ -176,6 +275,10 @@ fitness: fitness.exercises, fitness.warmup, fitness.cooldown, fitness.timer
 music: music.analysis, music.structure, music.lyrics, music.credits
 language: language.phrases, language.rules, language.drills, language.vocabulary
 science: science.concepts, science.keyFacts, science.experiments
+podcast: podcast.segments, podcast.guests, podcast.quotes, podcast.topics
+news: news.storyTimeline, news.entities, news.claims, news.context
+gaming: gaming.highlights, gaming.loadout, gaming.walkthrough, gaming.rankings
+sport: sport.matchEvents, sport.formation, sport.statComparison
 narrative: narrative.keyMoments, narrative.quotes, narrative.takeaways
 enrichment: enrichment.quiz, enrichment.flashcards, enrichment.scenarios
 

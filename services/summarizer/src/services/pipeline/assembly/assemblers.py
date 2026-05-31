@@ -223,6 +223,16 @@ def _coerce_int(value: Any) -> int | None:
         return None
 
 
+def _coerce_float(value: Any) -> float | None:
+    """Parse float or return None on failure."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None
+
+
 def _normalize_moment_item(item: Any, index: int) -> dict | None:
     """Normalize a moment/clip item to {label, time, seconds, endSeconds?, ...}.
 
@@ -595,7 +605,7 @@ def assemble_comparison(
 
     competitor_name = _first_competitor_name(rows) if rows else ""
 
-    return {
+    props: dict[str, Any] = {
         "pros": pros,
         "cons": cons,
         "comparisons": rows,
@@ -603,10 +613,38 @@ def assemble_comparison(
         "rightLabel": competitor_name,
     }
 
+    # Verdict header data is folded into ComparisonInteractive — when the
+    # review extraction includes a verdict block, attach it so ReviewSummary
+    # renders above the table. Standalone VerdictInteractive was retired in
+    # the video-to-action overhaul; the comparison renderer absorbs its role.
+    if isinstance(review_data, dict):
+        verdict = review_data.get("verdict")
+        if isinstance(verdict, dict) and verdict.get("bottomLine"):
+            verdict_props: dict[str, Any] = {
+                "badge": verdict.get("badge", "neutral"),
+                "bottomLine": verdict.get("bottomLine", ""),
+                "bestFor": verdict.get("bestFor") or [],
+                "notFor": verdict.get("notFor") or [],
+            }
+            sub_scores = verdict.get("subScores")
+            if isinstance(sub_scores, list) and sub_scores:
+                verdict_props["subScores"] = sub_scores
+            rating = review_data.get("rating") if isinstance(review_data.get("rating"), dict) else None
+            if isinstance(rating, dict):
+                score = rating.get("score")
+                if isinstance(score, (int, float)):
+                    verdict_props["score"] = score
+                    max_score = rating.get("maxScore")
+                    if isinstance(max_score, (int, float)) and max_score > 0:
+                        verdict_props["maxScore"] = max_score
+            props["verdict"] = verdict_props
+
+    return props
+
 
 _INFO_KEY_FIELDS: tuple[str, ...] = (
     "key", "name", "title", "label", "term", "word", "phrase",
-    "aspect", "role", "type", "fact", "concept",
+    "aspect", "role", "type", "fact", "concept", "topic",
 )
 _INFO_VALUE_FIELDS: tuple[str, ...] = (
     "value", "definition", "description", "detail", "explanation",
@@ -617,6 +655,34 @@ _INFO_EVIDENCE_FIELDS: tuple[str, ...] = (
     "analogy", "quote",
 )
 
+# A bare string longer than this with no key/value delimiter is a paragraph,
+# not a reference pair — it was the wall-of-empty-grid bug (a 150-char sentence
+# dumped into `key` with an empty `value`). Drop it so the orchestrator routes
+# the data elsewhere (spot_explorer via promotion, or the fallback layer).
+_INFO_STRING_MAX = 120
+
+
+def _split_string_info_item(text: str) -> dict | None:
+    """Turn a bare string into an info_grid pair, or drop it.
+
+    A natural ` — ` / ` – ` / `: ` delimiter splits cleanly into key/value.
+    A short standalone label survives as a key-only chip; a long delimiterless
+    paragraph is not a reference pair and is dropped.
+    """
+    text = text.strip()
+    if not text:
+        return None
+    for sep in (" — ", " – ", ": "):
+        if sep in text:
+            key, _, value = text.partition(sep)
+            key, value = key.strip(), value.strip()
+            if key and value:
+                return {"key": key, "value": value}
+            break
+    if len(text) > _INFO_STRING_MAX:
+        return None
+    return {"key": text, "value": ""}
+
 
 def _normalize_info_grid_item(item: Any) -> dict | None:
     """Coerce diverse LLM-emit shapes into {key, value, evidence?, emoji?}.
@@ -625,8 +691,7 @@ def _normalize_info_grid_item(item: Any) -> dict | None:
     as empty cards and are the root cause of the wall-of-empty-grid bug.
     """
     if isinstance(item, str):
-        text = item.strip()
-        return {"key": text, "value": ""} if text else None
+        return _split_string_info_item(item)
     if not isinstance(item, dict):
         return None
 
@@ -845,13 +910,38 @@ def assemble_scenario(
 def assemble_verdict(
     tab: dict, data: Any, extraction: dict, enrichment: dict | None,
 ) -> dict | None:
+    """Legacy verdict assembler — now emits ComparisonInteractive-shaped props.
+
+    The standalone VerdictInteractive React component was retired in the
+    video-to-action overhaul. Cached `assembledTabs` rows still reference the
+    "verdict" component key, so we route them to ComparisonInteractive with no
+    rows and the verdict folded into the `verdict` prop. The frontend
+    `verdict:` registry entry forwards to ComparisonInteractive accordingly.
+    """
     if not isinstance(data, dict):
         return None
-    return {
+    verdict_props: dict[str, Any] = {
         "badge": data.get("badge", "neutral"),
         "bottomLine": data.get("bottomLine", ""),
-        "bestFor": data.get("bestFor", []),
-        "notFor": data.get("notFor", []),
+        "bestFor": data.get("bestFor") or [],
+        "notFor": data.get("notFor") or [],
+    }
+    sub_scores = data.get("subScores")
+    if isinstance(sub_scores, list) and sub_scores:
+        verdict_props["subScores"] = sub_scores
+    score = data.get("score")
+    if isinstance(score, (int, float)):
+        verdict_props["score"] = score
+        max_score = data.get("maxScore")
+        if isinstance(max_score, (int, float)) and max_score > 0:
+            verdict_props["maxScore"] = max_score
+    return {
+        "pros": [],
+        "cons": [],
+        "comparisons": [],
+        "leftLabel": "",
+        "rightLabel": "",
+        "verdict": verdict_props,
     }
 
 
@@ -1049,27 +1139,618 @@ def assemble_display_section(
 
 
 # ─────────────────────────────────────────────────────
+# Video-to-Action overhaul: new component assemblers
+# ─────────────────────────────────────────────────────
+
+
+def _normalize_concept(item: Any) -> dict | None:
+    """Coerce a concept item to {name, emoji, definition, example?, analogy?, connections}."""
+    if not isinstance(item, dict):
+        return None
+    name = str(item.get("name") or item.get("title") or "").strip()
+    definition = str(item.get("definition") or item.get("description") or item.get("detail") or "").strip()
+    if not name or not definition:
+        return None
+    result: dict[str, Any] = {
+        "name": name,
+        "emoji": str(item.get("emoji") or "💡"),
+        "definition": definition,
+        "connections": item.get("connections") if isinstance(item.get("connections"), list) else [],
+    }
+    if item.get("example"):
+        result["example"] = str(item["example"])
+    if item.get("analogy"):
+        result["analogy"] = str(item["analogy"])
+    return result
+
+
+def assemble_concept_canvas(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """Build ConceptCanvas props from learning.concepts data."""
+    if isinstance(data, dict):
+        data = data.get("concepts") or data.get("items") or []
+    if not isinstance(data, list) or len(data) < 2:
+        return None
+    concepts = [c for c in (_normalize_concept(item) for item in data) if c is not None]
+    if len(concepts) < 2:
+        return None
+    return {"concepts": concepts}
+
+
+_CONNECT_MIN_PAIRS = 2
+_CONNECT_MAX_PAIRS = 8
+
+
+def assemble_connect_canvas(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """Graded drag-to-connect quiz. The answer key is DERIVED in assembly from
+    `concepts[].connections` (the known concept graph) — no enrichment LLM call.
+
+    Each connected concept yields one matching pair: prompt = the concept name,
+    match = the name of a concept it connects to (the first connection that
+    resolves to a real, distinct concept). Concepts with no resolvable
+    connection are skipped. Needs ≥2 pairs to be a quiz, caps at 8.
+    """
+    if isinstance(data, dict):
+        data = data.get("concepts") or data.get("items") or []
+    if not isinstance(data, list) or len(data) < _CONNECT_MIN_PAIRS:
+        return None
+
+    concepts = [c for c in (_normalize_concept(item) for item in data) if c is not None]
+    if len(concepts) < _CONNECT_MIN_PAIRS:
+        return None
+
+    names_lower = {c["name"].strip().lower(): c["name"] for c in concepts}
+    pairs: list[dict] = []
+    used_matches: set[str] = set()
+    for concept in concepts:
+        prompt = concept["name"].strip()
+        for conn in concept.get("connections") or []:
+            target = names_lower.get(str(conn).strip().lower())
+            if not target or target.strip().lower() == prompt.lower():
+                continue
+            if target in used_matches:
+                continue
+            pairs.append({"prompt": prompt, "match": target})
+            used_matches.add(target)
+            break
+        if len(pairs) >= _CONNECT_MAX_PAIRS:
+            break
+
+    if len(pairs) < _CONNECT_MIN_PAIRS:
+        return None
+    return {"pairs": pairs}
+
+
+def assemble_step_flow_canvas(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """Step flow canvas — same data contract as step_player. Frontend lazy-loads
+    the canvas renderer; small step lists fall back to step_player via the
+    component-routing layer."""
+    return assemble_step_player(tab, data, extraction, enrichment)
+
+
+def assemble_comparison_radar(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """ComparisonRadar shares the comparison data contract — it just chooses a
+    radar visualization for ≥3 axes. The frontend falls back to the table when
+    rows < 3, so the assembler stays identical."""
+    return assemble_comparison(tab, data, extraction, enrichment)
+
+
+def assemble_code_playground(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """CodePlayground replaces CodeExplorer — same data contract."""
+    return assemble_code_explorer(tab, data, extraction, enrichment)
+
+
+def assemble_quiz_arena(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """QuizArena absorbs Scenario data — same primary contract as quiz but
+    accepts items with optional `context` field that flags scenario kind."""
+    if not isinstance(data, list) or len(data) < 1:
+        return None
+    questions: list[dict] = []
+    for item in data:
+        normalized = _normalize_quiz_question(item)
+        if normalized is None:
+            # Try scenario shape: a scenario item with options[].correct
+            scenario = _normalize_scenario_item(item) if isinstance(item, dict) else None
+            if scenario is None:
+                continue
+            opts = scenario.get("options") or []
+            if not isinstance(opts, list) or not opts:
+                continue
+            correct_idx = next((i for i, opt in enumerate(opts) if isinstance(opt, dict) and opt.get("correct")), 0)
+            explanation = ""
+            for opt in opts:
+                if isinstance(opt, dict) and opt.get("correct") and opt.get("explanation"):
+                    explanation = str(opt["explanation"])
+                    break
+            questions.append({
+                "question": scenario.get("question", ""),
+                "options": [str(opt.get("text") or "") for opt in opts if isinstance(opt, dict)],
+                "correctIndex": correct_idx,
+                "explanation": explanation,
+                "kind": "scenario",
+            })
+        else:
+            questions.append(normalized)
+    if not questions:
+        return None
+    return {"questions": questions}
+
+
+def _normalize_packing_item(item: Any) -> dict | None:
+    """Coerce a packing list item to {item, category?, essential?, weight?, emoji?}."""
+    if isinstance(item, str):
+        text = item.strip()
+        return {"item": text} if text else None
+    if not isinstance(item, dict):
+        return None
+    name = str(item.get("item") or item.get("name") or item.get("label") or "").strip()
+    if not name:
+        return None
+    result: dict[str, Any] = {"item": name}
+    for field in ("category", "emoji"):
+        if item.get(field):
+            result[field] = str(item[field])
+    if isinstance(item.get("essential"), bool):
+        result["essential"] = item["essential"]
+    weight = item.get("weight")
+    if isinstance(weight, (int, float)) and weight > 0:
+        result["weight"] = weight
+    return result
+
+
+def assemble_packing_mission(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """PackingMission props — drag-and-drop packing list for travel domain."""
+    raw_list = data
+    if isinstance(data, dict):
+        raw_list = data.get("packingList") or data.get("items") or []
+    if not isinstance(raw_list, list) or len(raw_list) < 2:
+        return None
+    items = [p for p in (_normalize_packing_item(item) for item in raw_list) if p is not None]
+    if len(items) < 2:
+        return None
+    return {"items": items}
+
+
+def assemble_workout_room(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """WorkoutRoom replaces ExerciseInteractive — same data contract."""
+    return assemble_exercise_tracker(tab, data, extraction, enrichment)
+
+
+def assemble_lyrics_karaoke(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """LyricsKaraoke replaces LyricsPlayer — same data contract."""
+    return assemble_lyrics_player(tab, data, extraction, enrichment)
+
+
+def _normalize_filmstrip_frame(item: Any) -> dict | None:
+    """Coerce a frame item to {thumbnailUrl, timestamp, caption?, ocr?, sceneType?}."""
+    if not isinstance(item, dict):
+        return None
+    thumb = item.get("thumbnailUrl") or item.get("url")
+    if not isinstance(thumb, str) or not thumb.strip():
+        return None
+    timestamp = item.get("timestamp") or item.get("seconds") or 0
+    if not isinstance(timestamp, (int, float)):
+        return None
+    result: dict[str, Any] = {"thumbnailUrl": thumb, "timestamp": int(timestamp)}
+    caption = item.get("caption") or item.get("frameCaption") or item.get("description")
+    if isinstance(caption, str) and caption.strip():
+        result["caption"] = caption.strip()
+    ocr = item.get("ocr") or item.get("frameOcr")
+    if isinstance(ocr, str) and ocr.strip():
+        result["ocr"] = ocr.strip()
+    scene = item.get("sceneType") or item.get("frameSceneType")
+    if isinstance(scene, str) and scene.strip():
+        result["sceneType"] = scene.strip()
+    return result
+
+
+def assemble_video_filmstrip(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """VideoFilmstrip replaces standalone gallery — horizontal scrubber of frames."""
+    raw_frames = data
+    if isinstance(data, dict):
+        raw_frames = data.get("frames") or data.get("images") or []
+    if not isinstance(raw_frames, list) or len(raw_frames) < 3:
+        return None
+    frames = [f for f in (_normalize_filmstrip_frame(item) for item in raw_frames) if f is not None]
+    if len(frames) < 3:
+        return None
+    return {"frames": frames}
+
+
+# ─────────────────────────────────────────────────────
+# Secondary-tier assemblers (interactive-overhaul-v2 P2)
+# ─────────────────────────────────────────────────────
+# Attachment-only components. The orchestrator's `attach_secondaries` builds
+# their props directly and never routes them through the primary tab loop, but
+# they are registered so the contract-parity test (every assembler maps to a
+# known component) and any future direct-resolution path stay valid.
+
+
+def assemble_stat_banner(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """Equal-weight compact stats. Expects data as list[{label, value, emoji?}]."""
+    raw = data if isinstance(data, list) else (data or {}).get("stats") if isinstance(data, dict) else None
+    if not isinstance(raw, list):
+        return None
+    stats: list[dict] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or "").strip()
+        value = str(item.get("value") or "").strip()
+        if not label or not value:
+            continue
+        stat = {"label": label, "value": value}
+        if item.get("emoji"):
+            stat["emoji"] = str(item["emoji"])
+        stats.append(stat)
+    return {"stats": stats} if stats else None
+
+
+def assemble_tip_callout(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """Single highlighted aside. Expects a string or {text, style?, title?}."""
+    if isinstance(data, str):
+        text = data.strip()
+        return {"text": text, "style": "tip"} if text else None
+    if not isinstance(data, dict):
+        return None
+    text = str(data.get("text") or "").strip()
+    if not text:
+        return None
+    result: dict[str, Any] = {"text": text}
+    style = data.get("style")
+    result["style"] = style if style in ("tip", "warning", "note") else "tip"
+    if data.get("title"):
+        result["title"] = str(data["title"])
+    return result
+
+
+def assemble_summary_header(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """One-line orientation for a dense tab. Expects string or {summary, ...}."""
+    if isinstance(data, str):
+        summary = data.strip()
+        return {"summary": summary} if summary else None
+    if not isinstance(data, dict):
+        return None
+    summary = str(data.get("summary") or "").strip()
+    if not summary:
+        return None
+    result: dict[str, Any] = {"summary": summary}
+    if data.get("title"):
+        result["title"] = str(data["title"])
+    if data.get("emoji"):
+        result["emoji"] = str(data["emoji"])
+    return result
+
+
+_DIAGRAM_MAX_NODES = 8
+
+
+def _build_diagram_edges_from_connections(
+    raw_items: list, nodes: list[dict],
+) -> list[dict]:
+    """Derive index-addressed edges from each item's `connections[]` adjacency
+    list (concept graph). Unmatched / self / out-of-range targets are dropped.
+
+    The node list is the post-cap list, so we match connection names against the
+    labels that actually survived. Returns [] when no item carried connections.
+    """
+    label_index: dict[str, int] = {}
+    for i, node in enumerate(nodes):
+        label = str(node.get("label") or "").strip().lower()
+        if label:
+            label_index.setdefault(label, i)
+    edges: list[dict] = []
+    seen: set[tuple[int, int]] = set()
+    for source_idx, item in enumerate(raw_items[: len(nodes)]):
+        if not isinstance(item, dict):
+            continue
+        connections = item.get("connections")
+        if not isinstance(connections, list):
+            continue
+        for conn in connections:
+            target_idx = label_index.get(str(conn).strip().lower())
+            if target_idx is None or target_idx == source_idx:
+                continue
+            edge = (source_idx, target_idx)
+            if edge in seen:
+                continue
+            seen.add(edge)
+            edges.append({"source": source_idx, "target": target_idx})
+    return edges
+
+
+def assemble_diagram_card(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """Read-only diagram. Builds nodes from list[{label|name, detail?, emoji?}]
+    and edges either from concept `connections[]` (architecture / process graph)
+    or, absent connections, leaves edges empty so the frontend renders a
+    sequential chain (step ordering). Conservative: caps at 8 nodes."""
+    raw = data if isinstance(data, list) else (data or {}).get("nodes") if isinstance(data, dict) else None
+    if not isinstance(raw, list):
+        return None
+    nodes: list[dict] = []
+    source_items: list = []
+    for item in raw:
+        if isinstance(item, str):
+            label = item.strip()
+            if label:
+                nodes.append({"label": label})
+                source_items.append({})
+            continue
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or item.get("name") or "").strip()
+        if not label:
+            continue
+        node: dict[str, Any] = {"label": label}
+        detail = item.get("detail") or item.get("definition") or item.get("description")
+        if detail:
+            node["detail"] = str(detail)[:120]
+        if item.get("emoji"):
+            node["emoji"] = str(item["emoji"])
+        nodes.append(node)
+        source_items.append(item)
+    if len(nodes) < 2:
+        return None
+    nodes = nodes[:_DIAGRAM_MAX_NODES]
+    source_items = source_items[:_DIAGRAM_MAX_NODES]
+    result: dict[str, Any] = {"nodes": nodes}
+    edges = _build_diagram_edges_from_connections(source_items, nodes)
+    if edges:
+        result["edges"] = edges
+    if isinstance(data, dict) and data.get("caption"):
+        result["caption"] = str(data["caption"])
+    return result
+
+
+def assemble_frame_strip(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """frame_strip is a compact VideoFilmstrip — same {frames} contract."""
+    return assemble_video_filmstrip(tab, data, extraction, enrichment)
+
+
+def assemble_quick_quiz(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """quick_quiz is a single-question QuizArena — same {questions} contract."""
+    return assemble_quiz_arena(tab, data, extraction, enrichment)
+
+
+_CLAIM_STATUSES = frozenset({"verified", "disputed", "context"})
+_CLAIMS_MIN = 2
+
+
+def _normalize_claim(item: Any) -> dict | None:
+    """Coerce a claim item to {claim, source, status, sourceCitation?, timestamp?}.
+
+    Drops the row when there is no claim text. status defaults to "context"
+    (the safe, non-asserting default) when the LLM omits or supplies an
+    unknown value — we never silently upgrade an unverified claim to verified.
+    """
+    if not isinstance(item, dict):
+        return None
+    claim = str(item.get("claim") or item.get("text") or "").strip()
+    if not claim:
+        return None
+    status = str(item.get("status") or "").strip().lower()
+    if status not in _CLAIM_STATUSES:
+        status = "context"
+    result: dict[str, Any] = {
+        "claim": claim,
+        "source": str(item.get("source") or item.get("speaker") or "Reporter").strip(),
+        "status": status,
+    }
+    citation = item.get("sourceCitation") or item.get("citation")
+    if citation:
+        result["sourceCitation"] = str(citation).strip()
+    ts = _coerce_int(item.get("timestamp"))
+    if ts is not None:
+        result["timestamp"] = ts
+    return result
+
+
+def assemble_claims_tracker(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """Build ClaimsTracker props from news.claims — the news signature surface.
+
+    Each claim carries the assertion, who made it, a verified/disputed/context
+    status, and an optional source citation. Needs ≥2 real claims to justify the
+    tab; otherwise the data folds into info_grid / overview via the fallback layer.
+    """
+    if isinstance(data, dict):
+        data = data.get("claims") or data.get("items") or []
+    if not isinstance(data, list) or len(data) < _CLAIMS_MIN:
+        return None
+    claims = [c for c in (_normalize_claim(item) for item in data) if c is not None]
+    if len(claims) < _CLAIMS_MIN:
+        return None
+    return {"claims": claims}
+
+
+# ─────────────────────────────────────────────────────
+# Gaming — tier_list (interactive-overhaul-v2 P5c)
+# ─────────────────────────────────────────────────────
+
+_TIER_VALUES = frozenset({"S", "A", "B", "C", "D"})
+_TIER_LIST_MIN = 3
+
+
+def _normalize_tier_item(item: Any) -> dict | None:
+    """Coerce a ranking row to {item, tier?, reason?, emoji?}.
+
+    Drops the row when there is no item label. `tier` is the creator's
+    SUGGESTED placement (S/A/B/C/D); it is omitted when absent or invalid so
+    the viewer places the item themselves rather than us guessing a tier.
+    """
+    if not isinstance(item, dict):
+        return None
+    label = str(item.get("item") or item.get("name") or item.get("label") or "").strip()
+    if not label:
+        return None
+    result: dict[str, Any] = {"item": label[:60]}
+    tier = str(item.get("tier") or "").strip().upper()
+    if tier in _TIER_VALUES:
+        result["tier"] = tier
+    reason = item.get("reason") or item.get("note") or item.get("description")
+    if reason:
+        result["reason"] = str(reason)[:120]
+    if item.get("emoji"):
+        result["emoji"] = str(item["emoji"])
+    return result
+
+
+def assemble_tier_list(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """Build TierList props from gaming.rankings — the gaming signature surface.
+
+    Each item carries a label, an optional suggested S/A/B/C/D tier (the answer
+    key the user can override), and an optional reason. Needs ≥3 real items to
+    justify the tab; otherwise it folds into info_grid / overview.
+    """
+    if isinstance(data, dict):
+        data = data.get("rankings") or data.get("items") or []
+    if not isinstance(data, list):
+        return None
+    items = [i for i in (_normalize_tier_item(it) for it in data) if i is not None]
+    if len(items) < _TIER_LIST_MIN:
+        return None
+    return {"items": items}
+
+
+# ─────────────────────────────────────────────────────
+# Sport — formation_diagram (interactive-overhaul-v2 P5d)
+# ─────────────────────────────────────────────────────
+
+_FORMATION_MIN = 3
+
+
+def _normalize_position(item: Any) -> dict | None:
+    """Coerce a position to {player, role?, x, y, number?}.
+
+    Drops the row when there is no player name or the x/y coordinates are
+    missing — a formation node must be placeable on the pitch.
+    """
+    if not isinstance(item, dict):
+        return None
+    player = str(item.get("player") or item.get("name") or "").strip()
+    if not player:
+        return None
+    x = _coerce_float(item.get("x"))
+    y = _coerce_float(item.get("y"))
+    if x is None or y is None:
+        return None
+    result: dict[str, Any] = {
+        "player": player[:40],
+        "x": max(0.0, min(100.0, x)),
+        "y": max(0.0, min(100.0, y)),
+    }
+    role = item.get("role") or item.get("position")
+    if role:
+        result["role"] = str(role)[:24]
+    number = _coerce_int(item.get("number"))
+    if number is not None:
+        result["number"] = number
+    return result
+
+
+def assemble_formation_diagram(
+    tab: dict, data: Any, extraction: dict, enrichment: dict | None,
+) -> dict | None:
+    """Build FormationDiagram props from sport.formation — the sport signature.
+
+    Players become nodes positioned on a pitch via 0-100 x/y percentages.
+    Needs ≥3 placeable players to justify the tab; otherwise it folds away.
+    """
+    name: str | None = None
+    team: str | None = None
+    raw_positions: Any = data
+    if isinstance(data, dict):
+        name = str(data["name"]).strip() if data.get("name") else None
+        team = str(data["team"]).strip() if data.get("team") else None
+        raw_positions = data.get("positions") or data.get("players") or []
+    if not isinstance(raw_positions, list):
+        return None
+    positions = [p for p in (_normalize_position(it) for it in raw_positions) if p is not None]
+    if len(positions) < _FORMATION_MIN:
+        return None
+    result: dict[str, Any] = {"positions": positions}
+    if name:
+        result["name"] = name
+    if team:
+        result["team"] = team
+    return result
+
+
+# ─────────────────────────────────────────────────────
 # Assembler Registry & Component Inference
 # ─────────────────────────────────────────────────────
 
 ASSEMBLER_REGISTRY: dict[str, Callable] = {
+    # The full set of components the planner is allowed to emit. Kept tight —
+    # legacy names removed; cached `assembledTabs` rows that reference retired
+    # keys fall through to display_section by design. The pipeline produces
+    # new-name output only; we don't translate behind the scenes.
     "spot_explorer": assemble_spot_explorer,
     "moment_track": assemble_moment_track,
-    "code_explorer": assemble_code_explorer,
     "comparison": assemble_comparison,
-    "gallery": assemble_gallery,
     "info_grid": assemble_info_grid,
     "checklist": assemble_checklist,
     "step_player": assemble_step_player,
-    "exercise_tracker": assemble_exercise_tracker,
-    "quiz": assemble_quiz,
     "flash_deck": assemble_flash_deck,
-    "scenario": assemble_scenario,
-    "lyrics_player": assemble_lyrics_player,
-    "verdict": assemble_verdict,
     "budget": assemble_budget,
     "overview": assemble_overview,
     "display_section": assemble_display_section,
+    "concept_canvas": assemble_concept_canvas,
+    "connect_canvas": assemble_connect_canvas,
+    "step_flow_canvas": assemble_step_flow_canvas,
+    "comparison_radar": assemble_comparison_radar,
+    "code_playground": assemble_code_playground,
+    "quiz_arena": assemble_quiz_arena,
+    "packing_mission": assemble_packing_mission,
+    "workout_room": assemble_workout_room,
+    "lyrics_karaoke": assemble_lyrics_karaoke,
+    "video_filmstrip": assemble_video_filmstrip,
+    # interactive-overhaul-v2 P5b — news signature component
+    "claims_tracker": assemble_claims_tracker,
+    # interactive-overhaul-v2 P5c/d — gaming + sport signature components
+    "tier_list": assemble_tier_list,
+    "formation_diagram": assemble_formation_diagram,
+    # Secondary-tier (attachment-only) — interactive-overhaul-v2 P2
+    "stat_banner": assemble_stat_banner,
+    "tip_callout": assemble_tip_callout,
+    "summary_header": assemble_summary_header,
+    "diagram_card": assemble_diagram_card,
+    "frame_strip": assemble_frame_strip,
+    "quick_quiz": assemble_quick_quiz,
 }
 
 _TAB_ID_TO_COMPONENT: dict[str, str] = {
@@ -1078,29 +1759,55 @@ _TAB_ID_TO_COMPONENT: dict[str, str] = {
     "key_moments": "moment_track",
     "timestamps": "moment_track",
     "highlights": "moment_track",
-    "code": "code_explorer",
-    "cheat_sheet": "code_explorer",
-    "setup": "code_explorer",
+    "code": "code_playground",
+    "code_snippets": "code_playground",
+    "snippets": "code_playground",
+    "cheat_sheet": "code_playground",
+    "setup": "code_playground",
+    "patterns": "code_playground",
     "pros_cons": "comparison",
     "specs": "info_grid",
     "credits": "info_grid",
     "ingredients": "checklist",
-    "packing": "checklist",
+    "packing": "packing_mission",
+    "packing_list": "packing_mission",
     "materials": "checklist",
     "tools": "checklist",
     "steps": "step_player",
-    "exercises": "exercise_tracker",
-    "timer": "exercise_tracker",
-    "quizzes": "quiz",
+    "exercises": "workout_room",
+    "workout": "workout_room",
+    "workout_tracker": "workout_room",
+    "timer": "workout_room",
+    "quiz": "quiz_arena",
+    "quizzes": "quiz_arena",
     "flashcards": "flash_deck",
-    "concepts": "flash_deck",
-    "scenarios": "scenario",
-    "gallery": "gallery",
-    "lyrics": "lyrics_player",
-    "structure": "lyrics_player",
-    "verdict": "verdict",
+    "concepts": "concept_canvas",
+    "scenario": "quiz_arena",
+    "scenarios": "quiz_arena",
+    "gallery": "video_filmstrip",
+    "filmstrip": "video_filmstrip",
+    "lyrics": "lyrics_karaoke",
+    "structure": "lyrics_karaoke",
+    "verdict": "comparison",  # verdict folds into ComparisonInteractive's ReviewSummary
     "budget": "budget",
     "overview": "overview",
+    # podcast / news (interactive-overhaul-v2 P5)
+    "segments": "moment_track",
+    "guests": "spot_explorer",
+    "quotes": "flash_deck",
+    "topics": "info_grid",
+    "entities": "spot_explorer",
+    "claims": "claims_tracker",
+    "context": "info_grid",
+    # gaming / sport (interactive-overhaul-v2 P5c/d)
+    # ("highlights" already maps to moment_track above)
+    "loadout": "checklist",
+    "walkthrough": "step_flow_canvas",
+    "tier_list": "tier_list",
+    "rankings": "tier_list",
+    "match_events": "moment_track",
+    "formation": "formation_diagram",
+    "stats": "comparison",
 }
 
 

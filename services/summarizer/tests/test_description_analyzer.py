@@ -7,10 +7,12 @@ import json
 from src.services.video.description_analyzer import (
     DescriptionAnalysis,
     DescriptionLink,
+    DescriptionTimestamp,
     Resource,
     RelatedVideo,
     SocialLink,
     _analyze_description_async,
+    _parse_timestamps,
     analyze_description,
     load_prompt,
 )
@@ -59,6 +61,48 @@ class TestDescriptionAnalysisDataclass:
         assert result["resources"] == [{"name": "Tutorial", "url": "https://example.com"}]
         assert result["relatedVideos"] == [{"title": "Part 2", "url": "https://youtube.com/watch?v=abc"}]
         assert result["socialLinks"] == [{"platform": "twitter", "url": "https://twitter.com/test"}]
+        assert result["timestamps"] == []
+
+    def test_has_content_with_timestamps(self):
+        """has_content is True when only timestamps are present."""
+        analysis = DescriptionAnalysis(
+            timestamps=[DescriptionTimestamp(time="2:30", seconds=150, label="Setup")]
+        )
+        assert analysis.has_content is True
+
+    def test_to_dict_round_trips_timestamps(self):
+        analysis = DescriptionAnalysis(
+            timestamps=[DescriptionTimestamp(time="1:23:45", seconds=5025, label="Demo")]
+        )
+        result = analysis.to_dict()
+        assert result["timestamps"] == [{"time": "1:23:45", "seconds": 5025, "label": "Demo"}]
+
+
+class TestParseTimestamps:
+    """Tests for _parse_timestamps helper."""
+
+    def test_parses_mm_ss_and_hh_mm_ss(self):
+        items = [
+            {"time": "2:30", "label": "Setup"},
+            {"time": "1:23:45", "label": "Demo"},
+        ]
+        result = _parse_timestamps(items)
+
+        assert len(result) == 2
+        assert result[0] == DescriptionTimestamp(time="2:30", seconds=150, label="Setup")
+        assert result[1] == DescriptionTimestamp(time="1:23:45", seconds=5025, label="Demo")
+
+    def test_skips_malformed_time(self):
+        result = _parse_timestamps([{"time": "abc", "label": "Bad"}])
+        assert result == []
+
+    def test_skips_empty_label(self):
+        result = _parse_timestamps([{"time": "0:30", "label": ""}])
+        assert result == []
+
+    def test_handles_non_list_input(self):
+        assert _parse_timestamps(None) == []
+        assert _parse_timestamps("nope") == []
 
 
 class TestParseJsonResponse:

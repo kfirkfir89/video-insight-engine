@@ -107,6 +107,12 @@ class Settings(BaseSettings):
     # prompt caching kicks in across the parallel batches.
     CHUNKED_EXTRACTION_THRESHOLD: int = 900  # seconds (15 min)
     MAX_TOKENS_PER_BATCH: int = 50000  # conservative token limit per extraction batch
+    # Hard cap on the wall-clock span a single extraction batch may cover.
+    # A batch can fit MAX_TOKENS_PER_BATCH yet still span hours (a talky 3h
+    # segment is ~49K tokens) — and the fast model then front-loads and drops
+    # the tail (a 4.5h video produced output only up to 1:34). Bounding span to
+    # 40 min keeps each batch densely coverable within the 16K output budget.
+    MAX_MINUTES_PER_BATCH: int = 40
     CHUNKED_EXTRACTION_TIMEOUT: float = 300.0  # 5 min — per-batch timeout for chunked extraction
     # Parallel concurrency for the chunked extraction batches. Defaults to 2
     # because production has hit Anthropic 529 (overloaded) at 3 concurrent
@@ -228,6 +234,14 @@ class Settings(BaseSettings):
 
     # Prompt versioning (for regeneration tracking)
     PROMPT_VERSION: str = "v1.0"
+
+    # Pipeline output-schema version. Baked into the REDIS response-cache key so
+    # a bump makes every cached VIEResponse in Redis unreachable (it TTLs out).
+    # NOTE: this only invalidates the Redis response cache — persisted MongoDB
+    # `assembledTabs`/`output` docs are NOT version-keyed and still require a
+    # reprocess / DB flush on a schema or props change. Bump on any
+    # schemas/*.txt or assembler props change.
+    PIPELINE_VERSION: str = "v4"
 
     # ─── RabbitMQ worker ────────────────────────────────────────────────
     # AMQP URL — kept aligned with the API's RABBITMQ_URL in docker-compose.

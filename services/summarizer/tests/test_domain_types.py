@@ -575,7 +575,8 @@ class TestModelRegistries:
     """Test model registry completeness."""
 
     def test_all_eight_domains_registered(self):
-        expected = {"travel", "food", "learning", "review", "tech", "fitness", "music", "project", "language", "science"}
+        expected = {"travel", "food", "learning", "review", "tech", "fitness", "music",
+                    "project", "language", "science", "podcast", "news", "gaming", "sport"}
         assert set(DOMAIN_MODELS.keys()) == expected
 
     def test_all_modifiers_registered(self):

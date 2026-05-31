@@ -228,3 +228,26 @@ class TestRenumberOrderedLists:
         _renumber_ordered_lists(data)
         assert data["foodData"]["steps"][0]["step"] == 1
         assert data["foodData"]["steps"][1]["step"] == 2
+
+
+class TestTimelineOffsetsSurviveMerge:
+    """Regression: late-batch timeline entries must survive concat + renumber
+    with their video offsets intact (the coverage-loss guard)."""
+
+    def test_late_batch_timestamps_preserved(self):
+        early = {"learning": {"timestamps": [
+            {"time": "0:00", "seconds": 0, "label": "Intro"},
+            {"time": "5:00", "seconds": 300, "label": "Early"},
+        ]}}
+        late = {"learning": {"timestamps": [
+            {"time": "3:00:00", "seconds": 10800, "label": "Late"},
+            {"time": "4:30:00", "seconds": 16200, "label": "End"},
+        ]}}
+
+        merged = merge_batch_extractions([early, late], ["learning"])
+
+        offsets = [t["seconds"] for t in merged["learning"]["timestamps"]]
+        # All four entries survive, in chronological (batch) order.
+        assert offsets == [0, 300, 10800, 16200]
+        # The deep-into-the-video offset is intact (not dropped or zeroed).
+        assert max(offsets) == 16200

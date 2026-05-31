@@ -15,10 +15,14 @@ from src.utils.data_helpers import is_empty_data
 from .assemblers import (
     ASSEMBLER_REGISTRY,
     _chapters_to_moments,
+    _normalize_filmstrip_frame,
     assemble_display_section,
     infer_component,
 )
+from .attachments import attach_secondaries
 from .cross_tab import resolve_cross_tab_links
+from .density import enforce_density
+from .promotion import promote_component
 
 logger = logging.getLogger(__name__)
 
@@ -209,14 +213,33 @@ def find_description_for_frame(
 _DOMAIN_REQUIREMENTS: dict[str, dict] = {
     "food":     {"required": ["step_player", "checklist"], "max": {"flash_deck": 1}},
     "project":  {"required": ["step_player", "checklist"], "max": {"flash_deck": 1}},
-    "review":   {"required": ["verdict", "comparison"],    "max": {"flash_deck": 1}},
-    "fitness":  {"required": ["exercise_tracker"],         "max": {"flash_deck": 1}},
-    "tech":     {"required": ["code_explorer"],            "max": {"flash_deck": 1, "quiz": 1}},
+    "review":   {"required": ["comparison"],               "max": {"flash_deck": 1}},
+    "fitness":  {"required": ["workout_room"],             "max": {"flash_deck": 1}},
+    "tech":     {"required": ["code_playground"],          "max": {"flash_deck": 1, "quiz_arena": 1}},
     "travel":   {"required": ["spot_explorer"],            "max": {"flash_deck": 1}},
-    "music":    {"required": ["lyrics_player"],            "max": {"flash_deck": 1}},
-    "learning": {"required": [],                           "max": {"flash_deck": 1, "quiz": 1}},
+    # music: lyrics_karaoke is OPTIONAL — moment_track stays primary nav, so
+    # videos without per-line lyric timing don't fail validation.
+    "music":    {"required": [],                           "max": {"flash_deck": 1}},
+    "learning": {"required": [],                           "max": {"flash_deck": 1, "quiz_arena": 1}},
     "language": {"required": ["spot_explorer"],       "max": {"flash_deck": 1}},
-    "science":  {"required": ["spot_explorer"],       "max": {"flash_deck": 1, "quiz": 1}},
+    "science":  {"required": ["spot_explorer"],       "max": {"flash_deck": 1, "quiz_arena": 1}},
+    # podcast: moment_track segments are the spine (talking-head, no filmstrip).
+    "podcast":  {"required": ["moment_track"],        "max": {"flash_deck": 1, "quiz_arena": 1}},
+    # news: claims_tracker is the signature accountability surface.
+    "news":     {"required": ["claims_tracker"],      "max": {"flash_deck": 1}},
+    # gaming: tier_list is the signature ranking surface.
+    "gaming":   {"required": ["tier_list"],           "max": {"flash_deck": 1, "quiz_arena": 1}},
+    # sport: formation_diagram is the signature tactical surface.
+    "sport":    {"required": ["formation_diagram"],   "max": {"flash_deck": 1}},
+}
+
+
+# A required component is satisfied by any of its promotion targets — e.g.
+# `comparison` is promoted to `comparison_radar` when it has enough axes, which
+# still fulfils the review domain's need for a comparison tab.
+_REQUIREMENT_EQUIVALENTS: dict[str, frozenset[str]] = {
+    "comparison": frozenset({"comparison", "comparison_radar"}),
+    "step_player": frozenset({"step_player", "step_flow_canvas"}),
 }
 
 
@@ -226,7 +249,8 @@ def _validate_domain_requirements(tabs: list[dict], primary_tag: str) -> None:
     tab_components = [t.get("component", "") for t in tabs]
 
     for req in reqs.get("required", []):
-        if req not in tab_components:
+        accepted = _REQUIREMENT_EQUIVALENTS.get(req, frozenset({req}))
+        if not any(c in accepted for c in tab_components):
             logger.warning(
                 "Domain '%s' requires '%s' but it's missing from assembled tabs",
                 primary_tag, req,
@@ -261,17 +285,45 @@ _NO_COUNT_COMPONENTS = frozenset({"overview", "verdict", "budget"})
 
 # Maps component → required list key. If the list is empty after assembly, drop the tab.
 _COMPONENT_REQUIRED_LISTS: dict[str, str] = {
+    # Legacy keys (kept for cached `assembledTabs` rows)
     "code_explorer": "snippets",
-    "moment_track": "items",
     "exercise_tracker": "exercises",
     "quiz": "questions",
     "scenario": "scenarios",
+    "lyrics_player": "sections",
+    "gallery": "images",
+    # Kept across the overhaul
+    "moment_track": "items",
     "spot_explorer": "spots",
     "info_grid": "items",
     "checklist": "items",
     "step_player": "steps",
     "flash_deck": "cards",
     "budget": "breakdown",
+    "comparison": "comparisons",
+    # Video-to-action overhaul: new components
+    "code_playground": "snippets",
+    "workout_room": "exercises",
+    "quiz_arena": "questions",
+    "lyrics_karaoke": "sections",
+    "video_filmstrip": "frames",
+    "concept_canvas": "concepts",
+    "connect_canvas": "pairs",
+    "step_flow_canvas": "steps",
+    "comparison_radar": "comparisons",
+    "packing_mission": "items",
+    # interactive-overhaul-v2 P5b — news signature component
+    "claims_tracker": "claims",
+    # interactive-overhaul-v2 P5c/d — gaming + sport signature components
+    "tier_list": "items",
+    "formation_diagram": "positions",
+    # Secondary-tier (attachment-only) — interactive-overhaul-v2 P2.
+    # tip_callout/summary_header carry scalar text (no list), so they are not
+    # listed here; they're validated by their assemblers returning None on empty.
+    "stat_banner": "stats",
+    "diagram_card": "nodes",
+    "frame_strip": "frames",
+    "quick_quiz": "questions",
 }
 
 
@@ -310,6 +362,9 @@ _COUNT_KEYS: dict[str, str] = {
     "gallery": "images",
     "comparison": "comparisons",
     "lyrics_player": "sections",
+    "claims_tracker": "claims",
+    "tier_list": "items",
+    "formation_diagram": "positions",
 }
 
 # Per-component user-facing item caps. Long videos otherwise produce
@@ -324,10 +379,39 @@ _TAB_ITEM_CAPS: dict[str, int] = {
     "spot_explorer": 25,
     "step_player": 25,
     "checklist": 30,
+    "claims_tracker": 20,
+    "tier_list": 30,
+    "formation_diagram": 23,
 }
 
 
-def _cap_tab_items(component: str, props: dict) -> None:
+# moment_track is a timeline: its cap scales with duration and the kept items
+# are sampled evenly across the video, not head-sliced (which truncated long
+# videos to their first ~40 min). ~1 moment per 7 min, clamped to [20, 60].
+_MOMENT_CAP_MIN = 20
+_MOMENT_CAP_MAX = 60
+_MOMENT_MINUTES_PER_ITEM = 7
+
+
+def _evenly_sample(items: list, cap: int) -> list:
+    """Return ``cap`` items at evenly spaced indices, keeping first and last.
+
+    Used for timelines so a capped list still spans the whole video instead of
+    only its head. Rounding collisions may yield slightly fewer than ``cap``.
+    """
+    n = len(items)
+    if cap <= 0:
+        return []
+    if n <= cap:
+        return items
+    if cap == 1:
+        return [items[0]]
+    step = (n - 1) / (cap - 1)
+    indices = sorted({round(i * step) for i in range(cap)})
+    return [items[i] for i in indices]
+
+
+def _cap_tab_items(component: str, props: dict, video_duration: float | None = None) -> None:
     """Truncate the user-facing list on a tab if it exceeds the cap."""
     cap = _TAB_ITEM_CAPS.get(component)
     if cap is None:
@@ -336,7 +420,24 @@ def _cap_tab_items(component: str, props: dict) -> None:
     if not list_key:
         return
     items = props.get(list_key)
-    if isinstance(items, list) and len(items) > cap:
+    if not isinstance(items, list):
+        return
+
+    # Timeline: scale the cap with duration and sample evenly (span the video).
+    if component == "moment_track":
+        if video_duration and video_duration > 0:
+            cap = min(_MOMENT_CAP_MAX, max(
+                _MOMENT_CAP_MIN, round((video_duration / 60) / _MOMENT_MINUTES_PER_ITEM),
+            ))
+        if len(items) > cap:
+            logger.info(
+                "Assembly: capping %s.%s from %d → %d (even-sampled)",
+                component, list_key, len(items), cap,
+            )
+            props[list_key] = _evenly_sample(items, cap)
+        return
+
+    if len(items) > cap:
         logger.info(
             "Assembly: capping %s.%s from %d → %d",
             component, list_key, len(items), cap,
@@ -344,7 +445,7 @@ def _cap_tab_items(component: str, props: dict) -> None:
         props[list_key] = items[:cap]
 
 
-def _post_process_tabs(tabs: list[dict]) -> None:
+def _post_process_tabs(tabs: list[dict], video_duration: float | None = None) -> None:
     """Apply post-processing rules to assembled tabs in-place."""
     for i, tab in enumerate(tabs):
         label = tab.get("label", "")
@@ -355,7 +456,7 @@ def _post_process_tabs(tabs: list[dict]) -> None:
         # are computed, so e.g. "29 Comparisons" gets relabeled to "10".
         component = tab.get("component", "")
         if isinstance(props, dict) and component:
-            _cap_tab_items(component, props)
+            _cap_tab_items(component, props, video_duration)
 
         if emoji and label.startswith(emoji):
             label = label[len(emoji):].lstrip()
@@ -652,6 +753,34 @@ def assemble_response(
     """
     video_meta = video_meta or {}
 
+    # Inject normalized filmstrip frames into extraction so a tab planned as
+    # `{ "component": "video_filmstrip", "dataSource": "frames" }` resolves
+    # cleanly. Reuses the assembler's own normalizer for consistency. Frame
+    # data is captured by the frames phase but otherwise bypasses extraction —
+    # this is the bridge that lets the LLM plan a filmstrip tab. Work on a
+    # shallow copy so the synthetic `frames` key never leaks into the caller's
+    # extraction record (which is persisted/cached separately).
+    if extraction is not None:
+        extraction = dict(extraction)
+    if extraction is not None and "frames" not in extraction:
+        source = gallery_frames if gallery_frames else (frames or [])
+        if frame_descriptions:
+            enriched_source = []
+            for f in source:
+                if not isinstance(f, dict):
+                    continue
+                desc = find_description_for_frame(f, frame_descriptions)
+                merged = dict(f)
+                if desc:
+                    merged.setdefault("caption", desc.get("caption"))
+                    merged.setdefault("ocr", desc.get("ocr"))
+                    merged.setdefault("sceneType", desc.get("scene_type"))
+                enriched_source.append(merged)
+            source = enriched_source
+        normalized = [n for n in (_normalize_filmstrip_frame(item) for item in source) if n is not None]
+        if normalized:
+            extraction["frames"] = normalized
+
     meta: dict[str, Any] = {
         "contentTags": triage.get("contentTags", ["learning"]),
         "modifiers": triage.get("modifiers", []),
@@ -755,6 +884,15 @@ def assemble_response(
             )
             props = None
 
+        # Post-extraction promotion (the planner couldn't see the item counts /
+        # connection graph that gate the richer components) then density caps.
+        # Both run before validation so a promoted/trimmed tab is re-checked.
+        if props is not None:
+            component, props = promote_component(
+                component, props, data, extraction, primary_tag,
+            )
+            props = enforce_density(component, props)
+
         if props is not None and not _validate_assembled_props(component, props):
             logger.warning(
                 "TAB DROPPED: id=%r, component=%r — failed validation",
@@ -840,10 +978,12 @@ def assemble_response(
 
     _validate_domain_requirements(assembled_tabs, primary_tag)
 
-    # Conditional gallery auto-append
+    # Conditional filmstrip auto-append. The standalone gallery component was
+    # retired in the video-to-action overhaul; this surfaces the same frames as
+    # a `video_filmstrip` scrubber instead.
     _gallery_source = gallery_frames if gallery_frames else frames
     if _gallery_source and len(_gallery_source) > 0:
-        gallery_images = []
+        filmstrip_frames: list[dict] = []
         non_generic_count = 0
         for f in sorted(_gallery_source, key=lambda x: x.get("timestamp", 0)):
             ts = f.get("timestamp", 0)
@@ -857,46 +997,57 @@ def assemble_response(
             if caption.startswith("Moment at") and f.get("ocr_text"):
                 caption = f.get("ocr_text", caption)
 
-            if not caption.startswith("Moment at"):
-                non_generic_count += 1
-
-            gallery_images.append({
-                "url": f.get("s3_url", ""),
+            normalized = _normalize_filmstrip_frame({
+                "thumbnailUrl": f.get("s3_url", ""),
                 "caption": caption,
                 "timestamp": ts,
-                "thumbnailUrl": f.get("s3_url", ""),
-                **({"s3Key": f["s3_key"]} if f.get("s3_key") else {}),
+                **({"ocr": f["ocr_text"]} if f.get("ocr_text") else {}),
             })
+            if normalized is not None:
+                if f.get("s3_key"):
+                    normalized["s3Key"] = f["s3_key"]
+                filmstrip_frames.append(normalized)
+                # Count non-generic captions over the SURVIVING frames only, so
+                # the ≥70% gate below divides by the same population it counts.
+                if not caption.startswith("Moment at"):
+                    non_generic_count += 1
 
-        # Gallery is the lowest-signal tab on the rail — auto-append only when
-        # captions are largely non-generic (≥70%, was 50%) and we have enough
-        # frames to feel like a real gallery, not a 3-photo afterthought. Also
-        # skip for content types where a frame strip never adds value:
-        # podcast/narrative/music are mostly talking-head footage; pure audio
-        # books, lectures with one slide, etc. drown the page in noise.
-        has_enough_frames = len(gallery_images) >= 10
-        has_good_captions = non_generic_count >= len(gallery_images) * 0.7
+        # The filmstrip is the lowest-signal tab on the rail — auto-append only
+        # when captions are largely non-generic (≥70%) and we have enough frames
+        # to feel like a real strip, not a 3-photo afterthought. Also skip
+        # content types where it never adds value: podcast/narrative/music are
+        # mostly talking-head footage; lectures with one slide drown in noise.
+        has_enough_frames = len(filmstrip_frames) >= 10
+        has_good_captions = non_generic_count >= len(filmstrip_frames) * 0.7
         _NO_GALLERY_DOMAINS = {"narrative", "music"}
         _domain_blocked = primary_tag in _NO_GALLERY_DOMAINS
-        if (gallery_images and has_enough_frames and has_good_captions
+        if (filmstrip_frames and has_enough_frames and has_good_captions
                 and not _domain_blocked):
-            layout = "grid" if len(gallery_images) > 10 else "carousel"
             assembled_tabs.append({
                 "id": "frames-gallery",
                 "label": "Visual Moments",
                 "emoji": "\U0001f5bc\ufe0f",
-                "component": "gallery",
-                "props": {
-                    "images": gallery_images,
-                    "layout": layout,
-                    "enableLightbox": True,
-                    "onImageClick": "seek",
-                },
+                "component": "video_filmstrip",
+                "props": {"frames": filmstrip_frames},
                 "goal": "Browse key visual moments from the video",
                 "crossTabLinks": [],
             })
 
-    _post_process_tabs(assembled_tabs)
+    _post_process_tabs(assembled_tabs, (video_meta or {}).get("duration"))
+
+    # Secondary-tier attachments (interactive-overhaul-v2 P2): enrich sparse
+    # tabs / break up dense ones. Authoritative + data-driven; runs after tabs
+    # are finalized so item counts reflect the user-visible list. The overview
+    # tab is its own hero — never decorate it.
+    attach_frames = extraction.get("frames") if isinstance(extraction, dict) else None
+    for tab in assembled_tabs:
+        if tab.get("component") == "overview":
+            continue
+        secondaries = attach_secondaries(
+            tab, extraction, enrichment, attach_frames, primary_tag,
+        )
+        if secondaries:
+            tab["attachments"] = secondaries
 
     # Minimum 3-tab guarantee: add fallback tabs if needed
     if len(assembled_tabs) < 3:

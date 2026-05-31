@@ -1,0 +1,106 @@
+<domain_schema name="sport">
+SPORT DATA — SportData schema
+
+Extract structured sport / match-analysis / highlights content.
+
+THINKING GUIDE:
+- Sport content covers a MATCH or a player/team analysis. The value is the
+  sequence of key events, who lined up where, and how the numbers compare.
+- Match events are the chronological backbone: goals, cards, substitutions,
+  turning points. Set a timestamp so the viewer can jump.
+- The formation is the lineup laid out by position — players as nodes on a
+  pitch. This is the sport signature — a read-only tactical diagram.
+- The stat comparison weighs two teams or players on the same metrics.
+
+{
+  "title": "The match / analysis in one line, or null",
+  "matchEvents": [
+    {
+      "label": "What happened (goal, card, sub)",
+      "description": "1 sentence of detail",
+      "timestamp": 0
+    }
+  ],
+> UI: matchEvents → MomentTrack. Set timestamp (seconds) so viewers jump to each event.
+  "formation": {
+    "name": "Formation shorthand (e.g. 4-3-3), or null",
+    "team": "Team name, or null",
+    "positions": [
+      {
+        "player": "Player name",
+        "role": "Position label (GK, RB, CM, ST)",
+        "x": 50,
+        "y": 90,
+        "number": 9
+      }
+    ]
+  },
+> UI: formation → FormationDiagram. positions place players on a pitch. x/y are 0-100 percentages: x = left→right (0=left touchline, 100=right), y = own goal→opponent goal (0=own goalkeeper end, 100=attacking end). number is optional shirt number.
+  "statComparison": {
+    "leftLabel": "Team / player A",
+    "rightLabel": "Team / player B",
+    "comparisons": [
+      {
+        "feature": "The metric (possession, shots, xG)",
+        "left": "A's value",
+        "right": "B's value"
+      }
+    ]
+  }
+> UI: statComparison → Comparison. Two sides on the same metrics; each side ≤ 80 chars.
+}
+
+// Example for a football match recap:
+{
+  "title": "Title decider: City vs United",
+  "matchEvents": [
+    {"label": "City open the scoring", "description": "Tap-in from a low cross.", "timestamp": 720},
+    {"label": "United equalise", "description": "Header from a corner.", "timestamp": 1980},
+    {"label": "Red card, United", "description": "Second yellow for a late tackle.", "timestamp": 3600},
+    {"label": "City winner", "description": "Curling effort into the top corner.", "timestamp": 4980}
+  ],
+  "formation": {
+    "name": "4-3-3",
+    "team": "City",
+    "positions": [
+      {"player": "Ederson", "role": "GK", "x": 50, "y": 8, "number": 31},
+      {"player": "Walker", "role": "RB", "x": 80, "y": 30, "number": 2},
+      {"player": "Dias", "role": "CB", "x": 60, "y": 25, "number": 3},
+      {"player": "Stones", "role": "CB", "x": 40, "y": 25, "number": 5},
+      {"player": "Gvardiol", "role": "LB", "x": 20, "y": 30, "number": 24},
+      {"player": "Rodri", "role": "CDM", "x": 50, "y": 50, "number": 16},
+      {"player": "De Bruyne", "role": "CM", "x": 70, "y": 60, "number": 17},
+      {"player": "Silva", "role": "CM", "x": 30, "y": 60, "number": 20},
+      {"player": "Foden", "role": "RW", "x": 80, "y": 80, "number": 47},
+      {"player": "Haaland", "role": "ST", "x": 50, "y": 90, "number": 9},
+      {"player": "Grealish", "role": "LW", "x": 20, "y": 80, "number": 10}
+    ]
+  },
+  "statComparison": {
+    "leftLabel": "City",
+    "rightLabel": "United",
+    "comparisons": [
+      {"feature": "Possession", "left": "63%", "right": "37%"},
+      {"feature": "Shots", "left": "18", "right": "7"},
+      {"feature": "xG", "left": "2.4", "right": "0.9"}
+    ]
+  }
+}
+
+SCALING (video is {duration_minutes} minutes):
+- Under 10 min: 3-6 match events, 1 formation (3-11 players), 3-6 stat rows
+- 10-30 min: 5-12 match events, 1-2 formations, 4-10 stat rows
+- Over 30 min: 8-20 match events, 1-2 formations, 5-12 stat rows
+
+RULES:
+- formation.positions x and y MUST be 0-100. A player with no clear position is
+  omitted, not stacked at 0,0.
+- Preserve exact scores, stats, and minutes; do not round figures.
+- matchEvents timestamps must be ascending, in seconds.
+- statComparison needs BOTH sides on every row — drop a metric if one side is unknown.
+
+COMMON MISTAKES:
+- Inventing positions the video never shows — only place players you can place.
+- Treating the stat comparison as a flat list — it is two sides, same metrics.
+- Putting commentary in matchEvents — events are concrete things that happened.
+</domain_schema>

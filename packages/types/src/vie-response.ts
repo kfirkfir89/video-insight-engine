@@ -42,6 +42,20 @@ export interface CrossTabLinkDef {
   label: string;
 }
 
+/** Secondary-tier component attached above or below a tab's primary interactive.
+ *  Attachments enrich sparse tabs (frame strip, quick quiz, tip) and break up
+ *  dense ones (summary header). They are never standalone tabs — only the
+ *  primary `component` on a `TabEntry` can be planner-selected. */
+export interface TabAttachment {
+  /** Render position relative to the primary interactive. */
+  slot: 'top' | 'bottom';
+  /** Secondary-tier component name (must have a COMPONENT_REGISTRY renderer). */
+  component: string;
+  props: Record<string, unknown>;
+  /** Visual footprint hint — `banner` spans full width, `strip` is compact. */
+  size?: 'banner' | 'strip';
+}
+
 /** Backend-assembled tab: specifies which interactive to render and pre-resolved props. */
 export interface TabEntry {
   id: string;
@@ -51,6 +65,9 @@ export interface TabEntry {
   props: Record<string, unknown>;
   goal?: string;
   crossTabLinks?: CrossTabLinkDef[];
+  /** Optional secondary-tier attachments rendered around the primary. Absent
+   *  on flat tabs, which render exactly as before. */
+  attachments?: TabAttachment[];
 }
 
 // ─────────────────────────────────────────────────────
@@ -154,6 +171,261 @@ export interface MomentTrackProps {
   currentTime?: number;
   nextTab?: string;
   onNavigateTab?: (id: string) => void;
+}
+
+// ─────────────────────────────────────────────────────
+// Video-to-Action overhaul: new component prop types
+// ─────────────────────────────────────────────────────
+
+/** Verdict header rendered above ComparisonInteractive via ReviewSummary. */
+export interface VerdictHeader {
+  badge?: string;
+  bottomLine?: string;
+  bestFor?: string[];
+  notFor?: string[];
+  score?: number;
+  maxScore?: number;
+  subScores?: Array<{ category: string; score: number }>;
+}
+
+export interface ConceptCanvasProps {
+  concepts: ConceptItem[];
+  onSeek?: (seconds: number) => void;
+  videoId?: string;
+  nextTab?: string;
+  onNavigateTab?: (id: string) => void;
+}
+
+export interface StepFlowCanvasProps {
+  steps: StepItem[];
+  onSeek?: (seconds: number) => void;
+  tabId?: string;
+}
+
+/**
+ * @deprecated ComparisonRadar was merged into ComparisonInteractive (P3C). The
+ * `comparison_radar` component is now a registry alias that renders
+ * ComparisonInteractive with the radar hero forced on. Kept for backward type
+ * compatibility; new code should use ComparisonInteractive's `view="radar"`.
+ */
+export interface ComparisonRadarProps {
+  comparisons: ReviewComparison[];
+  leftLabel?: string;
+  rightLabel?: string;
+}
+
+/** One graded match in a ConnectCanvas quiz: a left-column prompt and the
+ *  right-column answer it should connect to. `match` is the answer-key value
+ *  (the connected concept the prompt belongs with). */
+export interface ConnectPair {
+  prompt: string;
+  match: string;
+}
+
+export interface ConnectCanvasProps {
+  pairs: ConnectPair[];
+  videoId?: string;
+  tabId?: string;
+  nextTab?: string;
+  onNavigateTab?: (id: string) => void;
+}
+
+export interface CodePlaygroundProps {
+  snippets: TechSnippet[];
+  onSeek?: (seconds: number) => void;
+}
+
+export interface QuizArenaQuestion extends FrameEvidence {
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation?: string;
+  context?: string;
+  kind?: 'standard' | 'scenario';
+  thumbnailUrl?: string;
+  timestamp?: number;
+}
+
+export interface QuizArenaProps {
+  questions: QuizArenaQuestion[];
+  tabId?: string;
+  nextTab?: string;
+  onNavigateTab?: (id: string) => void;
+  videoId?: string;
+}
+
+export interface PackingMissionItem {
+  item: string;
+  category?: string;
+  essential?: boolean;
+  weight?: number;
+  emoji?: string;
+}
+
+export interface PackingMissionProps {
+  items: PackingMissionItem[];
+  videoId?: string;
+  tabId?: string;
+  nextTab?: string;
+  onNavigateTab?: (id: string) => void;
+}
+
+export interface WorkoutRoomProps {
+  exercises: FitnessExercise[];
+  warmup?: FitnessExercise[];
+  cooldown?: FitnessExercise[];
+  onSeek?: (seconds: number) => void;
+}
+
+export interface LyricsKaraokeLine {
+  text: string;
+  timestamp?: number;
+  words?: Array<{ text: string; startTime: number; endTime: number }>;
+}
+
+export interface LyricsKaraokeSection {
+  name: string;
+  timestamp?: number;
+  lines: LyricsKaraokeLine[];
+}
+
+export interface LyricsKaraokeProps {
+  sections: LyricsKaraokeSection[];
+  lines?: LyricsKaraokeLine[];
+  artist?: string;
+  onSeek?: (seconds: number) => void;
+  currentTime?: number;
+}
+
+export interface FilmstripFrame {
+  thumbnailUrl: string;
+  timestamp: number;
+  caption?: string;
+  ocr?: string;
+  sceneType?: string;
+}
+
+export interface VideoFilmstripProps {
+  frames: FilmstripFrame[];
+  onSeek?: (seconds: number) => void;
+  currentTime?: number;
+  mode?: 'tab' | 'overlay';
+}
+
+// ─────────────────────────────────────────────────────
+// Secondary-tier component prop types (attachment-only)
+// ─────────────────────────────────────────────────────
+
+/** One equal-weight stat in a StatBanner. Deliberately NOT a hero metric. */
+export interface StatBannerStat {
+  label: string;
+  value: string;
+  emoji?: string;
+}
+
+export interface StatBannerProps {
+  stats: StatBannerStat[];
+}
+
+export interface TipCalloutProps {
+  /** Visual treatment — full border + bg tint, never a side-stripe. */
+  style?: 'tip' | 'warning' | 'note';
+  text: string;
+  title?: string;
+}
+
+export interface SummaryHeaderProps {
+  /** One-line orientation for a dense tab. */
+  summary: string;
+  title?: string;
+  emoji?: string;
+}
+
+export interface DiagramCardItem {
+  label: string;
+  detail?: string;
+  emoji?: string;
+}
+
+/** A directed edge between two diagram nodes, addressed by node index. */
+export interface DiagramCardEdge {
+  source: number;
+  target: number;
+}
+
+export interface DiagramCardProps {
+  /** Ordered nodes shown as a read-only ReactFlow diagram. */
+  nodes: DiagramCardItem[];
+  /** Explicit edges (from concept connections); falls back to a sequential
+   *  chain when omitted. */
+  edges?: DiagramCardEdge[];
+  caption?: string;
+}
+
+// ─────────────────────────────────────────────────────
+// claims_tracker — news signature component
+// ─────────────────────────────────────────────────────
+
+/** Fact-check status for a single claim. `context` = neither confirmed nor
+ *  refuted, surfaced for background. */
+export type ClaimStatus = 'verified' | 'disputed' | 'context';
+
+/** A single claim made in the video: the assertion, who made it, its
+ *  verification status, and the supporting source (if any). */
+export interface ClaimItem extends FrameEvidence {
+  claim: string;
+  /** Who said / made the claim (speaker, reporter, or named source). */
+  source: string;
+  status: ClaimStatus;
+  /** Where the claim's verification comes from (study, outlet, official record). */
+  sourceCitation?: string;
+  timestamp?: number;
+}
+
+export interface ClaimsTrackerProps {
+  claims: ClaimItem[];
+}
+
+// ─────────────────────────────────────────────────────
+// tier_list — gaming signature component
+// ─────────────────────────────────────────────────────
+
+/** A tier in an S/A/B/C/D ranking. */
+export type TierRank = 'S' | 'A' | 'B' | 'C' | 'D';
+
+/** One rankable item. `tier` is the creator's suggested placement (the answer
+ *  key); the viewer can drag it into any tier and the choice persists locally. */
+export interface TierListItem {
+  item: string;
+  tier?: TierRank;
+  reason?: string;
+  emoji?: string;
+}
+
+export interface TierListProps {
+  items: TierListItem[];
+  videoId?: string;
+  tabId?: string;
+}
+
+// ─────────────────────────────────────────────────────
+// formation_diagram — sport signature component
+// ─────────────────────────────────────────────────────
+
+/** One player placed on the pitch. x/y are 0-100 percentages: x = left→right,
+ *  y = own-goal end (0) → attacking end (100). */
+export interface FormationPosition {
+  player: string;
+  role?: string;
+  x: number;
+  y: number;
+  number?: number;
+}
+
+export interface FormationDiagramProps {
+  positions: FormationPosition[];
+  name?: string;
+  team?: string;
 }
 
 export interface QuizQuestion {
@@ -438,6 +710,133 @@ export interface ProjectData {
   safetyWarnings: string[];
 }
 
+// --- Podcast ---
+
+export interface PodcastSegment {
+  title: string;
+  summary?: string;
+  timestamp?: number;
+  endSeconds?: number;
+  speaker?: string;
+}
+
+export interface PodcastGuest {
+  name: string;
+  role?: string;
+  description?: string;
+  emoji?: string;
+}
+
+export interface PodcastQuote {
+  quote: string;
+  speaker?: string;
+  timestamp?: number;
+}
+
+export interface PodcastTopic {
+  topic: string;
+  detail?: string;
+}
+
+export interface PodcastData {
+  show?: string;
+  host?: string;
+  segments: PodcastSegment[];
+  guests: PodcastGuest[];
+  quotes: PodcastQuote[];
+  topics: PodcastTopic[];
+}
+
+// --- News ---
+
+export interface NewsTimelineEvent {
+  label: string;
+  description?: string;
+  timestamp?: number;
+}
+
+export interface NewsEntity {
+  name: string;
+  role?: string;
+  description?: string;
+  emoji?: string;
+}
+
+export interface NewsContextItem {
+  key: string;
+  value: string;
+}
+
+export interface NewsData {
+  headline?: string;
+  storyTimeline: NewsTimelineEvent[];
+  entities: NewsEntity[];
+  claims: ClaimItem[];
+  context: NewsContextItem[];
+}
+
+// --- Gaming ---
+
+export interface GamingHighlight {
+  label: string;
+  description?: string;
+  timestamp?: number;
+}
+
+export interface GamingLoadoutItem {
+  item: string;
+  category?: string;
+  note?: string;
+}
+
+export interface GamingWalkthroughStep {
+  instruction: string;
+  timestamp?: number;
+}
+
+export interface GamingData {
+  title?: string;
+  highlights: GamingHighlight[];
+  loadout: GamingLoadoutItem[];
+  walkthrough: GamingWalkthroughStep[];
+  /** Creator rankings — same shape as the tier_list component items. */
+  rankings: TierListItem[];
+}
+
+// --- Sport ---
+
+export interface SportMatchEvent {
+  label: string;
+  description?: string;
+  timestamp?: number;
+}
+
+export interface SportFormation {
+  name?: string;
+  team?: string;
+  /** Players placed on the pitch — same shape as formation_diagram positions. */
+  positions: FormationPosition[];
+}
+
+export interface SportStatRow {
+  feature: string;
+  left?: string;
+  right?: string;
+}
+
+export interface SportStatComparison {
+  leftLabel?: string;
+  rightLabel?: string;
+  comparisons: SportStatRow[];
+}
+
+export interface SportData {
+  title?: string;
+  matchEvents: SportMatchEvent[];
+  formation?: SportFormation;
+  statComparison?: SportStatComparison;
+}
+
 // ─────────────────────────────────────────────────────
 // Modifier Data Interfaces
 // ─────────────────────────────────────────────────────
@@ -506,6 +905,10 @@ export interface VIEResponse {
   learning?: LearningData;
   review?: ReviewData;
   project?: ProjectData;
+  podcast?: PodcastData;
+  news?: NewsData;
+  gaming?: GamingData;
+  sport?: SportData;
 
   // Modifier enrichment
   narrative?: NarrativeData;

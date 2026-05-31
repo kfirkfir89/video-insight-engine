@@ -23,8 +23,20 @@ in this file; they're all gone now.
 
 from __future__ import annotations
 
+# Promoted components reuse their base component's link rules (interactive-
+# overhaul-v2 1A promotion). Normalizing here keeps the rule table small and
+# means a flash_deck promoted to concept_canvas still links to the quiz, etc.
+_LINK_COMPONENT_ALIASES: dict[str, str] = {
+    "concept_canvas": "flash_deck",
+    "step_flow_canvas": "step_player",
+    "comparison_radar": "comparison",
+}
+
 # Component-based cross-tab rules: (source_component, target_component, domain_hint?)
 # domain_hint is optional — when present, the rule only fires for that domain.
+# Component names are the current (post video-to-action overhaul) set; retired
+# names (verdict, code_explorer, quiz, exercise_tracker, lyrics_player) were
+# removed in interactive-overhaul-v2 1D.
 _COMPONENT_LINK_RULES: list[tuple[str, str, str | None]] = [
     # Food domain flow
     ("overview", "checklist", "food"),
@@ -38,35 +50,33 @@ _COMPONENT_LINK_RULES: list[tuple[str, str, str | None]] = [
     ("overview", "spot_explorer", "travel"),
     ("spot_explorer", "budget", "travel"),
     ("budget", "checklist", "travel"),
-    # Review domain flow
+    # Review domain flow — verdict folds into comparison's ReviewSummary header.
     ("overview", "comparison", "review"),
-    ("comparison", "verdict", "review"),
-    ("verdict", "info_grid", "review"),
+    ("comparison", "info_grid", "review"),
     # Learning/Tech domain flow
     ("overview", "flash_deck", "learning"),
-    ("flash_deck", "code_explorer", "tech"),
-    ("code_explorer", "quiz", "tech"),
+    ("flash_deck", "code_playground", "tech"),
+    ("code_playground", "quiz_arena", "tech"),
     ("overview", "flash_deck", "tech"),
-    ("flash_deck", "quiz", "learning"),
+    ("flash_deck", "quiz_arena", "learning"),
     # Fitness domain flow
-    ("overview", "exercise_tracker", "fitness"),
-    ("exercise_tracker", "info_grid", "fitness"),
+    ("overview", "workout_room", "fitness"),
+    ("workout_room", "info_grid", "fitness"),
     # Music domain flow
-    ("overview", "lyrics_player", "music"),
-    ("lyrics_player", "moment_track", "music"),
+    ("overview", "lyrics_karaoke", "music"),
+    ("lyrics_karaoke", "moment_track", "music"),
     ("moment_track", "info_grid", "music"),
     # Generic (cross-domain) rules — fire when no domain-specific rule matched
     ("overview", "checklist", None),
     ("overview", "step_player", None),
     ("overview", "flash_deck", None),
-    ("overview", "quiz", None),
-    ("overview", "exercise_tracker", None),
+    ("overview", "quiz_arena", None),
+    ("overview", "workout_room", None),
     ("overview", "comparison", None),
-    ("overview", "verdict", None),
     ("checklist", "step_player", None),
-    ("flash_deck", "quiz", None),
-    ("quiz", "flash_deck", None),
-    ("code_explorer", "quiz", None),
+    ("flash_deck", "quiz_arena", None),
+    ("quiz_arena", "flash_deck", None),
+    ("code_playground", "quiz_arena", None),
 ]
 
 # Legacy ID-based rules as secondary fallback. Also structural-only.
@@ -136,13 +146,15 @@ def resolve_cross_tab_links(
     if component and all_tabs:
         comp_to_tabs: dict[str, list[str]] = {}
         for t in all_tabs:
-            tc = t.get("component", "")
+            tc = str(t.get("component", ""))
             tid = t.get("id", "")
             if tc and tid:
-                comp_to_tabs.setdefault(tc, []).append(tid)
+                canonical = _LINK_COMPONENT_ALIASES.get(tc) or tc
+                comp_to_tabs.setdefault(canonical, []).append(tid)
 
+        source_component = _LINK_COMPONENT_ALIASES.get(component, component)
         for src_comp, tgt_comp, domain in _COMPONENT_LINK_RULES:
-            if src_comp != component:
+            if src_comp != source_component:
                 continue
             if domain and domain != primary_tag:
                 continue

@@ -243,6 +243,7 @@ def _build_base_template(
     content_emphasis: str = "",
     video_context: str = "",
     language_instruction: str = "",
+    frame_context: str = "",
 ) -> str:
     """Build extraction prompt with domain schemas injected, {transcript} placeholder intact.
 
@@ -299,6 +300,7 @@ def _build_base_template(
         .replace("{detail_level}", detail_level)
         .replace("{content_emphasis}", content_emphasis or "Extract with precision and completeness.")
         .replace("{video_context}", video_context or "Not available")
+        .replace("{frame_context}", frame_context or "No keyframe captions available.")
         .replace("{primary_tag}", primary_tag)
         .replace("{domain_example}", domain_example)
         .replace("{language_instruction}", language_instruction)
@@ -318,6 +320,7 @@ def build_extraction_prompt(
     content_emphasis: str = "",
     video_context: str = "",
     language_instruction: str = "",
+    frame_context: str = "",
 ) -> str:
     """Assemble a complete extraction prompt from base template + domain schemas.
 
@@ -339,7 +342,7 @@ def build_extraction_prompt(
     template = _build_base_template(
         content_tags, modifiers, quality_rules, title, duration_minutes,
         user_goal, tab_goals, detail_level, content_emphasis, video_context,
-        language_instruction,
+        language_instruction, frame_context,
     )
     # build_extraction_prompt is the single-shot convenience wrapper —
     # no batch context applies, so clear the placeholder explicitly.
@@ -358,6 +361,7 @@ def build_extraction_template(
     content_emphasis: str = "",
     video_context: str = "",
     language_instruction: str = "",
+    frame_context: str = "",
 ) -> str:
     """Build extraction prompt template with {transcript} placeholder for extractor to fill.
 
@@ -381,5 +385,63 @@ def build_extraction_template(
     return _build_base_template(
         content_tags, modifiers, quality_rules, title, duration_minutes,
         user_goal, tab_goals, detail_level, content_emphasis, video_context,
-        language_instruction,
+        language_instruction, frame_context,
     )
+
+
+# Keep the frame block bounded — a long, low-signal list crowds the transcript
+# and inflates token cost. 12 captioned frames is enough to ground visual
+# claims and decide whether a filmstrip/diagram is warranted.
+_FRAME_CONTEXT_MAX = 12
+_FRAME_CAPTION_MAX = 90
+_FRAME_MATCH_TOLERANCE = 5.0  # seconds
+
+
+def _resolve_frame_caption(
+    frame: dict, timestamp: float, descriptions: list[dict],
+) -> tuple[str, str]:
+    """Pick the best caption + scene_type for a frame.
+
+    Vision description (matched by timestamp within tolerance) wins; OCR text is
+    the fallback. Returns ``("", "")`` when neither is available.
+    """
+    best: dict | None = None
+    best_dist = _FRAME_MATCH_TOLERANCE
+    for desc in descriptions:
+        dist = abs(desc.get("timestamp_sec", 0) - timestamp)
+        if dist <= best_dist:
+            best_dist = dist
+            best = desc
+    if best:
+        caption = str(best.get("content") or "").strip()
+        if caption:
+            return caption, str(best.get("scene_type") or "").strip()
+    return str(frame.get("ocr_text") or "").strip(), ""
+
+
+def format_gallery_frames_for_extraction(
+    gallery_frames: list[dict],
+    frame_descriptions: list[dict] | None = None,
+) -> str:
+    """Render up to 12 captioned gallery frames as prompt lines.
+
+    Each line is ``"M:SS — caption [scene_type]"``. Frames without any caption
+    (no vision description, no OCR) are skipped — a bare timestamp adds no
+    signal. Returns ``""`` when nothing usable is available.
+    """
+    if not gallery_frames:
+        return ""
+    descriptions = frame_descriptions or []
+    lines: list[str] = []
+    for frame in sorted(gallery_frames, key=lambda f: f.get("timestamp", 0)):
+        if len(lines) >= _FRAME_CONTEXT_MAX:
+            break
+        timestamp = frame.get("timestamp", 0) or 0
+        caption, scene = _resolve_frame_caption(frame, timestamp, descriptions)
+        if not caption:
+            continue
+        caption = caption[:_FRAME_CAPTION_MAX]
+        time_str = f"{int(timestamp) // 60}:{int(timestamp) % 60:02d}"
+        suffix = f" [{scene}]" if scene else ""
+        lines.append(f"{time_str} — {caption}{suffix}")
+    return "\n".join(lines)

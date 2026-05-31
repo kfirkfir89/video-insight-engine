@@ -1,5 +1,5 @@
-import { memo, useState, useMemo, type ReactNode } from 'react';
-import type { VIEResponse, SpotItem, FlashcardItem, TabEntry, TechSnippet, StepItem, FitnessExercise, QuizItem, ScenarioItem, ReviewComparison } from '@vie/types';
+import { memo, useState, useMemo, lazy, Suspense, type ReactNode } from 'react';
+import type { VIEResponse, SpotItem, FlashcardItem, TabEntry, TabAttachment, TechSnippet, StepItem, FitnessExercise, ReviewComparison, FilmstripFrame, PackingMissionItem, QuizArenaQuestion, ConceptItem, LyricsKaraokeSection, StatBannerStat, DiagramCardItem, ConnectPair, ClaimItem, TierListItem, FormationPosition } from '@vie/types';
 import { DisplaySection } from './DisplaySection';
 import { CrossTabLink } from './CrossTabLink';
 import { TabIntro } from './TabIntro';
@@ -7,29 +7,68 @@ import { resolveCrossTabLinks } from './link-rules';
 import { resolveTabData } from '@/features/video-output/components/output/lib/tab-data-resolver';
 import { INTERACTIVE_TABS, renderInteractive } from './ComposableOutputV1';
 import { useVideoPlayer } from '@/features/video-output/contexts/VideoPlayerContext';
-import { RecipePlayer } from './RecipePlayer';
+import { FlowPlayer } from './FlowPlayer';
+import { detectFlowMode } from './flow-modes';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { EmojiMarker } from '@/components/vie';
 import { stripLeadingEmoji } from '@/lib/string-utils';
 import {
   ChecklistInteractive,
-  QuizInteractive,
   FlashDeckInteractive,
-  ScenarioInteractive,
   SpotExplorer,
   StepByStepInteractive,
-  ExerciseInteractive,
   MomentTrack,
-  type MomentItem,
-  CodeExplorer,
   ComparisonInteractive,
-  VerdictInteractive,
   BudgetInteractive,
   OverviewInteractive,
   InfoGridInteractive,
-  GalleryInteractive,
-  LyricsPlayerInteractive,
+  // Video-to-action overhaul: legacy keys now forward to these new components
+  VideoFilmstrip,
+  CodePlayground,
+  QuizArena,
+  PackingMission,
+  WorkoutRoom,
+  LyricsKaraoke,
+  // Interactive Overhaul v2 — Phase 5b: news signature component
+  ClaimsTracker,
+  // Interactive Overhaul v2 — Phase 5c: gaming signature component
+  TierList,
+  // Interactive Overhaul v2 — Phase 2: secondary-tier (attachment-only)
+  StatBanner,
+  TipCallout,
+  SummaryHeader,
 } from './interactive';
+
+// Heavy canvas + radar components — code-split via React.lazy so they only
+// load when a tab actually uses them.
+const ConceptCanvas = lazy(() =>
+  import('./interactive/ConceptCanvas').then((m) => ({ default: m.ConceptCanvas })),
+);
+const StepFlowCanvas = lazy(() =>
+  import('./interactive/StepFlowCanvas').then((m) => ({ default: m.StepFlowCanvas })),
+);
+const ConnectCanvas = lazy(() =>
+  import('./interactive/ConnectCanvas').then((m) => ({ default: m.ConnectCanvas })),
+);
+const DiagramCard = lazy(() =>
+  import('./interactive/DiagramCard').then((m) => ({ default: m.DiagramCard })),
+);
+// FormationDiagram uses ReactFlow (heavy) — code-split like the other canvases.
+const FormationDiagram = lazy(() =>
+  import('./interactive/FormationDiagram').then((m) => ({ default: m.FormationDiagram })),
+);
+
+function CanvasFallback() {
+  return (
+    <div
+      className="flex items-center justify-center py-12 text-sm text-muted-foreground"
+      role="status"
+      aria-live="polite"
+    >
+      <span className="animate-pulse">Loading canvas…</span>
+    </div>
+  );
+}
 import type { OverviewCrossTabLink } from './interactive/OverviewInteractive';
 
 interface ComposableOutputProps {
@@ -84,21 +123,30 @@ interface NavProps {
  *  a single source of truth next to the renderers so new components only need
  *  to register their count-prop here. */
 const COUNT_PROP_BY_COMPONENT: Record<string, string> = {
-  quiz: 'questions',
+  // Current (post video-to-action overhaul) component set. Retired keys
+  // (quiz, timeline, clip_player, code_explorer, exercise_tracker, scenario,
+  // gallery, lyrics_player) were dropped in interactive-overhaul-v2 1D.
   flash_deck: 'cards',
   step_player: 'steps',
+  step_flow_canvas: 'steps',
   checklist: 'items',
   info_grid: 'items',
   spot_explorer: 'spots',
   moment_track: 'items',
-  timeline: 'items',
-  clip_player: 'clips',
-  code_explorer: 'snippets',
-  exercise_tracker: 'exercises',
-  scenario: 'scenarios',
-  gallery: 'images',
-  lyrics_player: 'sections',
   budget: 'breakdown',
+  // Overhaul components
+  code_playground: 'snippets',
+  quiz_arena: 'questions',
+  packing_mission: 'items',
+  workout_room: 'exercises',
+  video_filmstrip: 'frames',
+  concept_canvas: 'concepts',
+  connect_canvas: 'pairs',
+  comparison_radar: 'comparisons',
+  lyrics_karaoke: 'sections',
+  claims_tracker: 'claims',
+  tier_list: 'items',
+  formation_diagram: 'positions',
 };
 
 /** Pull the most-meaningful item count out of an assembled tab's props.
@@ -117,9 +165,9 @@ function inferItemCount(tab: TabEntry): number | undefined {
   const key = COUNT_PROP_BY_COMPONENT[tab.component];
   if (!key) return undefined;
   const value = props[key];
-  // moment_track / timeline historically also used `entries` — fall through
-  // when `items` is missing so older assembler outputs still display a count.
-  if (!Array.isArray(value) && (tab.component === 'moment_track' || tab.component === 'timeline')) {
+  // moment_track historically also used `entries` — fall through when `items`
+  // is missing so assembler outputs that used the older shape still show a count.
+  if (!Array.isArray(value) && tab.component === 'moment_track') {
     const entries = props.entries;
     return Array.isArray(entries) ? entries.length : undefined;
   }
@@ -143,18 +191,48 @@ function buildOverviewCrossTabLinks(
   }));
 }
 
-interface ExerciseMeta {
-  type?: string;
-  difficulty?: string;
-  duration?: number;
-  equipment?: string[];
-  muscleGroups?: string[];
-}
-
 /** Loose array cast — returns items that are non-null objects. Does NOT validate individual item shape. */
 function asArray<T>(val: unknown): T[] {
   if (!Array.isArray(val)) return [];
   return val.filter((item): item is T => item != null && typeof item === 'object') as T[];
+}
+
+interface VerdictHeader {
+  badge?: string;
+  bottomLine?: string;
+  bestFor?: string[];
+  notFor?: string[];
+  score?: number;
+  maxScore?: number;
+  subScores?: Array<{ category: string; score: number }>;
+}
+
+/** Coerce a loose props object into the verdict header shape ComparisonInteractive
+ *  expects. Returns undefined when no bottomLine is provided so the header stays
+ *  hidden. Filters subScores to entries with a valid `category` string and
+ *  numeric `score`. */
+function coerceVerdictHeader(props: Record<string, unknown>): VerdictHeader | undefined {
+  const bottomLine = typeof props.bottomLine === 'string' ? props.bottomLine : undefined;
+  if (!bottomLine) return undefined;
+  const subScoresRaw = Array.isArray(props.subScores) ? props.subScores : [];
+  const subScores = subScoresRaw
+    .map((s): { category: string; score: number } | null => {
+      if (s == null || typeof s !== 'object') return null;
+      const obj = s as Record<string, unknown>;
+      const category = typeof obj.category === 'string' ? obj.category : null;
+      const score = typeof obj.score === 'number' ? obj.score : null;
+      return category != null && score != null ? { category, score } : null;
+    })
+    .filter((s): s is { category: string; score: number } => s !== null);
+  return {
+    bottomLine,
+    badge: typeof props.badge === 'string' ? props.badge : undefined,
+    bestFor: Array.isArray(props.bestFor) ? (props.bestFor as string[]) : undefined,
+    notFor: Array.isArray(props.notFor) ? (props.notFor as string[]) : undefined,
+    score: typeof props.score === 'number' ? props.score : undefined,
+    maxScore: typeof props.maxScore === 'number' ? props.maxScore : undefined,
+    subScores: subScores.length > 0 ? subScores : undefined,
+  };
 }
 
 /**
@@ -178,55 +256,23 @@ const COMPONENT_REGISTRY: Record<string, (props: Record<string, unknown>, nav: N
       {...nav}
     />
   ),
-  // Legacy aliases — cached `assembledTabs` rows in MongoDB written before the
-  // moment_track unification still reference these component names. Translate
-  // their prop shapes into MomentTrack's items[] so they keep rendering as a
-  // proper interactive instead of degrading to DisplaySection. Safe to remove
-  // once the cache rolls over (currently keyed by youtubeId+promptVersion).
-  timeline: (props, nav) => (
-    <MomentTrack
-      items={asArray<MomentItem>(props.entries)}
-      onSeek={nav.onSeek}
-      currentTime={nav.currentTime}
-      {...nav}
-    />
-  ),
-  clip_player: (props, nav) => {
-    const items = asArray<Record<string, unknown>>(props.clips).map((clip) => {
-      const seconds = typeof clip.seconds === 'number'
-        ? clip.seconds
-        : (typeof clip.startSeconds === 'number' ? clip.startSeconds : 0);
-      return { ...clip, seconds } as MomentItem;
-    });
+  comparison: (props, nav) => {
+    const verdictRaw = typeof props.verdict === 'object' && props.verdict !== null
+      ? coerceVerdictHeader(props.verdict as Record<string, unknown>)
+      : undefined;
     return (
-      <MomentTrack
-        items={items}
-        filters={typeof props.filters === 'boolean' ? props.filters : undefined}
-        onSeek={nav.onSeek}
-        currentTime={nav.currentTime}
+      <ComparisonInteractive
+        comparisons={asArray<ReviewComparison>(props.comparisons)}
+        pros={Array.isArray(props.pros) ? props.pros as string[] : undefined}
+        cons={Array.isArray(props.cons) ? props.cons as string[] : undefined}
+        type={typeof props.type === 'string' ? props.type as 'table' | 'pros_cons' | 'versus' : undefined}
+        leftLabel={typeof props.leftLabel === 'string' ? props.leftLabel : undefined}
+        rightLabel={typeof props.rightLabel === 'string' ? props.rightLabel : undefined}
+        verdict={verdictRaw}
         {...nav}
       />
     );
   },
-  code_explorer: (props, nav) => (
-    <CodeExplorer
-      snippets={asArray<TechSnippet>(props.snippets)}
-      mode={typeof props.mode === 'string' ? props.mode as 'navigate' | 'showAll' : undefined}
-      onSeek={nav.onSeek}
-      {...nav}
-    />
-  ),
-  comparison: (props, nav) => (
-    <ComparisonInteractive
-      comparisons={asArray<ReviewComparison>(props.comparisons)}
-      pros={Array.isArray(props.pros) ? props.pros as string[] : undefined}
-      cons={Array.isArray(props.cons) ? props.cons as string[] : undefined}
-      type={typeof props.type === 'string' ? props.type as 'table' | 'pros_cons' | 'versus' : undefined}
-      leftLabel={typeof props.leftLabel === 'string' ? props.leftLabel : undefined}
-      rightLabel={typeof props.rightLabel === 'string' ? props.rightLabel : undefined}
-      {...nav}
-    />
-  ),
   checklist: (props, nav) => (
     <ChecklistInteractive
       items={Array.isArray(props.items) ? props.items as Array<{ label: string; note?: string; emoji?: string }> : []}
@@ -248,41 +294,11 @@ const COMPONENT_REGISTRY: Record<string, (props: Record<string, unknown>, nav: N
       {...nav}
     />
   ),
-  exercise_tracker: (props, nav) => (
-    <ExerciseInteractive
-      exercises={asArray<FitnessExercise>(props.exercises)}
-      warmup={Array.isArray(props.warmup) ? (props.warmup as string[] | FitnessExercise[]) : undefined}
-      cooldown={Array.isArray(props.cooldown) ? (props.cooldown as string[] | FitnessExercise[]) : undefined}
-      meta={typeof props.meta === 'object' && props.meta !== null ? (props.meta as ExerciseMeta) : undefined}
-      {...nav}
-    />
-  ),
-  quiz: (props, nav) => (
-    <QuizInteractive questions={asArray<QuizItem>(props.questions)} tabId={nav.tabId} {...nav} />
-  ),
   flash_deck: (props, nav) => (
     <FlashDeckInteractive
       cards={asArray<FlashcardItem>(props.cards)}
       shuffleable={typeof props.shuffleable === 'boolean' ? props.shuffleable : undefined}
       tabId={nav.tabId}
-      {...nav}
-    />
-  ),
-  scenario: (props, nav) => (
-    <ScenarioInteractive scenarios={asArray<ScenarioItem>(props.scenarios)} {...nav} />
-  ),
-
-  // New interactives
-  verdict: (props, nav) => (
-    <VerdictInteractive
-      product={typeof props.product === 'string' ? props.product : ''}
-      score={typeof props.score === 'number' ? props.score : undefined}
-      maxScore={typeof props.maxScore === 'number' ? props.maxScore : undefined}
-      badge={typeof props.badge === 'string' ? props.badge : undefined}
-      bottomLine={typeof props.bottomLine === 'string' ? props.bottomLine : ''}
-      bestFor={Array.isArray(props.bestFor) ? props.bestFor as string[] : undefined}
-      notFor={Array.isArray(props.notFor) ? props.notFor as string[] : undefined}
-      price={typeof props.price === 'string' ? props.price : undefined}
       {...nav}
     />
   ),
@@ -330,20 +346,200 @@ const COMPONENT_REGISTRY: Record<string, (props: Record<string, unknown>, nav: N
       {...nav}
     />
   ),
-  gallery: (props, nav) => (
-    <GalleryInteractive
-      images={asArray(props.images)}
-      layout={typeof props.layout === 'string' ? props.layout as 'grid' | 'carousel' | 'hero_stack' : undefined}
+  // ─── Video-to-action overhaul: 2026-05-28 ───
+  // Legacy keys (code_explorer, exercise_tracker, lyrics_player, scenario,
+  // gallery, verdict, quiz) were retired in 2026-05-29 cleanup. Cached
+  // assembledTabs rows with those keys now fall through to display_section.
+  // The new keys below are the only valid component names going forward —
+  // every category renders the new component directly.
+  // freshly-planned tabs.
+
+  video_filmstrip: (props, nav) => (
+    <VideoFilmstrip
+      frames={asArray<FilmstripFrame>(props.frames)}
       onSeek={nav.onSeek}
-      {...nav}
+      currentTime={nav.currentTime}
+      mode={typeof props.mode === 'string' ? props.mode as 'tab' | 'overlay' : 'tab'}
     />
   ),
-  lyrics_player: (props, nav) => (
-    <LyricsPlayerInteractive
-      sections={asArray(props.sections)}
+
+  code_playground: (props, nav) => {
+    void nav;
+    return <CodePlayground snippets={asArray<TechSnippet>(props.snippets)} onSeek={nav.onSeek} />;
+  },
+
+  quiz_arena: (props, nav) => (
+    <QuizArena
+      questions={asArray<QuizArenaQuestion>(props.questions)}
+      tabId={nav.tabId}
+      videoId={nav.videoId}
+      nextTab={nav.nextTab}
+      onNavigateTab={nav.onNavigateTab}
+    />
+  ),
+
+  packing_mission: (props, nav) => (
+    <PackingMission
+      items={asArray<PackingMissionItem>(props.items)}
+      videoId={nav.videoId}
+      tabId={nav.tabId}
+      nextTab={nav.nextTab}
+      onNavigateTab={nav.onNavigateTab}
+    />
+  ),
+
+  workout_room: (props, nav) => (
+    <WorkoutRoom
+      exercises={asArray<FitnessExercise>(props.exercises)}
+      warmup={Array.isArray(props.warmup) ? asArray<FitnessExercise>(props.warmup) : undefined}
+      cooldown={Array.isArray(props.cooldown) ? asArray<FitnessExercise>(props.cooldown) : undefined}
+      onSeek={nav.onSeek}
+    />
+  ),
+
+  lyrics_karaoke: (props, nav) => (
+    <LyricsKaraoke
+      sections={asArray<LyricsKaraokeSection>(props.sections)}
       artist={typeof props.artist === 'string' ? props.artist : undefined}
       onSeek={nav.onSeek}
-      {...nav}
+      currentTime={nav.currentTime}
+    />
+  ),
+
+  // ─── News signature component (interactive-overhaul-v2 P5b) ───
+  claims_tracker: (props, nav) => (
+    <ClaimsTracker claims={asArray<ClaimItem>(props.claims)} onSeek={nav.onSeek} />
+  ),
+
+  // ─── Gaming signature component (interactive-overhaul-v2 P5c) ───
+  tier_list: (props, nav) => (
+    <TierList
+      items={asArray<TierListItem>(props.items)}
+      videoId={nav.videoId}
+      tabId={nav.tabId}
+    />
+  ),
+
+  // ─── Sport signature component (interactive-overhaul-v2 P5d) ───
+  // Read-only ReactFlow pitch — lazy-loaded like the other canvases.
+  formation_diagram: (props) => (
+    <Suspense fallback={<CanvasFallback />}>
+      <FormationDiagram
+        positions={asArray<FormationPosition>(props.positions)}
+        name={typeof props.name === 'string' ? props.name : undefined}
+        team={typeof props.team === 'string' ? props.team : undefined}
+      />
+    </Suspense>
+  ),
+
+  // Code-split via React.lazy — each canvas/radar lazy chunk only loads when
+  // its tab is opened. Wrap in <Suspense> so the loading flash is contained.
+  concept_canvas: (props, nav) => (
+    <Suspense fallback={<CanvasFallback />}>
+      <ConceptCanvas
+        concepts={asArray<ConceptItem>(props.concepts)}
+        onSeek={nav.onSeek}
+        videoId={nav.videoId}
+        nextTab={nav.nextTab}
+        onNavigateTab={nav.onNavigateTab}
+      />
+    </Suspense>
+  ),
+
+  step_flow_canvas: (props, nav) => (
+    <Suspense fallback={<CanvasFallback />}>
+      <StepFlowCanvas
+        steps={asArray<StepItem>(props.steps)}
+        onSeek={nav.onSeek}
+        tabId={nav.tabId}
+      />
+    </Suspense>
+  ),
+
+  connect_canvas: (props, nav) => (
+    <Suspense fallback={<CanvasFallback />}>
+      <ConnectCanvas
+        pairs={asArray<ConnectPair>(props.pairs)}
+        videoId={nav.videoId}
+        tabId={nav.tabId}
+        nextTab={nav.nextTab}
+        onNavigateTab={nav.onNavigateTab}
+      />
+    </Suspense>
+  ),
+
+  // comparison_radar is an alias for the unified ComparisonInteractive with the
+  // radar hero forced on (view="radar"). The 1A promotion comparison→comparison_radar
+  // now just sets the radar view; ComparisonRadar.tsx was merged + deleted in P3C.
+  comparison_radar: (props, nav) => {
+    const verdictRaw = typeof props.verdict === 'object' && props.verdict !== null
+      ? coerceVerdictHeader(props.verdict as Record<string, unknown>)
+      : undefined;
+    return (
+      <ComparisonInteractive
+        comparisons={asArray<ReviewComparison>(props.comparisons)}
+        pros={Array.isArray(props.pros) ? props.pros as string[] : undefined}
+        cons={Array.isArray(props.cons) ? props.cons as string[] : undefined}
+        leftLabel={typeof props.leftLabel === 'string' ? props.leftLabel : undefined}
+        rightLabel={typeof props.rightLabel === 'string' ? props.rightLabel : undefined}
+        verdict={verdictRaw}
+        view="radar"
+        {...nav}
+      />
+    );
+  },
+
+  // ─── Secondary-tier components (interactive-overhaul-v2 P2) ───
+  // Attachment-only: rendered by <TabAttachments> around a primary, never as a
+  // standalone tab. Registered here so REGISTERED_COMPONENT_NAMES includes them
+  // and the parity test stays green.
+  stat_banner: (props) => (
+    <StatBanner stats={asArray<StatBannerStat>(props.stats)} />
+  ),
+
+  tip_callout: (props) => (
+    <TipCallout
+      text={typeof props.text === 'string' ? props.text : ''}
+      style={props.style === 'warning' || props.style === 'note' ? props.style : 'tip'}
+      title={typeof props.title === 'string' ? props.title : undefined}
+    />
+  ),
+
+  summary_header: (props) => (
+    <SummaryHeader
+      summary={typeof props.summary === 'string' ? props.summary : ''}
+      title={typeof props.title === 'string' ? props.title : undefined}
+      emoji={typeof props.emoji === 'string' ? props.emoji : undefined}
+    />
+  ),
+
+  diagram_card: (props) => (
+    <Suspense fallback={<CanvasFallback />}>
+      <DiagramCard
+        nodes={asArray<DiagramCardItem>(props.nodes)}
+        edges={Array.isArray(props.edges) ? (props.edges as Array<{ source: number; target: number }>) : undefined}
+        caption={typeof props.caption === 'string' ? props.caption : undefined}
+      />
+    </Suspense>
+  ),
+
+  // frame_strip = VideoFilmstrip in compact overlay mode (reuses primary renderer).
+  frame_strip: (props, nav) => (
+    <VideoFilmstrip
+      frames={asArray<FilmstripFrame>(props.frames)}
+      onSeek={nav.onSeek}
+      currentTime={nav.currentTime}
+      mode="overlay"
+    />
+  ),
+
+  // quick_quiz = single-question QuizArena (reuses primary renderer).
+  quick_quiz: (props, nav) => (
+    <QuizArena
+      questions={asArray<QuizArenaQuestion>(props.questions)}
+      tabId={nav.tabId}
+      videoId={nav.videoId}
+      onNavigateTab={nav.onNavigateTab}
     />
   ),
 
@@ -352,6 +548,46 @@ const COMPONENT_REGISTRY: Record<string, (props: Record<string, unknown>, nav: N
     <DisplaySection data={props.data} />
   ),
 };
+
+/** Component names with a registered renderer. Exported for the contract-parity
+ *  test (interactive-overhaul-v2 1F), which fails the build if a component the
+ *  backend can emit has no frontend renderer (would silently fall to
+ *  DisplaySection). */
+export const REGISTERED_COMPONENT_NAMES: ReadonlySet<string> = new Set(
+  Object.keys(COMPONENT_REGISTRY),
+);
+
+interface TabAttachmentsProps {
+  attachments: TabAttachment[] | undefined;
+  slot: 'top' | 'bottom';
+  nav: NavProps;
+}
+
+/** Render the secondary-tier attachments for one slot of a tab. Each attachment
+ *  is routed through COMPONENT_REGISTRY (secondaries are registered there) and
+ *  wrapped in its own ErrorBoundary so a broken attachment can't take down the
+ *  primary interactive. Renders nothing when there are no attachments for the
+ *  slot — keeping flat tabs byte-for-byte unchanged. */
+function TabAttachments({ attachments, slot, nav }: TabAttachmentsProps) {
+  if (!attachments || attachments.length === 0) return null;
+  const forSlot = attachments.filter((a) => a.slot === slot && COMPONENT_REGISTRY[a.component]);
+  if (forSlot.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2">
+      {forSlot.map((attachment, i) => {
+        const renderer = COMPONENT_REGISTRY[attachment.component];
+        return (
+          <ErrorBoundary
+            key={`${slot}-${attachment.component}-${i}`}
+            fallback={null}
+          >
+            {renderer(attachment.props ?? {}, nav)}
+          </ErrorBoundary>
+        );
+      })}
+    </div>
+  );
+}
 
 /**
  * Composable output renderer.
@@ -368,7 +604,7 @@ export const ComposableOutput = memo(function ComposableOutput({
   videoSummaryId,
 }: ComposableOutputProps) {
   const { seekTo, currentTime } = useVideoPlayer();
-  const [cookingMode, setCookingMode] = useState(false);
+  const [flowModeActive, setFlowModeActive] = useState(false);
 
   // Memoize derived structures on `tabs` so per-tab filtering and the Overview
   // cross-tab nav don't allocate fresh arrays on every `currentTime` tick.
@@ -388,24 +624,15 @@ export const ComposableOutput = memo(function ComposableOutput({
     [tabs, activeTab],
   );
 
-  // Detect cooking mode availability: food domain + has checklist + has step_player
-  const cookingModeData = useMemo(() => {
-    if (primaryTag !== 'food' || !tabs || tabs.length === 0) return null;
-    const checklistTab = tabs.find(t => t.component === 'checklist');
-    const stepTab = tabs.find(t => t.component === 'step_player');
-    if (!checklistTab?.props || !stepTab?.props) return null;
-    const ingredients = checklistTab.props.items as Array<{ label: string; note?: string; emoji?: string; amount?: number; displayAmount?: string; unit?: string; essential?: boolean; group?: string }> | undefined;
-    const steps = stepTab.props.steps as StepItem[] | undefined;
-    if (!ingredients || !steps) return null;
-    return {
-      ingredients,
-      steps,
-      tips: stepTab.props.tips as string[] | undefined,
-      scalable: checklistTab.props.scalable as boolean | undefined,
-      baseServings: checklistTab.props.baseServings as number | undefined,
-      tabLabel: stripCountPrefix(checklistTab.label ?? '') || 'Ingredients',
-    };
-  }, [primaryTag, tabs]);
+  // Detect the applicable enter-mode (cooking, workout, build, study, explore,
+  // practice). Returns null — and shows no enter-mode button — when the
+  // domain's required tabs/props aren't present. Cooking is migrated verbatim:
+  // the resolved cooking mode produces the same ingredients context + steps
+  // sequence the old hardcoded `cookingModeData` did.
+  const flowMode = useMemo(
+    () => detectFlowMode(tabs, primaryTag),
+    [tabs, primaryTag],
+  );
 
   // ─── Component-addressed rendering ───
   if (tabs && tabs.length > 0) {
@@ -435,36 +662,41 @@ export const ComposableOutput = memo(function ComposableOutput({
 
     return (
       <div className="flex flex-col gap-4">
-        {/* Cooking mode toggle */}
-        {cookingModeData && !cookingMode && (
+        {/* Enter-mode toggle (cooking, workout, build, study, explore, practice) */}
+        {flowMode && !flowModeActive && (
           <button
-            onClick={() => setCookingMode(true)}
+            onClick={() => setFlowModeActive(true)}
             className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-primary/30 bg-primary/5 px-4 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
           >
-            <EmojiMarker emoji="🍳" size="sm" animated={false} />
-            Enter Cooking Mode
+            <EmojiMarker emoji={flowMode.emoji} size="sm" animated={false} />
+            Enter {flowMode.label}
           </button>
         )}
 
-        {/* Cooking mode player */}
-        {cookingMode && cookingModeData ? (
-          <RecipePlayer
-            ingredients={cookingModeData.ingredients}
-            steps={cookingModeData.steps}
-            scalable={cookingModeData.scalable}
-            baseServings={cookingModeData.baseServings}
-            tabLabel={cookingModeData.tabLabel}
-            onExit={() => setCookingMode(false)}
-            onSeek={seekTo}
+        {/* Enter-mode player */}
+        {flowModeActive && flowMode ? (
+          <FlowPlayer
+            emoji={flowMode.emoji}
+            modeLabel={flowMode.label}
+            stepNoun={flowMode.stepNoun}
+            contextLabel={flowMode.contextLabel}
+            contextCount={flowMode.contextCount}
+            renderContext={flowMode.renderContext}
+            sequenceLength={flowMode.sequenceLength}
+            renderStep={(args) => flowMode.renderStep(args, seekTo)}
+            completionMessage={flowMode.completionMessage}
+            onExit={() => setFlowModeActive(false)}
           />
         ) : (
           <>
             {tab.goal && <TabIntro goal={tab.goal} />}
+            <TabAttachments attachments={tab.attachments} slot="top" nav={nav} />
             <ErrorBoundary fallback={<div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">Failed to render this tab. Try refreshing the page.</div>}>
               {renderer
                 ? renderer(tab.props, nav)
                 : <DisplaySection data={tab.props} />}
             </ErrorBoundary>
+            <TabAttachments attachments={tab.attachments} slot="bottom" nav={nav} />
 
             {crossLinks.length > 0 && (
               <div className="flex flex-col gap-2 mt-2">
