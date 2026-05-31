@@ -126,7 +126,9 @@ def test_register_prompts_already_synced_returns_true_on_match():
         prompt = "hello world"
 
     class _FakeClient:
-        def get_prompt(self, name: str):  # noqa: ARG002
+        # _already_synced scopes the lookup to the production label, so the
+        # fake must accept the `label` kwarg the real client receives.
+        def get_prompt(self, name: str, label: str | None = None):  # noqa: ARG002
             return _FakeExisting()
 
     assert mod._already_synced(_FakeClient(), "x", "hello world") is True
