@@ -122,6 +122,10 @@ def test_scoring_handles_empty_expectations(runner):
 
 def test_load_dataset_parses_golden_videos(runner):
     """The golden dataset YAML loads and has 20 entries with stable shape."""
+    # The dataset lives under dev/golden-dataset/, which is gitignored and so
+    # absent in CI / fresh checkouts. Skip rather than fail when it is missing.
+    if not runner._DATASET_PATH.exists():
+        pytest.skip("golden dataset not present (dev/golden-dataset/ is gitignored)")
     records = runner.load_dataset()
     assert len(records) == 20
     for r in records:
