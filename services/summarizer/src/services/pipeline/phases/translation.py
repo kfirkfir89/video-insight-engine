@@ -1,11 +1,12 @@
-"""Phase 8: Translation — promote English to primary for non-English videos.
+"""Phase 8: Translation — build the source-language artifact for the FE toggle.
 
-Calls ``translate_to_source`` which walks the assembled output, translates
-every translatable prose string in one Haiku call, and returns an
-English-primary dict with the original-language artifact nested under
-``sourceLanguage``. On any failure (LLM error, mirror, length mismatch),
-the returned dict has no ``sourceLanguage`` key and the phase no-ops —
-the FE then simply renders no language toggle.
+Generation is English-canonical, so the assembled tabs/meta are already the
+English primary. This phase calls ``translate_to_source`` which walks that
+English output, translates every translatable prose string into the detected
+source language (batched Haiku calls), and returns the unchanged English dict
+with the translated artifact nested under ``sourceLanguage``. On any failure
+(LLM error, mirror, length mismatch) the returned dict has no ``sourceLanguage``
+key and the phase no-ops — the FE then simply renders no language toggle.
 """
 
 from __future__ import annotations
@@ -17,8 +18,7 @@ from typing import TYPE_CHECKING, AsyncGenerator
 from src.config import settings
 from src.services.cache.response_cache import response_cache
 from src.services.pipeline.pipeline_helpers import sse_event
-from src.services.pipeline.translation import translate_to_source
-from src.services.vector.store import store_default_output_chunks
+from src.services.pipeline.translation import translate_text, translate_to_source
 
 if TYPE_CHECKING:
     from src.repositories.mongodb_repository import MongoDBVideoRepository
@@ -27,12 +27,22 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _log_qdrant_error(t: asyncio.Task) -> None:
-    if t.cancelled():
+async def _translate_title(ctx: PipelineContext) -> None:
+    """Give the primary view an English title and keep the original under the
+    source block, so the title follows the language toggle like everything else.
+
+    The original YouTube title is in the source language; it is the one field
+    that travels source→English (the rest of the surface is English→source).
+    """
+    title = ctx.video_data.title if ctx.video_data else None
+    if not title or not ctx.source_language_code or not isinstance(ctx.source_language, dict):
         return
-    exc = t.exception()
-    if exc:
-        logger.error("Qdrant store failed: %s", exc)
+    en_title = await translate_text(ctx.llm_service, title, ctx.source_language_code, "en")
+    if isinstance(ctx.assembled_meta, dict):
+        ctx.assembled_meta["videoTitle"] = en_title or title
+    sl_meta = ctx.source_language.get("meta")
+    if isinstance(sl_meta, dict):
+        sl_meta["videoTitle"] = title
 
 
 async def run_phase_translation(
@@ -40,35 +50,36 @@ async def run_phase_translation(
     repository: MongoDBVideoRepository,
     video_summary_id: str,
 ) -> AsyncGenerator[str, None]:
-    """Translate assembled output and swap English to primary on ctx."""
-    if ctx.language == "en":
+    """Translate the English output into the source language for the FE toggle."""
+    if not ctx.source_language_code:
         return
 
     yield sse_event("phase", {"phase": "translation"})
 
-    # `meta` is a superset of synthesis (carries tldr/masterSummary/
-    # keyTakeaways/seoDescription). Sending synthesis through translation
-    # would duplicate work; the FE reconstructs synthesis from meta via
-    # buildSynthesisFromMeta. Top-level synthesis is no longer persisted.
+    # Generation is English-canonical, so ``assembled_tabs``/``assembled_meta``
+    # are already the English primary. Translate a deep copy into the source
+    # language and attach it under ``sourceLanguage``; the English top-level is
+    # unchanged. (`meta` is a superset of synthesis — the FE reconstructs
+    # synthesis from meta via buildSynthesisFromMeta.)
     output = {
         "tabs": ctx.assembled_tabs or [],
         "meta": ctx.assembled_meta or {},
     }
-    result = await translate_to_source(ctx.llm_service, output, ctx.language)
+    result = await translate_to_source(ctx.llm_service, output, ctx.source_language_code)
 
     if "sourceLanguage" not in result:
-        # Failure / no-op — keep source language as primary, no toggle.
+        # Failure / no-op — English stays the only view, no toggle.
         logger.warning(
-            "[pipeline] Translation produced no sourceLanguage (lang=%s); "
-            "skipping promotion",
-            ctx.language,
+            "[pipeline] Translation produced no sourceLanguage (target=%s); skipping",
+            ctx.source_language_code,
         )
         return
 
-    # Promote English to primary on ctx so downstream consumers see English.
-    ctx.assembled_tabs = result["tabs"]
-    ctx.assembled_meta = result["meta"]
     ctx.source_language = result["sourceLanguage"]
+
+    # Title both ways: an English title for the primary view, the original kept
+    # under the source block, so the title swaps with the toggle too.
+    await _translate_title(ctx)
 
     await asyncio.to_thread(
         repository.save_structured_result,
@@ -83,8 +94,7 @@ async def run_phase_translation(
     )
 
     logger.info(
-        "[pipeline] Translation complete: promoted English to primary, "
-        "stashed source=%s under sourceLanguage",
+        "[pipeline] Translation complete: built %s sourceLanguage block",
         result["sourceLanguage"]["code"],
     )
 
@@ -111,12 +121,5 @@ async def run_phase_translation(
             await response_cache.set_response(ctx.youtube_id, frontend_response)
         except (OSError, ConnectionError) as e:
             logger.debug("Redis cache failed (non-critical): %s", e)
-
-    if settings.QDRANT_ENABLED and ctx.assembled_tabs:
-        task = asyncio.create_task(
-            store_default_output_chunks(
-                ctx.youtube_id, ctx.assembled_tabs, language="en",
-            ),
-            name=f"store_output_{ctx.youtube_id}",
-        )
-        task.add_done_callback(_log_qdrant_error)
+    # Qdrant output chunks were already indexed (in English) by the assembly
+    # phase — generation is English-canonical, so the tabs are unchanged here.

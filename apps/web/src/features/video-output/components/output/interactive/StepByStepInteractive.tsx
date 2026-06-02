@@ -202,7 +202,7 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
 
                     {/* Show more toggle for collapsed steps */}
                     {!isActive && step.instruction && step.instruction.length > 100 && (
-                      <span className="text-xs text-[color:var(--vie-accent)]">Show more</span>
+                      <span className="text-xs text-[color:var(--vie-accent)]">{t.showMore}</span>
                     )}
 
                     <div className="flex items-center gap-3 flex-wrap">

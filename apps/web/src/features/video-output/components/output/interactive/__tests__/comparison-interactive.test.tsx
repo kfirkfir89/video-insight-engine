@@ -1,5 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+/// <reference types="@testing-library/jest-dom" />
+import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 
 import { ComparisonInteractive, scoreComparisonAxes } from '../ComparisonInteractive';
@@ -71,12 +73,17 @@ describe('ComparisonInteractive', () => {
 
   // ─── P3C: unified radar + table + verdict ───
 
-  it('should show the radar hero AND the table when there are >=3 scoreable axes', () => {
+  it('should default to the radar view and reveal the table only after toggling, when there are >=3 scoreable axes', async () => {
+    const user = userEvent.setup();
     render(<ComparisonInteractive comparisons={radarRows} type="table" />);
-    // Radar hero (winner badge is unique to the hero) + table header below.
+    // Radar hero is the default view; the table is not stacked beneath it.
     expect(screen.getByTestId('comparison-radar-winner-badge')).toBeInTheDocument();
+    expect(screen.queryByText('Feature')).not.toBeInTheDocument();
+    // Switching to the Table view swaps the radar out for the table.
+    await user.click(screen.getByRole('button', { name: 'Table' }));
     expect(screen.getByText('Feature')).toBeInTheDocument();
     expect(screen.getAllByText('Camera').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByTestId('comparison-radar-winner-badge')).not.toBeInTheDocument();
   });
 
   it('should NOT show the radar hero with fewer than 3 axes', () => {
@@ -86,10 +93,13 @@ describe('ComparisonInteractive', () => {
     expect(screen.getByText('Battery')).toBeInTheDocument();
   });
 
-  it('should render the radar hero when view="radar" is forced (comparison_radar alias path)', () => {
+  it('should render the radar hero when view="radar" is forced (comparison_radar alias path)', async () => {
+    const user = userEvent.setup();
     render(<ComparisonInteractive comparisons={radarRows} view="radar" />);
     expect(screen.getByTestId('comparison-radar-winner-badge')).toBeInTheDocument();
-    // Per-axis weight sliders present (one per row).
+    // Per-axis weight sliders live behind the collapsed "Tune what matters" disclosure.
+    expect(screen.queryByTestId('comparison-radar-weight-0')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /tune what matters/i }));
     expect(screen.getByTestId('comparison-radar-weight-0')).toBeInTheDocument();
   });
 

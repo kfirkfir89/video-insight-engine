@@ -241,7 +241,7 @@ class Settings(BaseSettings):
     # `assembledTabs`/`output` docs are NOT version-keyed and still require a
     # reprocess / DB flush on a schema or props change. Bump on any
     # schemas/*.txt or assembler props change.
-    PIPELINE_VERSION: str = "v4"
+    PIPELINE_VERSION: str = "v5"
 
     # ─── RabbitMQ worker ────────────────────────────────────────────────
     # AMQP URL — kept aligned with the API's RABBITMQ_URL in docker-compose.

@@ -1,14 +1,15 @@
-"""Tests for ``translate_to_source`` — the single-entry translation engine.
+"""Tests for ``translate_to_source`` — the English-canonical translation engine.
 
-Covers:
-  - successful translation: English promoted to top level, source-language
-    artifact nested under ``sourceLanguage`` with code/name/isRTL/payloads.
+Generation is English; this engine translates the English output INTO the
+source language and nests it under ``sourceLanguage``. Covers:
+  - successful translation: top level stays English, the translated artifact
+    nests under ``sourceLanguage`` with code/native name/isRTL/payloads.
   - LLM failure → returns input unchanged (no ``sourceLanguage`` key).
-  - mirror detection (LLM echoed source strings) → returns input unchanged.
+  - mirror detection (LLM echoed English back) → returns input unchanged.
   - leaf-only deny-list: string values under denied keys are NOT collected,
     but containers under the same key names ARE recursed into their contents.
   - short strings (<= 3 chars after strip) not collected.
-  - top-level meta is forced to language="en"/isRTL=False on success.
+  - large string sets are batched (no fail-closed cap), nothing dropped.
 """
 
 from __future__ import annotations
@@ -35,38 +36,37 @@ def mock_llm():
 
 
 @pytest.fixture
-def hebrew_output() -> dict[str, Any]:
-    """An assembled output dict in Hebrew, mirroring real pipeline shape."""
+def english_output() -> dict[str, Any]:
+    """An assembled English output dict, mirroring real pipeline shape."""
     return {
         "tabs": [
             {
                 "id": "exercises",
-                "label": "תרגילים",
+                "label": "Exercises",
                 "emoji": "💪",
                 "component": "exercise_tracker",
                 "props": {
                     "exercises": [
                         {
-                            "name": "כפיפת בטן",
-                            "description": "תרגיל בטן בסיסי",
-                            "formCues": ["רגליים ישרות"],
+                            "name": "Crunches",
+                            "description": "Basic ab exercise",
+                            "formCues": ["Keep legs straight"],
                             "sets": 3,
-                            "reps": "30 שניות",
+                            "reps": "30 seconds",
                             "emoji": "🔄",
                         },
                     ],
-                    "warmup": [{"name": "מתיחות קלות"}],
+                    "warmup": [{"name": "Light stretches"}],
                 },
             },
         ],
         "meta": {
-            "tldr": "אימון בטן",
-            "masterSummary": "אימון בית קצר",
-            "userGoal": "לחטב את הבטן",
-            "language": "he",
-            "isRTL": True,
+            "tldr": "Ab workout",
+            "masterSummary": "Short home workout",
+            "userGoal": "Tone your abs",
+            "language": "en",
+            "isRTL": False,
         },
-        "synthesis": {"tldr": "אימון בטן", "masterSummary": "אימון בית קצר"},
     }
 
 
@@ -172,50 +172,50 @@ class TestIsMirror:
 
 class TestTranslateToSource:
     @patch("src.services.pipeline.translation._translate_flat_list")
-    async def test_promotes_english_and_nests_source_on_success(
-        self, mock_flat, mock_llm, hebrew_output,
+    async def test_keeps_english_primary_and_nests_translation_on_success(
+        self, mock_flat, mock_llm, english_output,
     ):
-        """Happy path: top level becomes English, original nests under sourceLanguage."""
-        # Fake translation: prefix each source string with "EN:" so the result
+        """Happy path: top level stays English, translation nests under sourceLanguage."""
+        # Fake translation: prefix each English string with "HE:" so the result
         # is unambiguously different and passes mirror detection.
         async def fake(_llm, strings, *_a, **_k):
-            return [f"EN: {s}" for s in strings]
+            return [f"HE: {s}" for s in strings]
         mock_flat.side_effect = fake
 
-        result = await translate_to_source(mock_llm, hebrew_output, "he")
+        result = await translate_to_source(mock_llm, english_output, "he")
 
-        # English promoted: tabs[0].label is now translated.
-        assert result["tabs"][0]["label"] == "EN: תרגילים"
-        # Meta forced to English semantics.
+        # Top level stays English (unchanged).
+        assert result["tabs"][0]["label"] == "Exercises"
         assert result["meta"]["language"] == "en"
         assert result["meta"]["isRTL"] is False
-        # sourceLanguage carries the original.
+        # sourceLanguage carries the translated copy.
         assert result["sourceLanguage"]["code"] == "he"
         assert result["sourceLanguage"]["name"] == "עברית"
         assert result["sourceLanguage"]["isRTL"] is True
-        assert result["sourceLanguage"]["tabs"][0]["label"] == "תרגילים"
+        assert result["sourceLanguage"]["tabs"][0]["label"] == "HE: Exercises"
         assert result["sourceLanguage"]["meta"]["language"] == "he"
+        assert result["sourceLanguage"]["meta"]["isRTL"] is True
 
     @patch("src.services.pipeline.translation._translate_flat_list")
     async def test_returns_input_unchanged_when_llm_fails(
-        self, mock_flat, mock_llm, hebrew_output,
+        self, mock_flat, mock_llm, english_output,
     ):
         """LLM None → no sourceLanguage key → FE renders no toggle."""
         mock_flat.return_value = None
-        result = await translate_to_source(mock_llm, hebrew_output, "he")
+        result = await translate_to_source(mock_llm, english_output, "he")
         assert "sourceLanguage" not in result
-        assert result is hebrew_output  # exact same object returned
+        assert result is english_output  # exact same object returned
 
     @patch("src.services.pipeline.translation._translate_flat_list")
-    async def test_returns_input_unchanged_when_llm_mirrors_source(
-        self, mock_flat, mock_llm, hebrew_output,
+    async def test_returns_input_unchanged_when_llm_mirrors_english(
+        self, mock_flat, mock_llm, english_output,
     ):
-        """LLM echoed source → mirror detection trips → no sourceLanguage."""
+        """LLM echoed English back → mirror detection trips → no sourceLanguage."""
         async def echo(_llm, strings, *_a, **_k):
             return list(strings)  # byte-identical mirror
         mock_flat.side_effect = echo
 
-        result = await translate_to_source(mock_llm, hebrew_output, "he")
+        result = await translate_to_source(mock_llm, english_output, "he")
         assert "sourceLanguage" not in result
 
     @patch("src.services.pipeline.translation._translate_flat_list")
@@ -225,10 +225,9 @@ class TestTranslateToSource:
         """Empty / structural-only inputs short-circuit before the LLM call."""
         result = await translate_to_source(
             mock_llm,
-            {"tabs": [], "meta": {"language": "he", "isRTL": True}, "synthesis": {}},
+            {"tabs": [], "meta": {"language": "en", "isRTL": False}},
             "he",
         )
-        # No translatable prose → no LLM call → original returned unchanged.
         mock_flat.assert_not_called()
         assert "sourceLanguage" not in result
 
@@ -238,53 +237,56 @@ class TestTranslateToSource:
     ):
         """Sanity: a deny-listed primitive string is NOT in the strings list."""
         async def fake(_llm, strings, *_a, **_k):
-            return [f"EN: {s}" for s in strings]
+            return [f"HE: {s}" for s in strings]
         mock_flat.side_effect = fake
 
         await translate_to_source(
             mock_llm,
-            {"tabs": [{"label": "תרגילים", "props": {"url": "https://example.com/asset.mp4"}}],
-             "meta": {}, "synthesis": {}},
+            {"tabs": [{"label": "Exercises", "props": {"url": "https://example.com/asset.mp4"}}],
+             "meta": {}},
             "he",
         )
-        # Inspect the strings the LLM was asked to translate.
         call_strings = mock_flat.call_args.args[1]
         assert "https://example.com/asset.mp4" not in call_strings
-        assert "תרגילים" in call_strings
+        assert "Exercises" in call_strings
 
-    @patch("src.services.pipeline.translation._MAX_COLLECTED_STRINGS", 5)
+    @patch("src.services.pipeline.translation._MAX_TRANSLATION_BATCH", 2)
     @patch("src.services.pipeline.translation._translate_flat_list")
-    async def test_fails_closed_when_walker_hits_string_cap(
+    async def test_batches_large_string_set_without_dropping(
         self, mock_flat, mock_llm,
     ):
-        """Cap-hit must abort: a partial translation that ships untranslated
-        source-language tail mixed into the English-primary surface is worse
-        than no translation. The FE expects all-or-nothing and renders no
-        toggle when sourceLanguage is absent.
+        """A large string set is split into batches and FULLY translated — the
+        old fail-closed cap is gone, nothing is silently dropped.
         """
-        # Pack enough prose strings to trip the (patched-low) cap of 5.
-        over_cap = {
+        async def fake(_llm, strings, *_a, **_k):
+            return [f"HE: {s}" for s in strings]
+        mock_flat.side_effect = fake
+
+        output = {
             "tabs": [
                 {
                     "id": "spots",
-                    "label": "ספוטים מומלצים",
+                    "label": "Recommended spots",
                     "component": "spot_explorer",
                     "props": {
                         "spots": [
-                            {"name": f"שם מקום מספר {i}",
-                             "description": f"תיאור ארוך של המקום מספר {i}"}
-                            for i in range(10)
+                            {"name": f"Place number {i}",
+                             "description": f"A long description of place number {i}"}
+                            for i in range(5)
                         ],
                     },
                 },
             ],
-            "meta": {"masterSummary": "סיכום כללי של הסרטון"},
+            "meta": {"masterSummary": "Overall summary of the video"},
         }
 
-        result = await translate_to_source(mock_llm, over_cap, "he")
+        result = await translate_to_source(mock_llm, output, "he")
 
-        # No LLM call at all — we bail before incurring the cost.
-        mock_flat.assert_not_called()
-        # Caller sees input unchanged ⇒ FE renders no language toggle.
-        assert "sourceLanguage" not in result
-        assert result is over_cap
+        # sourceLanguage built, every collected string translated (none dropped).
+        sl = result["sourceLanguage"]
+        spots = sl["tabs"][0]["props"]["spots"]
+        assert spots[0]["name"].startswith("HE: ")
+        assert spots[4]["description"].startswith("HE: ")
+        assert sl["meta"]["masterSummary"].startswith("HE: ")
+        # The low batch size forced more than one LLM call.
+        assert mock_flat.call_count > 1

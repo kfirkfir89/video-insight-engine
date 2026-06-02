@@ -115,13 +115,13 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
     await asyncio.to_thread(ctx.repository.save_structured_result, ctx.video_summary_id, result)
 
     # Cache in Redis (non-blocking, best-effort).
-    # English-source videos: cache the assembled payload now — there is no
-    # translation phase to wait for. Non-English: skip; the translation phase
-    # runs next, promotes English to primary, and writes the final payload to
-    # Redis. Caching here for non-English would freeze the source-language
-    # tabs into Redis for the entire TTL, silently bypassing translation on
-    # every cache hit and breaking the FE language toggle.
-    if settings.REDIS_ENABLED and ctx.language == "en":
+    # English-source videos: cache the assembled (English) payload now — there
+    # is no translation phase to wait for. Non-English: skip; the translation
+    # phase runs next, builds the source-language artifact, and writes the final
+    # payload (English primary + sourceLanguage) to Redis. Caching here for
+    # non-English would freeze a sourceLanguage-less payload into Redis for the
+    # whole TTL and hide the FE language toggle on every cache hit.
+    if settings.REDIS_ENABLED and not ctx.source_language_code:
         from src.routes.cached_response import build_frontend_response
         frontend_response = build_frontend_response(result)
         try:
@@ -138,10 +138,13 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
             if exc:
                 logger.error("Qdrant store failed: %s", exc)
 
-        # For non-English videos, get English transcript for embedding
+        # The transcript is still in the source language even though generated
+        # content is English. For non-English source, translate it to English so
+        # embeddings live in the model's strongest language; keep the original
+        # for display.
         english_text = ctx.clean_text
         original_text = None
-        if ctx.language != "en":
+        if ctx.source_language_code:
             # Try Whisper translate for English text
             try:
                 translated = await translate_audio_to_english(ctx.youtube_id, cached_audio_path=ctx.audio_path)
@@ -150,7 +153,7 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
                     original_text = ctx.clean_text
                     logger.info(
                         "Using Whisper-translated English text for Qdrant (%d chars, original %s: %d chars)",
-                        len(english_text), get_language_name(ctx.language), len(original_text),
+                        len(english_text), get_language_name(ctx.source_language_code), len(original_text),
                     )
                 else:
                     # Whisper translate failed or produced garbage — use LLM fallback
@@ -161,26 +164,25 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
         task = asyncio.create_task(
             store_transcript_chunks(
                 ctx.youtube_id, english_text,
-                language=ctx.language, transcript_original=original_text,
+                language=ctx.source_language_code or "en", transcript_original=original_text,
             )
         )
         task.add_done_callback(_log_qdrant_error)
 
         # Index assembled output content (tabs + props) alongside transcript.
-        # English videos: index here. Non-English videos: deferred to the
-        # translation phase, which promotes English tabs onto
-        # ``ctx.assembled_tabs`` and indexes those — embedding source-language
-        # text on an English-trained model produces poor retrieval quality.
-        if ctx.language == "en":
-            output_task = asyncio.create_task(
-                store_default_output_chunks(
-                    ctx.youtube_id,
-                    ctx.assembled_tabs or [],
-                    language="en",
-                ),
-                name=f"store_output_{ctx.youtube_id}",
-            )
-            output_task.add_done_callback(_log_qdrant_error)
+        # Generation is English-canonical, so the assembled tabs are always
+        # English and can be indexed here for every video — the translation
+        # phase only adds the source-language artifact, it does not change the
+        # English tabs.
+        output_task = asyncio.create_task(
+            store_default_output_chunks(
+                ctx.youtube_id,
+                ctx.assembled_tabs or [],
+                language="en",
+            ),
+            name=f"store_output_{ctx.youtube_id}",
+        )
+        output_task.add_done_callback(_log_qdrant_error)
 
     # Store raw transcript to S3 (background, non-blocking, best-effort)
     if S3Client.is_available() and ctx.transcript_data:
@@ -192,7 +194,7 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
                     youtube_id=ctx.youtube_id,
                     segments=normalized,
                     source=ctx.transcript_data.source,
-                    language=ctx.language if ctx.language != "en" else ctx.transcript_data.language,
+                    language=ctx.source_language_code or ctx.transcript_data.language,
                 )
                 await asyncio.to_thread(
                     ctx.repository._collection.update_one,

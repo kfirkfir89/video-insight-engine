@@ -7,6 +7,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
+from ...utils.language_utils import ENGLISH_OUTPUT_DIRECTIVE
 from .pipeline_helpers import sanitize_for_prompt
 
 logger = logging.getLogger(__name__)
@@ -242,7 +243,6 @@ def _build_base_template(
     detail_level: str = "standard",
     content_emphasis: str = "",
     video_context: str = "",
-    language_instruction: str = "",
     frame_context: str = "",
 ) -> str:
     """Build extraction prompt with domain schemas injected, {transcript} placeholder intact.
@@ -289,7 +289,7 @@ def _build_base_template(
     domain_example = _load_domain_example(primary_tag)
 
     # Inject everything EXCEPT {transcript} — caller decides whether to fill it
-    return (
+    return ENGLISH_OUTPUT_DIRECTIVE + "\n\n" + (
         template
         .replace("{domain_schemas}", domain_schemas)
         .replace("{quality_rules}", quality_rules)
@@ -303,7 +303,6 @@ def _build_base_template(
         .replace("{frame_context}", frame_context or "No keyframe captions available.")
         .replace("{primary_tag}", primary_tag)
         .replace("{domain_example}", domain_example)
-        .replace("{language_instruction}", language_instruction)
     )
 
 
@@ -319,7 +318,6 @@ def build_extraction_prompt(
     detail_level: str = "standard",
     content_emphasis: str = "",
     video_context: str = "",
-    language_instruction: str = "",
     frame_context: str = "",
 ) -> str:
     """Assemble a complete extraction prompt from base template + domain schemas.
@@ -342,7 +340,7 @@ def build_extraction_prompt(
     template = _build_base_template(
         content_tags, modifiers, quality_rules, title, duration_minutes,
         user_goal, tab_goals, detail_level, content_emphasis, video_context,
-        language_instruction, frame_context,
+        frame_context,
     )
     # build_extraction_prompt is the single-shot convenience wrapper —
     # no batch context applies, so clear the placeholder explicitly.
@@ -360,7 +358,6 @@ def build_extraction_template(
     detail_level: str = "standard",
     content_emphasis: str = "",
     video_context: str = "",
-    language_instruction: str = "",
     frame_context: str = "",
 ) -> str:
     """Build extraction prompt template with {transcript} placeholder for extractor to fill.
@@ -385,7 +382,7 @@ def build_extraction_template(
     return _build_base_template(
         content_tags, modifiers, quality_rules, title, duration_minutes,
         user_goal, tab_goals, detail_level, content_emphasis, video_context,
-        language_instruction, frame_context,
+        frame_context,
     )
 
 

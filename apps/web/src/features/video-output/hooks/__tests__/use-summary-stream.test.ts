@@ -531,4 +531,85 @@ describe("useSummaryStream", () => {
       });
     });
   });
+
+  describe("video navigation reset", () => {
+    // A populated stream (metadata + one tab) that finishes. Used to seed the
+    // hook with the "previous video" before navigating away.
+    const firstVideoEvents = [
+      {
+        event: "metadata",
+        data: { event: "metadata", title: "First Video", channel: "Chan A", duration: 120 },
+      },
+      {
+        event: "tab_ready",
+        data: {
+          event: "tab_ready",
+          id: "steps",
+          label: "Steps",
+          emoji: "👣",
+          component: "step_player",
+          props: {},
+        },
+      },
+      { event: "done", data: { event: "done", processingTimeMs: 1000 } },
+    ];
+
+    it("should clear streamed tabs and metadata when navigating to a different video", async () => {
+      server.use(
+        http.get(`${API_URL}/videos/:id/stream`, () => createSSEResponse(firstVideoEvents))
+      );
+
+      const { result, rerender } = renderHook(
+        (props: { videoSummaryId: string; enabled: boolean }) => useSummaryStream(props),
+        { initialProps: { videoSummaryId: "video-1", enabled: true } }
+      );
+
+      // First video streams to completion with content populated.
+      await waitFor(() => {
+        expect(result.current.phase).toBe("done");
+      });
+      expect(result.current.metadata?.title).toBe("First Video");
+      expect(result.current.tabs).toHaveLength(1);
+
+      // Navigate to a different, already-completed video (enabled=false, so the
+      // subscribe path never runs). The previous video's tabs/metadata must NOT
+      // bleed through — they would otherwise win in VideoDetailPage's
+      // resolvedTabs / mergedVideo.title precedence.
+      act(() => {
+        rerender({ videoSummaryId: "video-2", enabled: false });
+      });
+
+      await waitFor(() => {
+        expect(result.current.tabs).toEqual([]);
+      });
+      expect(result.current.metadata).toBeNull();
+    });
+
+    it("should retain finished content when status flips but the video is unchanged", async () => {
+      server.use(
+        http.get(`${API_URL}/videos/:id/stream`, () => createSSEResponse(firstVideoEvents))
+      );
+
+      const { result, rerender } = renderHook(
+        (props: { videoSummaryId: string; enabled: boolean }) => useSummaryStream(props),
+        { initialProps: { videoSummaryId: "video-1", enabled: true } }
+      );
+
+      await waitFor(() => {
+        expect(result.current.phase).toBe("done");
+      });
+      expect(result.current.tabs).toHaveLength(1);
+
+      // Same video, stream just finished so the page disables streaming. The
+      // id is unchanged, so the reset must NOT fire — the video the user is
+      // still viewing keeps its content.
+      act(() => {
+        rerender({ videoSummaryId: "video-1", enabled: false });
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(result.current.tabs).toHaveLength(1);
+      expect(result.current.metadata?.title).toBe("First Video");
+    });
+  });
 });

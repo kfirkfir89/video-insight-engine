@@ -1,4 +1,4 @@
-import { memo, useState, useMemo } from 'react';
+import { memo, useState, useMemo, useEffect, useRef } from 'react';
 import { Check, X, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   Legend,
@@ -7,11 +7,11 @@ import {
   PolarRadiusAxis,
   Radar,
   RadarChart,
-  ResponsiveContainer,
 } from 'recharts';
 import { cn } from '@/lib/utils';
 import { GlassCard, FadeIn, Badge, ScoreRing, EmojiMarker } from '@/components/vie';
 import { Slider } from '@/components/ui/slider';
+import { useMediaQuery } from '@/hooks/use-media-query';
 
 import { useLabels } from '@/lib/i18n';
 
@@ -99,6 +99,48 @@ const ComparisonRadarHero = memo(function ComparisonRadarHero({
 }: ComparisonRadarHeroProps) {
   const scored = useMemo(() => scoreComparisonAxes(comparisons), [comparisons]);
   const [weights, setWeights] = useState<number[]>(() => comparisons.map(() => DEFAULT_WEIGHT));
+  const [tunerOpen, setTunerOpen] = useState(false);
+
+  // Self-measure the chart box rather than leaning on Recharts'
+  // ResponsiveContainer, which latches a 0×0 reading when it mounts inside a
+  // hidden (display:none) tab and never recovers on reveal — the radar then
+  // renders as a ~14px stub. A ResizeObserver fires correctly when the element
+  // first gains size, so we hand RadarChart explicit pixel dimensions.
+  const chartRef = useRef<HTMLDivElement>(null);
+  const [chartSize, setChartSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  useEffect(() => {
+    const el = chartRef.current;
+    if (!el) return;
+    // Floor out implausibly-narrow readings (~14px) that Recharts/ResizeObserver
+    // can deliver mid-layout and latch forever. A real radar card is always far
+    // wider than this, so the floor rejects only the glitch — legitimate small
+    // viewports (and shrinks from a larger size) still pass through.
+    const MIN_CHART_WIDTH = 100;
+    const measure = (width: number, height: number) => {
+      if (width >= MIN_CHART_WIDTH && height > 0) {
+        setChartSize({ width, height });
+      }
+    };
+    // Synchronous read first: an already-laid-out container is sized now,
+    // so we don't depend on the observer's first async callback.
+    const initial = el.getBoundingClientRect();
+    measure(initial.width, initial.height);
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (rect) measure(rect.width, rect.height);
+    });
+    observer.observe(el);
+    // Backstop: if the container mounts tiny (mid tab-transition) the observer
+    // can miss the settle. Re-read after the browser has laid out for real.
+    const raf1 = requestAnimationFrame(() => {
+      const r = el.getBoundingClientRect();
+      measure(r.width, r.height);
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      observer.disconnect();
+    };
+  }, []);
 
   // Re-sync weight array length whenever the comparison count changes.
   useMemo(() => {
@@ -116,7 +158,7 @@ const ComparisonRadarHero = memo(function ComparisonRadarHero({
   const chartData = scored.map((s) => ({ feature: s.feature, [colLeft]: s.left, [colRight]: s.right }));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <GlassCard variant="default" className="p-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-foreground">Side-by-side</h3>
@@ -132,9 +174,14 @@ const ComparisonRadarHero = memo(function ComparisonRadarHero({
             )}
           </span>
         </div>
-        <div className="h-[320px] w-full" role="img" aria-label={`Radar comparing ${colLeft} and ${colRight}`}>
-          <ResponsiveContainer width="100%" height="100%" minWidth={320} minHeight={280}>
-            <RadarChart data={chartData} outerRadius="75%">
+        <div
+          ref={chartRef}
+          className="h-[260px] w-full sm:h-[320px]"
+          role="img"
+          aria-label={`Radar comparing ${colLeft} and ${colRight}`}
+        >
+          {chartSize.width > 0 && chartSize.height > 0 && (
+            <RadarChart width={chartSize.width} height={chartSize.height} data={chartData} outerRadius="75%">
               <PolarGrid stroke="var(--border)" />
               <PolarAngleAxis dataKey="feature" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} />
               <PolarRadiusAxis
@@ -158,19 +205,31 @@ const ComparisonRadarHero = memo(function ComparisonRadarHero({
               />
               <Legend />
             </RadarChart>
-          </ResponsiveContainer>
+          )}
         </div>
       </GlassCard>
 
+      {/* Weight sliders collapse by default — the winner split stays visible so
+          the signal survives, but the six-slider control no longer competes for
+          attention on first read. */}
       <GlassCard variant="outlined" className="space-y-3 p-4">
-        <div className="flex items-center justify-between">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <button
+          type="button"
+          onClick={() => setTunerOpen((open) => !open)}
+          aria-expanded={tunerOpen}
+          className="flex w-full items-center justify-between gap-2"
+        >
+          <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Tune what matters
-          </h4>
+            {tunerOpen
+              ? <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+              : <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />}
+          </span>
           <span className="text-xs font-medium tabular-nums text-muted-foreground">
             {colLeft} {leftPercent}% · {colRight} {rightPercent}%
           </span>
-        </div>
+        </button>
+        {tunerOpen && (
         <ul className="space-y-2">
           {scored.map((axis, index) => (
             <li
@@ -200,6 +259,7 @@ const ComparisonRadarHero = memo(function ComparisonRadarHero({
             </li>
           ))}
         </ul>
+        )}
       </GlassCard>
     </div>
   );
@@ -384,6 +444,14 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
   const [prosExpanded, setProsExpanded] = useState(true);
   const [consExpanded, setConsExpanded] = useState(true);
 
+  // Radar and table are mutually exclusive views, not a stacked pair. Mobile
+  // opens on the table (the radar is cramped under ~340px); desktop opens on
+  // the radar hero. `view="radar"` forces the radar regardless of viewport.
+  const isCompact = useMediaQuery('(max-width: 640px)');
+  const [comparisonView, setComparisonView] = useState<'radar' | 'details'>(
+    () => (view !== 'radar' && isCompact ? 'details' : 'radar'),
+  );
+
   const hasComparisons = comparisons.length > 0;
   const hasPros = pros && pros.length > 0;
   const hasCons = cons && cons.length > 0;
@@ -415,13 +483,50 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
       {/* Review summary header — renders only when verdict.bottomLine is set */}
       {hasVerdictHeader && <ReviewSummary verdict={verdict!} />}
 
-      {/* Radar hero — when ≥3 scoreable axes (auto) or forced via view="radar" */}
+      {/* View toggle — only when a radar hero and a detail view both exist.
+          One view at a time replaces the old radar-stacked-on-table wall. */}
       {showRadar && (
+        <div
+          className="flex w-fit items-center gap-1 rounded-lg bg-muted/40 p-0.5"
+          role="group"
+          aria-label="Comparison view"
+        >
+          <button
+            type="button"
+            onClick={() => setComparisonView('radar')}
+            aria-pressed={comparisonView === 'radar'}
+            className={cn(
+              'rounded-md px-3 py-1 text-xs font-semibold transition-colors',
+              comparisonView === 'radar'
+                ? 'bg-card text-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            Radar
+          </button>
+          <button
+            type="button"
+            onClick={() => setComparisonView('details')}
+            aria-pressed={comparisonView === 'details'}
+            className={cn(
+              'rounded-md px-3 py-1 text-xs font-semibold transition-colors',
+              comparisonView === 'details'
+                ? 'bg-card text-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {type === 'versus' ? 'Cards' : 'Table'}
+          </button>
+        </div>
+      )}
+
+      {/* Radar hero — when ≥3 scoreable axes (auto) or forced via view="radar" */}
+      {showRadar && comparisonView === 'radar' && (
         <ComparisonRadarHero comparisons={comparisons} colLeft={colLeft} colRight={colRight} />
       )}
 
       {/* Feature comparison — table mode */}
-      {hasComparisons && type === 'table' && (
+      {hasComparisons && type === 'table' && (!showRadar || comparisonView === 'details') && (
         <GlassCard variant="default" className="p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -475,7 +580,7 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
       )}
 
       {/* Versus mode */}
-      {hasComparisons && type === 'versus' && (
+      {hasComparisons && type === 'versus' && (!showRadar || comparisonView === 'details') && (
         <div className="space-y-2">
           {comparisons.map((item, index) => (
             <FadeIn key={index} index={index}>

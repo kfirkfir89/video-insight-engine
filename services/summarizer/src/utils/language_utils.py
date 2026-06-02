@@ -67,6 +67,20 @@ _LANGUAGE_NAMES: dict[str, str] = {
 }
 
 
+# Injected at the top of every generation prompt. The pipeline is
+# English-canonical: all stages must emit English regardless of the transcript's
+# language (the source-language version is produced later by translating this
+# English output). An ABSENT instruction is not enough — with a non-English
+# transcript the model otherwise echoes the source language for labels/content.
+ENGLISH_OUTPUT_DIRECTIVE = (
+    "OUTPUT LANGUAGE — CRITICAL: Write EVERY content value (titles, labels, "
+    "descriptions, summaries, key points, questions, answer options, tips) in "
+    "ENGLISH. If the transcript is in another language, translate its meaning "
+    "into natural, fluent English — do NOT copy the original language. JSON "
+    "field names and tab IDs stay in English."
+)
+
+
 def is_rtl(language: str) -> bool:
     """Check if a language code is RTL."""
     return language in RTL_LANGUAGES
@@ -220,24 +234,6 @@ def detect_language_from_text(text: str) -> str | None:
     except Exception as e:
         logger.debug("Language detection failed: %s", e)
         return None
-
-
-def build_language_instruction(language: str) -> str:
-    """Build a language instruction string for LLM prompts.
-
-    Returns empty string for English (no extra instruction needed).
-    For other languages, returns instruction to produce content in that language.
-    """
-    if language == "en":
-        return ""
-
-    name = get_language_name(language)
-    return (
-        f"IMPORTANT — LANGUAGE INSTRUCTION: This video is in {name}. "
-        f"All content values (titles, descriptions, tips, names, labels) MUST be in {name}. "
-        f"JSON field names and tab IDs MUST stay in English. "
-        f"Do NOT translate content to English — keep it in the original {name}."
-    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

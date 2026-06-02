@@ -1,19 +1,24 @@
-"""Translation step — translates assembled output to English for non-English videos.
+"""Translation step — English-canonical pipeline.
 
-Single LLM call. Walks the output tree recursively, collects every translatable
-prose string into a flat list (filtered by a leaf-only deny-list of structural,
-asset, and enum-shaped keys), sends one Haiku call, applies the translations
-back into a deep-copy of the original.
+Generation always produces English, so the assembled output IS the English
+primary. This step translates that English output INTO the detected source
+language and nests the result under ``sourceLanguage`` so the FE toggle can
+swap the whole surface. The English top-level is returned unchanged.
 
-On success: returns an English-primary dict with the original-language artifact
-nested under ``sourceLanguage`` ({code, name, isRTL, tabs, meta}).
+It walks the output tree recursively, collects every translatable prose string
+into a flat list (filtered by a leaf-only deny-list of structural, asset, and
+enum-shaped keys), translates them in batched Haiku calls (so a large video is
+fully translated rather than capped), and applies the translations back into a
+deep copy that becomes the ``sourceLanguage`` artifact ({code, name, isRTL,
+tabs, meta}).
+
 On any failure (LLM error, length mismatch, mirror detection): returns the
-input unchanged so the FE simply renders no toggle.
+input unchanged (no ``sourceLanguage`` key) so the FE simply renders no toggle.
 
 Mirror detection samples the 3 longest collected strings — small models
-occasionally echo source-language strings back, and longest-string sampling
-avoids false-positives on short tokens that legitimately match across
-languages (proper nouns, ASCII identifiers).
+occasionally echo input strings back, and longest-string sampling avoids
+false-positives on short tokens that legitimately match across languages
+(proper nouns, ASCII identifiers).
 """
 
 from __future__ import annotations
@@ -58,6 +63,12 @@ _SKIP_KEYS: frozenset[str] = frozenset({
     "timestamp", "time", "seconds", "startSeconds", "endSeconds",
     # Enums / non-prose primitives kept stable across languages
     "emoji", "correctIndex", "difficulty", "mood",
+    # ``videoTitle`` is the raw YouTube metadata title — source-language even in
+    # the English-canonical meta. The translation phase handles it explicitly in
+    # both directions via ``_translate_title``, so the batch walker skips it;
+    # otherwise a source-language string gets mislabeled as English, round-
+    # tripped for nothing, and pollutes mirror detection.
+    "videoTitle",
     # ``sets`` is always a number in the fitness schema. ``reps``/``rest``/
     # ``duration`` are deliberately ABSENT — the fitness schema emits prose
     # at these keys (e.g. ``"30 שניות"``, ``"AMRAP"``, ``"until failure"``),
@@ -78,12 +89,27 @@ _SKIP_KEYS: frozenset[str] = frozenset({
 # enum-ish remnants, etc.).
 _MIN_TRANSLATABLE_LEN = 3
 
-# Hard caps so a pathological payload (deeply nested or accidentally-large
-# blob in props) can't blow the recursion stack or balloon the LLM call into
-# a many-MB output. 800 strings at ~20 chars/string ≈ Haiku's 16K-token cap;
-# 32 levels is well beyond any real assembled-tab shape (~6 levels typical).
-_MAX_COLLECTED_STRINGS = 800
+# Runaway guard so a pathological payload (deeply nested or accidentally-large
+# blob in props) can't blow the recursion stack. Set well above any real
+# assembled-tab shape (a rich long video carries a few hundred strings); the
+# LLM call is kept small by batching, not by capping collection, so nothing is
+# silently dropped. 32 levels is far beyond any real shape (~6 levels typical).
+_MAX_COLLECTED_STRINGS = 5000
 _MAX_RECURSION_DEPTH = 32
+
+# Strings per LLM translation call. Collected strings are split into batches of
+# this size and translated concurrently, then concatenated — this removes the
+# old fail-closed "too many strings" abort while keeping each call within the
+# fast model's output budget.
+_MAX_TRANSLATION_BATCH = 200
+
+# Cap on how many translation batches run at once. A long video can produce
+# enough strings to fan out into many batches; without a bound, ``gather``
+# would launch them all and risk tripping the LLM provider's concurrency/rate
+# limits — and since translation is all-or-nothing, one rate-limited batch
+# discards the whole source-language artifact. 4 keeps throughput high while
+# staying comfortably under provider limits.
+_MAX_CONCURRENT_TRANSLATION_BATCHES = 4
 
 # JSON path — alternating dict keys (str) and list indices (int).
 JsonPath = tuple[str | int, ...]
@@ -150,9 +176,11 @@ async def _translate_flat_list(
     llm_service: LLMService,
     strings: list[str],
     source_language: str,
+    target_language: str,
     stage_name: str = "translation_full",
 ) -> list[str] | None:
-    """Translate a flat list of strings via one Haiku call.
+    """Translate a flat list of strings from ``source_language`` to
+    ``target_language`` via one Haiku call.
 
     Returns None on any failure (LLM error, JSON parse, non-string items,
     length mismatch). Caller decides how to recover.
@@ -161,11 +189,10 @@ async def _translate_flat_list(
         return []
 
     prompt_template = load_prompt_text(FLAT_PROMPT_PATH)
-    src_name = get_language_name(source_language)
     prompt = (
         prompt_template
-        .replace("{source_language}", src_name)
-        .replace("{target_language}", "English")
+        .replace("{source_language}", get_language_name(source_language))
+        .replace("{target_language}", get_language_name(target_language))
         .replace("{strings_json}", json.dumps(strings, ensure_ascii=False))
     )
 
@@ -283,66 +310,91 @@ def _is_mirror(originals: list[str], translations: list[str]) -> bool:
     return overall_ratio > _MIRROR_OVERALL_THRESHOLD
 
 
+async def _translate_in_batches(
+    llm_service: LLMService,
+    strings: list[str],
+    source_language: str,
+    target_language: str,
+) -> list[str] | None:
+    """Translate ``strings`` in concurrent batches and concatenate in order.
+
+    Splitting into ``_MAX_TRANSLATION_BATCH``-sized calls keeps each LLM call
+    within the fast model's output budget while still translating EVERY string
+    — replacing the old fail-closed "too many strings" abort. Concurrency is
+    bounded by ``_MAX_CONCURRENT_TRANSLATION_BATCHES`` so a long video can't
+    fan out enough batches to trip the provider's rate limits. Returns None if
+    any batch fails (all-or-nothing: a half-translated surface is worse than
+    none) or if the concatenated length doesn't match the input.
+    """
+    if not strings:
+        return []
+    batches = [
+        strings[i:i + _MAX_TRANSLATION_BATCH]
+        for i in range(0, len(strings), _MAX_TRANSLATION_BATCH)
+    ]
+    semaphore = asyncio.Semaphore(_MAX_CONCURRENT_TRANSLATION_BATCHES)
+
+    async def _bounded(batch: list[str]) -> list[str] | None:
+        async with semaphore:
+            return await _translate_flat_list(
+                llm_service, batch, source_language, target_language,
+            )
+
+    results = await asyncio.gather(*(_bounded(batch) for batch in batches))
+    out: list[str] = []
+    for chunk in results:
+        if chunk is None:
+            return None
+        out.extend(chunk)
+    if len(out) != len(strings):
+        logger.warning(
+            "Batched translation length mismatch: expected %d, got %d",
+            len(strings), len(out),
+        )
+        return None
+    return out
+
+
 async def translate_to_source(
     llm_service: LLMService,
     output: dict[str, Any],
-    source_lang: str,
+    target_lang: str,
 ) -> dict[str, Any]:
-    """Translate ``output`` from ``source_lang`` to English-primary shape.
+    """Translate the English ``output`` INTO ``target_lang`` for the source view.
 
     Args:
-        llm_service: LLM service for the Haiku call.
-        output: Source-language dict, shape ``{"tabs": [...], "meta": {...}, "synthesis": {...}}``.
-        source_lang: ISO 639-1 code of the input language (e.g. ``"he"``).
+        llm_service: LLM service for the Haiku calls.
+        output: English-primary dict, shape ``{"tabs": [...], "meta": {...}}``.
+        target_lang: ISO 639-1 code of the source language to translate into
+            (e.g. ``"he"``).
 
     Returns:
-        On success: a NEW dict with English values at top level + the
-        original-language artifact nested under ``sourceLanguage`` (with
-        ``code``, native ``name``, ``isRTL``, and the three payloads).
-        On any failure: the ``output`` arg unchanged (no ``sourceLanguage``
-        key). Callers detect success via ``"sourceLanguage" in result``.
+        On success: a NEW dict whose top level is the English ``output``
+        unchanged, plus the translated artifact nested under ``sourceLanguage``
+        ({code, native ``name``, ``isRTL``, ``tabs``, ``meta``}). On any failure:
+        the ``output`` arg unchanged (no ``sourceLanguage`` key). Callers detect
+        success via ``"sourceLanguage" in result``.
     """
     pairs: list[tuple[JsonPath, str]] = []
     _collect_strings(output, (), pairs)
     if not pairs:
-        # Pathological but possible: video with no translatable prose (very
-        # short clips, all-emoji titles, or aggressive deny-listing of every
-        # populated key). Logging makes this visible in observability rather
-        # than silently leaving the FE with no language toggle and Mongo
-        # still labelled as the non-English source language.
+        # Pathological but possible: no translatable prose (very short clips,
+        # all-emoji titles, or every populated key deny-listed). Log so it is
+        # visible in observability rather than a silently toggle-less video.
         logger.info(
-            "Translation no-op: no translatable prose collected (source=%s). "
+            "Translation no-op: no translatable prose collected (target=%s). "
             "Output unchanged; FE will render no language toggle.",
-            source_lang,
-        )
-        return output
-
-    # Fail-closed on cap-hit. The walker silently stops at _MAX_COLLECTED_STRINGS,
-    # so anything beyond the cap would ship as untranslated source-language
-    # prose mixed into the English-primary surface — a half-translated payload
-    # that's worse than no translation (the FE expects all-or-nothing). Return
-    # input unchanged so the FE renders no language toggle, which is the safe
-    # default for an oversized tree. The boundary case (exactly the cap) is a
-    # false positive, but the rarity of hitting it precisely and the much
-    # higher cost of a leaked source-language tail justify the conservative
-    # bail-out. If real videos legitimately approach the cap, raise the
-    # constant rather than papering over with a partial result.
-    if len(pairs) >= _MAX_COLLECTED_STRINGS:
-        logger.warning(
-            "Translation walker reached %d-string cap; aborting translation "
-            "to avoid shipping a half-translated payload. Source language: %s. "
-            "If this fires on real videos, raise _MAX_COLLECTED_STRINGS.",
-            _MAX_COLLECTED_STRINGS, source_lang,
+            target_lang,
         )
         return output
 
     originals = [s for _, s in pairs]
     logger.info(
-        "Translating %d strings (%d chars) from %s to English",
-        len(originals), sum(len(s) for s in originals), source_lang,
+        "Translating %d strings (%d chars) from English to %s",
+        len(originals), sum(len(s) for s in originals), target_lang,
     )
 
-    translations = await _translate_flat_list(llm_service, originals, source_lang)
+    translations = await _translate_in_batches(llm_service, originals, "en", target_lang)
     if translations is None:
         logger.warning(
             "Translation failed — returning input unchanged (no sourceLanguage)",
@@ -351,28 +403,46 @@ async def translate_to_source(
 
     if _is_mirror(originals, translations):
         logger.warning(
-            "Translation appears to mirror source language — discarding",
+            "Translation appears to mirror English — discarding sourceLanguage",
         )
         return output
 
-    english = copy.deepcopy(output)
-    for (path, _), translated in zip(pairs, translations):
-        _set_at_path(english, path, translated)
+    # Build the translated source-language artifact from a deep copy so a later
+    # mutation of the English ``output`` (still referenced by ctx) can't corrupt
+    # the persisted block.
+    translated = copy.deepcopy(output)
+    for (path, _), value in zip(pairs, translations):
+        _set_at_path(translated, path, value)
+    if isinstance(translated.get("meta"), dict):
+        translated["meta"]["language"] = target_lang
+        translated["meta"]["isRTL"] = is_rtl(target_lang)
 
-    # Force top-level meta to reflect English-primary semantics.
-    if isinstance(english.get("meta"), dict):
-        english["meta"]["language"] = "en"
-        english["meta"]["isRTL"] = False
-
-    # Deep-copy the source-language artifact so a downstream mutation of
-    # ``ctx.assembled_tabs`` (which still references the input ``output``)
-    # cannot corrupt the persisted ``sourceLanguage`` block. Cheap relative
-    # to the LLM call we just made.
-    english["sourceLanguage"] = {
-        "code": source_lang,
-        "name": get_native_name(source_lang),
-        "isRTL": is_rtl(source_lang),
-        "tabs": copy.deepcopy(output.get("tabs", [])),
-        "meta": copy.deepcopy(output.get("meta", {})),
+    # Top level stays English; attach the translated copy under sourceLanguage.
+    result = copy.deepcopy(output)
+    if isinstance(result.get("meta"), dict):
+        result["meta"]["language"] = "en"
+        result["meta"]["isRTL"] = False
+    result["sourceLanguage"] = {
+        "code": target_lang,
+        "name": get_native_name(target_lang),
+        "isRTL": is_rtl(target_lang),
+        "tabs": translated.get("tabs", []),
+        "meta": translated.get("meta", {}),
     }
-    return english
+    return result
+
+
+async def translate_text(
+    llm_service: LLMService,
+    text: str,
+    source_language: str,
+    target_language: str,
+) -> str | None:
+    """Translate a single string (e.g. the video title). None on failure."""
+    if not text:
+        return None
+    result = await _translate_flat_list(
+        llm_service, [text], source_language, target_language,
+        stage_name="translation_title",
+    )
+    return result[0] if result else None

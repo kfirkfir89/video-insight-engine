@@ -1,6 +1,7 @@
 import { memo, useCallback, useState } from 'react';
 import { ChevronDown, ChevronUp, Star, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLabels } from '@/lib/i18n';
 import type { SpotItem } from '@vie/types';
 import { GlassCard, FadeIn, SectionNav, Badge, MapLink, VisualEvidence } from '@/components/vie';
 
@@ -32,6 +33,7 @@ export const SpotExplorer = memo(function SpotExplorer({
   nextTab: _nextTab,
   onNavigateTab: _onNavigateTab,
 }: SpotExplorerProps) {
+  const t = useLabels();
   const spots = rawSpots.map(normalizeSpot);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [activeSection, setActiveSection] = useState(sections?.[0]?.label ?? '');
@@ -121,7 +123,7 @@ export const SpotExplorer = memo(function SpotExplorer({
               </div>
               {/* Show more toggle */}
               {hasExpandable && !isExpanded && (
-                <span className="text-xs text-[color:var(--vie-accent)] mt-1 inline-block">Show more</span>
+                <span className="text-xs text-[color:var(--vie-accent)] mt-1 inline-block">{t.showMore}</span>
               )}
             </div>
 

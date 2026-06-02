@@ -10,6 +10,7 @@ Cost: ~$0.006 per minute of audio via OpenAI Whisper API
 import asyncio
 import logging
 import tempfile
+import time
 import uuid
 from collections import Counter
 from pathlib import Path
@@ -220,6 +221,7 @@ def _split_audio_chunks(audio_path: Path) -> list[tuple[Path, int]]:
 def _transcribe_chunked_sync(
     chunks: list[tuple[Path, int]],
     is_music: bool = False,
+    deadline: float | None = None,
 ) -> dict:
     """
     Transcribe multiple audio chunks and merge results.
@@ -227,9 +229,16 @@ def _transcribe_chunked_sync(
     Calls _transcribe_sync for each chunk sequentially, then merges
     text (space-joined) and segments (timestamps adjusted by chunk offset).
 
+    When ``deadline`` (a ``time.monotonic()`` value) is supplied, the loop stops
+    before starting a chunk once the deadline has passed and returns the chunks
+    transcribed so far. The first chunk always runs so we never return an empty
+    transcript. This keeps a long video's partial-but-real transcript instead of
+    discarding all work — far better than the truncating Gemini fallback.
+
     Args:
         chunks: List of (chunk_path, offset_ms) from _split_audio_chunks
         is_music: If True, provide a lyrics-focused prompt hint per chunk
+        deadline: Optional ``time.monotonic()`` cutoff for partial return
 
     Returns:
         Combined {"text": ..., "segments": [...]} matching single-file shape
@@ -239,7 +248,13 @@ def _transcribe_chunked_sync(
     detected_languages: list[str] = []
     client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-    for chunk_path, offset_ms in chunks:
+    for index, (chunk_path, offset_ms) in enumerate(chunks):
+        if deadline is not None and index > 0 and time.monotonic() >= deadline:
+            logger.warning(
+                "Whisper deadline reached after %d/%d chunks; returning partial transcript",
+                index, len(chunks),
+            )
+            break
         result = _transcribe_sync(chunk_path, is_music=is_music, client=client)
         all_text.append(result["text"])
         if result.get("language"):
@@ -401,6 +416,7 @@ async def translate_audio_to_english(
 async def transcribe_with_whisper(
     video_id: str,
     is_music: bool = False,
+    deadline: float | None = None,
 ) -> NormalizedTranscript:
     """
     Full async workflow: download audio → transcribe → normalize.
@@ -411,6 +427,9 @@ async def transcribe_with_whisper(
     Args:
         video_id: YouTube video ID
         is_music: If True, provide a lyrics-focused prompt hint
+        deadline: Optional ``time.monotonic()`` cutoff. When the chunked path
+            crosses it, transcription returns the chunks finished so far rather
+            than continuing — preserving a partial transcript for long videos.
 
     Returns:
         NormalizedTranscript with source="whisper"
@@ -444,7 +463,7 @@ async def transcribe_with_whisper(
                     ErrorCode.UNKNOWN_ERROR,
                 )
             chunk_paths = [path for path, _ in chunks]
-            result = await asyncio.to_thread(_transcribe_chunked_sync, chunks, is_music)
+            result = await asyncio.to_thread(_transcribe_chunked_sync, chunks, is_music, deadline)
         else:
             result = await asyncio.to_thread(_transcribe_sync, audio_path, is_music)
 

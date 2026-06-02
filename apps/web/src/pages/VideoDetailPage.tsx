@@ -403,7 +403,7 @@ export function VideoDetailPage() {
       <VideoPlayerProvider>
         <Layout>
           <OutputRouter
-            title={mergedVideo.title}
+            title={resolvedMeta?.videoTitle || mergedVideo.title}
             videoSummaryId={videoSummaryId}
             tabs={resolvedTabs}
             meta={resolvedMeta}
