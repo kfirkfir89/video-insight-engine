@@ -1,5 +1,7 @@
 """Tests for Whisper transcriber service."""
 
+import time
+
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -351,6 +353,49 @@ class TestTranscribeChunkedSync:
         assert mock_transcribe.call_count == 2
         for call in mock_transcribe.call_args_list:
             assert call.kwargs.get("is_music") is True or call.args[1] is True
+
+    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
+    def test_deadline_returns_partial_transcript(self, mock_transcribe, mock_openai, tmp_path):
+        """A passed deadline stops the loop after the first chunk, keeping partial work.
+
+        Regression: a long video used to be hard-cancelled on timeout (orphaning
+        the worker thread, which then read just-deleted chunk files), discarding
+        all transcription. Now the loop stops cleanly between chunks and returns
+        what it finished — far better than the truncating Gemini fallback.
+        """
+        chunk_paths = [
+            (tmp_path / "chunk_0.mp3", 0),
+            (tmp_path / "chunk_1.mp3", 300_000),
+            (tmp_path / "chunk_2.mp3", 600_000),
+        ]
+        mock_transcribe.side_effect = [
+            {"text": "Chunk one.", "segments": []},
+            {"text": "Chunk two.", "segments": []},
+            {"text": "Chunk three.", "segments": []},
+        ]
+
+        # Deadline already in the past: chunk 0 always runs, then the loop breaks.
+        result = _transcribe_chunked_sync(chunk_paths, deadline=time.monotonic() - 1.0)
+
+        assert result["text"] == "Chunk one."
+        assert mock_transcribe.call_count == 1
+
+    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
+    def test_future_deadline_transcribes_all_chunks(self, mock_transcribe, mock_openai, tmp_path):
+        """A deadline comfortably in the future does not curtail transcription."""
+        chunk_paths = [
+            (tmp_path / "chunk_0.mp3", 0),
+            (tmp_path / "chunk_1.mp3", 300_000),
+        ]
+        mock_transcribe.side_effect = [
+            {"text": "Chunk one.", "segments": []},
+            {"text": "Chunk two.", "segments": []},
+        ]
+
+        result = _transcribe_chunked_sync(chunk_paths, deadline=time.monotonic() + 3600.0)
+
+        assert result["text"] == "Chunk one. Chunk two."
+        assert mock_transcribe.call_count == 2
 
 
 class TestCreateEstimatedSegments:

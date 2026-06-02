@@ -219,6 +219,19 @@ export function useSummaryStream({
   // Track the last videoSummaryId we started subscribing for
   const lastConnectedIdRef = useRef<string | null>(null);
 
+  // A new video is being viewed: drop any streamed state from the previous
+  // video so its tabs/metadata can't bleed through VideoDetailPage's
+  // stream-over-cache precedence (resolvedTabs / mergedVideo.title). Without
+  // this, navigating from a streamed video to a completed one (enabled=false,
+  // so subscribe() never runs) leaves the prior video's content on screen.
+  // `initialState` is a stable module-level constant (not derived from props),
+  // so it is intentionally omitted from the deps — there is no stale-closure
+  // risk and exhaustive-deps does not require it.
+  useEffect(() => {
+    setState(initialState);
+    cacheRestoredRef.current = false;
+  }, [videoSummaryId]);
+
   useEffect(() => {
     if (enabled && videoSummaryId && hasToken && lastConnectedIdRef.current !== videoSummaryId) {
       lastConnectedIdRef.current = videoSummaryId;

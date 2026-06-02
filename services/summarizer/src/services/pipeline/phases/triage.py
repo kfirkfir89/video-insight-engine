@@ -17,7 +17,6 @@ from src.services.pipeline.classifier import classify_domain_format, CLASSIFIER_
 from src.services.pipeline.plan import run_plan
 from src.services.pipeline.pipeline_helpers import sse_event
 from src.services.pipeline.triage import TriageResult
-from src.utils.language_utils import build_language_instruction
 
 if TYPE_CHECKING:
     from src.services.pipeline.context import PipelineContext
@@ -92,7 +91,6 @@ async def run_phase_plan(ctx: PipelineContext) -> AsyncGenerator[str, None]:
         transcript_preview=ctx.clean_text[:3000],
         llm_service=ctx.llm_service,
         content_traits=traits_summary,
-        language_instruction=build_language_instruction(ctx.language),
     )
 
     # Store plan result and populate backward-compat fields

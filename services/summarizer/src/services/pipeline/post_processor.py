@@ -236,6 +236,13 @@ def validate_extraction_counts(
 # timeline stops at 1:34 → ratio 0.34).
 COVERAGE_GATE_RATIO = 0.85
 
+# Ratio below which coverage is *critical* — the transcript itself is almost
+# certainly truncated/incomplete (e.g. a 57-min video whose timestamps stop at
+# 3:20 → ratio 0.058, the Gemini-fallback-truncation signature) rather than the
+# extraction merely thinning out over a long tail. Logged at error level and
+# flagged on meta so the FE/admin can surface "transcript incomplete".
+COVERAGE_CRITICAL_RATIO = 0.5
+
 # Lists whose items carry a video offset, mapped to the field holding it.
 # Offsets may be int seconds or "M:SS"/"H:MM:SS" strings.
 _TIMESTAMP_PATHS: dict[str, str] = {

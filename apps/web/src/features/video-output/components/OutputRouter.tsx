@@ -117,7 +117,7 @@ export function OutputRouter({
           <div dir="ltr" className="flex justify-end">{languageToggle}</div>
         ) : null}
         {hasData && tabDefs.length > 0 ? (
-          <TabCoordinationProvider videoId={videoSummaryId} initialTab={initialTab}>
+          <TabCoordinationProvider key={videoSummaryId} videoId={videoSummaryId} initialTab={initialTab}>
             <TabStateProvider videoId={videoSummaryId}>
               <CommandDeck
                 title={title}

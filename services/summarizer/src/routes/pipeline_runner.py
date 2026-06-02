@@ -200,8 +200,9 @@ async def _run_pipeline_phases(
                 if spawned is not None:
                     spawned_faithfulness.append(spawned)
 
-        # Translation step — translate assembled output to English for non-English videos
-        if ctx.language != "en":
+        # Translation step — translate the English output into the source
+        # language and attach it as ``sourceLanguage`` for the FE toggle.
+        if ctx.source_language_code:
             phase_start = time.monotonic()
             try:
                 from src.services.pipeline.phases.translation import run_phase_translation

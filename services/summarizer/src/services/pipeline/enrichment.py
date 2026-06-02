@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from ...config import settings
 from ...models.pipeline_types import EnrichmentData
 from ...utils.json_parsing import parse_json_response
+from ...utils.language_utils import ENGLISH_OUTPUT_DIRECTIVE
 from ...utils.llm_retry import call_llm_with_retry
 from .pipeline_helpers import truncate_json_safely, sanitize_for_prompt
 from .prompt_builder import load_prompt_text
@@ -95,7 +96,6 @@ async def enrich(
     synthesis_data: dict | None = None,
     video_context: str = "",
     tab_goals: str = "",
-    language_instruction: str = "",
 ) -> EnrichmentData | None:
     """Generate enrichment content based on primary content tag.
 
@@ -138,13 +138,12 @@ async def enrich(
                 logger.warning("No synthesis data either — enrichment will have minimal context")
                 context = json.dumps({"title": title})
 
-        prompt = (
+        prompt = ENGLISH_OUTPUT_DIRECTIVE + "\n\n" + (
             prompt_template
             .replace("{title}", sanitize_for_prompt(title))
             .replace("{extraction_data}", context)
             .replace("{video_context}", video_context or "Not available")
             .replace("{tab_goals}", tab_goals or "Not specified")
-            .replace("{language_instruction}", language_instruction)
         )
 
         raw = await call_llm_with_retry(

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { useLabels } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import {
   GlassCard,
@@ -139,6 +140,7 @@ export const WorkoutRoom = memo(function WorkoutRoom({
   nextTab,
   onNavigateTab,
 }: WorkoutRoomProps) {
+  const t = useLabels();
   const reducedMotion = usePrefersReducedMotion();
   const [activeIndex, setActiveIndex] = useState(0);
   const [completedSets, setCompletedSets] = useState<number[]>(() =>
@@ -382,9 +384,7 @@ export const WorkoutRoom = memo(function WorkoutRoom({
               variant="ghost"
               size="sm"
               onClick={() => setSoundEnabled((s) => !s)}
-              aria-label={
-                soundEnabled ? 'Mute audio cues' : 'Enable audio cues'
-              }
+              aria-label={soundEnabled ? t.muteAudioCues : t.enableAudioCues}
               aria-pressed={soundEnabled}
               className="gap-1 text-xs"
             >
@@ -393,7 +393,7 @@ export const WorkoutRoom = memo(function WorkoutRoom({
               ) : (
                 <VolumeX className="h-3.5 w-3.5" aria-hidden="true" />
               )}
-              {soundEnabled ? 'Sound on' : 'Sound off'}
+              {soundEnabled ? t.soundOn : t.soundOff}
             </Button>
           </div>
         </div>
@@ -448,7 +448,7 @@ export const WorkoutRoom = memo(function WorkoutRoom({
               onClick={skipRest}
               className="text-xs mt-1"
             >
-              Skip rest
+              {t.skipRest}
             </Button>
           </div>
         ) : (
@@ -461,7 +461,7 @@ export const WorkoutRoom = memo(function WorkoutRoom({
             className="w-full gap-2"
           >
             <Check className="h-4 w-4" aria-hidden="true" />
-            {exerciseDone ? 'Exercise complete' : 'Complete set'}
+            {exerciseDone ? t.exerciseComplete : t.completeSet}
           </Button>
         )}
       </GlassCard>

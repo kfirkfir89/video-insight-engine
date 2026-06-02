@@ -48,38 +48,45 @@ async def run_phase_transcript(ctx: PipelineContext) -> AsyncGenerator[str, None
 
     ctx.transcript_data = transcript_data
 
-    # Propagate detected language to pipeline context
-    if transcript_data.language:
-        from src.utils.language_utils import is_rtl
-        ctx.language = transcript_data.language
-        ctx.is_rtl = is_rtl(transcript_data.language)
-        logger.info("Pipeline language set: %s (RTL: %s)", ctx.language, ctx.is_rtl)
-
-    # Sound-only detection: a music-category video with essentially no speech
-    # means Whisper hallucinated a language on instrumental audio. Force English
-    # so downstream prompts produce coherent output instead of fabricated
-    # foreign-language content.
-    from src.utils.language_utils import is_sound_only_video
+    # English-canonical pipeline: ALL generation runs in English, so ctx.language
+    # stays "en" (its default). We only record the DETECTED original language —
+    # it drives the final English→source translation pass, the RAG transcript
+    # translation, and cache ownership. Detect from the source's own metadata or,
+    # when absent (e.g. the Gemini fallback carries no language), from the
+    # transcript content — never leave a non-English video unrecorded.
+    from src.utils.language_utils import (
+        detect_language_by_script,
+        detect_language_from_text,
+    )
     raw_text = transcript_data.raw_text or ""
-    if is_sound_only_video(
+    detected_language = transcript_data.language
+    if not detected_language and raw_text:
+        detected_language = (
+            detect_language_from_text(raw_text)
+            or detect_language_by_script(raw_text)
+        )
+    source_code = detected_language if detected_language and detected_language != "en" else None
+
+    # Sound-only detection: instrumental/no-speech music whose transcription is
+    # hallucinated foreign-language fragments. Drop the source language so no
+    # translation runs and the FE renders no language toggle — the right UX.
+    from src.utils.language_utils import is_sound_only_video
+    if source_code and is_sound_only_video(
         is_music=is_music,
-        language=ctx.language,
+        language=source_code,
         raw_text=raw_text,
         duration=video_data.duration or 0,
         wps_threshold=settings.MUSIC_LANGUAGE_FORCE_EN_WPS,
     ):
-        # Sound-only override: instrumental/no-speech music whose Whisper
-        # output is hallucinated foreign-language fragments. Pin to English
-        # so downstream prompts produce coherent content. The pipeline never
-        # builds a sourceLanguage block here — the FE language toggle is
-        # presence-driven and stays hidden, which is the right UX.
         logger.warning(
-            "Sound-only music video detected; overriding language %r -> en "
+            "Sound-only music video detected; dropping source language %r "
             "(word_count=%d, duration=%ds)",
-            ctx.language, len(raw_text.split()), video_data.duration or 0,
+            source_code, len(raw_text.split()), video_data.duration or 0,
         )
-        ctx.language = "en"
-        ctx.is_rtl = False
+        source_code = None
+
+    ctx.source_language_code = source_code
+    logger.info("Source language: %s (generation runs in English)", source_code or "en")
 
     yield sse_event("transcript_ready", {"duration": video_data.duration})
     ctx.clean_text = clean_transcript(transcript_data.raw_text)

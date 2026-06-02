@@ -9,6 +9,7 @@ Extracted from ``src.routes.stream`` for maintainability.
 
 import asyncio
 import logging
+import time
 from typing import AsyncGenerator
 
 from src.config import settings
@@ -227,12 +228,23 @@ async def _try_gemini_transcription(
             timeout=gemini_timeout,
         )
         segments = normalized_segments_to_pipeline(gemini_result.segments)
-        logger.info("Gemini transcription successful: %d segments", len(segments))
+        # Gemini transcription returns no language. Detect from the transcript
+        # text (mirrors the S3-cache and yt-dlp branches above) so a non-English
+        # video is never silently defaulted to "en" — that would skip the
+        # translation phase and hide the FE language toggle.
+        gemini_language = detect_language_from_text(gemini_result.text)
+        if not gemini_language:
+            gemini_language = detect_language_by_script(gemini_result.text)
+        logger.info(
+            "Gemini transcription successful: %d segments (language=%s)",
+            len(segments), gemini_language,
+        )
         return TranscriptData(
             segments=segments,
             raw_text=gemini_result.text,
             transcript_type="gemini",
             source="gemini",
+            language=gemini_language,
         )
     except (TranscriptError, asyncio.TimeoutError) as e:
         logger.warning("Gemini transcription failed, falling back to Whisper: %s", e)
@@ -248,19 +260,28 @@ async def _try_whisper_transcription(
 ) -> tuple[TranscriptData | None, TranscriptError | None]:
     """Attempt Whisper transcription. Returns (data, None) on success or (None, error) on failure."""
     logger.info("Trying Whisper fallback for %s", youtube_id)
-    # Timeout scales with duration: ~1 min download per 30 min video + transcription overhead
-    # Minimum 5 min, max 15 min. A 173-min video gets ~10 min.
-    whisper_timeout = min(max(300.0, duration * 0.055 + 120), 900.0)
-    logger.info("Whisper timeout set to %ds for %ds video", int(whisper_timeout), duration)
+    # Budget scales with duration so long videos get enough time to transcribe
+    # every chunk. Minimum 5 min, max 15 min. The budget is enforced as an
+    # internal per-chunk *deadline* inside transcribe_with_whisper (it returns
+    # the chunks it finished instead of being hard-cancelled), so a long video
+    # yields a partial-but-real transcript rather than falling through to the
+    # truncating Gemini path. The outer wait_for is only a generous backstop for
+    # a single hung API call; keeping it well above the deadline avoids the
+    # cancel-mid-thread race that deletes chunk files an orphaned worker is
+    # still reading.
+    whisper_timeout = min(max(300.0, duration * 0.12 + 120), 900.0)
+    deadline = time.monotonic() + whisper_timeout
+    backstop = whisper_timeout + 300.0
+    logger.info("Whisper budget set to %ds for %ds video", int(whisper_timeout), duration)
 
     try:
         whisper_result = await asyncio.wait_for(
-            transcribe_with_whisper(youtube_id, is_music=is_music),
-            timeout=whisper_timeout,
+            transcribe_with_whisper(youtube_id, is_music=is_music, deadline=deadline),
+            timeout=backstop,
         )
     except asyncio.TimeoutError:
         return None, TranscriptError(
-            f"Whisper transcription timed out after {int(whisper_timeout)}s",
+            f"Whisper transcription exceeded backstop of {int(backstop)}s",
             ErrorCode.UNKNOWN_ERROR,
         )
     except TranscriptError as e:

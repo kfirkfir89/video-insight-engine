@@ -20,12 +20,12 @@ from src.services.pipeline.extractor import extract
 from src.services.pipeline.pipeline_helpers import normalize_segments, sse_event, truncate_json_safely
 from src.services.pipeline.prompt_builder import format_gallery_frames_for_extraction
 from src.services.pipeline.post_processor import (
+    COVERAGE_CRITICAL_RATIO,
     COVERAGE_GATE_RATIO,
     compute_extraction_coverage,
     validate_extraction_counts,
 )
 from src.services.pipeline.synthesis import synthesize
-from src.utils.language_utils import build_language_instruction
 
 if TYPE_CHECKING:
     from src.services.pipeline.context import PipelineContext
@@ -54,10 +54,26 @@ def _record_extraction_coverage(
         coverage["batchesSucceeded"] = batches_succeeded
         coverage["batchesDropped"] = batches_total - (batches_succeeded or 0)
 
+    # Flag critically-low coverage distinctly from a normal long-tail thinning:
+    # a ratio this low means the transcript itself was truncated/incomplete
+    # (e.g. a Gemini-fallback that only captured the first few minutes), not
+    # that extraction merely got sparse toward the end. Surfaced on meta so the
+    # FE/admin can show a "transcript incomplete" signal.
+    is_critical = coverage["ratio"] < COVERAGE_CRITICAL_RATIO
+    coverage["critical"] = is_critical
     ctx.extraction_coverage = coverage
 
     dropped = coverage.get("batchesDropped", 0)
-    if coverage["ratio"] < COVERAGE_GATE_RATIO or dropped:
+    if is_critical:
+        logger.error("pipeline.extraction_coverage_critical", extra={
+            "video_id": ctx.video_summary_id,
+            "max_timestamp": coverage["maxTimestamp"],
+            "duration": coverage["duration"],
+            "ratio": coverage["ratio"],
+            "tail_missing_seconds": coverage["tailMissingSeconds"],
+            "batches_dropped": dropped,
+        })
+    elif coverage["ratio"] < COVERAGE_GATE_RATIO or dropped:
         logger.warning("pipeline.extraction_coverage", extra={
             "video_id": ctx.video_summary_id,
             "max_timestamp": coverage["maxTimestamp"],
@@ -112,7 +128,6 @@ async def _attempt_synthesis_fed_retry(
         ctx.llm_service, ctx.triage, ctx.clean_text, video_info,
         chapters=chapters, video_context=ctx.video_dna_compact,
         extra_instruction=retry_prompt,
-        language_instruction=build_language_instruction(ctx.language),
         force_primary_model=True,
     ):
         if evt["event"] == "extraction_complete":
@@ -191,7 +206,6 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
             logger.warning("Chapter splitting failed (non-critical): %s — falling back to standard extraction", e)
             chapters = None
 
-    lang_instruction = build_language_instruction(ctx.language)
     # Frames (stage 2b) are ready before extraction (stage 4) — fold their
     # captions into the prompt so the LLM can ground visual claims and warrant a
     # filmstrip/diagram. Bounded to 12 captioned frames to cap token cost.
@@ -201,7 +215,7 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
     batches_total: int | None = None
     batches_succeeded: int | None = None
     try:
-        async for evt in extract(ctx.llm_service, ctx.triage, ctx.clean_text, video_info, chapters=chapters, video_context=ctx.video_dna_compact, language_instruction=lang_instruction, frame_context=frame_context):
+        async for evt in extract(ctx.llm_service, ctx.triage, ctx.clean_text, video_info, chapters=chapters, video_context=ctx.video_dna_compact, frame_context=frame_context):
             event_name = evt["event"]
             yield sse_event(event_name, {k: v for k, v in evt.items() if k != "event"})
             if event_name == "extraction_complete":

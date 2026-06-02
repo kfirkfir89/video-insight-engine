@@ -6,7 +6,6 @@ import pytest
 
 from src.utils.language_utils import (
     RTL_LANGUAGES,
-    build_language_instruction,
     detect_language_by_script,
     get_language_name,
     is_rtl,
@@ -172,38 +171,3 @@ class TestDetectLanguageByScript:
         assert detect_language_by_script("") is None
 
 
-class TestBuildLanguageInstruction:
-    """Tests for build_language_instruction()."""
-
-    def test_should_return_empty_string_for_english(self):
-        """English requires no language instruction."""
-        assert build_language_instruction("en") == ""
-
-    def test_should_return_instruction_for_hebrew(self):
-        """Hebrew returns a non-empty instruction containing 'Hebrew'."""
-        result = build_language_instruction("he")
-        assert result != ""
-        assert "Hebrew" in result
-
-    def test_should_return_instruction_for_arabic(self):
-        """Arabic returns a non-empty instruction containing 'Arabic'."""
-        result = build_language_instruction("ar")
-        assert result != ""
-        assert "Arabic" in result
-
-    def test_should_include_language_name_in_instruction(self):
-        """Instruction includes the human-readable language name."""
-        result = build_language_instruction("es")
-        assert "Spanish" in result
-
-    def test_should_mention_json_fields_stay_english(self):
-        """Instruction tells the LLM to keep JSON keys in English."""
-        result = build_language_instruction("he")
-        assert "JSON" in result
-        assert "English" in result
-
-    def test_should_mention_not_translate_to_english(self):
-        """Instruction tells the LLM not to translate content to English."""
-        result = build_language_instruction("fr")
-        assert "NOT" in result or "not" in result.lower()
-        assert "French" in result

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from ...config import settings
 from ...models.pipeline_types import SynthesisResult
 from ...utils.json_parsing import parse_json_response
+from ...utils.language_utils import ENGLISH_OUTPUT_DIRECTIVE
 from ...utils.llm_retry import call_llm_with_retry
 from .pipeline_helpers import sanitize_for_prompt
 from .prompt_builder import load_prompt_text
@@ -32,14 +33,13 @@ async def synthesize(
     output_type: str,
     extraction_summary: str,
     video_context: str = "",
-    language_instruction: str = "",
 ) -> SynthesisResult:
     """Generate synthesis from extraction data.
 
     Produces TLDR, key takeaways, master summary, and SEO description.
     """
     prompt_template = _load_synthesis_prompt()
-    prompt = (
+    prompt = ENGLISH_OUTPUT_DIRECTIVE + "\n\n" + (
         prompt_template
         .replace("{title}", sanitize_for_prompt(title))
         .replace("{channel}", sanitize_for_prompt(channel or "Unknown"))
@@ -47,7 +47,6 @@ async def synthesize(
         .replace("{output_type}", output_type)
         .replace("{extraction_summary}", extraction_summary[:4000])
         .replace("{video_context}", video_context or "Not available")
-        .replace("{language_instruction}", language_instruction)
     )
 
     raw = await call_llm_with_retry(

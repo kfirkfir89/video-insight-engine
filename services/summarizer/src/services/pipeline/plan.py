@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from ...models.pipeline_types import PlanResult
 from ...shared_config.domain_config import build_fallback_tabs, map_category_to_tag, valid_components
 from ...utils.json_parsing import parse_json_response
+from ...utils.language_utils import ENGLISH_OUTPUT_DIRECTIVE
 from ...utils.llm_retry import call_llm_with_retry
 from .assembly import infer_component
 from .pipeline_helpers import sanitize_for_prompt
@@ -121,7 +122,6 @@ async def run_plan(
     transcript_preview: str,
     llm_service: LLMService,
     content_traits: str | None = None,
-    language_instruction: str = "",
 ) -> PlanResult:
     """Run the plan stage — single Sonnet call for video analysis + tab design.
 
@@ -152,10 +152,9 @@ async def run_plan(
     # Split prompt into static (cacheable) and dynamic parts.
     # Static: role + instructions + component_toolkit + output_schema + examples + rules
     # Dynamic: video details + transcript_preview
-    static_template = (
+    static_template = ENGLISH_OUTPUT_DIRECTIVE + "\n\n" + (
         prompt_template
         .replace("{component_toolkit}", component_toolkit)
-        .replace("{language_instruction}", language_instruction)
     )
 
     # Find the split point at <video> tag — everything before it is static

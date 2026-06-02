@@ -83,9 +83,15 @@ class PipelineContext:
     assembled_tabs: list[dict] | None = None
     assembled_meta: dict[str, Any] | None = None
 
-    # Language support
-    language: str = "en"  # ISO 639-1 code, defaults to English (the gate)
-    is_rtl: bool = False  # Whether language is right-to-left
+    # Language support. The pipeline is English-canonical: ALL generation runs
+    # in English, so ``language``/``is_rtl`` always describe the English-primary
+    # output. ``source_language_code`` is the detected original language (e.g.
+    # "he") that drives the final English→source translation pass, RAG
+    # transcript translation, and cache ownership. It is None for English-source
+    # and sound-only music-override videos (no translation, no toggle).
+    language: str = "en"  # ISO 639-1 code of the primary (English) output
+    is_rtl: bool = False  # Whether the primary output is right-to-left (always False)
+    source_language_code: str | None = None  # detected original language, or None
     audio_path: Path | None = None  # Cached audio file for reuse by translation
 
     # Source-language artifact for non-English videos. The top-level tabs/meta/

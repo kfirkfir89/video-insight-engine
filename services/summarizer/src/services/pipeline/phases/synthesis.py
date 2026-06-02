@@ -9,7 +9,6 @@ from llm_common.context import llm_feature_var
 
 from src.services.pipeline.pipeline_helpers import sse_event, truncate_json_safely
 from src.services.pipeline.synthesis import synthesize
-from src.utils.language_utils import build_language_instruction
 
 if TYPE_CHECKING:
     from src.services.pipeline.context import PipelineContext
@@ -66,7 +65,6 @@ async def run_phase_synthesis(ctx: PipelineContext) -> AsyncGenerator[str, None]
     else:
         extraction_summary = truncate_json_safely(ctx.extraction_data, 4000) if ctx.extraction_data else ""
 
-    lang_instruction = build_language_instruction(ctx.language)
     try:
         synthesis_result = await synthesize(
             ctx.llm_service,
@@ -76,7 +74,6 @@ async def run_phase_synthesis(ctx: PipelineContext) -> AsyncGenerator[str, None]
             output_type=ctx.triage.primary_tag,
             extraction_summary=extraction_summary,
             video_context=ctx.video_dna_compact,
-            language_instruction=lang_instruction,
         )
         ctx.synthesis_dict = synthesis_result.model_dump(by_alias=True)
         yield sse_event("synthesis_complete", {

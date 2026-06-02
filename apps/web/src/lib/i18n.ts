@@ -38,6 +38,14 @@ export interface Labels {
   completeSet: string;
   workoutComplete: string;
   allSetsFinished: string;
+  exerciseComplete: string;
+  skipRest: string;
+  soundOn: string;
+  soundOff: string;
+  muteAudioCues: string;
+  enableAudioCues: string;
+  // Disclosure
+  showMore: string;
   // Comparison
   description: string;
   example: string;
@@ -88,6 +96,13 @@ const EN: Labels = {
   completeSet: 'Complete Set',
   workoutComplete: 'Workout complete!',
   allSetsFinished: 'All sets finished. Great effort!',
+  exerciseComplete: 'Exercise complete',
+  skipRest: 'Skip rest',
+  soundOn: 'Sound on',
+  soundOff: 'Sound off',
+  muteAudioCues: 'Mute audio cues',
+  enableAudioCues: 'Enable audio cues',
+  showMore: 'Show more',
   description: 'Description',
   example: 'Example',
   goForIt: 'Go for it if...',
@@ -173,6 +188,13 @@ const TRANSLATIONS: Record<string, Labels> = {
     completeSet: 'השלם סט',
     workoutComplete: 'האימון הושלם!',
     allSetsFinished: 'כל הסטים הושלמו. כל הכבוד!',
+    exerciseComplete: 'התרגיל הושלם',
+    skipRest: 'דלג על המנוחה',
+    soundOn: 'צליל פעיל',
+    soundOff: 'צליל כבוי',
+    muteAudioCues: 'השתק רמזי שמע',
+    enableAudioCues: 'הפעל רמזי שמע',
+    showMore: 'הצג עוד',
     description: 'תיאור',
     example: 'דוגמה',
     goForIt: 'שווה את זה אם...',
@@ -255,6 +277,13 @@ const TRANSLATIONS: Record<string, Labels> = {
     completeSet: 'أكمل المجموعة',
     workoutComplete: 'اكتمل التمرين!',
     allSetsFinished: 'تم إنهاء جميع المجموعات. عمل رائع!',
+    exerciseComplete: 'اكتمل التمرين',
+    skipRest: 'تخطّ الراحة',
+    soundOn: 'الصوت مفعّل',
+    soundOff: 'الصوت متوقف',
+    muteAudioCues: 'كتم التنبيهات الصوتية',
+    enableAudioCues: 'تفعيل التنبيهات الصوتية',
+    showMore: 'عرض المزيد',
     description: 'الوصف',
     example: 'مثال',
     goForIt: 'اختره إذا...',

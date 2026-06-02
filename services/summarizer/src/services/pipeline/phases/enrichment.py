@@ -9,7 +9,6 @@ from llm_common.context import llm_feature_var
 
 from src.services.pipeline.enrichment import enrich, _has_meaningful_data
 from src.services.pipeline.pipeline_helpers import sse_event
-from src.utils.language_utils import build_language_instruction
 
 if TYPE_CHECKING:
     from src.services.pipeline.context import PipelineContext
@@ -39,7 +38,6 @@ async def run_phase_enrichment(ctx: PipelineContext) -> AsyncGenerator[str, None
         synthesis_data=ctx.synthesis_dict,
         video_context=ctx.video_dna_compact,
         tab_goals=tab_goals_text,
-        language_instruction=build_language_instruction(ctx.language),
     )
     if enrichment_result:
         ctx.enrichment_data = enrichment_result.model_dump(by_alias=True)
