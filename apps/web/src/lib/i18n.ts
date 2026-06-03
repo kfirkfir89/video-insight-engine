@@ -62,6 +62,24 @@ export interface Labels {
   // Verdict
   price: string;
   score: string;
+  // Library chat (cross-video assistant when no single video is open)
+  libraryChatPlaceholder: string;
+  libraryChatEmptyTitle: string;
+  libraryChatEmptyBody: string;
+  // Assistant actions (confirm-before-execute flow in the sidebar chat).
+  // {action} is interpolated with one of the actionNames values.
+  actionConfirmPrompt: string;
+  actionConfirm: string;
+  actionCancel: string;
+  actionCancelled: string;
+  actionRunning: string;
+  actionSuccess: string;
+  actionFailed: string;
+  actionNames: {
+    organize_library: string;
+    generate_video: string;
+    create_folder: string;
+  };
   // Tab preview tooltips (keyed by TabEntry.id). Keys the app currently
   // ships are listed in EN below; callers fall back gracefully when a key
   // is absent, so translators can stage coverage incrementally.
@@ -116,6 +134,21 @@ const EN: Labels = {
   tips: 'Tips',
   price: 'Price',
   score: 'Score',
+  libraryChatPlaceholder: 'Ask a question across your videos...',
+  libraryChatEmptyTitle: 'Start a conversation',
+  libraryChatEmptyBody: 'Ask questions about your videos and saved content.',
+  actionConfirmPrompt: 'I can {action} for you. Should I go ahead?',
+  actionConfirm: 'Yes, do it',
+  actionCancel: 'Cancel',
+  actionCancelled: 'Okay, cancelled.',
+  actionRunning: 'Working on it...',
+  actionSuccess: 'Done — {action} completed.',
+  actionFailed: "Sorry, I couldn't complete that action. Please try again.",
+  actionNames: {
+    organize_library: 'organize your library',
+    generate_video: 'summarize that video',
+    create_folder: 'create the folder',
+  },
   tabPreviews: {
     key_points: 'Essential takeaways from the video',
     concepts: 'Core concepts explained with examples',
@@ -208,6 +241,21 @@ const TRANSLATIONS: Record<string, Labels> = {
     tips: 'טיפים',
     price: 'מחיר',
     score: 'ציון',
+    libraryChatPlaceholder: 'שאלו שאלה על כל הסרטונים שלכם...',
+    libraryChatEmptyTitle: 'התחילו שיחה',
+    libraryChatEmptyBody: 'שאלו שאלות על הסרטונים והתוכן השמור שלכם.',
+    actionConfirmPrompt: 'אני יכול {action} עבורכם. להמשיך?',
+    actionConfirm: 'כן, בצע',
+    actionCancel: 'ביטול',
+    actionCancelled: 'בסדר, בוטל.',
+    actionRunning: 'עובד על זה...',
+    actionSuccess: 'בוצע — {action} הושלם.',
+    actionFailed: 'מצטער, לא הצלחתי להשלים את הפעולה. נסו שוב.',
+    actionNames: {
+      organize_library: 'לארגן את הספרייה שלכם',
+      generate_video: 'לסכם את הסרטון הזה',
+      create_folder: 'ליצור את התיקייה',
+    },
     tabPreviews: {
       key_points: 'נקודות מפתח מהסרטון',
       concepts: 'מושגי ליבה מוסברים עם דוגמאות',
@@ -297,6 +345,21 @@ const TRANSLATIONS: Record<string, Labels> = {
     tips: 'نصائح',
     price: 'السعر',
     score: 'النتيجة',
+    libraryChatPlaceholder: 'اطرح سؤالاً عبر جميع مقاطع الفيديو الخاصة بك...',
+    libraryChatEmptyTitle: 'ابدأ محادثة',
+    libraryChatEmptyBody: 'اطرح أسئلة حول مقاطع الفيديو والمحتوى المحفوظ.',
+    actionConfirmPrompt: 'يمكنني {action} لك. هل أتابع؟',
+    actionConfirm: 'نعم، نفّذ',
+    actionCancel: 'إلغاء',
+    actionCancelled: 'حسناً، تم الإلغاء.',
+    actionRunning: 'جارٍ التنفيذ...',
+    actionSuccess: 'تم — اكتمل {action}.',
+    actionFailed: 'عذراً، تعذّر إكمال هذا الإجراء. حاول مرة أخرى.',
+    actionNames: {
+      organize_library: 'تنظيم مكتبتك',
+      generate_video: 'تلخيص هذا الفيديو',
+      create_folder: 'إنشاء المجلد',
+    },
     tabPreviews: {
       key_points: 'النقاط الرئيسية من الفيديو',
       concepts: 'المفاهيم الأساسية مع أمثلة',

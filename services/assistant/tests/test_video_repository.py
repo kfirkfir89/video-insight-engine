@@ -151,6 +151,49 @@ class TestGetVideoContext:
         assert ctx.takeaways == ["takeaway 1", "takeaway 2"]
         assert ctx.tabs[0]["id"] == "overview"
 
+    async def test_should_populate_source_language_from_doc(self):
+        repo, collection = _make_repo()
+        collection.find_one.side_effect = [
+            {
+                "_id": "id_src",
+                "youtubeId": "translated",
+                "title": "Translated Video",
+                "creator": "Creator",
+                "meta": {"masterSummary": "English promoted summary"},
+                "language": "en",
+                "sourceLanguage": {
+                    "code": "he",
+                    "name": "Hebrew",
+                    "isRTL": True,
+                    "meta": {"masterSummary": "תקציר בעברית"},
+                    "tabs": [{"id": "key_points", "label": "נקודות מפתח"}],
+                },
+            },
+        ]
+        ctx = await repo.get_video_context("translated")
+
+        assert ctx is not None
+        assert ctx.language == "en"
+        assert ctx.source_language is not None
+        assert ctx.source_language["code"] == "he"
+        assert ctx.source_language["meta"]["masterSummary"] == "תקציר בעברית"
+
+    async def test_should_leave_source_language_none_when_absent(self):
+        repo, collection = _make_repo()
+        collection.find_one.side_effect = [
+            {
+                "_id": "id_nosrc",
+                "youtubeId": "english",
+                "title": "English Video",
+                "creator": "Creator",
+                "meta": {"masterSummary": "ok"},
+            },
+        ]
+        ctx = await repo.get_video_context("english")
+
+        assert ctx is not None
+        assert ctx.source_language is None
+
     async def test_should_map_v2_shape_doc_with_synthesis_master_summary(self):
         repo, collection = _make_repo()
         collection.find_one.side_effect = [

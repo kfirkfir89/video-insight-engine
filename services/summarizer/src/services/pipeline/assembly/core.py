@@ -10,6 +10,10 @@ import logging
 import re
 from typing import Any
 
+from src.shared_config.domain_config import (
+    build_fallback_tabs,
+    sibling_datasources,
+)
 from src.utils.data_helpers import is_empty_data
 
 from .assemblers import (
@@ -243,14 +247,87 @@ _REQUIREMENT_EQUIVALENTS: dict[str, frozenset[str]] = {
 }
 
 
-def _validate_domain_requirements(tabs: list[dict], primary_tag: str) -> None:
-    """Validate assembled tabs against domain requirements in-place."""
+def _backfill_required_component(
+    tabs: list[dict],
+    primary_tag: str,
+    accepted: frozenset[str],
+    extraction: dict | None,
+    enrichment: dict | None,
+    synthesis: dict | None,
+    video_meta: dict | None,
+) -> bool:
+    """Append a tab for a missing required component from the registry defaults.
+
+    The planner can drop a domain's signature component (e.g. tech's
+    ``code_playground``) by betting every tab on a field this video left empty.
+    Rather than only warning, try each defaultTab in `primary_tag` whose component
+    is accepted, resolving its dataSource with the same fallbacks the main loop
+    uses. On the first one that has real data and assembles + validates, append it.
+    """
+    existing_ids = {t.get("id") for t in tabs}
+    for cand in build_fallback_tabs(primary_tag):
+        component = cand.get("component", "") if isinstance(cand, dict) else ""
+        if component not in accepted or cand.get("id", "") in existing_ids:
+            continue
+        data_source = cand.get("dataSource", "")
+        data = resolve_data_source(data_source, extraction, enrichment)
+        if is_empty_data(data):
+            data = _cross_domain_fallback(data_source, extraction, enrichment) or \
+                _in_domain_sibling_fallback(data_source, component, extraction, enrichment)
+        if is_empty_data(data):
+            continue
+        tab_with_hints = {**cand, "_primary_tag": primary_tag,
+                          "_synthesis": synthesis, "_video_meta": video_meta}
+        assembler = ASSEMBLER_REGISTRY.get(component, assemble_display_section)
+        try:
+            props = assembler(tab_with_hints, data, extraction, enrichment)
+        except Exception as e:
+            logger.warning("Backfill assembler raised for %r (%s): %s", cand.get("id"), component, e)
+            continue
+        if props is None or not _validate_assembled_props(component, props):
+            continue
+        tabs.append({
+            "id": cand.get("id", ""),
+            "label": cand.get("label", cand.get("id", "")),
+            "emoji": cand.get("emoji", ""),
+            "component": component,
+            "props": props,
+            "goal": cand.get("goal", ""),
+            "crossTabLinks": [],
+        })
+        logger.info(
+            "Backfilled required component '%s' for domain '%s' from %s",
+            component, primary_tag, data_source,
+        )
+        return True
+    return False
+
+
+def _validate_domain_requirements(
+    tabs: list[dict],
+    primary_tag: str,
+    extraction: dict | None = None,
+    enrichment: dict | None = None,
+    synthesis: dict | None = None,
+    video_meta: dict | None = None,
+) -> None:
+    """Validate assembled tabs against domain requirements in-place.
+
+    When a required component is missing, attempt to backfill it from the registry
+    defaults using real extraction data before falling back to a warning.
+    """
     reqs = _DOMAIN_REQUIREMENTS.get(primary_tag, {})
     tab_components = [t.get("component", "") for t in tabs]
 
     for req in reqs.get("required", []):
         accepted = _REQUIREMENT_EQUIVALENTS.get(req, frozenset({req}))
-        if not any(c in accepted for c in tab_components):
+        if any(c in accepted for c in tab_components):
+            continue
+        if _backfill_required_component(
+            tabs, primary_tag, accepted, extraction, enrichment, synthesis, video_meta,
+        ):
+            tab_components = [t.get("component", "") for t in tabs]
+        else:
             logger.warning(
                 "Domain '%s' requires '%s' but it's missing from assembled tabs",
                 primary_tag, req,
@@ -565,6 +642,55 @@ def _cross_domain_fallback(
     return None
 
 
+def _in_domain_sibling_fallback(
+    data_source: str,
+    component: str,
+    extraction: dict | None,
+    enrichment: dict | None = None,
+) -> Any:
+    """Recover an empty planned field from a populated SIBLING field in the SAME domain.
+
+    The planner picks a tab's dataSource before extraction runs, so it may bet on a
+    schema field this video left empty (e.g. ``tech.patterns`` when only
+    ``tech.snippets`` got populated). Both back the same component per domains.json,
+    so the tab can render from the sibling instead of being dropped. This is the
+    same-domain counterpart to ``_cross_domain_fallback`` (which only scans OTHER
+    domains for the same field name).
+    """
+    if not extraction or "." not in data_source:
+        return None
+
+    domain = data_source.split(".", 1)[0]
+
+    # Registry-driven: siblings backing the same component, in priority order.
+    for candidate in sibling_datasources(domain, data_source):
+        value = resolve_data_source(candidate, extraction, enrichment)
+        if not is_empty_data(value):
+            logger.info(
+                "In-domain sibling fallback: %s (empty) → %s (%d items)",
+                data_source, candidate,
+                len(value) if isinstance(value, (list, dict)) else 1,
+            )
+            return value
+
+    # Last resort: the planner invented a field not registered as a defaultTab
+    # (e.g. ``tech.topics``). Try the component's required list key against other
+    # populated list fields in the same domain.
+    required_key = _COMPONENT_REQUIRED_LISTS.get(component)
+    domain_data = extraction.get(domain)
+    if required_key and isinstance(domain_data, dict):
+        candidate = domain_data.get(required_key)
+        if not is_empty_data(candidate):
+            logger.info(
+                "In-domain sibling fallback: %s (empty) → %s.%s (%d items)",
+                data_source, domain, required_key,
+                len(candidate) if isinstance(candidate, (list, dict)) else 1,
+            )
+            return candidate
+
+    return None
+
+
 # ─────────────────────────────────────────────────────
 # Overview Ordering Guarantee
 # ─────────────────────────────────────────────────────
@@ -831,6 +957,13 @@ def assemble_response(
             if data is not None:
                 data_resolved = True
 
+        # In-domain sibling fallback: when the planner bet on a field this video left
+        # empty, swap in a populated sibling backing the same component (registry-driven).
+        if data is None and "." in data_source:
+            data = _in_domain_sibling_fallback(data_source, component, extraction, enrichment)
+            if data is not None:
+                data_resolved = True
+
         if data is None and extraction:
             if tab_id in ("exercises", "timer"):
                 data = extraction.get("fitness")
@@ -941,6 +1074,13 @@ def assemble_response(
         assembled_tabs, synthesis, video_meta, extraction, enrichment, primary_tag,
     )
 
+    # Validate domain requirements (may backfill a missing required component from
+    # real extraction data). Runs before cross-tab resolution so a backfilled tab
+    # participates in link rules.
+    _validate_domain_requirements(
+        assembled_tabs, primary_tag, extraction, enrichment, synthesis, video_meta,
+    )
+
     # Resolve cross-tab links. ``outboundLinks`` on each source tab carries
     # Plan-generated CTA labels in source language; cross_tab.py uses them
     # as link text and falls back to the target tab's own label when an
@@ -975,8 +1115,6 @@ def assemble_response(
                 deduped.append(link)
                 globally_linked.add(target)
         tab["crossTabLinks"] = deduped
-
-    _validate_domain_requirements(assembled_tabs, primary_tag)
 
     # Conditional filmstrip auto-append. The standalone gallery component was
     # retired in the video-to-action overhaul; this surfaces the same frames as

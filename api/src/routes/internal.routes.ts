@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ObjectId } from 'mongodb';
-import { config } from '../config.js';
+import { isValidInternalSecret } from '../utils/internal-auth.js';
 import { getUtcDateKey } from '../repositories/user-cost.repository.js';
 
 const videoStatusSchema = z.object({
@@ -55,8 +55,7 @@ export async function internalRoutes(fastify: FastifyInstance) {
     Body: z.infer<typeof statusEventSchema>;
   }>('/status', async (req, reply) => {
     // Validate internal secret
-    const secret = req.headers['x-internal-secret'];
-    if (secret !== config.INTERNAL_SECRET) {
+    if (!isValidInternalSecret(req.headers['x-internal-secret'])) {
       return reply.status(401).send({ error: 'Unauthorized' });
     }
 
@@ -214,8 +213,7 @@ export async function internalRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Querystring: z.infer<typeof reconcileQuerySchema>;
   }>('/reconcile-costs', async (req, reply) => {
-    const secret = req.headers['x-internal-secret'];
-    if (secret !== config.INTERNAL_SECRET) {
+    if (!isValidInternalSecret(req.headers['x-internal-secret'])) {
       return reply.status(401).send({ error: 'Unauthorized' });
     }
 
@@ -245,8 +243,7 @@ export async function internalRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Body: z.infer<typeof runDeletionsBodySchema>;
   }>('/run-deletions', async (req, reply) => {
-    const secret = req.headers['x-internal-secret'];
-    if (secret !== config.INTERNAL_SECRET) {
+    if (!isValidInternalSecret(req.headers['x-internal-secret'])) {
       return reply.status(401).send({ error: 'Unauthorized' });
     }
 

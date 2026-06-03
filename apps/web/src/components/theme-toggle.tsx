@@ -1,15 +1,16 @@
-import { Moon, Sun, Monitor } from "lucide-react";
+import { Moon, Sun, Monitor, Waves } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 import type { Theme } from "@/components/theme-context";
 
-const THEME_CYCLE: Theme[] = ["dark", "light", "system"];
+const THEME_CYCLE: Theme[] = ["dark", "light", "system", "lagoon"];
 const THEME_LABELS: Record<Theme, string> = {
   dark: "Dark",
   light: "Light",
   system: "System",
+  lagoon: "Lagoon",
 };
 
 export function ThemeToggle({ className }: { className?: string }) {
@@ -33,6 +34,7 @@ export function ThemeToggle({ className }: { className?: string }) {
             {theme === "light" && <Sun className="h-4 w-4" />}
             {theme === "dark" && <Moon className="h-4 w-4" />}
             {theme === "system" && <Monitor className="h-4 w-4" />}
+            {theme === "lagoon" && <Waves className="h-4 w-4" />}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom">

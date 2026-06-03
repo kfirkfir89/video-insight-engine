@@ -8,7 +8,9 @@
 @import "./styles/overdrive.css";
 @plugin "@tailwindcss/typography";
 
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+/* Lagoon is a dark-family theme: it must receive every `dark:` Tailwind utility,
+   so the variant matches both [data-theme="dark"] and [data-theme="lagoon"]. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="lagoon"], [data-theme="lagoon"] *));
 @custom-variant rtl (&:where([dir="rtl"], [dir="rtl"] *));
 
 /* ═══════════════════════════════════════════════════
@@ -177,6 +179,85 @@
   --code-text-dim: oklch(54% 0 0);
   --code-text-bright: oklch(80% 0 0);
   --code-focus: oklch(28% 0 0);
+}
+
+/* ═══════════════════════════════════════════════════
+   LAGOON — colorful 4th theme (dark-family).
+   Deep teal canvas (hue ~200), bright-teal identity, warm coral action.
+   A distinct hue world from the violet light/dark, so it reads as a true
+   third register rather than "dark, louder". Opts into the dark contract
+   via @custom-variant dark + the :is() selectors in the imported CSS.
+   ═══════════════════════════════════════════════════ */
+[data-theme="lagoon"] {
+  --background: oklch(21% 0.045 200);
+  --foreground: oklch(93% 0.02 185);
+  --card: oklch(25% 0.05 199);
+  --card-foreground: oklch(93% 0.02 185);
+  --popover: oklch(25% 0.05 199);
+  --popover-foreground: oklch(93% 0.02 185);
+  /* Identity shifts violet → bright teal for this theme. Dark ink foreground
+     keeps AA contrast on the luminous teal fill. */
+  --primary: oklch(68% 0.13 195);
+  --primary-foreground: oklch(16% 0.04 200);
+  /* CTA stays warm (coral, hue 35) — heat against the cool canvas. The
+     cta-magnetic gradient then runs coral → teal, purpose-built for Lagoon. */
+  --cta: oklch(70% 0.17 35);
+  --cta-foreground: oklch(18% 0.05 35);
+  --secondary: oklch(29% 0.05 200);
+  --secondary-foreground: oklch(90% 0.02 185);
+  --muted: oklch(27% 0.045 200);
+  --muted-foreground: oklch(75% 0.03 192);
+  --accent: oklch(31% 0.06 196);
+  --accent-foreground: oklch(92% 0.02 185);
+  --destructive: oklch(66% 0.21 22);
+  --destructive-foreground: oklch(99% 0 0);
+  --border: oklch(33% 0.04 199);
+  --input: oklch(29% 0.045 200);
+  --ring: oklch(68% 0.13 195);
+
+  /* Canvas — recessed surface behind floating panels */
+  --app-canvas: oklch(16% 0.04 202);
+
+  /* Premium effect tokens (dark-family — stronger glow) */
+  --glow-strength: 0.35;
+  --glow-spread: 22px;
+
+  /* Status colors (tuned to harmonize with teal) */
+  --status-pending: oklch(82% 0.16 86);
+  --status-processing: oklch(74% 0.13 205);
+  --status-success: oklch(74% 0.14 165);
+  --status-error: var(--destructive);
+
+  /* Chart palette (boosted lightness, like dark) */
+  --chart-1: oklch(75% 0.16 250);
+  --chart-2: oklch(75% 0.16 150);
+  --chart-3: oklch(75% 0.16 50);
+  --chart-4: oklch(75% 0.16 330);
+  --chart-5: oklch(75% 0.16 200);
+  --chart-6: oklch(65% 0.14 280);
+  --chart-7: oklch(75% 0.14 90);
+  --chart-8: oklch(70% 0.14 20);
+
+  /* Feedback colors */
+  --success: oklch(72% 0.15 160);
+  --success-foreground: oklch(16% 0.05 160);
+  --success-soft: oklch(28% 0.06 165);
+  --warning: oklch(81% 0.13 82);
+  --warning-foreground: oklch(20% 0.05 80);
+  --warning-soft: oklch(30% 0.05 80);
+  --info: oklch(74% 0.12 210);
+  --info-foreground: oklch(16% 0.05 210);
+  --info-soft: oklch(28% 0.05 210);
+
+  /* Code/terminal surface — teal-tinted dark */
+  --code-bg: oklch(15% 0.02 200);
+  --code-chrome: oklch(18% 0.02 200);
+  --code-border: oklch(24% 0.02 200);
+  --code-text: oklch(92% 0.01 190);
+  --code-text-muted: oklch(64% 0.01 195);
+  --code-text-dim: oklch(54% 0.01 195);
+  --code-text-bright: oklch(80% 0.01 190);
+  --code-focus: oklch(28% 0.02 200);
 }
 
 /* System mode: Not needed — both index.html inline script and theme-provider.tsx
@@ -512,13 +593,46 @@
   --shadow-popover: 0 8px 24px -6px oklch(0% 0 0 / 0.5), 0 2px 6px -1px oklch(0% 0 0 / 0.3);
 }
 
+[data-theme="lagoon"] {
+  /* Warm accents stay vivid — they are the "pops" against the cool canvas */
+  --vie-coral: oklch(74% 0.17 30);
+  --vie-plum: oklch(64% 0.17 310);
+  --vie-sky: oklch(76% 0.12 215);
+  --vie-mint: oklch(80% 0.13 165);
+  --vie-honey: oklch(84% 0.14 82);
+  --vie-rose: oklch(73% 0.15 350);
+  --vie-forest: oklch(64% 0.11 150);
+  --vie-peach: oklch(84% 0.09 55);
+
+  --vie-glass: oklch(from var(--card) l c h / 0.3);
+  --vie-glass-border: oklch(100% 0 0 / 0.06);
+  --vie-nav-bg: oklch(from var(--card) l c h / 0.9);
+
+  /* Glass cards — teal-tinted translucency */
+  --glass-bg: oklch(23% 0.05 200 / 0.6);
+  --glass-border: oklch(40% 0.04 200 / 0.2);
+  --glass-border-strong: oklch(52% 0.05 200 / 0.5);
+  --glass-shadow: 0 8px 32px oklch(6% 0.03 200 / 0.4);
+  --glass-shadow-elevated: inset 0 1px 0 oklch(100% 0 0 / 0.06), 0 12px 40px -12px oklch(6% 0.03 200 / 0.55);
+  --glass-blur: 20px;
+
+  /* Elevation — deep, teal-tinted (vs dark's pure-black) to sit on the canvas */
+  --shadow-xs: 0 1px 2px oklch(8% 0.04 200 / 0.4);
+  --shadow-sm: 0 2px 4px oklch(8% 0.04 200 / 0.4), 0 1px 2px oklch(8% 0.04 200 / 0.3);
+  --shadow-md: 0 4px 8px -2px oklch(8% 0.04 200 / 0.45), 0 2px 4px -1px oklch(8% 0.04 200 / 0.3);
+  --shadow-lg: 0 12px 24px -6px oklch(6% 0.04 200 / 0.5), 0 4px 8px -2px oklch(6% 0.04 200 / 0.3);
+  --shadow-xl: 0 24px 48px -12px oklch(6% 0.04 200 / 0.6);
+  --shadow-popover: 0 8px 24px -6px oklch(6% 0.04 200 / 0.55), 0 2px 6px -1px oklch(6% 0.04 200 / 0.3);
+}
+
 /* ── Mobile perf tuning ──────────────────────────────
    Backdrop-filter with 20px blur is expensive on low-end mobile GPUs.
    Halving to 10px still reads as glass but cuts composite cost in half.
    Applies to both light and dark themes. */
 @media (max-width: 768px) {
   :root,
-  [data-theme="dark"] {
+  [data-theme="dark"],
+  [data-theme="lagoon"] {
     --glass-blur: 10px;
   }
 }

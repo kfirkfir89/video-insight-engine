@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { VideoNotFoundError } from '../utils/errors.js';
+import { actionParamsSchema } from '../schemas/assistant.schema.js';
 import type { AssistantAction } from '../services/assistant-client.js';
 
 const chatBodySchema = z.object({
@@ -10,23 +11,6 @@ const chatBodySchema = z.object({
     content: z.string().max(10000),
   })).max(50).optional(),
 });
-
-// Bound the param map so /action can't be used to push megabytes through to
-// the assistant. Limits chosen to comfortably cover save_note text, quiz_me
-// topic, find_moment query, and explain concept while rejecting abuse.
-const ACTION_PARAM_VALUE_MAX = 4000;
-const ACTION_PARAM_KEY_MAX = 64;
-const ACTION_PARAMS_MAX_ENTRIES = 16;
-
-const actionParamsSchema = z
-  .record(
-    z.string().min(1).max(ACTION_PARAM_KEY_MAX),
-    z.union([z.string().max(ACTION_PARAM_VALUE_MAX), z.number(), z.boolean()]),
-  )
-  .refine(
-    (obj) => Object.keys(obj).length <= ACTION_PARAMS_MAX_ENTRIES,
-    `too many params (max ${ACTION_PARAMS_MAX_ENTRIES})`,
-  );
 
 const actionBodySchema = z.object({
   action: z.enum(['save_note', 'quiz_me', 'find_moment', 'explain']),
@@ -67,12 +51,19 @@ export async function assistantRoutes(fastify: FastifyInstance) {
         requestId: req.id,
       });
 
-      // Set SSE headers and pipe the stream directly
+      // Set SSE headers and pipe the stream directly.
+      // @fastify/cors set ACAO/ACAC on the Fastify reply, but reply.raw.writeHead
+      // bypasses Fastify's header flush — forward them so the browser doesn't block
+      // the SSE stream (credentials: 'include' requires an explicit, non-* origin).
+      const corsOrigin = reply.getHeader('access-control-allow-origin');
+      const corsCreds = reply.getHeader('access-control-allow-credentials');
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no',
+        ...(corsOrigin ? { 'Access-Control-Allow-Origin': String(corsOrigin), Vary: 'Origin' } : {}),
+        ...(corsCreds ? { 'Access-Control-Allow-Credentials': String(corsCreds) } : {}),
       });
 
       const reader = stream.getReader();

@@ -65,6 +65,46 @@ class TestBuildActionParams:
         with pytest.raises(ValidationError, match="Unknown action"):
             _build_action_params("teleport", {}, "vid1")
 
+    def test_should_raise_when_video_scoped_action_has_no_video_id(self):
+        with pytest.raises(ValidationError, match="requires a video_id"):
+            _build_action_params("save_note", {"text": "hi"}, None)
+
+    def test_should_pass_name_for_create_folder(self):
+        result = _build_action_params("create_folder", {"name": "Recipes"}, None)
+        assert result == {"name": "Recipes"}
+
+    def test_should_raise_when_create_folder_missing_name(self):
+        with pytest.raises(ValidationError, match="requires param 'name'"):
+            _build_action_params("create_folder", {}, None)
+
+    def test_should_pass_folder_id_and_name_for_rename_folder(self):
+        result = _build_action_params(
+            "rename_folder", {"folder_id": "f1", "name": "New"}, None
+        )
+        assert result == {"folder_id": "f1", "name": "New"}
+
+    def test_should_pass_folder_id_and_parent_for_move_folder(self):
+        result = _build_action_params(
+            "move_folder", {"folder_id": "f1", "parent_id": "p1"}, None
+        )
+        assert result == {"folder_id": "f1", "parent_id": "p1"}
+
+    def test_should_pass_video_id_and_folder_id_for_move_video(self):
+        result = _build_action_params(
+            "move_video", {"video_id": "v1", "folder_id": "f1"}, None
+        )
+        assert result == {"video_id": "v1", "folder_id": "f1"}
+
+    def test_should_pass_url_for_generate_video(self):
+        result = _build_action_params(
+            "generate_video", {"url": "https://youtu.be/x"}, None
+        )
+        assert result == {"url": "https://youtu.be/x"}
+
+    def test_should_allow_organize_library_with_no_params(self):
+        result = _build_action_params("organize_library", {}, None)
+        assert result == {}
+
 
 class TestActionDispatcher:
     """ActionDispatcher.dispatch() — runs the matched tool."""
@@ -160,6 +200,48 @@ class TestActionDispatcher:
                 params={},
                 video_ctx=sample_video_context,
             )
+
+    async def test_should_dispatch_library_action_with_no_video(self):
+        """create_folder is library-scoped — dispatch succeeds with video_id/ctx None."""
+        router = ToolRouter()
+        stub = _StubTool("folder_organizer", {"created": True})
+        router.register(stub)
+        dispatcher = ActionDispatcher(router)
+
+        result = await dispatcher.dispatch(
+            action="create_folder",
+            video_id=None,
+            params={"name": "Reading list"},
+            video_ctx=None,
+            user_id="user42",
+        )
+
+        assert result == {"created": True}
+        passed_params, passed_ctx = stub.execute.await_args.args
+        assert passed_params == {"name": "Reading list"}
+        assert passed_ctx["video_id"] is None
+        assert passed_ctx["video_ctx"] is None
+        assert passed_ctx["user_id"] == "user42"
+        assert passed_ctx["action"] == "create_folder"
+
+    async def test_should_dispatch_generate_video_without_video(self):
+        """generate_video is library-scoped and passes url through."""
+        router = ToolRouter()
+        stub = _StubTool("video_generator", {"started": True})
+        router.register(stub)
+        dispatcher = ActionDispatcher(router)
+
+        result = await dispatcher.dispatch(
+            action="generate_video",
+            video_id=None,
+            params={"url": "https://youtu.be/abc"},
+            video_ctx=None,
+            user_id="user42",
+        )
+
+        assert result == {"started": True}
+        passed_params, _ = stub.execute.await_args.args
+        assert passed_params == {"url": "https://youtu.be/abc"}
 
 
 class TestActionEndpoint:
@@ -278,11 +360,71 @@ class TestActionEndpoint:
         kwargs = mock_service.dispatch_action.await_args.kwargs
         assert kwargs["user_id"] is None
 
+    async def test_should_accept_library_action_without_video_id(self, app_client):
+        """Library-scoped actions omit video_id; it reaches the service as None."""
+        from src.server import app
+
+        mock_service = AsyncMock()
+        mock_service.dispatch_action.return_value = {"created": True}
+        app.state.assistant_service = mock_service
+
+        response = await app_client.post(
+            "/action",
+            json={"action": "create_folder", "params": {"name": "Recipes"}},
+            headers={"X-User-Id": "user1"},
+        )
+
+        assert response.status_code == 200
+        kwargs = mock_service.dispatch_action.await_args.kwargs
+        assert kwargs["video_id"] is None
+        assert kwargs["action"] == "create_folder"
+
+    async def test_should_rate_limit_anonymous_action_without_user_or_video(self, app_client):
+        """With no X-User-Id and no video_id, the limiter falls back to 'anonymous'."""
+        from src.server import app
+        from src.server import _action_rate_tracker
+
+        _action_rate_tracker.clear()
+
+        mock_service = AsyncMock()
+        mock_service.dispatch_action.return_value = {"folders_created": 0, "videos_moved": 0}
+        app.state.assistant_service = mock_service
+
+        last_status = 200
+        for _ in range(31):
+            resp = await app_client.post(
+                "/action",
+                json={"action": "organize_library", "params": {}},
+            )
+            last_status = resp.status_code
+
+        assert last_status == 429
+        _action_rate_tracker.clear()
+
 
 def test_action_to_tool_covers_documented_actions():
     """Every action named in the plan must map to a registered tool name."""
-    assert set(ACTION_TO_TOOL.keys()) == {"save_note", "quiz_me", "find_moment", "explain"}
+    assert set(ACTION_TO_TOOL.keys()) == {
+        "save_note",
+        "quiz_me",
+        "find_moment",
+        "explain",
+        "generate_video",
+        "organize_library",
+        "create_folder",
+        "rename_folder",
+        "move_folder",
+        "delete_folder",
+        "move_video",
+    }
     assert ACTION_TO_TOOL["save_note"][0] == "note_taker"
     assert ACTION_TO_TOOL["quiz_me"][0] == "quiz_generator"
     assert ACTION_TO_TOOL["find_moment"][0] == "navigator"
     assert ACTION_TO_TOOL["explain"][0] == "concept_explain"
+    assert ACTION_TO_TOOL["generate_video"][0] == "video_generator"
+    assert ACTION_TO_TOOL["organize_library"][0] == "library_organizer"
+    assert ACTION_TO_TOOL["create_folder"][0] == "folder_organizer"
+    assert ACTION_TO_TOOL["rename_folder"][0] == "folder_organizer"
+    assert ACTION_TO_TOOL["move_folder"][0] == "folder_organizer"
+    assert ACTION_TO_TOOL["delete_folder"][0] == "folder_organizer"
+    assert ACTION_TO_TOOL["move_video"][0] == "folder_organizer"

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { authApi } from "@/api/auth";
 import { setAccessToken } from "@/api/client";
+import { useChatStore } from "./chat-store";
 import type { User } from "@/types";
 
 interface AuthState {
@@ -52,11 +53,15 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         authApi.logout().catch(() => {}); // Fire and forget
         setAccessToken(null);
+        // Don't leak one user's chat transcript to the next session.
+        useChatStore.getState().clearMessages();
         set({ user: null, accessToken: null, isAuthenticated: false });
       },
 
       forceLogout: (reason?: string) => {
         setAccessToken(null);
+        // Don't leak one user's chat transcript to the next session.
+        useChatStore.getState().clearMessages();
         set({
           user: null,
           accessToken: null,

@@ -14,7 +14,12 @@ export function ThemeProvider({
 }) {
   const [theme, setTheme] = useState<Theme>(() => {
     const stored = localStorage.getItem(storageKey);
-    if (stored === "dark" || stored === "light" || stored === "system")
+    if (
+      stored === "dark" ||
+      stored === "light" ||
+      stored === "system" ||
+      stored === "lagoon"
+    )
       return stored;
     return defaultTheme;
   });

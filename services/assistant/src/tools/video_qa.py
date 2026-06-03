@@ -22,7 +22,7 @@ Transcript context:
 
 Rules:
 - If the answer is not in the context, say so honestly.
-- Reference timestamps in [MM:SS] format when possible.
+- Reference a timestamp in [MM:SS] format only when one is shown in the context; never invent one.
 - Keep answers concise and focused."""
 
 _MAX_CONTEXT_CHUNKS = 8
@@ -56,7 +56,7 @@ class VideoQATool:
 
         rag_sources = await self._rag.search(
             query=query,
-            video_id=video_id,
+            video_id=video_ctx.youtube_id,
             top_k=_MAX_CONTEXT_CHUNKS,
         )
 

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getCmdGlyph } from "@/lib/platform";
 import { useSidebarChat } from "@/features/sidebar/hooks/use-sidebar-chat";
+import { useProcessingStore } from "@/features/video-output/stores/processing-store";
 import { useUIStore, useSelectionMode, useActiveSection } from "@/stores/ui-store";
 
 // Module-level — platform doesn't change mid-session; resolve once and
@@ -32,8 +33,14 @@ export const Sidebar = memo(function Sidebar() {
   const selectionMode = useSelectionMode();
   const exitSelectionMode = useUIStore((s) => s.exitSelectionMode);
   const activeSection = useActiveSection();
+  const activeVideoId = useProcessingStore((s) => s.viewingVideoSummaryId);
 
-  const { messages: chatMessages, status: chatStatus, sendMessage: handleSendMessage } = useSidebarChat();
+  const {
+    messages: chatMessages,
+    status: chatStatus,
+    sendMessage: handleSendMessage,
+    clearMessages: handleNewChat,
+  } = useSidebarChat({ videoSummaryId: activeVideoId ?? undefined });
 
   // Handle Escape key to exit selection mode
   useEffect(() => {
@@ -106,7 +113,7 @@ export const Sidebar = memo(function Sidebar() {
             messages={chatMessages}
             status={chatStatus}
             onSendMessage={handleSendMessage}
-            placeholder="Ask about your videos..."
+            onNewChat={handleNewChat}
           />
         ) : (
           <DndProvider>

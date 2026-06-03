@@ -62,10 +62,10 @@
   opacity: 0.2;
   animation: landing-orb-drift-b 26s linear infinite alternate;
 }
-[data-theme="dark"] .landing-hero-orbs::before {
+:is([data-theme="dark"], [data-theme="lagoon"]) .landing-hero-orbs::before {
   opacity: 0.18;
 }
-[data-theme="dark"] .landing-hero-orbs::after {
+:is([data-theme="dark"], [data-theme="lagoon"]) .landing-hero-orbs::after {
   opacity: 0.16;
 }
 @keyframes landing-orb-drift-a {
@@ -121,7 +121,7 @@
   border-radius: 1rem;
   box-shadow: 0 24px 80px -28px oklch(from var(--primary) l c h / 0.25);
 }
-[data-theme="dark"] .landing-demo-frame {
+:is([data-theme="dark"], [data-theme="lagoon"]) .landing-demo-frame {
   box-shadow:
     0 30px 100px -32px oklch(from var(--primary) l c h / 0.35),
     0 0 0 1px oklch(from var(--primary) l c h / 0.06);
@@ -152,7 +152,7 @@
   z-index: -1;
   pointer-events: none;
 }
-[data-theme="dark"] .landing-grid-paper::before {
+:is([data-theme="dark"], [data-theme="lagoon"]) .landing-grid-paper::before {
   background-image: radial-gradient(
     circle at 1px 1px,
     oklch(from var(--foreground) l c h / 0.11) 1px,
@@ -210,7 +210,7 @@
 .landing-input[data-invalid="true"] {
   border-color: oklch(from var(--destructive) l c h / 0.55);
 }
-[data-theme="dark"] .landing-input {
+:is([data-theme="dark"], [data-theme="lagoon"]) .landing-input {
   background: oklch(from var(--card) l c h / 0.45);
 }
 .landing-input input {
@@ -245,7 +245,7 @@
     0 30px 60px -30px oklch(0% 0 0 / 0.25),
     0 10px 20px -10px oklch(0% 0 0 / 0.12);
 }
-[data-theme="dark"] .landing-console {
+:is([data-theme="dark"], [data-theme="lagoon"]) .landing-console {
   background: oklch(from var(--card) l c h / 0.55);
   box-shadow:
     0 1px 0 oklch(100% 0 0 / 0.06) inset,
@@ -373,11 +373,11 @@
   font-weight: 600;
   box-shadow: 0 1px 4px oklch(from var(--primary) l c h / 0.1);
 }
-[data-theme="dark"] .landing-hero-tabs__tab {
+:is([data-theme="dark"], [data-theme="lagoon"]) .landing-hero-tabs__tab {
   background: oklch(from var(--card) l c h / 0.5);
   border-color: oklch(from var(--border) l c h / 0.5);
 }
-[data-theme="dark"] .landing-hero-tabs__tab[data-active="true"] {
+:is([data-theme="dark"], [data-theme="lagoon"]) .landing-hero-tabs__tab[data-active="true"] {
   background: oklch(from var(--primary) l c h / 0.2);
   border-color: oklch(from var(--primary) l c h / 0.5);
   box-shadow:
@@ -492,7 +492,7 @@
   padding: 1.25rem 1.25rem 1.5rem;
   transition: border-color 160ms var(--ease-out-expo);
 }
-[data-theme="dark"] .landing-card {
+:is([data-theme="dark"], [data-theme="lagoon"]) .landing-card {
   background: oklch(from var(--card) l c h / 0.5);
 }
 .landing-card__label {

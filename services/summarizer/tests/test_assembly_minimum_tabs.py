@@ -193,3 +193,30 @@ class TestAssembleResponseMinTabs:
             component_counts[c] = component_counts.get(c, 0) + 1
         # overview should appear at most once
         assert component_counts.get("overview", 0) <= 1
+
+    def test_backfilled_required_tab_counts_toward_minimum(self):
+        """A required component backfilled from real extraction data counts as a
+        real tab — the min-3 guarantee should see it and add fewer synth fillers."""
+        triage = {
+            "contentTags": ["tech"], "modifiers": [], "primaryTag": "tech",
+            "userGoal": "Learn the code",
+            "tabs": [
+                {"id": "key_claims", "label": "Claims", "dataSource": "tech.topics",
+                 "component": "info_grid", "goal": "claims"},
+            ],
+        }
+        # Only snippets are populated; the planned info_grid field is empty, so
+        # the sole planned tab drops — code_playground must be backfilled.
+        extraction = {"tech": {
+            "snippets": [
+                {"filename": "a.py", "language": "python", "code": "a = 1", "explanation": "x"},
+                {"filename": "b.py", "language": "python", "code": "b = 2", "explanation": "y"},
+            ],
+            "topics": [],
+        }}
+        synthesis = {"masterSummary": "A talk", "keyTakeaways": ["k1", "k2", "k3"]}
+        result = assemble_response(triage, extraction, None, synthesis)
+
+        components = [t["component"] for t in result["tabs"]]
+        assert "code_playground" in components
+        assert len(result["tabs"]) >= 3

@@ -1,103 +1,77 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   sendAssistantMessage,
+  sendLibraryMessage,
   type AssistantChatMessage,
   type AssistantChatEvent,
 } from "@/lib/assistant";
+import { queryKeys } from "@/lib/query-keys";
+import {
+  useChatStore,
+  type ChatMessage,
+  type ChatSource,
+} from "@/stores/chat-store";
 
-interface ChatSource {
-  title: string;
-  youtubeId: string;
-  timestamp?: string;
-  timestampSeconds?: number;
-  relevanceScore?: number;
-}
-
-export interface ChatMessage {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  sources?: ChatSource[];
-  isStreaming?: boolean;
-  createdAt: string;
-}
-
-export type ChatStatus = "idle" | "pending" | "streaming" | "error";
+export type { ChatMessage, ChatSource, ChatStatus } from "@/stores/chat-store";
 
 interface UseSidebarChatOptions {
   /** When provided, chat messages are sent to this video's assistant endpoint. */
   videoSummaryId?: string;
 }
 
+// Agent actions that mutate the library server-side. When one completes we must
+// invalidate the folder/video caches so the sidebar tree reflects it live.
+const MUTATING_ACTIONS = new Set([
+  "create_folder",
+  "rename_folder",
+  "move_folder",
+  "delete_folder",
+  "move_video",
+  "generate_video",
+  "organize_library",
+]);
+
 export function useSidebarChat(options: UseSidebarChatOptions = {}) {
   const { videoSummaryId } = options;
-  // Track videoSummaryId alongside messages to reset on change.
-  // React 19 pattern: derive state from props without effects.
-  const [state, setState] = useState({
-    videoKey: videoSummaryId,
-    messages: [] as ChatMessage[],
-    status: "idle" as ChatStatus,
-  });
 
-  // If videoSummaryId changed, reset conversation state
-  let { messages, status } = state;
-  if (state.videoKey !== videoSummaryId) {
-    messages = [];
-    status = "idle";
-    setState({ videoKey: videoSummaryId, messages, status });
-  }
+  // Chat transcript lives in a persisted Zustand store so the conversation
+  // survives the Sidebar remounting on every navigation (and page reloads).
+  // The SAME conversation is shared across videos/pages — videoSummaryId only
+  // selects the transport (single-video vs library), it never wipes history.
+  const messages = useChatStore((s) => s.messages);
+  const status = useChatStore((s) => s.status);
+  const setMessages = useChatStore((s) => s.setMessages);
+  const setStatus = useChatStore((s) => s.setStatus);
+  const storeClearMessages = useChatStore((s) => s.clearMessages);
 
-  const setMessages = useCallback(
-    (updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => {
-      setState((prev) => ({
-        ...prev,
-        messages: typeof updater === "function" ? updater(prev.messages) : updater,
-      }));
-    },
-    [],
-  );
-
-  const setStatus = useCallback((newStatus: ChatStatus) => {
-    setState((prev) => ({ ...prev, status: newStatus }));
-  }, []);
+  const queryClient = useQueryClient();
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
-  // Clean up on unmount
+  // Tracks whether the current turn triggered a library-mutating agent action,
+  // so we refetch the folder/video trees once at the end (not per tool call).
+  const didMutateRef = useRef(false);
+
+  // Reset on mount, clean up on unmount. Re-setting `true` here is essential:
+  // React 19 StrictMode (dev) does mount → unmount → remount, and the cleanup
+  // sets mountedRef false. Without restoring it on the remount, every streamed
+  // event below is dropped by the `if (!mountedRef.current) return` guards —
+  // the chat renders an empty bubble and the send button stays stuck loading.
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       abortControllerRef.current?.abort();
     };
   }, []);
 
-  const sendMessage = useCallback(
+  // Stream a regular RAG chat turn (single-video or library mode).
+  const sendChat = useCallback(
     (message: string) => {
-      // Add user message immediately
-      const userMsg: ChatMessage = {
-        id: `msg-${Date.now()}`,
-        role: "user",
-        content: message,
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, userMsg]);
-
-      // If no videoSummaryId, show a helpful placeholder
-      if (!videoSummaryId) {
-        const placeholderMsg: ChatMessage = {
-          id: `msg-${Date.now()}-reply`,
-          role: "assistant",
-          content:
-            "Open a video to start chatting. The assistant can answer questions about your video content.",
-          createdAt: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, placeholderMsg]);
-        return;
-      }
-
       // Build conversation history from current messages (excluding the one we just added)
       const history: AssistantChatMessage[] = messagesRef.current.map((m) => ({
         role: m.role,
@@ -137,15 +111,49 @@ export function useSidebarChat(options: UseSidebarChatOptions = {}) {
             break;
 
           case "source": {
-            const mapped: ChatSource[] = (event.sources ?? []).map((s) => ({
-              title: s.text.slice(0, 60),
-              youtubeId: "",
-              timestamp: s.timestamp ?? undefined,
-              relevanceScore: s.score,
-            }));
+            // One chip per video (deduped by id), labelled by title, no score —
+            // a clean "Sources" row rather than a debug list of every chunk.
+            const seen = new Set<string>();
+            const mapped: ChatSource[] = [];
+            for (const s of event.sources ?? []) {
+              const youtubeId = s.video_id ?? "";
+              const key = youtubeId || s.text.slice(0, 24);
+              if (seen.has(key)) continue;
+              seen.add(key);
+              mapped.push({
+                title: s.title || s.text.slice(0, 60),
+                youtubeId,
+                timestamp: s.timestamp ?? undefined,
+              });
+            }
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantId ? { ...m, sources: mapped } : m,
+              ),
+            );
+            break;
+          }
+
+          case "tool": {
+            // The agent emits a "start"/"done" pair per tool call. Only the
+            // finished step carries a human summary worth showing, so append
+            // its content as a ✓ step line on the streaming assistant message.
+            if (event.metadata?.status !== "done") break;
+
+            // If the finished tool mutated the library server-side, flag a
+            // refetch for the chat "done" event (one refresh per turn).
+            const action = event.metadata?.action;
+            if (typeof action === "string" && MUTATING_ACTIONS.has(action)) {
+              didMutateRef.current = true;
+            }
+
+            const step = event.content;
+            if (!step) break;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? { ...m, steps: [...(m.steps ?? []), step] }
+                  : m,
               ),
             );
             break;
@@ -174,17 +182,29 @@ export function useSidebarChat(options: UseSidebarChatOptions = {}) {
                 m.id === assistantId ? { ...m, isStreaming: false } : m,
               ),
             );
+            // The agent mutated the library bypassing client mutation hooks, so
+            // refetch the exact caches the sidebar tree (useFolders/useAllVideos)
+            // reads — making folder/video changes appear live, no manual refresh.
+            if (didMutateRef.current) {
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.folders.lists(),
+              });
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.videos.lists(),
+              });
+              didMutateRef.current = false;
+            }
             break;
         }
       };
 
-      sendAssistantMessage(
-        videoSummaryId,
-        message,
-        history,
-        handleEvent,
-        controller.signal,
-      ).catch((err) => {
+      // No active video → library mode (cross-video RAG over the user's videos).
+      // Otherwise scope the chat to the single open video.
+      const request = videoSummaryId
+        ? sendAssistantMessage(videoSummaryId, message, history, handleEvent, controller.signal)
+        : sendLibraryMessage(message, history, handleEvent, controller.signal);
+
+      request.catch((err) => {
         if (!mountedRef.current) return;
         // Ignore abort errors (user navigated away or sent another message)
         if (err instanceof Error && err.name === "AbortError") return;
@@ -203,14 +223,40 @@ export function useSidebarChat(options: UseSidebarChatOptions = {}) {
         );
       });
     },
-    [videoSummaryId, setMessages, setStatus],
+    [videoSummaryId, setMessages, setStatus, queryClient],
   );
 
+  // Every message — single-video or library — now goes through the streaming
+  // agent. Tool calls (folder creation, library organization, video dispatch)
+  // are handled server-side and surfaced as ✓ step lines via "tool" events.
+  const sendMessage = useCallback(
+    (message: string) => {
+      // Always echo the user's message into the transcript first.
+      const userMsg: ChatMessage = {
+        id: `msg-${Date.now()}`,
+        role: "user",
+        content: message,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, userMsg]);
+
+      sendChat(message);
+    },
+    [setMessages, sendChat],
+  );
+
+  // Abort any in-flight stream before wiping the transcript (the store's
+  // clearMessages only resets state; the abort lives in the hook).
   const clearMessages = useCallback(() => {
     abortControllerRef.current?.abort();
-    setMessages([]);
-    setStatus("idle");
-  }, [setMessages, setStatus]);
+    didMutateRef.current = false;
+    storeClearMessages();
+  }, [storeClearMessages]);
 
-  return { messages, status, sendMessage, clearMessages };
+  return {
+    messages,
+    status,
+    sendMessage,
+    clearMessages,
+  };
 }

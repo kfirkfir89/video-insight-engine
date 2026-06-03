@@ -24,7 +24,10 @@ import { foldersRoutes } from './routes/folders.routes.js';
 import { videosRoutes } from './routes/videos.routes.js';
 import { playlistsRoutes } from './routes/playlists.routes.js';
 import { assistantRoutes } from './routes/assistant.routes.js';
+import { assistantLibraryRoutes } from './routes/assistant-library.routes.js';
+import { assistantActionRoutes } from './routes/assistant-action.routes.js';
 import { internalRoutes } from './routes/internal.routes.js';
+import { internalAssistantRoutes } from './routes/internal-assistant.routes.js';
 import { streamRoutes } from './routes/stream.routes.js';
 import { shareRoutes } from './routes/share.routes.js';
 import { ssrRoutes } from './routes/ssr.routes.js';
@@ -200,12 +203,15 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   await fastify.register(overrideRoutes, { prefix: '/api/videos' }); // Override category
   await fastify.register(playlistsRoutes, { prefix: '/api/playlists' });
   await fastify.register(assistantRoutes, { prefix: '/api/videos' });
+  await fastify.register(assistantLibraryRoutes, { prefix: '/api/assistant' });
+  await fastify.register(assistantActionRoutes, { prefix: '/api/assistant' });
   await fastify.register(shareRoutes, { prefix: '/api/share' });
   await fastify.register(paymentRoutes, { prefix: '/api/payments' });
   await fastify.register(preferencesRoutes, { prefix: '/api/users/me/preferences' });
   await fastify.register(userUsageRoutes, { prefix: '/api/users/me/usage' });
   await fastify.register(userMeRoutes, { prefix: '/api/users/me' });
   await fastify.register(internalRoutes, { prefix: '/internal' });
+  await fastify.register(internalAssistantRoutes, { prefix: '/internal/assistant' });
   await fastify.register(adminQueueRoutes, { prefix: '/api/admin/queue' });
   await fastify.register(adminUsersRoutes, { prefix: '/api/admin/users' });
 

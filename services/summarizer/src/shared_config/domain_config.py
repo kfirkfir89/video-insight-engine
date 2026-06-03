@@ -127,3 +127,46 @@ def build_fallback_tabs(tag: str) -> list[dict]:
     cfg = get_config()
     domain = cfg["domains"].get(tag, cfg["domains"].get("learning", {}))
     return list(domain.get("defaultTabs", []))
+
+
+def datasources_for_component(tag: str, component: str) -> list[str]:
+    """Default-tab dataSources in `tag` that back `component`, in priority order.
+
+    The defaultTabs order in domains.json IS the priority (e.g. tech lists `code`
+    → ``tech.snippets`` before `patterns` → ``tech.patterns``, both backing
+    ``code_playground``). Used by assembly to recover an empty planned field by
+    swapping in a populated sibling field that renders with the same component.
+    """
+    cfg = get_config()
+    domain = cfg["domains"].get(tag, {})
+    sources: list[str] = []
+    for tab in domain.get("defaultTabs", []):
+        if not isinstance(tab, dict):
+            continue
+        if tab.get("component") == component and tab.get("dataSource"):
+            ds = tab["dataSource"]
+            if ds not in sources:
+                sources.append(ds)
+    return sources
+
+
+def sibling_datasources(tag: str, data_source: str) -> list[str]:
+    """Other dataSources in `tag` sharing `data_source`'s component, priority-ordered.
+
+    Resolves `data_source` to its registered defaultTab component, then returns the
+    other dataSources backing that same component (excluding `data_source` itself).
+    Returns [] when `data_source` is not a registered defaultTab for `tag`.
+    """
+    cfg = get_config()
+    domain = cfg["domains"].get(tag, {})
+    component = next(
+        (
+            tab.get("component")
+            for tab in domain.get("defaultTabs", [])
+            if isinstance(tab, dict) and tab.get("dataSource") == data_source
+        ),
+        None,
+    )
+    if not component:
+        return []
+    return [ds for ds in datasources_for_component(tag, component) if ds != data_source]

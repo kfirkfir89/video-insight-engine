@@ -58,7 +58,7 @@ class TestConceptExplainUsesPrimary:
             {"concept": "topic", "video_id": "v1"},
             {
                 "video_ctx": type("Ctx", (), {
-                    "title": "T", "creator": "C", "tabs": [],
+                    "title": "T", "creator": "C", "tabs": [], "youtube_id": "yt1",
                 })(),
             },
         )

@@ -108,6 +108,24 @@ class TestVideoQA:
         assert "[1:23]" in system_content
         assert "[3:10]" in system_content
 
+    async def test_should_search_rag_with_youtube_id_not_mongo_id(self) -> None:
+        """Should search Qdrant by the YouTube ID, not the Mongo _id passed in params."""
+        # Arrange
+        rag = AsyncMock()
+        rag.search.return_value = _make_rag_sources(1)
+        llm = AsyncMock()
+        llm.complete_with_messages.return_value = "Answer."
+
+        tool = VideoQATool(rag=rag, llm=llm)
+        params = {"query": "How do transformers work?", "video_id": "vid1"}
+        context = {"video_ctx": _make_video_ctx()}
+
+        # Act
+        await tool.execute(params, context)
+
+        # Assert
+        assert rag.search.await_args.kwargs["video_id"] == "yt1"
+
     async def test_should_raise_on_llm_failure(self) -> None:
         """Should propagate LLMError when the LLM provider fails."""
         # Arrange

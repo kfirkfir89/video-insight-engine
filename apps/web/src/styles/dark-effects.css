@@ -4,16 +4,16 @@
    ═══════════════════════════════════════════════════ */
 
 /* Subtle inner luminance on semantic callouts — readable, not "glowing". */
-:is([data-theme="dark"]) .callout-gradient-tip,
-:is([data-theme="dark"]) .callout-gradient-note,
-:is([data-theme="dark"]) .callout-gradient-warning,
-:is([data-theme="dark"]) .callout-gradient-security {
+:is([data-theme="dark"], [data-theme="lagoon"]) .callout-gradient-tip,
+:is([data-theme="dark"], [data-theme="lagoon"]) .callout-gradient-note,
+:is([data-theme="dark"], [data-theme="lagoon"]) .callout-gradient-warning,
+:is([data-theme="dark"], [data-theme="lagoon"]) .callout-gradient-security {
   box-shadow: inset 0 0 20px oklch(from var(--border) l c h / 0.05);
 }
 
 /* Timer digit glow — the only element where the glow carries meaning
    (focal, attention-demanding countdown). Kept intentionally. */
-:is([data-theme="dark"]) .timer-glow {
+:is([data-theme="dark"], [data-theme="lagoon"]) .timer-glow {
   filter: drop-shadow(0 0 6px oklch(from var(--primary) l c h / 0.25));
 }
 

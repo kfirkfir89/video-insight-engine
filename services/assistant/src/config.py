@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     # Internal auth
     INTERNAL_SECRET: str = Field(default=_DEFAULT_INTERNAL_SECRET, repr=False)
 
+    # vie-api gateway (outbound internal calls — reuses INTERNAL_SECRET)
+    VIE_API_URL: str = "http://vie-api:3000"
+
     # LLM Provider Configuration
     LLM_PROVIDER: str = "anthropic"
     LLM_FAST_PROVIDER: str | None = None

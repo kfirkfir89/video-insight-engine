@@ -1,0 +1,80 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+import { runAssistantAction } from "../assistant";
+
+// Mock the API client + auth store so runAssistantAction stays a pure unit test.
+vi.mock("@/api/client", () => ({
+  getAccessToken: vi.fn(() => "token-abc"),
+  refreshToken: vi.fn(() => Promise.resolve(false)),
+}));
+
+vi.mock("@/stores/auth-store", () => ({
+  useAuthStore: { getState: vi.fn(() => ({ forceLogout: vi.fn() })) },
+}));
+
+describe("runAssistantAction", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("should POST to the gateway action endpoint with the bearer token and envelope body", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ success: true, action: "create_folder", data: { id: "f1" } }),
+    });
+
+    const result = await runAssistantAction(
+      "create_folder",
+      { name: "Recipes" },
+      "vid-123",
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("http://localhost:3000/api/assistant/action");
+    expect(init.method).toBe("POST");
+    expect(init.headers.Authorization).toBe("Bearer token-abc");
+    expect(init.headers["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(init.body)).toEqual({
+      action: "create_folder",
+      params: { name: "Recipes" },
+      video_id: "vid-123",
+    });
+    expect(result).toEqual({
+      success: true,
+      action: "create_folder",
+      data: { id: "f1" },
+    });
+  });
+
+  it("should omit video_id from the body when no videoSummaryId is given", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ success: true, action: "organize_library" }),
+    });
+
+    await runAssistantAction("organize_library", {});
+
+    const init = fetchMock.mock.calls[0][1];
+    const body = JSON.parse(init.body);
+    expect(body).not.toHaveProperty("video_id");
+  });
+
+  it("should throw a transport error on a non-ok response", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) });
+
+    await expect(runAssistantAction("organize_library", {})).rejects.toThrow(
+      "Assistant action failed: 500",
+    );
+  });
+});

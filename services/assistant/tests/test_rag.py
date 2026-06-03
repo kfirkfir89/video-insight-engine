@@ -161,3 +161,14 @@ class TestSearchLibrary:
         with patch.object(rag, "_encode", return_value=[0.0] * 384):
             results = await rag.search_library(query="x", video_ids=["v1"])
         assert results == []
+
+    async def test_should_forward_exact_video_ids_unmodified(self, qdrant_mock):
+        # Library chat trusts the gateway-derived id list verbatim — the RAG
+        # layer must forward it to Qdrant without filtering or reordering.
+        from src.services.rag import RAGService
+        rag = RAGService(qdrant_repo=qdrant_mock)
+        ids = ["aaa", "bbb", "ccc", "ddd"]
+        with patch.object(rag, "_encode", return_value=[0.0] * 384), \
+             patch.object(rag, "_get_model", return_value=MagicMock()):
+            await rag.search_library(query="forwarded?", video_ids=ids)
+        assert qdrant_mock.search.call_args.kwargs["video_ids"] == ids

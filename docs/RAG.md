@@ -60,7 +60,7 @@ Each point carries:
 | `text_original`   | string?  | non-EN   | Source-language text aligned by proportional offset  |
 | `video_id`        | string   | both     | YouTube ID — filter scope for retrieval              |
 | `chunk_index`     | int      | both     | Ordering within the source                           |
-| `timestamp`       | string?  | both     | Transcript only — sentence-window approximate time   |
+| `timestamp`       | string?  | both     | Reserved — **not currently populated** by the summarizer chunker; always `null` at retrieval. Citations omit the `[MM:SS]` prefix until ingest computes it. |
 | `source`          | string   | both     | `transcript` or `default_output`                     |
 | `tab_id`          | string?  | output   | Originating tab (`overview_tab`, `key_moments`, ...) |
 | `tab_component`   | string?  | output   | Originating component (`overview`, `quiz`, ...)      |
