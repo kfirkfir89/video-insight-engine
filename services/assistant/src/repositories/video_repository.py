@@ -25,7 +25,7 @@ class VideoContext:
     tabs: list[dict] = field(default_factory=list)
     output_data: dict | None = None
     language: str = "en"
-    synthesis_en: dict | None = None
+    source_language: dict | None = None
 
 
 class MongoVideoRepository:
@@ -83,7 +83,7 @@ class MongoVideoRepository:
 
         output_data = doc.get("output")
         language = doc.get("language", "en") or "en"
-        synthesis_en = doc.get("synthesis_en")
+        source_language = doc.get("sourceLanguage")
 
         return VideoContext(
             id=str(doc.get("_id", "")),
@@ -95,7 +95,7 @@ class MongoVideoRepository:
             tabs=tabs,
             output_data=output_data,
             language=language,
-            synthesis_en=synthesis_en,
+            source_language=source_language,
         )
 
 

@@ -3191,3 +3191,109 @@ class TestSportAssembly:
         formation_tab = next(t for t in out["tabs"] if t["component"] == "formation_diagram")
         assert len(formation_tab["props"]["positions"]) == 3
         assert formation_tab["props"]["name"] == "4-3-3"
+
+
+# ─── in-domain sibling fallback + required-component backfill ───
+
+
+def _snip(code: str) -> dict:
+    return {"filename": f"{code}.py", "language": "python", "code": code, "explanation": "demo"}
+
+
+class TestInDomainSiblingFallback:
+    """Planner bets a tab on a field extraction left empty — assembly should
+    recover from a populated sibling field of the same domain/component rather
+    than silently dropping the tab (and losing the domain-required component)."""
+
+    @staticmethod
+    def _tech_triage(tabs):
+        return {
+            "contentTags": ["tech"],
+            "modifiers": [],
+            "primaryTag": "tech",
+            "userGoal": "Learn the code",
+            "tabs": tabs,
+        }
+
+    def test_empty_field_remaps_to_populated_sibling(self):
+        triage = self._tech_triage([
+            {"id": "old_vs_new", "label": "Old vs New", "emoji": "🧩",
+             "dataSource": "tech.patterns", "component": "code_playground",
+             "goal": "Compare the approaches"},
+        ])
+        extraction = {"tech": {"snippets": [_snip("a = 1"), _snip("b = 2")], "patterns": []}}
+        result = assemble_response(triage, extraction, None, None)
+
+        tab = next((t for t in result["tabs"] if t["id"] == "old_vs_new"), None)
+        assert tab is not None, "tab should survive via sibling fallback, not be dropped"
+        assert tab["component"] == "code_playground"
+        assert len(tab["props"]["snippets"]) == 2  # came from tech.snippets
+
+    def test_missing_required_component_backfilled(self):
+        # No tab targets tech.snippets, and the planned tab's field is empty →
+        # code_playground would be missing; backfill should restore it.
+        triage = self._tech_triage([
+            {"id": "key_claims", "label": "Key Claims", "emoji": "📌",
+             "dataSource": "tech.topics", "component": "info_grid", "goal": "The claims"},
+        ])
+        extraction = {"tech": {"snippets": [_snip("x = 1"), _snip("y = 2")], "topics": []}}
+        result = assemble_response(triage, extraction, None, None)
+
+        components = [t["component"] for t in result["tabs"]]
+        assert "code_playground" in components, "required tech component should be backfilled"
+
+    def test_validate_domain_requirements_backfills_in_place(self):
+        tabs = [{"id": "overview", "label": "Overview", "emoji": "📄",
+                 "component": "overview", "props": {"summary": "hi"}, "goal": "g"}]
+        extraction = {"tech": {"snippets": [_snip("z = 3")]}}
+        _validate_domain_requirements(tabs, "tech", extraction=extraction)
+
+        assert any(t["component"] == "code_playground" for t in tabs)
+
+    def test_no_data_anywhere_drops_gracefully(self, caplog):
+        triage = self._tech_triage([
+            {"id": "old_vs_new", "label": "Old vs New", "emoji": "🧩",
+             "dataSource": "tech.patterns", "component": "code_playground", "goal": "g"},
+        ])
+        extraction = {"tech": {"snippets": [], "patterns": []}}
+        synthesis = {"masterSummary": "A talk", "keyTakeaways": ["t1", "t2", "t3"]}
+        video_meta = {"chapters": [
+            {"title": "Intro", "start_time": 0, "end_time": 60},
+            {"title": "Main", "start_time": 60, "end_time": 300},
+        ]}
+        with caplog.at_level("WARNING"):
+            result = assemble_response(triage, extraction, None, synthesis, video_meta=video_meta)
+
+        assert not any(t["component"] == "code_playground" for t in result["tabs"])
+        assert "requires 'code_playground'" in caplog.text
+        assert len(result["tabs"]) >= 3  # min-3 guarantee still holds
+
+    def test_in_domain_resolves_before_cross_domain_in_multidomain(self):
+        triage = self._tech_triage([
+            {"id": "patterns_tab", "label": "Patterns", "emoji": "🧩",
+             "dataSource": "tech.patterns", "component": "code_playground", "goal": "g"},
+        ])
+        extraction = {
+            "learning": {"keyPoints": [{"title": "P1", "detail": "d"}]},
+            "tech": {"snippets": [_snip("only_tech = True")], "patterns": []},
+        }
+        result = assemble_response(triage, extraction, None, None)
+
+        tab = next(t for t in result["tabs"] if t["id"] == "patterns_tab")
+        assert tab["props"]["snippets"][0]["code"] == "only_tech = True"
+
+    def test_populated_primary_is_not_remapped(self):
+        # Regression guard: when the planned field has data, no sibling swap.
+        triage = self._tech_triage([
+            {"id": "patterns_tab", "label": "Patterns", "emoji": "🧩",
+             "dataSource": "tech.patterns", "component": "code_playground", "goal": "g"},
+        ])
+        extraction = {"tech": {
+            "patterns": [_snip("PLANNED_1"), _snip("PLANNED_2")],
+            "snippets": [_snip("SIBLING_1"), _snip("SIBLING_2")],
+        }}
+        result = assemble_response(triage, extraction, None, None)
+
+        tab = next(t for t in result["tabs"] if t["id"] == "patterns_tab")
+        codes = {s["code"] for s in tab["props"]["snippets"]}
+        assert codes == {"PLANNED_1", "PLANNED_2"}

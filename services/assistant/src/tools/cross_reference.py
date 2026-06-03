@@ -45,6 +45,8 @@ class CrossReferenceTool:
 
         Args:
             params: Must contain ``query`` (str) and ``video_ids`` (list[str]).
+                The ``video_ids`` MUST already be YouTube IDs — Qdrant is keyed
+                by YouTube ID, and callers are responsible for resolving them.
             context: Unused for cross-reference.
 
         Returns:

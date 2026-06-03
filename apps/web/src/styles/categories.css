@@ -84,43 +84,43 @@
 }
 
 /* Dark mode category overrides */
-:is([data-theme="dark"]) .category-cooking {
+:is([data-theme="dark"], [data-theme="lagoon"]) .category-cooking {
   --category-accent-soft: oklch(68% 0.20 30 / 0.06);
   --category-surface: oklch(68% 0.20 30 / 0.04);
 }
-:is([data-theme="dark"]) .category-coding {
+:is([data-theme="dark"], [data-theme="lagoon"]) .category-coding {
   --category-accent-soft: oklch(80% 0.12 200 / 0.06);
   --category-surface: oklch(80% 0.12 200 / 0.04);
 }
-:is([data-theme="dark"]) .category-travel {
+:is([data-theme="dark"], [data-theme="lagoon"]) .category-travel {
   --category-accent-soft: oklch(72% 0.14 165 / 0.06);
   --category-surface: oklch(72% 0.14 165 / 0.04);
 }
-:is([data-theme="dark"]) .category-reviews {
+:is([data-theme="dark"], [data-theme="lagoon"]) .category-reviews {
   --category-accent-soft: oklch(80% 0.16 85 / 0.06);
   --category-surface: oklch(80% 0.16 85 / 0.04);
 }
-:is([data-theme="dark"]) .category-fitness {
+:is([data-theme="dark"], [data-theme="lagoon"]) .category-fitness {
   --category-accent-soft: oklch(63% 0.22 25 / 0.06);
   --category-surface: oklch(63% 0.22 25 / 0.04);
 }
-:is([data-theme="dark"]) .category-education {
+:is([data-theme="dark"], [data-theme="lagoon"]) .category-education {
   --category-accent-soft: oklch(55% 0.20 290 / 0.06);
   --category-surface: oklch(55% 0.20 290 / 0.04);
 }
-:is([data-theme="dark"]) .category-podcast {
+:is([data-theme="dark"], [data-theme="lagoon"]) .category-podcast {
   --category-accent-soft: oklch(65% 0.20 340 / 0.06);
   --category-surface: oklch(65% 0.20 340 / 0.04);
 }
-:is([data-theme="dark"]) .category-gaming {
+:is([data-theme="dark"], [data-theme="lagoon"]) .category-gaming {
   --category-accent-soft: oklch(55% 0.20 270 / 0.06);
   --category-surface: oklch(55% 0.20 270 / 0.04);
 }
-:is([data-theme="dark"]) .category-diy {
+:is([data-theme="dark"], [data-theme="lagoon"]) .category-diy {
   --category-accent-soft: oklch(68% 0.16 70 / 0.06);
   --category-surface: oklch(68% 0.16 70 / 0.04);
 }
-:is([data-theme="dark"]) .category-standard {
+:is([data-theme="dark"], [data-theme="lagoon"]) .category-standard {
   --category-accent-soft: oklch(58% 0.01 250 / 0.05);
   --category-surface: oklch(58% 0.01 250 / 0.04);
 }

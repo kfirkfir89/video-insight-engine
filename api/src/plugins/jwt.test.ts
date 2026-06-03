@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 import Fastify, { FastifyInstance } from 'fastify';
 import { jwtPlugin } from './jwt.js';
 import { config } from '../config.js';
+import { AppError } from '../utils/errors.js';
 
 describe('JWT plugin', () => {
   let app: FastifyInstance;
@@ -235,6 +236,88 @@ describe('JWT plugin', () => {
         userId: 'user-456',
         email: 'user@example.com',
       });
+    });
+  });
+
+  describe('authenticateInternal decorator', () => {
+    let internalApp: FastifyInstance;
+
+    beforeAll(async () => {
+      internalApp = Fastify({ logger: false });
+      await internalApp.register(jwtPlugin);
+
+      internalApp.get('/internal-test', {
+        preHandler: internalApp.authenticateInternal,
+      }, async (request) => {
+        return { userId: request.user.userId };
+      });
+
+      // authenticateInternal throws domain errors; mirror the real app's
+      // AppError → status mapping so they surface as 401.
+      internalApp.setErrorHandler((error, _request, reply) => {
+        const status = error instanceof AppError ? error.status : 500;
+        return reply.status(status).send({ error: error.message });
+      });
+
+      await internalApp.ready();
+    });
+
+    afterAll(async () => {
+      await internalApp.close();
+    });
+
+    it('should return 401 when the internal secret is missing', async () => {
+      const response = await internalApp.inject({
+        method: 'GET',
+        url: '/internal-test',
+        headers: { 'x-user-id': 'u1' },
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 401 when the internal secret is invalid', async () => {
+      const response = await internalApp.inject({
+        method: 'GET',
+        url: '/internal-test',
+        headers: { 'x-internal-secret': 'wrong-secret', 'x-user-id': 'u1' },
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 401 when a correct-prefix-but-shorter secret is sent', async () => {
+      const response = await internalApp.inject({
+        method: 'GET',
+        url: '/internal-test',
+        headers: {
+          'x-internal-secret': config.INTERNAL_SECRET.slice(0, -1),
+          'x-user-id': 'u1',
+        },
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 401 when X-User-Id is missing', async () => {
+      const response = await internalApp.inject({
+        method: 'GET',
+        url: '/internal-test',
+        headers: { 'x-internal-secret': config.INTERNAL_SECRET },
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should bind X-User-Id as req.user with a valid secret', async () => {
+      const response = await internalApp.inject({
+        method: 'GET',
+        url: '/internal-test',
+        headers: { 'x-internal-secret': config.INTERNAL_SECRET, 'x-user-id': 'u1' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ userId: 'u1' });
     });
   });
 });

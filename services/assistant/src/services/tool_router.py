@@ -29,7 +29,33 @@ ACTION_TO_TOOL: dict[str, tuple[str, tuple[str, ...]]] = {
     "quiz_me": ("quiz_generator", ()),
     "find_moment": ("navigator", ("query",)),
     "explain": ("concept_explain", ("concept",)),
+    "generate_video": ("video_generator", ("url",)),
+    "organize_library": ("library_organizer", ()),
+    "create_folder": ("folder_organizer", ("name",)),
+    "rename_folder": ("folder_organizer", ("folder_id", "name")),
+    "move_folder": ("folder_organizer", ("folder_id",)),
+    "delete_folder": ("folder_organizer", ("folder_id",)),
+    "move_video": ("folder_organizer", ("video_id",)),
 }
+
+# Actions that target a single video and therefore require a ``video_id``.
+_VIDEO_SCOPED_ACTIONS = frozenset({
+    "save_note",
+    "quiz_me",
+    "find_moment",
+    "explain",
+})
+
+# Actions that operate on the user's whole library, not a single video.
+_LIBRARY_ACTIONS = frozenset({
+    "generate_video",
+    "organize_library",
+    "create_folder",
+    "rename_folder",
+    "move_folder",
+    "delete_folder",
+    "move_video",
+})
 
 
 class ToolRouter:
@@ -126,10 +152,14 @@ def _build_tool_params(tool_name: str, message: str, video_id: str) -> dict:
     return {"query": message, "video_id": video_id}
 
 
+# Payload keys passed through verbatim to folder/library/generate tools.
+_PASS_THROUGH_KEYS = ("name", "folder_id", "parent_id", "video_id", "url", "color", "icon", "delete_content")
+
+
 def _build_action_params(
     action: str,
     payload: dict[str, Any],
-    video_id: str,
+    video_id: str | None,
 ) -> dict[str, Any]:
     """Map an action's params into the underlying tool's param shape.
 
@@ -138,6 +168,9 @@ def _build_action_params(
     """
     if action not in ACTION_TO_TOOL:
         raise ValidationError(f"Unknown action: {action}")
+
+    if action in _VIDEO_SCOPED_ACTIONS and not video_id:
+        raise ValidationError(f"Action '{action}' requires a video_id")
 
     _, required_keys = ACTION_TO_TOOL[action]
     for key in required_keys:
@@ -161,6 +194,8 @@ def _build_action_params(
         return {"query": payload["query"]}
     if action == "explain":
         return {"concept": payload["concept"], "video_id": video_id}
+    if action in _LIBRARY_ACTIONS:
+        return {k: payload[k] for k in _PASS_THROUGH_KEYS if k in payload}
     return dict(payload)
 
 
@@ -177,19 +212,21 @@ class ActionDispatcher:
     async def dispatch(
         self,
         action: str,
-        video_id: str,
+        video_id: str | None,
         params: dict[str, Any],
-        video_ctx: VideoContext,
+        video_ctx: VideoContext | None,
         user_id: str | None = None,
     ) -> dict[str, Any]:
         """Run the tool matched to ``action``.
 
         Args:
             action: One of the keys in :data:`ACTION_TO_TOOL`.
-            video_id: Target video.
+            video_id: Target video, or ``None`` for library-scoped actions.
             params: Action-specific parameters (validated per action).
-            video_ctx: Loaded video context (passed into tools).
-            user_id: Caller's user ID (used to attribute notes).
+            video_ctx: Loaded video context, or ``None`` when no video is in
+                scope (library actions).
+            user_id: Caller's user ID (used to attribute notes and scope
+                library mutations).
 
         Returns:
             The tool's result dict.
@@ -208,7 +245,12 @@ class ActionDispatcher:
             raise ValidationError(f"Tool '{tool_name}' for action '{action}' is not available")
 
         tool_params = _build_action_params(action, params, video_id)
-        context = {"video_ctx": video_ctx, "video_id": video_id, "user_id": user_id}
+        context = {
+            "video_ctx": video_ctx,
+            "video_id": video_id,
+            "user_id": user_id,
+            "action": action,
+        }
 
         logger.info(
             "action_dispatch",

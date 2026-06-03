@@ -5,7 +5,26 @@ import { ServiceTimeoutError, ServiceUnavailableError } from '../utils/errors.js
 const ASSISTANT_TIMEOUT_MS = 60000;
 const ACTION_TIMEOUT_MS = 60000;
 
-export type AssistantAction = 'save_note' | 'quiz_me' | 'find_moment' | 'explain';
+/**
+ * Canonical list of assistant actions — the single source of truth. The
+ * `AssistantAction` union and every route's Zod enum derive from this array so
+ * the type and the validators can never drift apart.
+ */
+export const ASSISTANT_ACTIONS = [
+  'save_note',
+  'quiz_me',
+  'find_moment',
+  'explain',
+  'generate_video',
+  'organize_library',
+  'create_folder',
+  'rename_folder',
+  'move_folder',
+  'delete_folder',
+  'move_video',
+] as const;
+
+export type AssistantAction = (typeof ASSISTANT_ACTIONS)[number];
 
 export interface AssistantChatOptions {
   videoId: string;
@@ -16,7 +35,8 @@ export interface AssistantChatOptions {
 }
 
 export interface AssistantActionOptions {
-  videoId: string;
+  /** Optional — library-scoped actions (organize_library, *_folder) have no video. */
+  videoId?: string;
   userId: string;
   action: AssistantAction;
   params?: Record<string, string | number | boolean>;
@@ -30,6 +50,30 @@ export interface AssistantActionResponse {
   data: Record<string, unknown> | null;
   error: string | null;
   trace_id: string;
+}
+
+export interface AssistantLibraryChatOptions {
+  /** YouTube ids the gateway derived server-side from the user's owned videos. */
+  youtubeIds: string[];
+  userId: string;
+  message: string;
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  /** Owned-video inventory ({video_id, title}) so the assistant can name videos
+   *  by title and answer "what videos do I have?". Derived server-side. */
+  library?: Array<{ video_id: string; title: string }>;
+  /** Forwarded as `X-Request-ID` header so the assistant binds it on contextvars. */
+  requestId?: string;
+}
+
+export interface AssistantLibrarySearchOptions {
+  /** YouTube ids the gateway derived server-side from the user's owned videos. */
+  youtubeIds: string[];
+  userId: string;
+  query: string;
+  topK?: number;
+  sources?: string[];
+  /** Forwarded as `X-Request-ID` header so the assistant binds it on contextvars. */
+  requestId?: string;
 }
 
 export class AssistantClient {
@@ -115,15 +159,19 @@ export class AssistantClient {
       headers['X-Request-ID'] = options.requestId;
     }
 
+    const requestBody: Record<string, unknown> = {
+      action: options.action,
+      params: options.params ?? {},
+    };
+    if (options.videoId !== undefined) {
+      requestBody.video_id = options.videoId;
+    }
+
     try {
       const response = await fetch(url, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          video_id: options.videoId,
-          action: options.action,
-          params: options.params ?? {},
-        }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
 
@@ -132,6 +180,14 @@ export class AssistantClient {
 
       if (!body) {
         this.logger.error({ status: response.status }, 'Assistant action returned non-JSON body');
+        throw new ServiceUnavailableError('Assistant');
+      }
+
+      // Never relay an upstream 5xx body to the client — it can carry internal
+      // paths/stack detail. Collapse to a generic unavailable error; 4xx
+      // (validation/business) envelopes still pass through for the UI.
+      if (response.status >= 500) {
+        this.logger.error({ status: response.status }, 'Assistant action returned a server error');
         throw new ServiceUnavailableError('Assistant');
       }
 
@@ -145,6 +201,138 @@ export class AssistantClient {
         throw new ServiceTimeoutError('Assistant');
       }
       this.logger.error(err, 'Assistant action connection failed');
+      throw new ServiceUnavailableError('Assistant');
+    }
+  }
+
+  /**
+   * Send a library-mode chat message to the assistant service and get an SSE
+   * stream back. The `youtubeIds` are derived server-side from the caller's
+   * owned videos — never trust a client-supplied id list.
+   * Returns a ReadableStream that can be piped directly to the client.
+   */
+  async libraryChat(options: AssistantLibraryChatOptions): Promise<ReadableStream<Uint8Array>> {
+    const url = `${config.ASSISTANT_URL}/library/chat`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ASSISTANT_TIMEOUT_MS);
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Internal-Secret': config.INTERNAL_SECRET,
+      'X-User-Id': options.userId,
+    };
+    if (options.requestId) {
+      headers['X-Request-ID'] = options.requestId;
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          video_ids: options.youtubeIds,
+          message: options.message,
+          conversation_history: (options.conversationHistory ?? []).map(m => ({
+            role: m.role,
+            content: m.content,
+          })),
+          library: options.library ?? [],
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        this.logger.error({ status: response.status, error: errorText }, 'Assistant library chat request failed');
+        throw new ServiceUnavailableError('Assistant');
+      }
+
+      if (!response.body) {
+        throw new ServiceUnavailableError('Assistant: empty response body');
+      }
+
+      clearTimeout(timeout);
+      return response.body;
+    } catch (err) {
+      clearTimeout(timeout);
+      if (err instanceof ServiceUnavailableError || err instanceof ServiceTimeoutError) {
+        throw err;
+      }
+      if ((err as Error).name === 'AbortError') {
+        throw new ServiceTimeoutError('Assistant');
+      }
+      this.logger.error(err, 'Assistant library chat connection failed');
+      throw new ServiceUnavailableError('Assistant');
+    }
+  }
+
+  /**
+   * Retrieval-only library search. The `youtubeIds` are derived server-side
+   * from the caller's owned videos — never trust a client-supplied id list.
+   * Returns the parsed JSON `{ results: [...] }` envelope from the assistant.
+   */
+  async librarySearch(options: AssistantLibrarySearchOptions): Promise<{
+    status: number;
+    body: Record<string, unknown>;
+  }> {
+    const url = `${config.ASSISTANT_URL}/library/search`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ACTION_TIMEOUT_MS);
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Internal-Secret': config.INTERNAL_SECRET,
+      'X-User-Id': options.userId,
+    };
+    if (options.requestId) {
+      headers['X-Request-ID'] = options.requestId;
+    }
+
+    const requestBody: Record<string, unknown> = {
+      video_ids: options.youtubeIds,
+      query: options.query,
+    };
+    if (options.topK !== undefined) {
+      requestBody.top_k = options.topK;
+    }
+    if (options.sources !== undefined) {
+      requestBody.sources = options.sources;
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+
+      const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+      clearTimeout(timeout);
+
+      if (!body) {
+        this.logger.error({ status: response.status }, 'Assistant library search returned non-JSON body');
+        throw new ServiceUnavailableError('Assistant');
+      }
+
+      // Never relay an upstream 5xx body to the client — it can carry internal
+      // paths/stack detail. Collapse to a generic unavailable error.
+      if (response.status >= 500) {
+        this.logger.error({ status: response.status }, 'Assistant library search returned a server error');
+        throw new ServiceUnavailableError('Assistant');
+      }
+
+      return { status: response.status, body };
+    } catch (err) {
+      clearTimeout(timeout);
+      if (err instanceof ServiceUnavailableError || err instanceof ServiceTimeoutError) {
+        throw err;
+      }
+      if ((err as Error).name === 'AbortError') {
+        throw new ServiceTimeoutError('Assistant');
+      }
+      this.logger.error(err, 'Assistant library search connection failed');
       throw new ServiceUnavailableError('Assistant');
     }
   }

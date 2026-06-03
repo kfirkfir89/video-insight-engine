@@ -1,9 +1,11 @@
 import { memo, useState, useCallback, useRef, useEffect } from 'react';
-import { MessageCircle, Send, Loader2, User, Bot, Sparkles } from 'lucide-react';
+import { MessageCircle, Send, Loader2, User, Bot, Sparkles, ExternalLink, Check, SquarePen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollContainer } from '@/components/ui/scroll-container';
+import { useLabels } from '@/lib/i18n';
 import { RAGSourceCard } from './RAGSourceCard';
+import { MarkdownContent } from '@/components/ui/markdown-content';
 
 interface RAGSource {
   title: string;
@@ -19,6 +21,8 @@ interface RAGMessage {
   role: 'user' | 'assistant';
   content: string;
   sources?: RAGSource[];
+  /** Agent tool steps (e.g. "Created folder \"Series\"") shown as ✓ lines. */
+  steps?: string[];
   isStreaming?: boolean;
   createdAt: string;
 }
@@ -34,7 +38,53 @@ interface RAGChatPanelProps {
   onSeek?: (seconds: number) => void;
   placeholder?: string;
   className?: string;
+  /** True when an assistant action is awaiting the user's confirmation. The
+   * confirm prompt itself is rendered as a normal assistant message; this flag
+   * surfaces the Confirm/Cancel buttons that resolve it. */
+  pendingAction?: boolean;
+  onConfirmAction?: () => void;
+  onCancelAction?: () => void;
+  /** Clears the conversation and starts a fresh chat. Disabled when empty. */
+  onNewChat?: () => void;
 }
+
+/**
+ * Deep-linking source chip. Rendered when no in-page seek handler is available
+ * (e.g. the sidebar has no embedded player), so the cited source stays a real
+ * navigable target — a YouTube link at the timestamp — never a broken internal
+ * link. Used in both single-video and library (cross-video) modes; whenever an
+ * `onSeek` handler IS present the seek-enabled RAGSourceCard is used instead.
+ */
+const LibrarySourceChip = memo(function LibrarySourceChip({
+  source,
+}: {
+  source: RAGSource;
+}) {
+  const { youtubeId, title, timestamp, timestampSeconds, relevanceScore } = source;
+  const youtubeUrl = timestampSeconds
+    ? `https://www.youtube.com/watch?v=${youtubeId}&t=${timestampSeconds}s`
+    : `https://www.youtube.com/watch?v=${youtubeId}`;
+
+  return (
+    <a
+      href={youtubeUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-1.5 rounded-md border border-border/20 bg-muted/20 px-2 py-1.5 text-xs hover:bg-muted/40 transition-colors"
+    >
+      <ExternalLink className="h-3 w-3 shrink-0 text-primary" aria-hidden="true" />
+      <span className="line-clamp-1 flex-1 min-w-0 font-medium">{title}</span>
+      {timestamp && (
+        <span className="shrink-0 text-muted-foreground">{timestamp}</span>
+      )}
+      {relevanceScore !== undefined && (
+        <span className="shrink-0 text-muted-foreground">
+          {Math.round(relevanceScore * 100)}%
+        </span>
+      )}
+    </a>
+  );
+});
 
 const MessageBubble = memo(function MessageBubble({
   message,
@@ -81,29 +131,64 @@ const MessageBubble = memo(function MessageBubble({
               : 'bg-muted'
           )}
         >
-          {message.content}
+          {isUser ? (
+            message.content
+          ) : (
+            <>
+              {/* Agent tool steps — muted ✓ lines above the reply. */}
+              {message.steps && message.steps.length > 0 && (
+                <ul className="mb-1.5 space-y-0.5 text-xs text-muted-foreground">
+                  {message.steps.map((step, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <Check
+                        className="h-3 w-3 mt-0.5 shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <MarkdownContent
+                content={message.content}
+                className={cn(
+                  'text-sm',
+                  // Sidebar-tuned hierarchy: tight + scannable, no oversized headings.
+                  'prose-p:my-1 prose-p:leading-relaxed',
+                  'prose-headings:mt-3 prose-headings:mb-1 prose-headings:font-semibold',
+                  'prose-h1:text-sm prose-h2:text-sm prose-h3:text-xs',
+                  'prose-ul:my-1 prose-ul:space-y-0.5 prose-ol:my-1 prose-ol:space-y-0.5',
+                  'prose-li:my-0 prose-strong:text-foreground',
+                  'prose-code:text-xs prose-pre:text-xs prose-pre:p-2',
+                )}
+              />
+            </>
+          )}
           {message.isStreaming && (
             <span className="inline-block ml-1 animate-pulse">▌</span>
           )}
         </div>
 
-        {/* Sources (assistant only) */}
+        {/* Sources (assistant only) — collapsed by default to keep the chat clean */}
         {!isUser && message.sources && message.sources.length > 0 && (
-          <div className="mt-2 space-y-1.5">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <details className="mt-2">
+            <summary className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer select-none list-none hover:text-foreground/80">
               <Sparkles className="h-3 w-3" aria-hidden="true" />
-              <span>Sources</span>
+              <span>Sources ({message.sources.length})</span>
+            </summary>
+            <div className="mt-1.5 space-y-1">
+              {message.sources.map((source, i) =>
+                // With a seek handler, use the seek-enabled card; without one
+                // (no in-page player), deep-link the source to YouTube so it
+                // stays navigable. Applies to single-video and library modes.
+                !onSeek && source.youtubeId ? (
+                  <LibrarySourceChip key={i} source={source} />
+                ) : (
+                  <RAGSourceCard key={i} {...source} onSeek={onSeek} />
+                ),
+              )}
             </div>
-            <div className="space-y-1">
-              {message.sources.map((source, i) => (
-                <RAGSourceCard
-                  key={i}
-                  {...source}
-                  onSeek={onSeek}
-                />
-              ))}
-            </div>
-          </div>
+          </details>
         )}
       </div>
     </div>
@@ -120,9 +205,15 @@ export const RAGChatPanel = memo(function RAGChatPanel({
   status: statusProp,
   onSendMessage,
   onSeek,
-  placeholder = 'Ask a question about your saved content...',
+  placeholder,
   className,
+  pendingAction = false,
+  onConfirmAction,
+  onCancelAction,
+  onNewChat,
 }: RAGChatPanelProps) {
+  const labels = useLabels();
+  const effectivePlaceholder = placeholder ?? labels.libraryChatPlaceholder;
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -198,6 +289,19 @@ export const RAGChatPanel = memo(function RAGChatPanel({
       <div className="flex items-center gap-2 px-4 py-3 border-b">
         <MessageCircle className="h-5 w-5 text-primary" aria-hidden="true" />
         <h3 className="font-medium">Chat with your knowledge</h3>
+        {onNewChat && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="ms-auto h-8 w-8"
+            onClick={onNewChat}
+            disabled={messages.length === 0}
+            aria-label="New chat"
+          >
+            <SquarePen className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        )}
       </div>
 
       {/* Messages with aria-live for screen readers */}
@@ -207,10 +311,8 @@ export const RAGChatPanel = memo(function RAGChatPanel({
             <div className="h-full flex items-center justify-center text-center text-muted-foreground">
               <div className="space-y-2">
                 <Sparkles className="h-10 w-10 mx-auto opacity-30" aria-hidden="true" />
-                <p className="text-sm">Start a conversation</p>
-                <p className="text-xs max-w-[200px]">
-                  Ask questions about your videos and saved content.
-                </p>
+                <p className="text-sm">{labels.libraryChatEmptyTitle}</p>
+                <p className="text-xs max-w-[200px]">{labels.libraryChatEmptyBody}</p>
               </div>
             </div>
           ) : (
@@ -226,6 +328,28 @@ export const RAGChatPanel = memo(function RAGChatPanel({
         <div ref={messagesEndRef} />
       </ScrollContainer>
 
+      {/* Action confirmation — the prompt is rendered as an assistant message
+          above; these buttons resolve the pending action. */}
+      {pendingAction && (
+        <div
+          role="group"
+          aria-label={labels.actionConfirmPrompt.replace('{action}', '')}
+          className="flex gap-2 px-4 py-3 border-t"
+        >
+          <Button type="button" size="sm" onClick={onConfirmAction}>
+            {labels.actionConfirm}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={onCancelAction}
+          >
+            {labels.actionCancel}
+          </Button>
+        </div>
+      )}
+
       {/* Input */}
       <div className="p-4 border-t">
         <form onSubmit={handleFormSubmit} className="flex gap-2 items-end">
@@ -237,8 +361,8 @@ export const RAGChatPanel = memo(function RAGChatPanel({
               resizeTextarea();
             }}
             onKeyDown={handleKeyDown}
-            aria-label={placeholder}
-            placeholder={placeholder}
+            aria-label={effectivePlaceholder}
+            placeholder={effectivePlaceholder}
             disabled={isBusy}
             rows={1}
             className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"

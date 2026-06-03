@@ -12,6 +12,7 @@ class RAGSource(BaseModel):
 
     text: str
     video_id: str  # source video — always populated from Qdrant payload
+    title: str | None = None  # video title — set in library mode so the chip can label by title
     text_original: str | None = None  # Original-language transcript text (transcript-source only today)
     timestamp: str | None = None
     score: float = 0.0
@@ -25,7 +26,7 @@ class RAGSource(BaseModel):
 class ChatEvent(BaseModel):
     """A single SSE event in a chat stream."""
 
-    type: Literal["text", "source", "tool_result", "error", "done"]
+    type: Literal["text", "source", "tool", "tool_result", "error", "done"]
     content: str = ""
     sources: list[RAGSource] | None = None
     metadata: dict[str, Any] | None = None

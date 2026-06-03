@@ -208,7 +208,7 @@ describe('RAGChatPanel', () => {
         />
       );
 
-      expect(screen.getByText('Sources')).toBeInTheDocument();
+      expect(screen.getByText(/Sources \(\d+\)/)).toBeInTheDocument();
       expect(screen.getByText('Source Video')).toBeInTheDocument();
     });
 
@@ -258,6 +258,103 @@ describe('RAGChatPanel', () => {
       fireEvent.click(jumpButton);
 
       expect(onSeek).toHaveBeenCalledWith(60);
+    });
+  });
+
+  describe('library-mode sources', () => {
+    it('should render a navigable YouTube chip when youtubeId is set and no onSeek', () => {
+      render(
+        <RAGChatPanel
+          {...defaultProps}
+          messages={[
+            createMessage({
+              role: 'assistant',
+              content: 'Cross-video answer.',
+              sources: [
+                {
+                  title: 'Library Video',
+                  youtubeId: 'lib123',
+                  timestampSeconds: 42,
+                },
+              ],
+            }),
+          ]}
+        />
+      );
+
+      const link = screen.getByRole('link', { name: /library video/i });
+      expect(link).toHaveAttribute(
+        'href',
+        'https://www.youtube.com/watch?v=lib123&t=42s'
+      );
+    });
+
+    it('should not render a seek button for library sources', () => {
+      render(
+        <RAGChatPanel
+          {...defaultProps}
+          messages={[
+            createMessage({
+              role: 'assistant',
+              content: 'Cross-video answer.',
+              sources: [
+                { title: 'Library Video', youtubeId: 'lib123', timestampSeconds: 42 },
+              ],
+            }),
+          ]}
+        />
+      );
+
+      expect(screen.queryByRole('button', { name: /jump to/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('action confirmation', () => {
+    it('should not render confirm/cancel buttons when no action is pending', () => {
+      render(<RAGChatPanel {...defaultProps} />);
+
+      expect(
+        screen.queryByRole('button', { name: /yes, do it/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('should render confirm and cancel buttons when an action is pending', () => {
+      render(<RAGChatPanel {...defaultProps} pendingAction />);
+
+      expect(
+        screen.getByRole('button', { name: /yes, do it/i }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    });
+
+    it('should call onConfirmAction when the confirm button is clicked', () => {
+      const onConfirmAction = vi.fn();
+      render(
+        <RAGChatPanel
+          {...defaultProps}
+          pendingAction
+          onConfirmAction={onConfirmAction}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /yes, do it/i }));
+
+      expect(onConfirmAction).toHaveBeenCalledTimes(1);
+    });
+
+    it('should call onCancelAction when the cancel button is clicked', () => {
+      const onCancelAction = vi.fn();
+      render(
+        <RAGChatPanel
+          {...defaultProps}
+          pendingAction
+          onCancelAction={onCancelAction}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(onCancelAction).toHaveBeenCalledTimes(1);
     });
   });
 

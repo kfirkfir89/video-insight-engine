@@ -29,15 +29,59 @@ class ChatRequest(BaseModel):
     )
 
 
-ActionName = Literal["save_note", "quiz_me", "find_moment", "explain"]
+ActionName = Literal[
+    "save_note",
+    "quiz_me",
+    "find_moment",
+    "explain",
+    "generate_video",
+    "organize_library",
+    "create_folder",
+    "rename_folder",
+    "move_folder",
+    "delete_folder",
+    "move_video",
+]
 
 
 class ActionRequest(BaseModel):
-    """Request to perform an action on a video."""
+    """Request to perform an action on a video.
 
-    video_id: str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_\-]+$")
+    ``video_id`` is optional — library-scoped actions (folder management,
+    generate_video, organize_library) operate on the user's whole library
+    and carry no single video. Video-scoped actions (save_note, quiz_me,
+    find_moment, explain) require it; the dispatcher validates per-action.
+    """
+
+    video_id: VideoId | None = None
     action: ActionName
-    params: dict[str, str | int | float | bool] = Field(default_factory=dict)
+    params: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
+
+
+class LibraryVideo(BaseModel):
+    """A single video in the user's library inventory (id + title)."""
+
+    video_id: str = Field(..., min_length=1, max_length=64)
+    title: str = Field(default="", max_length=500)
+
+
+class LibraryChatRequest(BaseModel):
+    """Request to chat across a user's library of saved videos.
+
+    Auth assumption: the caller (Node api gateway) derives ``video_ids``
+    server-side from the user's owned videos and trusts the list — same
+    pattern as ``/chat`` and ``/library/search``. An EMPTY list is allowed
+    (the assistant degrades to a no-context "nothing relevant" reply).
+    """
+
+    video_ids: list[VideoId] = Field(default_factory=list, max_length=200)
+    message: str = Field(..., min_length=1, max_length=10000)
+    conversation_history: list[ChatMessage] = Field(
+        default_factory=list, max_length=50
+    )
+    # Owned-video inventory ({video_id, title}) the gateway derives server-side so
+    # the assistant can name videos by title and answer "what videos do I have?".
+    library: list[LibraryVideo] = Field(default_factory=list, max_length=200)
 
 
 class LibrarySearchRequest(BaseModel):

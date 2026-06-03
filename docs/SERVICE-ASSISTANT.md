@@ -202,9 +202,17 @@ Semantic search across a library of videos. Pure retrieval — no LLM call. Requ
 - `429` — rate limit exceeded (60/min/caller — keyed on `X-User-Id` forwarded by vie-api; falls back to a shared `anonymous` bucket if the header is absent. Separate bucket from `/chat`.)
 - `503` — RAG service not initialized (lifespan hasn't completed)
 
+### `POST /library/chat`
+
+Library-wide RAG **chat** (SSE) — answers across many videos when no single video is open. Same internal-secret + `X-User-Id`/`X-Session-Id` headers and SSE event shapes as `/chat` (`source` / `text` / `error` / `done`); each `source.video_id` is the YouTube ID so the UI can attribute/deep-link. Pairs with the retrieval-only `/library/search` above.
+
+**Request:** `{ "video_ids": ["abc123", ...], "message": "which of my videos covered hooks?", "conversation_history": [] }` — `video_ids` 0–200 (empty allowed → friendly "nothing found"); `message` 1–10000. The vie-api gateway derives `video_ids` from the user's `userVideos` server-side; the assistant trusts the list (same pattern as `/chat`).
+
+**Gateway routes (vie-api):** `POST /api/assistant/library/chat` and `/library/search` (JWT) resolve owned YouTube IDs via `getUserVideos` then forward with `X-Internal-Secret` + `X-User-Id`; `POST /api/assistant/action` (JWT) proxies to `/action`. User-scoped writes flow assistant → `POST /internal/assistant/{folders,videos,generate}` (vie-api `authenticateInternal`: `X-Internal-Secret` + `X-User-Id`) → existing services; generate goes through `videoService.createVideo` (cost reservation + dispatch-guard preserved).
+
 ### `POST /action`
 
-Structured action endpoint — dispatches to a registered tool based on `action`.
+Structured action endpoint — dispatches to a registered tool based on `action`. `video_id` is **optional** (omit for library-scoped actions). Actions: `save_note`, `quiz_me`, `find_moment`, `explain` (video-scoped) plus `generate_video`, `organize_library`, `create_folder`, `rename_folder`, `move_folder`, `delete_folder`, `move_video` (library/action channel — these call back into vie-api via the assistant `ApiClient`).
 
 **Headers**
 - `X-Internal-Secret: <secret>` — required

@@ -3,11 +3,20 @@ import fp from 'fastify-plugin';
 import fastifyJwt from '@fastify/jwt';
 import fastifyCookie from '@fastify/cookie';
 import { config } from '../config.js';
+import { UnauthorizedError } from '../utils/errors.js';
+import { isValidInternalSecret } from '../utils/internal-auth.js';
 import * as softDeleteCache from '../utils/soft-delete-cache.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    /**
+     * Internal service-to-service auth. Validates `X-Internal-Secret` against
+     * `config.INTERNAL_SECRET` and trusts the caller-supplied `X-User-Id` as the
+     * acting user (the assistant derives it from its own validated request). Used
+     * by `/internal/assistant/*` routes that existing services scope by userId.
+     */
+    authenticateInternal: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
   interface FastifyContextConfig {
     /**
@@ -89,6 +98,20 @@ async function jwt(fastify: FastifyInstance) {
         statusCode: 403,
       });
     }
+  });
+
+  fastify.decorate('authenticateInternal', async (req: FastifyRequest) => {
+    if (!isValidInternalSecret(req.headers['x-internal-secret'])) {
+      throw new UnauthorizedError('Invalid internal secret');
+    }
+
+    const userIdHeader = req.headers['x-user-id'];
+    const userId = Array.isArray(userIdHeader) ? userIdHeader[0] : userIdHeader;
+    if (!userId) {
+      throw new UnauthorizedError('Missing X-User-Id');
+    }
+
+    req.user = { userId };
   });
 }
 

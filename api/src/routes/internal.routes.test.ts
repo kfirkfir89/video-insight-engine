@@ -64,6 +64,32 @@ describe('internal routes', () => {
         expect(response.statusCode).toBe(401);
         expect(response.json()).toEqual({ error: 'Unauthorized' });
       });
+
+      it('should return 401 for a same-length-but-wrong secret (constant-time path)', async () => {
+        // Same byte length as the real secret, exercising timingSafeEqual rather
+        // than the length guard — must still be rejected.
+        const sameLengthWrong = 'x'.repeat(INTERNAL_SECRET.length);
+        expect(sameLengthWrong.length).toBe(INTERNAL_SECRET.length);
+
+        const response = await app.inject({
+          method: 'POST',
+          url: '/internal/status',
+          headers: {
+            'content-type': 'application/json',
+            'x-internal-secret': sameLengthWrong,
+          },
+          payload: {
+            type: 'video.status',
+            payload: {
+              videoSummaryId: '507f1f77bcf86cd799439011',
+              status: 'completed',
+            },
+          },
+        });
+
+        expect(response.statusCode).toBe(401);
+        expect(response.json()).toEqual({ error: 'Unauthorized' });
+      });
     });
 
     describe('video.status events', () => {

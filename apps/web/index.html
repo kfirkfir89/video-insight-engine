@@ -30,6 +30,8 @@
       @keyframes spin{to{transform:rotate(360deg)}}
       [data-theme="dark"] .loading-overlay{background-color:#1a1a1a}
       [data-theme="dark"] .loading-spinner{border-color:#404040;border-top-color:#ef4444}
+      [data-theme="lagoon"] .loading-overlay{background-color:oklch(21% 0.045 200)}
+      [data-theme="lagoon"] .loading-spinner{border-color:oklch(33% 0.04 199);border-top-color:oklch(70% 0.17 35)}
     </style>
     <!-- Preconnect to YouTube domains for faster video loading -->
     <link rel="preconnect" href="https://www.youtube.com" crossorigin />
@@ -44,6 +46,8 @@
         var theme = localStorage.getItem('vie-theme');
         if (theme === 'light') {
           document.documentElement.dataset.theme = 'light';
+        } else if (theme === 'lagoon') {
+          document.documentElement.dataset.theme = 'lagoon';
         } else if (theme === 'system' || !theme) {
           // System mode or no preference: check OS preference
           if (window.matchMedia('(prefers-color-scheme: dark)').matches) {

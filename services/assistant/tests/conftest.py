@@ -111,6 +111,25 @@ def mock_rag(sample_rag_sources):
 
 
 @pytest.fixture
+def mock_api_client():
+    """AsyncMock stand-in for the vie-api ApiClient.
+
+    Every method returns a benign default so tools under test only need to
+    assert which endpoint method was awaited, not stub each one.
+    """
+    client = AsyncMock()
+    client.list_folders.return_value = []
+    client.create_folder.return_value = {"id": "folder-1", "name": "New Folder"}
+    client.update_folder.return_value = {"id": "folder-1", "name": "Renamed"}
+    client.move_folder.return_value = {"id": "folder-1", "name": "Moved"}
+    client.delete_folder.return_value = {"deleted": True}
+    client.list_videos.return_value = []
+    client.move_video.return_value = {"moved": True}
+    client.generate_video.return_value = {"videoSummaryId": "vs-1", "status": "processing"}
+    return client
+
+
+@pytest.fixture
 def mock_settings():
     from unittest.mock import MagicMock
     s = MagicMock()
@@ -138,6 +157,25 @@ def assistant_service(mock_video_repo, mock_rag, mock_llm, mock_settings):
         video_repo=mock_video_repo,
         context_builder=ContextBuilder(),
         settings=mock_settings,
+    )
+
+
+@pytest.fixture
+def agentic_assistant_service(
+    mock_video_repo, mock_rag, mock_llm, mock_settings, mock_api_client,
+):
+    """AssistantService with an injected api_client so library_chat runs the
+    agentic tool-calling loop instead of degrading to a plain stream."""
+    from src.services.assistant import AssistantService
+    from src.services.context_builder import ContextBuilder
+
+    return AssistantService(
+        llm=mock_llm,
+        rag=mock_rag,
+        video_repo=mock_video_repo,
+        context_builder=ContextBuilder(),
+        settings=mock_settings,
+        api_client=mock_api_client,
     )
 
 

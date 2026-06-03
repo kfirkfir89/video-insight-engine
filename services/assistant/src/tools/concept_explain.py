@@ -23,7 +23,7 @@ Instructions:
 - Provide a clear, thorough explanation of the concept.
 - Use examples from the video when available.
 - Break down complex ideas into digestible parts.
-- Reference timestamps in [MM:SS] format where relevant.
+- Reference a timestamp in [MM:SS] format only when one is shown in the context; never invent one.
 - If the concept is not covered in the video, explain it generally \
 and note it was not directly discussed."""
 
@@ -58,7 +58,7 @@ class ConceptExplainTool:
 
         rag_sources = await self._rag.search(
             query=concept,
-            video_id=video_id,
+            video_id=video_ctx.youtube_id,
             top_k=_MAX_CONTEXT_CHUNKS,
         )
 

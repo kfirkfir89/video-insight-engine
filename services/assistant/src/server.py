@@ -21,11 +21,17 @@ from llm_common.sentry_init import init_sentry_from_settings
 from src.config import settings, validate_internal_secret
 from src.exceptions import AppError, NotFoundError, ValidationError
 from src.logging_config import configure_structlog, get_logger
-from src.models.requests import ActionRequest, ChatRequest, LibrarySearchRequest
+from src.models.requests import (
+    ActionRequest,
+    ChatRequest,
+    LibraryChatRequest,
+    LibrarySearchRequest,
+)
 from src.models.responses import ActionResponse
 from src.repositories.notes_repository import NotesRepository
 from src.repositories.qdrant_repository import QdrantRepository
 from src.repositories.video_repository import MongoVideoRepository
+from src.services.api_client import ApiClient
 from src.services.assistant import AssistantService
 from src.services.context_builder import ContextBuilder
 from src.services.llm_provider import LLMProvider
@@ -33,9 +39,12 @@ from src.services.observability import flush_langfuse, init_langfuse
 from src.services.rag import RAGService
 from src.tools.concept_explain import ConceptExplainTool
 from src.tools.cross_reference import CrossReferenceTool
+from src.tools.folder_organizer import FolderOrganizerTool
+from src.tools.library_organizer import LibraryOrganizerTool
 from src.tools.navigator import NavigatorTool
 from src.tools.note_taker import NoteTakerTool
 from src.tools.quiz_generator import QuizGeneratorTool
+from src.tools.video_generator import VideoGeneratorTool
 from src.tools.video_qa import VideoQATool
 
 # Configure structured logging before anything else
@@ -142,13 +151,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         import litellm
         from llm_common import MongoDBUsageCallback
 
-        usage_callback = MongoDBUsageCallback(db, service="assistant", mode="sync")
+        # Async mode: this service uses Motor (async). Sync mode would hand the
+        # SyncBuffer's background thread a Motor collection, whose insert_many
+        # needs the event loop -> "no current event loop in thread" on flush.
+        usage_callback = MongoDBUsageCallback(db, service="assistant", mode="async")
+        await usage_callback.start_async()
         litellm.callbacks = [usage_callback]
-        logger.info("llm_usage_callback_registered", mode="sync")
+        logger.info("llm_usage_callback_registered", mode="async")
     except ImportError:
         logger.warning("llm_common_not_installed_usage_tracking_disabled")
     except Exception as exc:
         logger.warning("llm_usage_callback_failed", error=str(exc))
+
+    # Outbound vie-api client for folder/library actions (reuses INTERNAL_SECRET).
+    api_client = ApiClient(settings.VIE_API_URL, settings.INTERNAL_SECRET)
+    app.state.api_client = api_client
 
     # Assemble services
     llm = LLMProvider()
@@ -160,6 +177,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         video_repo=video_repo,
         context_builder=context_builder,
         settings=settings,
+        api_client=api_client,
     )
 
     # Register tools — uses primary (Sonnet) by default; quiz uses fast tier internally.
@@ -169,6 +187,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     assistant_service.register_tool(NoteTakerTool(notes_repo=notes_repo))
     assistant_service.register_tool(ConceptExplainTool(rag=rag_service, llm=llm))
     assistant_service.register_tool(CrossReferenceTool(rag=rag_service, llm=llm))
+    # vie-api-backed action tools (folders, library organize, generate).
+    assistant_service.register_tool(FolderOrganizerTool(api_client))
+    assistant_service.register_tool(LibraryOrganizerTool(api_client, llm))
+    assistant_service.register_tool(VideoGeneratorTool(api_client))
 
     app.state.assistant_service = assistant_service
     # Expose rag_service directly for /library/search (no LLM needed).
@@ -180,10 +202,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Cleanup
     await flush_langfuse()
+    await api_client.aclose()
     mongo_client.close()
     if usage_callback:
         try:
-            usage_callback.shutdown_sync()
+            await usage_callback.shutdown_async()
         except Exception as exc:
             logger.warning("callback_shutdown_failed", error=str(exc))
 
@@ -273,6 +296,55 @@ def create_app() -> FastAPI:
             },
         )
 
+    @application.post("/library/chat", response_model=None)
+    async def library_chat(
+        request: LibraryChatRequest,
+        req: Request,
+        x_internal_secret: str = Header(..., alias="X-Internal-Secret"),
+    ) -> StreamingResponse | JSONResponse:
+        """Stream a library-wide chat response across the user's videos via SSE.
+
+        Trusts the caller (vie-api) to derive ``video_ids`` server-side from the
+        user's owned videos. Same SSE event shapes as ``/chat``.
+        """
+        if not hmac.compare_digest(x_internal_secret, settings.INTERNAL_SECRET):
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        # Bucket per upstream user so the per-LLM-call limit can't be bypassed
+        # by varying the video_ids set; shared "anonymous" bucket as fallback.
+        user_id = req.headers.get("X-User-Id")
+        rate_key = user_id or "anonymous"
+        if _check_rate_limit(rate_key):
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": "Rate limit exceeded — try again shortly",
+                    "code": "RATE_LIMIT_EXCEEDED",
+                },
+            )
+
+        service: AssistantService | None = getattr(req.app.state, "assistant_service", None)
+        if service is None:
+            raise HTTPException(status_code=503, detail="Service not ready")
+
+        session_id = req.headers.get("X-Session-Id")
+
+        return StreamingResponse(
+            service.library_chat(
+                video_ids=list(request.video_ids),
+                message=request.message,
+                history=request.conversation_history,
+                user_id=user_id,
+                session_id=session_id,
+                inventory=[lv.model_dump() for lv in request.library],
+            ),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
     @application.post("/library/search")
     async def library_search(
         request: LibrarySearchRequest,
@@ -332,7 +404,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=403, detail="Forbidden")
 
         user_id = req.headers.get("X-User-Id")
-        rate_key = user_id or request.video_id
+        rate_key = user_id or request.video_id or "anonymous"
         if _check_action_rate_limit(rate_key):
             return JSONResponse(
                 status_code=429,

@@ -182,3 +182,30 @@ class TestDomainConfigModule:
         for tag, filename in config["enrichment"].items():
             prompt_path = prompts_dir / filename
             assert prompt_path.exists(), f"Enrichment prompt '{filename}' for tag '{tag}' not found at {prompt_path}"
+
+
+class TestSiblingDataSources:
+    """Registry helpers that power the assembly in-domain sibling fallback."""
+
+    def test_datasources_for_component_priority_order(self):
+        from src.shared_config.domain_config import datasources_for_component
+        # tech lists `code` (tech.snippets) before `patterns` (tech.patterns),
+        # both backing code_playground — defaultTabs order IS the priority.
+        assert datasources_for_component("tech", "code_playground") == [
+            "tech.snippets", "tech.patterns",
+        ]
+
+    def test_datasources_for_component_unknown_returns_empty(self):
+        from src.shared_config.domain_config import datasources_for_component
+        assert datasources_for_component("tech", "no_such_component") == []
+        assert datasources_for_component("no_such_domain", "code_playground") == []
+
+    def test_sibling_datasources_excludes_self(self):
+        from src.shared_config.domain_config import sibling_datasources
+        assert sibling_datasources("tech", "tech.patterns") == ["tech.snippets"]
+        assert sibling_datasources("tech", "tech.snippets") == ["tech.patterns"]
+
+    def test_sibling_datasources_unregistered_field_returns_empty(self):
+        from src.shared_config.domain_config import sibling_datasources
+        # tech.topics is a valid extraction field but NOT a registered defaultTab.
+        assert sibling_datasources("tech", "tech.topics") == []

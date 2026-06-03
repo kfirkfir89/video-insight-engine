@@ -141,6 +141,115 @@ class TestActionEndpoint:
         assert response.status_code == 403
 
 
+class TestLibraryChatEndpoint:
+    """POST /library/chat endpoint tests."""
+
+    async def test_should_return_sse_stream_when_valid_request(self, app_client):
+        # Arrange — the conftest AsyncMock returns a coroutine, not a generator,
+        # so install a real async-generator library_chat for streaming.
+        from src.server import app
+
+        async def _mock_library_chat(*_args, **_kwargs):
+            yield 'data: {"type": "text", "content": "Across your library"}\n\n'
+            yield 'data: {"type": "done", "content": ""}\n\n'
+
+        app.state.assistant_service.library_chat = _mock_library_chat
+
+        payload = {"video_ids": ["v1", "v2"], "message": "What did I learn?"}
+
+        # Act
+        response = await app_client.post("/library/chat", json=payload)
+
+        # Assert
+        assert response.status_code == 200
+        assert "text/event-stream" in response.headers["content-type"]
+
+    async def test_should_allow_empty_video_ids(self, app_client):
+        # Arrange
+        from src.server import app
+
+        async def _mock_library_chat(*_args, **_kwargs):
+            yield 'data: {"type": "done", "content": ""}\n\n'
+
+        app.state.assistant_service.library_chat = _mock_library_chat
+
+        payload = {"video_ids": [], "message": "Anything?"}
+
+        # Act
+        response = await app_client.post("/library/chat", json=payload)
+
+        # Assert — empty list is allowed (degrades to no-context reply).
+        assert response.status_code == 200
+
+    async def test_should_forward_ids_message_and_headers_to_service(self):
+        """``video_ids``/``X-User-Id``/``X-Session-Id`` must reach
+        ``AssistantService.library_chat``."""
+        from httpx import ASGITransport, AsyncClient
+        from src.server import app
+
+        captured: dict = {}
+
+        async def _spy_library_chat(*, video_ids, message, history, user_id, session_id, **_):
+            captured["video_ids"] = video_ids
+            captured["message"] = message
+            captured["user_id"] = user_id
+            captured["session_id"] = session_id
+            yield 'data: {"type": "done", "content": ""}\n\n'
+
+        spy_service = AsyncMock()
+        spy_service.library_chat = _spy_library_chat
+        app.state.assistant_service = spy_service
+
+        transport = ASGITransport(app=app)
+        try:
+            async with AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                headers={
+                    "X-Internal-Secret": "dev-internal-secret-change-me",
+                    "X-User-Id": "user-77",
+                    "X-Session-Id": "sess-xyz",
+                },
+            ) as client:
+                resp = await client.post(
+                    "/library/chat",
+                    json={"video_ids": ["v1", "v2"], "message": "compare them"},
+                )
+                assert resp.status_code == 200
+                _ = resp.content
+        finally:
+            app.state.assistant_service = None
+
+        assert captured.get("video_ids") == ["v1", "v2"]
+        assert captured.get("message") == "compare them"
+        assert captured.get("user_id") == "user-77"
+        assert captured.get("session_id") == "sess-xyz"
+
+    async def test_should_return_422_when_message_missing(self, app_client):
+        payload = {"video_ids": ["v1"]}
+        response = await app_client.post("/library/chat", json=payload)
+        assert response.status_code == 422
+
+    async def test_should_return_422_when_too_many_video_ids(self, app_client):
+        payload = {"video_ids": [f"v{i}" for i in range(201)], "message": "hi"}
+        response = await app_client.post("/library/chat", json=payload)
+        assert response.status_code == 422
+
+    async def test_should_return_422_when_video_id_invalid_chars(self, app_client):
+        payload = {"video_ids": ["bad/id"], "message": "hi"}
+        response = await app_client.post("/library/chat", json=payload)
+        assert response.status_code == 422
+
+    async def test_should_return_403_when_internal_secret_wrong(self, app_client):
+        payload = {"video_ids": ["v1"], "message": "hi"}
+        response = await app_client.post(
+            "/library/chat",
+            json=payload,
+            headers={"X-Internal-Secret": "wrong-secret"},
+        )
+        assert response.status_code == 403
+
+
 class TestLibrarySearchEndpoint:
     """POST /library/search endpoint tests."""
 

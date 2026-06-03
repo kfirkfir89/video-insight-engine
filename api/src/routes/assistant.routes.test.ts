@@ -332,5 +332,19 @@ describe('assistant routes', () => {
       }
       expect(mockContainer.assistantClient.action).toHaveBeenCalledTimes(actions.length);
     });
+
+    it('should reject params exceeding the shared value length cap', async () => {
+      mockContainer.videoRepository.userHasAccessToSummary.mockResolvedValue(true);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/videos/${validVideoSummaryId}/action`,
+        headers: { authorization: authHeader },
+        payload: { action: 'save_note', params: { text: 'x'.repeat(4001) } },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mockContainer.assistantClient.action).not.toHaveBeenCalled();
+    });
   });
 });

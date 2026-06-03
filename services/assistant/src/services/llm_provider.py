@@ -6,8 +6,10 @@ with built-in fallbacks, retries, and streaming support.
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass, field
 from typing import Any
 
 from litellm import acompletion, completion_cost
@@ -26,6 +28,19 @@ from src.services.observability import log_generation
 
 logger = get_logger(__name__)
 
+
+@dataclass
+class ToolCompletion:
+    """Result of a tool-enabled completion.
+
+    ``content`` is the model's natural-language reply (``None`` when the model
+    chose to call tools instead). ``tool_calls`` is a parsed list of
+    ``{"id", "name", "arguments"}`` dicts — empty when the model produced a
+    plain answer.
+    """
+
+    content: str | None = None
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
 
 
 class LLMProvider:
@@ -130,11 +145,92 @@ class LLMProvider:
             )
             raise LLMError(f"LLM authentication failed: {exc}") from exc
 
+    async def complete_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        max_tokens: int = 2000,
+        *,
+        span_name: str | None = None,
+        span_metadata: dict[str, Any] | None = None,
+    ) -> ToolCompletion:
+        """Generate a completion that may call tools (LLM function-calling).
+
+        Calls ``acompletion`` with the same kwargs as
+        :meth:`complete_with_messages` plus ``tools`` and ``tool_choice="auto"``,
+        letting the model either answer directly or request tool calls.
+
+        Args:
+            messages: List of message dicts with role and content.
+            tools: OpenAI-format function schemas.
+            max_tokens: Maximum tokens in response.
+            span_name: When non-None, record the call as a Langfuse generation.
+            span_metadata: Extra metadata merged into the generation span.
+
+        Returns:
+            A :class:`ToolCompletion` with ``content`` (text reply or ``None``)
+            and parsed ``tool_calls`` (empty when the model answered directly).
+
+        Raises:
+            LLMError: On any LLM provider failure.
+        """
+        kwargs: dict[str, Any] = {
+            "model": self._model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "timeout": self._timeout,
+            "num_retries": self._num_retries,
+            "tools": tools,
+            "tool_choice": "auto",
+        }
+        if self._fallback_models:
+            kwargs["fallbacks"] = self._fallback_models
+
+        try:
+            start_monotonic = time.monotonic()
+            response = await acompletion(**kwargs)
+            latency_ms = int((time.monotonic() - start_monotonic) * 1000)
+            choice = response.choices[0]
+            message = choice.message
+            content = message.content or None
+            tool_calls = _parse_tool_calls(getattr(message, "tool_calls", None))
+            if span_name:
+                usage = getattr(response, "usage", None)
+                self._log_generation_safe(
+                    span_name=span_name,
+                    msg_dicts=messages,
+                    content=content or "",
+                    input_tokens=getattr(usage, "prompt_tokens", 0) if usage else 0,
+                    output_tokens=getattr(usage, "completion_tokens", 0) if usage else 0,
+                    cost_usd=_safe_completion_cost(response=response),
+                    latency_ms=latency_ms,
+                    finish_reason=choice.finish_reason,
+                    extra_metadata={"toolCallCount": len(tool_calls), **(span_metadata or {})},
+                )
+            return ToolCompletion(content=content, tool_calls=tool_calls)
+        except (RateLimitError, Timeout, LiteLLMServiceUnavailable, APIError) as exc:
+            logger.error(
+                "llm_tool_completion_failed",
+                model=self._model,
+                provider=self._extract_provider(self._model),
+                error=str(exc),
+            )
+            raise LLMError(f"LLM tool completion failed: {exc}") from exc
+        except AuthenticationError as exc:
+            logger.error(
+                "llm_auth_error_tools",
+                provider=self._extract_provider(self._model),
+                error=str(exc),
+            )
+            raise LLMError(f"LLM authentication failed: {exc}") from exc
+
     async def stream_with_messages(
         self,
         messages: list[dict],
         max_tokens: int = 2000,
         *,
+        tools: list[dict] | None = None,
+        tool_choice: str | None = None,
         span_name: str | None = None,
         span_metadata: dict[str, Any] | None = None,
     ) -> AsyncGenerator[str, None]:
@@ -143,6 +239,12 @@ class LLMProvider:
         Args:
             messages: List of message dicts with role and content.
             max_tokens: Maximum tokens in response.
+            tools: When the conversation references prior tool calls, the same
+                tool schemas must be re-declared or Anthropic rejects the
+                request (400). Pair with ``tool_choice="none"`` to forbid
+                further calls and force a final text answer.
+            tool_choice: Tool-selection mode (e.g. ``"none"``); only applied
+                when ``tools`` is provided.
             span_name: When non-None, record the stream as a Langfuse generation
                 on completion. ``stream_options={"include_usage": True}`` is
                 added so OpenAI/compatible providers emit a final usage chunk;
@@ -163,6 +265,10 @@ class LLMProvider:
             "num_retries": self._num_retries,
             "stream": True,
         }
+        if tools is not None:
+            kwargs["tools"] = tools
+            if tool_choice is not None:
+                kwargs["tool_choice"] = tool_choice
         if self._fallback_models:
             kwargs["fallbacks"] = self._fallback_models
         if span_name:
@@ -281,6 +387,37 @@ class LLMProvider:
         except LLMError:
             # complete_with_messages already logs the detailed error
             return None
+
+
+def _parse_tool_calls(raw_calls: Any) -> list[dict[str, Any]]:
+    """Normalise LiteLLM ``message.tool_calls`` into plain dicts.
+
+    Each returned item is ``{"id", "name", "arguments"}`` where ``arguments``
+    is the parsed JSON object from ``fn.arguments`` (``{}`` on empty/invalid
+    JSON, so a malformed call surfaces to the model as empty args rather than
+    crashing the loop). Returns ``[]`` for ``None``/empty input.
+    """
+    if not raw_calls:
+        return []
+    parsed: list[dict[str, Any]] = []
+    for call in raw_calls:
+        fn = getattr(call, "function", None)
+        if fn is None:
+            continue
+        try:
+            arguments = json.loads(fn.arguments or "{}")
+        except (json.JSONDecodeError, TypeError):
+            arguments = {}
+        if not isinstance(arguments, dict):
+            arguments = {}
+        parsed.append(
+            {
+                "id": getattr(call, "id", None),
+                "name": fn.name,
+                "arguments": arguments,
+            }
+        )
+    return parsed
 
 
 def _safe_completion_cost(
