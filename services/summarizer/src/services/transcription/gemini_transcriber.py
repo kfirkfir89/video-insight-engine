@@ -27,6 +27,7 @@ from src.models.schemas import (
 )
 from src.exceptions import TranscriptError
 from src.services.media.download_utils import download_youtube_audio
+from src.services.transcription.usage import emit_transcription_usage
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,16 @@ Rules:
 
 Return ONLY the JSON array, no markdown formatting or explanation.
 Example: [{"text": "Never gonna give you up, never gonna let you down", "startMs": 0, "endMs": 25000}]"""
+
+
+def _usage_token(usage_md: object, attr: str) -> int:
+    """Read an int token count off ``usage_metadata``, type-guarded.
+
+    A missing field or a bare ``MagicMock`` (in tests) yields 0 rather than a
+    Mock that would blow up ``int()`` downstream.
+    """
+    value = getattr(usage_md, attr, 0)
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
 
 
 def _get_mime_type(audio_path: Path) -> str:
@@ -413,6 +424,12 @@ async def transcribe_with_gemini(
             ),
         )
 
+        # Real token counts for the usage ledger (google.genai bypasses
+        # LiteLLM, so this is the only place the cost is observable).
+        usage_md = getattr(response, "usage_metadata", None)
+        tokens_in = _usage_token(usage_md, "prompt_token_count")
+        tokens_out = _usage_token(usage_md, "candidates_token_count")
+
         # Safely extract response text — response.text raises ValueError
         # when Gemini returns no candidates (blocked content, empty audio, etc.)
         try:
@@ -494,12 +511,29 @@ async def transcribe_with_gemini(
             len(raw_text), len(segments),
         )
 
+        emit_transcription_usage(
+            provider="google",
+            model=model_name,
+            feature="summarize:transcript:gemini",
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            success=True,
+        )
+
         return NormalizedTranscript(
             text=raw_text,
             segments=segments,
             source="gemini",
         )
 
+    except Exception:
+        emit_transcription_usage(
+            provider="google",
+            model=_get_gemini_model(),
+            feature="summarize:transcript:gemini",
+            success=False,
+        )
+        raise
     finally:
         # Clean up remote Gemini file (best effort).
         if upload_result is not None:

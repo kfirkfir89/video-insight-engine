@@ -196,6 +196,79 @@ export interface GrantCreditResponse {
   effectiveUsd: number;
 }
 
+// --- Run-grouped usage types (GET /usage/by-run) ---
+
+export interface RunCallSummary {
+  id: string;
+  feature: string | null;
+  model: string | null;
+  cost_usd: number;
+  tokens_in: number | null;
+  tokens_out: number | null;
+  duration_ms: number | null;
+  success: boolean | null;
+  timestamp: string;
+  /** Cost unit: "tokens" (default) or "audio_seconds" for transcription rows. */
+  unit?: string | null;
+  /** Billed audio duration in seconds, for transcription rows. */
+  audio_seconds?: number | null;
+}
+
+export interface RunSummary {
+  request_id: string | null;
+  video_id: string | null;
+  video_summary_id: string | null;
+  user_id: string | null;
+  first_call: string;
+  last_call: string;
+  total_cost_usd: number;
+  call_count: number;
+  regen_ordinal: number | null;
+  /** Direct link to this run's Langfuse trace, resolved server-side. Null when unconfigured/unresolvable. */
+  langfuse_url: string | null;
+  calls: RunCallSummary[];
+}
+
+// --- User-360 activity types (GET /users/{id}/activity) ---
+
+export interface UserVideoRow {
+  userVideoId: string;
+  videoSummaryId: string;
+  youtubeId: string;
+  title: string | null;
+  channel: string | null;
+  duration: number | null;
+  thumbnailUrl: string | null;
+  status: string | null;
+  addedAt: string | null;
+}
+
+export interface UserAssistantCallRow {
+  id: string;
+  feature: string | null;
+  videoId: string | null;
+  model: string | null;
+  costUsd: number;
+  tokensIn: number | null;
+  tokensOut: number | null;
+  requestId: string | null;
+  timestamp: string;
+}
+
+export interface UserCostTimelineRow {
+  date: string;
+  totalCostUsd: number;
+  creditAdjustmentUsd: number;
+  effectiveUsd: number;
+}
+
+export interface UserActivityResponse {
+  userId: string;
+  videos: UserVideoRow[];
+  assistantCalls: UserAssistantCallRow[];
+  costTimeline: UserCostTimelineRow[];
+}
+
 export interface QueueStatsResponse {
   main: {
     messages: number;
@@ -222,6 +295,8 @@ export const api = {
     recent: (limit = 20, beforeId?: string) => apiFetch<Array<Record<string, unknown>>>(`/usage/recent${qs({ limit, before_id: beforeId })}`),
     duplicates: (days = 7) => apiFetch<Array<Record<string, unknown>>>(`/usage/duplicates${qs({ days })}`),
     byOutputType: (days = 30) => apiFetch<OutputTypeUsage[]>(`/usage/by-output-type${qs({ days })}`),
+    byRun: (days = 30, limit = 20, offset = 0) =>
+      apiFetch<RunSummary[]>(`/usage/by-run${qs({ days, limit, offset })}`),
   },
   shares: {
     top: (days = 30, limit = 10) => apiFetch<ShareItem[]>(`/shares/top${qs({ days, limit })}`),
@@ -261,6 +336,8 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       }),
+    activity: (userId: string) =>
+      apiFetch<UserActivityResponse>(`/users/${encodeURIComponent(userId)}/activity`),
   },
   queue: {
     stats: () => apiFetch<QueueStatsResponse>('/queue/stats'),

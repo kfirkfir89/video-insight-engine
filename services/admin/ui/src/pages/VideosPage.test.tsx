@@ -43,6 +43,12 @@ describe('VideosPage', () => {
     expect(typeof VideosPage).toBe('function');
   });
 
+  it('should import formatDateTime from format module (tz-aware timestamps)', async () => {
+    // Verify the format module exports formatDateTime (used in the page)
+    const mod = await import('../lib/format');
+    expect(typeof mod.formatDateTime).toBe('function');
+  });
+
   it('should filter table rows by title substring', () => {
     vi.mocked(useUsageByVideo).mockReturnValue({
       data: [

@@ -1,8 +1,15 @@
 """Tests for llm_common.models."""
 
 from datetime import UTC, datetime
+from unittest.mock import patch
 
-from llm_common.models import UsageRecord, extract_provider
+import pytest
+
+from llm_common.models import (
+    UsageRecord,
+    compute_transcription_cost_usd,
+    extract_provider,
+)
 
 
 def test_extract_provider_with_slash():
@@ -52,3 +59,65 @@ def test_usage_record_model_dump():
     assert "model" in d
     assert "provider" in d
     assert "timestamp" in d
+
+
+# ─── Transcription unit fields (Phase 0.5) ───
+
+
+def test_usage_record_unit_defaults_to_tokens():
+    """Existing token rows are unchanged: unit/audio_seconds have safe defaults."""
+    record = UsageRecord(model="whisper-1", provider="openai")
+    assert record.unit == "tokens"
+    assert record.audio_seconds == 0.0
+    d = record.model_dump()
+    assert d["unit"] == "tokens"
+    assert d["audio_seconds"] == 0.0
+
+
+def test_usage_record_audio_unit_round_trips():
+    record = UsageRecord(
+        model="whisper-1", provider="openai", unit="audio_seconds", audio_seconds=90.0,
+    )
+    assert record.unit == "audio_seconds"
+    assert record.model_dump()["audio_seconds"] == 90.0
+
+
+# ─── compute_transcription_cost_usd (Phase 0.5) ───
+
+
+def test_whisper_cost_is_per_minute():
+    """Whisper-1 bills $0.006/min → 60s = $0.006, 600s = $0.06."""
+    assert compute_transcription_cost_usd("whisper-1", audio_seconds=60.0) == pytest.approx(0.006)
+    assert compute_transcription_cost_usd("whisper-1", audio_seconds=600.0) == pytest.approx(0.06)
+
+
+def test_whisper_cost_ignores_tokens():
+    """Duration-priced models don't charge for tokens."""
+    cost = compute_transcription_cost_usd("whisper-1", audio_seconds=0.0, tokens_in=1000)
+    assert cost == 0.0
+
+
+def test_gemini_cost_is_per_token():
+    """Gemini transcription bills per token (input $0.30/1M + output $0.40/1M)."""
+    cost = compute_transcription_cost_usd(
+        "gemini-2.5-flash-lite", tokens_in=1_000_000, tokens_out=1_000_000,
+    )
+    assert cost == pytest.approx(0.30 + 0.40)
+
+
+def test_unmapped_transcription_model_yields_zero_and_logs_once():
+    """An unmapped model returns 0.0 and logs the drift once per model."""
+    from llm_common.models import _LOGGED_MISSING_TRANSCRIPTION_MODELS
+
+    unknown = "whisper-future-9"
+    _LOGGED_MISSING_TRANSCRIPTION_MODELS.discard(unknown)
+    try:
+        with patch("llm_common.models.logger") as mock_logger:
+            first = compute_transcription_cost_usd(unknown, audio_seconds=120.0)
+            second = compute_transcription_cost_usd(unknown, audio_seconds=120.0)
+        assert first == 0.0
+        assert second == 0.0
+        assert mock_logger.info.call_count == 1
+        assert mock_logger.info.call_args.args[0] == "transcription.rate_missing"
+    finally:
+        _LOGGED_MISSING_TRANSCRIPTION_MODELS.discard(unknown)

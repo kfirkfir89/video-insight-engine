@@ -109,6 +109,45 @@ describe('api client', () => {
     });
   });
 
+  describe('api.usage.byRun', () => {
+    it('should call /usage/by-run with days, limit, offset params', async () => {
+      const { api, setApiKey } = await import('./api');
+      setApiKey('key');
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve([]),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      await api.usage.byRun(7, 10, 0);
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/usage/by-run?days=7&limit=10&offset=0',
+        expect.anything(),
+      );
+    });
+  });
+
+  describe('api.users.activity', () => {
+    it('should call /users/{id}/activity', async () => {
+      const { api, setApiKey } = await import('./api');
+      setApiKey('key');
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ userId: 'u1', videos: [], assistantCalls: [], costTimeline: [] }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const result = await api.users.activity('user-123');
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/users/user-123/activity',
+        expect.anything(),
+      );
+      expect(result).toHaveProperty('userId', 'u1');
+    });
+  });
+
   describe('api.alerts.updateConfig', () => {
     it('should POST config as JSON body, not query string', async () => {
       const { api, setApiKey } = await import('./api');

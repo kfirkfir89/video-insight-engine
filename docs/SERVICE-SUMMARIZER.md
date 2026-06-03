@@ -245,6 +245,8 @@ The pipeline uses 3-6 LLM calls with a plan-first architecture:
     │   └─▶ 2. youtube-transcript-api (with rate limit retry)
     │   └─▶ 3. Gemini Flash (audio transcription, ~30-90s, ~$0.04/26min)
     │   └─▶ 4. OpenAI Whisper (audio fallback, ~5-15min, ~$0.16/26min)
+    │   └─▶ (audio paths 3+4 bypass LiteLLM → emit their own llm_usage cost row +
+    │        Langfuse generation via transcription/usage.py; see llm-cost-model.md)
     │   └─▶ SSE: transcript_ready event
     │
     └─▶ FRAMES (smart frame selection, non-critical)
@@ -647,6 +649,15 @@ The summarizer uses a multi-source fallback chain to maximize transcript availab
 │                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
+
+**Audio-fallback gate.** A caption-fetch failure (steps 1–2) drops to audio
+transcription for *any* error **except** genuine video-access failures
+(`VIDEO_UNAVAILABLE`, `VIDEO_RESTRICTED`, `LIVE_STREAM`), where the audio
+download would also fail. In particular a YouTube **429 (`RATE_LIMITED`)** on the
+caption API still attempts audio — the audio download is a separate, un-throttled
+endpoint. Audio fallback is additionally gated by `WHISPER_ENABLED` and
+`WHISPER_MAX_DURATION_MINUTES` (the gate lives in
+`transcript_fetcher.py`, constant `_NO_AUDIO_FALLBACK`).
 
 ### Configuration
 

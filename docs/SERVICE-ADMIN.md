@@ -40,10 +40,10 @@ Python package providing automatic LLM call tracking via LiteLLM callbacks.
 
 | Module | Purpose |
 |--------|---------|
-| `models.py` | `UsageRecord` Pydantic model (23 fields incl. `cache_creation_tokens`, `cache_read_tokens`, `cache_savings_usd`) + `compute_cache_savings_usd(model, tokens)` helper backed by `_CACHE_RATES_USD_PER_M` (Sonnet 4.5/4.6, Haiku 4.5) |
-| `context.py` | `ContextVar` for feature, request_id, video_id |
+| `models.py` | `UsageRecord` Pydantic model (25 fields incl. `cache_*`, plus `unit`/`audio_seconds` for transcription) + `compute_cache_savings_usd(model, tokens)` (backed by `_CACHE_RATES_USD_PER_M`) and `compute_transcription_cost_usd(model, ...)` (backed by `_TRANSCRIPTION_RATES_USD` — Whisper $0.006/min, Gemini per-token) helpers |
+| `context.py` | `ContextVar`s for feature, request_id, video_id, user_id, video_summary_id |
 | `buffer.py` | `SyncBuffer` (threading.Timer) + `AsyncBuffer` (asyncio) |
-| `callback.py` | `MongoDBUsageCallback(CustomLogger)` with cost alerting |
+| `callback.py` | `MongoDBUsageCallback(CustomLogger)` with cost alerting; `register_active_buffer` + `record_manual_usage(record)` for out-of-band emits (transcription bypasses LiteLLM) |
 
 Registered in:
 - `services/summarizer/src/main.py` (sync mode)
@@ -60,7 +60,8 @@ Registered in:
 | GET | `/usage/by-feature` | Cost per feature, sorted desc |
 | GET | `/usage/by-model` | Cost per model, sorted desc |
 | GET | `/usage/by-service` | Cost per service |
-| GET | `/usage/by-video` | Top videos by total cost |
+| GET | `/usage/by-video` | Top videos by total cost (latest cache version only — `isLatest` lookup avoids duplicate rows from versioned/dedup'd docs) |
+| GET | `/usage/by-run` | Pipeline runs grouped by `request_id`, newest first; each run carries `regen_ordinal` (1 = first run, 2+ = regeneration), a best-effort `langfuse_url` (direct trace deep-link, null when unconfigured/unresolvable), and child calls. Paginated (`days`, `limit`, `offset`). Rows missing `request_id` → "unattributed (legacy)" bucket |
 | GET | `/usage/video/{video_id}` | Per-video feature breakdown |
 | GET | `/usage/anomalies` | Expensive calls above threshold |
 | GET | `/usage/recent` | Cursor-based pagination (before_id) |
@@ -100,6 +101,7 @@ daily aggregates) and `userCostAdjustments` (admin audit log). See
 |--------|------|-------------|
 | GET | `/users/costs?days=7&limit=50&offset=0` | Top users by effective USD over the trailing window (joins `users` for email/name/tier) |
 | GET | `/users/{user_id}/costs?days=30` | One user's daily breakdown + last 20 audit rows |
+| GET | `/users/{user_id}/activity?days=30` | User-360: videos generated (`userVideos` join), assistant LLM calls (`llm_usage` where `user_id`), and daily cost timeline — all in one payload |
 | POST | `/users/{user_id}/grant-credit` | Apply a signed adjustment; `amountUsd > 0` grants credit (stored as negative), `< 0` is a manual charge. Validated: `|amountUsd| ≤ 1000`, `reason` 1–500 chars, optional `date` (`YYYY-MM-DD`) |
 
 **Audit caveat:** the admin service authenticates with a shared
@@ -153,6 +155,13 @@ VIE_API_URL=http://vie-api:3000
 VIE_SUMMARIZER_URL=http://vie-summarizer:8000
 VIE_ASSISTANT_URL=http://vie-assistant:8001
 ALERT_COST_THRESHOLD_USD=0.50
+# Langfuse — read-only, only to build "Open in Langfuse" run deep-links.
+# Project id auto-resolved from the keys when LANGFUSE_PROJECT_ID is blank.
+# All optional: unset → /usage/by-run simply returns langfuse_url=null.
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
+LANGFUSE_PUBLIC_KEY=
+LANGFUSE_SECRET_KEY=
+LANGFUSE_PROJECT_ID=
 ```
 
 ## Testing

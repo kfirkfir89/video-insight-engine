@@ -295,21 +295,23 @@ class AssistantService:
         previous library-chat behaviour.
         """
         if self._api is None or user_id is None:
-            async for token in self._llm.stream_with_messages(
-                messages=messages,
-                max_tokens=2000,
-                span_name="library_generation",
-            ):
-                yield self._format_sse(ChatEvent(type="text", content=token))
+            async with span("library_generation"):
+                async for token in self._llm.stream_with_messages(
+                    messages=messages,
+                    max_tokens=2000,
+                    span_name="library_generation",
+                ):
+                    yield self._format_sse(ChatEvent(type="text", content=token))
             return
 
         for _ in range(MAX_TOOL_ITERS):
-            result = await self._llm.complete_with_tools(
-                messages,
-                tools=AGENT_TOOL_SCHEMAS,
-                max_tokens=2000,
-                span_name="library_agent",
-            )
+            async with span("library_agent"):
+                result = await self._llm.complete_with_tools(
+                    messages,
+                    tools=AGENT_TOOL_SCHEMAS,
+                    max_tokens=2000,
+                    span_name="library_agent",
+                )
             if not result.tool_calls:
                 if result.content:
                     yield self._format_sse(
@@ -323,14 +325,15 @@ class AssistantService:
         # tool schemas must still be declared (``messages`` references prior
         # tool calls, which Anthropic 400s on when ``tools`` is absent) but
         # ``tool_choice="none"`` forbids further calls.
-        async for token in self._llm.stream_with_messages(
-            messages=messages,
-            max_tokens=2000,
-            tools=AGENT_TOOL_SCHEMAS,
-            tool_choice="none",
-            span_name="library_generation",
-        ):
-            yield self._format_sse(ChatEvent(type="text", content=token))
+        async with span("library_generation"):
+            async for token in self._llm.stream_with_messages(
+                messages=messages,
+                max_tokens=2000,
+                tools=AGENT_TOOL_SCHEMAS,
+                tool_choice="none",
+                span_name="library_generation",
+            ):
+                yield self._format_sse(ChatEvent(type="text", content=token))
 
     async def _execute_tool_calls(
         self,
@@ -431,13 +434,14 @@ class AssistantService:
         messages = self._build_messages(system_prompt, history, message)
 
         try:
-            async for token in self._llm.stream_with_messages(
-                messages=messages,
-                max_tokens=2000,
-                span_name="rag_generation",
-                span_metadata={"sourcesCount": len(rag_sources)},
-            ):
-                yield self._format_sse(ChatEvent(type="text", content=token))
+            async with span("rag_generation", metadata={"sourcesCount": len(rag_sources)}):
+                async for token in self._llm.stream_with_messages(
+                    messages=messages,
+                    max_tokens=2000,
+                    span_name="rag_generation",
+                    span_metadata={"sourcesCount": len(rag_sources)},
+                ):
+                    yield self._format_sse(ChatEvent(type="text", content=token))
         except Exception as exc:
             logger.error("assistant_chat_llm_error", video_id=video_id, error=str(exc))
             yield self._format_sse(ChatEvent(

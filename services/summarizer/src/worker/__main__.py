@@ -120,6 +120,45 @@ async def _declare_topology(channel: aio_pika.abc.AbstractChannel) -> None:
     await main.bind(exchange, routing_key=QueueTopology.routing_key)
 
 
+def _setup_usage_callback() -> object | None:
+    """Register the LLM usage callback so the queue path records the cost ledger.
+
+    The standalone worker does not run the FastAPI lifespan, so without this it
+    drops every ``llm_usage`` row (including transcription spend). Mirrors the
+    app wiring in ``src.main`` (sync mode, reusing the cached Mongo client).
+    Returns the callback so the caller can flush it on shutdown, or ``None`` when
+    tracking could not be set up — a setup failure must never crash the worker.
+    """
+    try:
+        import litellm
+        from llm_common import MongoDBUsageCallback
+
+        from src.dependencies import get_mongo_client
+
+        client = get_mongo_client()
+        db = client.get_default_database()
+        callback = MongoDBUsageCallback(db, service="summarizer", mode="sync")
+        litellm.callbacks = [callback]
+        logger.info("worker_llm_usage_callback_registered mode=%s", "sync")
+        return callback
+    except ImportError:
+        logger.warning("worker_llm_common_not_installed usage tracking disabled")
+        return None
+    except Exception as e:  # noqa: BLE001 - tracking must not crash the worker
+        logger.warning("worker_llm_usage_callback_failed error=%s", e)
+        return None
+
+
+def _shutdown_usage_callback(callback: object | None) -> None:
+    """Flush the sync usage buffer on worker shutdown — best-effort."""
+    if callback is None:
+        return
+    try:
+        callback.shutdown_sync()
+    except Exception as e:  # noqa: BLE001 - cleanup best-effort
+        logger.warning("worker_llm_usage_callback_shutdown_failed error=%s", e)
+
+
 def _redact_url(url: str) -> str:
     try:
         from urllib.parse import urlparse, urlunparse
@@ -156,6 +195,10 @@ async def main() -> None:
         logger.info("worker_langfuse_init enabled=%s", client is not None)
     except Exception as e:
         logger.warning("worker_langfuse_init_failed error=%s", e)
+
+    # Register the LLM usage callback so the queue path captures the full cost
+    # ledger (the worker bypasses the FastAPI lifespan that wires this in app).
+    usage_callback = _setup_usage_callback()
 
     connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
     logger.info("worker_connected url=%s", _redact_url(settings.RABBITMQ_URL))
@@ -197,6 +240,10 @@ async def main() -> None:
             c.cancel()
         await asyncio.gather(*consumers, return_exceptions=True)
         await channel_pool.close()
+
+    # Flush any buffered usage records before exit so the final jobs' cost
+    # ledger isn't lost on container stop.
+    _shutdown_usage_callback(usage_callback)
 
     # Drain Langfuse buffer so in-flight spans aren't lost on container stop.
     try:

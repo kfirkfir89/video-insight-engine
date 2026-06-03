@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useUserCosts, useUserCostDetail } from '../hooks/use-admin-api';
+import { useUserCosts, useUserCostDetail, useUserActivity } from '../hooks/use-admin-api';
 import { api, type UserCostRow } from '../lib/api';
-import { formatCost, formatNumber, timeAgo } from '../lib/format';
+import { formatCost, formatNumber, formatDateTime, formatDuration, timeAgo } from '../lib/format';
 import { Panel } from '../components/Panel';
 import { SkeletonPanel } from '../components/SkeletonPanel';
 import { ErrorState } from '../components/ErrorState';
@@ -191,20 +191,307 @@ function SortableTh({ label, active, dir, onClick }: SortableThProps) {
   );
 }
 
+type DrawerTab = 'overview' | 'videos' | 'assistant' | 'adjustments';
+
+interface TabButtonProps {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}
+
+function TabButton({ label, active, onClick }: TabButtonProps) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+        active
+          ? 'bg-[var(--color-primary)] text-white'
+          : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-dim)]'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+interface OverviewTabProps {
+  userId: string;
+}
+
+function OverviewTab({ userId }: OverviewTabProps) {
+  const { data, isLoading, isError, error, refetch } = useUserCostDetail(userId, 30);
+
+  if (isError) {
+    return <ErrorState error={error} onRetry={() => refetch()} title="Failed to load cost summary" />;
+  }
+  if (isLoading || !data) {
+    return <SkeletonPanel size="sm" count={3} />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <StatTile label="Effective" value={formatCost(data.user.effectiveUsd)} highlight />
+        <StatTile label="Raw" value={formatCost(data.user.totalCostUsd)} />
+        <StatTile label="Credit" value={formatCost(data.user.creditAdjustmentUsd)} />
+        <StatTile label="Videos" value={formatNumber(data.user.videoCount)} />
+      </div>
+
+      <section className="space-y-2">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+          Daily breakdown
+        </h4>
+        {data.daily.length === 0 ? (
+          <p className="text-xs text-[var(--color-text-muted)]">No usage in the window.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
+            <table className="w-full text-[11px]">
+              <thead className="bg-[var(--color-surface-dim)]">
+                <tr>
+                  <th className="p-2 text-left font-medium">Date</th>
+                  <th className="p-2 text-right font-medium">Effective</th>
+                  <th className="p-2 text-right font-medium">Raw</th>
+                  <th className="p-2 text-right font-medium">Credit</th>
+                  <th className="p-2 text-right font-medium">Videos</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.daily.map((row) => (
+                  <tr key={row.date} className="border-t border-[var(--color-border)]">
+                    <td className="p-2">{row.date}</td>
+                    <td className="p-2 text-right font-mono font-medium text-[var(--color-primary)]">
+                      {formatCost(row.effectiveUsd)}
+                    </td>
+                    <td className="p-2 text-right font-mono">{formatCost(row.totalCostUsd)}</td>
+                    <td className="p-2 text-right font-mono">{formatCost(row.creditAdjustmentUsd)}</td>
+                    <td className="p-2 text-right">{formatNumber(row.videoCount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+interface VideosTabProps {
+  userId: string;
+}
+
+function VideosTab({ userId }: VideosTabProps) {
+  const { data, isLoading, isError, error, refetch } = useUserActivity(userId);
+
+  if (isError) {
+    return <ErrorState error={error} onRetry={() => refetch()} title="Failed to load videos" />;
+  }
+  if (isLoading || !data) {
+    return <SkeletonPanel size="sm" count={4} />;
+  }
+
+  const videos = data.videos;
+
+  if (videos.length === 0) {
+    return (
+      <p className="text-xs text-[var(--color-text-muted)] py-4 text-center">
+        No videos generated yet.
+      </p>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
+      <table className="w-full text-[11px]">
+        <thead className="bg-[var(--color-surface-dim)]">
+          <tr>
+            <th className="p-2 text-left font-medium">Title</th>
+            <th className="p-2 text-left font-medium hidden sm:table-cell">Channel</th>
+            <th className="p-2 text-right font-medium hidden md:table-cell">Duration</th>
+            <th className="p-2 text-center font-medium">Status</th>
+            <th className="p-2 text-right font-medium hidden sm:table-cell">Added</th>
+          </tr>
+        </thead>
+        <tbody>
+          {videos.map((v) => (
+            <tr key={v.userVideoId} className="border-t border-[var(--color-border)] hover:bg-[var(--color-surface-dim)]">
+              <td className="p-2">
+                <div className="font-medium truncate max-w-[220px] text-[var(--color-text)]">
+                  {v.title ?? v.youtubeId}
+                </div>
+                <div className="text-[var(--color-text-faint)] font-mono text-[9px] truncate">
+                  {v.youtubeId}
+                </div>
+              </td>
+              <td className="p-2 hidden sm:table-cell text-[var(--color-text-muted)] truncate max-w-[120px]">
+                {v.channel ?? '—'}
+              </td>
+              <td className="p-2 text-right hidden md:table-cell text-[var(--color-text-muted)]">
+                {formatDuration(v.duration)}
+              </td>
+              <td className="p-2 text-center">
+                <span
+                  className="inline-block w-2 h-2 rounded-full"
+                  style={{
+                    background:
+                      v.status === 'completed' ? 'var(--color-success)' :
+                      v.status === 'processing' ? 'var(--color-warning)' :
+                      v.status === 'error' ? 'var(--color-danger)' :
+                      'var(--color-text-muted)',
+                  }}
+                  title={v.status ?? 'unknown'}
+                />
+              </td>
+              <td className="p-2 text-right hidden sm:table-cell text-[var(--color-text-faint)] text-[10px]">
+                {formatDateTime(v.addedAt)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+interface AssistantTabProps {
+  userId: string;
+}
+
+function AssistantTab({ userId }: AssistantTabProps) {
+  const { data, isLoading, isError, error, refetch } = useUserActivity(userId);
+
+  if (isError) {
+    return <ErrorState error={error} onRetry={() => refetch()} title="Failed to load assistant calls" />;
+  }
+  if (isLoading || !data) {
+    return <SkeletonPanel size="sm" count={4} />;
+  }
+
+  const calls = data.assistantCalls;
+
+  if (calls.length === 0) {
+    return (
+      <p className="text-xs text-[var(--color-text-muted)] py-4 text-center">
+        No assistant activity yet.
+      </p>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
+      <table className="w-full text-[11px]">
+        <thead className="bg-[var(--color-surface-dim)]">
+          <tr>
+            <th className="p-2 text-left font-medium">Feature</th>
+            <th className="p-2 text-left font-medium hidden sm:table-cell">Model</th>
+            <th className="p-2 text-right font-medium">Cost</th>
+            <th className="p-2 text-right font-medium hidden sm:table-cell">Tokens</th>
+            <th className="p-2 text-right font-medium hidden md:table-cell">When</th>
+          </tr>
+        </thead>
+        <tbody>
+          {calls.map((call) => (
+            <tr key={call.id} className="border-t border-[var(--color-border)] hover:bg-[var(--color-surface-dim)]">
+              <td className="p-2">
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-[var(--color-surface-dim)]">
+                  {call.feature ?? '—'}
+                </span>
+              </td>
+              <td className="p-2 font-mono hidden sm:table-cell truncate max-w-[120px] text-[var(--color-text-muted)]">
+                {call.model ?? '—'}
+              </td>
+              <td className="p-2 text-right font-mono font-medium text-[var(--color-primary)]">
+                {formatCost(call.costUsd)}
+              </td>
+              <td className="p-2 text-right hidden sm:table-cell text-[var(--color-text-muted)]">
+                {formatNumber((call.tokensIn ?? 0) + (call.tokensOut ?? 0))}
+              </td>
+              <td className="p-2 text-right hidden md:table-cell text-[var(--color-text-faint)] text-[10px]">
+                {formatDateTime(call.timestamp)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+interface AdjustmentsTabProps {
+  userId: string;
+}
+
+function AdjustmentsTab({ userId }: AdjustmentsTabProps) {
+  const { data, isLoading, isError, error, refetch } = useUserCostDetail(userId, 30);
+
+  if (isError) {
+    return <ErrorState error={error} onRetry={() => refetch()} title="Failed to load adjustments" />;
+  }
+  if (isLoading || !data) {
+    return <SkeletonPanel size="sm" count={2} />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <GrantCreditForm userId={userId} />
+
+      <section className="space-y-2">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+          Recent adjustments
+        </h4>
+        {data.adjustments.length === 0 ? (
+          <p className="text-xs text-[var(--color-text-muted)]">No grants or manual adjustments yet.</p>
+        ) : (
+          <ul className="space-y-1">
+            {data.adjustments.map((adj) => {
+              // Storage convention: negative = credit, positive = charge.
+              const isCredit = adj.amountUsd < 0;
+              const magnitude = Math.abs(adj.amountUsd);
+              return (
+                <li
+                  key={adj.id}
+                  className="flex items-center justify-between p-2 rounded border border-[var(--color-border)] text-xs"
+                >
+                  <div className="min-w-0">
+                    <div className="font-mono text-[var(--color-text-muted)]">
+                      {adj.date} · {timeAgo(adj.createdAt)}
+                    </div>
+                    <div className="truncate max-w-[300px] text-[var(--color-text)]">{adj.reason}</div>
+                  </div>
+                  <span
+                    className="font-mono font-bold"
+                    style={{ color: isCredit ? 'var(--color-success)' : 'var(--color-warning)' }}
+                    title={`Stored as ${formatCost(adj.amountUsd)} (negative = credit)`}
+                  >
+                    {isCredit ? `Credit ${formatCost(magnitude)}` : `Charge ${formatCost(magnitude)}`}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
 interface UserDetailDrawerProps {
   user: UserCostRow;
   onClose: () => void;
 }
 
 function UserDetailDrawer({ user, onClose }: UserDetailDrawerProps) {
-  const { data, isLoading, isError, error, refetch } = useUserCostDetail(user.userId, 30);
+  const [activeTab, setActiveTab] = useState<DrawerTab>('overview');
 
   return (
     <div
       className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="User cost detail"
+      aria-label="User detail"
       onClick={onClose}
     >
       <div
@@ -226,97 +513,23 @@ function UserDetailDrawer({ user, onClose }: UserDetailDrawerProps) {
           </button>
         </header>
 
-        <div className="p-4 space-y-4">
-          {isError ? (
-            <ErrorState error={error} onRetry={() => refetch()} title="Failed to load user detail" />
-          ) : isLoading || !data ? (
-            <SkeletonPanel size="sm" count={3} />
-          ) : (
-            <>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <StatTile label="Effective" value={formatCost(data.user.effectiveUsd)} highlight />
-                <StatTile label="Raw" value={formatCost(data.user.totalCostUsd)} />
-                <StatTile label="Credit" value={formatCost(data.user.creditAdjustmentUsd)} />
-                <StatTile label="Videos" value={formatNumber(data.user.videoCount)} />
-              </div>
+        {/* Tab bar */}
+        <div
+          className="flex gap-1 px-4 pt-3 pb-0 border-b border-[var(--color-border)]"
+          role="tablist"
+          aria-label="User detail tabs"
+        >
+          <TabButton label="Overview" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
+          <TabButton label="Videos" active={activeTab === 'videos'} onClick={() => setActiveTab('videos')} />
+          <TabButton label="Assistant" active={activeTab === 'assistant'} onClick={() => setActiveTab('assistant')} />
+          <TabButton label="Adjustments" active={activeTab === 'adjustments'} onClick={() => setActiveTab('adjustments')} />
+        </div>
 
-              <GrantCreditForm userId={user.userId} />
-
-              <section className="space-y-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-                  Daily breakdown
-                </h4>
-                {data.daily.length === 0 ? (
-                  <p className="text-xs text-[var(--color-text-muted)]">No usage in the window.</p>
-                ) : (
-                  <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
-                    <table className="w-full text-[11px]">
-                      <thead className="bg-[var(--color-surface-dim)]">
-                        <tr>
-                          <th className="p-2 text-left font-medium">Date</th>
-                          <th className="p-2 text-right font-medium">Effective</th>
-                          <th className="p-2 text-right font-medium">Raw</th>
-                          <th className="p-2 text-right font-medium">Credit</th>
-                          <th className="p-2 text-right font-medium">Videos</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.daily.map((row) => (
-                          <tr key={row.date} className="border-t border-[var(--color-border)]">
-                            <td className="p-2">{row.date}</td>
-                            <td className="p-2 text-right font-mono font-medium text-[var(--color-primary)]">
-                              {formatCost(row.effectiveUsd)}
-                            </td>
-                            <td className="p-2 text-right font-mono">{formatCost(row.totalCostUsd)}</td>
-                            <td className="p-2 text-right font-mono">{formatCost(row.creditAdjustmentUsd)}</td>
-                            <td className="p-2 text-right">{formatNumber(row.videoCount)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </section>
-
-              <section className="space-y-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-                  Recent adjustments
-                </h4>
-                {data.adjustments.length === 0 ? (
-                  <p className="text-xs text-[var(--color-text-muted)]">No grants or manual adjustments yet.</p>
-                ) : (
-                  <ul className="space-y-1">
-                    {data.adjustments.map((adj) => {
-                      // Storage convention: negative = credit, positive = charge.
-                      // Re-frame for display so the admin reads the intent, not the sign.
-                      const isCredit = adj.amountUsd < 0;
-                      const magnitude = Math.abs(adj.amountUsd);
-                      return (
-                        <li
-                          key={adj.id}
-                          className="flex items-center justify-between p-2 rounded border border-[var(--color-border)] text-xs"
-                        >
-                          <div className="min-w-0">
-                            <div className="font-mono text-[var(--color-text-muted)]">
-                              {adj.date} · {timeAgo(adj.createdAt)}
-                            </div>
-                            <div className="truncate max-w-[300px] text-[var(--color-text)]">{adj.reason}</div>
-                          </div>
-                          <span
-                            className="font-mono font-bold"
-                            style={{ color: isCredit ? 'var(--color-success)' : 'var(--color-warning)' }}
-                            title={`Stored as ${formatCost(adj.amountUsd)} (negative = credit)`}
-                          >
-                            {isCredit ? `Credit ${formatCost(magnitude)}` : `Charge ${formatCost(magnitude)}`}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </section>
-            </>
-          )}
+        <div className="p-4">
+          {activeTab === 'overview' && <OverviewTab userId={user.userId} />}
+          {activeTab === 'videos' && <VideosTab userId={user.userId} />}
+          {activeTab === 'assistant' && <AssistantTab userId={user.userId} />}
+          {activeTab === 'adjustments' && <AdjustmentsTab userId={user.userId} />}
         </div>
       </div>
     </div>
@@ -351,6 +564,7 @@ function GrantCreditForm({ userId }: GrantCreditFormProps) {
     mutationFn: async () => {
       const parsed = Number.parseFloat(amount);
       if (!Number.isFinite(parsed)) throw new Error('Enter a numeric USD amount');
+      if (Math.abs(parsed) > 1000) throw new Error('Amount must be between -1000 and 1000');
       if (!reason.trim()) throw new Error('Reason is required');
       if (adminId.trim().length !== 24) throw new Error('Admin id must be a 24-char ObjectId');
       return api.users.grantCredit(userId, {
@@ -386,8 +600,8 @@ function GrantCreditForm({ userId }: GrantCreditFormProps) {
         <input
           type="number"
           step="0.01"
-          min="-100"
-          max="100"
+          min="-1000"
+          max="1000"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           placeholder="USD (positive = credit)"
@@ -414,6 +628,9 @@ function GrantCreditForm({ userId }: GrantCreditFormProps) {
           className="px-2 py-1.5 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-mono"
         />
       </div>
+      <p className="text-[10px] text-[var(--color-text-faint)]">
+        Enter a positive amount to grant credit; charges are negative. Stored signed (negative = credit).
+      </p>
       <div className="flex items-center gap-2">
         <button
           type="submit"

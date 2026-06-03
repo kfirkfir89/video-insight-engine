@@ -31,6 +31,28 @@ describe('AssistantClient', () => {
     vi.unstubAllGlobals();
   });
 
+  describe('chat', () => {
+    it('should forward X-User-Id so the assistant attributes RAG llm_usage to the user', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        body: new ReadableStream(),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      await client.chat({
+        videoId: 'vsid-1',
+        userId: 'user-42',
+        message: 'hi',
+        requestId: 'req-9',
+      });
+
+      const sentHeaders = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+      expect(sentHeaders['X-User-Id']).toBe('user-42');
+      expect(sentHeaders['X-Request-ID']).toBe('req-9');
+    });
+  });
+
   describe('ASSISTANT_ACTIONS', () => {
     it('should be the single source of truth listing every supported action', () => {
       expect(ASSISTANT_ACTIONS).toContain('save_note');

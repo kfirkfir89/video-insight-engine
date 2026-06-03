@@ -26,6 +26,7 @@ from src.models.schemas import (
 )
 from src.exceptions import TranscriptError
 from src.services.media.download_utils import download_youtube_audio
+from src.services.transcription.usage import emit_transcription_usage
 from src.utils.language_utils import normalize_language_code
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,17 @@ CHUNK_TARGET_SIZE_MB = 24
 def _cached_audio_path(video_id: str) -> Path:
     """Deterministic cache path for audio reuse by translate step."""
     return TEMP_DIR / f"{video_id}_cached.mp3"
+
+
+def _response_duration(response: object) -> float:
+    """Billed audio seconds from a Whisper verbose_json response.
+
+    Type-guarded: a bare ``MagicMock`` (in tests) or a missing field yields
+    0.0 rather than a Mock that would blow up ``float()`` — same hazard the
+    callback's ``_safe_int`` guards against.
+    """
+    value = getattr(response, "duration", 0.0)
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0.0
 
 
 def _download_audio_sync(video_id: str) -> Path:
@@ -165,6 +177,9 @@ def _transcribe_sync(
             "text": response.text,
             "segments": segments,
             "language": detected_language,
+            # verbose_json carries the billed audio duration in seconds; used
+            # to compute Whisper cost ($0.006/min) for the usage ledger.
+            "duration": _response_duration(response),
         }
     except Exception as e:
         logger.error("Whisper transcription failed: %s", e)
@@ -246,6 +261,7 @@ def _transcribe_chunked_sync(
     all_text: list[str] = []
     all_segments: list[dict] = []
     detected_languages: list[str] = []
+    total_duration = 0.0
     client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
     for index, (chunk_path, offset_ms) in enumerate(chunks):
@@ -257,6 +273,7 @@ def _transcribe_chunked_sync(
             break
         result = _transcribe_sync(chunk_path, is_music=is_music, client=client)
         all_text.append(result["text"])
+        total_duration += float(result.get("duration") or 0.0)
         if result.get("language"):
             detected_languages.append(result["language"])
 
@@ -291,6 +308,7 @@ def _transcribe_chunked_sync(
         "text": " ".join(all_text),
         "segments": all_segments,
         "language": combined_language,
+        "duration": total_duration,
     }
 
 
@@ -357,7 +375,11 @@ def _translate_sync(audio_path: Path, client: OpenAI | None = None) -> dict:
             }
             for seg in (raw_segments or [])
         ]
-        return {"text": response.text, "segments": segments}
+        return {
+            "text": response.text,
+            "segments": segments,
+            "duration": _response_duration(response),
+        }
     except Exception as e:
         logger.error("Whisper translation failed: %s", e)
         raise TranscriptError(f"Whisper translation failed: {e}", ErrorCode.UNKNOWN_ERROR)
@@ -393,6 +415,15 @@ async def translate_audio_to_english(
 
         result = await asyncio.to_thread(_translate_sync, audio_path)
 
+        # The translate API billed by duration regardless of text content.
+        emit_transcription_usage(
+            provider="openai",
+            model="whisper-1",
+            feature="summarize:transcript:whisper_translate",
+            audio_seconds=float(result.get("duration") or 0.0),
+            success=True,
+        )
+
         if not result.get("text"):
             logger.warning("Whisper translate returned empty text for %s", video_id)
             return None
@@ -404,6 +435,12 @@ async def translate_audio_to_english(
         return result["text"]
     except Exception as e:
         logger.warning("Whisper translate failed for %s: %s", video_id, e)
+        emit_transcription_usage(
+            provider="openai",
+            model="whisper-1",
+            feature="summarize:transcript:whisper_translate",
+            success=False,
+        )
         return None
     finally:
         if owns_audio and audio_path and audio_path.exists():
@@ -501,6 +538,14 @@ async def transcribe_with_whisper(
             except Exception:
                 pass  # Not critical — translate will re-download
 
+        emit_transcription_usage(
+            provider="openai",
+            model="whisper-1",
+            feature="summarize:transcript:whisper",
+            audio_seconds=float(result.get("duration") or 0.0),
+            success=True,
+        )
+
         return NormalizedTranscript(
             text=result["text"],
             segments=segments,
@@ -508,6 +553,14 @@ async def transcribe_with_whisper(
             language=detected_language,
         )
 
+    except Exception:
+        emit_transcription_usage(
+            provider="openai",
+            model="whisper-1",
+            feature="summarize:transcript:whisper",
+            success=False,
+        )
+        raise
     finally:
         # Cleanup original audio file (skipped if moved to cache above)
         if audio_path and audio_path.exists():

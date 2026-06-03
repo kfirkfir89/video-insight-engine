@@ -24,10 +24,12 @@ To run **without** Langfuse: leave the keys blank. The pipeline behaves identica
 
 ## Trace structure
 
-One pipeline run = one trace named `pipeline:{videoSummaryId}`, tagged with `youtubeId` and `videoSummaryId`. Each LLM call attaches as a child generation with `usage` (input/output/total/cost) and `metadata` (attempt, useFastModel, modelOverride, latencyMs).
+One pipeline run = one trace named `pipeline:{videoSummaryId}`, tagged with `youtubeId`, `videoSummaryId`, and `requestId` (when present). Each LLM call attaches as a child generation with `usage` (input/output/total/cost) and `metadata` (attempt, useFastModel, modelOverride, latencyMs). Whisper/Gemini transcription bypasses LiteLLM, so it emits its own `transcription:<provider>` generation (and `llm_usage` row) via `services/summarizer/src/services/transcription/usage.py` — Whisper carries `audioSeconds` in metadata (duration-priced), Gemini carries token counts; see [llm-cost-model.md](./llm-cost-model.md#transcription-cost-tracking).
 
 ```
 Trace: pipeline:{videoSummaryId}
+├── generation: transcription:openai  model=whisper-1         audioSeconds cost  (audio-fallback only)
+├── generation: transcription:google  model=gemini-…          tokens   cost      (audio-fallback only)
 ├── generation: classifier           model=gpt-4o-mini       tokens   cost  latency
 ├── generation: plan                  model=sonnet            tokens   cost  latency
 ├── generation: extraction            model=sonnet            tokens   cost  latency
@@ -39,7 +41,13 @@ Trace: pipeline:{videoSummaryId}
 └── (assembly has no generations — pure code)
 ```
 
-For the assistant, one chat session = one trace named `chat:{videoId}` keyed by `userId`/`sessionId`. Tool runs attach as named spans (`tool:concept_explain`, `tool:quiz_generator`, …) and the RAG generation is a `rag_generation` span.
+For the assistant, one chat session = one trace named `chat:{videoId}` keyed by `userId`/`sessionId`. Tool runs attach as named spans (`tool:concept_explain`, `tool:quiz_generator`, …) and the RAG generation is a `rag_generation` span. `/action` dispatch opens its own session trace with an `action:{action}` span. The tool router owns the per-tool `llm_feature_var` (`assistant:tool:<name>`, set/reset around dispatch so siblings aren't mislabelled); endpoints set `assistant:rag_chat` / `assistant:library_chat` / `assistant:action:<action>` plus `user_id` / `video_id` / `request_id` so assistant `llm_usage` rows are attributable.
+
+### Admin "Open in Langfuse" deep-link
+
+The vie-admin **backend** resolves each pipeline-run's trace and returns a direct URL — the admin UI just renders it. `services/admin/src/services/langfuse.py` resolves the Langfuse project id from the `LANGFUSE_*` keys (auto-resolved via `/api/public/projects`, cached; or pinned with `LANGFUSE_PROJECT_ID`), then maps each run's `request_id` → its trace id by scanning recent traces' `requestId:<id>` tags in one batched `/api/public/traces` call, building `{LANGFUSE_BASE_URL}/project/{projectId}/traces/{traceId}`. `GET /usage/by-run` returns this as `langfuse_url` per run (null when unconfigured/unresolvable — e.g. assistant chat traces aren't `requestId`-tagged). The layer is best-effort: keys-missing or a timeout yields no link, never an error (read budget 9s; whole `/usage/by-run` response cached 30s).
+
+`PipelineRunsPanel` renders `run.langfuse_url` and falls back to the build-time `buildLangfuseTraceUrl` helper (`services/admin/ui/src/lib/langfuse.ts`, `VITE_LANGFUSE_*`) only when the backend returns nothing — the backend resolver is the primary path and needs no browser-exposed config.
 
 ### Reading a trace
 
@@ -167,7 +175,7 @@ Every HTTP request to the API gets a UUID v4 stamped on the `x-request-id` respo
 - **API → frontend**: header echoed on every response (set in `api/src/plugins/request-id.ts`).
 - **API → RabbitMQ**: `requestId` field on the queue payload (`api/src/services/queue-topology.ts`).
 - **API → summarizer HTTP fallback**: `X-Request-ID` header on `triggerSummarization` (`api/src/services/summarizer-client.ts`).
-- **API → assistant**: `X-Request-ID` header on `/chat` and `/action` (`api/src/services/assistant-client.ts`).
+- **API → assistant**: `X-Request-ID` + `X-User-Id` headers on `/chat`, `/library/chat`, and `/action` (`api/src/services/assistant-client.ts`). The assistant binds them onto the LLM cost-tracking ctxvars so its `llm_usage` rows carry `request_id` + `user_id` (without `X-User-Id`, RAG-chat rows land unattributed).
 - **Worker**: the runner binds `request_id`, `video_summary_id`, `youtube_id`, `user_id`, `attempt` to structlog contextvars before driving the pipeline. Every log line and Langfuse trace tag inside the pipeline carries them automatically.
 - **Assistant**: `add_request_context_middleware` reads the header (or generates one) and binds it on contextvars.
 

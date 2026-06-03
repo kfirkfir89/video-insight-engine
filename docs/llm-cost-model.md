@@ -26,8 +26,63 @@ in the hot loop.
 | `cache_hit`               | `_hidden_params.cache_hit` or `cache_read > 0`      | Either signal triggers True |
 | `cache_savings_usd`       | `compute_cache_savings_usd(model, cache_read)`      | See below |
 | `feature` / `video_id`    | `llm_feature_var` / `llm_video_id_var`              | Set by call sites via context vars |
+| `user_id`                 | `llm_user_id_var`                                   | Owner of the run; the key per-user reconciliation matches on. `None` on legacy rows |
+| `video_summary_id`        | `llm_video_summary_id_var`                          | The Mongo `videoSummaryCache` id for this run |
+| `request_id`              | `llm_request_id_var`                                | Per-run grouping key — one POST = one `request_id`; a regeneration gets a fresh one. `None` on legacy rows |
 | `service`                 | callback ctor arg                                   | `summarizer` / `assistant` / etc. |
 | `is_stream`               | `kwargs["stream"]`                                  | True when LiteLLM was streamed |
+| `unit`                    | emitter                                             | `tokens` (default) or `audio_seconds` for transcription rows |
+| `audio_seconds`           | emitter                                             | Billed audio duration for Whisper rows; `0.0` for token-priced rows |
+
+## Transcription cost tracking
+
+Whisper and Gemini transcription call provider SDKs directly (OpenAI /
+`google.genai`), bypassing LiteLLM — so `MongoDBUsageCallback` never fires for
+them. Without explicit tracking those calls are silently `$0`, which is material:
+Whisper-1 bills `$0.006/min`, so a 1-hour audio-fallback video is ~`$0.36`.
+
+The transcribers emit their own rows via `llm_common.record_manual_usage`, which
+writes through the **same active buffer** the callback owns
+(`register_active_buffer`, set in `MongoDBUsageCallback.__init__`) and fills
+run-attribution (`user_id` / `video_id` / `video_summary_id` / `request_id`) from
+the same context vars the pipeline already set — so transcription rows inherit
+the run's attribution for free. The shared emit helper
+(`services/summarizer/src/services/transcription/usage.py`) also logs a
+`transcription:<provider>` generation under the pipeline's Langfuse trace.
+
+- **Whisper** (`whisper_transcriber.py`) — `unit="audio_seconds"`,
+  `audio_seconds=response.duration`, cost via `compute_transcription_cost_usd`
+  (`$0.006/min`). Features: `summarize:transcript:whisper` /
+  `:whisper_translate`.
+- **Gemini** (`gemini_transcriber.py`) — `unit="tokens"`, token counts from
+  `response.usage_metadata`, cost via the per-token Gemini rate. Feature:
+  `summarize:transcript:gemini`.
+- A failed transcription emits `success=False`, `cost_usd=0` (failed provider
+  calls bill nothing). Tracking is best-effort and never breaks transcription.
+
+Rates live in `_TRANSCRIPTION_RATES_USD` (`models.py`); an unmapped model logs
+`transcription.rate_missing` once and costs `$0` — same drift-visibility pattern
+as `compute_cache_savings_usd`.
+
+**Billing policy:** transcription cost is **counted against the user daily cap**
+— it is real spend. Because the rows carry `cost_usd` + `user_id`, they flow into
+`reconcileUserDay` automatically with no extra wiring; no exclusion filter is
+applied. (NB: only processes that register a `MongoDBUsageCallback` emit these
+rows — the FastAPI summarizer does; the standalone RabbitMQ worker does not
+register a callback, so transcription run through the queue-only path is
+untracked, same as all other `llm_usage` on that path.)
+
+The summarizer sets `user_id`, `video_summary_id`, `video_id`, and `request_id`
+in `pipeline_runner.py` **before** the cache lookup, so every row a run writes is
+attributable. `user_id` and `request_id` come from the **structlog contextvars
+the worker binds from the queue payload** — *not* from the cache row, which is the
+cross-user `videoSummaryCache` doc and carries no per-run owner. The assistant sets
+`feature` (`assistant:rag_chat` / `assistant:library_chat` /
+`assistant:action:<action>` / `assistant:tool:<name>`), `video_id`, `user_id`, and
+`request_id` at each endpoint (from `X-User-Id` / `X-Request-ID` headers the API
+gateway forwards) and in the tool router.
+Rows written before this (no `user_id` / `request_id`) are treated as
+"unattributed (legacy)" by admin — fix-forward only, no historical backfill.
 
 ## Cache savings calculation
 

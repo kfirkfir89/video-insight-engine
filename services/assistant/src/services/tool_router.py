@@ -6,10 +6,13 @@ import re
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from llm_common.context import llm_feature_var
+
 from src.exceptions import AppError, ValidationError
 from src.logging_config import get_logger
 from src.models.responses import ChatEvent
 from src.repositories.video_repository import VideoContext
+from src.services.observability import span
 from src.tools.base import BaseTool
 
 logger = get_logger(__name__)
@@ -112,8 +115,13 @@ class ToolRouter:
 
         logger.info("tool_route", tool=tool_name, video_id=video_id)
 
+        # Attribute this tool's LLM calls to the specific tool feature, then
+        # restore the previous value — so a generation running after route()
+        # (or a sibling tool in the same request) isn't mislabelled.
+        token = llm_feature_var.set(f"assistant:tool:{tool_name}")
         try:
-            result = await tool.execute(params, context)
+            async with span(f"tool:{tool_name}"):
+                result = await tool.execute(params, context)
             yield ChatEvent(
                 type="tool_result",
                 metadata={"tool": tool_name, "result": result},
@@ -124,12 +132,14 @@ class ToolRouter:
                 type="error",
                 content=f"Tool '{tool_name}' failed: {exc.message}",
             )
-        except Exception as exc:
+        except Exception:
             logger.exception("tool_unexpected_error", tool=tool_name)
             yield ChatEvent(
                 type="error",
                 content=f"Tool '{tool_name}' encountered an error. Please try again.",
             )
+        finally:
+            llm_feature_var.reset(token)
 
         yield ChatEvent(
             type="done",
@@ -259,4 +269,11 @@ class ActionDispatcher:
             video_id=video_id,
             user_id=user_id,
         )
-        return await tool.execute(tool_params, context)
+        # Attribute this tool's LLM calls to the specific tool feature, then
+        # restore the previous value so nothing after dispatch is mislabelled.
+        token = llm_feature_var.set(f"assistant:tool:{tool_name}")
+        try:
+            async with span(f"tool:{tool_name}"):
+                return await tool.execute(tool_params, context)
+        finally:
+            llm_feature_var.reset(token)

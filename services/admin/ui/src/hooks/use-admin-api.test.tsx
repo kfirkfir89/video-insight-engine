@@ -20,6 +20,9 @@ describe('use-admin-api hooks', () => {
     expect(typeof hooks.useHealthUptime).toBe('function');
     expect(typeof hooks.useAlertsRecent).toBe('function');
     expect(typeof hooks.useAlertConfig).toBe('function');
+    // New hooks
+    expect(typeof hooks.useUsageByRun).toBe('function');
+    expect(typeof hooks.useUserActivity).toBe('function');
   });
 });
 

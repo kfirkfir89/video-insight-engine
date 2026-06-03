@@ -31,6 +31,18 @@ from src.utils.language_utils import detect_language_from_text, detect_language_
 
 logger = logging.getLogger(__name__)
 
+# Caption-fetch errors that must NOT fall back to audio transcription: genuine
+# video-access failures where the audio download would also fail. Every other
+# caption error (rate-limit 429, generic fetch errors) falls back to Whisper,
+# since audio download is a different YouTube endpoint than the caption API.
+_NO_AUDIO_FALLBACK = frozenset(
+    {
+        ErrorCode.VIDEO_UNAVAILABLE,
+        ErrorCode.VIDEO_RESTRICTED,
+        ErrorCode.LIVE_STREAM,
+    }
+)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Public API
@@ -149,12 +161,17 @@ async def fetch_transcript(
             )
         # Fall through to Whisper
     except TranscriptError as e:
-        # Priority 4: Whisper fallback for NO_TRANSCRIPT errors
-        if e.code != ErrorCode.NO_TRANSCRIPT or not settings.WHISPER_ENABLED:
+        # Priority 4: audio fallback. Whisper downloads AUDIO — a different
+        # YouTube endpoint than the throttled caption API — so transient caption
+        # failures (rate-limit 429, generic fetch errors) should still fall back
+        # to audio transcription. Only genuine video-access failures, where the
+        # audio download would also fail, abort here.
+        if e.code in _NO_AUDIO_FALLBACK or not settings.WHISPER_ENABLED:
             raise
         if duration > settings.WHISPER_MAX_DURATION_MINUTES * 60:
             logger.warning("Video too long for Whisper (%d min)", duration // 60)
             raise
+        logger.info("Caption fetch failed (%s); falling back to audio transcription", e.code.value)
 
     # Audio transcription fallback chain: Whisper (detects language) -> Gemini (fast)
     # Whisper comes first because it natively returns response.language for detection.
