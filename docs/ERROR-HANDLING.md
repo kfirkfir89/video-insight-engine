@@ -66,7 +66,7 @@ See [docs/SECURITY.md](./SECURITY.md#rate-limiting) for implementation.
 | `VIDEO_RESTRICTED`  | Age-restricted video not supported       | Requires auth      |
 | `LIVE_STREAM`       | Live streams not supported               | Is a live stream   |
 | `PROCESSING_FAILED` | Failed to process video                  | LLM/internal error |
-| `RATE_LIMITED`      | YouTube rate limited transcript fetch    | 429 from YouTube   |
+| `RATE_LIMITED`      | YouTube rate limited transcript fetch    | 429 from YouTube captions (only surfaces if audio fallback is unavailable — see SERVICE-SUMMARIZER) |
 
 ### Resource Errors (404)
 
@@ -238,6 +238,8 @@ def _is_rate_limit_error(exception: BaseException) -> bool:
     error_str = str(exception).lower()
     return any(x in error_str for x in ["429", "too many", "rate limit"])
 ```
+
+When all retries are exhausted the 429 becomes a `RATE_LIMITED` `TranscriptError`, which **falls back to audio transcription** (Whisper/Gemini) rather than failing the pipeline — the audio download is a separate, un-throttled YouTube endpoint. `RATE_LIMITED` only reaches the user when audio fallback is unavailable (`WHISPER_ENABLED=false`, video over `WHISPER_MAX_DURATION_MINUTES`, or audio transcription also fails). See the audio-fallback gate in [SERVICE-SUMMARIZER](./SERVICE-SUMMARIZER.md).
 
 ```python
 # services/summarizer/src/services/summarizer.py

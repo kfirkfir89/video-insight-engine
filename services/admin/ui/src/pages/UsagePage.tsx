@@ -2,6 +2,7 @@ import { CostChart } from '../components/CostChart';
 import { FeatureBreakdown } from '../components/FeatureBreakdown';
 import { ModelBreakdown } from '../components/ModelBreakdown';
 import { RecentCalls } from '../components/RecentCalls';
+import { PipelineRunsPanel } from '../components/PipelineRunsPanel';
 
 interface UsagePageProps {
   days?: number;
@@ -15,6 +16,7 @@ export function UsagePage({ days = 30 }: UsagePageProps = {}) {
         <ModelBreakdown days={days} />
       </div>
       <FeatureBreakdown days={days} />
+      <PipelineRunsPanel days={days} />
       <RecentCalls />
     </div>
   );

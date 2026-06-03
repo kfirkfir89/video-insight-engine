@@ -5,8 +5,16 @@ from unittest.mock import MagicMock, AsyncMock, patch
 
 import pytest
 
-from llm_common.callback import MongoDBUsageCallback
-from llm_common.context import llm_feature_var, llm_video_id_var
+import llm_common.callback as callback_module
+from llm_common.callback import MongoDBUsageCallback, record_manual_usage
+from llm_common.context import (
+    llm_feature_var,
+    llm_request_id_var,
+    llm_user_id_var,
+    llm_video_id_var,
+    llm_video_summary_id_var,
+)
+from llm_common.models import UsageRecord
 
 
 class MockResponse:
@@ -291,6 +299,176 @@ class TestCachePlumbing:
         assert record["cache_creation_tokens"] == 0
         assert record["cache_read_tokens"] == 0
         assert record["cache_savings_usd"] == 0.0
+
+
+class TestAttributionContextVars:
+    """Phase 0 — user/video_summary/request id attribution flows from ctxvars
+    onto every UsageRecord, so per-user reconciliation and run grouping match."""
+
+    def _capture_record(self, cb):
+        if cb._buffer._buffer:
+            return cb._buffer._buffer[-1]
+        last_call = cb._usage_col.insert_many.call_args
+        if last_call:
+            records = last_call.args[0] if last_call.args else last_call.kwargs.get("documents", [])
+            return records[-1]
+        raise AssertionError("No record was buffered or flushed")
+
+    def test_record_carries_attribution_from_ctxvars(self):
+        mock_db = MagicMock()
+        cb = MongoDBUsageCallback(mock_db, service="summarizer", mode="sync")
+
+        tokens = [
+            llm_feature_var.set("extraction:chapter"),
+            llm_video_id_var.set("yt_abc123"),
+            llm_user_id_var.set("user_42"),
+            llm_video_summary_id_var.set("vsum_99"),
+            llm_request_id_var.set("req_xyz"),
+        ]
+        try:
+            with patch("llm_common.callback.litellm") as mock_litellm:
+                mock_litellm.completion_cost.return_value = 0.05
+                mock_litellm.version = "1.80.0"
+                cb.log_success_event(
+                    kwargs={"model": "anthropic/claude-sonnet-4-6", "messages": [{"content": "x"}]},
+                    response_obj=MockResponse(),
+                    start_time=datetime.now(UTC),
+                    end_time=datetime.now(UTC),
+                )
+        finally:
+            llm_request_id_var.reset(tokens[4])
+            llm_video_summary_id_var.reset(tokens[3])
+            llm_user_id_var.reset(tokens[2])
+            llm_video_id_var.reset(tokens[1])
+            llm_feature_var.reset(tokens[0])
+
+        record = self._capture_record(cb)
+        assert record["feature"] == "extraction:chapter"
+        assert record["video_id"] == "yt_abc123"
+        assert record["user_id"] == "user_42"
+        assert record["video_summary_id"] == "vsum_99"
+        assert record["request_id"] == "req_xyz"
+
+    def test_record_attribution_defaults_to_none_when_unset(self):
+        """Unset ctxvars must not throw and must serialize as None — old rows
+        and the SSE-direct path that binds no user/request stay valid."""
+        mock_db = MagicMock()
+        cb = MongoDBUsageCallback(mock_db, service="summarizer", mode="sync")
+
+        with patch("llm_common.callback.litellm") as mock_litellm:
+            mock_litellm.completion_cost.return_value = 0.05
+            mock_litellm.version = "1.80.0"
+            cb.log_success_event(
+                kwargs={"model": "anthropic/claude-sonnet-4-6", "messages": [{"content": "x"}]},
+                response_obj=MockResponse(),
+                start_time=datetime.now(UTC),
+                end_time=datetime.now(UTC),
+            )
+
+        record = self._capture_record(cb)
+        assert record["user_id"] is None
+        assert record["video_summary_id"] is None
+
+
+class TestManualUsage:
+    """Phase 0.5 — record_manual_usage emits transcription-style rows that
+    bypass LiteLLM, inheriting run attribution from the context vars."""
+
+    def _capture_record(self, cb):
+        if cb._buffer._buffer:
+            return cb._buffer._buffer[-1]
+        raise AssertionError("No record was buffered")
+
+    def test_writes_through_active_buffer_with_ctxvar_attribution(self):
+        mock_db = MagicMock()
+        cb = MongoDBUsageCallback(mock_db, service="summarizer", mode="sync")
+
+        tokens = [
+            llm_video_id_var.set("yt_abc"),
+            llm_user_id_var.set("user_7"),
+            llm_video_summary_id_var.set("vsum_3"),
+            llm_request_id_var.set("req_55"),
+        ]
+        try:
+            record_manual_usage(
+                UsageRecord(
+                    model="whisper-1",
+                    provider="openai",
+                    feature="summarize:transcript:whisper",
+                    cost_usd=0.012,
+                    unit="audio_seconds",
+                    audio_seconds=120.0,
+                )
+            )
+        finally:
+            llm_request_id_var.reset(tokens[3])
+            llm_video_summary_id_var.reset(tokens[2])
+            llm_user_id_var.reset(tokens[1])
+            llm_video_id_var.reset(tokens[0])
+
+        record = self._capture_record(cb)
+        # Explicit fields preserved.
+        assert record["feature"] == "summarize:transcript:whisper"
+        assert record["unit"] == "audio_seconds"
+        assert record["audio_seconds"] == 120.0
+        assert record["cost_usd"] == 0.012
+        # Run attribution filled from ctxvars.
+        assert record["video_id"] == "yt_abc"
+        assert record["user_id"] == "user_7"
+        assert record["video_summary_id"] == "vsum_3"
+        assert record["request_id"] == "req_55"
+
+    def test_unset_feature_filled_from_ctxvar(self):
+        mock_db = MagicMock()
+        cb = MongoDBUsageCallback(mock_db, service="summarizer", mode="sync")
+
+        token = llm_feature_var.set("summarize:transcript:gemini")
+        try:
+            record_manual_usage(UsageRecord(model="gemini-2.5-flash-lite", provider="google"))
+        finally:
+            llm_feature_var.reset(token)
+
+        assert self._capture_record(cb)["feature"] == "summarize:transcript:gemini"
+
+    def test_no_buffer_registered_is_noop(self):
+        """With no buffer registered, emit is a no-op + warning, never raises."""
+        original = callback_module._active_buffer
+        callback_module._active_buffer = None
+        try:
+            record_manual_usage(UsageRecord(model="whisper-1", provider="openai"))
+        finally:
+            callback_module._active_buffer = original
+
+    @pytest.mark.asyncio
+    async def test_async_buffer_emit_schedules_tracked_task(self):
+        """Under a running loop with an AsyncBuffer, the coroutine returned by
+        ``buffer.add`` is scheduled as a task retained in the module set (so it
+        can't be GC'd mid-flight), reaches the buffer, then clears the set."""
+        mock_db = MagicMock()
+        mock_db.__getitem__ = MagicMock(return_value=AsyncMock())
+        cb = MongoDBUsageCallback(mock_db, service="explainer", mode="async")
+
+        assert not callback_module._pending_manual_tasks
+
+        record_manual_usage(
+            UsageRecord(
+                model="gemini-2.5-flash-lite",
+                provider="google",
+                feature="summarize:transcript:gemini",
+            )
+        )
+
+        # A task was scheduled and tracked before it ran.
+        assert len(callback_module._pending_manual_tasks) == 1
+        tracked = next(iter(callback_module._pending_manual_tasks))
+
+        await tracked
+
+        # The record reached the async buffer.
+        assert len(cb._buffer._buffer) == 1
+        assert cb._buffer._buffer[-1]["feature"] == "summarize:transcript:gemini"
+        # The done callback discarded the task from the tracking set.
+        assert tracked not in callback_module._pending_manual_tasks
 
 
 class TestCrossModeCallback:

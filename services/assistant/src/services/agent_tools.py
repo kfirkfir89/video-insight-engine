@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from llm_common.context import llm_feature_var
+
 from src.logging_config import get_logger
 from src.tools.library_organizer import LibraryOrganizerTool
 
@@ -215,6 +217,11 @@ async def execute_tool(
         A compact result dict (e.g. ``{"ok": True, "folder": {...}}``) or
         ``{"error": "..."}``.
     """
+    # Attribute any LLM calls this tool makes (e.g. organize_library) to the
+    # specific tool feature, then restore so the agentic loop's own
+    # generations stay labelled with the chat feature. Without this, library
+    # agentic tools roll up under "assistant:library_chat".
+    token = llm_feature_var.set(f"assistant:tool:{name}")
     try:
         return await _dispatch(name, args, user_id=user_id, api_client=api_client, llm=llm)
     except KeyError as exc:
@@ -225,6 +232,8 @@ async def execute_tool(
     except Exception as exc:  # noqa: BLE001 — surface as model-correctable error
         logger.warning("agent_tool_failed", tool=name, error=str(exc))
         return {"error": f"tool {name} failed: {exc}"}
+    finally:
+        llm_feature_var.reset(token)
 
 
 async def _dispatch(

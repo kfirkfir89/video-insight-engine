@@ -1,15 +1,21 @@
 """Usage analytics endpoints for LLM cost monitoring."""
 
+from __future__ import annotations
+
 import asyncio
+from collections import defaultdict
 from datetime import datetime
+from typing import Any
 
 from bson import ObjectId
 from bson.errors import InvalidId
 from cachetools import TTLCache
 from fastapi import APIRouter, HTTPException, Path, Query
+from pydantic import BaseModel
 
 from src.dependencies import get_database
 from src.routes._helpers import cutoff as _cutoff
+from src.services import langfuse
 
 
 def _serialize_value(v: object) -> object:
@@ -41,6 +47,42 @@ _cache = TTLCache(maxsize=64, ttl=30)
 
 MAX_DAYS = 90
 
+# ─── Response models ───
+
+
+class RunCallSummary(BaseModel):
+    """One LLM call belonging to a pipeline run."""
+
+    id: str
+    feature: str | None
+    model: str | None
+    cost_usd: float
+    tokens_in: int | None
+    tokens_out: int | None
+    duration_ms: float | None
+    success: bool | None
+    timestamp: str
+    # Cost-unit discriminator: "tokens" (default) or "audio_seconds" for
+    # transcription rows. Lets the UI render "N min audio" instead of "0 tokens".
+    unit: str | None = None
+    audio_seconds: float | None = None
+
+
+class RunSummary(BaseModel):
+    """Aggregated summary of one pipeline run (keyed by request_id)."""
+
+    request_id: str | None
+    video_id: str | None
+    video_summary_id: str | None
+    user_id: str | None
+    first_call: str
+    last_call: str
+    total_cost_usd: float
+    call_count: int
+    regen_ordinal: int | None  # 1 = first run for this video, 2 = first regen, etc.
+    langfuse_url: str | None = None  # Direct link to this run's Langfuse trace, if resolvable.
+    calls: list[RunCallSummary]
+
 
 @router.get("/stats")
 async def usage_stats(
@@ -55,7 +97,7 @@ async def usage_stats(
         return _cache[cache_key]
 
     db = get_database()
-    match = {"timestamp": {"$gte": _cutoff(days)}}
+    match: dict[str, Any] = {"timestamp": {"$gte": _cutoff(days)}}
     if feature:
         match["feature"] = feature
     if provider:
@@ -120,7 +162,13 @@ async def usage_by_output_type(days: int = Query(30, ge=1, le=MAX_DAYS)) -> list
                 "localField": "_id",
                 "foreignField": "youtubeId",
                 "as": "_video",
-                "pipeline": [{"$project": {"outputType": 1}}],
+                # Filter to the latest version only — avoids fan-out when multiple
+                # versioned cache docs exist for the same youtubeId (cross-user dedup).
+                "pipeline": [
+                    {"$match": {"isLatest": True}},
+                    {"$project": {"outputType": 1}},
+                    {"$limit": 1},
+                ],
             }
         },
         {"$unwind": {"path": "$_video", "preserveNullAndEmptyArrays": True}},
@@ -288,7 +336,10 @@ _VIDEO_LOOKUP_STAGE: list[dict] = [
             "localField": "_id",
             "foreignField": "youtubeId",
             "as": "_v",
+            # isLatest:True keeps only one doc per youtubeId — prevents fan-out
+            # when multiple versioned cache docs exist (cross-user dedup).
             "pipeline": [
+                {"$match": {"isLatest": True}},
                 {
                     "$project": {
                         "title": 1,
@@ -299,7 +350,8 @@ _VIDEO_LOOKUP_STAGE: list[dict] = [
                         "context.category": 1,
                         "processedAt": 1,
                     }
-                }
+                },
+                {"$limit": 1},
             ],
         }
     },
@@ -488,3 +540,163 @@ async def usage_duplicates(
     ]
     results = await db.llm_usage.aggregate(pipeline).to_list(20)
     return [{"prompt_hash": r["_id"], **{k: v for k, v in r.items() if k != "_id"}} for r in results]
+
+
+def _build_run_call(raw: dict) -> RunCallSummary:
+    """Map a raw llm_usage document to a RunCallSummary."""
+    ts = raw.get("timestamp")
+    return RunCallSummary(
+        id=str(raw["_id"]),
+        feature=raw.get("feature"),
+        model=raw.get("model"),
+        cost_usd=float(raw.get("cost_usd") or 0),
+        tokens_in=raw.get("tokens_in"),
+        tokens_out=raw.get("tokens_out"),
+        duration_ms=raw.get("duration_ms"),
+        success=raw.get("success"),
+        timestamp=ts.isoformat() if isinstance(ts, datetime) else str(ts or ""),
+        unit=raw.get("unit"),
+        audio_seconds=raw.get("audio_seconds"),
+    )
+
+
+def _build_run_summary(run_group: dict, calls: list[dict], ordinal: int | None) -> RunSummary:
+    """Assemble a RunSummary from an aggregation result + child call documents."""
+    first = run_group.get("first_call")
+    last = run_group.get("last_call")
+    return RunSummary(
+        request_id=run_group.get("_id"),
+        video_id=run_group.get("video_id"),
+        video_summary_id=run_group.get("video_summary_id"),
+        user_id=run_group.get("user_id"),
+        first_call=first.isoformat() if isinstance(first, datetime) else str(first or ""),
+        last_call=last.isoformat() if isinstance(last, datetime) else str(last or ""),
+        total_cost_usd=float(run_group.get("total_cost_usd") or 0),
+        call_count=int(run_group.get("call_count") or 0),
+        regen_ordinal=ordinal,
+        calls=[_build_run_call(c) for c in calls],
+    )
+
+
+@router.get("/by-run", response_model=list[RunSummary])
+async def usage_by_run(
+    days: int = Query(30, ge=1, le=MAX_DAYS),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+) -> list[RunSummary]:
+    """Pipeline runs grouped by request_id, newest first.
+
+    Rows without a request_id are grouped under the sentinel key
+    ``None`` (displayed as 'unattributed (legacy)' in the UI).
+    Each run includes a regen_ordinal (1 = first run for that video,
+    2 = first regeneration, etc.) derived by ranking runs per video by
+    their first_call timestamp.
+
+    NOTE: ``regen_ordinal`` is relative to the selected day window — the
+    ranking only counts runs whose timestamp is within ``days`` (see the
+    ``timestamp >= cutoff(days)`` match in the rank pipeline). Runs older
+    than ``days`` are not counted, so ordinals may understate the true
+    all-time regen count near the window boundary (e.g. a run that is the
+    3rd all-time regeneration may report ordinal 1 if its two predecessors
+    fall outside the window).
+    """
+    cache_key = f"by-run:{days}:{limit}:{offset}"
+    if cache_key in _cache:
+        return _cache[cache_key]
+
+    db = get_database()
+
+    # Step 1: group llm_usage rows by request_id → one document per run.
+    group_pipeline: list[dict] = [
+        {"$match": {"timestamp": {"$gte": _cutoff(days)}}},
+        {
+            "$group": {
+                "_id": {"$ifNull": ["$request_id", None]},
+                "video_id": {"$first": "$video_id"},
+                "video_summary_id": {"$first": "$video_summary_id"},
+                "user_id": {"$first": "$user_id"},
+                "first_call": {"$min": "$timestamp"},
+                "last_call": {"$max": "$timestamp"},
+                "total_cost_usd": {"$sum": "$cost_usd"},
+                "call_count": {"$sum": 1},
+            }
+        },
+        {"$sort": {"first_call": -1}},
+        {"$skip": offset},
+        {"$limit": limit},
+    ]
+    run_groups = await db.llm_usage.aggregate(group_pipeline).to_list(limit)
+
+    if not run_groups:
+        _cache[cache_key] = []
+        return []
+
+    # Step 2: compute regen_ordinals for runs that have a video_id.
+    # For each unique video_id in the page, rank runs by first_call ascending.
+    video_ids_on_page = {g["video_id"] for g in run_groups if g.get("video_id")}
+    ordinal_map: dict[tuple[str | None, str | None], int] = {}  # (request_id, video_id) → ordinal
+
+    if video_ids_on_page:
+        rank_pipeline: list[dict] = [
+            {"$match": {"timestamp": {"$gte": _cutoff(days)}, "video_id": {"$in": list(video_ids_on_page)}}},
+            {
+                "$group": {
+                    "_id": {"$ifNull": ["$request_id", None]},
+                    "video_id": {"$first": "$video_id"},
+                    "first_call": {"$min": "$timestamp"},
+                }
+            },
+            {"$sort": {"video_id": 1, "first_call": 1}},
+        ]
+        all_video_runs = await db.llm_usage.aggregate(rank_pipeline).to_list(1000)
+
+        # Build per-video ordered list → ordinal = position + 1
+        runs_by_video: dict[str, list[str | None]] = defaultdict(list)
+        for r in all_video_runs:
+            vid = r.get("video_id")
+            if vid:
+                runs_by_video[vid].append(r["_id"])
+
+        for vid, req_ids in runs_by_video.items():
+            for pos, req_id in enumerate(req_ids):
+                ordinal_map[(req_id, vid)] = pos + 1
+
+    # Step 3: fetch child call documents for every run in parallel.
+    async def _fetch_calls_for_run(request_id: str | None) -> list[dict]:
+        """Fetch up to 50 call documents for a single run.
+
+        Filtering on ``request_id`` alone mirrors how the group stage keys runs
+        (``$ifNull: [request_id, None]``) — so the expanded calls are the same
+        population the run's ``call_count`` was summed over. A ``None``
+        ``request_id`` matches the single legacy bucket (rows missing/null
+        ``request_id``); matching by ``video_id`` there would drop the other
+        legacy videos' calls and contradict ``call_count``.
+        """
+        cursor = (
+            db.llm_usage.find({"request_id": request_id}, {"prompt_preview": 0})
+            .sort("timestamp", 1)
+            .limit(50)
+        )
+        return await cursor.to_list(50)
+
+    call_lists = await asyncio.gather(
+        *[_fetch_calls_for_run(g.get("_id")) for g in run_groups]
+    )
+
+    # Step 4: assemble response models.
+    results: list[RunSummary] = []
+    for group, calls in zip(run_groups, call_lists, strict=True):
+        req_id = group.get("_id")
+        vid_id = group.get("video_id")
+        ordinal = ordinal_map.get((req_id, vid_id))
+        results.append(_build_run_summary(group, calls, ordinal))
+
+    # Step 5: best-effort Langfuse deep-links (one batched call; no-op if unconfigured).
+    request_ids = [r.request_id for r in results if r.request_id]
+    trace_urls = await langfuse.map_request_ids_to_urls(request_ids)
+    for run in results:
+        if run.request_id:
+            run.langfuse_url = trace_urls.get(run.request_id)
+
+    _cache[cache_key] = results
+    return results

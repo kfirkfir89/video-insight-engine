@@ -15,6 +15,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 
+from llm_common.context import (
+    llm_feature_var,
+    llm_request_id_var,
+    llm_user_id_var,
+    llm_video_id_var,
+)
 from llm_common.middleware import add_request_context_middleware
 from llm_common.sentry_init import init_sentry_from_settings
 
@@ -35,7 +41,7 @@ from src.services.api_client import ApiClient
 from src.services.assistant import AssistantService
 from src.services.context_builder import ContextBuilder
 from src.services.llm_provider import LLMProvider
-from src.services.observability import flush_langfuse, init_langfuse
+from src.services.observability import flush_langfuse, init_langfuse, session_trace, span
 from src.services.rag import RAGService
 from src.tools.concept_explain import ConceptExplainTool
 from src.tools.cross_reference import CrossReferenceTool
@@ -168,11 +174,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.api_client = api_client
 
     # Assemble services
-    llm = LLMProvider()
+    llm = LLMProvider()  # primary (Sonnet) — tools keep their audited tier
+    # The chat + agentic loop use their own provider so they can run on a
+    # cheaper/faster model (LLM_CHAT_MODEL, default Haiku) without downgrading
+    # the Sonnet-pinned tools that share `llm` below.
+    chat_llm = LLMProvider(
+        model=settings.llm_chat_model,
+        fallback_models=settings.llm_fallback_models,
+    )
     context_builder = ContextBuilder()
     notes_repo = NotesRepository(db)
     assistant_service = AssistantService(
-        llm=llm,
+        llm=chat_llm,
         rag=rag_service,
         video_repo=video_repo,
         context_builder=context_builder,
@@ -196,7 +209,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Expose rag_service directly for /library/search (no LLM needed).
     app.state.rag_service = rag_service
 
-    logger.info("assistant_service_ready", model=llm.model, port=settings.ASSISTANT_PORT)
+    logger.info(
+        "assistant_service_ready",
+        chat_model=chat_llm.model,
+        tool_model=llm.model,
+        port=settings.ASSISTANT_PORT,
+    )
 
     yield
 
@@ -280,6 +298,13 @@ def create_app() -> FastAPI:
         # consecutive chat turns under one Langfuse session.
         user_id = req.headers.get("X-User-Id")
         session_id = req.headers.get("X-Session-Id")
+        request_id = req.headers.get("X-Request-ID")
+
+        # Propagate tracking context onto every llm_usage row for this request.
+        llm_feature_var.set("assistant:rag_chat")
+        llm_video_id_var.set(request.video_id)
+        llm_user_id_var.set(user_id)
+        llm_request_id_var.set(request_id)
 
         return StreamingResponse(
             service.chat(
@@ -328,6 +353,12 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=503, detail="Service not ready")
 
         session_id = req.headers.get("X-Session-Id")
+        request_id = req.headers.get("X-Request-ID")
+
+        # Propagate tracking context onto every llm_usage row for this request.
+        llm_feature_var.set("assistant:library_chat")
+        llm_user_id_var.set(user_id)
+        llm_request_id_var.set(request_id)
 
         return StreamingResponse(
             service.library_chat(
@@ -404,6 +435,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=403, detail="Forbidden")
 
         user_id = req.headers.get("X-User-Id")
+        request_id = req.headers.get("X-Request-ID")
         rate_key = user_id or request.video_id or "anonymous"
         if _check_action_rate_limit(rate_key):
             return JSONResponse(
@@ -418,69 +450,82 @@ def create_app() -> FastAPI:
         if service is None:
             raise HTTPException(status_code=503, detail="Service not ready")
 
-        trace_id = uuid4().hex[:12]
-        try:
-            result = await service.dispatch_action(
-                action=request.action,
-                video_id=request.video_id,
-                params=dict(request.params),
-                user_id=user_id,
-            )
-        except ValidationError as exc:
-            logger.warning(
-                "action_validation_failed",
-                trace_id=trace_id,
-                action=request.action,
-                error=exc.message,
-            )
-            return JSONResponse(
-                status_code=exc.status_code,
-                content=ActionResponse(
-                    success=False,
-                    action=request.action,
-                    data=None,
-                    error=exc.message,
-                    trace_id=trace_id,
-                ).model_dump(),
-            )
-        except NotFoundError as exc:
-            return JSONResponse(
-                status_code=exc.status_code,
-                content=ActionResponse(
-                    success=False,
-                    action=request.action,
-                    data=None,
-                    error=exc.message,
-                    trace_id=trace_id,
-                ).model_dump(),
-            )
-        except AppError as exc:
-            logger.exception(
-                "action_app_error",
-                trace_id=trace_id,
-                action=request.action,
-            )
-            return JSONResponse(
-                status_code=exc.status_code,
-                content=ActionResponse(
-                    success=False,
-                    action=request.action,
-                    data=None,
-                    error=exc.message,
-                    trace_id=trace_id,
-                ).model_dump(),
-            )
+        # Propagate tracking context onto every llm_usage row for this request.
+        llm_feature_var.set(f"assistant:action:{request.action}")
+        llm_video_id_var.set(request.video_id)
+        llm_user_id_var.set(user_id)
+        llm_request_id_var.set(request_id)
 
-        return JSONResponse(
-            status_code=200,
-            content=ActionResponse(
-                success=True,
-                action=request.action,
-                data=result,
-                error=None,
-                trace_id=trace_id,
-            ).model_dump(),
-        )
+        trace_id = uuid4().hex[:12]
+        async with session_trace(
+            video_id=request.video_id or "",
+            user_id=user_id,
+            tags=["action", f"action:{request.action}"],
+            metadata={"action": request.action, "traceId": trace_id},
+        ):
+            async with span(f"action:{request.action}"):
+                try:
+                    result = await service.dispatch_action(
+                        action=request.action,
+                        video_id=request.video_id,
+                        params=dict(request.params),
+                        user_id=user_id,
+                    )
+                except ValidationError as exc:
+                    logger.warning(
+                        "action_validation_failed",
+                        trace_id=trace_id,
+                        action=request.action,
+                        error=exc.message,
+                    )
+                    return JSONResponse(
+                        status_code=exc.status_code,
+                        content=ActionResponse(
+                            success=False,
+                            action=request.action,
+                            data=None,
+                            error=exc.message,
+                            trace_id=trace_id,
+                        ).model_dump(),
+                    )
+                except NotFoundError as exc:
+                    return JSONResponse(
+                        status_code=exc.status_code,
+                        content=ActionResponse(
+                            success=False,
+                            action=request.action,
+                            data=None,
+                            error=exc.message,
+                            trace_id=trace_id,
+                        ).model_dump(),
+                    )
+                except AppError as exc:
+                    logger.exception(
+                        "action_app_error",
+                        trace_id=trace_id,
+                        action=request.action,
+                    )
+                    return JSONResponse(
+                        status_code=exc.status_code,
+                        content=ActionResponse(
+                            success=False,
+                            action=request.action,
+                            data=None,
+                            error=exc.message,
+                            trace_id=trace_id,
+                        ).model_dump(),
+                    )
+
+                return JSONResponse(
+                    status_code=200,
+                    content=ActionResponse(
+                        success=True,
+                        action=request.action,
+                        data=result,
+                        error=None,
+                        trace_id=trace_id,
+                    ).model_dump(),
+                )
 
     return application
 

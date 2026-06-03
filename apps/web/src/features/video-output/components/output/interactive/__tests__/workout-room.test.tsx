@@ -144,9 +144,11 @@ describe('WorkoutRoom', () => {
     });
     try {
       render(<WorkoutRoom exercises={exercises} />);
-      // Enable sound first — the toggle shows "Sound off" while audio is disabled.
+      // Enable sound first — while audio is disabled the toggle's accessible
+      // name (aria-label) is "Enable audio cues" (the visible "Sound off" text
+      // is overridden by the aria-label for the accessible name).
       fireEvent.click(
-        screen.getByRole('button', { name: /sound off/i }),
+        screen.getByRole('button', { name: /enable audio cues/i }),
       );
       const button = screen.getByRole('button', { name: /complete set/i });
       act(() => {

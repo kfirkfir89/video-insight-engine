@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-from src.config import get_model, settings
+from src.config import MODEL_MAP, get_model, settings
 from src.services.llm_provider import LLMProvider
 from src.tools.concept_explain import ConceptExplainTool
 from src.tools.quiz_generator import QuizGeneratorTool
@@ -27,6 +27,16 @@ class TestModelMap:
 
     def test_should_fall_back_to_anthropic_when_provider_unknown(self):
         assert get_model("invalid_provider", "default") == get_model("anthropic", "default")
+
+    def test_should_resolve_unknown_provider_to_anthropic_map(self):
+        """Unknown provider falls back to the anthropic map, NOT openai."""
+        assert get_model("unknown_provider", "default") == MODEL_MAP["anthropic"]["default"]
+        assert "sonnet" in get_model("unknown_provider", "default").lower()
+
+    def test_should_resolve_unknown_tier_to_default_tier(self):
+        """Unknown tier falls back to the provider's default tier (Sonnet), NOT fast."""
+        assert get_model("anthropic", "unknown_tier") == MODEL_MAP["anthropic"]["default"]
+        assert "sonnet" in get_model("anthropic", "unknown_tier").lower()
 
 
 class TestLLMProvider:
@@ -105,3 +115,32 @@ class TestQuizGeneratorUsesFast:
 def test_primary_and_fast_models_differ():
     """If primary and fast collapse to the same model, the escalation has no effect."""
     assert settings.llm_model != settings.llm_fast_model
+
+
+class TestChatModel:
+    """The RAG chat / agentic loop uses its own configurable model tier."""
+
+    def test_chat_model_defaults_to_primary_provider_fast_tier(self, monkeypatch):
+        """Unset LLM_CHAT_MODEL → primary provider's fast tier (Haiku), NOT Sonnet.
+
+        Resolves via get_model(LLM_PROVIDER, 'fast') deliberately — so it ignores
+        LLM_FAST_PROVIDER and stays on the primary provider family.
+        """
+        monkeypatch.setattr(settings, "LLM_CHAT_MODEL", None)
+        monkeypatch.setattr(settings, "LLM_PROVIDER", "anthropic")
+        assert settings.llm_chat_model == get_model("anthropic", "fast")
+        assert "haiku" in settings.llm_chat_model.lower()
+        assert "sonnet" not in settings.llm_chat_model.lower()
+
+    def test_chat_model_honours_explicit_override(self, monkeypatch):
+        monkeypatch.setattr(settings, "LLM_CHAT_MODEL", "anthropic/claude-sonnet-4-6")
+        assert settings.llm_chat_model == "anthropic/claude-sonnet-4-6"
+
+    def test_chat_default_ignores_fast_provider(self, monkeypatch):
+        """Even with LLM_FAST_PROVIDER=openai, the chat default stays on the
+        primary provider's fast tier (not gpt-4o-mini)."""
+        monkeypatch.setattr(settings, "LLM_CHAT_MODEL", None)
+        monkeypatch.setattr(settings, "LLM_PROVIDER", "anthropic")
+        monkeypatch.setattr(settings, "LLM_FAST_PROVIDER", "openai")
+        assert settings.llm_chat_model == get_model("anthropic", "fast")
+        assert "gpt" not in settings.llm_chat_model.lower()

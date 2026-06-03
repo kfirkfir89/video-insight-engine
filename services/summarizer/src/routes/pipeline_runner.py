@@ -19,7 +19,13 @@ from litellm.exceptions import APIError as LitellmAPIError, RateLimitError, Time
 import redis.exceptions as redis_exceptions
 import structlog
 
-from llm_common.context import llm_feature_var, llm_video_id_var  # noqa: F401 — used in phases
+from llm_common.context import (  # noqa: F401 — llm_feature_var used in phases
+    llm_feature_var,
+    llm_request_id_var,
+    llm_user_id_var,
+    llm_video_id_var,
+    llm_video_summary_id_var,
+)
 
 from src.config import settings
 from src.exceptions import TranscriptError
@@ -276,13 +282,32 @@ async def stream_summarization(
         # traces share the same correlation id. Only added when present —
         # the SSE-direct path (e.g. dev override) doesn't bind one and we don't
         # want ``null`` polluting Langfuse dashboards.
-        request_id = structlog.contextvars.get_contextvars().get("request_id")
+        # ``request_id`` and ``user_id`` come from structlog contextvars, which
+        # the worker binds from the queue payload (see worker/runner.py). The
+        # ``entry`` row is the cross-user ``videoSummaryCache`` doc — it is
+        # content-addressed and shared across users, so it carries no per-run
+        # owner; ``entry.get("userId")`` is a best-effort fallback for any
+        # SSE-direct path that sets it on the doc.
+        ctxvars = structlog.contextvars.get_contextvars()
+        request_id = ctxvars.get("request_id")
+        user_id = entry.get("userId") or ctxvars.get("user_id")
+
+        # Set LLM cost-tracking context vars BEFORE the cache lookup so every
+        # ``llm_usage`` row this run writes — including the rare cache-hit-path
+        # LLM call — is attributable to its user, video, run, and request. These
+        # are the keys per-user reconciliation and run grouping match on.
+        llm_video_id_var.set(youtube_id)
+        llm_video_summary_id_var.set(video_summary_id)
+        if user_id:
+            llm_user_id_var.set(user_id)
+        if request_id:
+            llm_request_id_var.set(request_id)
 
         trace_tags = [f"youtubeId:{youtube_id}", f"videoSummaryId:{video_summary_id}"]
         trace_metadata: dict[str, Any] = {
             "youtubeId": youtube_id,
             "videoSummaryId": video_summary_id,
-            "userId": entry.get("userId"),
+            "userId": user_id,
             "language": entry.get("language"),
         }
         if request_id:
@@ -290,7 +315,7 @@ async def stream_summarization(
             trace_metadata["requestId"] = request_id
         async with pipeline_trace(
             video_summary_id, tags=trace_tags, metadata=trace_metadata,
-            user_id=entry.get("userId"),
+            user_id=user_id,
         ):
             # Check Redis cache first (same YouTube video = instant serve)
             if settings.REDIS_ENABLED and not force_refresh:
@@ -329,9 +354,6 @@ async def stream_summarization(
 
             await asyncio.to_thread(repository.update_status, video_summary_id, ProcessingStatus.PROCESSING)
             logger.info("[pipeline] START video_id=%s youtube_id=%s", video_summary_id, youtube_id)
-
-            # Set video context for LLM usage tracking
-            llm_video_id_var.set(youtube_id)
 
             ctx = PipelineContext(
                 video_summary_id=video_summary_id,

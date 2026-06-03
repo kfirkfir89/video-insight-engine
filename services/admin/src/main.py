@@ -43,6 +43,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             db.llm_usage.create_index([("video_id", 1)]),
             db.llm_usage.create_index([("service", 1)]),
             db.llm_usage.create_index([("prompt_hash", 1)]),
+            # Per-run grouping (request_id) and per-user reconciliation (user_id).
+            # Both keys are populated by the unified cost ledger going forward.
+            db.llm_usage.create_index([("request_id", 1), ("timestamp", -1)]),
+            db.llm_usage.create_index([("user_id", 1), ("timestamp", -1)]),
+            db.llm_usage.create_index([("video_summary_id", 1)]),
         )
     except Exception as e:
         logger.warning("index_creation_failed", error=str(e))

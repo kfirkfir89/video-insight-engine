@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useUsageByVideo, useVideoDetail } from '../hooks/use-admin-api';
 import type { VideoSummaryItem } from '../lib/api';
-import { formatCost, formatDuration, timeAgo, formatNumber } from '../lib/format';
+import { formatCost, formatDuration, timeAgo, formatNumber, formatDateTime } from '../lib/format';
 import { DollarIcon, ZapIcon, VideoPlayIcon, ChevronRightIcon } from '../components/icons';
 import { Panel } from '../components/Panel';
 import { SkeletonPanel } from '../components/SkeletonPanel';
@@ -444,7 +444,10 @@ function VideoRow({ video: v, isOpen, onToggle }: VideoRowProps) {
         <td className="p-3 text-center hidden sm:table-cell">
           <StatusDot status={v.status} />
         </td>
-        <td className="p-3 pr-4 text-right text-[var(--color-text-muted)] hidden lg:table-cell">
+        <td
+          className="p-3 pr-4 text-right text-[var(--color-text-muted)] hidden lg:table-cell"
+          title={formatDateTime(v.last_call)}
+        >
           {timeAgo(v.last_call)}
         </td>
       </tr>

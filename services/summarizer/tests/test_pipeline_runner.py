@@ -107,3 +107,129 @@ async def test_launch_returns_none_when_transcript_missing():
     ctx.youtube_id = "abc123"
 
     assert pipeline_runner._launch_faithfulness_check(ctx) is None
+
+
+@pytest.mark.asyncio
+async def test_stream_sets_attribution_ctxvars_on_cache_hit():
+    """Phase 0: the cost-tracking ctxvars (user/video/video_summary/request)
+    must be set BEFORE the cache lookup, so even a Redis cache-hit run that
+    makes a (rare) LLM call writes attributable `llm_usage` rows.
+
+    Run grouping and per-user reconciliation match on these keys; if the fast
+    path skipped them, cache-hit cost would be unattributable.
+    """
+    import structlog
+
+    from llm_common.context import (
+        llm_request_id_var,
+        llm_user_id_var,
+        llm_video_id_var,
+        llm_video_summary_id_var,
+    )
+
+    cached = {
+        "status": "completed",
+        "youtubeId": "yt_cache_hit",
+        "tabs": [{"id": "overview"}],
+        "meta": {"contentTags": ["learning"]},
+    }
+
+    async def fake_get_response(_youtube_id: str) -> dict:
+        return cached
+
+    async def fake_cached_stream(_vsid: str, _cached: dict):
+        yield "data: {}\n\n"
+
+    captured: dict[str, str | None] = {}
+
+    async def capture_then_stream(_vsid: str, _cached: dict):
+        # Snapshot ctxvars at the point the cache-hit branch streams — they
+        # must already be set by this point.
+        captured["video_id"] = llm_video_id_var.get()
+        captured["video_summary_id"] = llm_video_summary_id_var.get()
+        captured["user_id"] = llm_user_id_var.get()
+        captured["request_id"] = llm_request_id_var.get()
+        async for ev in fake_cached_stream(_vsid, _cached):
+            yield ev
+
+    repository = MagicMock()
+    entry = {"youtubeId": "yt_cache_hit", "userId": "user_77", "status": "processing"}
+
+    structlog.contextvars.bind_contextvars(request_id="req_live_42")
+    try:
+        with patch.object(
+            pipeline_runner.response_cache, "get_response", new=fake_get_response
+        ), patch.object(
+            pipeline_runner, "_stream_cached_structured", new=capture_then_stream
+        ), patch.object(
+            pipeline_runner.settings, "REDIS_ENABLED", True
+        ):
+            events = [
+                ev
+                async for ev in pipeline_runner.stream_summarization(
+                    "vsum_55", entry, repository, MagicMock()
+                )
+            ]
+    finally:
+        structlog.contextvars.unbind_contextvars("request_id")
+
+    assert events, "cache-hit path should stream at least one event"
+    assert captured["video_id"] == "yt_cache_hit"
+    assert captured["video_summary_id"] == "vsum_55"
+    assert captured["user_id"] == "user_77"
+    assert captured["request_id"] == "req_live_42"
+
+
+@pytest.mark.asyncio
+async def test_stream_reads_user_id_from_contextvars_when_entry_has_none():
+    """Regression: the ``entry`` row is the cross-user ``videoSummaryCache`` doc
+    and carries no per-run owner, so ``user_id`` must come from the structlog
+    contextvar the worker binds from the queue payload — NOT ``entry``.
+
+    Before the fix, ``entry.get("userId")`` was the only source, so every
+    summarizer cost row landed with ``user_id=None`` and per-user reconciliation
+    matched zero rows.
+    """
+    import structlog
+
+    from llm_common.context import llm_user_id_var
+
+    cached = {
+        "status": "completed",
+        "youtubeId": "yt_cross_user",
+        "tabs": [{"id": "overview"}],
+        "meta": {"contentTags": ["learning"]},
+    }
+
+    async def fake_get_response(_youtube_id: str) -> dict:
+        return cached
+
+    captured: dict[str, str | None] = {}
+
+    async def capture_then_stream(_vsid: str, _cached: dict):
+        captured["user_id"] = llm_user_id_var.get()
+        yield "data: {}\n\n"
+
+    repository = MagicMock()
+    # No "userId" key on the cache doc — the cross-user case.
+    entry = {"youtubeId": "yt_cross_user", "status": "processing"}
+
+    structlog.contextvars.bind_contextvars(request_id="req_x", user_id="payload_user_99")
+    try:
+        with patch.object(
+            pipeline_runner.response_cache, "get_response", new=fake_get_response
+        ), patch.object(
+            pipeline_runner, "_stream_cached_structured", new=capture_then_stream
+        ), patch.object(
+            pipeline_runner.settings, "REDIS_ENABLED", True
+        ):
+            _ = [
+                ev
+                async for ev in pipeline_runner.stream_summarization(
+                    "vsum_x", entry, repository, MagicMock()
+                )
+            ]
+    finally:
+        structlog.contextvars.unbind_contextvars("request_id", "user_id")
+
+    assert captured["user_id"] == "payload_user_99"

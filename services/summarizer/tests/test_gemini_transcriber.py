@@ -989,3 +989,51 @@ class TestMusicTranscriptionPromptSelection:
         contents = call_args.kwargs["contents"]
         prompt_text = contents[0].parts[0].text
         assert prompt_text == TRANSCRIPTION_PROMPT
+
+
+@patch("src.services.transcription.gemini_transcriber.settings.GEMINI_API_KEY", "test-key")
+class TestGeminiUsageEmission:
+    """Phase 0.5 — Gemini transcription emits a token-priced cost row.
+
+    Gemini bypasses LiteLLM via google.genai, so the transcriber emits the cost
+    from the response's usage_metadata token counts.
+    """
+
+    @patch("src.services.transcription.gemini_transcriber.emit_transcription_usage")
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
+    async def test_emits_token_cost_on_success(
+        self, mock_download, mock_client_class, mock_emit, tmp_path
+    ):
+        audio_path = tmp_path / "v.webm"
+        audio_path.write_bytes(b"fake audio")
+        mock_download.return_value = audio_path
+
+        response_text = json.dumps([{"text": "hi", "startMs": 0, "endMs": 1000}])
+        client = _make_mock_genai_client(response_text)
+        resp = client.aio.models.generate_content.return_value
+        resp.usage_metadata.prompt_token_count = 50_000
+        resp.usage_metadata.candidates_token_count = 4_000
+        mock_client_class.return_value = client
+
+        await transcribe_with_gemini("v")
+
+        mock_emit.assert_called_once()
+        kwargs = mock_emit.call_args.kwargs
+        assert kwargs["provider"] == "google"
+        assert kwargs["feature"] == "summarize:transcript:gemini"
+        assert kwargs["tokens_in"] == 50_000
+        assert kwargs["tokens_out"] == 4_000
+        assert kwargs["success"] is True
+
+    @patch("src.services.transcription.gemini_transcriber.emit_transcription_usage")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
+    async def test_emits_failure_when_download_fails(self, mock_download, mock_emit):
+        mock_download.side_effect = TranscriptError("boom", ErrorCode.UNKNOWN_ERROR)
+
+        with pytest.raises(TranscriptError):
+            await transcribe_with_gemini("v")
+
+        mock_emit.assert_called_once()
+        assert mock_emit.call_args.kwargs["success"] is False
+        assert mock_emit.call_args.kwargs["feature"] == "summarize:transcript:gemini"

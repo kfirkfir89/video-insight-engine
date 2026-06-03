@@ -46,6 +46,7 @@ export async function assistantRoutes(fastify: FastifyInstance) {
     try {
       const stream = await assistantClient.chat({
         videoId: videoSummaryId,
+        userId: req.user.userId,
         message: parsed.data.message,
         conversationHistory: parsed.data.conversationHistory,
         requestId: req.id,

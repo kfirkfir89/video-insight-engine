@@ -13,7 +13,6 @@ from src.models.schemas import ProviderConfig
 from src.repositories.mongodb_repository import MongoDBVideoRepository
 from src.services.llm import LLMService
 from src.services.llm_provider import LLMProvider
-from src.services.usage_tracker import UsageTracker
 
 logger = logging.getLogger(__name__)
 
@@ -91,16 +90,8 @@ def get_llm_service(
     return LLMService(provider)
 
 
-def get_usage_tracker(
-    database: Annotated[Database, Depends(get_database)]
-) -> UsageTracker:
-    """Get usage tracker instance for cost monitoring."""
-    return UsageTracker(database)
-
-
 # Type aliases for cleaner dependency injection
 VideoRepositoryDep = Annotated[MongoDBVideoRepository, Depends(get_video_repository)]
 LLMProviderDep = Annotated[LLMProvider, Depends(get_llm_provider)]
 LLMServiceDep = Annotated[LLMService, Depends(get_llm_service)]
 DatabaseDep = Annotated[Database, Depends(get_database)]
-UsageTrackerDep = Annotated[UsageTracker, Depends(get_usage_tracker)]

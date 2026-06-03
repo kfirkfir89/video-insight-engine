@@ -23,7 +23,13 @@ import structlog
 from litellm.integrations.custom_logger import CustomLogger
 
 from llm_common.buffer import AsyncBuffer, SyncBuffer
-from llm_common.context import llm_feature_var, llm_request_id_var, llm_video_id_var
+from llm_common.context import (
+    llm_feature_var,
+    llm_request_id_var,
+    llm_user_id_var,
+    llm_video_id_var,
+    llm_video_summary_id_var,
+)
 from llm_common.models import UsageRecord, compute_cache_savings_usd, extract_provider
 
 
@@ -44,6 +50,67 @@ def _safe_int(obj: object, attr: str) -> int:
 logger = structlog.get_logger(__name__)
 
 DEFAULT_COST_THRESHOLD = 0.50
+
+# Process-wide handle to the active usage buffer. Lets out-of-band emitters
+# (transcription calls provider SDKs directly, bypassing LiteLLM's callback)
+# write to the same llm_usage stream. Set by the most-recently-constructed
+# MongoDBUsageCallback — each service constructs exactly one.
+_active_buffer: SyncBuffer | AsyncBuffer | None = None
+
+# Strong references to in-flight manual-emit tasks. ``create_task`` only keeps a
+# weak reference, so without this a fire-and-forget task can be garbage-collected
+# before it runs (RUF006). Tasks discard themselves on completion.
+_pending_manual_tasks: set[asyncio.Task] = set()
+
+
+def register_active_buffer(buffer: SyncBuffer | AsyncBuffer) -> None:
+    """Register the process-wide usage buffer for manual emits."""
+    global _active_buffer
+    _active_buffer = buffer
+
+
+def record_manual_usage(record: UsageRecord) -> None:
+    """Write a usage record built outside LiteLLM into the active buffer.
+
+    For costs LiteLLM never sees — Whisper/Gemini transcription call provider
+    SDKs directly. Run-attribution fields (request/video/user/video_summary id)
+    and an unset feature are filled from the same context vars
+    :meth:`MongoDBUsageCallback._build_record` reads, so a manual emit inherits
+    the run's attribution automatically. No-op (with a warning) when no buffer
+    is registered — e.g. a unit test with no callback. Never raises into the
+    caller; tracking must never break the work it tracks.
+    """
+    buffer = _active_buffer
+    if buffer is None:
+        logger.warning(
+            "manual_usage_no_buffer", feature=record.feature, model=record.model,
+        )
+        return
+    try:
+        if record.feature == "unknown":
+            record.feature = llm_feature_var.get()
+        if record.request_id is None:
+            record.request_id = llm_request_id_var.get()
+        if record.video_id is None:
+            record.video_id = llm_video_id_var.get()
+        if record.user_id is None:
+            record.user_id = llm_user_id_var.get()
+        if record.video_summary_id is None:
+            record.video_summary_id = llm_video_summary_id_var.get()
+        result = buffer.add(record.model_dump())
+        # AsyncBuffer.add returns a coroutine. Transcription only runs under the
+        # sync buffer today, but schedule it on a running loop if present so an
+        # async-mode caller doesn't silently drop the record.
+        if asyncio.iscoroutine(result):
+            try:
+                task = asyncio.get_running_loop().create_task(result)
+                _pending_manual_tasks.add(task)
+                task.add_done_callback(_pending_manual_tasks.discard)
+            except RuntimeError:
+                result.close()
+                logger.warning("manual_usage_async_no_loop", model=record.model)
+    except Exception as e:  # noqa: BLE001 — tracking must never break the caller
+        logger.error("manual_usage_emit_failed", error=str(e))
 
 
 class MongoDBUsageCallback(CustomLogger):
@@ -66,6 +133,10 @@ class MongoDBUsageCallback(CustomLogger):
             self._buffer = SyncBuffer(self._usage_col)
         else:
             self._buffer = AsyncBuffer(self._usage_col)
+
+        # Expose this buffer for manual (non-LiteLLM) emits — see
+        # record_manual_usage. The transcription path uses it for Whisper/Gemini.
+        register_active_buffer(self._buffer)
 
     async def start_async(self) -> None:
         """Start the async buffer flush loop. Call in lifespan for async mode."""
@@ -149,6 +220,8 @@ class MongoDBUsageCallback(CustomLogger):
                 duration_ms=duration_ms,
                 request_id=llm_request_id_var.get(),
                 video_id=llm_video_id_var.get(),
+                user_id=llm_user_id_var.get(),
+                video_summary_id=llm_video_summary_id_var.get(),
                 is_stream=is_stream,
                 service=self._service,
                 prompt_preview=prompt_text,
@@ -167,6 +240,10 @@ class MongoDBUsageCallback(CustomLogger):
                 provider=extract_provider(kwargs.get("model", "unknown")),
                 service=self._service,
                 feature=llm_feature_var.get(),
+                request_id=llm_request_id_var.get(),
+                video_id=llm_video_id_var.get(),
+                user_id=llm_user_id_var.get(),
+                video_summary_id=llm_video_summary_id_var.get(),
             ).model_dump()
 
     def _build_alert(self, record: dict) -> dict:

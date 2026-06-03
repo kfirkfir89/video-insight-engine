@@ -601,6 +601,111 @@ class TestTranscribeWithWhisper:
         assert exc_info.value.code == ErrorCode.VIDEO_UNAVAILABLE
 
 
+class TestWhisperUsageEmission:
+    """Phase 0.5 — Whisper transcription emits a cost row to the usage ledger.
+
+    Whisper bypasses LiteLLM, so the transcriber itself must emit the cost.
+    """
+
+    @patch("src.services.transcription.whisper_transcriber.OpenAI")
+    @patch("src.services.transcription.whisper_transcriber.settings")
+    def test_transcribe_sync_captures_duration(self, mock_settings, mock_openai_class, tmp_path):
+        """verbose_json duration is surfaced for cost computation."""
+        mock_settings.OPENAI_API_KEY = "test-key"
+        audio_path = tmp_path / "test.mp3"
+        audio_path.write_bytes(b"fake audio")
+
+        mock_response = MagicMock()
+        mock_response.text = "hi"
+        mock_response.segments = []
+        mock_response.duration = 305.5
+
+        mock_client = MagicMock()
+        mock_client.audio.transcriptions.create.return_value = mock_response
+        mock_openai_class.return_value = mock_client
+
+        result = _transcribe_sync(audio_path)
+        assert result["duration"] == 305.5
+
+    @patch("src.services.transcription.whisper_transcriber.OpenAI")
+    def test_chunked_sums_durations(self, mock_openai_class, tmp_path):
+        """Chunked transcription sums per-chunk durations for the billed total."""
+        chunk_0 = tmp_path / "c0.mp3"
+        chunk_1 = tmp_path / "c1.mp3"
+        chunk_0.write_bytes(b"a")
+        chunk_1.write_bytes(b"b")
+
+        with patch(
+            "src.services.transcription.whisper_transcriber._transcribe_sync",
+            side_effect=[
+                {"text": "a", "segments": [], "language": "en", "duration": 100.0},
+                {"text": "b", "segments": [], "language": "en", "duration": 50.0},
+            ],
+        ):
+            result = _transcribe_chunked_sync([(chunk_0, 0), (chunk_1, 100_000)])
+
+        assert result["duration"] == 150.0
+
+    @patch("src.services.transcription.whisper_transcriber.emit_transcription_usage")
+    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
+    @patch("src.services.transcription.whisper_transcriber._download_audio_sync")
+    async def test_emits_cost_row_on_success(
+        self, mock_download, mock_transcribe, mock_emit, tmp_path
+    ):
+        audio_path = tmp_path / "v.mp3"
+        audio_path.write_bytes(b"fake audio")
+        mock_download.return_value = audio_path
+        mock_transcribe.return_value = {
+            "text": "hi", "segments": [], "duration": 600.0,
+        }
+
+        await transcribe_with_whisper("v")
+
+        mock_emit.assert_called_once()
+        kwargs = mock_emit.call_args.kwargs
+        assert kwargs["model"] == "whisper-1"
+        assert kwargs["feature"] == "summarize:transcript:whisper"
+        assert kwargs["audio_seconds"] == 600.0
+        assert kwargs["success"] is True
+
+    @patch("src.services.transcription.whisper_transcriber.emit_transcription_usage")
+    @patch("src.services.transcription.whisper_transcriber._download_audio_sync")
+    async def test_emits_failure_row_when_transcription_fails(
+        self, mock_download, mock_emit
+    ):
+        mock_download.side_effect = TranscriptError("boom", ErrorCode.DOWNLOAD_ERROR)
+
+        with pytest.raises(TranscriptError):
+            await transcribe_with_whisper("v")
+
+        mock_emit.assert_called_once()
+        assert mock_emit.call_args.kwargs["success"] is False
+        assert mock_emit.call_args.kwargs["feature"] == "summarize:transcript:whisper"
+
+    @patch("src.services.transcription.whisper_transcriber.emit_transcription_usage")
+    @patch("src.services.transcription.whisper_transcriber._translate_sync")
+    @patch("src.services.transcription.whisper_transcriber._download_audio_sync")
+    async def test_translate_emits_whisper_translate_feature(
+        self, mock_download, mock_translate, mock_emit, tmp_path
+    ):
+        audio_path = tmp_path / "v.mp3"
+        audio_path.write_bytes(b"fake audio")
+        mock_download.return_value = audio_path
+        mock_translate.return_value = {
+            "text": "english text", "segments": [], "duration": 240.0,
+        }
+
+        from src.services.transcription.whisper_transcriber import translate_audio_to_english
+
+        result = await translate_audio_to_english("v")
+
+        assert result == "english text"
+        mock_emit.assert_called_once()
+        kwargs = mock_emit.call_args.kwargs
+        assert kwargs["feature"] == "summarize:transcript:whisper_translate"
+        assert kwargs["audio_seconds"] == 240.0
+
+
 class TestClassifyDownloadError:
     """Tests for _classify_download_error function."""
 

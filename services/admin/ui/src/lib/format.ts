@@ -1,3 +1,69 @@
+/**
+ * Cached `Intl.DateTimeFormat` instances keyed by the resolved timezone.
+ *
+ * Constructing `Intl.DateTimeFormat` is relatively expensive, and
+ * `formatDateTime` is called once per table row (up to ~200 rows). The
+ * formatters are stateless aside from the timezone, so we build them lazily
+ * and reuse them, rebuilding only if the resolved timezone changes.
+ */
+let _formatterCache: {
+  tz: string;
+  date: Intl.DateTimeFormat;
+  time: Intl.DateTimeFormat;
+  tzName: Intl.DateTimeFormat;
+} | null = null;
+
+function _formatters(): NonNullable<typeof _formatterCache> {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (!_formatterCache || _formatterCache.tz !== tz) {
+    _formatterCache = {
+      tz,
+      date: new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: tz,
+      }),
+      time: new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: tz,
+      }),
+      tzName: new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        timeZoneName: 'short',
+      }),
+    };
+  }
+  return _formatterCache;
+}
+
+/**
+ * Format an ISO timestamp as a local absolute date-time with an explicit
+ * timezone label, e.g. "Jun 3, 2026, 1:04 PM PST".
+ *
+ * Uses `Intl.DateTimeFormat` so the label reflects the user's resolved
+ * timezone (IANA short name when available, otherwise offset-based fallback).
+ *
+ * Returns "—" for null/undefined/invalid inputs.
+ */
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+
+  const { date, time, tzName, tz } = _formatters();
+
+  const datePart = date.format(d);
+  const timePart = time.format(d);
+
+  // Extract the short tz abbreviation (e.g. "PST", "UTC+2", "IST").
+  const tzLabel =
+    tzName.formatToParts(d).find((p) => p.type === 'timeZoneName')?.value ?? tz;
+
+  return `${datePart}, ${timePart} ${tzLabel}`;
+}
+
 /** Format seconds into "mm:ss" or "h:mm:ss". */
 export function formatDuration(seconds: number | null | undefined): string {
   if (seconds == null || seconds < 0) return '—';

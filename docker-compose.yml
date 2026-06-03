@@ -67,6 +67,8 @@ x-assistant-env: &assistant-env
   LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
   LLM_MODEL: ${LLM_MODEL:-}
   LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
+  # Chat + agentic-loop model (assistant only). Blank → primary provider's fast tier (Haiku).
+  LLM_CHAT_MODEL: ${LLM_CHAT_MODEL:-}
   LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60.0}
   LLM_NUM_RETRIES: ${LLM_NUM_RETRIES:-2}
   # Provider API keys
@@ -412,6 +414,12 @@ services:
       VIE_SUMMARIZER_URL: http://vie-summarizer:8000
       VIE_ASSISTANT_URL: http://vie-assistant:8001
       ALERT_COST_THRESHOLD_USD: ${ALERT_COST_THRESHOLD_USD:-0.50}
+      # Langfuse — read-only, only to build "Open in Langfuse" deep-links.
+      # Project id is auto-resolved from the keys when LANGFUSE_PROJECT_ID is blank.
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_PROJECT_ID: ${LANGFUSE_PROJECT_ID:-}
       # Sentry — empty DSN = SDK no-ops
       SENTRY_DSN: ${SENTRY_DSN:-}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}

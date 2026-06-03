@@ -117,3 +117,20 @@ export function useUserCostDetail(userId: string | null | undefined, days = 30) 
     enabled: !!userId,
   });
 }
+
+export function useUsageByRun(days = 30, limit = 20, offset = 0) {
+  return useQuery({
+    queryKey: ['usage-by-run', days, limit, offset],
+    queryFn: () => api.usage.byRun(days, limit, offset),
+    staleTime: 30_000,
+  });
+}
+
+export function useUserActivity(userId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['user-activity', userId],
+    queryFn: () => api.users.activity(userId!),
+    enabled: !!userId,
+    staleTime: 30_000,
+  });
+}

@@ -28,6 +28,7 @@ export type AssistantAction = (typeof ASSISTANT_ACTIONS)[number];
 
 export interface AssistantChatOptions {
   videoId: string;
+  userId: string;
   message: string;
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
   /** Forwarded as `X-Request-ID` header so the assistant binds it on contextvars. */
@@ -92,6 +93,9 @@ export class AssistantClient {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'X-Internal-Secret': config.INTERNAL_SECRET,
+      // Forwarded so the assistant attributes this RAG chat's llm_usage rows to
+      // the user (otherwise user_id lands null and admin can't bill the call).
+      'X-User-Id': options.userId,
     };
     if (options.requestId) {
       headers['X-Request-ID'] = options.requestId;

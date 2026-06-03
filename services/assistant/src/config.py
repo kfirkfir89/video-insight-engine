@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     LLM_FALLBACK_PROVIDER: str | None = None
     LLM_MODEL: str | None = None
     LLM_FAST_MODEL: str | None = None
+    # Model for the RAG chat + agentic loop specifically. Unset → primary
+    # provider's fast tier (Haiku) — chat is high-volume/latency-sensitive.
+    LLM_CHAT_MODEL: str | None = None
 
     # Provider API Keys
     ANTHROPIC_API_KEY: str | None = None
@@ -106,6 +109,20 @@ class Settings(BaseSettings):
             return self.LLM_FAST_MODEL
         provider = self.LLM_FAST_PROVIDER or self.LLM_PROVIDER
         return get_model(provider, "fast")
+
+    @property
+    def llm_chat_model(self) -> str:
+        """Model for the RAG chat + agentic loop.
+
+        Defaults to the PRIMARY provider's fast tier (Haiku for anthropic) —
+        chat is high-volume and latency-sensitive. Deliberately resolves via
+        ``get_model(LLM_PROVIDER, "fast")`` rather than ``llm_fast_model`` so
+        chat stays on the same provider family regardless of
+        ``LLM_FAST_PROVIDER``. Pin a specific model with ``LLM_CHAT_MODEL``.
+        """
+        if self.LLM_CHAT_MODEL:
+            return self.LLM_CHAT_MODEL
+        return get_model(self.LLM_PROVIDER, "fast")
 
     @property
     def llm_fallback_models(self) -> list[str] | None:
