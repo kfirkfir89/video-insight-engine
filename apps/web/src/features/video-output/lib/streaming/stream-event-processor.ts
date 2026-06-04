@@ -268,6 +268,10 @@ const EVENT_HANDLERS: Record<string, (event: Record<string, unknown>, setState: 
   complete: handleCompleteEvent,
   frames: handleFramesEvent,
   warning: handleWarningEvent,
+  // Keepalive only — the summarizer emits these during long silent phases
+  // (e.g. multi-minute Whisper) so the proxied SSE connection never idles out.
+  // No state change; explicit so intent is clear (unknown events are ignored).
+  heartbeat: () => {},
 };
 
 // ─── Main entry point ───

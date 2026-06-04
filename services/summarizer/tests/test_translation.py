@@ -290,3 +290,115 @@ class TestTranslateToSource:
         assert sl["meta"]["masterSummary"].startswith("HE: ")
         # The low batch size forced more than one LLM call.
         assert mock_flat.call_count > 1
+
+    @patch("src.services.pipeline.translation._MAX_TRANSLATION_BATCH", 2)
+    @patch("src.services.pipeline.translation._translate_flat_list")
+    async def test_partial_batch_failure_still_yields_source_language(
+        self, mock_flat, mock_llm,
+    ):
+        """One failing batch is salvaged as English; the rest still translate.
+
+        Regression for the Hebrew podcast whose entire ``sourceLanguage`` block
+        was discarded because a single batch hit a count mismatch.
+        """
+        async def fake(_llm, strings, *_a, **_k):
+            # Any batch containing the poison string can't be translated; the
+            # salvage path isolates it (size-1 retry) and keeps it English.
+            if any("POISON" in s for s in strings):
+                return None
+            return [f"HE: {s}" for s in strings]
+        mock_flat.side_effect = fake
+
+        output = {
+            "tabs": [
+                {"id": "t", "label": "Recommended spots", "component": "spot_explorer",
+                 "props": {"spots": [
+                     {"name": "First place", "description": "A POISON description here"},
+                     {"name": "Second place", "description": "A normal description here"},
+                 ]}},
+            ],
+            "meta": {"masterSummary": "Overall summary of the video"},
+        }
+
+        result = await translate_to_source(mock_llm, output, "he")
+
+        assert "sourceLanguage" in result
+        spots = result["sourceLanguage"]["tabs"][0]["props"]["spots"]
+        # The poison string is salvaged verbatim (English); everything else is
+        # translated — a mostly-translated toggle beats no toggle.
+        assert spots[0]["description"] == "A POISON description here"
+        assert spots[0]["name"] == "HE: First place"
+        assert spots[1]["name"] == "HE: Second place"
+        assert result["sourceLanguage"]["meta"]["masterSummary"].startswith("HE: ")
+
+    @patch("src.services.pipeline.translation._MAX_TRANSLATION_BATCH", 2)
+    @patch("src.services.pipeline.translation._translate_flat_list")
+    async def test_full_batch_mismatch_recovers_via_half_size_retry(
+        self, mock_flat, mock_llm,
+    ):
+        """A batch that fails at full size succeeds when retried split in half."""
+        async def fake(_llm, strings, *_a, **_k):
+            if len(strings) > 1:
+                return None  # full 2-string batch "truncates" → count mismatch
+            return [f"HE: {s}" for s in strings]
+        mock_flat.side_effect = fake
+
+        output = {"tabs": [], "meta": {"tldr": "First summary line",
+                                       "masterSummary": "Second summary line"}}
+
+        result = await translate_to_source(mock_llm, output, "he")
+
+        sl = result["sourceLanguage"]
+        assert sl["meta"]["tldr"].startswith("HE: ")
+        assert sl["meta"]["masterSummary"].startswith("HE: ")
+        # 1 full-batch attempt + 2 half-size retries for the single batch.
+        assert mock_flat.call_count == 3
+
+    @patch("src.services.pipeline.translation._MAX_TRANSLATION_BATCH", 2)
+    @patch("src.services.pipeline.translation._translate_flat_list")
+    async def test_all_batches_failing_returns_input_unchanged(
+        self, mock_flat, mock_llm, english_output,
+    ):
+        """When nothing translates, fall back to no ``sourceLanguage`` (no toggle)."""
+        mock_flat.return_value = None
+        result = await translate_to_source(mock_llm, english_output, "he")
+        assert "sourceLanguage" not in result
+
+    @patch("src.services.pipeline.translation._MAX_TRANSLATION_BATCH", 1)
+    @patch("src.services.pipeline.translation._translate_flat_list")
+    async def test_salvaged_strings_excluded_from_mirror_gate(
+        self, mock_flat, mock_llm,
+    ):
+        """Salvaged English strings must NOT trip the echo (mirror) gate.
+
+        Regression: salvaged strings equal their English originals by
+        construction. Counting them in the mirror ratio could discard a
+        genuinely-translated surface — here half the strings are salvaged
+        (over the small-payload mirror threshold), yet the toggle must survive
+        because the other half is really translated.
+        """
+        async def fake(_llm, strings, *_a, **_k):
+            if any("POISON" in s for s in strings):
+                return None  # this string can never be translated -> salvaged
+            return [f"HE: {s}" for s in strings]
+        mock_flat.side_effect = fake
+
+        output = {
+            "tabs": [
+                {"id": "t", "label": "Spots", "component": "spot_explorer",
+                 "props": {"spots": [
+                     {"name": "POISON one", "description": "POISON two"},
+                     {"name": "Genuine name", "description": "Genuine description"},
+                 ]}},
+            ],
+            "meta": {},
+        }
+
+        result = await translate_to_source(mock_llm, output, "he")
+
+        assert "sourceLanguage" in result  # would be discarded by the old gate
+        spots = result["sourceLanguage"]["tabs"][0]["props"]["spots"]
+        assert spots[0]["name"] == "POISON one"          # salvaged English
+        assert spots[0]["description"] == "POISON two"   # salvaged English
+        assert spots[1]["name"] == "HE: Genuine name"
+        assert spots[1]["description"] == "HE: Genuine description"

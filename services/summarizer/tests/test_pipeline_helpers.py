@@ -3,15 +3,18 @@
 from src.services.pipeline.pipeline_helpers import (
     PipelineTimer,
     TranscriptData,
+    run_parallel_phases,
     sse_event,
     sse_token,
     normalize_segments,
     validate_duration,
 )
 
+import asyncio
 import json
 import pytest
 from src.exceptions import TranscriptError
+from src.models.schemas import ErrorCode
 
 
 class TestPipelineTimer:
@@ -82,3 +85,57 @@ class TestValidateDuration:
     def test_too_short(self):
         with pytest.raises(TranscriptError):
             validate_duration(1)
+
+
+class TestRunParallelPhases:
+    """Tests for run_parallel_phases — heartbeat keepalive + event forwarding.
+
+    The heartbeat exists because a long silent phase (multi-minute Whisper)
+    otherwise sends zero bytes, and the API gateway's undici proxy aborts the
+    idle-but-live SSE connection at its 300s bodyTimeout.
+    """
+
+    async def test_heartbeat_emitted_when_phase_is_idle(self, monkeypatch):
+        """A phase that produces no event within the window triggers a heartbeat."""
+        monkeypatch.setattr(
+            "src.services.pipeline.pipeline_helpers.settings.SSE_HEARTBEAT_SECONDS", 0.02
+        )
+
+        async def slow_phase(ctx):
+            await asyncio.sleep(0.12)  # several heartbeat windows of silence
+            yield sse_event("phase", {"phase": "done"})
+
+        events = [e async for e in run_parallel_phases([slow_phase], ctx=None)]  # type: ignore[arg-type]
+
+        assert any('"event": "heartbeat"' in e for e in events)
+        assert any('"phase": "done"' in e for e in events)
+
+    async def test_real_events_forwarded_without_spurious_heartbeats(self, monkeypatch):
+        """Events arriving faster than the window are forwarded in order, no heartbeat."""
+        monkeypatch.setattr(
+            "src.services.pipeline.pipeline_helpers.settings.SSE_HEARTBEAT_SECONDS", 5.0
+        )
+
+        async def fast_phase(ctx):
+            yield sse_event("token", {"phase": "p", "token": "a"})
+            yield sse_event("token", {"phase": "p", "token": "b"})
+
+        events = [e async for e in run_parallel_phases([fast_phase], ctx=None)]  # type: ignore[arg-type]
+
+        assert not any('"event": "heartbeat"' in e for e in events)
+        tokens = [e for e in events if '"event": "token"' in e]
+        assert len(tokens) == 2
+
+    async def test_phase_exception_propagates(self, monkeypatch):
+        """An exception raised in a phase propagates out of the runner (regression)."""
+        monkeypatch.setattr(
+            "src.services.pipeline.pipeline_helpers.settings.SSE_HEARTBEAT_SECONDS", 5.0
+        )
+
+        async def boom_phase(ctx):
+            raise TranscriptError("boom", ErrorCode.UNKNOWN_ERROR)
+            yield  # pragma: no cover — makes this an async generator
+
+        with pytest.raises(TranscriptError):
+            async for _ in run_parallel_phases([boom_phase], ctx=None):  # type: ignore[arg-type]
+                pass

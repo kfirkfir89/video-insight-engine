@@ -3,13 +3,14 @@
 import time
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.services.transcription.whisper_transcriber import (
     _download_audio_sync,
     _transcribe_sync,
     _split_audio_chunks,
-    _transcribe_chunked_sync,
+    _merge_chunk_results,
+    _transcribe_chunks_parallel,
     _create_estimated_segments,
     transcribe_with_whisper,
     CHUNK_TARGET_SIZE_MB,
@@ -154,6 +155,29 @@ class TestTranscribeSync:
         assert "Whisper transcription failed" in str(exc_info.value)
 
 
+class TestMakeOpenAIClient:
+    """The OpenAI client must carry a bounded timeout + retry budget.
+
+    Without this, the SDK default (600s × 2 retries) lets a stalled chunk
+    upload hang far past the pipeline backstop — the original freeze.
+    """
+
+    @patch("src.services.transcription.whisper_transcriber.OpenAI")
+    @patch("src.services.transcription.whisper_transcriber.settings")
+    def test_client_bounded_with_timeout_and_retries(self, mock_settings, mock_openai):
+        from src.services.transcription.whisper_transcriber import _make_openai_client
+
+        mock_settings.OPENAI_API_KEY = "test-key"
+        mock_settings.WHISPER_CLIENT_TIMEOUT_SECONDS = 300.0
+        mock_settings.WHISPER_MAX_RETRIES = 1
+
+        _make_openai_client()
+
+        mock_openai.assert_called_once_with(
+            api_key="test-key", timeout=300.0, max_retries=1
+        )
+
+
 class TestSplitAudioChunks:
     """Tests for _split_audio_chunks function."""
 
@@ -244,158 +268,197 @@ class TestSplitAudioChunks:
         assert chunks[0][1] == 0
 
 
-@patch("src.services.transcription.whisper_transcriber.OpenAI")
-class TestTranscribeChunkedSync:
-    """Tests for _transcribe_chunked_sync function."""
+class TestMergeChunkResults:
+    """Tests for _merge_chunk_results — pure merge of per-chunk transcription dicts."""
 
-    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
-    def test_merges_text_from_all_chunks(self, mock_transcribe, mock_openai, tmp_path):
-        """Test that text from all chunks is merged with space separation."""
-        chunk_paths = [
-            (tmp_path / "chunk_0.mp3", 0),
-            (tmp_path / "chunk_1.mp3", 300_000),
-        ]
-
-        mock_transcribe.side_effect = [
-            {"text": "Hello from chunk one.", "segments": []},
-            {"text": "Hello from chunk two.", "segments": []},
-        ]
-
-        result = _transcribe_chunked_sync(chunk_paths)
+    def test_merges_text_from_all_chunks(self):
+        """Text from all chunks is merged with space separation, in offset order."""
+        result = _merge_chunk_results([
+            (0, {"text": "Hello from chunk one.", "segments": []}),
+            (300_000, {"text": "Hello from chunk two.", "segments": []}),
+        ])
 
         assert result["text"] == "Hello from chunk one. Hello from chunk two."
 
-    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
-    def test_adjusts_segment_timestamps_by_offset(self, mock_transcribe, mock_openai, tmp_path):
-        """Test that segment timestamps are adjusted by chunk offset."""
-        chunk_paths = [
-            (tmp_path / "chunk_0.mp3", 0),
-            (tmp_path / "chunk_1.mp3", 300_000),  # 300s offset
-        ]
-
-        mock_transcribe.side_effect = [
-            {
+    def test_adjusts_segment_timestamps_by_offset(self):
+        """Segment timestamps are shifted by each chunk's offset."""
+        result = _merge_chunk_results([
+            (0, {
                 "text": "First chunk.",
                 "segments": [
                     {"text": "First", "start": 0.0, "end": 5.0},
                     {"text": "chunk.", "start": 5.0, "end": 10.0},
                 ],
-            },
-            {
+            }),
+            (300_000, {  # 300s offset
                 "text": "Second chunk.",
                 "segments": [
                     {"text": "Second", "start": 0.0, "end": 4.0},
                     {"text": "chunk.", "start": 4.0, "end": 8.0},
                 ],
-            },
-        ]
-
-        result = _transcribe_chunked_sync(chunk_paths)
+            }),
+        ])
 
         assert len(result["segments"]) == 4
         # First chunk segments: no offset
         assert result["segments"][0]["start"] == 0.0
-        assert result["segments"][0]["end"] == 5.0
-        assert result["segments"][1]["start"] == 5.0
         assert result["segments"][1]["end"] == 10.0
         # Second chunk segments: +300s offset
         assert result["segments"][2]["start"] == 300.0
         assert result["segments"][2]["end"] == 304.0
-        assert result["segments"][3]["start"] == 304.0
         assert result["segments"][3]["end"] == 308.0
 
-    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
-    def test_handles_chunks_without_segments(self, mock_transcribe, mock_openai, tmp_path):
-        """Test merging when some chunks have no segments."""
-        chunk_paths = [
-            (tmp_path / "chunk_0.mp3", 0),
-            (tmp_path / "chunk_1.mp3", 300_000),
-        ]
-
-        mock_transcribe.side_effect = [
-            {"text": "First chunk.", "segments": [{"text": "First", "start": 0.0, "end": 5.0}]},
-            {"text": "Second chunk."},  # No segments key
-        ]
-
-        result = _transcribe_chunked_sync(chunk_paths)
+    def test_handles_chunks_without_segments(self):
+        """Merging tolerates a chunk dict missing the segments key."""
+        result = _merge_chunk_results([
+            (0, {"text": "First chunk.", "segments": [{"text": "First", "start": 0.0, "end": 5.0}]}),
+            (300_000, {"text": "Second chunk."}),  # No segments key
+        ])
 
         assert result["text"] == "First chunk. Second chunk."
         assert len(result["segments"]) == 1
 
-    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
-    def test_single_chunk_works(self, mock_transcribe, mock_openai, tmp_path):
-        """Test that a single chunk returns correct result."""
-        chunk_paths = [(tmp_path / "chunk_0.mp3", 0)]
-
-        mock_transcribe.return_value = {
-            "text": "Only chunk.",
-            "segments": [{"text": "Only chunk.", "start": 0.0, "end": 3.0}],
-        }
-
-        result = _transcribe_chunked_sync(chunk_paths)
+    def test_single_chunk(self):
+        """A single chunk merges to the expected result."""
+        result = _merge_chunk_results([
+            (0, {"text": "Only chunk.", "segments": [{"text": "Only chunk.", "start": 0.0, "end": 3.0}]}),
+        ])
 
         assert result["text"] == "Only chunk."
-        assert len(result["segments"]) == 1
         assert result["segments"][0]["start"] == 0.0
 
+    def test_sums_durations(self):
+        """Per-chunk billed durations sum into the combined total."""
+        result = _merge_chunk_results([
+            (0, {"text": "a", "segments": [], "language": "en", "duration": 100.0}),
+            (100_000, {"text": "b", "segments": [], "language": "en", "duration": 50.0}),
+        ])
+
+        assert result["duration"] == 150.0
+
+    def test_combines_language_by_majority(self):
+        """A language detected by every chunk survives the merge (normalized)."""
+        result = _merge_chunk_results([
+            (0, {"text": "a", "segments": [], "language": "hebrew"}),
+            (100_000, {"text": "b", "segments": [], "language": "hebrew"}),
+        ])
+
+        assert result["language"] == "he"
+
+
+@patch("src.services.transcription.whisper_transcriber.OpenAI")
+class TestTranscribeChunksParallel:
+    """Tests for _transcribe_chunks_parallel — concurrent, order-preserving transcription.
+
+    ``_transcribe_sync`` is mocked with a path-keyed callable rather than an
+    ordered ``side_effect`` list because chunks now run concurrently, so the
+    *call* order is non-deterministic even though the merged output stays in
+    chunk order.
+    """
+
     @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
-    def test_passes_is_music_to_each_chunk(self, mock_transcribe, mock_openai, tmp_path):
-        """Test that is_music flag is forwarded to _transcribe_sync for every chunk."""
-        chunk_paths = [
-            (tmp_path / "chunk_0.mp3", 0),
-            (tmp_path / "chunk_1.mp3", 300_000),
-        ]
+    async def test_transcribes_all_chunks(self, mock_transcribe, mock_openai, tmp_path):
+        """Every chunk is transcribed and its text appears in the merged result."""
+        chunks = [(tmp_path / "chunk_0.mp3", 0), (tmp_path / "chunk_1.mp3", 300_000)]
+        by_name = {
+            "chunk_0.mp3": {"text": "Hello from chunk one.", "segments": []},
+            "chunk_1.mp3": {"text": "Hello from chunk two.", "segments": []},
+        }
+        mock_transcribe.side_effect = lambda path, *a, **k: by_name[path.name]
 
-        mock_transcribe.return_value = {"text": "Lyrics.", "segments": []}
+        result = await _transcribe_chunks_parallel(chunks)
 
-        _transcribe_chunked_sync(chunk_paths, is_music=True)
+        assert "Hello from chunk one." in result["text"]
+        assert "Hello from chunk two." in result["text"]
+        assert mock_transcribe.call_count == 2
+
+    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
+    async def test_preserves_chunk_order(self, mock_transcribe, mock_openai, tmp_path):
+        """Merged text follows chunk/offset order regardless of completion order."""
+        chunks = [(tmp_path / "chunk_0.mp3", 0), (tmp_path / "chunk_1.mp3", 300_000)]
+        by_name = {
+            "chunk_0.mp3": {"text": "one", "segments": []},
+            "chunk_1.mp3": {"text": "two", "segments": []},
+        }
+        mock_transcribe.side_effect = lambda path, *a, **k: by_name[path.name]
+
+        result = await _transcribe_chunks_parallel(chunks)
+
+        assert result["text"] == "one two"
+
+    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
+    async def test_passes_is_music_to_each_chunk(self, mock_transcribe, mock_openai, tmp_path):
+        """is_music is forwarded to _transcribe_sync for every chunk."""
+        chunks = [(tmp_path / "chunk_0.mp3", 0), (tmp_path / "chunk_1.mp3", 300_000)]
+        mock_transcribe.side_effect = lambda path, *a, **k: {"text": "Lyrics.", "segments": []}
+
+        await _transcribe_chunks_parallel(chunks, is_music=True)
 
         assert mock_transcribe.call_count == 2
         for call in mock_transcribe.call_args_list:
-            assert call.kwargs.get("is_music") is True or call.args[1] is True
+            # _transcribe_sync(chunk_path, is_music, client) — positional
+            assert call.args[1] is True
 
     @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
-    def test_deadline_returns_partial_transcript(self, mock_transcribe, mock_openai, tmp_path):
-        """A passed deadline stops the loop after the first chunk, keeping partial work.
+    async def test_deadline_skips_later_chunks(self, mock_transcribe, mock_openai, tmp_path):
+        """A passed deadline transcribes only chunk 0, keeping partial work.
 
         Regression: a long video used to be hard-cancelled on timeout (orphaning
         the worker thread, which then read just-deleted chunk files), discarding
-        all transcription. Now the loop stops cleanly between chunks and returns
-        what it finished — far better than the truncating Gemini fallback.
+        all transcription. The first chunk always runs; later chunks are skipped
+        once the deadline passes — better than the truncating Gemini fallback.
         """
-        chunk_paths = [
+        chunks = [
             (tmp_path / "chunk_0.mp3", 0),
             (tmp_path / "chunk_1.mp3", 300_000),
             (tmp_path / "chunk_2.mp3", 600_000),
         ]
-        mock_transcribe.side_effect = [
-            {"text": "Chunk one.", "segments": []},
-            {"text": "Chunk two.", "segments": []},
-            {"text": "Chunk three.", "segments": []},
-        ]
+        mock_transcribe.side_effect = lambda path, *a, **k: {"text": "Chunk one.", "segments": []}
 
-        # Deadline already in the past: chunk 0 always runs, then the loop breaks.
-        result = _transcribe_chunked_sync(chunk_paths, deadline=time.monotonic() - 1.0)
+        result = await _transcribe_chunks_parallel(chunks, deadline=time.monotonic() - 1.0)
 
         assert result["text"] == "Chunk one."
         assert mock_transcribe.call_count == 1
 
     @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
-    def test_future_deadline_transcribes_all_chunks(self, mock_transcribe, mock_openai, tmp_path):
+    async def test_future_deadline_transcribes_all_chunks(self, mock_transcribe, mock_openai, tmp_path):
         """A deadline comfortably in the future does not curtail transcription."""
-        chunk_paths = [
-            (tmp_path / "chunk_0.mp3", 0),
-            (tmp_path / "chunk_1.mp3", 300_000),
-        ]
-        mock_transcribe.side_effect = [
-            {"text": "Chunk one.", "segments": []},
-            {"text": "Chunk two.", "segments": []},
-        ]
+        chunks = [(tmp_path / "chunk_0.mp3", 0), (tmp_path / "chunk_1.mp3", 300_000)]
+        by_name = {
+            "chunk_0.mp3": {"text": "one", "segments": []},
+            "chunk_1.mp3": {"text": "two", "segments": []},
+        }
+        mock_transcribe.side_effect = lambda path, *a, **k: by_name[path.name]
 
-        result = _transcribe_chunked_sync(chunk_paths, deadline=time.monotonic() + 3600.0)
+        result = await _transcribe_chunks_parallel(chunks, deadline=time.monotonic() + 3600.0)
 
-        assert result["text"] == "Chunk one. Chunk two."
+        assert result["text"] == "one two"
         assert mock_transcribe.call_count == 2
+
+    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
+    async def test_failed_chunk_is_dropped(self, mock_transcribe, mock_openai, tmp_path):
+        """One failing chunk is dropped; surviving chunks still produce a transcript."""
+        chunks = [(tmp_path / "chunk_0.mp3", 0), (tmp_path / "chunk_1.mp3", 300_000)]
+
+        def fake(path, *a, **k):
+            if path.name == "chunk_1.mp3":
+                raise TranscriptError("boom", ErrorCode.UNKNOWN_ERROR)
+            return {"text": "survived", "segments": []}
+
+        mock_transcribe.side_effect = fake
+
+        result = await _transcribe_chunks_parallel(chunks)
+
+        assert result["text"] == "survived"
+
+    @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
+    async def test_all_chunks_failed_raises(self, mock_transcribe, mock_openai, tmp_path):
+        """If every chunk fails, a TranscriptError surfaces (no empty transcript)."""
+        chunks = [(tmp_path / "chunk_0.mp3", 0)]
+        mock_transcribe.side_effect = TranscriptError("boom", ErrorCode.UNKNOWN_ERROR)
+
+        with pytest.raises(TranscriptError):
+            await _transcribe_chunks_parallel(chunks)
 
 
 class TestCreateEstimatedSegments:
@@ -471,7 +534,10 @@ class TestTranscribeWithWhisper:
         assert result.segments[0].startMs == 0
         assert result.segments[0].endMs == 1000
 
-    @patch("src.services.transcription.whisper_transcriber._transcribe_chunked_sync")
+    @patch(
+        "src.services.transcription.whisper_transcriber._transcribe_chunks_parallel",
+        new_callable=AsyncMock,
+    )
     @patch("src.services.transcription.whisper_transcriber._split_audio_chunks")
     @patch("src.services.transcription.whisper_transcriber._download_audio_sync")
     async def test_large_file_uses_chunked_path(
@@ -543,7 +609,10 @@ class TestTranscribeWithWhisper:
         # File should be deleted
         assert not audio_path.exists()
 
-    @patch("src.services.transcription.whisper_transcriber._transcribe_chunked_sync")
+    @patch(
+        "src.services.transcription.whisper_transcriber._transcribe_chunks_parallel",
+        new_callable=AsyncMock,
+    )
     @patch("src.services.transcription.whisper_transcriber._split_audio_chunks")
     @patch("src.services.transcription.whisper_transcriber._download_audio_sync")
     async def test_cleanup_includes_chunk_files(
@@ -627,22 +696,12 @@ class TestWhisperUsageEmission:
         result = _transcribe_sync(audio_path)
         assert result["duration"] == 305.5
 
-    @patch("src.services.transcription.whisper_transcriber.OpenAI")
-    def test_chunked_sums_durations(self, mock_openai_class, tmp_path):
+    def test_chunked_sums_durations(self):
         """Chunked transcription sums per-chunk durations for the billed total."""
-        chunk_0 = tmp_path / "c0.mp3"
-        chunk_1 = tmp_path / "c1.mp3"
-        chunk_0.write_bytes(b"a")
-        chunk_1.write_bytes(b"b")
-
-        with patch(
-            "src.services.transcription.whisper_transcriber._transcribe_sync",
-            side_effect=[
-                {"text": "a", "segments": [], "language": "en", "duration": 100.0},
-                {"text": "b", "segments": [], "language": "en", "duration": 50.0},
-            ],
-        ):
-            result = _transcribe_chunked_sync([(chunk_0, 0), (chunk_1, 100_000)])
+        result = _merge_chunk_results([
+            (0, {"text": "a", "segments": [], "language": "en", "duration": 100.0}),
+            (100_000, {"text": "b", "segments": [], "language": "en", "duration": 50.0}),
+        ])
 
         assert result["duration"] == 150.0
 

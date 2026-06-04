@@ -453,6 +453,27 @@ class TestTranscribeWithGemini:
 
     @patch("src.services.transcription.gemini_transcriber.genai.Client")
     @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
+    async def test_transcript_carries_detected_language(
+        self, mock_download, mock_client_class, tmp_path
+    ):
+        """A non-English transcript carries its detected source language so the
+        pipeline runs the translation phase (and the FE shows the toggle)."""
+        audio_path = tmp_path / "heb.webm"
+        audio_path.write_bytes(b"fake audio")
+        mock_download.return_value = audio_path
+
+        response_text = json.dumps([
+            {"text": "שלום וברוכים הבאים לפרק", "startMs": 0, "endMs": 25000},
+            {"text": "היום נדבר על אמונה ובחירה", "startMs": 25000, "endMs": 50000},
+        ])
+        mock_client_class.return_value = _make_mock_genai_client(response_text)
+
+        result = await transcribe_with_gemini("heb123")
+
+        assert result.language == "he"
+
+    @patch("src.services.transcription.gemini_transcriber.genai.Client")
+    @patch("src.services.transcription.gemini_transcriber._download_audio_raw_sync")
     async def test_cleanup_on_success(
         self, mock_download, mock_client_class, tmp_path
     ):
@@ -1037,3 +1058,19 @@ class TestGeminiUsageEmission:
         mock_emit.assert_called_once()
         assert mock_emit.call_args.kwargs["success"] is False
         assert mock_emit.call_args.kwargs["feature"] == "summarize:transcript:gemini"
+
+
+class TestTranscriptionPrompts:
+    """The transcription prompts must keep transcripts in the source language."""
+
+    def test_default_prompt_instructs_original_language(self):
+        """Non-music transcription must NOT translate — otherwise a non-English
+        video's source-language signal is lost and the translate toggle never
+        appears."""
+        lowered = TRANSCRIPTION_PROMPT.lower()
+        assert "original spoken language" in lowered
+        assert "do not translate" in lowered
+
+    def test_music_prompt_preserves_language(self):
+        """Music prompt already preserves language — guard against regression."""
+        assert "preserving the language" in MUSIC_TRANSCRIPTION_PROMPT.lower()

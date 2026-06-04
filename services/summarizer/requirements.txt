@@ -69,6 +69,12 @@ aio-pika>=9.4.0
 spacy>=3.7.0
 scikit-learn>=1.3.0
 
+# Language detection (text-based, refines script heuristic for Latin-script
+# languages). detect_language_from_text() no-ops without it, which silently
+# mislabels non-English Latin-script videos as English and hides the translate
+# toggle — so it must be installed, not optional.
+langdetect>=1.0.9
+
 # OCR (frame text extraction)
 opencv-python-headless>=4.8.0
 pytesseract>=0.3.10

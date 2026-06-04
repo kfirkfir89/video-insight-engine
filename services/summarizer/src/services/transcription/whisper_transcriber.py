@@ -54,6 +54,22 @@ def _response_duration(response: object) -> float:
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0.0
 
 
+def _make_openai_client() -> OpenAI:
+    """OpenAI client with a bounded per-request timeout + retry budget.
+
+    The SDK default (600s × 2 retries) lets a stalled chunk upload hang far past
+    the pipeline's outer backstop with zero feedback — the freeze observed on a
+    long Hebrew video. Bounding it here makes a hung chunk surface as a
+    ``TranscriptError`` in minutes, including chunk 0 (the chunked loop's
+    ``deadline`` only guards chunks after the first).
+    """
+    return OpenAI(
+        api_key=settings.OPENAI_API_KEY,
+        timeout=settings.WHISPER_CLIENT_TIMEOUT_SECONDS,
+        max_retries=settings.WHISPER_MAX_RETRIES,
+    )
+
+
 def _download_audio_sync(video_id: str) -> Path:
     """
     Download audio from YouTube using yt-dlp.
@@ -137,7 +153,7 @@ def _transcribe_sync(
         )
 
     if client is None:
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        client = _make_openai_client()
 
     try:
         with open(audio_path, "rb") as f:
@@ -233,45 +249,28 @@ def _split_audio_chunks(audio_path: Path) -> list[tuple[Path, int]]:
     return chunks
 
 
-def _transcribe_chunked_sync(
-    chunks: list[tuple[Path, int]],
-    is_music: bool = False,
-    deadline: float | None = None,
-) -> dict:
-    """
-    Transcribe multiple audio chunks and merge results.
+def _merge_chunk_results(results: list[tuple[int, dict]]) -> dict:
+    """Merge per-chunk transcription dicts into one combined result.
 
-    Calls _transcribe_sync for each chunk sequentially, then merges
-    text (space-joined) and segments (timestamps adjusted by chunk offset).
+    ``results`` is ``(offset_ms, chunk_result)`` for the chunks that
+    transcribed successfully, in chunk order. Segment timestamps are shifted by
+    each chunk's offset, text is space-joined, billed duration summed.
 
-    When ``deadline`` (a ``time.monotonic()`` value) is supplied, the loop stops
-    before starting a chunk once the deadline has passed and returns the chunks
-    transcribed so far. The first chunk always runs so we never return an empty
-    transcript. This keeps a long video's partial-but-real transcript instead of
-    discarding all work — far better than the truncating Gemini fallback.
-
-    Args:
-        chunks: List of (chunk_path, offset_ms) from _split_audio_chunks
-        is_music: If True, provide a lyrics-focused prompt hint per chunk
-        deadline: Optional ``time.monotonic()`` cutoff for partial return
-
-    Returns:
-        Combined {"text": ..., "segments": [...]} matching single-file shape
+    Without combining the per-chunk languages, chunked Whisper would return
+    ``language=None`` even when every chunk detected the same language —
+    observed on an Arabic football video where 2 chunks said "arabic" but the
+    combined result dropped the field, downstream defaulted to English, and
+    translation never ran. Normalize at the boundary because Whisper returns a
+    name ("chinese", "hebrew"); callers that truncate to 2 chars would produce
+    invalid codes like "ch" (Chamorro). ``Counter.most_common`` is deterministic
+    on ties — it preserves insertion order (dict insertion-ordered since 3.7).
     """
     all_text: list[str] = []
     all_segments: list[dict] = []
     detected_languages: list[str] = []
     total_duration = 0.0
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-    for index, (chunk_path, offset_ms) in enumerate(chunks):
-        if deadline is not None and index > 0 and time.monotonic() >= deadline:
-            logger.warning(
-                "Whisper deadline reached after %d/%d chunks; returning partial transcript",
-                index, len(chunks),
-            )
-            break
-        result = _transcribe_sync(chunk_path, is_music=is_music, client=client)
+    for offset_ms, result in results:
         all_text.append(result["text"])
         total_duration += float(result.get("duration") or 0.0)
         if result.get("language"):
@@ -285,18 +284,6 @@ def _transcribe_chunked_sync(
                 "end": seg.get("end", 0) + offset_sec,
             })
 
-    # Without this, chunked Whisper would always return ``language=None`` even
-    # when every chunk individually detected the same language — observed on
-    # an Arabic football video where 2 chunks said "arabic" but the combined
-    # result dropped the field, downstream defaulted to English, and
-    # translation never ran. Normalize at the boundary because Whisper returns
-    # a name ("chinese", "hebrew"); callers that truncate to 2 chars would
-    # produce invalid codes like "ch" (Chamorro).
-    #
-    # ``Counter.most_common`` is deterministic on ties — it preserves insertion
-    # order from the input list (dict insertion-ordered since Python 3.7). The
-    # earlier ``max(set(...), key=...count)`` form iterated a hash-randomized
-    # set, so a 2-chunk mixed-language input could swing winners across runs.
     combined_language = (
         normalize_language_code(
             Counter(detected_languages).most_common(1)[0][0]
@@ -310,6 +297,87 @@ def _transcribe_chunked_sync(
         "language": combined_language,
         "duration": total_duration,
     }
+
+
+async def _transcribe_chunks_parallel(
+    chunks: list[tuple[Path, int]],
+    is_music: bool = False,
+    deadline: float | None = None,
+) -> dict:
+    """Transcribe audio chunks concurrently (bounded) and merge in chunk order.
+
+    Each chunk is an independent OpenAI call dispatched via ``asyncio.to_thread``
+    under a ``Semaphore(WHISPER_CHUNK_CONCURRENCY)`` — so a 2-chunk video runs in
+    ~one chunk's wall-clock instead of two. ``asyncio.gather`` preserves input
+    order, so merging by chunk offset stays correct.
+
+    The first chunk always runs; a later chunk is skipped once ``deadline`` (a
+    ``time.monotonic()`` value) has passed, preserving a partial-but-real
+    transcript for very long videos — the same intent as the old sequential
+    loop. A single hung chunk is bounded by the client's per-request timeout;
+    failed chunks are dropped (``return_exceptions=True``) so one bad chunk never
+    voids the whole transcript.
+
+    Args:
+        chunks: List of (chunk_path, offset_ms) from _split_audio_chunks
+        is_music: If True, provide a lyrics-focused prompt hint per chunk
+        deadline: Optional ``time.monotonic()`` cutoff for partial return
+
+    Returns:
+        Combined {"text": ..., "segments": [...]} matching single-file shape
+
+    Raises:
+        TranscriptError: If every chunk failed (none usable).
+    """
+    sem = asyncio.Semaphore(settings.WHISPER_CHUNK_CONCURRENCY)
+    client = _make_openai_client()
+    total = len(chunks)
+
+    async def _run_chunk(index: int, chunk_path: Path, offset_ms: int) -> dict | None:
+        async with sem:
+            if deadline is not None and index > 0 and time.monotonic() >= deadline:
+                logger.warning(
+                    "Whisper deadline reached before chunk %d/%d; skipping (partial transcript)",
+                    index + 1, total,
+                )
+                return None
+            logger.info(
+                "Whisper chunk %d/%d starting (offset=%.0fs)",
+                index + 1, total, offset_ms / 1000.0,
+            )
+            chunk_start = time.monotonic()
+            result = await asyncio.to_thread(
+                _transcribe_sync, chunk_path, is_music, client
+            )
+            logger.info(
+                "Whisper chunk %d/%d done in %.1fs (%d chars)",
+                index + 1, total, time.monotonic() - chunk_start, len(result["text"]),
+            )
+            return result
+
+    outcomes = await asyncio.gather(
+        *[_run_chunk(i, path, offset) for i, (path, offset) in enumerate(chunks)],
+        return_exceptions=True,
+    )
+
+    merge_inputs: list[tuple[int, dict]] = []
+    for (_, offset_ms), outcome in zip(chunks, outcomes):
+        if isinstance(outcome, BaseException):
+            logger.warning(
+                "Whisper chunk at offset %.0fs failed, dropping: %s",
+                offset_ms / 1000.0, outcome,
+            )
+            continue
+        if outcome is None:
+            continue  # skipped past deadline
+        merge_inputs.append((offset_ms, outcome))
+
+    if not merge_inputs:
+        raise TranscriptError(
+            "All Whisper chunks failed", ErrorCode.UNKNOWN_ERROR
+        )
+
+    return _merge_chunk_results(merge_inputs)
 
 
 def _create_estimated_segments(text: str) -> list[TranscriptSegment]:
@@ -357,7 +425,7 @@ def _translate_sync(audio_path: Path, client: OpenAI | None = None) -> dict:
         raise TranscriptError("OpenAI API key not configured", ErrorCode.UNKNOWN_ERROR)
 
     if client is None:
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        client = _make_openai_client()
 
     try:
         with open(audio_path, "rb") as f:
@@ -500,7 +568,9 @@ async def transcribe_with_whisper(
                     ErrorCode.UNKNOWN_ERROR,
                 )
             chunk_paths = [path for path, _ in chunks]
-            result = await asyncio.to_thread(_transcribe_chunked_sync, chunks, is_music, deadline)
+            # Already async — it dispatches one thread per chunk internally and
+            # bounds concurrency itself, so no outer to_thread wrapper here.
+            result = await _transcribe_chunks_parallel(chunks, is_music, deadline)
         else:
             result = await asyncio.to_thread(_transcribe_sync, audio_path, is_music)
 
