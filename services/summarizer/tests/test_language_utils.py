@@ -7,6 +7,7 @@ import pytest
 from src.utils.language_utils import (
     RTL_LANGUAGES,
     detect_language_by_script,
+    detect_language_from_text,
     get_language_name,
     is_rtl,
     normalize_language_code,
@@ -147,6 +148,19 @@ class TestDetectLanguageByScript:
         chinese_text = "你好世界这是一段中文文本包含足够多的字符来通过检测阈值的要求"
         assert detect_language_by_script(chinese_text) == "zh"
 
+    def test_should_detect_japanese_as_ja_not_zh(self):
+        """Kanji+kana Japanese detects as 'ja', not 'zh'.
+
+        Regression: kanji live in the CJK Unicode block, so a CJK-before-kana
+        check order mislabeled kanji-heavy Japanese as Chinese — which then
+        translated the source-language toggle into the wrong language.
+        """
+        japanese_text = (
+            "これは日本語のテストです。十分に長い文章を書いて、"
+            "漢字とひらがなとカタカナを混ぜています。"
+        )
+        assert detect_language_by_script(japanese_text) == "ja"
+
     def test_should_detect_korean_script(self):
         """Text with Hangul characters detects as 'ko'."""
         korean_text = "안녕하세요 세계입니다 이것은 한국어 텍스트입니다 충분한 문자를 포함합니다"
@@ -169,5 +183,26 @@ class TestDetectLanguageByScript:
     def test_should_return_none_for_empty_text(self):
         """Empty text returns None."""
         assert detect_language_by_script("") is None
+
+
+class TestDetectLanguageFromText:
+    """Text-based detection (langdetect) — the fallback that resolves
+    Latin-script non-English languages that the script heuristic can't.
+
+    Guarded by importorskip because langdetect is a runtime dependency: in a
+    deployment missing it, detect_language_from_text safely returns None (which
+    is exactly the bug that mislabeled a Latin-script video as English)."""
+
+    def test_detects_spanish_latin_script_when_installed(self):
+        pytest.importorskip("langdetect")
+        spanish = (
+            "Hola a todos y bienvenidos a este video donde vamos a hablar "
+            "sobre la importancia de aprender un nuevo idioma cada año."
+        )
+        assert detect_language_from_text(spanish) == "es"
+
+    def test_returns_none_for_short_text(self):
+        """Under the 50-char floor, detection returns None regardless of deps."""
+        assert detect_language_from_text("hola") is None
 
 

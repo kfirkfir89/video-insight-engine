@@ -245,13 +245,16 @@ async def _try_gemini_transcription(
             timeout=gemini_timeout,
         )
         segments = normalized_segments_to_pipeline(gemini_result.segments)
-        # Gemini transcription returns no language. Detect from the transcript
-        # text (mirrors the S3-cache and yt-dlp branches above) so a non-English
-        # video is never silently defaulted to "en" — that would skip the
-        # translation phase and hide the FE language toggle.
-        gemini_language = detect_language_from_text(gemini_result.text)
-        if not gemini_language:
-            gemini_language = detect_language_by_script(gemini_result.text)
+        # The transcriber now detects and carries the source language (it keeps
+        # the transcript in its original script). Honor that first; fall back to
+        # detecting from text as a safety net so a non-English video is never
+        # silently defaulted to "en" — that would skip the translation phase and
+        # hide the FE language toggle.
+        gemini_language = (
+            gemini_result.language
+            or detect_language_from_text(gemini_result.text)
+            or detect_language_by_script(gemini_result.text)
+        )
         logger.info(
             "Gemini transcription successful: %d segments (language=%s)",
             len(segments), gemini_language,

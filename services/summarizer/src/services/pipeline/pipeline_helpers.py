@@ -241,7 +241,19 @@ async def run_parallel_phases(
     try:
         completed = 0
         while completed < len(tasks):
-            item = await queue.get()
+            # Emit a keepalive when no phase produces an event within the
+            # heartbeat window. A long silent phase (multi-minute Whisper runs
+            # entirely inside one asyncio.to_thread) otherwise sends zero bytes,
+            # and the API gateway's undici proxy aborts the idle-but-live SSE
+            # connection at its 300s bodyTimeout. asyncio.Queue.get is
+            # cancellation-safe, so the timed-out get drops no queued item.
+            try:
+                item = await asyncio.wait_for(
+                    queue.get(), timeout=settings.SSE_HEARTBEAT_SECONDS
+                )
+            except asyncio.TimeoutError:
+                yield sse_event("heartbeat", {"ts": time.monotonic()})
+                continue
             if item is _SENTINEL:
                 completed += 1
             elif isinstance(item, BaseException):

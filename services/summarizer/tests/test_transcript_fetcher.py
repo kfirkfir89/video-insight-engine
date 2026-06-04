@@ -50,6 +50,27 @@ class TestGeminiLanguageDetection:
         assert result.source == "gemini"
         assert result.language == "he"
 
+    async def test_honors_transcriber_provided_language(self):
+        """When the transcriber already set a language, the fetcher trusts it
+        rather than re-detecting from text."""
+        gemini_result = NormalizedTranscript(
+            text="This English-looking sentence would otherwise detect as en.",
+            segments=[],
+            source="gemini",
+            language="he",
+        )
+
+        with patch.object(transcript_fetcher.settings, "GEMINI_API_KEY", "fake-key"), \
+             patch.object(
+                 transcript_fetcher,
+                 "transcribe_with_gemini",
+                 new=AsyncMock(return_value=gemini_result),
+             ):
+            result = await _try_gemini_transcription("vid123", duration=100, is_music=False)
+
+        assert result is not None
+        assert result.language == "he"
+
     async def test_no_api_key_returns_none(self):
         """Without a Gemini key the helper short-circuits to None."""
         with patch.object(transcript_fetcher.settings, "GEMINI_API_KEY", ""):

@@ -143,6 +143,16 @@ class Settings(BaseSettings):
     # Cost implication: 10-hour video ≈ $3.60 Whisper API + up to 30 min processing.
     WHISPER_ENABLED: bool = True
     WHISPER_MAX_DURATION_MINUTES: int = 600
+    # Per-request OpenAI HTTP timeout for one chunk (upload + transcription of a
+    # ≤24MB chunk). Bounds chunk 0 (the per-chunk *deadline* only guards index>0),
+    # so a stalled call fails in minutes instead of hanging to the outer backstop.
+    WHISPER_CLIENT_TIMEOUT_SECONDS: float = 300.0
+    # SDK default is 2; with a 300s timeout that doubles worst-case latency past
+    # the backstop margin. One retry covers a transient blip without unbounded wait.
+    WHISPER_MAX_RETRIES: int = 1
+    # Chunks of a long video transcribe concurrently (bounded). Mirrors the
+    # extraction Semaphore(3) pattern; respects OpenAI per-key rate limits.
+    WHISPER_CHUNK_CONCURRENCY: int = 3
 
     # Logging
     LOG_LEVEL: str = "INFO"
@@ -200,6 +210,10 @@ class Settings(BaseSettings):
     PIPELINE_LOCK_TTL_SECONDS: int = 600  # 10 min — auto-expire if producer crashes
     PIPELINE_STREAM_TTL_SECONDS: int = 120  # 2 min retention after DONE
     PIPELINE_STREAM_MAXLEN: int = 2000  # MAXLEN ~ for XADD ring-buffer
+    # Keepalive cadence while a phase runs silently (e.g. multi-minute Whisper).
+    # Must stay well under the API gateway's undici bodyTimeout (300s) and any
+    # 60s proxy read timeout, or the SSE proxy hop aborts an idle-but-live stream.
+    SSE_HEARTBEAT_SECONDS: float = 12.0
 
     # Advanced transcript cleaning (spaCy + TF-IDF)
     TRANSCRIPT_CLEANING_ENABLED: bool = True

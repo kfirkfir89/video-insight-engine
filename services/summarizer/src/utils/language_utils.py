@@ -263,12 +263,17 @@ def detect_language_by_script(text: str) -> str | None:
     sample = text[:3000]
     total = len(sample)
 
+    # Japanese kana (hiragana/katakana) MUST be checked before the CJK range:
+    # Japanese mixes kanji — which live in the CJK block — with kana, so a kanji
+    # ratio over the threshold would otherwise mislabel Japanese as Chinese
+    # ("zh"). Chinese never contains kana, so kana-first can't misfire the other
+    # way. Order is significant; the first pattern over threshold wins.
     checks: list[tuple[re.Pattern, str]] = [
         (_HEBREW_RE, "he"),
         (_ARABIC_RE, "ar"),
+        (_HIRAGANA_KATAKANA_RE, "ja"),
         (_CJK_RE, "zh"),
         (_HANGUL_RE, "ko"),
-        (_HIRAGANA_KATAKANA_RE, "ja"),
         (_CYRILLIC_RE, "ru"),
         (_DEVANAGARI_RE, "hi"),
         (_THAI_RE, "th"),

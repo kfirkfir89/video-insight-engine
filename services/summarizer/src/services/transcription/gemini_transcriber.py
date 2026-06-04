@@ -28,6 +28,10 @@ from src.models.schemas import (
 from src.exceptions import TranscriptError
 from src.services.media.download_utils import download_youtube_audio
 from src.services.transcription.usage import emit_transcription_usage
+from src.utils.language_utils import (
+    detect_language_by_script,
+    detect_language_from_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +67,8 @@ Each segment should be 20-40 seconds of speech with format:
 
 Rules:
 - Include ALL spoken words, do not skip or summarize
+- Transcribe VERBATIM in the original spoken language — do NOT translate to
+  English (a non-English video must stay in its own language and script)
 - Timestamps must be in milliseconds
 - Segments should not overlap
 - Clean up filler words (um, uh) but keep the content accurate
@@ -506,9 +512,22 @@ async def transcribe_with_gemini(
 
         raw_text = " ".join(seg.text for seg in segments)
 
+        # Detect the original language now that the prompt keeps the transcript
+        # in its source script, and carry it so the pipeline doesn't re-derive it
+        # downstream. Text-first (langdetect) then script-fallback — the same
+        # order every other call site uses (transcript_fetcher, transcript.py).
+        # langdetect distinguishes languages the coarse script heuristic can't
+        # (e.g. Japanese vs Chinese, or any Latin-script non-English language);
+        # script detection is the zero-dependency safety net for short or
+        # langdetect-unsupported transcripts.
+        detected_language = (
+            detect_language_from_text(raw_text)
+            or detect_language_by_script(raw_text)
+        )
+
         logger.info(
-            "Gemini transcription complete: %s chars, %s segments",
-            len(raw_text), len(segments),
+            "Gemini transcription complete: %s chars, %s segments (language=%s)",
+            len(raw_text), len(segments), detected_language,
         )
 
         emit_transcription_usage(
@@ -524,6 +543,7 @@ async def transcribe_with_gemini(
             text=raw_text,
             segments=segments,
             source="gemini",
+            language=detected_language,
         )
 
     except Exception:

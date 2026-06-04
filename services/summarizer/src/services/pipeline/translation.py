@@ -310,49 +310,110 @@ def _is_mirror(originals: list[str], translations: list[str]) -> bool:
     return overall_ratio > _MIRROR_OVERALL_THRESHOLD
 
 
+async def _translate_or_salvage(
+    llm_service: LLMService,
+    batch: list[str],
+    source_language: str,
+    target_language: str,
+) -> tuple[list[str], list[bool]]:
+    """Translate ``batch``; on failure retry once at half size, then salvage.
+
+    Returns ``(strings, salvaged_mask)`` — a SAME-LENGTH list where any string
+    that could not be translated falls back to its English original (so the
+    positional path mapping in ``translate_to_source`` stays valid) plus a
+    per-string mask where ``True`` marks an English-fallback string (not really
+    translated). The mask lets the caller exclude salvaged strings from the
+    ``_is_mirror`` echo check — they are English by construction and would
+    otherwise inflate the mirror ratio. A count mismatch on a large batch
+    ("expected 200, got 72") usually means the model truncated its output, so a
+    half-size retry typically fits within the budget; only a half that still
+    fails is salvaged as English.
+    """
+    result = await _translate_flat_list(
+        llm_service, batch, source_language, target_language,
+    )
+    if result is not None:
+        return result, [False] * len(result)
+    if len(batch) <= 1:
+        return batch, [True] * len(batch)  # single string failed — keep English
+
+    mid = len(batch) // 2
+    halves_src = (batch[:mid], batch[mid:])
+    halves_res = await asyncio.gather(*(
+        _translate_flat_list(llm_service, half, source_language, target_language)
+        for half in halves_src
+    ))
+    out: list[str] = []
+    salvaged_mask: list[bool] = []
+    salvaged = 0
+    for half_src, half_res in zip(halves_src, halves_res):
+        if half_res is not None:
+            out.extend(half_res)
+            salvaged_mask.extend([False] * len(half_res))
+        else:
+            out.extend(half_src)
+            salvaged_mask.extend([True] * len(half_src))
+            salvaged += len(half_src)
+    if salvaged:
+        logger.warning(
+            "Translation salvaged %d/%d strings as English after batch retry",
+            salvaged, len(batch),
+        )
+    return out, salvaged_mask
+
+
 async def _translate_in_batches(
     llm_service: LLMService,
     strings: list[str],
     source_language: str,
     target_language: str,
-) -> list[str] | None:
+) -> tuple[list[str], list[bool]] | None:
     """Translate ``strings`` in concurrent batches and concatenate in order.
 
-    Splitting into ``_MAX_TRANSLATION_BATCH``-sized calls keeps each LLM call
-    within the fast model's output budget while still translating EVERY string
-    — replacing the old fail-closed "too many strings" abort. Concurrency is
-    bounded by ``_MAX_CONCURRENT_TRANSLATION_BATCHES`` so a long video can't
-    fan out enough batches to trip the provider's rate limits. Returns None if
-    any batch fails (all-or-nothing: a half-translated surface is worse than
-    none) or if the concatenated length doesn't match the input.
+    Resilient to a single bad batch: a batch that fails (LLM error or a count
+    mismatch) is retried once split in half, and any half that still fails falls
+    back to its English source strings — a mostly-translated source-language
+    surface is far better than none (the previous all-or-nothing behaviour
+    discarded the entire ``sourceLanguage`` block on one truncated batch).
+
+    Returns ``(strings, salvaged_mask)`` — the translated strings (English in
+    salvaged positions) and a per-string mask where ``True`` marks a salvaged
+    English-fallback string. Returns None ONLY when no batch produced a real
+    translation (every string salvaged), so the caller's ``_is_mirror`` gate /
+    no-toggle path still apply. Concurrency is bounded by
+    ``_MAX_CONCURRENT_TRANSLATION_BATCHES`` to stay under provider rate limits.
     """
     if not strings:
-        return []
+        return [], []
     batches = [
         strings[i:i + _MAX_TRANSLATION_BATCH]
         for i in range(0, len(strings), _MAX_TRANSLATION_BATCH)
     ]
     semaphore = asyncio.Semaphore(_MAX_CONCURRENT_TRANSLATION_BATCHES)
 
-    async def _bounded(batch: list[str]) -> list[str] | None:
+    async def _bounded(batch: list[str]) -> tuple[list[str], list[bool]]:
         async with semaphore:
-            return await _translate_flat_list(
+            return await _translate_or_salvage(
                 llm_service, batch, source_language, target_language,
             )
 
     results = await asyncio.gather(*(_bounded(batch) for batch in batches))
     out: list[str] = []
-    for chunk in results:
-        if chunk is None:
-            return None
+    salvaged_mask: list[bool] = []
+    for chunk, chunk_mask in results:
         out.extend(chunk)
+        salvaged_mask.extend(chunk_mask)
+    if all(salvaged_mask):
+        return None  # nothing actually translated — let the caller skip the toggle
     if len(out) != len(strings):
-        logger.warning(
-            "Batched translation length mismatch: expected %d, got %d",
+        # Salvage preserves length, so this is a defensive invariant; if it ever
+        # trips, fail closed rather than write a misaligned source-language tree.
+        logger.error(
+            "Batched translation length mismatch after salvage: expected %d, got %d",
             len(strings), len(out),
         )
         return None
-    return out
+    return out, salvaged_mask
 
 
 async def translate_to_source(
@@ -394,14 +455,22 @@ async def translate_to_source(
         len(originals), sum(len(s) for s in originals), target_lang,
     )
 
-    translations = await _translate_in_batches(llm_service, originals, "en", target_lang)
-    if translations is None:
+    batched = await _translate_in_batches(llm_service, originals, "en", target_lang)
+    if batched is None:
         logger.warning(
             "Translation failed — returning input unchanged (no sourceLanguage)",
         )
         return output
+    translations, salvaged_mask = batched
 
-    if _is_mirror(originals, translations):
+    # Judge the echo gate only on strings the model actually translated. Salvaged
+    # strings are their English originals by construction, so including them would
+    # inflate the mirror ratio and could discard a genuinely-translated surface
+    # just because part of it was salvaged. At least one non-salvaged string
+    # exists here (else _translate_in_batches returned None).
+    mirror_originals = [o for o, sal in zip(originals, salvaged_mask) if not sal]
+    mirror_translations = [t for t, sal in zip(translations, salvaged_mask) if not sal]
+    if _is_mirror(mirror_originals, mirror_translations):
         logger.warning(
             "Translation appears to mirror English — discarding sourceLanguage",
         )
