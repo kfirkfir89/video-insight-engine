@@ -50,6 +50,54 @@ The triage pipeline determines content tags from video metadata and transcript m
 | `narrative` | `schemas/narrative.txt` | Modifier only |
 | `finance` | `schemas/finance.txt` | Modifier only |
 
+### Interactive Component Types
+
+Component props live in `packages/types/src/vie-response.ts`. The **concept canvas**
+(learning & science domains) uses a typed, grouped graph (assembled by
+`assemble_concept_canvas`; see [SERVICE-SUMMARIZER.md](./SERVICE-SUMMARIZER.md#concept-canvas-schema-learning--science-domains)):
+
+```typescript
+// Relation drives EDGE STYLE, never color (see DESIGN.md):
+//   causes / requires  → solid line + arrowhead (directional dependency)
+//   contrasts          → dashed line (opposition / trade-off)
+//   partOf / relatesTo → dotted line (loose association)
+export type ConceptRelation = 'causes' | 'contrasts' | 'requires' | 'partOf' | 'relatesTo';
+
+export interface ConceptConnection {
+  to: string;                    // EXACT name of another concept in the same array
+  type: ConceptRelation;
+}
+
+export interface ConceptItem extends FrameEvidence {
+  name: string;
+  emoji: string;
+  definition: string;
+  example?: string;
+  analogy?: string;
+  group?: string;                // thematic cluster / lane (assembler derives/defaults one)
+  timestamp?: number;            // seconds into the video — drives frame evidence
+  thumbnailUrl?: string;         // injected by inject_frame_thumbnails on timestamp match
+  connections: Array<string | ConceptConnection>;  // bare string = legacy → coerced to relatesTo
+}
+
+export interface ConceptCanvasProps {
+  concepts: ConceptItem[];
+  groups?: string[];             // ordered, de-duped lane order (added in v6)
+  onSeek?: (seconds: number) => void;
+  // videoId / nextTab / onNavigateTab remain as optional nav props
+}
+```
+
+#### Component density gates (`densityGates`)
+
+`packages/shared/src/config/domains.json` carries a `densityGates` map
+(`Record<string, { min; max; chars }>`, typed in
+`packages/shared/src/config/index.ts`). It is **advisory planner guidance only** —
+rendered into the plan prompt as `{density_gates}` to steer how many items the
+LLM emits per component. It is **not** an enforcement layer: the summarizer's
+per-assembler hard caps are independent. Edit `domains.json` to change either the
+planner-selectable `components` list or these gates.
+
 ### Legacy: VideoContext
 
 Still present in older documents for backward compatibility:

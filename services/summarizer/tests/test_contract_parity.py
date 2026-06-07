@@ -20,8 +20,11 @@ from src.services.pipeline.assembly.assemblers import (
     _TAB_ID_TO_COMPONENT,
 )
 from src.shared_config.domain_config import (
+    density_gates,
     get_config,
     primary_components,
+    render_density_gate_table,
+    render_valid_component_names,
     secondary_components,
     valid_components,
 )
@@ -33,12 +36,16 @@ _FALLBACK_ONLY = frozenset({"display_section"})
 _PLAN_PROMPT = Path(__file__).parent.parent / "src" / "prompts" / "plan.txt"
 
 
+_TOOLKIT_PROMPT = Path(__file__).parent.parent / "src" / "prompts" / "component_toolkit.txt"
+
+
 def _plan_valid_component_names() -> list[str]:
-    """Parse the backtick-wrapped names from plan.txt's VALID-names line."""
-    text = _PLAN_PROMPT.read_text(encoding="utf-8")
-    match = re.search(r"VALID component names.*?:\*\*(.+)", text)
-    assert match, "plan.txt must declare a 'VALID component names' line"
-    return re.findall(r"`([a-z_]+)`", match.group(1))
+    """Parse the backtick names from the GENERATED valid-components block.
+
+    The planner's selectable surface is now single-sourced from domains.json and
+    injected into plan.txt's ``{valid_components}`` placeholder at runtime, so we
+    assert against the rendered block rather than hardcoded prompt text."""
+    return re.findall(r"`([a-z_]+)`", render_valid_component_names())
 
 
 class TestContractParity:
@@ -110,3 +117,35 @@ class TestContractParity:
         tiers = get_config().get("componentTiers", {})
         untiered = set(ASSEMBLER_REGISTRY) - set(tiers)
         assert not untiered, f"assemblers with no tier in componentTiers: {sorted(untiered)}"
+
+    # ── Single-source placeholders (config → generated prompt) ────────────
+
+    def test_plan_txt_uses_valid_components_placeholder(self):
+        """plan.txt must inject the component list via {valid_components}, not a
+        hardcoded backtick list — so domains.json is the single source."""
+        text = _PLAN_PROMPT.read_text(encoding="utf-8")
+        assert "{valid_components}" in text, "plan.txt must declare {valid_components}"
+        # The hardcoded list must be gone (guard against drift-back). The rendered
+        # block has many backtick names on the VALID line; the raw file shouldn't.
+        valid_line = next(
+            (ln for ln in text.splitlines() if "VALID component names" in ln), ""
+        )
+        assert valid_line.count("`") == 0, f"plan.txt still hardcodes the list: {valid_line!r}"
+
+    def test_toolkit_uses_density_gates_placeholder(self):
+        """component_toolkit.txt must inject the density table via {density_gates}."""
+        text = _TOOLKIT_PROMPT.read_text(encoding="utf-8")
+        assert "{density_gates}" in text, "component_toolkit.txt must declare {density_gates}"
+
+    def test_density_gates_keys_are_valid_components(self):
+        """Every density-table row names a real component (no typos/orphans in
+        the table the planner sees)."""
+        known = set(valid_components()) | set(secondary_components())
+        unknown = set(density_gates()) - known
+        assert not unknown, f"densityGates rows for unknown components: {sorted(unknown)}"
+
+    def test_render_density_table_has_a_row_per_gate(self):
+        """The generated markdown table renders one row per densityGates entry."""
+        table = render_density_gate_table()
+        for name in density_gates():
+            assert f"| {name} |" in table, f"density table missing a row for {name}"

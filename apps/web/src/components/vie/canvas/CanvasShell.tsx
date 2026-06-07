@@ -90,6 +90,12 @@ const tokenStyle = {
  * Disables scroll-zoom by default to avoid hijacking page scroll, and hides
  * the upstream attribution chip (we display it elsewhere in the design
  * system).
+ *
+ * Bounded pan (`translateExtent` / `nodeExtent`), static nodes
+ * (`nodesDraggable={false}`), and custom `edgeTypes` (e.g. the concept canvas
+ * `FloatingEdge`) all pass straight through via `...rest`. `minZoom` defaults
+ * lower than ReactFlow's 0.5 so wide grouped-lane layouts can `fitView` without
+ * clamping; override per-consumer when needed.
  */
 function VieCanvasInner<
   NodeType extends Node = Node,
@@ -103,6 +109,7 @@ function VieCanvasInner<
   panOnDrag = true,
   zoomOnScroll = false,
   fitView = true,
+  minZoom = 0.2,
   ...rest
 }: VieCanvasProps<NodeType, EdgeType>) {
   const { isDark } = useVieFlowTheme();
@@ -125,6 +132,7 @@ function VieCanvasInner<
           fitView={fitView}
           panOnDrag={panOnDrag}
           zoomOnScroll={zoomOnScroll}
+          minZoom={minZoom}
           {...rest}
         >
           <Background gap={16} size={1} color="var(--border)" />

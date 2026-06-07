@@ -54,6 +54,28 @@
     "quick_quiz": "secondary",
     "display_section": "display"
   },
+  "densityGates": {
+    "info_grid": { "min": "3", "max": "20", "chars": "120 chars per value (≈ 20 words)" },
+    "flash_deck": { "min": "3", "max": "15", "chars": "front ≤ 40, back ≤ 180" },
+    "comparison": { "min": "3 rows", "max": "10", "chars": "each side ≤ 80 chars" },
+    "comparison_radar": { "min": "4 axes", "max": "8", "chars": "weighted by user via sliders" },
+    "spot_explorer": { "min": "2", "max": "25", "chars": "description ≤ 200" },
+    "step_player": { "min": "3", "max": "10", "chars": "instruction ≤ 200" },
+    "step_flow_canvas": { "min": "6", "max": "25", "chars": "drives the canvas graph layout" },
+    "moment_track": { "min": "3", "max": "20", "chars": "label ≤ 60" },
+    "quiz_arena": { "min": "2", "max": "8", "chars": "question ≤ 140, context ≤ 180" },
+    "workout_room": { "min": "2", "max": "25", "chars": "name ≤ 40" },
+    "checklist": { "min": "3", "max": "30", "chars": "label ≤ 80" },
+    "packing_mission": { "min": "4", "max": "40", "chars": "item ≤ 40, weight optional" },
+    "code_playground": { "min": "1", "max": "12", "chars": "explanation ≤ 200" },
+    "concept_canvas": { "min": "2", "max": "30", "chars": "definition ≤ 200, connections[]" },
+    "connect_canvas": { "min": "2 pairs", "max": "8", "chars": "graded; answer key from connections[]" },
+    "video_filmstrip": { "min": "3 frames", "max": "24", "chars": "caption ≤ 80" },
+    "claims_tracker": { "min": "2 claims", "max": "20", "chars": "claim ≤ 200, source ≤ 80" },
+    "tier_list": { "min": "3 items", "max": "30", "chars": "item ≤ 60, reason ≤ 120" },
+    "formation_diagram": { "min": "3 players", "max": "23", "chars": "player ≤ 40; x/y are 0-100" },
+    "lyrics_karaoke": { "min": "—", "max": "—", "chars": "per-line ≤ 120 chars" }
+  },
   "domains": {
     "learning": {
       "emoji": "📚",

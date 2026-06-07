@@ -134,13 +134,38 @@ export interface StepItem extends FrameEvidence {
   thumbnailUrl?: string;
 }
 
-export interface ConceptItem {
+/**
+ * Relationship type between two concepts, encoded on the canvas by line-style +
+ * arrowhead (never hue — see DESIGN.md "One Domain, One Accent"):
+ *   causes / requires → solid line + arrowhead (directional dependency)
+ *   contrasts        → dashed line (opposition / trade-off)
+ *   partOf / relatesTo → dotted line (loose association)
+ */
+export type ConceptRelation = 'causes' | 'contrasts' | 'requires' | 'partOf' | 'relatesTo';
+
+export interface ConceptConnection {
+  /** EXACT name of another concept in the same `concepts` array. */
+  to: string;
+  type: ConceptRelation;
+}
+
+export interface ConceptItem extends FrameEvidence {
   name: string;
   emoji: string;
   definition: string;
   example?: string;
   analogy?: string;
-  connections: string[];
+  /** Short thematic cluster label (e.g. "Foundations"). Assembler defaults/derives one. */
+  group?: string;
+  /** Seconds into the video where this concept is explained — drives frame evidence. */
+  timestamp?: number;
+  /** Frame thumbnail injected by `inject_frame_thumbnails` when a timestamp matches. */
+  thumbnailUrl?: string;
+  /**
+   * Typed adjacency list. A bare string is legacy data (cached pre-v6 rows) and
+   * is treated as a `relatesTo` connection by the canvas normalizer.
+   */
+  connections: Array<string | ConceptConnection>;
 }
 
 export interface KeyPointItem {
@@ -190,6 +215,8 @@ export interface VerdictHeader {
 
 export interface ConceptCanvasProps {
   concepts: ConceptItem[];
+  /** Ordered, de-duped group labels for the lanes + Groups view. */
+  groups?: string[];
   onSeek?: (seconds: number) => void;
   videoId?: string;
   nextTab?: string;

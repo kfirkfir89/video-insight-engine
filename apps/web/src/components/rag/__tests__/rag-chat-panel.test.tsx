@@ -58,6 +58,25 @@ describe('RAGChatPanel', () => {
 
       expect(container.firstChild).toHaveClass('custom-class');
     });
+
+    it('should show the "This video" scope chip when scoped to a video', () => {
+      render(<RAGChatPanel {...defaultProps} scope="video" />);
+
+      expect(screen.getByText('This video')).toBeInTheDocument();
+    });
+
+    it('should show the "Your library" scope chip when scoped to the library', () => {
+      render(<RAGChatPanel {...defaultProps} scope="library" />);
+
+      expect(screen.getByText('Your library')).toBeInTheDocument();
+    });
+
+    it('should not render a scope chip when scope is omitted', () => {
+      render(<RAGChatPanel {...defaultProps} />);
+
+      expect(screen.queryByText('This video')).not.toBeInTheDocument();
+      expect(screen.queryByText('Your library')).not.toBeInTheDocument();
+    });
   });
 
   describe('message bubbles', () => {

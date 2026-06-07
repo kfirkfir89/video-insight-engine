@@ -24,4 +24,32 @@ describe('VieCanvas', () => {
     const { container } = render(<VieCanvas nodes={[]} edges={[]} />);
     expect(container.querySelector('.react-flow__controls')).not.toBeNull();
   });
+
+  it('should accept bounded-pan + locked-node passthrough props without crashing', () => {
+    // translateExtent / nodeExtent / nodesDraggable all flow through `...rest`
+    // into ReactFlow — the concept canvas relies on this for static layout.
+    const { container } = render(
+      <VieCanvas
+        nodes={[]}
+        edges={[]}
+        nodesDraggable={false}
+        translateExtent={[
+          [0, 0],
+          [800, 600],
+        ]}
+      >
+        <div data-testid="bounded-child">bounded</div>
+      </VieCanvas>,
+    );
+    expect(screen.getByTestId('bounded-child')).toBeInTheDocument();
+    expect(container.querySelector('[data-slot="vie-canvas"]')).not.toBeNull();
+  });
+
+  it('should accept a custom edgeTypes registration (e.g. FloatingEdge)', () => {
+    const FakeEdge = () => null;
+    const { container } = render(
+      <VieCanvas nodes={[]} edges={[]} edgeTypes={{ floating: FakeEdge }} />,
+    );
+    expect(container.querySelector('[data-slot="vie-canvas"]')).not.toBeNull();
+  });
 });

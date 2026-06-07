@@ -143,6 +143,48 @@ describe("useSidebarChat", () => {
 
       expect(mockedSendLibraryMessage).not.toHaveBeenCalled();
     });
+
+    it("should surface tool steps and refresh the tree on a mutating action while a video is open", () => {
+      // Regression: a video being open must NOT make the assistant a toolless
+      // chatbot — single-video chat now runs library tools too.
+      const { queryClient, wrapper } = makeWrapper();
+      const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+      const { result } = renderHook(
+        () => useSidebarChat({ videoSummaryId: "vid-123" }),
+        { wrapper },
+      );
+
+      act(() => {
+        result.current.sendMessage("organize my collection");
+      });
+
+      // The single-video transport receives handleEvent as its 4th arg.
+      const handleEvent = mockedSendAssistantMessage.mock.calls[0][3] as (
+        event: AssistantChatEvent,
+      ) => void;
+
+      act(() => {
+        handleEvent({
+          type: "tool",
+          content: "Organized library: 4 folders, 8 videos moved",
+          metadata: { status: "done", action: "organize_library" },
+        });
+        handleEvent({ type: "done" });
+      });
+
+      const assistantMsg = result.current.messages.find(
+        (m) => m.role === "assistant",
+      );
+      expect(assistantMsg?.steps).toEqual([
+        "Organized library: 4 folders, 8 videos moved",
+      ]);
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["folders", "list"],
+      });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["videos", "list"],
+      });
+    });
   });
 
   describe("sendMessage streams every message through the agent", () => {

@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ConceptItem } from '@vie/types';
 
-import { ConceptCanvas, buildConceptEdges } from '../ConceptCanvas';
+import { ConceptCanvas, buildConceptGraph } from '../ConceptCanvas';
 
 const concepts: ConceptItem[] = [
   {
@@ -10,86 +11,150 @@ const concepts: ConceptItem[] = [
     emoji: '🌍',
     definition: 'Force that attracts objects with mass toward each other.',
     example: 'An apple falling from a tree.',
-    analogy: 'Like a magnet, but for everything with mass.',
-    connections: ['Acceleration'],
+    group: 'Foundations',
+    connections: [{ to: 'Acceleration', type: 'causes' }],
   },
   {
     name: 'Acceleration',
     emoji: '🚀',
     definition: 'The rate at which velocity changes over time.',
-    connections: ['Gravity', 'Phantom Concept'],
+    group: 'Mechanics',
+    connections: [{ to: 'Gravity', type: 'relatesTo' }, { to: 'Phantom Concept', type: 'causes' }],
   },
   {
     name: 'Mass',
     emoji: '⚖️',
     definition: 'The amount of matter in an object.',
+    group: 'Foundations',
     connections: [],
   },
 ];
 
+// Legacy cached shape — bare-string connections, no group.
+const legacyConcepts: ConceptItem[] = [
+  { name: 'Embedding', emoji: '🔢', definition: 'Maps tokens to vectors.', connections: ['Attention'] },
+  { name: 'Attention', emoji: '👀', definition: 'Weights tokens.', connections: ['Embedding'] },
+];
+
+describe('buildConceptGraph', () => {
+  it('builds typed edges and drops hallucinated + self references', () => {
+    const model = buildConceptGraph(concepts, ['Foundations', 'Mechanics']);
+    // Gravity↔Acceleration is one undirected edge; the "Phantom Concept" ref is dropped.
+    expect(model.edges).toHaveLength(1);
+    expect(model.edges[0]).toMatchObject({ relation: 'causes' });
+  });
+
+  it('coerces legacy bare-string connections to relatesTo edges', () => {
+    const model = buildConceptGraph(legacyConcepts);
+    expect(model.edges).toHaveLength(1);
+    expect(model.edges[0].relation).toBe('relatesTo');
+  });
+
+  it('returns ordered, de-duped group lanes', () => {
+    const model = buildConceptGraph(concepts, ['Foundations', 'Mechanics']);
+    expect(model.groups).toEqual(['Foundations', 'Mechanics']);
+  });
+
+  it('derives a default group lane for ungrouped legacy concepts', () => {
+    const model = buildConceptGraph(legacyConcepts);
+    expect(model.groups).toEqual(['Concepts']);
+  });
+
+  it('records undirected adjacency for the inspector', () => {
+    const model = buildConceptGraph(concepts, ['Foundations', 'Mechanics']);
+    const gravityNeighbors = model.adjacency.get('concept-0') ?? [];
+    expect(gravityNeighbors.map((n) => n.name)).toContain('Acceleration');
+  });
+});
+
 describe('ConceptCanvas', () => {
-  beforeEach(() => {
-    localStorage.clear();
+  it('renders the empty fallback when there are no concepts', () => {
+    render(<ConceptCanvas concepts={[]} />);
+    expect(screen.getByText(/No concepts to map yet/i)).toBeInTheDocument();
   });
 
-  it('should render one node slot per concept', () => {
-    render(<ConceptCanvas concepts={concepts} videoId="abc123" />);
-    const nodes = document.querySelectorAll('[data-slot="vie-concept-node"]');
-    expect(nodes).toHaveLength(concepts.length);
-  });
-
-  it('should build edges only for connections that resolve to a real concept', () => {
-    // Gravity -> Acceleration and Acceleration -> Gravity. The "Phantom
-    // Concept" reference is skipped because no concept has that name.
-    const edges = buildConceptEdges(concepts);
-    expect(edges).toHaveLength(2);
-    expect(edges.map((e) => `${e.source}->${e.target}`)).toEqual(
-      expect.arrayContaining(['concept-0->concept-1', 'concept-1->concept-0']),
+  it('renders a sparse graph (concepts with no connections → no edges, no crash)', () => {
+    const sparse: ConceptItem[] = [
+      { name: 'Alpha', emoji: '🅰️', definition: 'First.', connections: [] },
+      { name: 'Beta', emoji: '🅱️', definition: 'Second.', connections: [] },
+    ];
+    render(<ConceptCanvas concepts={sparse} />);
+    // Falls back to a single derived "Concepts" lane with zero links.
+    expect(screen.getByTestId('concept-canvas-counts')).toHaveTextContent(
+      '2 concepts · 1 groups · 0 links',
     );
-
-    // Edge layer mounts inside the canvas (rendering depends on a real
-    // viewport, but the layer container itself is always present).
-    render(<ConceptCanvas concepts={concepts} videoId="abc123" />);
-    expect(document.querySelector('.react-flow__edges')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Concepts' })).toBeInTheDocument();
   });
 
-  it('should expand a concept node when its toggle is clicked', () => {
-    render(<ConceptCanvas concepts={concepts} videoId="abc123" />);
-    // Definition body should not be in the DOM before any click.
+  it('shows a header strip with concept, group and link counts', () => {
+    render(<ConceptCanvas concepts={concepts} groups={['Foundations', 'Mechanics']} />);
+    expect(screen.getByTestId('concept-canvas-counts')).toHaveTextContent(
+      '3 concepts · 2 groups · 1 links',
+    );
+  });
+
+  it('defaults to the Groups list view on mobile (matchMedia → not desktop)', () => {
+    render(<ConceptCanvas concepts={concepts} groups={['Foundations', 'Mechanics']} />);
+    // Group headings are present; the canvas node layer is not.
+    expect(screen.getByRole('heading', { name: 'Foundations' })).toBeInTheDocument();
+    expect(document.querySelector('[data-slot="vie-concept-node"]')).toBeNull();
+  });
+
+  it('switches to the Map view and renders one node per concept', async () => {
+    const user = userEvent.setup();
+    render(<ConceptCanvas concepts={concepts} groups={['Foundations', 'Mechanics']} />);
+    await user.click(screen.getByRole('tab', { name: /map/i }));
+    expect(document.querySelectorAll('[data-slot="vie-concept-node"]')).toHaveLength(concepts.length);
+  });
+
+  it('gives each node hidden source + target handles (regression: floating edges need anchors)', async () => {
+    // Without handles on the (handle-less) compact nodes, React Flow logs
+    // error #008 ("Couldn't create edge for source handle id: null") and draws
+    // ZERO edges — the typed-edge feature silently breaks. Each node must carry
+    // one source + one target handle (hidden) for the floating edges to anchor.
+    // (jsdom can't render RF's measured edge layer, so we assert the anchors.)
+    const user = userEvent.setup();
+    render(<ConceptCanvas concepts={concepts} groups={['Foundations', 'Mechanics']} />);
+    await user.click(screen.getByRole('tab', { name: /map/i }));
+    const nodes = document.querySelectorAll('[data-slot="vie-concept-node"]');
+    nodes.forEach((node) => {
+      expect(node.querySelectorAll('.react-flow__handle.source').length).toBe(1);
+      expect(node.querySelectorAll('.react-flow__handle.target').length).toBe(1);
+    });
+  });
+
+  it('opens the inspector (outside the node tree) when a concept is selected', async () => {
+    const user = userEvent.setup();
+    render(<ConceptCanvas concepts={concepts} groups={['Foundations', 'Mechanics']} />);
+    // No inspector before selection.
+    expect(document.querySelector('[data-slot="canvas-inspector"]')).toBeNull();
+    // Select Gravity from the (default) Groups list.
+    await user.click(screen.getByRole('button', { name: /Gravity/ }));
+    const inspector = document.querySelector('[data-slot="canvas-inspector"]');
+    expect(inspector).not.toBeNull();
     expect(
-      screen.queryByText('Force that attracts objects with mass toward each other.'),
-    ).toBeNull();
-    // xyflow viewport children may be visibility:hidden in jsdom; query the
-    // raw DOM and pick the first button labeled with the concept name.
-    const gravityButton = Array.from(
-      document.querySelectorAll<HTMLButtonElement>('[data-slot="vie-concept-node"] button'),
-    ).find((btn) => btn.textContent?.includes('Gravity'));
-    expect(gravityButton).toBeDefined();
-    fireEvent.click(gravityButton!);
-    expect(
-      screen.getByText('Force that attracts objects with mass toward each other.'),
+      within(inspector as HTMLElement).getByText(
+        'Force that attracts objects with mass toward each other.',
+      ),
     ).toBeInTheDocument();
   });
 
-  it('should persist dragged node positions to localStorage', () => {
+  it('locks node dragging in the Map view (no infinite drag)', async () => {
+    const user = userEvent.setup();
+    render(<ConceptCanvas concepts={concepts} groups={['Foundations', 'Mechanics']} />);
+    await user.click(screen.getByRole('tab', { name: /map/i }));
+    // ReactFlow tags draggable nodes with a `draggable` class; locked nodes have none.
+    expect(document.querySelectorAll('.react-flow__node.draggable')).toHaveLength(0);
+  });
+
+  it('does not persist any layout to localStorage (feature dropped)', () => {
     const setItemSpy = vi.spyOn(window.localStorage, 'setItem');
-    render(<ConceptCanvas concepts={concepts} videoId="abc123" />);
-
-    // Simulate the xyflow onNodeDragStop callback by exercising the same
-    // persistence code path the component uses. Read the component's storage
-    // key directly so the test remains coupled to the contract, not internals.
-    const key = 'vie:concept-canvas:abc123';
-    window.localStorage.setItem(
-      key,
-      JSON.stringify({ 'concept-0': { x: 99, y: 42 } }),
+    render(<ConceptCanvas concepts={concepts} groups={['Foundations', 'Mechanics']} />);
+    fireEvent.click(screen.getByRole('button', { name: /Gravity/ }));
+    expect(setItemSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('concept-canvas'),
+      expect.anything(),
     );
-
-    expect(setItemSpy).toHaveBeenCalledWith(
-      key,
-      expect.stringContaining('"concept-0"'),
-    );
-
-    const stored = JSON.parse(window.localStorage.getItem(key) ?? '{}');
-    expect(stored['concept-0']).toEqual({ x: 99, y: 42 });
+    setItemSpy.mockRestore();
   });
 });

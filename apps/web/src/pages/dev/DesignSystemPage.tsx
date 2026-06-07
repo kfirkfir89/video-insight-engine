@@ -12,7 +12,7 @@ if (!import.meta.env.DEV) {
 }
 
 import { useState } from 'react';
-import { Palette, Type, Ruler, Component, Boxes, MousePointerClick } from 'lucide-react';
+import { Palette, Type, Ruler, Component, Boxes, MousePointerClick, Workflow } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
 
@@ -22,8 +22,9 @@ import { SpacingScale } from '@/components/dev/design-system/SpacingScale';
 import { UIShowcase } from '@/components/dev/design-system/UIShowcase';
 import { VIELibraryShowcase } from '@/components/dev/design-system/VIELibraryShowcase';
 import { InteractiveBlockShowcase } from '@/components/dev/design-system/InteractiveBlockShowcase';
+import { ModesShowcase } from '@/components/dev/design-system/ModesShowcase';
 
-type Section = 'colors' | 'typography' | 'spacing' | 'ui' | 'vie' | 'interactive';
+type Section = 'colors' | 'typography' | 'spacing' | 'ui' | 'vie' | 'interactive' | 'modes';
 
 const sections: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'colors', label: 'Colors & Tokens', icon: <Palette className="h-4 w-4" /> },
@@ -32,6 +33,7 @@ const sections: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'ui', label: 'UI Primitives', icon: <Component className="h-4 w-4" /> },
   { id: 'vie', label: 'VIE Library', icon: <Boxes className="h-4 w-4" /> },
   { id: 'interactive', label: 'Interactive', icon: <MousePointerClick className="h-4 w-4" /> },
+  { id: 'modes', label: 'Modes', icon: <Workflow className="h-4 w-4" /> },
 ];
 
 function SectionContent({ section }: { section: Section }) {
@@ -48,6 +50,8 @@ function SectionContent({ section }: { section: Section }) {
       return <VIELibraryShowcase />;
     case 'interactive':
       return <InteractiveBlockShowcase />;
+    case 'modes':
+      return <ModesShowcase />;
   }
 }
 

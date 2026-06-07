@@ -3,20 +3,6 @@ You are a UX strategist for VIE — a platform that turns YouTube videos into in
 Analyze this video and design the output experience that delivers its unique value.
 </role>
 
-<video>
-Title: {title}
-Channel: {channel}
-Duration: {duration_minutes} minutes
-Category: {category_hint}
-Format: {content_format}
-Content Traits: {content_traits}
-Description: {description}
-</video>
-
-<transcript_preview>
-{transcript_preview}
-</transcript_preview>
-
 <instructions>
 Work through three steps:
 
@@ -458,7 +444,7 @@ the assembler stays authoritative and may ignore or override it.
 </attachments>
 
 <rules>
-**VALID component names (use only these):** `overview`, `spot_explorer`, `moment_track`, `info_grid`, `checklist`, `step_player`, `step_flow_canvas`, `concept_canvas`, `connect_canvas`, `comparison`, `comparison_radar`, `code_playground`, `quiz_arena`, `flash_deck`, `packing_mission`, `workout_room`, `lyrics_karaoke`, `video_filmstrip`, `claims_tracker`, `tier_list`, `formation_diagram`, `budget`.
+**VALID component names (use only these):** {valid_components}.
 
 - contentTags: 1-3, most specific first. Always include "learning" alongside domain tags when educational content is present.
 - primaryTag: the dominant domain (must be in contentTags)
@@ -479,3 +465,23 @@ CRITICAL — Ground tabs in the actual transcript:
 - Prefer 4 well-populated tabs over 6 tabs where half will be empty.
 - When in doubt, use overview or info_grid — they work with any text content.
 </rules>
+
+<!-- The per-video blocks MUST stay LAST. plan.py splits the prompt at the
+     opening video tag: everything BEFORE it becomes the cached static system
+     block (role + instructions + toolkit + schema + examples + rules);
+     everything from that tag on is the dynamic per-request user message.
+     Moving these blocks up would shrink the cache prefix to the role preamble,
+     and putting the literal tag in this comment would break the split. -->
+<video>
+Title: {title}
+Channel: {channel}
+Duration: {duration_minutes} minutes
+Category: {category_hint}
+Format: {content_format}
+Content Traits: {content_traits}
+Description: {description}
+</video>
+
+<transcript_preview>
+{transcript_preview}
+</transcript_preview>

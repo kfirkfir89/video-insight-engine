@@ -106,7 +106,7 @@ video-insight-engine/
 └── docker-compose.yml
 ```
 
-**Shared config, one source of truth:** `packages/shared/src/config/domains.json` defines, per domain: `label`, `schemas[]`, `components[]`, `enrichment(bool)`. **Python** reads it via `domain_config.py`; **TypeScript** via `@vie/shared/config`. One config, two runtimes.
+**Shared config, one source of truth:** `packages/shared/src/config/domains.json` defines, per domain: `label`, `schemas[]`, `components[]`, `enrichment(bool)`, plus top-level `components` (planner-selectable set), `componentTiers`, and `densityGates`. **Python** reads it via `domain_config.py`; **TypeScript** via `@vie/shared/config`. One config, two runtimes. The plan prompt is generated from it — `plan.txt` `{valid_components}` + `component_toolkit.txt` `{density_gates}` come from config (no hardcoded prompt lists), so editing `domains.json` changes what the planner LLM can pick.
 
 **Layered service code (a strong convention across all services):** Routes (HTTP) → Services (business logic) → Repositories (data). Dependencies flow downward only; services throw domain errors and never know HTTP; repositories map docs ↔ domain entities. Node uses constructor injection + a DI `Container`; Python uses FastAPI `Depends()`.
 

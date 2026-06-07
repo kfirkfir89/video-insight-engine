@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Handle,
+  MarkerType,
   Position,
   useEdgesState,
   useNodesState,
@@ -8,284 +9,333 @@ import {
   type Node,
   type NodeMouseHandler,
   type NodeTypes,
-  type OnNodeDrag,
+  type EdgeTypes,
 } from '@xyflow/react';
 
 import { VieCanvas } from '@/components/vie/canvas/CanvasShell';
+import {
+  FloatingEdge,
+  type EdgeVisualState,
+  isDirectionalRelation,
+} from '@/components/vie/canvas/FloatingEdge';
+import {
+  CanvasInspector,
+  type InspectorNeighbor,
+} from '@/components/vie/canvas/CanvasInspector';
+import { useGraphLayout } from '@/components/vie/canvas/useGraphLayout';
 import { GlassCard } from '@/components/vie';
+import { useIsDesktop } from '@/hooks/use-media-query';
 import { cn } from '@/lib/utils';
-import type { ConceptItem } from '@vie/types';
+import type { ConceptItem, ConceptConnection, ConceptRelation } from '@vie/types';
 
 // ─── Props ───
 
 interface ConceptCanvasProps {
   concepts: ConceptItem[];
+  groups?: string[];
   onSeek?: (seconds: number) => void;
-  videoId?: string;
-  nextTab?: string;
-  onNavigateTab?: (id: string) => void;
 }
 
-// ─── Persistence ───
+// ─── Model ───
 
-interface StoredPositions {
-  [nodeId: string]: { x: number; y: number };
+const DEFAULT_GROUP = 'Concepts';
+const ACCENT = 'var(--vie-accent, var(--primary))';
+const GROUP_DOT_CLASSES = [
+  'bg-foreground/30',
+  'bg-foreground/45',
+  'bg-foreground/60',
+  'bg-foreground/75',
+  'bg-foreground/90',
+];
+
+function groupDotClass(index: number): string {
+  return GROUP_DOT_CLASSES[index % GROUP_DOT_CLASSES.length];
 }
 
-function storageKey(videoId?: string): string | null {
-  if (!videoId) return null;
-  return `vie:concept-canvas:${videoId}`;
-}
-
-function readStoredPositions(videoId?: string): StoredPositions {
-  const key = storageKey(videoId);
-  if (!key || typeof localStorage === 'undefined') return {};
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as StoredPositions;
-    return typeof parsed === 'object' && parsed !== null ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeStoredPositions(videoId: string | undefined, positions: StoredPositions): void {
-  const key = storageKey(videoId);
-  if (!key || typeof localStorage === 'undefined') return;
-  try {
-    localStorage.setItem(key, JSON.stringify(positions));
-  } catch {
-    // Best-effort persistence; ignore quota errors.
-  }
-}
-
-// ─── Layout ───
-
-const CANVAS_RADIUS = 220;
-
-function radialLayout(count: number, stored: StoredPositions): Array<{ x: number; y: number }> {
-  if (count === 0) return [];
-  return Array.from({ length: count }, (_, index) => {
-    const id = nodeIdFor(index);
-    const saved = stored[id];
-    if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
-      return saved;
-    }
-    if (index === 0) return { x: 0, y: 0 };
-    const ringCount = Math.max(count - 1, 1);
-    const angle = ((index - 1) / ringCount) * Math.PI * 2;
-    return {
-      x: Math.cos(angle) * CANVAS_RADIUS,
-      y: Math.sin(angle) * CANVAS_RADIUS,
-    };
-  });
-}
-
-function nodeIdFor(index: number): string {
+function conceptNodeId(index: number): string {
   return `concept-${index}`;
 }
 
-function buildNameIndex(concepts: ConceptItem[]): Map<string, number> {
-  const index = new Map<string, number>();
-  concepts.forEach((concept, i) => {
-    if (concept?.name) {
-      index.set(concept.name.toLowerCase(), i);
-    }
-  });
-  return index;
+/** Coerce a connection (legacy bare string OR typed object) to `{to, type}`. */
+function normalizeConnection(conn: string | ConceptConnection): ConceptConnection {
+  if (typeof conn === 'string') return { to: conn, type: 'relatesTo' };
+  return { to: conn.to, type: conn.type ?? 'relatesTo' };
+}
+
+export interface ConceptGraphModel {
+  nodes: Array<{ id: string; concept: ConceptItem; group: string; groupIndex: number }>;
+  edges: Array<{ id: string; source: string; target: string; relation: ConceptRelation }>;
+  /** id → connected neighbours (both directions), with the relation that links them. */
+  adjacency: Map<string, InspectorNeighbor[]>;
+  groups: string[];
 }
 
 /**
- * Builds the edge list from each concept's `connections[]` adjacency list.
- * Unmatched connection names (typos, hallucinations) and self-references are
- * filtered out. Exported for unit testing — the rendered xyflow edge layer
- * needs a real viewport to mount in.
+ * Build the concept graph from raw props. Resolves typed/legacy connections to
+ * real concept ids (dropping hallucinated / self references), assigns a group
+ * lane per concept, and collects an undirected adjacency map for the inspector.
+ * Pure + exported for unit testing.
  */
-export function buildConceptEdges(concepts: ConceptItem[]): Edge[] {
-  if (!concepts?.length) return [];
-  const nameIndex = buildNameIndex(concepts);
-  const edges: Edge[] = [];
-  concepts.forEach((concept, sourceIndex) => {
-    const sourceId = nodeIdFor(sourceIndex);
-    concept.connections?.forEach((connectionName) => {
-      const targetIndex = nameIndex.get(connectionName.toLowerCase());
-      if (targetIndex == null || targetIndex === sourceIndex) return;
-      const targetId = nodeIdFor(targetIndex);
-      edges.push({
-        id: `${sourceId}->${targetId}`,
-        source: sourceId,
-        target: targetId,
-        type: 'smoothstep',
-        style: { stroke: 'var(--vie-accent, var(--primary))', strokeWidth: 1.4 },
-      });
-    });
+export function buildConceptGraph(
+  concepts: ConceptItem[],
+  groupsProp?: string[],
+): ConceptGraphModel {
+  const safe = (concepts ?? []).filter((c) => c && c.name && c.definition);
+
+  // Group lanes: prefer the assembler's ordered list, else derive from concepts.
+  const orderedGroups: string[] = [...(groupsProp ?? [])];
+  const groupForConcept = safe.map((c) => (c.group?.trim() ? c.group.trim() : DEFAULT_GROUP));
+  for (const group of groupForConcept) {
+    if (!orderedGroups.includes(group)) orderedGroups.push(group);
+  }
+  if (orderedGroups.length === 0) orderedGroups.push(DEFAULT_GROUP);
+
+  const nameToId = new Map<string, string>();
+  safe.forEach((concept, i) => nameToId.set(concept.name.trim().toLowerCase(), conceptNodeId(i)));
+
+  const nodes = safe.map((concept, i) => {
+    const group = groupForConcept[i];
+    return { id: conceptNodeId(i), concept, group, groupIndex: Math.max(0, orderedGroups.indexOf(group)) };
   });
-  return edges;
+
+  const adjacency = new Map<string, InspectorNeighbor[]>();
+  const pushNeighbor = (fromId: string, toId: string, relation: ConceptRelation): void => {
+    const node = nodes.find((n) => n.id === toId);
+    if (!node) return;
+    const list = adjacency.get(fromId) ?? [];
+    if (list.some((n) => n.id === toId)) return;
+    list.push({ id: toId, name: node.concept.name, emoji: node.concept.emoji, relation });
+    adjacency.set(fromId, list);
+  };
+
+  const edges: ConceptGraphModel['edges'] = [];
+  const seenPairs = new Set<string>();
+  safe.forEach((concept, i) => {
+    const sourceId = conceptNodeId(i);
+    for (const raw of concept.connections ?? []) {
+      const { to, type } = normalizeConnection(raw);
+      const targetId = nameToId.get(to.trim().toLowerCase());
+      if (!targetId || targetId === sourceId) continue;
+      // Adjacency is undirected (inspector shows everything connected).
+      pushNeighbor(sourceId, targetId, type);
+      pushNeighbor(targetId, sourceId, type);
+      // One drawn edge per unordered pair to avoid overlapping reciprocal lines.
+      const pairKey = [sourceId, targetId].sort().join('|');
+      if (seenPairs.has(pairKey)) continue;
+      seenPairs.add(pairKey);
+      edges.push({ id: `${sourceId}->${targetId}`, source: sourceId, target: targetId, relation: type });
+    }
+  });
+
+  return { nodes, edges, adjacency, groups: orderedGroups };
 }
 
 // ─── Node component ───
 
 interface ConceptNodeData extends Record<string, unknown> {
   concept: ConceptItem;
-  expanded: boolean;
-  onToggle: (id: string) => void;
+  groupIndex: number;
+  selected: boolean;
+  dimmed: boolean;
+  onSelect: (id: string) => void;
   nodeId: string;
 }
 
-const ConceptNode = memo(function ConceptNode({
-  data,
-}: {
-  data: ConceptNodeData;
-}) {
-  const { concept, expanded, onToggle, nodeId } = data;
+const ConceptNode = memo(function ConceptNode({ data }: { data: ConceptNodeData }) {
+  const { concept, groupIndex, selected, dimmed, onSelect, nodeId } = data;
   return (
-    <div data-slot="vie-concept-node" className="relative">
+    <div
+      data-slot="vie-concept-node"
+      data-selected={selected || undefined}
+      className={cn('transition-opacity duration-200', dimmed && 'opacity-30')}
+    >
+      {/* Hidden handles — FloatingEdge computes its own center-to-center geometry,
+          but React Flow still requires a source + target handle to wire an edge. */}
       <Handle
         type="target"
         position={Position.Top}
-        className="!h-2 !w-2 !border-0 !bg-[var(--vie-accent,var(--primary))]"
+        isConnectable={false}
+        className="!h-px !w-px !min-w-0 !border-0 !bg-transparent !opacity-0"
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        isConnectable={false}
+        className="!h-px !w-px !min-w-0 !border-0 !bg-transparent !opacity-0"
       />
       <GlassCard
-        variant={expanded ? 'interactive' : 'default'}
+        variant={selected ? 'interactive' : 'default'}
         className={cn(
-          'min-w-[160px] max-w-[260px] cursor-pointer p-3 text-start transition-colors',
+          'w-[184px] cursor-pointer p-2.5 text-start transition-colors',
           'hover:border-[color:var(--vie-accent,var(--primary))]/60',
-          'focus-within:ring-2 focus-within:ring-[color:var(--vie-accent,var(--primary))]/50',
-          expanded && 'border-[color:var(--vie-accent,var(--primary))]/60',
+          selected &&
+            'border-[color:var(--vie-accent,var(--primary))] ring-2 ring-[color:var(--vie-accent,var(--primary))]/40',
         )}
       >
         <button
           type="button"
           onClick={(event) => {
             event.stopPropagation();
-            onToggle(nodeId);
+            onSelect(nodeId);
           }}
           className="flex w-full items-center gap-2 text-start outline-none focus-visible:underline"
-          aria-expanded={expanded}
+          aria-pressed={selected}
         >
-          <span className="text-2xl leading-none" aria-hidden="true">
+          <span className="text-xl leading-none" aria-hidden="true">
             {concept.emoji || '💡'}
           </span>
           <span className="flex-1 truncate text-sm font-semibold text-foreground">
             {concept.name}
           </span>
+          <span
+            className={cn('h-2.5 w-2.5 shrink-0 rounded-full', groupDotClass(groupIndex))}
+            aria-hidden="true"
+          />
         </button>
-        {expanded && (
-          <div className="mt-3 space-y-2 text-xs leading-snug text-muted-foreground">
-            <p className="text-sm text-foreground/90">{concept.definition}</p>
-            {concept.example && (
-              <p>
-                <span className="me-1 text-[10px] font-semibold uppercase tracking-wider text-foreground/70">
-                  Example
-                </span>
-                {concept.example}
-              </p>
-            )}
-            {concept.analogy && (
-              <p>
-                <span className="me-1 text-[10px] font-semibold uppercase tracking-wider text-foreground/70">
-                  Analogy
-                </span>
-                {concept.analogy}
-              </p>
-            )}
-          </div>
-        )}
       </GlassCard>
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="!h-2 !w-2 !border-0 !bg-[var(--vie-accent,var(--primary))]"
-      />
     </div>
   );
 });
 
 const NODE_TYPES: NodeTypes = { concept: ConceptNode };
+const EDGE_TYPES: EdgeTypes = { floating: FloatingEdge };
+
+// ─── Legends ───
+
+const RELATION_LEGEND: Array<{ label: string; dash?: string }> = [
+  { label: 'causes / requires' },
+  { label: 'contrasts', dash: '7 5' },
+  { label: 'related', dash: '1.5 6' },
+];
+
+function RelationLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      {RELATION_LEGEND.map((item) => (
+        <span key={item.label} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <svg width="22" height="6" viewBox="0 0 22 6" aria-hidden="true">
+            <line
+              x1="1"
+              y1="3"
+              x2="21"
+              y2="3"
+              stroke={ACCENT}
+              strokeWidth="1.6"
+              strokeDasharray={item.dash}
+              strokeLinecap="round"
+            />
+          </svg>
+          {item.label}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 // ─── Canvas ───
 
 /**
- * Concept map rendered on top of @xyflow/react. Lays concepts out radially
- * (first concept at center, others on a circle), wires connections from the
- * `connections[]` adjacency list, and persists per-video node positions to
- * `localStorage` so the user's manual layout survives reloads.
+ * Concept map rendered on @xyflow/react. Concepts are laid out by a deterministic
+ * Dagre layout — tiered top→bottom by connection rank, clustered into per-group
+ * horizontal lanes (`useGraphLayout`). Nodes are locked (`nodesDraggable={false}`)
+ * with bounded pan; there is no localStorage persistence. Relationship type is
+ * encoded on the edges by line-style + arrowhead (`FloatingEdge`), never hue.
  *
- * Falls back to a friendly empty card when no concepts are provided.
+ * Selecting a concept docks the `CanvasInspector` (rendered outside the flow
+ * node tree so it is never z-trapped), brightens the selected neighbourhood and
+ * dims the rest. A Map/Groups toggle swaps the graph for group list-cards;
+ * mobile defaults to Groups, desktop to Map.
  */
 export const ConceptCanvas = memo(function ConceptCanvas({
   concepts,
-  videoId,
+  groups: groupsProp,
+  onSeek,
 }: ConceptCanvasProps) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const handleToggle = useCallback((id: string) => {
-    setExpandedId((prev) => (prev === id ? null : id));
-  }, []);
+  const isDesktop = useIsDesktop();
+  const model = useMemo(() => buildConceptGraph(concepts, groupsProp), [concepts, groupsProp]);
 
-  const initialNodes = useMemo<Node<ConceptNodeData>[]>(() => {
-    if (!concepts?.length) return [];
-    const stored = readStoredPositions(videoId);
-    const positions = radialLayout(concepts.length, stored);
-    return concepts.map((concept, index) => {
-      const id = nodeIdFor(index);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [view, setView] = useState<'map' | 'groups'>(() => (isDesktop ? 'map' : 'groups'));
+
+  const handleSelect = useCallback((id: string) => setSelectedId(id), []);
+  const handleClose = useCallback(() => setSelectedId(null), []);
+
+  const layout = useGraphLayout(
+    model.nodes.map((n) => ({ id: n.id, group: n.group })),
+    model.edges.map((e) => ({ source: e.source, target: e.target })),
+    model.groups,
+  );
+
+  // Highlight set = selected node + its neighbours.
+  const highlightSet = useMemo(() => {
+    if (!selectedId) return null;
+    const set = new Set<string>([selectedId]);
+    for (const neighbor of model.adjacency.get(selectedId) ?? []) set.add(neighbor.id);
+    return set;
+  }, [selectedId, model.adjacency]);
+
+  // Selection/highlight decoration is derived during render (single source of
+  // truth) rather than pushed in via effects — that previously let edge state
+  // desync from the model when `concepts` changed mid-selection.
+  const baseNodes = useMemo<Node<ConceptNodeData>[]>(() => {
+    return model.nodes.map((n) => ({
+      id: n.id,
+      type: 'concept',
+      position: layout.positions[n.id] ?? { x: 0, y: 0 },
+      draggable: false,
+      data: {
+        concept: n.concept,
+        groupIndex: n.groupIndex,
+        selected: n.id === selectedId,
+        dimmed: highlightSet != null && !highlightSet.has(n.id),
+        onSelect: handleSelect,
+        nodeId: n.id,
+      },
+    }));
+  }, [model.nodes, layout, handleSelect, selectedId, highlightSet]);
+
+  const baseEdges = useMemo<Edge[]>(() => {
+    return model.edges.map((e) => {
+      const state: EdgeVisualState =
+        selectedId == null
+          ? 'rest'
+          : e.source === selectedId || e.target === selectedId
+            ? 'active'
+            : 'dimmed';
       return {
-        id,
-        type: 'concept',
-        position: positions[index],
-        data: {
-          concept,
-          expanded: false,
-          onToggle: handleToggle,
-          nodeId: id,
-        },
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        type: 'floating',
+        data: { relation: e.relation, state },
+        markerEnd: isDirectionalRelation(e.relation)
+          ? { type: MarkerType.ArrowClosed, color: ACCENT, width: 16, height: 16 }
+          : undefined,
       };
     });
-    // We intentionally ignore handleToggle in deps because it's stable.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [concepts, videoId]);
+  }, [model.edges, selectedId]);
 
-  const initialEdges = useMemo<Edge[]>(() => buildConceptEdges(concepts), [concepts]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<ConceptNodeData>>(baseNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(baseEdges);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node<ConceptNodeData>>(initialNodes);
-  const [edges, , onEdgesChange] = useEdgesState<Edge>(initialEdges);
-
-  // When concepts or layout change, replace nodes/edges wholesale.
-  useEffect(() => {
-    setNodes(initialNodes);
-  }, [initialNodes, setNodes]);
-
-  // Re-sync expanded flag into node data without losing positions.
-  useEffect(() => {
-    setNodes((prev) =>
-      prev.map((node) => ({
-        ...node,
-        data: {
-          ...node.data,
-          expanded: node.id === expandedId,
-        },
-      })),
-    );
-  }, [expandedId, setNodes]);
+  // Keep React Flow's controlled state in sync as the model or selection
+  // changes. RF keys node measurements by id, so replacing node objects of the
+  // same id preserves the measurements the FloatingEdge geometry depends on.
+  useEffect(() => setNodes(baseNodes), [baseNodes, setNodes]);
+  useEffect(() => setEdges(baseEdges), [baseEdges, setEdges]);
 
   const handleNodeClick: NodeMouseHandler = useCallback(
-    (_event, node) => handleToggle(node.id),
-    [handleToggle],
+    (_event, node) => setSelectedId(node.id),
+    [],
   );
 
-  const handleNodeDragStop: OnNodeDrag = useCallback(
-    (_event, _node, draggedNodes) => {
-      if (!videoId) return;
-      const positions = readStoredPositions(videoId);
-      draggedNodes.forEach((dn) => {
-        positions[dn.id] = { x: dn.position.x, y: dn.position.y };
-      });
-      writeStoredPositions(videoId, positions);
-    },
-    [videoId],
+  const selectedConcept = useMemo(
+    () => model.nodes.find((n) => n.id === selectedId)?.concept ?? null,
+    [model.nodes, selectedId],
   );
+  const selectedNeighbors = selectedId ? model.adjacency.get(selectedId) ?? [] : [];
 
-  if (!concepts?.length) {
+  if (!model.nodes.length) {
     return (
       <GlassCard variant="outlined" className="text-center text-sm text-muted-foreground">
         No concepts to map yet.
@@ -293,18 +343,156 @@ export const ConceptCanvas = memo(function ConceptCanvas({
     );
   }
 
+  const counts = `${model.nodes.length} concepts · ${model.groups.length} groups · ${model.edges.length} links`;
+  const canvasHeight = Math.min(640, Math.max(420, layout.height + 120));
+
   return (
-    <div className="space-y-3">
-      <VieCanvas
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={NODE_TYPES}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeClick={handleNodeClick}
-        onNodeDragStop={handleNodeDragStop}
-        height={520}
-      />
+    <div className="space-y-3" data-slot="concept-canvas">
+      {/* Header strip: restrained analytics + view toggle */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-medium tabular-nums text-muted-foreground" data-testid="concept-canvas-counts">
+          {counts}
+        </p>
+        <div
+          role="tablist"
+          aria-label="Concept view"
+          className="inline-flex items-center rounded-lg border border-border bg-muted/20 p-0.5 text-xs font-semibold"
+        >
+          {(['map', 'groups'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              aria-selected={view === v}
+              onClick={() => setView(v)}
+              className={cn(
+                'rounded-md px-3 py-1 capitalize transition-colors',
+                view === v
+                  ? 'bg-[var(--vie-accent,var(--primary))] text-[var(--primary-foreground,white)]'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="relative">
+        {view === 'map' ? (
+          <VieCanvas
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={NODE_TYPES}
+            edgeTypes={EDGE_TYPES}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodeClick={handleNodeClick}
+            onPaneClick={handleClose}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            height={canvasHeight}
+          />
+        ) : (
+          <GroupsView
+            model={model}
+            selectedId={selectedId}
+            onSelect={handleSelect}
+          />
+        )}
+
+        {selectedConcept && (
+          <CanvasInspector
+            concept={selectedConcept}
+            neighbors={selectedNeighbors}
+            onSelectNeighbor={handleSelect}
+            onClose={handleClose}
+            onSeek={onSeek}
+            isDesktop={isDesktop}
+          />
+        )}
+      </div>
+
+      {/* Legends: relationship key + group key (both single-accent, no hue) */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-border/60 bg-muted/10 px-3 py-2">
+        <RelationLegend />
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {model.groups.map((group, i) => (
+            <span key={group} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className={cn('h-2.5 w-2.5 rounded-full', groupDotClass(i))} aria-hidden="true" />
+              {group}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// ─── Groups list view (mobile default) ───
+
+interface GroupsViewProps {
+  model: ConceptGraphModel;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}
+
+const GroupsView = memo(function GroupsView({ model, selectedId, onSelect }: GroupsViewProps) {
+  const byGroup = useMemo(() => {
+    const map = new Map<string, ConceptGraphModel['nodes']>();
+    for (const group of model.groups) map.set(group, []);
+    for (const node of model.nodes) {
+      const list = map.get(node.group) ?? [];
+      list.push(node);
+      map.set(node.group, list);
+    }
+    return map;
+  }, [model]);
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {model.groups.map((group, groupIndex) => {
+        const members = byGroup.get(group) ?? [];
+        if (members.length === 0) return null;
+        return (
+          <GlassCard key={group} variant="default" className="space-y-2 p-3">
+            <header className="flex items-center gap-2">
+              <span className={cn('h-2.5 w-2.5 rounded-full', groupDotClass(groupIndex))} aria-hidden="true" />
+              <h4 className="flex-1 text-sm font-semibold text-foreground">{group}</h4>
+              <span className="text-xs tabular-nums text-muted-foreground">{members.length}</span>
+            </header>
+            <ul className="space-y-1">
+              {members.map((node) => (
+                <li key={node.id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(node.id)}
+                    aria-pressed={node.id === selectedId}
+                    className={cn(
+                      'flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-start transition-colors',
+                      node.id === selectedId
+                        ? 'bg-[color:var(--vie-accent,var(--primary))]/10'
+                        : 'hover:bg-muted/40',
+                    )}
+                  >
+                    <span className="text-base leading-none" aria-hidden="true">
+                      {node.concept.emoji || '💡'}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-foreground">
+                        {node.concept.name}
+                      </span>
+                      <span className="line-clamp-1 text-xs text-muted-foreground">
+                        {node.concept.definition}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </GlassCard>
+        );
+      })}
     </div>
   );
 });

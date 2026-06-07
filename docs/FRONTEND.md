@@ -137,17 +137,24 @@ apps/web/src/
 
 ### Architecture
 
-Theme uses `data-theme` attribute on `<html>` with three modes:
+Theme uses `data-theme` attribute on `<html>` with four modes:
 
 | Mode     | Behavior                                      |
 | -------- | --------------------------------------------- |
 | `dark`   | Forces dark theme (`data-theme="dark"`)       |
 | `light`  | Forces light theme (`data-theme="light"`)     |
 | `system` | No attribute set — CSS `prefers-color-scheme` controls |
+| `lagoon` | Colorful dark-family variant (`data-theme="lagoon"`) — deep-teal primary + warm coral CTA |
+
+`lagoon` is a **dark-family** theme: it matches the `@custom-variant dark`
+selector and the `:is([data-theme="dark"])` rules, so it inherits dark-mode prose,
+effects, and the mobile glass-blur media query. Adding another dark-family theme
+means extending all of those selectors plus the `index.html` pre-paint script.
+`ResolvedTheme` is `"dark" | "light" | "lagoon"` (`"system"` always resolves away).
 
 ### Key Files
 
-- **`theme-context.ts`** — `Theme = "dark" | "light" | "system"`, context + provider types
+- **`theme-context.ts`** — `Theme = "dark" | "light" | "system" | "lagoon"`, context + provider types
 - **`theme-provider.tsx`** — Sets `document.documentElement.dataset.theme`, listens to `matchMedia` for system mode, uses View Transitions API for smooth crossfade
 - **`index.html`** — FOUC prevention script reads `localStorage('vie-theme')` and sets `data-theme` before React loads
 
@@ -717,6 +724,29 @@ Each tab's `component` field maps to a renderer in `ComposableOutput.tsx`:
 | `gallery` | GalleryInteractive | Grid/carousel/hero_stack layouts, seek |
 | `lyrics_player` | LyricsPlayerInteractive | Synced lyrics sections with seek |
 | `display_section` | DisplaySection | Generic data-driven fallback renderer |
+| `concept_canvas` | ConceptCanvas | Dagre-laid grouped lanes + docked inspector; typed edge relations (lazy-loaded) |
+| `step_flow_canvas` | StepFlowCanvas | Step graph laid out via the shared canvas layout (lazy-loaded) |
+| `connect_canvas` | ConnectCanvas | Graded match-the-pairs canvas (lazy-loaded) |
+| `lyrics_karaoke` | LyricsKaraoke | Per-line synced karaoke view |
+
+> The canvas renderers (`concept_canvas`, `step_flow_canvas`, `connect_canvas`)
+> are `React.lazy`-loaded and built on the shared Canvas System below.
+
+### Canvas System (React Flow)
+
+`apps/web/src/components/vie/canvas/` is the shared graph layer behind the canvas
+renderers. Dependency: `@dagrejs/dagre` (^3.0.0).
+
+| File | Role |
+|------|------|
+| `CanvasShell.tsx` | React Flow wrapper — bounded pan, locked (non-draggable) nodes, registered `edgeTypes`, sensible `minZoom`. **Nodes must keep hidden handles** even with floating edges, or RF errors and renders zero edges. |
+| `FloatingEdge.tsx` | Handle-less edge renderer; line style encodes the relation, never color (`causes`/`requires` → solid + arrow, `contrasts` → dashed, `partOf`/`relatesTo` → dotted). |
+| `useGraphLayout.ts` | Deterministic Dagre layout — tiers concepts within a group, lays groups out as horizontal lanes; pure + SSR-safe. |
+| `CanvasInspector.tsx` | Right-dock (desktop) / bottom-sheet (mobile) detail panel — concept definition, neighbors, frame evidence. Rendered as a docked sibling **outside** React Flow so it is never z-trapped behind nodes. |
+
+`ConceptCanvas` consumes these to render a static (non-drag) grouped graph from
+`ConceptCanvasProps` (`concepts`, optional `groups` for lane order). See
+[DATA-MODELS.md](./DATA-MODELS.md#interactive-component-types) for the prop types.
 
 ### Data Flow
 
@@ -762,8 +792,14 @@ Chat interface for RAG-powered conversations.
   sources={[...]}
   initialMessages={[...]}
   onSendMessage={async (message) => {...}}
+  scope="video"   // optional 'video' | 'library' — renders a header chip
 />
 ```
+
+The optional `scope` prop surfaces a header chip ("This video" / "Your library")
+so the user knows the chat's grounding. The Sidebar passes
+`scope={activeVideoId ? "video" : "library"}`. Both scopes can still trigger
+library actions (create/move/organize) — the chip is informational.
 
 ---
 
@@ -1009,6 +1045,7 @@ Living style guide for all design tokens and components.
 | Spacing Scale | Tailwind spacing tokens (1-12) with visual boxes |
 | Cards Showcase | GlassCard, ExpandableCard, HeroCard, ImageCard, VideoHero |
 | Interactive Block Showcase | All interactive renderers with live previews |
+| Modes | FlowPlayer "enter mode" demos (cooking, workout, build, study, explore, practice, listen) — extracted from the Interactive showcase |
 | UI Showcase | Buttons, badges, dialogs, toasts, form elements |
 | VIE Library Showcase | All Layer 2 components: data, content, navigation, feedback, media |
 
@@ -1022,6 +1059,8 @@ Living style guide for all design tokens and components.
 | `components/dev/design-system/SpacingScale.tsx` | Spacing showcase |
 | `components/dev/design-system/CardsShowcase.tsx` | Card component showcase |
 | `components/dev/design-system/InteractiveBlockShowcase.tsx` | Interactive renderer showcase |
+| `components/dev/design-system/ModesShowcase.tsx` | FlowPlayer "enter mode" demos (Modes tab) |
+| `components/dev/design-system/showcase-primitives.tsx` | Shared dev-demo primitives (`SectionCard`, `DemoBoundary`, `DemoSuspenseFallback`, `ShowcaseEntry`) |
 | `components/dev/design-system/UIShowcase.tsx` | UI primitives showcase |
 | `components/dev/design-system/VIELibraryShowcase.tsx` | VIE component library showcase |
 | `lib/dev/mock-interactive-blocks.ts` | Mock data for interactive components |

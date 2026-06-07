@@ -280,11 +280,18 @@ The pipeline uses Server-Sent Events (SSE) to stream results progressively with 
 │    → Translates tabs + synthesis to English for bilingual storage           │
 │    → Whisper translate for English Qdrant embeddings                        │
 │    → Stores language/isRTL metadata on document                             │
+│    → Owns the terminal transition: assembly left the doc "processing"        │
+│      and DEFERRED `done`; translation writes status="completed" and emits    │
+│      `done` after persisting the sourceLanguage block                        │
 │                                                                             │
 │  PHASE 8: SAVE + DONE                                                      │
 │    Events: complete (tabCount, processingTimeMs), done, [DONE]              │
+│    → English videos: assembly emits `done` directly (status="completed")     │
+│    → Non-English videos: `done` is emitted by Phase 7.5 (see above)          │
 │    → MongoDB: meta + tabs + language + isRTL saved                          │
 │    → Redis: full response cached for instant re-serve                      │
+│    → `heartbeat` events keep the SSE stream alive during long silent phases  │
+│      (e.g. multi-minute Whisper); cadence SSE_HEARTBEAT_SECONDS (12s)        │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```

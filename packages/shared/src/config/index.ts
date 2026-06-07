@@ -70,6 +70,10 @@ interface DomainsConfig {
   /** Optional so the `?? {}` read below stays meaningful for older/partial
    *  configs that predate the tier map (mirrors the Python `.get(...)`). */
   componentTiers?: Record<string, ComponentTier>;
+  /** Advisory per-component density-gate guidance shown to the planner LLM
+   *  (steering text, not enforcement — the assembler's caps are independent).
+   *  Single-sources the toolkit density table. */
+  densityGates?: Record<string, { min: string; max: string; chars: string }>;
   domains: Record<ContentTag, DomainEntry>;
   modifiers: Record<Modifier, ModifierEntry>;
   enrichment: Record<string, string>;
