@@ -96,7 +96,7 @@ services/summarizer/
     ├── prompts/
     │   ├── plan.txt              # Plan prompt → merged manifest+triage (identity, tabs, extraction guidance)
     │   ├── triage.txt            # Triage prompt (fallback only, injects component_toolkit.txt)
-    │   ├── component_toolkit.txt # Component descriptions + datasource paths (injected into plan/triage)
+    │   ├── component_toolkit.txt # Component descriptions + datasource paths (injected into plan/triage). Density table is generated from domains.json `densityGates` via `{density_gates}` placeholder
     │   ├── base_extraction.txt   # Schema-injection extraction template + video_context + prompt caching
     │   ├── classify.txt          # Domain+format classifier prompt (fast model, 10 domains + 17 formats)
     │   ├── chapter_detect.txt    # AI chapter detection prompt (fast model)
@@ -128,7 +128,7 @@ services/summarizer/
     │
     ├── shared_config/
     │   ├── __init__.py
-    │   └── domain_config.py      # Reads domains.json (Docker mount or local fallback)
+    │   └── domain_config.py      # Reads domains.json (Docker mount or local fallback). Also renders the planner's `{valid_components}` list + `{density_gates}` table from config
     │
     └── models/
         ├── schemas.py            # Pydantic models
@@ -173,6 +173,16 @@ QDRANT_HOST=vie-qdrant
 QDRANT_PORT=6333
 QDRANT_ENABLED=true
 EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2  # Drop-in alternatives must keep VECTOR_SIZE=384 (e.g. BAAI/bge-small-en-v1.5)
+
+# Whisper audio fallback resilience
+WHISPER_ENABLED=true
+WHISPER_MAX_DURATION_MINUTES=600
+WHISPER_CLIENT_TIMEOUT_SECONDS=300.0   # Per-request HTTP timeout for one chunk (bounds a stalled upload)
+WHISPER_MAX_RETRIES=1                  # Retries per chunk (SDK default is 2 — capped to bound worst-case latency)
+WHISPER_CHUNK_CONCURRENCY=3            # Concurrent chunk transcription (respects OpenAI per-key rate limits)
+
+# SSE streaming
+SSE_HEARTBEAT_SECONDS=12.0             # Keepalive cadence during silent phases — must stay under the gateway's 300s undici timeout
 
 LOG_LEVEL=INFO
 LOG_FORMAT=console              # console or json
@@ -284,6 +294,11 @@ The pipeline uses 3-6 LLM calls with a plan-first architecture:
         └─▶ Single call replaces old Manifest + Triage (2 calls → 1, saves ~30-50s)
         └─▶ Analyzes: creator identity, core promise, unique angle, extraction guidance
         └─▶ Designs: contentTags, modifiers, tab layout with component toolkit
+        └─▶ Selectable component list + density guidance are config-generated from domains.json
+            (`{valid_components}` via `render_valid_component_names`, `{density_gates}` via
+            `render_density_gate_table` in `shared_config/domain_config.py`, injected at plan time) —
+            edit `components` in domains.json to change what the planner can pick. `densityGates`
+            is **advisory LLM-steering only**; the assembler's per-component hard caps are independent.
         └─▶ Item counts for extraction quality validation
         └─▶ video_context flows to all downstream phases (compact ~300 chars)
         └─▶ 10 primary tags: learning, tech, fitness, food, music, travel, review, project, language, science
@@ -347,17 +362,29 @@ The pipeline uses 3-6 LLM calls with a plan-first architecture:
 
 10. TRANSLATION (non-English videos only, ~5-15s)
     └─▶ Triggered when ctx.language != "en" (detected from transcript)
-    └─▶ translate_to_source() — single flat-list LLM call
+    └─▶ translate_to_source() — batched, salvage-tolerant translation
     │   └─▶ Walks the assembled tree, collects every translatable prose
     │   │   string into one flat list (`_collect_strings` + `_SKIP_KEYS`
     │   │   leaf-only deny-list for structural/asset/enum keys)
-    │   └─▶ One Haiku call via src/prompts/translate_flat.txt (replaces
+    │   └─▶ Haiku calls via src/prompts/translate_flat.txt (replaces
     │   │   the deleted src/prompts/translate.txt; flat-list contract
     │   │   means the model returns a list of equal length, applied
     │   │   back into a deep copy via `_set_at_path`)
-    │   └─▶ Mirror detection: rejects output if all 3 longest strings are
-    │       byte-identical AND >50% of all strings are byte-identical
-    │       (small-payload threshold: 33% over fewer than 10 strings).
+    │   └─▶ Batching: strings are split into batches of ≤200
+    │   │   (`_MAX_TRANSLATION_BATCH`), up to 4 batches concurrently
+    │   │   (`_MAX_CONCURRENT_TRANSLATION_BATCHES`) — keeps long videos
+    │   │   under the per-call token ceiling and provider rate limits.
+    │   └─▶ Salvage-on-failure (`_translate_or_salvage`): a batch that
+    │   │   fails (LLM error / length mismatch) is retried once split in
+    │   │   half; any half that still fails is salvaged as English
+    │   │   (left untranslated) rather than discarding the whole
+    │   │   translation. Returns `(strings, salvaged_mask)` — a
+    │   │   same-length boolean mask marking salvaged positions.
+    │   └─▶ Mirror detection samples only genuinely-translated strings
+    │       (salvaged positions excluded via `salvaged_mask`, so kept
+    │       English doesn't inflate the mirror ratio): rejects output if
+    │       all 3 longest are byte-identical AND >50% of all strings are
+    │       byte-identical (small-payload threshold: 33% under 10 strings).
     │       Protects against the "small model echoes input" failure mode.
     │   └─▶ `_SKIP_KEYS` denies: id, component, language, url, s3Key, code,
     │       timestamp, time, seconds, startSeconds, endSeconds, emoji,
@@ -379,6 +406,12 @@ The pipeline uses 3-6 LLM calls with a plan-first architecture:
     │   to Redis. Without this split, source-language tabs would
     │   freeze into Redis for the full TTL and silently break the
     │   FE language toggle on every cache hit.
+    └─▶ Owns the terminal status + `done` event for non-English videos:
+    │   assembly leaves the doc `status="processing"` and does NOT emit
+    │   `done`; translation writes `status="completed"` and emits the
+    │   `done` event only after the sourceLanguage block is persisted, so
+    │   the FE refetch on `done` always sees a completed doc with the
+    │   toggle (fixes fake-completed English-only on interrupted runs).
     └─▶ language_instruction injected into upstream LLM phases (plan,
     │   extraction, synthesis, enrichment) — produces source-language
     │   output that this phase then translates.
@@ -501,7 +534,8 @@ The pipeline uses triage (LLM) to determine content tags from manifest + metadat
 | `meta` | `{VIEResponseMeta}` (assembled meta) |
 | `tab_ready` | `{id, label, emoji, component, props, crossTabLinks?}` (progressive tab) |
 | `complete` | `{tabCount, processingTimeMs}` (v2 completion) |
-| `done` | `{videoSummaryId, cached?, phase: "done"}` (legacy + confetti trigger) |
+| `heartbeat` | `{ts}` — keepalive emitted every `SSE_HEARTBEAT_SECONDS` (12s) during long silent phases (e.g. multi-minute Whisper) so the API-gateway SSE proxy does not abort an idle-but-live stream. **Frontend treats it as a no-op.** |
+| `done` | `{videoSummaryId, cached?, phase: "done"}` (legacy + confetti trigger). For non-English videos this is **deferred to the translation phase** — assembly marks the doc `processing` and translation emits `done` after writing `status="completed"`. |
 | `[DONE]` | Terminal signal |
 
 ### Key Design Decisions
@@ -517,7 +551,7 @@ The pipeline uses triage (LLM) to determine content tags from manifest + metadat
 | Finance modifier costs-only | `costs[]` + `savingTips[]`, no budget | Primary domain owns budget structure |
 | Adaptive extraction | 1-3 calls by word count | Prevents token overflow on long videos |
 | Category fallback | Map video category to content tag | Safety net when triage confidence < 0.6 |
-| Shared domain config | `@vie/shared` `domains.json` via Docker mount | Single source of truth for domains, tabs, gradients, categories across TS + Python |
+| Shared domain config | `@vie/shared` `domains.json` via Docker mount | Single source of truth for domains, tabs, gradients, categories, **planner-selectable `components`**, and the **`densityGates`** table across TS + Python. `plan.txt` `{valid_components}` + `component_toolkit.txt` `{density_gates}` are generated from it (no hardcoded prompt lists); `test_contract_parity.py` asserts the generated prompt matches config. NOTE: `densityGates` is advisory LLM-steering text — assembler enforcement (`_TAB_ITEM_CAPS`, per-assembler min/max, `density.py`) is independent. |
 
 ---
 
@@ -581,6 +615,45 @@ The pipeline stores results in two formats for backward compatibility:
 }
 ```
 
+### Concept Canvas Schema (learning & science domains)
+
+The `concept_canvas` component (`assemble_concept_canvas` in `assembly/assemblers.py`)
+renders a typed, grouped knowledge graph. Output shape is `{concepts, groups}`:
+
+```jsonc
+{
+  "concepts": [
+    {
+      "name": "Term as the speaker uses it",
+      "emoji": "🔁",
+      "definition": "Speaker's explanation (≤ ~200 chars)",
+      "example": "…",                 // optional
+      "analogy": "…",                 // optional
+      "group": "Foundations",          // thematic cluster (lane)
+      "timestamp": 312,                // optional — drives frame-evidence thumbnail
+      "connections": [
+        { "to": "EXACT other concept name", "type": "causes" }
+      ]
+    }
+  ],
+  "groups": ["Foundations", "Mechanics", "Applications"]  // ordered, de-duped lane order
+}
+```
+
+- **Typed connections** — `type` ∈ `causes | requires | contrasts | partOf | relatesTo`
+  (`_CONCEPT_RELATIONS`). A bare string connection (legacy data) coerces to
+  `{to, type: "relatesTo"}` via `_normalize_connections`.
+- **Validation** — connection targets are matched against real concept names
+  (case-insensitive); hallucinated / self-referential targets are dropped, casing
+  canonicalized.
+- **Grouping** — the LLM assigns each concept a `group`; when absent, groups are
+  derived from the connection graph (`_cluster_groups`, connected components),
+  defaulting to `"Concepts"` (`_DEFAULT_GROUP`).
+- **Cap** — capped at 30 concepts (`_CONCEPT_CANVAS_MAX`); grouping, not
+  truncation, is the density strategy. Prompted via `schemas/learning.txt` and
+  `schemas/science.txt`. See [DATA-MODELS.md](./DATA-MODELS.md) for the TS types
+  (`ConceptRelation`, `ConceptConnection`, `ConceptItem`).
+
 ### Frontend Meta Resolution
 
 The API builds a clean response using `meta-builder.ts`:
@@ -633,9 +706,16 @@ The summarizer uses a multi-source fallback chain to maximize transcript availab
 │  4. OpenAI Whisper (if enabled)                        │
 │     └─▶ Download audio + convert to MP3 (FFmpeg)       │
 │     └─▶ Chunk large files (>24MB) with pydub           │
-│     └─▶ Transcribe with Whisper API                    │
+│     └─▶ Transcribe chunks concurrently (Semaphore,     │
+│         WHISPER_CHUNK_CONCURRENCY=3), per-request       │
+│         timeout WHISPER_CLIENT_TIMEOUT_SECONDS=300s,    │
+│         WHISPER_MAX_RETRIES=1                          │
+│     └─▶ Deadline + partial-return: chunk 0 always runs; │
+│         later chunks skip past the soft deadline and a  │
+│         PARTIAL transcript is returned instead of       │
+│         failing the whole video                         │
 │     └─▶ ~5-15min, ~$0.16 per 26-min video             │
-│     └─▶ Max 60 minutes                                 │
+│     └─▶ Max WHISPER_MAX_DURATION_MINUTES (default 600)  │
 │     └─▶ Source: "whisper"                              │
 │                         │                               │
 │                         ▼                               │
@@ -659,6 +739,16 @@ endpoint. Audio fallback is additionally gated by `WHISPER_ENABLED` and
 `WHISPER_MAX_DURATION_MINUTES` (the gate lives in
 `transcript_fetcher.py`, constant `_NO_AUDIO_FALLBACK`).
 
+**Language detection.** Both the Gemini and Whisper paths keep the transcript
+**verbatim in its source language** (no internal translation), which is what
+powers the FE source-language toggle. Detection is text-first —
+`detect_language_from_text()` (`langdetect`, now a hard dependency) with a
+fallback to `detect_language_by_script()`. The script detector checks
+hiragana/katakana **before** the shared CJK block so kanji-heavy Japanese is no
+longer misdetected as Chinese. The detected language is carried on the
+`NormalizedTranscript` so downstream phases consume one authoritative value
+instead of re-deriving it.
+
 ### Configuration
 
 ```bash
@@ -667,8 +757,11 @@ GEMINI_API_KEY=...      # Enables Gemini Flash transcription
 
 # Whisper fallback settings
 WHISPER_ENABLED=true
-WHISPER_MAX_DURATION_MINUTES=60
-OPENAI_API_KEY=sk-...  # Required for Whisper
+WHISPER_MAX_DURATION_MINUTES=600
+OPENAI_API_KEY=sk-...                   # Required for Whisper
+WHISPER_CLIENT_TIMEOUT_SECONDS=300.0    # Per-chunk HTTP timeout
+WHISPER_MAX_RETRIES=1                   # Retries per chunk
+WHISPER_CHUNK_CONCURRENCY=3             # Concurrent chunk transcription
 ```
 
 ---

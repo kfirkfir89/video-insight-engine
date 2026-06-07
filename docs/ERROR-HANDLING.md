@@ -241,6 +241,17 @@ def _is_rate_limit_error(exception: BaseException) -> bool:
 
 When all retries are exhausted the 429 becomes a `RATE_LIMITED` `TranscriptError`, which **falls back to audio transcription** (Whisper/Gemini) rather than failing the pipeline — the audio download is a separate, un-throttled YouTube endpoint. `RATE_LIMITED` only reaches the user when audio fallback is unavailable (`WHISPER_ENABLED=false`, video over `WHISPER_MAX_DURATION_MINUTES`, or audio transcription also fails). See the audio-fallback gate in [SERVICE-SUMMARIZER](./SERVICE-SUMMARIZER.md).
 
+### Whisper deadline + partial-transcript return
+
+Whisper chunked transcription degrades gracefully instead of failing a long
+video. Each chunk has a per-request timeout (`WHISPER_CLIENT_TIMEOUT_SECONDS`,
+300s) with `WHISPER_MAX_RETRIES=1`, and chunks transcribe concurrently bounded
+by `WHISPER_CHUNK_CONCURRENCY` (3). Chunk 0 always runs; later chunks are
+**skipped once a soft deadline is reached**, and if any chunk fails or is
+skipped the pipeline returns a **partial transcript** (possibly missing the end
+of a long video) rather than raising a `TranscriptError`. The partial output is
+still usable downstream.
+
 ```python
 # services/summarizer/src/services/summarizer.py
 

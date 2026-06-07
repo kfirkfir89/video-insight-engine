@@ -324,15 +324,27 @@ verifyWebhook(rawBody: string, signature: string): boolean {
 
 ### Service-to-Service Auth
 
-For production, add API keys between services:
+The vie-assistant service calls back into vie-api to mutate the caller's library
+(create/rename/move/delete folders, move videos, generate a video). These
+`/internal/assistant/*` routes are guarded by the `authenticateInternal`
+preHandler (`api/src/utils/internal-auth.ts`):
 
 ```bash
-# .env
-INTERNAL_API_KEY=xxx
+# .env (set on both vie-api and vie-assistant)
+INTERNAL_SECRET=xxx
 
-# Summarizer → MongoDB uses this header
-X-Internal-Key: xxx
+# Every /internal/assistant/* request must send BOTH headers:
+X-Internal-Secret: xxx          # validated against INTERNAL_SECRET
+X-User-Id: <userId>             # scopes all work; a body-supplied userId is never trusted
 ```
+
+- **Constant-time comparison** — `isValidInternalSecret()` compares the secret
+  via `node:crypto.timingSafeEqual` (a plain `!==` would leak the secret byte by
+  byte through response timing). A length check runs first because
+  `timingSafeEqual` throws on unequal-length buffers.
+- **User scoping** — the preHandler binds `req.user.userId` from `X-User-Id`;
+  routes scope every folder/video operation to that user, so the assistant can
+  never act outside the authenticated caller's library.
 
 ---
 

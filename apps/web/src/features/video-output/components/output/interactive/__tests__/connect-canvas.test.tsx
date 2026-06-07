@@ -30,6 +30,16 @@ describe('ConnectCanvas', () => {
     ).toBeInTheDocument();
   });
 
+  it('should render enlarged full-height connector strips (forgiving click target)', () => {
+    render(<ConnectCanvas pairs={pairs} videoId="vid1" tabId="connect" />);
+    const handles = document.querySelectorAll('.react-flow__handle');
+    expect(handles.length).toBeGreaterThan(0);
+    // Every connect handle is a full-height strip (min-h-[40px]), not a 12px dot.
+    handles.forEach((handle) => {
+      expect(handle.className).toContain('min-h-[40px]');
+    });
+  });
+
   describe('gradeConnections', () => {
     // identity rightOrder: right node i shows pairs[i].match
     const identityOrder = [0, 1, 2];

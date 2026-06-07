@@ -5,7 +5,14 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from ..shared_config.domain_config import valid_content_tags, valid_modifiers
 
@@ -243,13 +250,35 @@ class LearningKeyPoint(BaseModel):
     timestamp: int | None = None
 
 
+class ConceptConnection(BaseModel):
+    """Typed edge between two concepts (`{to, type}`), mirroring the TS
+    `ConceptConnection`. Shared by `LearningConcept` and `ScienceConcept`.
+
+    Accepts `name`/`target` as defensive aliases for `to`, and keeps `to`
+    defaultable + `type` a free string ON PURPOSE: a malformed item must never
+    raise `ValidationError` here, or `validate_domain_output` would drop the whole
+    domain to raw passthrough. The assembler's `_normalize_connections` is the
+    single source of relation-enum validation (off-enum → `relatesTo`) and drops
+    empty targets, so leniency here is safe.
+    """
+
+    model_config = {"populate_by_name": True}
+
+    to: str = Field(default="", validation_alias=AliasChoices("to", "name", "target"))
+    type: str = "relatesTo"
+
+
 class LearningConcept(BaseModel):
     name: str
     emoji: str = ""
     definition: str = ""
     example: str | None = None
     analogy: str | None = None
-    connections: list[str] = []
+    # Thematic cluster label the planner asks the LLM to assign; powers the
+    # ConceptCanvas Groups view. Dropped silently if not declared here.
+    group: str | None = None
+    timestamp: int | None = None
+    connections: list[str | ConceptConnection] = []
 
 
 class LearningTimestamp(BaseModel):
@@ -780,7 +809,9 @@ class ScienceConcept(BaseModel):
     definition: str = ""
     formula: str | None = None
     real_world_example: str | None = Field(None, alias="realWorldExample")
-    connections: list[str] = []
+    group: str | None = None
+    timestamp: int | None = None
+    connections: list[str | ConceptConnection] = []
 
 
 class ScienceKeyFact(BaseModel):

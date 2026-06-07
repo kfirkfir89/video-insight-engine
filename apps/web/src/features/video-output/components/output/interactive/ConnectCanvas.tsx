@@ -128,7 +128,7 @@ const ColumnNode = memo(function ColumnNode({ data }: { data: ColumnNodeData }) 
         <Handle
           type="target"
           position={Position.Left}
-          className="!h-3 !w-3 !border-2 !border-background !bg-[var(--vie-accent,var(--primary))]"
+          className="!h-full !min-h-[40px] !w-2.5 !-translate-x-1/2 !rounded-md !border-0 !bg-[var(--vie-accent,var(--primary))]/70 transition-colors hover:!bg-[var(--vie-accent,var(--primary))]"
         />
       )}
       <GlassCard
@@ -153,7 +153,7 @@ const ColumnNode = memo(function ColumnNode({ data }: { data: ColumnNodeData }) 
         <Handle
           type="source"
           position={Position.Right}
-          className="!h-3 !w-3 !border-2 !border-background !bg-[var(--vie-accent,var(--primary))]"
+          className="!h-full !min-h-[40px] !w-2.5 !translate-x-1/2 !rounded-md !border-0 !bg-[var(--vie-accent,var(--primary))]/70 transition-colors hover:!bg-[var(--vie-accent,var(--primary))]"
         />
       )}
     </div>

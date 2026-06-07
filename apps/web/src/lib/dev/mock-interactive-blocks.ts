@@ -15,6 +15,8 @@
  * design-system showcase.
  */
 
+import type { ConceptItem } from '@vie/types';
+
 // Production guard
 if (!import.meta.env.DEV) {
   throw new Error('mock-interactive-blocks should not be imported in production');
@@ -523,53 +525,83 @@ export function createMockFilmstripFrames() {
 }
 
 /**
- * Six concepts forming a small relational graph — each lists 1–3 connections
- * by name so ConceptCanvas wires edges between them. Includes one orphan
- * (no inbound or outbound connections) to verify the layout still works.
+ * Concepts forming a small relational graph for ConceptCanvas. Each lists
+ * typed `connections` (`{to, type}`) so the canvas can encode relationship type
+ * by line-style + arrowhead, and a `group` so the graph splits into tiered
+ * lanes / Groups list-cards. One concept carries frame evidence to exercise the
+ * inspector's `VisualEvidence`. Includes an orphan to verify layout robustness.
  */
-export function createMockConcepts() {
+export function createMockConcepts(): ConceptItem[] {
   return [
     {
       name: 'Attention',
       emoji: '🧠',
       definition: 'A weighted aggregation where each output position attends to every input position.',
       example: "In 'the cat sat on the mat', 'cat' attends most strongly to 'sat'.",
-      connections: ['Transformer', 'Embedding'],
+      group: 'Core architecture',
+      timestamp: 312,
+      thumbnailUrl: PLACEHOLDER_FRAME('Attention heatmap'),
+      frameCaption: 'Attention weight heatmap across token positions.',
+      frameSceneType: 'diagram',
+      connections: [
+        { to: 'Transformer', type: 'partOf' },
+        { to: 'Softmax', type: 'requires' },
+      ],
     },
     {
       name: 'Transformer',
       emoji: '🤖',
       definition: 'A sequence model built from stacked attention and feed-forward layers — no recurrence.',
       example: 'GPT, BERT, and Llama all share the transformer backbone.',
-      connections: ['Attention', 'Embedding', 'Tokenization'],
+      group: 'Core architecture',
+      connections: [
+        { to: 'Attention', type: 'requires' },
+        { to: 'Embedding', type: 'requires' },
+      ],
     },
     {
       name: 'Embedding',
       emoji: '📐',
       definition: 'A dense vector representation of a discrete token, learned during training.',
       example: "'King' - 'Man' + 'Woman' ≈ 'Queen' in word2vec space.",
-      connections: ['Tokenization'],
+      group: 'Inputs',
+      connections: [{ to: 'Tokenization', type: 'requires' }],
     },
     {
       name: 'Tokenization',
       emoji: '✂️',
       definition: 'Splitting raw text into the discrete units a model consumes.',
       example: "'Hello world!' → ['Hello', ' world', '!']",
-      connections: ['Embedding'],
+      group: 'Inputs',
+      connections: [{ to: 'Embedding', type: 'causes' }],
     },
     {
       name: 'Softmax',
       emoji: '📊',
       definition: 'A normalization that converts an arbitrary vector into a probability distribution.',
-      connections: ['Attention'],
+      group: 'Training',
+      connections: [{ to: 'Attention', type: 'partOf' }],
+    },
+    {
+      name: 'Greedy decoding',
+      emoji: '🎯',
+      definition: 'Picking the highest-probability token at each step — fast but myopic.',
+      group: 'Training',
+      connections: [{ to: 'Softmax', type: 'contrasts' }],
     },
     {
       name: 'Backprop',
       emoji: '🔁',
       definition: 'The chain-rule algorithm that propagates gradients backwards through the network.',
+      group: 'Training',
       connections: [],
     },
   ];
+}
+
+/** Ordered group lanes for the ConceptCanvas demo (matches createMockConcepts). */
+export function createMockConceptGroups(): string[] {
+  return ['Core architecture', 'Inputs', 'Training'];
 }
 
 /**

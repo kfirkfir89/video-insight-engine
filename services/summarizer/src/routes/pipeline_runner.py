@@ -214,7 +214,18 @@ async def _run_pipeline_phases(
                 from src.services.pipeline.phases.translation import run_phase_translation
                 async for event in run_phase_translation(ctx, repository, video_summary_id):
                     yield event
+                # Assembly deferred the terminal event for non-English videos so
+                # `done` fires only after the source-language surface is final.
+                # Reaching here means translation ran to completion (success or a
+                # deliberate English-only no-op) and the doc is now "completed".
+                yield sse_event("done", {
+                    "videoSummaryId": video_summary_id,
+                    "processingTimeMs": int(timer.elapsed() * 1000),
+                })
+                yield "data: [DONE]\n\n"
             except Exception as e:
+                # Translation raised — leave the doc "processing" (retriable) and
+                # emit no terminal event; the FE handles the stream close.
                 logger.warning("[pipeline] Translation failed (non-critical): %s", e)
             ctx.phase_times["translation"] = round(time.monotonic() - phase_start, 1)
 

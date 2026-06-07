@@ -290,6 +290,7 @@ export const StepFlowCanvas = memo(function StepFlowCanvas({
         nodeTypes={NODE_TYPES}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        nodesDraggable={false}
         height={Math.min(720, 280 + steps.length * 160)}
       />
     </div>

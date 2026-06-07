@@ -438,10 +438,8 @@ const COMPONENT_REGISTRY: Record<string, (props: Record<string, unknown>, nav: N
     <Suspense fallback={<CanvasFallback />}>
       <ConceptCanvas
         concepts={asArray<ConceptItem>(props.concepts)}
+        groups={Array.isArray(props.groups) ? (props.groups as string[]) : undefined}
         onSeek={nav.onSeek}
-        videoId={nav.videoId}
-        nextTab={nav.nextTab}
-        onNavigateTab={nav.onNavigateTab}
       />
     </Suspense>
   ),

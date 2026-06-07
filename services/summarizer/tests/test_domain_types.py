@@ -18,6 +18,9 @@ from src.models.domain_types import (
     LearningKeyPoint,
     LearningConcept,
     LearningTimestamp,
+    ConceptConnection,
+    ScienceData,
+    ScienceConcept,
     ReviewData,
     ReviewRating,
     ReviewVerdict,
@@ -192,6 +195,50 @@ class TestLearningData:
             connections=["Classes", "Inheritance"],
         )
         assert len(concept.connections) == 2
+
+    def test_concept_accepts_typed_connections(self):
+        """Typed `{to, type}` connections (current contract) must validate, not
+        fall back to passthrough as bare strings would have under `list[str]`."""
+        concept = LearningConcept.model_validate({
+            "name": "OOP",
+            "definition": "Object-oriented programming",
+            "connections": [{"to": "Classes", "type": "requires"}],
+        })
+        assert concept.connections == [ConceptConnection(to="Classes", type="requires")]
+
+    def test_concept_off_enum_relation_does_not_raise(self):
+        """An unknown relation must survive validation (assembler owns the enum);
+        a strict Literal here would drop the whole domain to passthrough."""
+        concept = LearningConcept.model_validate({
+            "name": "OOP", "definition": "d",
+            "connections": [{"to": "Classes", "type": "leadsTo"}],
+        })
+        assert concept.connections[0].type == "leadsTo"
+
+    def test_concept_mixed_legacy_and_typed_connections(self):
+        concept = LearningConcept.model_validate({
+            "name": "OOP", "definition": "d",
+            "connections": ["Classes", {"to": "Inheritance", "type": "partOf"}],
+        })
+        assert concept.connections[0] == "Classes"
+        assert concept.connections[1] == ConceptConnection(to="Inheritance", type="partOf")
+
+    def test_concept_group_is_preserved(self):
+        """`group` powers the ConceptCanvas Groups view; it must round-trip
+        through `model_dump`, not be silently dropped as an unknown field."""
+        concept = LearningConcept.model_validate({
+            "name": "OOP", "definition": "d", "group": "Foundations",
+        })
+        assert concept.group == "Foundations"
+        assert concept.model_dump()["group"] == "Foundations"
+
+    def test_science_concept_accepts_typed_connections_and_group(self):
+        concept = ScienceConcept.model_validate({
+            "name": "Wave-Particle Duality", "definition": "d", "group": "Fundamentals",
+            "connections": [{"to": "Photon", "type": "relatesTo"}],
+        })
+        assert concept.group == "Fundamentals"
+        assert concept.connections[0].to == "Photon"
 
 
 class TestReviewData:
@@ -559,6 +606,26 @@ class TestValidateDomainOutput:
         result = validate_domain_output(["travel", "food"], [], {})
         # Models with nested defaults (budget, meta) produce non-empty defaults
         assert "travel" in result or "food" in result
+
+    def test_learning_typed_connections_and_group_survive_validation(self):
+        """Regression: typed connections + `group` must round-trip through the
+        full validate path. Before widening the model these triggered a
+        ValidationError → whole-domain passthrough (connections kept but `group`
+        and every other field's normalization lost)."""
+        result = validate_domain_output(
+            ["learning"], [],
+            {
+                "keyPoints": [], "takeaways": [],
+                "concepts": [{
+                    "name": "Compound interest", "emoji": "💵", "definition": "d",
+                    "group": "Foundations",
+                    "connections": [{"to": "Time value of money", "type": "causes"}],
+                }],
+            },
+        )
+        concept = result["learning"]["concepts"][0]
+        assert concept["group"] == "Foundations"
+        assert concept["connections"] == [{"to": "Time value of money", "type": "causes"}]
 
     def test_invalid_data_passes_through_with_warning(self):
         """Invalid data is passed through (not raised) — validation is lenient."""

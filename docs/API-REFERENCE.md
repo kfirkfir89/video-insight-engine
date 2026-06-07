@@ -1152,6 +1152,11 @@ Dispatch a structured action to the assistant service. Proxies to `POST /action`
 | `find_moment` | `navigator` | `query` | — |
 | `explain` | `concept_explain` | `concept` | — |
 
+Library-scoped actions (`video_id` omitted) are also dispatched through the same
+channel and call back into vie-api via `/internal/assistant/*`: `generate_video`,
+`organize_library`, `create_folder`, `rename_folder`, `move_folder`,
+`delete_folder`, `move_video`. See [SERVICE-ASSISTANT.md](./SERVICE-ASSISTANT.md#post-action).
+
 **Response (200):**
 
 ```json
@@ -1172,6 +1177,46 @@ The same envelope is returned for action-level errors (400/404) with `success: f
 - `401`: Missing or invalid auth
 - `404`: User has no access to the video
 - `502`: Assistant service unavailable
+
+---
+
+## POST /api/assistant/library/chat
+
+Library-wide RAG chat (SSE) — answers across many of the user's videos when no
+single video is open. The gateway resolves the user's owned YouTube IDs via
+`getUserVideos`, then forwards to vie-assistant `/library/chat` with
+`X-Internal-Secret` + `X-User-Id`. Same SSE event shapes as `/chat`
+(`source` / `text` / `error` / `done`); each `source.video_id` is a YouTube ID
+for attribution/deep-link.
+
+**Auth:** Bearer token required.
+
+**Request:** `{ "message": "which of my videos covered hooks?", "conversation_history": [] }`
+(the gateway injects `video_ids` from the user's library; a client-supplied list is ignored).
+
+## POST /api/assistant/library/search
+
+Retrieval-only sibling of `/library/chat` — returns ranked chunks across the
+user's library without an LLM answer. Same auth and gateway forwarding.
+
+## /internal/assistant/* (service-to-service)
+
+Callback routes the vie-assistant uses to mutate the caller's library. **Not
+user-JWT** — authenticated by the `authenticateInternal` preHandler
+(`X-Internal-Secret` + `X-User-Id`, constant-time secret comparison). All work is
+scoped to `X-User-Id`; a body-supplied userId is never trusted.
+
+| Method & path | Purpose |
+|---|---|
+| `GET /internal/assistant/folders` | List the user's folders |
+| `POST /internal/assistant/folders` | Create a folder |
+| `PATCH /internal/assistant/folders/:id` | Rename / move a folder |
+| `DELETE /internal/assistant/folders/:id` | Delete a folder |
+| `GET /internal/assistant/videos` | List the user's videos |
+| `PATCH /internal/assistant/videos/:id/move` | Move a video to a folder |
+| `POST /internal/assistant/generate` | Generate a video (via `videoService.createVideo` — keeps cost reservation + dispatch guard) |
+
+See [SERVICE-API.md](./SERVICE-API.md#internal-authentication-authenticateinternal) and [SECURITY.md](./SECURITY.md#service-to-service-auth).
 
 ---
 

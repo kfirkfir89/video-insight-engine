@@ -174,8 +174,10 @@ class AssistantService:
                         yield self._format_sse(event)
                 return
 
-            # Default: RAG-powered chat
-            async for sse in self._rag_chat(video_id, message, history, video_ctx):
+            # Default: RAG-powered chat (also exposes library action tools)
+            async for sse in self._rag_chat(
+                video_id, message, history, video_ctx, user_id=user_id,
+            ):
                 yield sse
 
     async def library_chat(
@@ -248,7 +250,7 @@ class AssistantService:
                 logger.info("assistant_library_chat_no_context")
 
             system_prompt = self._build_library_system_prompt(
-                rag_sources, user_language, inventory
+                rag_sources, user_language, inventory, user_id=user_id
             )
             messages = self._build_messages(system_prompt, history, message)
 
@@ -272,6 +274,7 @@ class AssistantService:
         rag_sources: list,
         user_language: str,
         inventory: list[dict] | None,
+        user_id: str | None = None,
     ) -> str:
         """Build the library system prompt; prepend agent instructions when tools are on."""
         base = self._context_builder.build_library(
@@ -279,9 +282,19 @@ class AssistantService:
             user_language=user_language,
             inventory=inventory,
         )
-        if self._api is None:
-            return base
-        return f"{_LIBRARY_AGENT_INSTRUCTIONS}\n\n{base}"
+        return f"{self._agent_instructions_prefix(user_id)}{base}"
+
+    def _agent_instructions_prefix(self, user_id: str | None) -> str:
+        """Return the agent action instructions when the action channel is usable.
+
+        Mirrors the gating in :meth:`_run_agentic_loop`: tools are only offered
+        when both the vie-api client and a ``user_id`` are present, so the prompt
+        must only promise actions under that same condition — otherwise the model
+        claims it "can act" while no tools are passed.
+        """
+        if self._api is None or user_id is None:
+            return ""
+        return f"{_LIBRARY_AGENT_INSTRUCTIONS}\n\n"
 
     async def _run_agentic_loop(
         self,
@@ -409,8 +422,16 @@ class AssistantService:
         message: str,
         history: list[ChatMessage],
         video_ctx: VideoContext,
+        user_id: str | None = None,
     ) -> AsyncGenerator[str, None]:
-        """Default RAG + LLM streaming chat path."""
+        """Default RAG + LLM chat path, grounded in the open video.
+
+        Beyond answering about the video, this also exposes the library action
+        tools (create/move/organize folders and videos) via the shared agentic
+        loop, so the user can act on their collection without leaving the video.
+        Degrades to a plain streamed completion when the action channel is
+        unavailable — see :meth:`_run_agentic_loop`.
+        """
         # Detect user language for query translation and response language
         user_language = detect_language(message)
         search_query = await self._translate_query(message, user_language)
@@ -431,17 +452,12 @@ class AssistantService:
             rag_chunks=rag_sources,
             user_language=user_language,
         )
+        system_prompt = f"{self._agent_instructions_prefix(user_id)}{system_prompt}"
         messages = self._build_messages(system_prompt, history, message)
 
         try:
-            async with span("rag_generation", metadata={"sourcesCount": len(rag_sources)}):
-                async for token in self._llm.stream_with_messages(
-                    messages=messages,
-                    max_tokens=2000,
-                    span_name="rag_generation",
-                    span_metadata={"sourcesCount": len(rag_sources)},
-                ):
-                    yield self._format_sse(ChatEvent(type="text", content=token))
+            async for sse in self._run_agentic_loop(messages, user_id):
+                yield sse
         except Exception as exc:
             logger.error("assistant_chat_llm_error", video_id=video_id, error=str(exc))
             yield self._format_sse(ChatEvent(

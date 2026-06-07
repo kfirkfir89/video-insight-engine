@@ -122,6 +122,8 @@ Health check. No authentication required.
 
 Stream a conversational response about a video via SSE. Requires `X-Internal-Secret` header.
 
+Single-video chat is **not toolless**: `_rag_chat` routes through `_run_agentic_loop`, so the same library action tools as `/library/chat` are offered **when a `user_id` is present** (forwarded as `X-User-Id`). Tool exposure is gated by `_agent_instructions_prefix` — with no `api_client` or no `user_id`, the agent instructions and tools are omitted and it behaves as plain RAG. (Before this fix, opening a video silently switched the assistant to a no-tools chat that refused actions.)
+
 **Request:**
 ```json
 {

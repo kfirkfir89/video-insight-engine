@@ -114,6 +114,7 @@ export const Sidebar = memo(function Sidebar() {
             status={chatStatus}
             onSendMessage={handleSendMessage}
             onNewChat={handleNewChat}
+            scope={activeVideoId ? "video" : "library"}
           />
         ) : (
           <DndProvider>

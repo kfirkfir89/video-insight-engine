@@ -80,6 +80,43 @@ def primary_components() -> frozenset[str]:
     )
 
 
+def ordered_components() -> list[str]:
+    """Planner-selectable components in their canonical (config) order."""
+    return list(get_config().get("components", []))
+
+
+def render_valid_component_names() -> str:
+    """Render the backtick-comma component list injected into plan.txt's
+    ``{valid_components}`` placeholder. Single-sourced from domains.json so the
+    planner's selectable surface follows config — no hardcoded prompt list."""
+    return ", ".join(f"`{name}`" for name in ordered_components())
+
+
+def density_gates() -> dict[str, dict[str, str]]:
+    """Per-component density-gate guidance shown to the planner.
+
+    NOTE: this is advisory LLM-steering text only. The assembler's hard limits
+    (``_TAB_ITEM_CAPS`` in assembly/core.py, per-assembler min/max constants,
+    and assembly/density.py) are independent and intentionally NOT derived from
+    this config — editing it changes what the LLM aims for, not the enforced caps.
+    """
+    return dict(get_config().get("densityGates", {}))
+
+
+def render_density_gate_table() -> str:
+    """Render the markdown density table injected into component_toolkit.txt's
+    ``{density_gates}`` placeholder, single-sourced from domains.json."""
+    header = (
+        "| Component | min items | max items | max chars/cell |\n"
+        "|---|---|---|---|"
+    )
+    rows = [
+        f"| {name} | {gate.get('min', '')} | {gate.get('max', '')} | {gate.get('chars', '')} |"
+        for name, gate in density_gates().items()
+    ]
+    return "\n".join([header, *rows])
+
+
 # ─────────────────────────────────────────────────────
 # Category mapping
 # ─────────────────────────────────────────────────────

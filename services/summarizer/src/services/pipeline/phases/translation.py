@@ -16,6 +16,7 @@ import logging
 from typing import TYPE_CHECKING, AsyncGenerator
 
 from src.config import settings
+from src.models.schemas import ProcessingStatus
 from src.services.cache.response_cache import response_cache
 from src.services.pipeline.pipeline_helpers import sse_event
 from src.services.pipeline.translation import translate_text, translate_to_source
@@ -68,10 +69,17 @@ async def run_phase_translation(
     result = await translate_to_source(ctx.llm_service, output, ctx.source_language_code)
 
     if "sourceLanguage" not in result:
-        # Failure / no-op — English stays the only view, no toggle.
+        # Failure / no-op — English stays the only view, no toggle. This is a
+        # deliberate terminal outcome (mirror detected / LLM returned None after
+        # retries), so finalize the doc: assembly left it "processing" for the
+        # non-English path, and English-only is the accepted final surface.
         logger.warning(
-            "[pipeline] Translation produced no sourceLanguage (target=%s); skipping",
+            "[pipeline] Translation produced no sourceLanguage (target=%s); "
+            "finalizing English-only",
             ctx.source_language_code,
+        )
+        await asyncio.to_thread(
+            repository.update_status, video_summary_id, ProcessingStatus.COMPLETED,
         )
         return
 
@@ -90,6 +98,9 @@ async def run_phase_translation(
             "sourceLanguage": ctx.source_language,
             "language": "en",
             "isRTL": False,
+            # The translation phase owns the "completed" transition for
+            # non-English videos (assembly left the doc "processing").
+            "status": "completed",
         },
     )
 

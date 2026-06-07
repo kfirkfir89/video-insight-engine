@@ -1,5 +1,5 @@
 import { memo, useState, useCallback, useRef, useEffect } from 'react';
-import { MessageCircle, Send, Loader2, User, Bot, Sparkles, ExternalLink, Check, SquarePen } from 'lucide-react';
+import { MessageCircle, Send, Loader2, User, Bot, Sparkles, ExternalLink, Check, SquarePen, Film, Library } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollContainer } from '@/components/ui/scroll-container';
@@ -46,6 +46,10 @@ interface RAGChatPanelProps {
   onCancelAction?: () => void;
   /** Clears the conversation and starts a fresh chat. Disabled when empty. */
   onNewChat?: () => void;
+  /** What the assistant is grounded in this turn: a single open video, or the
+   * whole library. Surfaced as a header chip so the user knows the chat's scope
+   * (both scopes can also act on the library — create/move/organize). */
+  scope?: 'video' | 'library';
 }
 
 /**
@@ -211,6 +215,7 @@ export const RAGChatPanel = memo(function RAGChatPanel({
   onConfirmAction,
   onCancelAction,
   onNewChat,
+  scope,
 }: RAGChatPanelProps) {
   const labels = useLabels();
   const effectivePlaceholder = placeholder ?? labels.libraryChatPlaceholder;
@@ -287,8 +292,25 @@ export const RAGChatPanel = memo(function RAGChatPanel({
     <div className={cn('flex flex-col h-full', className)}>
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b">
-        <MessageCircle className="h-5 w-5 text-primary" aria-hidden="true" />
+        <MessageCircle className="h-5 w-5 text-primary shrink-0" aria-hidden="true" />
         <h3 className="font-medium">Chat with your knowledge</h3>
+        {scope && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground"
+            title={
+              scope === 'video'
+                ? 'Grounded in the open video — can also organize your library'
+                : 'Spanning your whole library — can also organize it'
+            }
+          >
+            {scope === 'video' ? (
+              <Film className="h-3 w-3 shrink-0" aria-hidden="true" />
+            ) : (
+              <Library className="h-3 w-3 shrink-0" aria-hidden="true" />
+            )}
+            <span>{scope === 'video' ? 'This video' : 'Your library'}</span>
+          </span>
+        )}
         {onNewChat && (
           <Button
             type="button"

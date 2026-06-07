@@ -55,7 +55,7 @@ const envSchema = z.object({
   // Canonical pipeline version string baked into idempotency hashes. Bump
   // this when prompts, schemas, or any other pipeline output-shaping logic
   // changes — every stale key auto-misses on the next submit.
-  PIPELINE_VERSION: z.string().min(1).default('v1'),
+  PIPELINE_VERSION: z.string().min(1).default('v2'),
   // TTL window for an idempotency hit. 24h is long enough for accidental
   // double-submits and short enough that "I want to retry tomorrow" still works.
   IDEMPOTENCY_TTL_SECONDS: z.string().default('86400').transform(Number),

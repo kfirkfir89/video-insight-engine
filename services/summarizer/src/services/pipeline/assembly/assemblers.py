@@ -1143,8 +1143,54 @@ def assemble_display_section(
 # ─────────────────────────────────────────────────────
 
 
+# Relationship types the concept canvas knows how to render (line-style + arrowhead).
+_CONCEPT_RELATIONS: frozenset[str] = frozenset(
+    {"causes", "contrasts", "requires", "partOf", "relatesTo"}
+)
+_DEFAULT_RELATION = "relatesTo"
+_MAX_CONNECTIONS_PER_CONCEPT = 3
+_DEFAULT_GROUP = "Concepts"
+_CONCEPT_CANVAS_MAX = 30
+
+
+def _connection_target(conn: Any) -> str:
+    """Extract the target concept name from a connection — accepts a bare string
+    (legacy) or a typed `{to, type}` object (v6+)."""
+    if isinstance(conn, dict):
+        return str(conn.get("to") or conn.get("name") or conn.get("target") or "").strip()
+    return str(conn or "").strip()
+
+
+def _normalize_connections(raw: Any) -> list[dict]:
+    """Coerce a concept's `connections` into typed `[{to, type}]` objects.
+
+    A bare string becomes `{to, type: relatesTo}` (legacy data). A dict's `type`
+    is validated against the relation enum, falling back to `relatesTo`. Empty
+    targets are dropped; the list is clamped to keep the graph readable.
+    """
+    if not isinstance(raw, list):
+        return []
+    out: list[dict] = []
+    seen: set[str] = set()
+    for conn in raw:
+        to = _connection_target(conn)
+        if not to or to.lower() in seen:
+            continue
+        rel = _DEFAULT_RELATION
+        if isinstance(conn, dict):
+            candidate = str(conn.get("type") or "").strip()
+            if candidate in _CONCEPT_RELATIONS:
+                rel = candidate
+        out.append({"to": to, "type": rel})
+        seen.add(to.lower())
+        if len(out) >= _MAX_CONNECTIONS_PER_CONCEPT:
+            break
+    return out
+
+
 def _normalize_concept(item: Any) -> dict | None:
-    """Coerce a concept item to {name, emoji, definition, example?, analogy?, connections}."""
+    """Coerce a concept item to {name, emoji, definition, example?, analogy?,
+    group?, timestamp?, connections:[{to,type}]}."""
     if not isinstance(item, dict):
         return None
     name = str(item.get("name") or item.get("title") or "").strip()
@@ -1155,19 +1201,69 @@ def _normalize_concept(item: Any) -> dict | None:
         "name": name,
         "emoji": str(item.get("emoji") or "💡"),
         "definition": definition,
-        "connections": item.get("connections") if isinstance(item.get("connections"), list) else [],
+        "connections": _normalize_connections(item.get("connections")),
     }
     if item.get("example"):
         result["example"] = str(item["example"])
     if item.get("analogy"):
         result["analogy"] = str(item["analogy"])
+    group = str(item.get("group") or "").strip()
+    if group:
+        result["group"] = group
+    # Preserve a timestamp so `inject_frame_thumbnails` can attach frame evidence.
+    ts = item.get("timestamp") if item.get("timestamp") is not None else item.get("seconds")
+    if isinstance(ts, (int, float)):
+        result["timestamp"] = ts
     return result
+
+
+def _cluster_groups(concepts: list[dict]) -> dict[str, str]:
+    """Connected-components fallback: when no concept carries a `group`, derive
+    clusters from the connection graph so the Groups view still has structure.
+
+    Returns a map of lowercased concept name → synthesized group label
+    ("Group 1", "Group 2", …). Concepts in the same component share a label;
+    isolated concepts each form their own single-member group.
+    """
+    names_lower = {c["name"].strip().lower() for c in concepts}
+    adjacency: dict[str, set[str]] = {n: set() for n in names_lower}
+    for concept in concepts:
+        src = concept["name"].strip().lower()
+        for conn in concept.get("connections") or []:
+            tgt = _connection_target(conn).lower()
+            if tgt in names_lower and tgt != src:
+                adjacency[src].add(tgt)
+                adjacency[tgt].add(src)
+
+    label_for: dict[str, str] = {}
+    cluster_index = 0
+    for concept in concepts:  # iterate in concept order for deterministic labels
+        start = concept["name"].strip().lower()
+        if start in label_for:
+            continue
+        cluster_index += 1
+        label = f"Group {cluster_index}"
+        stack = [start]
+        while stack:
+            node = stack.pop()
+            if node in label_for:
+                continue
+            label_for[node] = label
+            stack.extend(neighbor for neighbor in adjacency[node] if neighbor not in label_for)
+    return label_for
 
 
 def assemble_concept_canvas(
     tab: dict, data: Any, extraction: dict, enrichment: dict | None,
 ) -> dict | None:
-    """Build ConceptCanvas props from learning.concepts data."""
+    """Build ConceptCanvas props from learning/science `concepts` data.
+
+    Normalizes typed connections, validates each `to` against a real concept
+    name (drops hallucinated / self references), assigns/derives a group per
+    concept, and returns `{concepts, groups}` where `groups` is the ordered,
+    de-duped list of group labels. Caps at a generous 30 concepts — grouping,
+    not truncation, is meant to absorb density.
+    """
     if isinstance(data, dict):
         data = data.get("concepts") or data.get("items") or []
     if not isinstance(data, list) or len(data) < 2:
@@ -1175,7 +1271,44 @@ def assemble_concept_canvas(
     concepts = [c for c in (_normalize_concept(item) for item in data) if c is not None]
     if len(concepts) < 2:
         return None
-    return {"concepts": concepts}
+
+    if len(concepts) > _CONCEPT_CANVAS_MAX:
+        logger.info(
+            "concept_canvas: capping %d concepts to %d", len(concepts), _CONCEPT_CANVAS_MAX
+        )
+        concepts = concepts[:_CONCEPT_CANVAS_MAX]
+
+    # Validate connections against the surviving concept names (case-insensitive),
+    # canonicalize the `to` casing, and drop hallucinated / self references.
+    names_lower = {c["name"].strip().lower(): c["name"] for c in concepts}
+    for concept in concepts:
+        src_lower = concept["name"].strip().lower()
+        valid: list[dict] = []
+        for conn in concept.get("connections") or []:
+            canonical = names_lower.get(conn["to"].strip().lower())
+            if canonical and canonical.strip().lower() != src_lower:
+                valid.append({"to": canonical, "type": conn["type"]})
+        concept["connections"] = valid
+
+    # Grouping: honour explicit groups when any concept has one (defaulting the
+    # rest to "Concepts"); otherwise synthesize clusters from the graph.
+    has_explicit_group = any(c.get("group") for c in concepts)
+    if not has_explicit_group:
+        cluster_label = _cluster_groups(concepts)
+        for concept in concepts:
+            concept["group"] = cluster_label[concept["name"].strip().lower()]
+    else:
+        for concept in concepts:
+            if not concept.get("group"):
+                concept["group"] = _DEFAULT_GROUP
+
+    groups: list[str] = []
+    for concept in concepts:  # ordered by first appearance, de-duped
+        group = concept["group"]
+        if group not in groups:
+            groups.append(group)
+
+    return {"concepts": concepts, "groups": groups}
 
 
 _CONNECT_MIN_PAIRS = 2
@@ -1208,7 +1341,7 @@ def assemble_connect_canvas(
     for concept in concepts:
         prompt = concept["name"].strip()
         for conn in concept.get("connections") or []:
-            target = names_lower.get(str(conn).strip().lower())
+            target = names_lower.get(_connection_target(conn).lower())
             if not target or target.strip().lower() == prompt.lower():
                 continue
             if target in used_matches:
@@ -1473,7 +1606,7 @@ def _build_diagram_edges_from_connections(
         if not isinstance(connections, list):
             continue
         for conn in connections:
-            target_idx = label_index.get(str(conn).strip().lower())
+            target_idx = label_index.get(_connection_target(conn).lower())
             if target_idx is None or target_idx == source_idx:
                 continue
             edge = (source_idx, target_idx)

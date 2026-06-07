@@ -18,15 +18,16 @@ if (!import.meta.env.DEV) {
   throw new Error('InteractiveBlockShowcase should not be imported in production');
 }
 
-import { lazy, memo, Suspense, useMemo, type ReactNode } from 'react';
-import { ErrorBoundary, type FallbackProps } from '@/components/ui/error-boundary';
+import { lazy, Suspense, useMemo } from 'react';
 
-import { GlassCard, VisualEvidence } from '@/components/vie';
+import { VisualEvidence } from '@/components/vie';
 
-import { FlowPlayer } from '@/features/video-output/components/output/FlowPlayer';
-import { RecipeStepView } from '@/features/video-output/components/output/RecipeStepView';
-import { FlowContextPanel } from '@/features/video-output/components/output/FlowContextPanel';
-import type { StepItem } from '@vie/types';
+import {
+  SectionCard,
+  DemoBoundary,
+  DemoSuspenseFallback,
+  type ShowcaseEntry,
+} from './showcase-primitives';
 
 import {
   // Retained interactives
@@ -67,6 +68,7 @@ import {
   createMockVisualEvidence,
   createMockFilmstripFrames,
   createMockConcepts,
+  createMockConceptGroups,
   createMockStepFlowSteps,
   createMockComparisonRadarRows,
   createMockConnectCanvasPairs,
@@ -125,6 +127,7 @@ const clips = createMockClips();
 const visualEvidenceSample = createMockVisualEvidence();
 const filmstripFrames = createMockFilmstripFrames();
 const concepts = createMockConcepts();
+const conceptGroups = createMockConceptGroups();
 const stepFlowSteps = createMockStepFlowSteps();
 const radarRows = createMockComparisonRadarRows();
 const connectPairs = createMockConnectCanvasPairs();
@@ -134,129 +137,7 @@ const packingItems = createMockPackingItems();
 const workoutExercises = createMockWorkoutExercises();
 const lyricsSections = createMockLyricsKaraokeSections();
 
-// FlowPlayer mock modes — context items + an ordered step sequence. The shell
-// is domain-agnostic; these mocks exercise the cooking + build presentations.
-const flowCookingSteps: StepItem[] = [
-  { number: 1, title: 'Boil water', instruction: 'Bring a salted pot of water to a rolling boil.', duration: '5 min' },
-  { number: 2, title: 'Cook pasta', instruction: 'Add the pasta and cook until al dente.', duration: '10 min' },
-  { number: 3, title: 'Make sauce', instruction: 'Warm olive oil, add garlic, then the tomato sauce.', duration: '5 min' },
-  { number: 4, title: 'Combine', instruction: 'Drain the pasta and toss it through the sauce.' },
-];
-const flowCookingContext = [
-  { label: 'Pasta', note: 'penne or fusilli' },
-  { label: 'Olive oil' },
-  { label: 'Garlic', note: '3 cloves, minced' },
-  { label: 'Tomato sauce', note: '1 can' },
-];
-const flowBuildSteps: StepItem[] = [
-  { number: 1, title: 'Scaffold the project', instruction: 'Run the CLI generator and install dependencies.' },
-  { number: 2, title: 'Wire the router', instruction: 'Register the routes and the layout shell.' },
-  { number: 3, title: 'Ship the first screen', instruction: 'Build the landing route and verify the dev server.' },
-];
-const flowBuildContext = [
-  { label: 'Node 20+', group: 'Materials' },
-  { label: 'pnpm', group: 'Materials' },
-  { label: 'router.ts', note: 'route registry', group: 'Code' },
-];
-
-// ── Demo-section primitives ──
-
-interface SectionCardProps {
-  index: number;
-  name: string;
-  description: string;
-  whatsNew: string;
-  testId: string;
-  children: ReactNode;
-}
-
-/**
- * Section container — each interactive demo lives inside one of these. The
- * `data-section="showcase"` + per-section `data-testid` attributes let
- * Playwright assert that every component in the new registry rendered.
- */
-const SectionCard = memo(function SectionCard({
-  index,
-  name,
-  description,
-  whatsNew,
-  testId,
-  children,
-}: SectionCardProps) {
-  return (
-    <div data-section="showcase" data-testid={testId}>
-      <GlassCard variant="default" className="space-y-4">
-        <header className="space-y-2 border-b border-border/40 pb-3">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-              {String(index).padStart(2, '0')}
-            </span>
-            <h3 className="text-base font-semibold tracking-tight">{name}</h3>
-          </div>
-          <p className="text-sm text-muted-foreground">{description}</p>
-          <p
-            className="inline-flex items-center gap-1.5 rounded-md bg-muted/40 px-2 py-1 text-[11px] font-medium text-foreground/80"
-            data-testid={`${testId}-whats-new`}
-          >
-            <span className="font-semibold uppercase tracking-wider text-muted-foreground">
-              What&apos;s new
-            </span>
-            <span aria-hidden>·</span>
-            <span>{whatsNew}</span>
-          </p>
-        </header>
-        <div>{children}</div>
-      </GlassCard>
-    </div>
-  );
-});
-
-function SectionErrorFallback({ error }: FallbackProps) {
-  const message = error instanceof Error ? error.message : 'Unknown error';
-  return (
-    <div
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
-    >
-      <p className="font-semibold">Demo crashed</p>
-      <p className="mt-1 text-xs opacity-80">{message}</p>
-    </div>
-  );
-}
-
-function DemoSuspenseFallback({ label }: { label: string }) {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex h-32 items-center justify-center rounded-md border border-dashed border-border/40 bg-muted/10 text-sm text-muted-foreground"
-    >
-      Loading {label}…
-    </div>
-  );
-}
-
-interface DemoBoundaryProps {
-  label: string;
-  children: ReactNode;
-}
-
-function DemoBoundary({ label: _label, children }: DemoBoundaryProps) {
-  return <ErrorBoundary FallbackComponent={SectionErrorFallback}>{children}</ErrorBoundary>;
-}
-
-// ── Migration banner ──
-
 // ── Section data (declarative wiring) ──
-
-interface ShowcaseEntry {
-  testId: string;
-  name: string;
-  description: string;
-  whatsNew: string;
-  /** A function so we can produce fresh handlers per render without leaking listeners. */
-  render: () => ReactNode;
-}
 
 function useShowcaseEntries(): ShowcaseEntry[] {
   return useMemo<ShowcaseEntry[]>(() => {
@@ -405,11 +286,11 @@ function useShowcaseEntries(): ShowcaseEntry[] {
       {
         testId: 'concept-canvas',
         name: 'ConceptCanvas',
-        description: 'Drag-arrangeable concept map (React Flow) with persisted per-video layout.',
-        whatsNew: 'Drag to reorder · Saves layout · Frame thumbs on nodes',
+        description: 'Static tiered graph explorer (Dagre) — typed edges, grouped lanes, docked inspector.',
+        whatsNew: 'Dagre auto-layout · Typed edges (style, not hue) · Map/Groups toggle · Side inspector',
         render: () => (
           <Suspense fallback={<DemoSuspenseFallback label="ConceptCanvas" />}>
-            <LazyConceptCanvas concepts={concepts} videoId="showcase-demo" />
+            <LazyConceptCanvas concepts={concepts} groups={conceptGroups} />
           </Suspense>
         ),
       },
@@ -661,69 +542,6 @@ function useShowcaseEntries(): ShowcaseEntry[] {
               ]}
             />
           </Suspense>
-        ),
-      },
-      // ── Generalized enter mode (FlowPlayer) — interactive-overhaul-v2 P4 ──
-      {
-        testId: 'flow-player',
-        name: 'FlowPlayer (enter mode)',
-        description: 'Generalized cooking mode: left context panel + a sequenced action pane with progress, stepper dots, and a completion celebration. Reused across cooking, workout, build, study, explore, practice.',
-        whatsNew: 'New (P4) · extracted from RecipePlayer · per-mode context + sequence + per-step render slot',
-        render: () => (
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                mode=&quot;cooking&quot; (migrated, unchanged)
-              </p>
-              <FlowPlayer
-                emoji="🍳"
-                modeLabel="Cooking Mode"
-                stepNoun="steps"
-                contextLabel="Ingredients"
-                contextCount={flowCookingContext.length}
-                renderContext={() => (
-                  <FlowContextPanel items={flowCookingContext} label="Ingredients" />
-                )}
-                sequenceLength={flowCookingSteps.length}
-                renderStep={(args) => (
-                  <RecipeStepView
-                    steps={flowCookingSteps}
-                    currentStep={args.currentStep}
-                    onStepChange={args.onStepChange}
-                    onComplete={args.onComplete}
-                  />
-                )}
-                completionMessage="All steps complete! Enjoy your meal!"
-                onExit={() => undefined}
-              />
-            </div>
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                mode=&quot;build&quot; (tech / project)
-              </p>
-              <FlowPlayer
-                emoji="🔧"
-                modeLabel="Build Mode"
-                stepNoun="steps"
-                contextLabel="Materials"
-                contextCount={flowBuildContext.length}
-                renderContext={() => (
-                  <FlowContextPanel items={flowBuildContext} label="Materials" />
-                )}
-                sequenceLength={flowBuildSteps.length}
-                renderStep={(args) => (
-                  <RecipeStepView
-                    steps={flowBuildSteps}
-                    currentStep={args.currentStep}
-                    onStepChange={args.onStepChange}
-                    onComplete={args.onComplete}
-                  />
-                )}
-                completionMessage="Build complete! Nicely done!"
-                onExit={() => undefined}
-              />
-            </div>
-          </div>
         ),
       },
     ];

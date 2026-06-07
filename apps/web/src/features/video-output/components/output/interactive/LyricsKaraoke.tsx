@@ -113,18 +113,27 @@ export const LyricsKaraoke = memo(function LyricsKaraoke({
   const activeIndexRef = useRef<number>(activeIndex);
   activeIndexRef.current = activeIndex;
 
-  // Auto-scroll the active line into view when it changes.
+  // Auto-scroll the active line to the center of the lyrics container — NOT the
+  // page. `scrollIntoView()` bubbles to every scrollable ancestor (including the
+  // document), so mounting this list with an active line yanks the whole page to
+  // center it. Scrolling `containerRef` directly keeps the jump contained to the
+  // lyrics panel.
   useEffect(() => {
     if (activeIndex < 0) return;
+    const container = containerRef.current;
     const node = lineRefs.current[activeIndex];
-    if (!node) return;
+    if (!container || !node) return;
     try {
-      node.scrollIntoView({
+      const containerRect = container.getBoundingClientRect();
+      const nodeRect = node.getBoundingClientRect();
+      const delta =
+        nodeRect.top - containerRect.top - (container.clientHeight - node.clientHeight) / 2;
+      container.scrollTo({
+        top: container.scrollTop + delta,
         behavior: reducedMotion ? 'auto' : 'smooth',
-        block: 'center',
       });
     } catch {
-      // jsdom/older browsers may not implement scrollIntoView options.
+      // jsdom/older browsers may not implement scrollTo options.
     }
   }, [activeIndex, reducedMotion]);
 

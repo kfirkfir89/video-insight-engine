@@ -462,9 +462,9 @@ video-insight-engine/
 - [x] SponsorBlock filtering
 - [x] Chunked extraction for long videos
 - [x] Multi-language support with RTL and translation
-- [ ] Whisper fallback for videos without captions
+- [x] Whisper + Gemini audio fallback for videos without captions
 - [ ] Playlist processing with cross-video connections
-- [ ] Assistant chat with RAG (Qdrant vector search)
+- [x] Assistant chat with RAG (Qdrant vector search) — single-video + library scope, action channel
 - [ ] Collections with drag-and-drop organization
 - [ ] Speaker diarization
 - [ ] Browser extension

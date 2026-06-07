@@ -25,6 +25,11 @@ async def _drain(gen):
         pass
 
 
+async def _collect(gen) -> list[str]:
+    """Collect every SSE chunk an async generator yields."""
+    return [chunk async for chunk in gen]
+
+
 def _build_ctx(source_language_code: str | None = None) -> SimpleNamespace:
     """Minimal PipelineContext stand-in for run_phase_assembly."""
     triage = SimpleNamespace(tabs=[])
@@ -92,6 +97,41 @@ async def test_redis_cache_skipped_for_non_english_videos() -> None:
         mock_cache.set_response = AsyncMock(return_value=True)
         await _drain(phase.run_phase_assembly(ctx))  # type: ignore[arg-type]
         mock_cache.set_response.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_status_completed_and_done_emitted_for_english_videos() -> None:
+    """English videos are final at assembly: persist status="completed" and
+    emit the terminal done/[DONE] here (no translation phase follows)."""
+    from src.services.pipeline.phases import assembly as phase
+
+    ctx = _build_ctx()
+    with patch.object(phase, "assemble_response", return_value={"tabs": [], "meta": {}}), \
+         patch.object(phase, "settings", SimpleNamespace(REDIS_ENABLED=False, QDRANT_ENABLED=False)), \
+         patch.object(phase, "response_cache"):
+        events = await _collect(phase.run_phase_assembly(ctx))  # type: ignore[arg-type]
+
+    saved = ctx.repository.save_structured_result.call_args.args[1]
+    assert saved["status"] == "completed"
+    assert any("[DONE]" in ev for ev in events)
+
+
+@pytest.mark.asyncio
+async def test_status_processing_and_done_deferred_for_non_english_videos() -> None:
+    """Non-English videos stay "processing" at assembly and DEFER the terminal
+    event — the translation phase owns "completed" + the done emission so an
+    interrupted translation leaves a retriable doc."""
+    from src.services.pipeline.phases import assembly as phase
+
+    ctx = _build_ctx(source_language_code="he")
+    with patch.object(phase, "assemble_response", return_value={"tabs": [], "meta": {}}), \
+         patch.object(phase, "settings", SimpleNamespace(REDIS_ENABLED=False, QDRANT_ENABLED=False)), \
+         patch.object(phase, "response_cache"):
+        events = await _collect(phase.run_phase_assembly(ctx))  # type: ignore[arg-type]
+
+    saved = ctx.repository.save_structured_result.call_args.args[1]
+    assert saved["status"] == "processing"
+    assert not any("[DONE]" in ev for ev in events)
 
 
 @pytest.mark.asyncio

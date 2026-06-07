@@ -6,12 +6,121 @@ runner is exercised through integration tests.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from llm_common.context import llm_feature_var
 from src.routes import pipeline_runner
+
+
+def _phase_stub(label: str):
+    """Build a single-event async-generator stand-in for a pipeline phase."""
+    async def _gen(*_args: object, **_kwargs: object):
+        yield f"data: {label}\n\n"
+    return _gen
+
+
+def _non_english_ctx() -> SimpleNamespace:
+    """Minimal ctx for _run_pipeline_phases driving the non-English path."""
+    return SimpleNamespace(
+        youtube_id="yt1",
+        clean_text="",  # skip the visual-inject block
+        frame_descriptions=None,
+        scene_frames_all=None,
+        transcript_data=None,
+        extraction_data={},  # skip the faithfulness spawn
+        source_language_code="he",
+        phase_times={},
+        plan_result=object(),
+        enrichment_data={"a": 1},
+        triage=SimpleNamespace(tabs=[]),
+    )
+
+
+def _patched_phases():
+    """Patch every pipeline phase to a trivial stub so the orchestration —
+    specifically the terminal-event ordering — can be tested in isolation."""
+    async def _parallel_stub(_phases, _ctx):
+        yield "data: parallel\n\n"
+
+    return [
+        patch.object(pipeline_runner, "run_phase_metadata", _phase_stub("metadata")),
+        patch.object(pipeline_runner, "run_parallel_phases", _parallel_stub),
+        patch.object(pipeline_runner, "run_phase_plan", _phase_stub("plan")),
+        patch.object(pipeline_runner, "run_phase_extraction", _phase_stub("extraction")),
+        patch.object(pipeline_runner, "run_phase_synthesis", _phase_stub("synthesis")),
+        patch.object(pipeline_runner, "run_phase_enrichment", _phase_stub("enrichment")),
+        patch.object(pipeline_runner, "run_phase_assembly", _phase_stub("assembly")),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_done_emitted_after_translation_for_non_english() -> None:
+    """For non-English videos assembly defers the terminal event; the runner
+    emits done/[DONE] only AFTER the translation phase, so the FE refetch sees a
+    completed doc with the sourceLanguage toggle."""
+    ctx = _non_english_ctx()
+    timer = MagicMock()
+    timer.elapsed = MagicMock(return_value=1.0)
+
+    async def _translation_stub(_ctx, _repo, _vsid):
+        yield "data: translation\n\n"
+
+    patches = _patched_phases()
+    patches.append(
+        patch("src.services.pipeline.phases.translation.run_phase_translation", _translation_stub)
+    )
+    for p in patches:
+        p.start()
+    try:
+        events = [
+            ev async for ev in pipeline_runner._run_pipeline_phases(
+                ctx, MagicMock(), "vsid", timer
+            )
+        ]
+    finally:
+        for p in patches:
+            p.stop()
+
+    assert any("translation" in ev for ev in events)
+    assert any("[DONE]" in ev for ev in events)
+    translation_idx = next(i for i, ev in enumerate(events) if "translation" in ev)
+    done_idx = next(i for i, ev in enumerate(events) if "[DONE]" in ev)
+    assert translation_idx < done_idx, "done must come after the translation phase"
+
+
+@pytest.mark.asyncio
+async def test_no_done_when_translation_raises() -> None:
+    """If translation raises, the doc stays "processing" (retriable): the runner
+    swallows the error as non-critical and emits NO terminal event."""
+    ctx = _non_english_ctx()
+    timer = MagicMock()
+    timer.elapsed = MagicMock(return_value=1.0)
+
+    async def _translation_raises(_ctx, _repo, _vsid):
+        raise RuntimeError("boom")
+        yield  # pragma: no cover — makes this an async generator
+
+    patches = _patched_phases()
+    patches.append(
+        patch("src.services.pipeline.phases.translation.run_phase_translation", _translation_raises)
+    )
+    for p in patches:
+        p.start()
+    try:
+        events = [
+            ev async for ev in pipeline_runner._run_pipeline_phases(
+                ctx, MagicMock(), "vsid", timer
+            )
+        ]
+    finally:
+        for p in patches:
+            p.stop()
+
+    assert not any("[DONE]" in ev for ev in events)
+    assert not any("videoSummaryId" in ev for ev in events)
 
 
 @pytest.mark.asyncio

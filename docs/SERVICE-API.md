@@ -54,13 +54,15 @@ api/
     │   ├── folders.routes.ts
     │   ├── videos.routes.ts
     │   ├── playlists.routes.ts
-    │   ├── assistant.routes.ts   # /api/assistant/* (RAG chat + actions)
+    │   ├── assistant.routes.ts   # /api/videos/:id/chat + /action (single-video RAG)
+    │   ├── assistant-library.routes.ts # /api/assistant/library/{chat,search}
     │   ├── stream.routes.ts      # SSE proxy to summarizer
     │   ├── share.routes.ts       # Share creation + public access
     │   ├── ssr.routes.ts         # /s/:slug server-rendered share pages
     │   ├── override.routes.ts    # Category override
     │   ├── payment.routes.ts     # Paddle webhooks + checkout
     │   ├── internal.routes.ts    # Internal service-to-service calls
+    │   ├── internal-assistant.routes.ts # /internal/assistant/* — assistant→api library callbacks (authenticateInternal)
     │   ├── preferences.routes.ts # User preferences
     │   └── users.routes.ts       # User profile + GDPR deletion
     │
@@ -247,6 +249,26 @@ export async function assistantRoutes(fastify: FastifyInstance) {
 }
 ```
 
+### Internal authentication (`authenticateInternal`)
+
+The `/internal/assistant/*` routes are **service-to-service** callbacks the
+vie-assistant uses to mutate the caller's library (folders, videos, generate).
+They are not user-JWT protected — instead they use the `authenticateInternal`
+preHandler:
+
+```typescript
+// src/routes/internal-assistant.routes.ts
+fastify.get('/folders', {
+  preHandler: [fastify.authenticateInternal],   // validates X-Internal-Secret + binds X-User-Id
+}, async (req) => folderService.list(req.user.userId));
+```
+
+- `isValidInternalSecret()` (`src/utils/internal-auth.ts`) compares the
+  `X-Internal-Secret` header to `config.INTERNAL_SECRET` in **constant time**
+  via `node:crypto.timingSafeEqual` (length-checked first).
+- `X-User-Id` is the only trusted source of the userId — every operation is
+  scoped to it; a body-supplied userId is ignored. See [SECURITY.md](./SECURITY.md#service-to-service-auth).
+
 ---
 
 ## Input Validation
@@ -357,7 +379,7 @@ JWT_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
 FRONTEND_URL=http://localhost:5173
 CORS_ADDITIONAL_ORIGINS=
-INTERNAL_SECRET=dev-internal-secret-change-me
+INTERNAL_SECRET=dev-internal-secret-change-me   # Shared secret for /internal/assistant/* (X-Internal-Secret); must match vie-assistant
 
 # Payment (Paddle) — v1.4
 PADDLE_WEBHOOK_SECRET=

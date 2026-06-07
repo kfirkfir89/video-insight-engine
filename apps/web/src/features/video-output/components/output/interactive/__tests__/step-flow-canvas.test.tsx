@@ -25,6 +25,12 @@ describe('StepFlowCanvas', () => {
     expect(nodes).toHaveLength(steps.length);
   });
 
+  it('should lock node dragging (nodesDraggable=false — no infinite drag)', () => {
+    renderInProvider(<StepFlowCanvas steps={steps} />);
+    // ReactFlow tags draggable nodes with a `draggable` class; locked nodes have none.
+    expect(document.querySelectorAll('.react-flow__node.draggable')).toHaveLength(0);
+  });
+
   it('should render edges between consecutive steps', () => {
     renderInProvider(<StepFlowCanvas steps={steps} />);
     // xyflow edges require a real viewport to render the path; we assert the

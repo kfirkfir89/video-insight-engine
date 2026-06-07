@@ -111,6 +111,9 @@ importers:
       '@ai-sdk/react':
         specifier: ^3.0.29
         version: 3.0.29(react@19.2.3)(zod@3.25.76)
+      '@dagrejs/dagre':
+        specifier: ^3.0.0
+        version: 3.0.0
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.3)(react@19.2.3)
@@ -1126,6 +1129,16 @@ packages:
     resolution: {integrity: sha512-Vd/9EVDiu6PPJt9yAh6roZP6El1xHrdvIVGjyBsHR0RYwNHgL7FJPyIIW4fANJNG6FtyZfvlRPpFI4ZM/lubvw==}
     engines: {node: '>=18'}
     dev: true
+
+  /@dagrejs/dagre@3.0.0:
+    resolution: {integrity: sha512-ZzhnTy1rfuoew9Ez3EIw4L2znPGnYYhfn8vc9c4oB8iw6QAsszbiU0vRhlxWPFnmmNSFAkrYeF1PhM5m4lAN0Q==}
+    dependencies:
+      '@dagrejs/graphlib': 4.0.1
+    dev: false
+
+  /@dagrejs/graphlib@4.0.1:
+    resolution: {integrity: sha512-IvcV6FduIIAmLwnH+yun+QtV36SC7mERqa86aClNqmMN09WhmPPYU8ckHrZBozErf+UvHPWOTJYaGYiIcs0DgA==}
+    dev: false
 
   /@dnd-kit/accessibility@3.1.1(react@19.2.3):
     resolution: {integrity: sha512-2P+YgaXF+gRsIihwwY1gCsQSYnu9Zyj2py8kY5fFvUM1qm2WA2u639R6YNVfU4GWr+ZM5mqEsfHZZLoRONbemw==}

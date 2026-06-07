@@ -85,9 +85,12 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
         "processingTimeMs": processing_time,
     })
 
-    # Save result
+    # Save result. Non-English videos stay "processing" until the translation
+    # phase persists the sourceLanguage block and owns the "completed"
+    # transition — so an interrupted translation leaves a retriable doc rather
+    # than a fake-completed English-only one.
     result: dict = {
-        "status": "completed",
+        "status": "processing" if ctx.source_language_code else "completed",
         "youtubeId": ctx.youtube_id,
         "title": ctx.video_data.title,
         "creator": ctx.video_data.channel,
@@ -215,5 +218,10 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
         transcript_task = asyncio.create_task(_store_transcript())
         transcript_task.add_done_callback(_log_transcript_error)
 
-    yield sse_event("done", {"videoSummaryId": ctx.video_summary_id, "processingTimeMs": processing_time})
-    yield "data: [DONE]\n\n"
+    # English-source videos are final here. Non-English videos still have the
+    # translation phase ahead of them, which owns the terminal event (emitted by
+    # the pipeline runner after translation persists the sourceLanguage block)
+    # so the FE refetch on `done` sees a "completed" doc with the toggle.
+    if not ctx.source_language_code:
+        yield sse_event("done", {"videoSummaryId": ctx.video_summary_id, "processingTimeMs": processing_time})
+        yield "data: [DONE]\n\n"

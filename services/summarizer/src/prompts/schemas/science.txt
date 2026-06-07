@@ -13,10 +13,14 @@ Extract structured science/STEM educational content.
       "definition": "Clear explanation as the speaker describes it",
       "formula": "Mathematical formula or equation if applicable, or null",
       "realWorldExample": "Practical example from the video",
-      "connections": ["Related concepts mentioned"]
+      "group": "Short thematic group (e.g. Fundamentals / Mechanisms / Applications)",
+      "connections": [
+        {"to": "EXACT name of a related concept", "type": "causes | requires | contrasts | partOf | relatesTo"}
+      ]
     }
   ],
-> UI: Concepts → SpotExplorer cards. Fill formula for expandable detail, realWorldExample for practical context.
+> UI: Concepts → SpotExplorer cards, or ConceptCanvas tiered graph when connections are populated. Fill formula for expandable detail, realWorldExample for practical context.
+> GROUPING: give every concept a short `group` label (aim for 2-5 groups total). `connections` are typed objects — `to` is the EXACT concept name, `type` is the relationship (`causes`/`requires`/`contrasts`/`partOf`/`relatesTo`). Keep ≤16 concepts on the canvas; group tightly rather than listing more.
   "keyFacts": [
     {
       "emoji": "relevant emoji",
@@ -45,7 +49,7 @@ Extract structured science/STEM educational content.
   "field": "Physics",
   "level": "intermediate",
   "concepts": [
-    {"name": "Wave-Particle Duality", "emoji": "🌊", "definition": "Light behaves as both a wave and a particle depending on how you observe it", "formula": "E = hf", "realWorldExample": "The double-slit experiment shows interference patterns (wave) but photon detectors register individual hits (particle)", "connections": ["quantum mechanics", "photon"]}
+    {"name": "Wave-Particle Duality", "emoji": "🌊", "definition": "Light behaves as both a wave and a particle depending on how you observe it", "formula": "E = hf", "realWorldExample": "The double-slit experiment shows interference patterns (wave) but photon detectors register individual hits (particle)", "group": "Fundamentals", "connections": [{"to": "Quantum mechanics", "type": "partOf"}, {"to": "Photon", "type": "relatesTo"}]}
   ],
   "keyFacts": [
     {"emoji": "🔬", "title": "Double-slit experiment proves wave nature", "detail": "When no detector is placed, photons create an interference pattern on the screen — proving wave behavior", "source": "Thomas Young's 1801 experiment"}

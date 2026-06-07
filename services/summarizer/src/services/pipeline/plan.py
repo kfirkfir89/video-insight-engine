@@ -11,7 +11,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ...models.pipeline_types import PlanResult
-from ...shared_config.domain_config import build_fallback_tabs, map_category_to_tag, valid_components
+from ...shared_config.domain_config import (
+    build_fallback_tabs,
+    map_category_to_tag,
+    render_density_gate_table,
+    render_valid_component_names,
+    valid_components,
+)
 from ...utils.json_parsing import parse_json_response
 from ...utils.language_utils import ENGLISH_OUTPUT_DIRECTIVE
 from ...utils.llm_retry import call_llm_with_retry
@@ -152,12 +158,22 @@ async def run_plan(
     # Split prompt into static (cacheable) and dynamic parts.
     # Static: role + instructions + component_toolkit + output_schema + examples + rules
     # Dynamic: video details + transcript_preview
+    # All three are config-derived static content (no video data) and single-
+    # sourced from domains.json. {density_gates} lives inside the toolkit text,
+    # so it must be replaced AFTER {component_toolkit} is injected.
     static_template = ENGLISH_OUTPUT_DIRECTIVE + "\n\n" + (
         prompt_template
         .replace("{component_toolkit}", component_toolkit)
+        .replace("{density_gates}", render_density_gate_table())
+        .replace("{valid_components}", render_valid_component_names())
     )
 
-    # Find the split point at <video> tag — everything before it is static
+    # Split at the <video> tag for Anthropic prompt caching: the per-video
+    # blocks are deliberately LAST in plan.txt, so everything before them — role
+    # + instructions + toolkit + density gates + schema + examples + rules — is
+    # the cached static system block, and only the small video + transcript blocks
+    # are the dynamic per-request user message. (If <video> were near the top, the
+    # cache prefix would collapse to the role preamble — see the note in plan.txt.)
     video_marker = "<video>"
     split_idx = static_template.find(video_marker)
 

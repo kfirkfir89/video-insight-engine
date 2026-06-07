@@ -1,0 +1,79 @@
+"""Regression tests for Phase 8 Translation — status ownership.
+
+Assembly leaves non-English videos ``status="processing"``; the translation
+phase owns the ``"completed"`` transition. On success it persists the
+``sourceLanguage`` block AND ``status="completed"``; on a deliberate no-op
+(mirror / LLM returned None — English-only is the valid final surface) it still
+finalizes the doc to ``"completed"``. An *interrupted* translation never reaches
+either path, so the doc stays ``"processing"`` and is retriable.
+"""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from src.models.schemas import ProcessingStatus
+
+
+async def _drain(gen) -> None:
+    async for _ in gen:
+        pass
+
+
+def _build_ctx() -> SimpleNamespace:
+    """Minimal PipelineContext stand-in for run_phase_translation (non-English)."""
+    video_data = SimpleNamespace(title="כותרת", channel="c", duration=10, thumbnail_url="https://x/t.jpg")
+    return SimpleNamespace(
+        source_language_code="he",
+        source_language=None,
+        llm_service=MagicMock(),
+        assembled_tabs=[{"id": "overview"}],
+        assembled_meta={"contentTags": ["podcast"]},
+        video_data=video_data,
+        youtube_id="ytid",
+    )
+
+
+@pytest.mark.asyncio
+async def test_success_persists_sourcelanguage_and_status_completed() -> None:
+    from src.services.pipeline.phases import translation as phase
+
+    ctx = _build_ctx()
+    repo = MagicMock()
+    translated = {
+        "tabs": [],
+        "meta": {},
+        "sourceLanguage": {"code": "he", "name": "עברית", "isRTL": True, "tabs": [], "meta": {}},
+    }
+    with patch.object(phase, "translate_to_source", AsyncMock(return_value=translated)), \
+         patch.object(phase, "translate_text", AsyncMock(return_value="English title")), \
+         patch.object(phase, "settings", SimpleNamespace(REDIS_ENABLED=False)):
+        await _drain(phase.run_phase_translation(ctx, repo, "vsid"))  # type: ignore[arg-type]
+
+    saved = repo.save_structured_result.call_args.args[1]
+    assert saved["status"] == "completed"
+    assert saved["sourceLanguage"]["code"] == "he"
+    repo.update_status.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_noop_finalizes_status_completed_without_sourcelanguage() -> None:
+    """Mirror/LLM-None → no sourceLanguage, but the doc must leave "processing"
+    so it is not stuck as fake-incomplete (English-only is the final surface)."""
+    from src.services.pipeline.phases import translation as phase
+
+    ctx = _build_ctx()
+    repo = MagicMock()
+    # translate_to_source returns the input unchanged (no sourceLanguage key).
+    unchanged = {"tabs": [{"id": "overview"}], "meta": {"contentTags": ["podcast"]}}
+    with patch.object(phase, "translate_to_source", AsyncMock(return_value=unchanged)), \
+         patch.object(phase, "translate_text", AsyncMock(return_value="x")), \
+         patch.object(phase, "settings", SimpleNamespace(REDIS_ENABLED=False)):
+        await _drain(phase.run_phase_translation(ctx, repo, "vsid"))  # type: ignore[arg-type]
+
+    repo.update_status.assert_called_once()
+    assert repo.update_status.call_args.args[1] is ProcessingStatus.COMPLETED
+    repo.save_structured_result.assert_not_called()

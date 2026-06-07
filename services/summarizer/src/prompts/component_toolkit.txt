@@ -25,28 +25,7 @@ travel-specific drop-zone variant. Components are wayfinding by INTENT.
 DENSITY GATES (HARD RULES — assembler will drop tabs that violate)
 ═══════════════════════════════════════════════════════════════════
 
-| Component         | min items | max items | max chars/cell                   |
-|-------------------|-----------|-----------|----------------------------------|
-| info_grid         | 3         | 20        | 120 chars per value (≈ 20 words) |
-| flash_deck        | 3         | 15        | front ≤ 40, back ≤ 180           |
-| comparison        | 3 rows    | 10        | each side ≤ 80 chars             |
-| comparison_radar  | 4 axes    | 8         | weighted by user via sliders     |
-| spot_explorer     | 2         | 25        | description ≤ 200                |
-| step_player       | 3         | 10        | instruction ≤ 200                |
-| step_flow_canvas  | 6         | 25        | drives the canvas graph layout   |
-| moment_track      | 3         | 20        | label ≤ 60                       |
-| quiz_arena        | 2         | 8         | question ≤ 140, context ≤ 180    |
-| workout_room      | 2         | 25        | name ≤ 40                        |
-| checklist         | 3         | 30        | label ≤ 80                       |
-| packing_mission   | 4         | 40        | item ≤ 40, weight optional       |
-| code_playground   | 1         | 12        | explanation ≤ 200                |
-| concept_canvas    | 2         | 30        | definition ≤ 200, connections[]  |
-| connect_canvas    | 2 pairs   | 8         | graded; answer key from connections[] |
-| video_filmstrip   | 3 frames  | 24        | caption ≤ 80                     |
-| claims_tracker    | 2 claims  | 20        | claim ≤ 200, source ≤ 80         |
-| tier_list         | 3 items   | 30        | item ≤ 60, reason ≤ 120          |
-| formation_diagram | 3 players | 23        | player ≤ 40; x/y are 0-100       |
-| lyrics_karaoke    | —         | —         | per-line ≤ 120 chars             |
+{density_gates}
 
 If your extraction has fewer items than min: pick a DIFFERENT component
 or fold the data into overview/info_grid. NEVER ship a 1-item

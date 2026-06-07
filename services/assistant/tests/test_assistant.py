@@ -388,3 +388,112 @@ class TestAssistantLibraryAgenticLoop:
         assert not any("\"type\":\"tool\"" in e for e in events)
         assert any("3 videos" in e for e in events)
         assert "\"type\":\"done\"" in events[-1]
+
+
+class TestAssistantSingleVideoAgenticLoop:
+    """chat() (single open video) also exposes the library action tools, so the
+    assistant can organize the collection without the user leaving the video."""
+
+    @staticmethod
+    def _tool_completion(calls):
+        from src.services.llm_provider import ToolCompletion
+
+        return ToolCompletion(content=None, tool_calls=calls)
+
+    @staticmethod
+    def _final(content):
+        from src.services.llm_provider import ToolCompletion
+
+        return ToolCompletion(content=content, tool_calls=[])
+
+    async def test_should_execute_library_tools_while_a_video_is_open(
+        self, agentic_assistant_service, mock_llm, mock_api_client,
+    ):
+        mock_api_client.create_folder.return_value = {"id": "f9", "name": "Series"}
+        steps = [
+            self._tool_completion([
+                {"id": "c1", "name": "create_folder", "arguments": {"name": "Series"}},
+            ]),
+            self._tool_completion([
+                {"id": "c2", "name": "move_video", "arguments": {"video_id": "v1", "folder_id": "f9"}},
+            ]),
+            self._final("Done — created Series and moved your video in."),
+        ]
+        mock_llm.complete_with_tools = AsyncMock(side_effect=steps)
+
+        events = []
+        async for event in agentic_assistant_service.chat(
+            video_id="abc123",
+            message="Make a Series folder and move my video into it",
+            history=[],
+            user_id="u1",
+        ):
+            events.append(event)
+
+        # Library tools executed in order with the caller's user_id injected.
+        mock_api_client.create_folder.assert_awaited_once_with(
+            "u1", "Series", parentId=None, color=None, icon=None,
+        )
+        mock_api_client.move_video.assert_awaited_once_with("u1", "v1", "f9")
+
+        # Tool steps surfaced (start + done per call) and a final answer + done.
+        tool_events = [e for e in events if "\"type\":\"tool\"" in e]
+        assert len(tool_events) == 4
+        assert any("\"type\":\"text\"" in e and "Series" in e for e in events)
+        assert "\"type\":\"done\"" in events[-1]
+
+    async def test_should_not_call_tools_without_api_client(
+        self, assistant_service, mock_llm,
+    ):
+        # No api_client wired → degrades to a plain video-grounded stream.
+        mock_llm.complete_with_tools = AsyncMock(
+            side_effect=AssertionError("tools must not run without an api_client")
+        )
+
+        events = []
+        async for event in assistant_service.chat(
+            video_id="abc123", message="Organize my collection", history=[],
+            user_id="u1",
+        ):
+            events.append(event)
+
+        assert any("\"type\":\"text\"" in e for e in events)
+        assert "\"type\":\"done\"" in events[-1]
+
+    async def test_should_not_call_tools_without_user_id(
+        self, agentic_assistant_service, mock_llm,
+    ):
+        # api_client present but no user_id (header missing) → no tools offered.
+        mock_llm.complete_with_tools = AsyncMock(
+            side_effect=AssertionError("tools must not run without a user_id")
+        )
+
+        events = []
+        async for event in agentic_assistant_service.chat(
+            video_id="abc123", message="Organize my collection", history=[],
+        ):
+            events.append(event)
+
+        assert any("\"type\":\"text\"" in e for e in events)
+        assert "\"type\":\"done\"" in events[-1]
+
+    async def test_should_still_ground_in_the_open_video(
+        self, agentic_assistant_service, mock_llm, mock_rag,
+    ):
+        # A plain question runs the loop once, answers directly, no tools, and
+        # still searches the open video's chunks for grounding.
+        mock_llm.complete_with_tools = AsyncMock(
+            return_value=self._final("It is about neural networks.")
+        )
+
+        events = []
+        async for event in agentic_assistant_service.chat(
+            video_id="abc123", message="What is this video about?",
+            history=[], user_id="u1",
+        ):
+            events.append(event)
+
+        mock_rag.search.assert_awaited()
+        assert not any("\"type\":\"tool\"" in e for e in events)
+        assert any("neural networks" in e for e in events)
+        assert "\"type\":\"done\"" in events[-1]
