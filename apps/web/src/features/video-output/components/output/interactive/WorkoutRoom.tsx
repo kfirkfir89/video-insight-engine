@@ -29,6 +29,7 @@ import {
   TextBlock,
 } from '@/components/vie';
 import { Celebration } from '../Celebration';
+import { EmptyTabState } from './EmptyTabState';
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
 
 import type { FitnessExercise } from '@vie/types';
@@ -274,7 +275,7 @@ export const WorkoutRoom = memo(function WorkoutRoom({
     setActiveIndex((idx) => Math.min(exercises.length - 1, idx + 1));
   }, [clearRestTimers, exercises.length]);
 
-  if (exercises.length === 0) return null;
+  if (exercises.length === 0) return <EmptyTabState message="No exercises were extracted for this video." icon={Dumbbell} />;
 
   const exercise = exercises[activeIndex];
   const setsDone = completedSets[activeIndex] ?? 0;

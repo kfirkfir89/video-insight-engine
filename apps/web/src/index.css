@@ -424,6 +424,13 @@
   --vie-accent: var(--primary);
   --vie-accent-muted: oklch(from var(--primary) l c h / 0.1);
   --vie-accent-border: oklch(from var(--primary) l c h / 0.25);
+  /* Contrast-safe text color for solid accent fills: light domains (honey/mint/
+     sky, l>0.62) get tinted ink, dark domains (plum/primary, l<0.62) get tinted
+     frost. accentStyle() re-emits this per wrapper so it tracks domain overrides;
+     this :root value is the no-wrapper default (primary l≈0.58 → frost). */
+  --vie-accent-foreground: oklch(
+    from var(--vie-accent) calc(0.18 + 0.8 * clamp(0, (0.62 - l) * 100, 1)) 0.015 280
+  );
 
   /* ─────────────────────────────────────────────
      TYPOGRAPHY SYSTEM

@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { Copy, Check, Play, Square, FileCode } from 'lucide-react';
+import { Copy, Check, Play, Square, FileCode, Code2 } from 'lucide-react';
 import type { TechSnippet } from '@vie/types';
 
 import { cn } from '@/lib/utils';
@@ -20,6 +20,7 @@ import {
   VisualEvidence,
 } from '@/components/vie';
 import { useLabels } from '@/lib/i18n';
+import { EmptyTabState } from './EmptyTabState';
 
 interface CodePlaygroundProps {
   snippets: TechSnippet[];
@@ -309,7 +310,7 @@ const SnippetCard = memo(function SnippetCard({
                 'flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
                 isRunning
                   ? 'bg-destructive/20 text-destructive hover:bg-destructive/30'
-                  : 'bg-primary/20 text-primary hover:bg-primary/30',
+                  : 'bg-[var(--vie-accent)]/20 text-[var(--vie-accent)] hover:bg-[var(--vie-accent)]/30',
               )}
             >
               {isRunning ? (
@@ -392,7 +393,7 @@ export const CodePlayground = memo(function CodePlayground({
   const [currentIndex, setCurrentIndex] = useState(0);
   const total = snippets.length;
 
-  if (total === 0) return null;
+  if (total === 0) return <EmptyTabState message="No code snippets were extracted for this video." icon={Code2} />;
 
   const snippet = snippets[currentIndex];
 

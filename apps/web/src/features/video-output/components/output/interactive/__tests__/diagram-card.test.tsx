@@ -39,9 +39,9 @@ describe('DiagramCard', () => {
     expect(screen.getByText('Request lifecycle')).toBeInTheDocument();
   });
 
-  it('renders nothing when every node lacks a label', () => {
+  it('renders an empty state when every node lacks a label', () => {
     const { container } = render(<DiagramCard nodes={[{ label: '' }]} />);
-    expect(container.innerHTML).toBe('');
+    expect(container.textContent).toContain('No diagram data was extracted');
   });
 
   describe('buildDiagramEdges', () => {

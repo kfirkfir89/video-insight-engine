@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 
@@ -18,9 +18,9 @@ describe('SpotExplorer', () => {
     expect(screen.getByText('Notre Dame')).toBeInTheDocument();
   });
 
-  it('should return null for empty spots', () => {
+  it('renders an empty state for empty spots', () => {
     const { container } = render(<SpotExplorer spots={[]} />);
-    expect(container.innerHTML).toBe('');
+    expect(container.textContent).toContain('No highlights were extracted');
   });
 
   it('should show rating when present', () => {

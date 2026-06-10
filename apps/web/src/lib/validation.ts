@@ -54,7 +54,7 @@ export function translateAuthError(
 ): string {
   if (err instanceof ApiError) {
     if (err.status === 401 || err.code === "INVALID_CREDENTIALS") {
-      return "Email or password is incorrect. Try again or reset your password.";
+      return "Email or password is incorrect. Please try again.";
     }
     if (err.status === 409 || err.code === "USER_EXISTS") {
       return "An account with this email already exists. Try signing in instead.";

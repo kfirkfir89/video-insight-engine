@@ -10,10 +10,12 @@ import {
   type Node,
   type NodeTypes,
 } from '@xyflow/react';
-import { Check, RotateCcw, Trophy, X } from 'lucide-react';
+import { Check, Link2, RotateCcw, Trophy, X } from 'lucide-react';
 
 import { VieCanvas } from '@/components/vie/canvas/CanvasShell';
 import { GlassCard, Badge } from '@/components/vie';
+import { EmptyTabState } from './EmptyTabState';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { ConnectPair } from '@vie/types';
 
@@ -221,6 +223,10 @@ export const ConnectCanvas = memo(function ConnectCanvas({
   const [graded, setGraded] = useState(false);
   const [score, setScore] = useState<GradeResult | null>(null);
   const [bestScore, setBestScore] = useState(0);
+  // Skeleton covers the blank mount window until React Flow reports it has
+  // initialised + measured the viewport (onInit).
+  const [canvasReady, setCanvasReady] = useState(false);
+  const handleCanvasInit = useCallback(() => setCanvasReady(true), []);
 
   useEffect(() => {
     setBestScore(readBestScore(videoId, tabId));
@@ -328,11 +334,14 @@ export const ConnectCanvas = memo(function ConnectCanvas({
 
   if (cleanPairs.length < 2) {
     return (
-      <GlassCard variant="outlined" className="text-center text-sm text-muted-foreground">
-        Not enough connected concepts to build a matching quiz.
-      </GlassCard>
+      <EmptyTabState
+        message="Not enough connected concepts to build a matching quiz."
+        icon={Link2}
+      />
     );
   }
+
+  const canvasHeight = Math.min(640, 160 + cleanPairs.length * ROW_SPACING);
 
   return (
     <div className="space-y-3" data-tab-id={tabId}>
@@ -368,23 +377,32 @@ export const ConnectCanvas = memo(function ConnectCanvas({
             type="button"
             onClick={handleCheck}
             disabled={edges.length === 0 || graded}
-            className="inline-flex items-center gap-1 rounded-md bg-[var(--vie-accent,var(--primary))] px-3 py-1 text-xs font-semibold text-[var(--primary-foreground,white)] transition-opacity disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-md bg-[var(--vie-accent,var(--primary))] px-3 py-1 text-xs font-semibold text-[var(--vie-accent-foreground)] transition-opacity disabled:opacity-50"
           >
             <Check className="h-3.5 w-3.5" aria-hidden="true" />
             Check
           </button>
         </div>
       </GlassCard>
-      <VieCanvas
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={NODE_TYPES}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={handleConnect}
-        nodesDraggable={false}
-        height={Math.min(640, 160 + cleanPairs.length * ROW_SPACING)}
-      />
+      <div className="relative" style={{ height: canvasHeight }}>
+        <VieCanvas
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={NODE_TYPES}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={handleConnect}
+          onInit={handleCanvasInit}
+          nodesDraggable={false}
+          height={canvasHeight}
+        />
+        {!canvasReady && (
+          <Skeleton
+            aria-hidden="true"
+            className="absolute inset-0 rounded-2xl bg-muted/40 motion-reduce:animate-none"
+          />
+        )}
+      </div>
     </div>
   );
 });

@@ -39,9 +39,9 @@ describe('CodePlayground', () => {
     expect(screen.getByText('hello.js')).toBeInTheDocument();
   });
 
-  it('should return null for empty snippets', () => {
+  it('renders an empty state for empty snippets', () => {
     const { container } = render(<CodePlayground snippets={[]} />);
-    expect(container.innerHTML).toBe('');
+    expect(container.textContent).toContain('No code snippets were extracted');
   });
 
   it('should copy snippet code to clipboard when Copy is clicked', async () => {

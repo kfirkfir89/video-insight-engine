@@ -1,5 +1,7 @@
 import { memo, useCallback } from 'react';
+import { Film } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { EmptyTabState } from './EmptyTabState';
 
 export interface FilmstripFrame {
   thumbnailUrl: string;
@@ -45,7 +47,7 @@ export const VideoFilmstrip = memo(function VideoFilmstrip({
     [onSeek],
   );
 
-  if (frames.length === 0) return null;
+  if (frames.length === 0) return mode === 'overlay' ? null : <EmptyTabState message="No frames were captured for this video." icon={Film} />;
 
   const isTabMode = mode === 'tab';
   const cellWidth = isTabMode ? 'w-[120px]' : 'w-[88px]';

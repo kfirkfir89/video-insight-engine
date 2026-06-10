@@ -1,9 +1,10 @@
 import { memo, useCallback, useMemo, useState } from 'react';
-import { Check, Square, Minus, Plus } from 'lucide-react';
+import { Check, Square, Minus, Plus, ListChecks } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { scaleAmount } from '@/features/video-output/components/output/lib/format-utils';
 import { GlassCard, FadeIn, Badge } from '@/components/vie';
 import { Celebration } from '../Celebration';
+import { EmptyTabState } from './EmptyTabState';
 
 import { Button } from '@/components/ui/button';
 import { useTabState } from '@/features/video-output/contexts/TabStateContext';
@@ -95,7 +96,7 @@ export const ChecklistInteractive = memo(function ChecklistInteractive({
     return result;
   }, [items, groups]);
 
-  if (items.length === 0) return null;
+  if (items.length === 0) return <EmptyTabState message="No checklist items were extracted for this video." icon={ListChecks} />;
 
   return (
     <GlassCard className="space-y-4">

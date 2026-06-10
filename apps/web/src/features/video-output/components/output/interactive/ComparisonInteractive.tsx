@@ -1,5 +1,5 @@
 import { memo, useState, useMemo, useEffect, useRef } from 'react';
-import { Check, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, X, ChevronDown, ChevronUp, Scale } from 'lucide-react';
 import {
   Legend,
   PolarAngleAxis,
@@ -14,6 +14,7 @@ import { Slider } from '@/components/ui/slider';
 import { useMediaQuery } from '@/hooks/use-media-query';
 
 import { useLabels } from '@/lib/i18n';
+import { EmptyTabState } from './EmptyTabState';
 
 import type { ReviewComparison } from '@vie/types';
 
@@ -192,8 +193,8 @@ const ComparisonRadarHero = memo(function ComparisonRadarHero({
               <Radar
                 name={colLeft}
                 dataKey={colLeft}
-                stroke="var(--vie-accent, var(--primary))"
-                fill="var(--vie-accent, var(--primary))"
+                stroke="var(--vie-accent)"
+                fill="var(--vie-accent)"
                 fillOpacity={0.35}
               />
               <Radar
@@ -476,7 +477,7 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
     return { leftWins, rightWins, ties, total: withWinner.length };
   }, [comparisons]);
 
-  if (!hasComparisons && !hasPros && !hasCons && !hasVerdictHeader) return null;
+  if (!hasComparisons && !hasPros && !hasCons && !hasVerdictHeader) return <EmptyTabState message="No comparison data was extracted for this video." icon={Scale} />;
 
   return (
     <div className="space-y-4">
@@ -533,7 +534,7 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
               <thead>
                 <tr className="border-b border-border/50">
                   <th className="text-start text-xs font-semibold uppercase tracking-wider text-muted-foreground px-4 py-2.5">Feature</th>
-                  <th className="text-start text-xs font-semibold uppercase tracking-wider text-primary px-4 py-2.5">{colLeft}</th>
+                  <th className="text-start text-xs font-semibold uppercase tracking-wider text-[var(--vie-accent)] px-4 py-2.5">{colLeft}</th>
                   <th className="text-start text-xs font-semibold uppercase tracking-wider text-muted-foreground px-4 py-2.5">{colRight}</th>
                 </tr>
               </thead>
@@ -546,7 +547,7 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
                       key={index}
                       className={cn(
                         'border-b border-border/30 cursor-pointer transition-colors',
-                        index === activeRow ? 'bg-primary/5' : 'hover:bg-muted/30',
+                        index === activeRow ? 'bg-[var(--vie-accent)]/5' : 'hover:bg-muted/30',
                       )}
                       onClick={() => setActiveRow(index)}
                     >
@@ -603,7 +604,7 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
                     {item.winner === 'left' && (
                       <EmojiMarker emoji="🏆" size="sm" animated={false} className="absolute -top-2 -end-1" />
                     )}
-                    <span className="text-xs font-semibold uppercase tracking-wider text-primary">{colLeft}</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-[var(--vie-accent)]">{colLeft}</span>
                     <p className="text-sm leading-relaxed text-muted-foreground mt-1">{item.thisProduct}</p>
                   </div>
                   <div className={cn(

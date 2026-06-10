@@ -38,9 +38,9 @@ describe('MomentTrack', () => {
     expect(screen.getByText('Conclusion')).toBeInTheDocument();
   });
 
-  it('returns null for empty items', () => {
+  it('renders an empty state for empty items', () => {
     const { container } = render(<MomentTrack items={[]} />);
-    expect(container.innerHTML).toBe('');
+    expect(container.textContent).toContain('No moments were extracted');
   });
 
   it('shows timestamps', () => {

@@ -1,8 +1,9 @@
 import { memo, useState } from 'react';
-import { Check, AlertTriangle, Lightbulb, Clock } from 'lucide-react';
+import { Check, AlertTriangle, Lightbulb, Clock, ListOrdered } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { GlassCard, FadeIn, Timer, BackForward, Stepper, Timestamp, TextBlock, VisualEvidence } from '@/components/vie';
+import { EmptyTabState } from './EmptyTabState';
 import { Celebration } from '../Celebration';
 import { useLabels } from '@/lib/i18n';
 
@@ -20,11 +21,15 @@ interface StepByStepInteractiveProps {
   onSeek?: (seconds: number) => void;
 }
 
-const STEP_COLORS = [
-  'border-primary/50 text-primary',
-  'border-info/50 text-info',
-  'border-success/50 text-success',
-] as const;
+/**
+ * Single-accent step badge styling (Color discipline — one hue per tab).
+ * Steps are distinguished by FILL vs OUTLINE vs neutral state, never by hue.
+ */
+function stepBadgeClass(isActive: boolean): string {
+  return isActive
+    ? 'border-[var(--vie-accent)] bg-[var(--vie-accent)] text-[var(--vie-accent-foreground)]'
+    : 'border-border bg-muted text-muted-foreground';
+}
 
 function parseDurationSeconds(duration?: string | number): number {
   if (duration == null) return 0;
@@ -75,7 +80,7 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
     });
   };
 
-  if (steps.length === 0) return null;
+  if (steps.length === 0) return <EmptyTabState message="No steps were extracted for this video." icon={ListOrdered} />;
 
   // Default to one-at-a-time for manageable step counts
   const effectiveMode = mode ?? (steps.length <= 10 ? 'one_at_a_time' : 'scrollable');
@@ -151,7 +156,6 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
           if (!step) return null;
           const isActive = index === currentStep;
           const isDone = completedSteps.has(index);
-          const colorClass = STEP_COLORS[index % STEP_COLORS.length];
           const durationSecs = parseDurationSeconds(step.duration);
 
           return (
@@ -159,11 +163,23 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
               <GlassCard
                 variant={isActive ? 'interactive' : 'default'}
                 className={cn(
-                  'cursor-pointer transition-all duration-200 overflow-hidden',
-                  isActive && 'border-primary/40',
+                  'cursor-pointer transition duration-200 overflow-hidden',
+                  isActive && 'border-[var(--vie-accent)]/40',
                   isDone && 'opacity-60',
                 )}
               >
+                {/* Frame-as-Hero: the supporting frame leads the step full-width
+                    at aspect-video (DESIGN.md §6), never a sidekick thumbnail. */}
+                {step.thumbnailUrl && (
+                  <VisualEvidence
+                    variant="figure"
+                    thumbnailUrl={step.thumbnailUrl}
+                    caption={step.frameCaption}
+                    ocr={step.frameOcr}
+                    className="mb-3"
+                  />
+                )}
+
                 <div
                   className="flex gap-3"
                   onClick={() => setCurrentStep(index)}
@@ -176,11 +192,13 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
                     }
                   }}
                 >
-                  {/* Number circle / check */}
+                  {/* Number circle / check — single accent, fill vs outline vs neutral */}
                   <div
                     className={cn(
-                      'shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-all',
-                      isDone ? 'bg-success border-success text-success-foreground' : colorClass,
+                      'shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-colors',
+                      isDone
+                        ? 'border-[var(--vie-accent)] bg-[var(--vie-accent)]/15 text-[var(--vie-accent)]'
+                        : stepBadgeClass(isActive),
                     )}
                   >
                     {isDone ? <Check className="h-4 w-4" /> : step.number}
@@ -239,26 +257,12 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
                     )}
                   </div>
 
-                  {/* Right: thumbnail + optional frame caption stack. Mobile
-                      keeps the 72×72 thumbnail (parity with the pre-frame
-                      design); the figcaption is sm+ only because the caption
-                      crowds the row at <640px. */}
-                  {step.thumbnailUrl && (
-                    <VisualEvidence
-                      variant="figure"
-                      thumbnailUrl={step.thumbnailUrl}
-                      caption={step.frameCaption}
-                      ocr={step.frameOcr}
-                      className="shrink-0 w-[120px]"
-                    />
-                  )}
-
                   {/* Complete button */}
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={(e) => { e.stopPropagation(); toggleComplete(index); }}
-                    className={cn('shrink-0 rounded-full', isDone && 'text-success hover:text-success')}
+                    className={cn('shrink-0 rounded-full', isDone && 'text-[var(--vie-accent)] hover:text-[var(--vie-accent)]')}
                     aria-label={isDone ? `Mark step ${step.number} incomplete` : `Mark step ${step.number} complete`}
                   >
                     <Check className="h-4 w-4" />

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Handle,
   Position,
@@ -9,11 +9,13 @@ import {
   type NodeTypes,
 } from '@xyflow/react';
 
-import { Clock } from 'lucide-react';
+import { Clock, Workflow } from 'lucide-react';
 
 import { VieCanvas } from '@/components/vie/canvas/CanvasShell';
 import { GlassCard, VisualEvidence } from '@/components/vie';
+import { EmptyTabState } from './EmptyTabState';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useTabState } from '@/features/video-output/contexts/TabStateContext';
 import type { StepItem } from '@vie/types';
@@ -237,6 +239,11 @@ export const StepFlowCanvas = memo(function StepFlowCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<StepNodeData>>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
 
+  // Skeleton covers the blank mount window until React Flow reports it has
+  // initialised + measured the viewport (onInit).
+  const [canvasReady, setCanvasReady] = useState(false);
+  const handleCanvasInit = useCallback(() => setCanvasReady(true), []);
+
   useEffect(() => {
     setNodes(initialNodes);
   }, [initialNodes, setNodes]);
@@ -275,24 +282,31 @@ export const StepFlowCanvas = memo(function StepFlowCanvas({
   }, [completedSteps, initialNodes, initialEdges, setNodes, setEdges]);
 
   if (!steps?.length) {
-    return (
-      <GlassCard variant="outlined" className="text-center text-sm text-muted-foreground">
-        No steps to render yet.
-      </GlassCard>
-    );
+    return <EmptyTabState message="No steps were extracted for this video." icon={Workflow} />;
   }
+
+  const canvasHeight = Math.min(720, 280 + steps.length * 160);
 
   return (
     <div className="space-y-3" data-tab-id={tabId}>
-      <VieCanvas
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={NODE_TYPES}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        nodesDraggable={false}
-        height={Math.min(720, 280 + steps.length * 160)}
-      />
+      <div className="relative" style={{ height: canvasHeight }}>
+        <VieCanvas
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={NODE_TYPES}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onInit={handleCanvasInit}
+          nodesDraggable={false}
+          height={canvasHeight}
+        />
+        {!canvasReady && (
+          <Skeleton
+            aria-hidden="true"
+            className="absolute inset-0 rounded-2xl bg-muted/40 motion-reduce:animate-none"
+          />
+        )}
+      </div>
     </div>
   );
 });

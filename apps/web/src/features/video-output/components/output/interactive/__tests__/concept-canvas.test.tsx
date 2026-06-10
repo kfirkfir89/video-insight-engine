@@ -70,7 +70,7 @@ describe('buildConceptGraph', () => {
 describe('ConceptCanvas', () => {
   it('renders the empty fallback when there are no concepts', () => {
     render(<ConceptCanvas concepts={[]} />);
-    expect(screen.getByText(/No concepts to map yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/No concepts were extracted/i)).toBeInTheDocument();
   });
 
   it('renders a sparse graph (concepts with no connections → no edges, no crash)', () => {

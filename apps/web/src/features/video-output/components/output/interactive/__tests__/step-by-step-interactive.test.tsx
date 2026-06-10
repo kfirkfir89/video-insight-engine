@@ -21,9 +21,9 @@ describe('StepByStepInteractive', () => {
     expect(screen.getByText('Serve')).toBeInTheDocument();
   });
 
-  it('should return null for empty steps', () => {
+  it('renders an empty state for empty steps', () => {
     const { container } = render(<StepByStepInteractive steps={[]} />);
-    expect(container.innerHTML).toBe('');
+    expect(container.textContent).toContain('No steps were extracted');
   });
 
   it('should show progress counter', () => {

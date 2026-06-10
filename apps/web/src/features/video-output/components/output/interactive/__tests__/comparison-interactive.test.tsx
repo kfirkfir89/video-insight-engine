@@ -28,9 +28,9 @@ describe('ComparisonInteractive', () => {
     expect(screen.getByText('Brand X')).toBeInTheDocument();
   });
 
-  it('should return null when no data', () => {
+  it('renders an empty state when no data', () => {
     const { container } = render(<ComparisonInteractive />);
-    expect(container.innerHTML).toBe('');
+    expect(container.textContent).toContain('No comparison data was extracted');
   });
 
   it('should render pros and cons', () => {

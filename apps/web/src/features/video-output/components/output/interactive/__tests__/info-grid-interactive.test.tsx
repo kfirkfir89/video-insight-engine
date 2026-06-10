@@ -17,9 +17,9 @@ describe('InfoGridInteractive', () => {
     expect(screen.getByText('Christopher Nolan')).toBeInTheDocument();
   });
 
-  it('should return null for empty items', () => {
+  it('renders an empty state for empty items', () => {
     const { container } = render(<InfoGridInteractive items={[]} />);
-    expect(container.innerHTML).toBe('');
+    expect(container.textContent).toContain('No reference details were extracted');
   });
 
   it('should render table mode', () => {
