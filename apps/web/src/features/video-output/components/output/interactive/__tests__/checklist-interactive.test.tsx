@@ -22,9 +22,9 @@ describe('ChecklistInteractive', () => {
     expect(screen.getByText('Salt')).toBeInTheDocument();
   });
 
-  it('should return null for empty items', () => {
+  it('renders an empty state for empty items', () => {
     const { container } = render(<ChecklistInteractive items={[]} tabLabel="Empty" />);
-    expect(container.innerHTML).toBe('');
+    expect(container.textContent).toContain('No checklist items were extracted');
   });
 
   it('should toggle item checked state on click', () => {

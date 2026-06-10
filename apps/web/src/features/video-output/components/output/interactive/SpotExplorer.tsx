@@ -1,9 +1,10 @@
 import { memo, useCallback, useState } from 'react';
-import { ChevronDown, ChevronUp, Star, Clock } from 'lucide-react';
+import { ChevronDown, ChevronUp, Star, Clock, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLabels } from '@/lib/i18n';
 import type { SpotItem } from '@vie/types';
 import { GlassCard, FadeIn, SectionNav, Badge, MapLink, VisualEvidence } from '@/components/vie';
+import { EmptyTabState } from './EmptyTabState';
 
 
 interface SpotSection {
@@ -47,7 +48,8 @@ export const SpotExplorer = memo(function SpotExplorer({
     });
   }, []);
 
-  if (spots.length === 0) return null;
+  if (spots.length === 0)
+    return <EmptyTabState message="No highlights were extracted for this video." icon={MapPin} />;
 
   const sectionNav = sections && sections.length > 1
     ? sections.map((s) => ({ id: s.label, label: s.label }))

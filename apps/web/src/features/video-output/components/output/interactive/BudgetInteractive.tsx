@@ -1,8 +1,9 @@
 import { memo, useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { Plus, Minus } from 'lucide-react';
+import { Plus, Minus, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { HeroCard, FadeIn, GlassCard, StatPill } from '@/components/vie';
 import { Button } from '@/components/ui/button';
+import { EmptyTabState } from './EmptyTabState';
 
 
 interface BudgetBreakdownItem {
@@ -22,15 +23,20 @@ interface BudgetInteractiveProps {
   onNavigateTab?: (id: string) => void;
 }
 
+/**
+ * Donut/dot/bar palette — a single-hue ramp of the domain accent token. All
+ * eight steps are the same hue varied only by alpha (1.0 → 0.3) so segments
+ * stay distinguishable while reading as one domain color (no second hue).
+ */
 const DONUT_COLORS = [
-  'var(--chart-1)',
-  'var(--chart-2)',
-  'var(--chart-3)',
-  'var(--chart-4)',
-  'var(--chart-5)',
-  'var(--chart-6)',
-  'var(--chart-7)',
-  'var(--chart-8)',
+  'oklch(from var(--vie-accent) l c h / 1)',
+  'oklch(from var(--vie-accent) l c h / 0.9)',
+  'oklch(from var(--vie-accent) l c h / 0.8)',
+  'oklch(from var(--vie-accent) l c h / 0.7)',
+  'oklch(from var(--vie-accent) l c h / 0.6)',
+  'oklch(from var(--vie-accent) l c h / 0.5)',
+  'oklch(from var(--vie-accent) l c h / 0.4)',
+  'oklch(from var(--vie-accent) l c h / 0.3)',
 ];
 
 function formatCurrency(amount: number, currency = 'USD'): string {
@@ -116,7 +122,7 @@ export const BudgetInteractive = memo(function BudgetInteractive({
     ? Math.round(currentTotal * 0.15)
     : null;
 
-  if (breakdown.length === 0) return null;
+  if (breakdown.length === 0) return <EmptyTabState message="No cost breakdown was extracted for this video." icon={Wallet} />;
 
   return (
     <div className="space-y-4">
@@ -167,7 +173,7 @@ export const BudgetInteractive = memo(function BudgetInteractive({
               <div
                 className={cn(
                   'space-y-1.5 p-1.5 rounded-lg transition-colors',
-                  isHighlighted && 'bg-primary/5 ring-1 ring-primary/20',
+                  isHighlighted && 'bg-[var(--vie-accent)]/5 ring-1 ring-[var(--vie-accent)]/20',
                 )}
                 onClick={() => setHighlightedCategory(isHighlighted ? null : index)}
               >

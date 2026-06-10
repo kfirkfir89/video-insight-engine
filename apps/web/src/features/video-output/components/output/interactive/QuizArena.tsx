@@ -22,7 +22,10 @@ import {
   EmojiMarker,
   VisualEvidence,
 } from '@/components/vie';
+import { HelpCircle } from 'lucide-react';
+
 import { Celebration } from '../Celebration';
+import { EmptyTabState } from './EmptyTabState';
 import { useLabels } from '@/lib/i18n';
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
 
@@ -261,7 +264,8 @@ export const QuizArena = memo(function QuizArena({
     setPulseStreak(false);
   }, []);
 
-  if (questions.length === 0) return null;
+  if (questions.length === 0)
+    return <EmptyTabState message="No quiz questions were generated for this video." icon={HelpCircle} />;
 
   const question = questions[currentIndex];
   const selectedOption = answers.get(currentIndex);

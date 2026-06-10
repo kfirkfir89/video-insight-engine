@@ -10,12 +10,13 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, RotateCcw } from 'lucide-react';
+import { GripVertical, RotateCcw, Trophy } from 'lucide-react';
 import type { TierListItem, TierRank } from '@vie/types';
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { GlassCard } from '@/components/vie';
+import { EmptyTabState } from './EmptyTabState';
 
 interface TierListProps {
   items: TierListItem[];
@@ -28,13 +29,31 @@ const TIERS: TierRank[] = ['S', 'A', 'B', 'C', 'D'];
 const UNRANKED = '__unranked__';
 type Slot = TierRank | typeof UNRANKED;
 
-/** Per-tier accent token — top tiers warmer, lower tiers cooler/muted. */
-const TIER_ACCENT: Record<TierRank, string> = {
-  S: 'var(--vie-coral)',
-  A: 'var(--vie-honey)',
-  B: 'var(--vie-mint)',
-  C: 'var(--vie-sky)',
-  D: 'var(--vie-plum)',
+interface TierStyle {
+  /** Letter-box fill — a single-hue ramp of the domain accent. */
+  bg: string;
+  /** Letter color, picked to stay legible on `bg` in every theme. */
+  fg: string;
+}
+
+/**
+ * Per-tier styling — a single-hue ramp of the domain accent token. S is the
+ * strongest fill and D the faintest, so the ranking reads as one domain color
+ * varied only by alpha (never a second hue).
+ *
+ * The label color can't be one fixed token: `--vie-accent-foreground` is only
+ * contrast-safe on a *solid* accent. The near-solid top tiers (S/A) use it; the
+ * faint tiers (B/C/D) blend toward the surface, so their letter uses
+ * `--foreground` (defined to contrast that surface). Without this split, a dark
+ * domain accent in light theme (or a light one in dark theme) renders the lower
+ * tiers' letters near-invisible.
+ */
+const TIER_STYLE: Record<TierRank, TierStyle> = {
+  S: { bg: 'oklch(from var(--vie-accent) l c h / 1)', fg: 'var(--vie-accent-foreground)' },
+  A: { bg: 'oklch(from var(--vie-accent) l c h / 0.8)', fg: 'var(--vie-accent-foreground)' },
+  B: { bg: 'oklch(from var(--vie-accent) l c h / 0.6)', fg: 'var(--foreground)' },
+  C: { bg: 'oklch(from var(--vie-accent) l c h / 0.4)', fg: 'var(--foreground)' },
+  D: { bg: 'oklch(from var(--vie-accent) l c h / 0.25)', fg: 'var(--foreground)' },
 };
 
 function storageKey(videoId: string | undefined, tabId: string | undefined): string | null {
@@ -135,7 +154,7 @@ function TierChip({ index, item }: ChipProps) {
 interface RowProps {
   slot: Slot;
   label: string;
-  accent?: string;
+  accent?: TierStyle;
   indices: number[];
   items: TierListItem[];
 }
@@ -146,8 +165,12 @@ function TierRow({ slot, label, accent, indices, items }: RowProps) {
   return (
     <div className="flex items-stretch gap-2">
       <div
-        className="flex w-12 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-foreground"
-        style={accent ? { backgroundColor: `color-mix(in oklch, ${accent} 30%, transparent)` } : undefined}
+        className="flex w-12 shrink-0 items-center justify-center rounded-lg text-sm font-bold"
+        style={
+          accent
+            ? { backgroundColor: accent.bg, color: accent.fg }
+            : { color: 'var(--foreground)' }
+        }
       >
         {label}
       </div>
@@ -226,11 +249,7 @@ export const TierList = memo(function TierList({ items, videoId, tabId }: TierLi
   }, [items]);
 
   if (items.length === 0) {
-    return (
-      <p className="py-8 text-center text-sm text-muted-foreground" role="status">
-        No items to rank for this video.
-      </p>
-    );
+    return <EmptyTabState message="No items to rank for this video." icon={Trophy} />;
   }
 
   return (
@@ -258,7 +277,7 @@ export const TierList = memo(function TierList({ items, videoId, tabId }: TierLi
               key={tier}
               slot={tier}
               label={tier}
-              accent={TIER_ACCENT[tier]}
+              accent={TIER_STYLE[tier]}
               indices={bySlot[tier]}
               items={items}
             />

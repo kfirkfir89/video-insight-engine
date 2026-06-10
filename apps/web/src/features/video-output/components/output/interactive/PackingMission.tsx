@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { GlassCard, FadeIn, Badge, TextBlock } from '@/components/vie';
 import { Celebration } from '../Celebration';
+import { EmptyTabState } from './EmptyTabState';
 
 export interface PackingItem {
   item: string;
@@ -339,7 +340,8 @@ export const PackingMission = memo(function PackingMission({
     };
   }, [items, packed]);
 
-  if (items.length === 0) return null;
+  if (items.length === 0)
+    return <EmptyTabState message="No packing items were extracted for this video." icon={Luggage} />;
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
@@ -363,7 +365,7 @@ export const PackingMission = memo(function PackingMission({
                 className={cn(
                   'rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors',
                   categoryFilter === ALL_CATEGORIES
-                    ? 'bg-primary text-primary-foreground'
+                    ? 'bg-[var(--vie-accent)] text-[var(--vie-accent-foreground)]'
                     : 'bg-muted/40 text-muted-foreground hover:text-foreground',
                 )}
               >
@@ -377,7 +379,7 @@ export const PackingMission = memo(function PackingMission({
                   className={cn(
                     'rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors capitalize',
                     categoryFilter === cat
-                      ? 'bg-primary text-primary-foreground'
+                      ? 'bg-[var(--vie-accent)] text-[var(--vie-accent-foreground)]'
                       : 'bg-muted/40 text-muted-foreground hover:text-foreground',
                   )}
                 >

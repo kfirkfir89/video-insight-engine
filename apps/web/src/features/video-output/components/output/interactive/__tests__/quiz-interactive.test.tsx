@@ -29,9 +29,9 @@ describe('QuizInteractive', () => {
     expect(screen.getByText('Q 1 of 2')).toBeInTheDocument();
   });
 
-  it('should return null for empty questions', () => {
+  it('renders an empty state for empty questions', () => {
     const { container } = render(<QuizInteractive questions={[]} />);
-    expect(container.innerHTML).toBe('');
+    expect(container.textContent).toContain('No quiz questions were generated');
   });
 
   it('should show explanation after selecting an answer', () => {

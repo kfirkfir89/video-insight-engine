@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Shuffle } from 'lucide-react';
+import { Shuffle, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import type { FlashcardItem } from '@vie/types';
 import { GlassCard, FadeIn, BackForward, Stepper, Badge, ProgressBar, EmojiMarker } from '@/components/vie';
 import { Celebration } from '../Celebration';
+import { EmptyTabState } from './EmptyTabState';
 import { useLabels } from '@/lib/i18n';
 import { useDirection } from '@/contexts/DirectionContext';
 
@@ -152,7 +153,7 @@ export const FlashDeckInteractive = memo(function FlashDeckInteractive({
     }
   }, [flipped, handleFlip, markKnown, markReview, isRTL]);
 
-  if (cards.length === 0) return null;
+  if (cards.length === 0) return <EmptyTabState message="No flashcards were extracted for this video." icon={Layers} />;
 
   const card = cards[currentCard];
 

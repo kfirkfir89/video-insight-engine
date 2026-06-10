@@ -1,8 +1,10 @@
 import { memo, useMemo } from 'react';
+import { Users } from 'lucide-react';
 import { type Node, type NodeTypes } from '@xyflow/react';
 import type { FormationPosition } from '@vie/types';
 
 import { VieCanvas } from '@/components/vie/canvas/CanvasShell';
+import { EmptyTabState } from './EmptyTabState';
 
 interface FormationDiagramProps {
   positions: FormationPosition[];
@@ -77,7 +79,7 @@ export const FormationDiagram = memo(function FormationDiagram({
     [clean],
   );
 
-  if (clean.length === 0) return null;
+  if (clean.length === 0) return <EmptyTabState message="No formation data was extracted for this video." icon={Users} />;
 
   const caption = [team, name].filter(Boolean).join(' · ');
 

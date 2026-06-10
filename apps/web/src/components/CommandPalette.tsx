@@ -112,7 +112,7 @@ export const CommandPalette = memo(function CommandPalette() {
     },
     {
       id: "board",
-      label: "Go to your library",
+      label: "Go to Board",
       hint: "Navigate",
       icon: LayoutGrid,
       run: () => navigate("/board"),

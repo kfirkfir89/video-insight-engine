@@ -10,12 +10,12 @@ interface TabConfig {
   label: string;
   icon: typeof Library;
   showCount?: boolean;
-  /** Accent role — primary for Collection (library of work), coral for Assistant (conversational/agentic) */
+  /** Accent role — primary for Library (collection of work), coral for Assistant (conversational/agentic) */
   accent: "primary" | "coral";
 }
 
 const TABS: TabConfig[] = [
-  { key: "summarized", label: "Collection", icon: Library, showCount: true, accent: "primary" },
+  { key: "summarized", label: "Library", icon: Library, showCount: true, accent: "primary" },
   { key: "assistant", label: "Assistant", icon: MessageCircle, accent: "coral" },
 ];
 

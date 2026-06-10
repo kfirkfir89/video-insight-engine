@@ -28,9 +28,9 @@ describe('PackingMission', () => {
     expect(screen.getByText('0 packed')).toBeInTheDocument();
   });
 
-  it('should return null when items is empty', () => {
+  it('renders an empty state when items is empty', () => {
     const { container } = render(<PackingMission items={[]} />);
-    expect(container.innerHTML).toBe('');
+    expect(container.textContent).toContain('No packing items were extracted');
   });
 
   it('should move an item to the suitcase via the Pack button', () => {

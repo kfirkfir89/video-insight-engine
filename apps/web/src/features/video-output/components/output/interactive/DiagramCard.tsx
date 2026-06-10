@@ -7,8 +7,11 @@ import {
   type NodeTypes,
 } from '@xyflow/react';
 
+import { Workflow } from 'lucide-react';
+
 import { VieCanvas } from '@/components/vie/canvas/CanvasShell';
 import { cn } from '@/lib/utils';
+import { EmptyTabState } from './EmptyTabState';
 
 export interface DiagramCardItem {
   label: string;
@@ -155,7 +158,7 @@ export const DiagramCard = memo(function DiagramCard({
     [clean.length, edges],
   );
 
-  if (clean.length === 0) return null;
+  if (clean.length === 0) return <EmptyTabState message="No diagram data was extracted for this video." icon={Workflow} />;
 
   return (
     <figure className={cn('space-y-2', className)}>

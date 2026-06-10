@@ -6,12 +6,13 @@ import {
   useRef,
   type CSSProperties,
 } from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, Music } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { GlassCard, SectionNav } from '@/components/vie';
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
+import { EmptyTabState } from './EmptyTabState';
 
 export interface LyricsWord {
   text: string;
@@ -196,7 +197,8 @@ export const LyricsKaraoke = memo(function LyricsKaraoke({
     [sections, onSeek],
   );
 
-  if (flatLines.length === 0) return null;
+  if (flatLines.length === 0)
+    return <EmptyTabState message="No lyrics were extracted for this video." icon={Music} />;
 
   return (
     <div className="space-y-4" data-slot="lyrics-karaoke">

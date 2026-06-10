@@ -22,9 +22,9 @@ describe('FlashDeckInteractive', () => {
     expect(spaceHint.tagName).toBe('KBD');
   });
 
-  it('should return null for empty cards', () => {
+  it('renders an empty state for empty cards', () => {
     const { container } = render(<FlashDeckInteractive cards={[]} />);
-    expect(container.innerHTML).toBe('');
+    expect(container.textContent).toContain('No flashcards were extracted');
   });
 
   it('should flip card on click', () => {

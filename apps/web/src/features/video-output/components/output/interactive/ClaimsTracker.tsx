@@ -1,8 +1,9 @@
 import { memo, useMemo, useState } from 'react';
-import { CheckCircle2, AlertTriangle, Info, Clock } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Info, Clock, BadgeCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ClaimItem, ClaimStatus } from '@vie/types';
 import { GlassCard, FadeIn, Badge } from '@/components/vie';
+import { EmptyTabState } from './EmptyTabState';
 
 interface ClaimsTrackerProps {
   claims: ClaimItem[];
@@ -50,11 +51,7 @@ export const ClaimsTracker = memo(function ClaimsTracker({ claims, onSeek }: Cla
   );
 
   if (claims.length === 0) {
-    return (
-      <p className="py-8 text-center text-sm text-muted-foreground" role="status">
-        No claims were tracked for this video.
-      </p>
-    );
+    return <EmptyTabState message="No claims were tracked for this video." icon={BadgeCheck} />;
   }
 
   return (

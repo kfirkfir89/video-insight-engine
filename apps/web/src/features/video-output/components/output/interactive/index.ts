@@ -1,3 +1,7 @@
+// Shared empty-state primitive — every interactive renders this instead of
+// bare `return null` so an empty/filtered tab never shows blank whitespace.
+export { EmptyTabState } from './EmptyTabState';
+
 // Kept interactives
 export { ChecklistInteractive } from './ChecklistInteractive';
 export { QuizInteractive } from './QuizInteractive';

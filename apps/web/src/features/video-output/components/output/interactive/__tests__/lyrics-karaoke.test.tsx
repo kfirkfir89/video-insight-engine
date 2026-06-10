@@ -47,9 +47,9 @@ describe('LyricsKaraoke', () => {
     ).toBeInTheDocument();
   });
 
-  it('should return null when no lines are provided', () => {
+  it('renders an empty state when no lines are provided', () => {
     const { container } = render(<LyricsKaraoke sections={[]} />);
-    expect(container.innerHTML).toBe('');
+    expect(container.textContent).toContain('No lyrics were extracted');
   });
 
   it('should mark the line whose timestamp range contains currentTime as active', () => {

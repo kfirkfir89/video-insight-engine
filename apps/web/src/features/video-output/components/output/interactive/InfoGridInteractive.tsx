@@ -1,8 +1,9 @@
 import { memo, useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Search, ArrowUpDown, Copy, Check } from 'lucide-react';
+import { Search, ArrowUpDown, Copy, Check, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GlassCard, FadeIn, Badge, ExpandableCard } from '@/components/vie';
 import { Button } from '@/components/ui/button';
+import { EmptyTabState } from './EmptyTabState';
 
 
 type InfoGridMode = 'key_value' | 'table' | 'tag_cloud';
@@ -110,7 +111,7 @@ export const InfoGridInteractive = memo(function InfoGridInteractive({
     } catch { /* clipboard API may fail in insecure contexts */ }
   }, [sorted]);
 
-  if (cleanItems.length === 0) return null;
+  if (cleanItems.length === 0) return <EmptyTabState message="No reference details were extracted for this video." icon={LayoutGrid} />;
 
   const renderGridCell = (item: NormalizedItem, displayIndex: number) => (
     <FadeIn key={item.originalIndex} index={displayIndex}>

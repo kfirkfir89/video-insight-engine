@@ -1,5 +1,6 @@
+/// <reference types="@testing-library/jest-dom" />
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { VisualEvidence } from '../VisualEvidence';
@@ -63,6 +64,39 @@ describe('VisualEvidence', () => {
     const fig = container.querySelector('[data-slot="visual-evidence"][data-variant="figure"]');
     expect(fig).toBeInTheDocument();
     expect(fig?.tagName).toBe('FIGURE');
+  });
+
+  it('should not render an empty aspect-video frame when figure variant has no thumbnail', () => {
+    const { container } = render(
+      <VisualEvidence variant="figure" caption="Diagram description" sceneType="diagram" />,
+    );
+    expect(container.querySelector('.aspect-video')).not.toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByText('Diagram description')).toBeInTheDocument();
+    expect(screen.getByText('diagram')).toBeInTheDocument();
+  });
+
+  it('shows a skeleton placeholder until the thumbnail finishes loading', () => {
+    const { container } = render(
+      <VisualEvidence variant="figure" thumbnailUrl="https://cdn.example.com/f.jpg" />,
+    );
+    expect(container.querySelector('[data-slot="skeleton"]')).toBeInTheDocument();
+    fireEvent.load(screen.getByRole('img'));
+    expect(container.querySelector('[data-slot="skeleton"]')).not.toBeInTheDocument();
+  });
+
+  it('hides the image and skeleton when the thumbnail fails to load', () => {
+    const { container } = render(
+      <VisualEvidence
+        variant="figure"
+        thumbnailUrl="https://cdn.example.com/broken.jpg"
+        caption="Fallback caption"
+      />,
+    );
+    fireEvent.error(screen.getByRole('img'));
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(container.querySelector('[data-slot="skeleton"]')).not.toBeInTheDocument();
+    expect(screen.getByText('Fallback caption')).toBeInTheDocument();
   });
 
   it('renders timestamp button with LTR direction even inside an RTL container', () => {

@@ -50,9 +50,9 @@ describe('WorkoutRoom', () => {
     expect(screen.queryByText('Squats')).not.toBeInTheDocument();
   });
 
-  it('should return null when exercises is empty', () => {
+  it('renders an empty state when exercises is empty', () => {
     const { container } = render(<WorkoutRoom exercises={[]} />);
-    expect(container.innerHTML).toBe('');
+    expect(container.textContent).toContain('No exercises were extracted');
   });
 
   it('should increment the set counter when Complete set is clicked', () => {

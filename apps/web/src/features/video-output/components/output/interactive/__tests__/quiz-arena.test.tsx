@@ -44,9 +44,9 @@ describe('QuizArena', () => {
     expect(screen.getByText('Q 1 of 3')).toBeInTheDocument();
   });
 
-  it('should return null for empty questions', () => {
+  it('renders an empty state for empty questions', () => {
     const { container } = render(<QuizArena questions={[]} />);
-    expect(container.innerHTML).toBe('');
+    expect(container.textContent).toContain('No quiz questions were generated');
   });
 
   it('should show explanation after selecting correct answer', () => {

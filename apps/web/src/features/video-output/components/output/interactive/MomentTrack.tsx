@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
 
 import { getMoodColor } from '../../../lib/moodColors';
+import { EmptyTabState } from './EmptyTabState';
 
 type TypeFilter = 'all' | 'clips' | 'moments';
 
@@ -172,7 +173,8 @@ export const MomentTrack = memo(function MomentTrack({
     navigator.clipboard.writeText(url.toString()).catch(() => {});
   };
 
-  if (items.length === 0) return null;
+  if (items.length === 0)
+    return <EmptyTabState message="No moments were extracted for this video." icon={Clock} />;
 
   return (
     <div className="space-y-4" data-testid="moment-track">
@@ -200,7 +202,7 @@ export const MomentTrack = memo(function MomentTrack({
                     data-testid={`type-filter-${opt.id}`}
                     className={cn(
                       'rounded-full px-3 py-1 transition-colors',
-                      active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                      active ? 'bg-[var(--vie-accent)] text-[var(--vie-accent-foreground)] shadow-sm' : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
                     {opt.label}
@@ -218,7 +220,7 @@ export const MomentTrack = memo(function MomentTrack({
                 className={cn(
                   'rounded-full px-2.5 py-1 text-xs font-medium border transition-colors',
                   moodFilter === null
-                    ? 'bg-primary text-primary-foreground border-primary'
+                    ? 'bg-[var(--vie-accent)] text-[var(--vie-accent-foreground)] border-[var(--vie-accent)]'
                     : 'bg-muted/20 text-muted-foreground border-border/50 hover:bg-muted/40',
                 )}
               >
@@ -234,7 +236,7 @@ export const MomentTrack = memo(function MomentTrack({
                     className={cn(
                       'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border transition-colors capitalize',
                       active
-                        ? 'bg-primary text-primary-foreground border-primary'
+                        ? 'bg-[var(--vie-accent)] text-[var(--vie-accent-foreground)] border-[var(--vie-accent)]'
                         : 'bg-muted/20 text-muted-foreground border-border/50 hover:bg-muted/40',
                     )}
                   >
@@ -266,7 +268,7 @@ export const MomentTrack = memo(function MomentTrack({
       <ol className="relative space-y-2" aria-label="Moment track">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute start-[14px] top-1 bottom-1 w-px bg-gradient-to-b from-primary/50 via-primary/25 to-transparent"
+          className="pointer-events-none absolute start-[14px] top-1 bottom-1 w-px bg-gradient-to-b from-[var(--vie-accent)]/50 via-[var(--vie-accent)]/25 to-transparent"
         />
 
         {filtered.map(({ item, originalIndex }, index) => {
@@ -316,19 +318,21 @@ export const MomentTrack = memo(function MomentTrack({
                         data-testid={`capsule-${originalIndex}`}
                         style={{ height: `${capsuleHeight}px` }}
                         className={cn(
-                          'relative w-[14px] rounded-full border border-primary/40 bg-primary/15',
-                          'shadow-[inset_0_0_12px_oklch(var(--primary)/0.25)]',
-                          isActive && 'ring-1 ring-[var(--vie-accent)]/60 bg-primary/30',
+                          'relative w-[14px] rounded-full border border-[var(--vie-accent)]/40 bg-[var(--vie-accent)]/15',
+                          'shadow-[inset_0_0_12px_oklch(from_var(--vie-accent)_l_c_h/0.25)]',
+                          isActive && 'ring-1 ring-[var(--vie-accent)]/60 bg-[var(--vie-accent)]/30',
                         )}
                       >
-                        <span className="absolute -top-1 start-1/2 -translate-x-1/2 size-2 rounded-full bg-primary" aria-hidden="true" />
-                        <span className="absolute -bottom-1 start-1/2 -translate-x-1/2 size-2 rounded-full bg-primary/70" aria-hidden="true" />
+                        <span className="absolute -top-1 start-1/2 -translate-x-1/2 size-2 rounded-full bg-[var(--vie-accent)]" aria-hidden="true" />
+                        <span className="absolute -bottom-1 start-1/2 -translate-x-1/2 size-2 rounded-full bg-[var(--vie-accent)]/70" aria-hidden="true" />
                       </div>
                     ) : (
                       <div
                         className={cn(
                           'size-[14px] rounded-full border-2 bg-background',
-                          isActive ? 'border-[var(--vie-accent)]' : 'border-primary',
+                          isActive
+                            ? 'border-[var(--vie-accent)] ring-2 ring-[var(--vie-accent)]/30'
+                            : 'border-[var(--vie-accent)]/45',
                           pulseKey === originalIndex && !reducedMotion && 'animate-pulse-once',
                         )}
                       />
@@ -364,13 +368,13 @@ export const MomentTrack = memo(function MomentTrack({
                               type="button"
                               onClick={() => handleSeek(item.seconds)}
                               dir="ltr"
-                              className="inline-flex items-center gap-1 text-xs font-bold tabular-nums text-primary bg-primary/10 px-2 py-0.5 rounded-md shrink-0 cursor-pointer hover:bg-primary/20 transition-colors"
+                              className="inline-flex items-center gap-1 text-xs font-bold tabular-nums text-[var(--vie-accent)] bg-[var(--vie-accent)]/10 px-2 py-0.5 rounded-md shrink-0 cursor-pointer hover:bg-[var(--vie-accent)]/20 transition-colors"
                               aria-label={`Jump to ${item.time}`}
                             >
                               {chipContent}
                             </button>
                           ) : (
-                            <span dir="ltr" className="inline-flex items-center gap-1 text-xs font-bold tabular-nums text-primary bg-primary/10 px-2 py-0.5 rounded-md shrink-0">
+                            <span dir="ltr" className="inline-flex items-center gap-1 text-xs font-bold tabular-nums text-[var(--vie-accent)] bg-[var(--vie-accent)]/10 px-2 py-0.5 rounded-md shrink-0">
                               {chipContent}
                             </span>
                           )}

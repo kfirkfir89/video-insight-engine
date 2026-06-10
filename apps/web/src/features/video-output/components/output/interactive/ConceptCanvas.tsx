@@ -12,6 +12,8 @@ import {
   type EdgeTypes,
 } from '@xyflow/react';
 
+import { Skeleton } from '@/components/ui/skeleton';
+
 import { VieCanvas } from '@/components/vie/canvas/CanvasShell';
 import {
   FloatingEdge,
@@ -23,7 +25,10 @@ import {
   type InspectorNeighbor,
 } from '@/components/vie/canvas/CanvasInspector';
 import { useGraphLayout } from '@/components/vie/canvas/useGraphLayout';
+import { Network } from 'lucide-react';
+
 import { GlassCard } from '@/components/vie';
+import { EmptyTabState } from './EmptyTabState';
 import { useIsDesktop } from '@/hooks/use-media-query';
 import { cn } from '@/lib/utils';
 import type { ConceptItem, ConceptConnection, ConceptRelation } from '@vie/types';
@@ -256,9 +261,13 @@ export const ConceptCanvas = memo(function ConceptCanvas({
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<'map' | 'groups'>(() => (isDesktop ? 'map' : 'groups'));
+  // Flipped true by React Flow's onInit (canvas measured + first paint ready).
+  // Until then a skeleton fills the canvas box to cover the blank mount window.
+  const [canvasReady, setCanvasReady] = useState(false);
 
   const handleSelect = useCallback((id: string) => setSelectedId(id), []);
   const handleClose = useCallback(() => setSelectedId(null), []);
+  const handleCanvasInit = useCallback(() => setCanvasReady(true), []);
 
   const layout = useGraphLayout(
     model.nodes.map((n) => ({ id: n.id, group: n.group })),
@@ -336,11 +345,7 @@ export const ConceptCanvas = memo(function ConceptCanvas({
   const selectedNeighbors = selectedId ? model.adjacency.get(selectedId) ?? [] : [];
 
   if (!model.nodes.length) {
-    return (
-      <GlassCard variant="outlined" className="text-center text-sm text-muted-foreground">
-        No concepts to map yet.
-      </GlassCard>
-    );
+    return <EmptyTabState message="No concepts were extracted for this video." icon={Network} />;
   }
 
   const counts = `${model.nodes.length} concepts · ${model.groups.length} groups · ${model.edges.length} links`;
@@ -368,7 +373,7 @@ export const ConceptCanvas = memo(function ConceptCanvas({
               className={cn(
                 'rounded-md px-3 py-1 capitalize transition-colors',
                 view === v
-                  ? 'bg-[var(--vie-accent,var(--primary))] text-[var(--primary-foreground,white)]'
+                  ? 'bg-[var(--vie-accent,var(--primary))] text-[var(--vie-accent-foreground)]'
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
@@ -380,19 +385,28 @@ export const ConceptCanvas = memo(function ConceptCanvas({
 
       <div className="relative">
         {view === 'map' ? (
-          <VieCanvas
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={NODE_TYPES}
-            edgeTypes={EDGE_TYPES}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onNodeClick={handleNodeClick}
-            onPaneClick={handleClose}
-            nodesDraggable={false}
-            nodesConnectable={false}
-            height={canvasHeight}
-          />
+          <div className="relative" style={{ height: canvasHeight }}>
+            <VieCanvas
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={NODE_TYPES}
+              edgeTypes={EDGE_TYPES}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onNodeClick={handleNodeClick}
+              onPaneClick={handleClose}
+              onInit={handleCanvasInit}
+              nodesDraggable={false}
+              nodesConnectable={false}
+              height={canvasHeight}
+            />
+            {!canvasReady && (
+              <Skeleton
+                aria-hidden="true"
+                className="absolute inset-0 rounded-2xl bg-muted/40 motion-reduce:animate-none"
+              />
+            )}
+          </div>
         ) : (
           <GroupsView
             model={model}

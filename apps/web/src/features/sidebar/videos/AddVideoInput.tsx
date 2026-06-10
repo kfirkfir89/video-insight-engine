@@ -84,7 +84,7 @@ export function AddVideoInput() {
 
     // Only allow adding videos in summarized section
     if (activeSection !== "summarized") {
-      setError("You can only add videos from the Collection tab.");
+      setError("You can only add videos from the Library tab.");
       return;
     }
 

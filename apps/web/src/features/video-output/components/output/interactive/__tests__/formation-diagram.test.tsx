@@ -53,10 +53,10 @@ describe('FormationDiagram', () => {
     expect(screen.getByText('GK')).toBeInTheDocument();
   });
 
-  it('renders nothing when no player has a name', () => {
+  it('renders an empty state when no player has a name', () => {
     const { container } = render(
       <FormationDiagram positions={[{ player: '', x: 10, y: 10 }]} />,
     );
-    expect(container.innerHTML).toBe('');
+    expect(container.textContent).toContain('No formation data was extracted');
   });
 });

@@ -1,8 +1,10 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { QuizItem } from '@vie/types';
+import { HelpCircle } from 'lucide-react';
 import { GlassCard, FadeIn, OptionGrid, InlineScore, Shake, BackForward, Stepper, ScoreRing, Badge, EmojiMarker } from '@/components/vie';
 import { Button } from '@/components/ui/button';
 import { Celebration } from '../Celebration';
+import { EmptyTabState } from './EmptyTabState';
 import { useLabels } from '@/lib/i18n';
 
 import { useTabState } from '@/features/video-output/contexts/TabStateContext';
@@ -112,7 +114,8 @@ export const QuizInteractive = memo(function QuizInteractive({
     setShaking(false);
   }, []);
 
-  if (questions.length === 0) return null;
+  if (questions.length === 0)
+    return <EmptyTabState message="No quiz questions were generated for this video." icon={HelpCircle} />;
 
   const question = questions[currentIndex];
   const selectedOption = answers.get(currentIndex);
