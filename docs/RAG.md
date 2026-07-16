@@ -93,6 +93,17 @@ The script (`services/summarizer/scripts/benchmark_embeddings.py`) prints per-qu
 
 Edit `DEFAULT_FIXTURES` in the script to point at YouTube IDs that are actually ingested in your local `vie-qdrant`. **If you swap `settings.EMBEDDING_MODEL_NAME` you MUST re-ingest the fixtures with the new model so the query encoder and stored vectors agree.**
 
+## Retrieval eval (gating)
+
+Beyond the advisory benchmark above, retrieval quality is **measured and gated** (project-score-9 3.2) by `services/summarizer/tests/eval/test_retrieval_eval.py` over the golden fixture `services/summarizer/tests/fixtures/retrieval_golden.json` (4 synthetic videos, 21 query→answer-span pairs). It exercises the real path — `chunk_transcript` → `embed_texts` → Qdrant upsert → `query_points` — against a uniquely-named **ephemeral collection** (created and deleted per run; never touches `transcript_chunks`), with zero LLM spend.
+
+- **Committed baseline** (`dev/golden-dataset/baseline.json`, measured 2026-07-12): recall@3 = **1.000**, MRR = **0.865** (n=21).
+- **Hard floors** (in the fixture, asserted by the test): recall@3 ≥ 0.85, MRR ≥ 0.70. Verified to trip: a deliberate chunker regression (120-char chunks, no overlap) scored recall@3 0.524 / MRR 0.500 and failed the job.
+- **CI**: `.github/workflows/eval.yml` → `retrieval-eval` job runs it on PRs touching prompts/pipeline/vector code against a `qdrant/qdrant:v1.18.2` service container, and fails if the suite silently skips.
+- **Local**: `cd services/summarizer && .venv/bin/python -m pytest -q tests/eval/test_retrieval_eval.py -s` (skips gracefully without a reachable Qdrant).
+
+This also gives the bge-small swap decision its measuring stick: run the eval before/after the model swap (with re-ingest) and compare against the committed baseline.
+
 ## Multi-video search
 
 `QdrantRepository.search` at `services/assistant/src/repositories/qdrant_repository.py:32` accepts `video_ids: list[str]` and:

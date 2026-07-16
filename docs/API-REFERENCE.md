@@ -243,9 +243,15 @@ Delete folder. Contents moved to parent (or unfiled).
 
 ### GET /videos
 
-List user's videos.
+List user's videos (offset-paginated, newest first).
 
-**Query:** `?folderId=xxx` (optional)
+**Query:**
+
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `folderId` | ObjectId | — | Optional folder filter |
+| `limit` | int | 50 | Page size, 1–100 (values outside the range → 400) |
+| `offset` | int | 0 | Items to skip, ≥ 0 |
 
 **Response (200):**
 
@@ -264,9 +270,12 @@ List user's videos.
       "folderId": "507f1f77bcf86cd799439013",
       "createdAt": "2024-01-15T10:00:00Z"
     }
-  ]
+  ],
+  "pagination": { "limit": 50, "offset": 0, "total": 137 }
 }
 ```
+
+`pagination.total` is the full count of the filtered set (not the page size), so clients can page with `offset += limit` while `offset < total`. The `pagination` key is an additive sibling — existing consumers that only read `videos` are unaffected.
 
 ---
 

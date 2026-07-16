@@ -25,7 +25,7 @@ metadata → [transcript ‖ frames] → visual injection
 → [synthesis ‖ assembly] → enrichment (learning/tech only) → assembly (pure code, no LLM)
 → [translation] (non-English only) → save + complete
 ```
-- **10 domains** (learning, tech, fitness, food, music, travel, review, project, language, science) + **2 modifiers** (narrative, finance) → 12 schemas. 8 `ContentTraits` booleans route components.
+- **14 domains** (fitness, food, gaming, language, learning, music, news, podcast, project, review, science, sport, tech, travel — see `domains.json`, the single source) + **2 modifiers** (narrative, finance). 8 `ContentTraits` booleans route components.
 - **16 interactive components** (MomentTrack, StepPlayer, CodeExplorer, SpotExplorer, FlashDeck, Checklist, Gallery, LyricsPlayer, ComparisonTable, ProConList, RatingBreakdown, BudgetCalculator, GearList, QuizChallenge, ScenarioExplorer, ResourceHub).
 - **Frames:** yt-dlp 360p → FFmpeg scene-detect (~200) → OpenCV scoring → ~25 to S3 → Tesseract OCR + Sonnet vision → `[VISUAL at M:SS]` injected into transcript.
 - **LLM:** LiteLLM multi-provider (default Sonnet 4.6 / fast Haiku 4.5). Anthropic prompt caching on static prompt halves.

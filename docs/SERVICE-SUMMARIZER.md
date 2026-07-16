@@ -98,7 +98,7 @@ services/summarizer/
     │   ├── triage.txt            # Triage prompt (fallback only, injects component_toolkit.txt)
     │   ├── component_toolkit.txt # Component descriptions + datasource paths (injected into plan/triage). Density table is generated from domains.json `densityGates` via `{density_gates}` placeholder
     │   ├── base_extraction.txt   # Schema-injection extraction template + video_context + prompt caching
-    │   ├── classify.txt          # Domain+format classifier prompt (fast model, 10 domains + 17 formats)
+    │   ├── classify.txt          # Domain+format classifier prompt (fast model, 14 domains + 17 formats — domains.json is the source)
     │   ├── chapter_detect.txt    # AI chapter detection prompt (fast model)
     │   ├── quality_rules.txt     # JSON extraction quality rules
     │   ├── enrich/               # Per-domain enrichment prompts (+ video_context + tab_goals)
@@ -283,7 +283,7 @@ The pipeline uses 3-6 LLM calls with a plan-first architecture:
     └─▶ Toggle: FRAME_VISION_ENABLED=false skips vision (OCR-only like before)
 
  4. CLASSIFIER + PLAN (1-2 LLM calls)
-    └─▶ Classifier (fast model): domain + format + traits classification (10 domains, 17 formats)
+    └─▶ Classifier (fast model): domain + format + traits classification (14 domains, 17 formats)
     │   └─▶ 10s timeout, 1 retry, ~$0.001 per video, json_mode
     │   └─▶ Overrides rule-based category_hint when confidence > 0.6
     │   └─▶ Sets content_format on PipelineContext (tutorial, commentary, reaction, etc.)
@@ -518,25 +518,38 @@ The pipeline uses triage (LLM) to determine content tags from manifest + metadat
 
 ### SSE Event Protocol
 
+Every event below has a Pydantic contract in
+`src/models/sse_events.py`, validated on emission by `sse_event()`
+(`pipeline_helpers.py`): outside production a payload/name violation raises
+(drift fails the suite); in production it logs `sse_event_contract_violation`
+and emits anyway. `tests/test_sse_event_models.py` pins this table's event
+list against the model registry.
+
 | Event | Data |
 |-------|------|
 | `cached` | `{videoSummaryId}` (only for cached results) |
-| `metadata` | `{title, channel, thumbnailUrl, duration}` |
+| `metadata` | `{title, channel, thumbnailUrl, duration}` (fields may be `null` on cached legacy docs) |
 | `transcript_ready` | `{duration}` |
-| `sponsor_segments` | `{count, filteredDuration}` (SponsorBlock integration) |
+| `phase` | `{phase}` — progress marker (`transcript_cached`, `transcript`, `audio_transcription`, `whisper_transcription`, `metadata_fallback`, `translation`) |
 | `description_analysis` | `{links, resources, socialLinks}` (concurrent with manifest) |
 | `triage_complete` | `{contentTags, modifiers, primaryTag, tabs, confidence}` |
 | `extraction_progress` | `{section, percent, batch?, of?}` — chunked path emits `batch`/`of` per batch with `section="chunked"`; rate-limited fallback batches use `section="chunked-sequential"` |
 | `extraction_complete` | `{domain-keyed data}` |
 | `enrichment_complete` | `{quiz?, flashcards?, scenarios?}` (learning and tech domains only) |
 | `synthesis_complete` | `{tldr, keyTakeaways, masterSummary, seoDescription}` |
-| `frames` | `{frames: [{index, timestamp, url, s3Key?, ocrText?}]}` (scene frames) |
-| `meta` | `{VIEResponseMeta}` (assembled meta) |
+| `frames` | `{videoId, frames: [{index, timestamp, url, s3Key?, ocrText?}]}` (scene frames) |
+| `meta` | `{title, contentTags, modifiers, primaryTag, tabCount, tabLabels, degraded?, ...}` (progressive meta) |
 | `tab_ready` | `{id, label, emoji, component, props, crossTabLinks?}` (progressive tab) |
-| `complete` | `{tabCount, processingTimeMs}` (v2 completion) |
+| `complete` | `{tabCount, processingTimeMs, degraded}` (v2 completion) |
+| `error` | `{message, code?}` — `code` is an `ErrorCode` value (see docs/ERROR-HANDLING.md) |
+| `token` | `{phase, token}` — legacy token streaming; protocol slot kept, no current emitter |
 | `heartbeat` | `{ts}` — keepalive emitted every `SSE_HEARTBEAT_SECONDS` (12s) during long silent phases (e.g. multi-minute Whisper) so the API-gateway SSE proxy does not abort an idle-but-live stream. **Frontend treats it as a no-op.** |
-| `done` | `{videoSummaryId, cached?, phase: "done"}` (legacy + confetti trigger). For non-English videos this is **deferred to the translation phase** — assembly marks the doc `processing` and translation emits `done` after writing `status="completed"`. |
+| `done` | `{videoSummaryId, processingTimeMs?, degraded?, cached?}` (terminal + confetti trigger; `cached: true` on cached serves). For non-English videos this is **deferred to the translation phase** — assembly marks the doc `processing` and translation emits `done` after writing `status="completed"`. |
 | `[DONE]` | Terminal signal |
+
+> `sponsor_segments` was documented here for years but never emitted by any
+> code path — removed 2026-07-12 (project-score-9 4.5c). The `done` event
+> carries no `phase` field (that was a doc-only invention).
 
 ### Key Design Decisions
 

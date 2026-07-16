@@ -98,7 +98,6 @@ video-insight-engine/
 ├── packages/
 │   ├── shared/                # @vie/shared — owns domains.json (single source of truth)
 │   ├── types/                 # @vie/types — shared TS types
-│   ├── utils/                 # @vie/utils
 │   └── llm-common/            # shared Python LLM cost-tracking package
 ├── docs/                      # the canonical docs this briefing summarizes
 ├── dev/                       # task planning (survives context resets)

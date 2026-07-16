@@ -6,16 +6,23 @@ Error codes, recovery strategies, and user messages.
 
 ## Error Response Format
 
-All errors follow this structure:
+All errors follow this structure (emitted by the global error handler in
+`api/src/app.ts` and enforced by the envelope tests in `api/src/app.test.ts`):
 
 ```json
 {
   "error": "ERROR_CODE",
   "message": "Human-readable message",
-  "details": {},
-  "statusCode": 400
+  "statusCode": 400,
+  "details": {}
 }
 ```
+
+- `error`, `message`, `statusCode` are always present.
+- `details` is **optional** — currently only `VALIDATION_ERROR` carries it
+  (`details.issues: [{ path, message }]` from the Zod issue list).
+- `DAILY_LIMIT_REACHED` additionally carries top-level `resetAt` + `limitUsd`
+  (consumed by the UI countdown).
 
 ---
 
@@ -23,19 +30,26 @@ All errors follow this structure:
 
 ### Authentication Errors (401)
 
-| Code              | Message                       | When                     |
-| ----------------- | ----------------------------- | ------------------------ |
-| `UNAUTHORIZED`    | Authentication required       | No token provided        |
-| `TOKEN_EXPIRED`   | Token has expired             | Access token expired     |
-| `TOKEN_INVALID`   | Invalid token                 | Token malformed/tampered |
-| `REFRESH_EXPIRED` | Session expired, please login | Refresh token expired    |
+Emitted by the `authenticate` decorator (`api/src/plugins/jwt.ts`) and
+`POST /api/auth/refresh` (`api/src/routes/auth.routes.ts`).
+
+| Code              | Message                       | When                                                                    | Client reaction               |
+| ----------------- | ----------------------------- | ----------------------------------------------------------------------- | ----------------------------- |
+| `UNAUTHORIZED`    | Authentication required       | No token provided                                                        | Log in                        |
+| `TOKEN_EXPIRED`   | Token has expired             | Access token expired                                                     | Call `/api/auth/refresh`      |
+| `TOKEN_INVALID`   | Invalid token                 | Token malformed/tampered, or a refresh token presented as a bearer token | Log out (token is unusable)   |
+| `REFRESH_EXPIRED` | Session expired, please login | `/api/auth/refresh` cookie missing/expired/malformed/type-confused (deliberately one code for all failure modes — no cookie-validity oracle) | Re-login |
 
 ### Authorization Errors (403)
 
-| Code           | Message           | When                      |
-| -------------- | ----------------- | ------------------------- |
-| `FORBIDDEN`    | Access denied     | User doesn't own resource |
-| `RATE_LIMITED` | Too many requests | Rate limit exceeded       |
+| Code                       | Message                                                          | When                                                    |
+| -------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------- |
+| `ACCOUNT_DELETION_PENDING` | This account is scheduled for deletion. Contact support to cancel. | Valid JWT for a soft-deleted account (GDPR grace window) |
+
+> There is deliberately **no** generic `FORBIDDEN` code: ownership checks
+> return `404 NOT_FOUND` instead of 403 so the API never confirms that a
+> resource exists but belongs to someone else (anti-enumeration). Rate
+> limiting is `429 RATE_LIMITED`, not 403 (see next section).
 
 ### Rate Limit Errors
 

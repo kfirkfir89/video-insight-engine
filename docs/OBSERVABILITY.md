@@ -95,11 +95,22 @@ After extraction completes, a fire-and-forget task samples 20% of extracted item
 
 The check is **informational only** — it never blocks the pipeline or fails a video. Use the Langfuse dashboards to track drift over time. A run below 0.7 is logged at warning level but otherwise ignored.
 
+**Claim-localized context (not a head slice).** Transcripts within the 80K-char judged-context budget pass through whole. Longer transcripts are split into ~4K-char windows; per claim, the top BM25-style (IDF-weighted lexical overlap) windows are packed into the budget in document order with gaps marked, plus immediate neighbors of scoring windows. A claim from hour 3 of a long video is therefore judged against hour-3 text — the old fixed 80K-char head slice mis-verdicted tail claims of 3h+ videos as hallucinations. Falls back to the head slice only when a claim shares zero vocabulary with the transcript. See `_select_claim_context` in `faithfulness.py`; regression tests in `tests/test_faithfulness.py` include a synthetic tail-claim case past the 80K boundary.
+
+**Judge accuracy (validated 2026-07-12).** The judge (`_judge_one` + `_select_claim_context`, Haiku fast tier) was run live over the 20-claim labeled fixture `services/summarizer/tests/fixtures/faithfulness_labeled_claims.json` (12 supported / 8 hallucinated, synthetic transcript): **20/20 = 100% accuracy, 0 judge errors**. The dataset is deliberately easy (explicit statements vs. flat contradictions/absences); the regression floor asserted by the eval is 80%. Re-run any time with:
+
+```bash
+cd services/summarizer && LIVE_EVAL=1 .venv/bin/python -m pytest -q tests/test_faithfulness_live_eval.py -s
+```
+
+(~20 Haiku calls ≈ $0.02; the fixture's structural checks run in the normal suite for free.)
+
 Tuning:
 
 - `LANGFUSE_FAITHFULNESS_SAMPLE_RATE=0` disables the judge entirely.
 - `LANGFUSE_FAITHFULNESS_SAMPLE_RATE=1.0` checks every claim (capped at 6/video). Useful when debugging a quality regression.
 - Cost: ~$0.005 per video at the default rate.
+- `_TRANSCRIPT_BUDGET_CHARS` (80K) is coupled to the judge model's context window — see the warning comment in `faithfulness.py` before pointing the faithfulness stage at a smaller-context model.
 
 ## Golden dataset + eval
 
@@ -137,6 +148,15 @@ Scoring (`scripts/run_eval.py`):
 The reports land under `reports/eval-{timestamp}.csv` + `.md`. The CI-friendly `--fail-under` flag exits non-zero when the average drops below the threshold.
 
 Dry-run mode (`--dry-run`) substitutes a perfect-response stub for the live pipeline, so the scoring code path can be smoke-tested without making any network calls. Used by the test suite.
+
+### CI wiring + committed baselines
+
+`.github/workflows/eval.yml` (project-score-9 3.1/3.2) is the eval gate:
+
+- **PR** (paths: `src/prompts/**`, pipeline/vector code, `scripts/run_eval.py`, `dev/golden-dataset/**`): a zero-spend `--dry-run --fail-under` gate plus the retrieval recall@k/MRR floor against an ephemeral Qdrant service container (see docs/RAG.md §Retrieval eval).
+- **Weekly** (Mondays 03:00 UTC) + `workflow_dispatch`: full live golden-dataset run against a composed stack, `--fail-under` gated, `--publish-run weekly-YYYYMMDD` to Langfuse. Skips cleanly when spend secrets (`ANTHROPIC_API_KEY`, `EVAL_USER_PASSWORD`, Langfuse keys) are not configured.
+
+Committed metric baselines live in `dev/golden-dataset/baseline.json` — retrieval eval (recall@3 1.000 / MRR 0.865, 2026-07-12), faithfulness-judge accuracy (20/20, 2026-07-12), and the golden-eval average (currently `deferred-for-spend` with the exact production procedure recorded in the file; the workflow reads its `failUnder` floor either way).
 
 ## Operational watch-outs
 

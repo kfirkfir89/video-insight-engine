@@ -182,3 +182,42 @@ only for global cost telemetry, not for per-user attribution.
 Admin grants and manual charges go through `userCostAdjustments` (signed
 storage: negative = credit) — see [DATA-MODELS.md](./DATA-MODELS.md#usercostadjustments)
 and [SERVICE-ADMIN.md](./SERVICE-ADMIN.md#per-user-costs-users).
+
+## Ledger Retention (decided 2026-07-06)
+
+`llm_usage` is the financial ledger. **Rows are retained indefinitely** — the
+former 90-day TTL index silently erased billing history and was removed
+(`api/src/plugins/mongodb.ts` now drops the legacy TTL index at startup and
+recreates `createdAt` as a plain index). Rationale: personal-scale volume
+(thousands of rows/month at most) makes rollups unnecessary, and cost audits /
+cache-credit reconciliation need the raw rows. Revisit only if the collection
+exceeds ~1M rows; the fallback design is a monthly rollup collection populated
+before any re-introduced expiry.
+
+The vie-admin lifespan **also** drops any legacy 90-day TTL on `llm_usage`
+(`timestamp_1` — it used to recreate one on every boot) and recreates
+`timestamp` as a plain index, so either service booting first heals the ledger.
+
+## Alerting (implemented 2026-07-12)
+
+Three thresholds, all real:
+
+| Alert type | Evaluated by | Trigger |
+|---|---|---|
+| `high_cost_call` | `llm_common.callback.MongoDBUsageCallback` (inline, per LLM call) | single call cost > `cost_threshold` (constructor default $0.50) |
+| `daily_spend_spike` | vie-admin `alert_evaluator` loop (every 5 min) | today's spend > `daily_spike_multiplier` × trailing 7-day daily average (baseline must be ≥ $0.50/day) |
+| `high_failure_rate` | vie-admin `alert_evaluator` loop (every 5 min) | failure rate over the trailing 60 min > `failure_rate_threshold`, with ≥ 10 calls in the window |
+
+The spike/failure thresholds are read live from `llm_alert_config` (managed by
+`POST /alerts/config` in vie-admin), which was previously decorative. Per-type
+cooldowns (6 h spike, 1 h failure) stop a sustained condition from re-alerting
+every cycle.
+
+**Delivery:** every alert is written to `llm_alerts` (rendered by the admin UI)
+and POSTed as JSON to `ALERT_WEBHOOK_URL` when set (Slack-compatible generic
+webhook / ntfy / any HTTP catcher). The URL must be `http(s)://` — any other
+scheme is rejected (logged, no send). Empty URL → Mongo-only. Delivery is
+best-effort with a 3 s timeout and never breaks the LLM call or the evaluator;
+the webhook fires even when the Mongo write fails. Senders:
+`packages/llm-common/src/llm_common/alerts.py` (stdlib urllib, sync services)
+and `services/admin/src/services/alert_evaluator.py` (httpx, async).

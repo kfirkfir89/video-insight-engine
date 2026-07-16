@@ -481,58 +481,184 @@ db.userVideos.createIndex({ userId: 1, folderId: 1 })
 
 ---
 
-## Production Considerations
+## Backup & Restore
 
-### Security
+Data lives in two stores: MongoDB (summaries, users, ledger) and Qdrant (RAG vectors — rebuildable via re-ingest but expensive). Redis and RabbitMQ hold only transient state and are not backed up.
 
-- Change JWT_SECRET to a strong random string
-- Don't expose MongoDB port externally
-- Use HTTPS for vie-api and vie-web
+### Taking a backup
 
-### Scaling
+```bash
+./scripts/backup.sh                 # → backups/<UTC-timestamp>/
+BACKUP_KEEP=30 ./scripts/backup.sh  # keep 30 most recent (default 14)
+```
 
-- vie-summarizer: Can run multiple instances (load balanced)
-- vie-api: Can run multiple instances (add load balancer)
-- vie-assistant: Can run multiple instances (stateless HTTP)
+Produces `mongo-video-insight-engine.archive.gz` (mongodump `--archive --gzip`), one `qdrant-<collection>.snapshot` per collection (Qdrant snapshot API; server-side copy deleted after download), and a `manifest.json`. `backups/` is gitignored. For off-host durability, sync the directory to the existing S3 bucket (e.g. `aws s3 sync backups/ s3://<bucket>/backups/`).
 
-### Monitoring
+Both scripts work unchanged against the auth-enabled prod stack: mongodump/mongorestore auth args are resolved inside the Mongo container from its own `MONGO_INITDB_ROOT_*` env, so no secrets cross the host boundary and the same commands run on the authless dev stack. Pruning deletes only timestamp-named (`YYYYMMDDTHHMMSSZ`) directories under the backup root (newest `BACKUP_KEEP` kept), so unrelated dirs under a custom root are never touched. An unreachable Qdrant aborts with an explicit error; set `QDRANT_SKIP=1` for a deliberate Mongo-only backup (vectors are re-derivable).
 
-- Add health check endpoints to all services
-- Set up log aggregation
-- Track LLM API usage and costs
+### Scheduling (installed 2026-07-14)
+
+The dev box runs cron (`cron.service` active under WSL2 systemd), so the
+backup is scheduled via the user crontab — verify with `crontab -l`:
+
+```
+30 3 * * * cd /home/kfir/projects/video-insight-engine && ./scripts/backup.sh >> backups/backup.log 2>&1
+```
+
+**WSL2 caveat:** cron only fires while the WSL2 VM is running. If the distro
+is not kept alive overnight, mirror the schedule from Windows Task Scheduler
+(runs even when no WSL terminal is open):
+
+```
+schtasks /Create /TN "VIE Backup" /SC DAILY /ST 03:30 ^
+  /TR "wsl.exe -d Ubuntu -u kfir -- bash -lc 'cd /home/kfir/projects/video-insight-engine && ./scripts/backup.sh >> backups/backup.log 2>&1'"
+```
+
+### Staleness alarm (dead-man's switch)
+
+Scheduling alone fails silently (dead cron, stopped VM, failing script), so
+the vie-admin alert evaluator (`services/admin/src/services/alert_evaluator.py`)
+checks the newest `backups/*/manifest.json` timestamp every 5 minutes and
+raises a `backup_stale` alert (Mongo `llm_alerts` + `ALERT_WEBHOOK_URL`, 6 h
+cooldown) when it is older than `BACKUP_MAX_AGE_HOURS` (default 26 — daily
+cron plus slack) or when no backup exists at all. Both compose files mount
+the host `backups/` dir read-only into vie-admin at `/backups` (`BACKUP_DIR`).
+A missing/unmounted dir disables the check, so a box without the mount never
+false-alarms. Applies on next vie-admin recreate.
+
+### Restoring
+
+```bash
+./scripts/restore.sh backups/<timestamp>                    # into the live stack (mongorestore --drop)
+MONGO_CONTAINER=scratch ./scripts/restore.sh backups/<ts>   # drill against a scratch container
+```
+
+Qdrant snapshots upload with `priority=snapshot` (snapshot data wins); a failed upload aborts with an error naming the collection and `QDRANT_URL`. The script prints per-collection document counts at the end for verification.
+
+### Restore drill — executed 2026-07-06
+
+Procedure: inserted a marker doc → `./scripts/backup.sh` → started scratch `mongo:7` container → `MONGO_CONTAINER=scratch-mongo-drill ./scripts/restore.sh backups/20260706T184141Z`.
+
+Result: **33 documents restored, 0 failed**; all index metadata (unique keys, TTL `expireAfterSeconds`, compound indexes) recreated; marker doc verified in the scratch instance. Qdrant had no collections at drill time (post-flush state); snapshot upload path exercised as no-op. Re-run the drill after the next Qdrant re-ingest.
+
+### Restore drill — executed 2026-07-14 (first with live Qdrant collections)
+
+Procedure: `./scripts/backup.sh` against the live stack (snapshot API +
+mongodump are read-only; taken mid LLM-eval run) → scratch
+`qdrant/qdrant:v1.18.2` (`vie-qdrant-restore-drill`, port 16333) + scratch
+`mongo:7` (`vie-mongo-restore-drill`) →
+`QDRANT_URL=http://localhost:16333 MONGO_CONTAINER=vie-mongo-restore-drill ./scripts/restore.sh backups/20260714T104418Z`
+→ scratch containers removed.
+
+Result: **Mongo: 78,973 documents restored, 0 failed** (incl. 78,948
+`health_history`), all indexes recreated. **Qdrant: 3 collections restored**
+(`eval_retrieval_*`), restored names/point counts/vector config (384-dim
+Cosine) matched live exactly. Caveat: the eval collections held 0 points at
+snapshot time (the eval run creates and clears them), so the Qdrant leg
+exercised snapshot download/upload and collection recreation but not bulk
+point data — re-run after `transcript_chunks` is re-ingested for a
+points-bearing drill. `restore.sh` needed no changes: `QDRANT_URL` /
+`MONGO_CONTAINER` env overrides already retarget it.
 
 ---
 
-## Production Architecture
+## Single-Replica Assumptions
 
-### Deployment Topology
+Several correctness mechanisms are **process-local**. The compose files run
+exactly one replica of each service; scaling any of these to N>1 requires the
+listed change first:
 
-| Component       | Host     | Purpose                                |
-| --------------- | -------- | -------------------------------------- |
-| vie-web (SPA)   | Vercel   | Static React app, edge CDN             |
-| vie-api         | Railway  | Node.js backend, all API routes        |
-| vie-summarizer  | Railway  | Python summarizer service              |
-| vie-assistant   | Railway  | Python RAG + chat service              |
-| vie-admin       | Railway  | Admin panel (Python + React)           |
-| vie-mongodb     | Railway  | MongoDB 7 database                     |
+| Mechanism | Where | Breaks at N>1 because | Fix before scaling |
+| --- | --- | --- | --- |
+| WebSocket registry (`Map<userId, Set<WebSocket>>`) | `api/src/plugins/websocket.ts` | broadcasts only reach sockets connected to the same process | Redis pub/sub fan-out (or sticky sessions + fan-out) |
+| Soft-delete verdict cache | `api/src/utils/soft-delete-cache.ts` | a deletion processed on replica A stays cached as "active" on replica B for the TTL | shared cache (Redis) or accept the TTL skew |
+| Rate-limit counters (in-memory store) | `api/src/plugins/rate-limit.ts` | each replica keeps its own counters → effective limit multiplies | Redis store for @fastify/rate-limit |
+| SSE proxy attach (`/api/videos/:id/stream`) | `api/src/routes/stream.routes.ts` | fine per-request, but the LB must not buffer (`X-Accel-Buffering: no`) | any non-buffering LB; no shared state |
+| Summarizer pipeline lock + response cache | Redis (`vie:*`) | already shared via Redis — safe | — |
+| RabbitMQ worker | `vie-summarizer-worker` | safe — competing consumers is the design | just scale the worker |
+| Admin health poller + alert evaluator | `services/admin/src/services/*.py` | N replicas → duplicate health snapshots and duplicate alerts (cooldowns make dupes rare, not impossible) | leader election, or keep admin at 1 replica |
+
+vie-assistant is stateless per-request (state in Mongo/Qdrant) and can scale
+freely. `/ready` on vie-api reports per-instance readiness (Mongo, Redis, and
+the broker when `USE_QUEUE_PIPELINE=true`); `/health` is liveness only.
+
+---
+
+## Production Deployment (decided 2026-07-07: full self-host compose)
+
+Production runs the same containers as dev from **`docker-compose.prod.yml`**
+on a single Docker host. The earlier Railway/Vercel split-hosting plan was
+dropped — one box, one compose file, no per-platform config drift.
+
+Key differences from the dev compose:
+
+- **Mandatory secrets** — every secret is `${VAR:?...}`; compose refuses to
+  interpolate without them (verified: `docker compose -f docker-compose.prod.yml config`
+  fails fast naming the missing variable). `api/src/config.ts` additionally
+  refuses well-known dev-default secrets when `NODE_ENV=production`.
+- **Authenticated datastores** — Mongo root user/pass, Redis `--requirepass`,
+  RabbitMQ user/pass. Qdrant is unauthenticated but network-internal only.
+- **No published datastore ports** — Mongo/Redis/Qdrant/RabbitMQ are reachable
+  only on `vie-network`. Published surface: vie-web (`80`), vie-api (`3000`),
+  and vie-admin on **loopback only** (`127.0.0.1:8002` — reach via
+  `ssh -L 8002:127.0.0.1:8002 <host>`).
+- **No source bind-mounts** — images are immutable; only the shared config
+  JSONs (`pipeline-version.json`, `domains.json`) are mounted read-only
+  because the prod images don't bake them.
+- **`restart: always`**, `mem_limit` on every service, healthchecks everywhere
+  (worker uses the heartbeat-file check), `USE_QUEUE_PIPELINE` defaults **true**.
+- **TLS** — terminate at a reverse proxy (Caddy/Traefik/nginx) in front of
+  ports 80/3000 and keep `TRUST_PROXY=1` (prod compose default) so `req.ip`
+  derives from `X-Forwarded-For`.
+
+### Staging boot procedure
+
+```bash
+# 1. Create the env file (never commit it)
+cp .env.example .env.prod             # then fill EVERY ${VAR:?} secret:
+                                      # MONGO_ROOT_USER/PASS, REDIS_PASSWORD,
+                                      # RABBITMQ_USER/PASS, JWT_SECRET,
+                                      # JWT_REFRESH_SECRET, INTERNAL_SECRET,
+                                      # ADMIN_API_KEY, PADDLE_WEBHOOK_SECRET,
+                                      # FRONTEND_URL, VITE_API_URL, VITE_WS_URL
+
+# 2. Validate interpolation (fails fast on any missing secret)
+docker compose --env-file .env.prod -f docker-compose.prod.yml config --quiet
+
+# 3. Build + boot
+docker compose --env-file .env.prod -f docker-compose.prod.yml build
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+
+# 4. Verify
+docker compose -f docker-compose.prod.yml ps          # all healthy, no 0.0.0.0 datastore binds
+curl -fsS http://127.0.0.1:3000/health                # liveness
+curl -fsS http://127.0.0.1:3000/ready                 # readiness (mongo/redis/broker)
+curl -fsS http://127.0.0.1/                           # web serves
+```
+
+Status: config validation verified on the dev box (2026-07-12). A full staging
+boot needs a host with ~16 GB free RAM (mem_limits sum to ~17 GB worst-case) —
+run the procedure above on the target box before the first real deploy.
 
 ### SSR for Shared Pages
 
-Shared video summaries are accessible at `/s/:slug`. Vercel rewrites these requests
-to the Railway-hosted API for server-side rendering of Open Graph metadata:
+Shared video summaries are accessible at `/s/:slug`. The reverse proxy routes
+these requests to vie-api for server-side rendering of Open Graph metadata:
 
 ```
-Browser ──► Vercel Edge ──► /s/:slug rewrite ──► Railway API (vie-api)
-                                                    │
-                                                    ▼
-                                              GET /api/share/:slug/ssr
-                                              Returns full HTML with OG tags
+Browser ──► reverse proxy ──► /s/:slug rewrite ──► vie-api
+                                                      │
+                                                      ▼
+                                                GET /api/share/:slug/ssr
+                                                Returns full HTML with OG tags
 ```
 
-- Vercel serves the SPA for all other routes (client-side routing)
-- `/s/*` routes are rewritten to `https://api.vie.app/api/share/:slug/ssr`
-- Edge cache: 60s TTL (`s-maxage=60`), 300s stale-while-revalidate
+- vie-web (nginx) serves the SPA for all other routes (client-side routing)
+- Route `/s/*` at the reverse proxy to `vie-api:3000/api/share/:slug/ssr`
+- The SSR response sets `s-maxage=60` + stale-while-revalidate for any caching proxy
 - This enables rich link previews on social platforms (Twitter, Discord, Slack)
+- (A `vercel.json` with equivalent rewrites remains in the repo from the
+  abandoned Vercel plan; it is unused by the self-host deployment.)
 
 ### CI/CD
 
@@ -540,14 +666,8 @@ Browser ──► Vercel Edge ──► /s/:slug rewrite ──► Railway API (
 - Four parallel jobs: api, web, summarizer, assistant
 - All jobs must pass before merge (fail-fast)
 - See `.github/workflows/ci.yml` for configuration
-
-### Vercel Configuration
-
-- Config file: `vercel.json` at project root
-- Build: `cd apps/web && pnpm build`
-- Output: `apps/web/dist`
-- Framework: Vite
-- Rewrites and cache headers configured for `/s/*` share routes
+- The `docker-build` job also validates `docker-compose.prod.yml` interpolation (`config -q` with dummy values for the required vars — proves the `${VAR:?}` guards without booting)
+- The e2e workflow (`e2e.yml`) appends `CORS_ADDITIONAL_ORIGINS=http://localhost:5273` to its generated `.env` so the Playwright webServer origin passes CORS
 
 ---
 

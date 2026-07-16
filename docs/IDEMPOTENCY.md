@@ -54,7 +54,7 @@ SHA-256 of `userId:youtubeId:PIPELINE_VERSION:providersHash`. Owned by `idempote
 
 - **`userId`** — namespaces per user so cross-user collisions are impossible.
 - **`youtubeId`** — the canonical 11-char ID (URL params stripped upstream).
-- **`PIPELINE_VERSION`** — env var. **Bump this on every meaningful pipeline change** — all stale keys auto-miss.
+- **`PIPELINE_VERSION`** — canonical version string, single-sourced from `packages/shared/src/config/pipeline-version.json` (NOT an env var; both the api and the summarizer read the same file). **Bump the JSON on every meaningful pipeline change** — all stale keys auto-miss.
 - **`providersHash`** — stable JSON of the provider override (`default`/`fast`/`fallback`). Empty when not supplied. Two different provider configs produce two different hashes.
 
 When a client supplies an `Idempotency-Key` header (Stripe convention), the header value is **mixed INTO** the payload (it does not replace it). The hash becomes `SHA-256(userId:youtubeId:PIPELINE_VERSION:providersHash:client:headerValue)`. This is stricter than Stripe's "same key + different params is an error" semantic — different params with the same header simply produce a different hash, so the work runs fresh. We trade the ability to dedup arbitrary payloads for the guarantee that reusing a key by mistake never returns the wrong video.
@@ -86,9 +86,9 @@ Belt-and-suspenders Redis lock above the content-addressed upsert. The upsert co
 
 ## Configuration
 
-| Env var | Default | Purpose |
+| Setting | Default | Purpose |
 |---------|---------|---------|
-| `PIPELINE_VERSION` | `v1` | Canonical version string baked into both the per-user idempotency hash AND the cross-user `dedupKey`. Bump on prompt/schema/pipeline changes. |
+| `PIPELINE_VERSION` | (from `packages/shared/src/config/pipeline-version.json`) | Canonical version string baked into both the per-user idempotency hash AND the cross-user `dedupKey`, namespacing the summarizer's Redis response cache, and stamped as `pipelineVersion` on every persisted Mongo summary doc. **Not an env var** — single-sourced from the shared JSON so the api and summarizer can never diverge. Bump the JSON on prompt/schema/pipeline changes. |
 | `IDEMPOTENCY_TTL_SECONDS` | `86400` (24h) | Per-key TTL for `idempotencyKeys`. Long enough for accidental double-submits; short enough that "I want to retry tomorrow" works. |
 | `REDIS_URL` | `redis://vie-redis:6379` | Redis connection for the dispatch guard. Must be the same instance the summarizer uses for its per-video pipeline lock. |
 | `DISPATCH_GUARD_TTL_SECONDS` | `900` | TTL on `vie:api:dispatched:<videoSummaryId>`. Must exceed the summarizer's `PIPELINE_LOCK_TTL_SECONDS` (default 600s). |
@@ -112,14 +112,18 @@ Do **NOT** bump for:
 
 **Rule of thumb**: if a user re-running the same video would get a different result, bump.
 
-> **Note**: bumping `PIPELINE_VERSION` invalidates **both** the per-user idempotency hash AND the cross-user content-addressed `dedupKey` — same input, different version = different keys in both layers, so every stale row is bypassed atomically on the next request.
+> **Note**: bumping `PIPELINE_VERSION` invalidates **both** the per-user idempotency hash AND the cross-user content-addressed `dedupKey` — same input, different version = different keys in both layers, so every stale row is bypassed atomically on the next request. It also shifts the summarizer's Redis response-cache namespace (stale entries TTL out) and arms the serve-path regen check: completed Mongo docs **stamped** with an older `pipelineVersion` are re-run on the user's next submission instead of being served stale. Docs **without** a `pipelineVersion` field predate stamping and are always served as-is (current-legacy) — a bump never mass-invalidates them, so no out-of-band DB flush is needed or wanted.
 
 ### Procedure
 
-1. Pick a new version string. Convention: `v{N}` (e.g. `v1` → `v2`). Date-suffixed (`v2-2026-05-19`) is also fine for traceability.
-2. Set `PIPELINE_VERSION` in `.env` (dev) and the production environment.
-3. Restart the API. The new version takes effect on the next request — no migration, no key cleanup needed (TTL handles it).
-4. Old keys remain in `idempotencyKeys` until their TTL expires; they just no longer match new submissions.
+1. Pick a new version string. Convention: `v{N}` (e.g. `v6` → `v7`). Date-suffixed (`v7-2026-07-08`) is also fine for traceability.
+2. Edit `version` in `packages/shared/src/config/pipeline-version.json` — the single source for the api AND the summarizer.
+3. Restart both services (compose mounts the JSON read-only into both containers; both log `pipeline_version` at boot — the two lines must match).
+4. Old keys remain in `idempotencyKeys` until their TTL expires; they just no longer match new submissions. Old cache rows keep serving to users who already own them until they resubmit (stamped-stale docs then regen on the same row).
+
+### Unification note (2026-07-08)
+
+Before single-sourcing, the api hardcoded `v2` while the summarizer hardcoded `v6`. The canonical file adopted **`v6`** (the summarizer's lineage — it names the output schema, and keeps the Redis response cache warm). Adopting `v6` api-side changes every idempotency hash and `dedupKey` computed under `v2`: in-flight `idempotencyKeys` rows (≤24h TTL) orphan harmlessly, and pre-unification `videoSummaryCache.dedupKey` values become unreachable for **new** cross-user submissions — the first re-submission of such a video runs the pipeline once more, after which the new row dedups normally. Same-user resubmissions are unaffected (matched via `userVideos`, not `dedupKey`). At unification time the live DB had 0 `idempotencyKeys` rows and 0 `dedupKey`-carrying cache rows, so the switch was a no-op in practice.
 
 ## Bypass for power users
 

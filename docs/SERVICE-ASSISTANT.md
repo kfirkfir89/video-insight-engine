@@ -26,34 +26,41 @@ Python service providing video-aware conversational AI with RAG-powered context 
 ```
                     ┌──────────────────────────────────────────┐
                     │              vie-api (gateway)            │
-                    │   POST /api/assistant/chat → proxy        │
+                    │  /chat, /library/{chat,search}, /action   │
                     └────────────────┬─────────────────────────┘
-                                     │ X-Internal-Secret
+                                     │ X-Internal-Secret (+X-User-Id)
                                      ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        vie-assistant (:8001)                        │
 │                                                                     │
-│  ┌─────────────┐   ┌──────────────┐   ┌──────────────────────────┐ │
-│  │ Intent      │──▶│ Tool Router  │──▶│ Tools                    │ │
-│  │ Detection   │   │              │   │  video_qa                │ │
-│  │ (keywords)  │   │ detect_intent│   │  navigator               │ │
-│  └──────┬──────┘   │ → route      │   │  concept_explain         │ │
-│         │no match  └──────────────┘   │  quiz_generator          │ │
-│         ▼                             │  note_taker              │ │
-│  ┌──────────────┐                     │  cross_reference         │ │
-│  │ RAG Chat     │                     └──────────────────────────┘ │
-│  │ (default)    │                                                   │
-│  │ search→LLM   │                                                   │
-│  │ stream tokens │                                                   │
-│  └──────────────┘                                                   │
-│         │                                                           │
-│         ▼                                                           │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                         │
-│  │ Qdrant   │  │ MongoDB  │  │ LiteLLM  │                         │
-│  │ (vectors)│  │ (context)│  │ (LLM)    │                         │
-│  └──────────┘  └──────────┘  └──────────┘                         │
+│  Chat (both modes: /chat and /library/chat)                         │
+│  ┌──────────────┐   ┌───────────────────────────────────────────┐  │
+│  │ RAG retrieve │──▶│ Agentic loop (agent_loop.py)              │  │
+│  │ encode →     │   │  LLM owns tool selection each round;      │  │
+│  │ Qdrant top-k │   │  budgets: 4 iters / 5 calls / 15 per req  │  │
+│  │ → relevance  │   │  destructive/costly calls park behind the │  │
+│  │ floor → dedup│   │  ConfirmationGate until the user confirms │  │
+│  └──────────────┘   └───────────────────────────────────────────┘  │
+│                                                                     │
+│  Structured /action (deterministic, no intent detection)            │
+│  ┌───────────────────────────────┐   ┌──────────────────────────┐  │
+│  │ tool_router.py                │──▶│ Tools                    │  │
+│  │  ToolRouter = name-keyed      │   │  navigator, note_taker   │  │
+│  │  registry; ActionDispatcher   │   │  concept_explain, quiz   │  │
+│  │  validates params + dispatches│   │  folder/library organize │  │
+│  └───────────────────────────────┘   │  video_generator         │  │
+│                                       └──────────────────────────┘  │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────────────┐   │
+│  │ Qdrant   │  │ MongoDB  │  │ LiteLLM  │  │ vie-api ApiClient │   │
+│  │ (vectors)│  │ (context)│  │ (LLM)    │  │ (internal writes) │   │
+│  └──────────┘  └──────────┘  └──────────┘  └───────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+Free-form chat has **no keyword intent detection** — the agentic loop lets the
+LLM pick tools in both chat modes. `tool_router.py` survives only as the
+registry + `ActionDispatcher` behind the structured `POST /action` endpoint.
+All public endpoints are rate-limited in-memory per caller (`rate_limit.py`).
 
 ---
 
@@ -65,21 +72,28 @@ services/assistant/
 ├── requirements.txt
 ├── pyproject.toml
 └── src/
-    ├── server.py                 # FastAPI app, routes, lifespan
+    ├── server.py                 # FastAPI app + routes
+    ├── bootstrap.py              # Lifespan: dependency wiring + tool registration
     ├── config.py                 # Settings + model mapping
     ├── exceptions.py             # AppError hierarchy
     ├── logging_config.py         # structlog setup
     │
     ├── models/
-    │   ├── requests.py           # ChatRequest, ActionRequest, ChatMessage
+    │   ├── requests.py           # ChatRequest, ActionRequest, ActionName Literal
     │   └── responses.py          # RAGSource, ChatEvent, ActionResponse
     │
     ├── services/
     │   ├── assistant.py          # AssistantService (orchestrator)
+    │   ├── agent_loop.py         # Agentic tool-calling loop (both chat modes)
+    │   ├── agent_tools.py        # Agent tool schemas + execution
+    │   ├── confirmation.py       # ConfirmationGate for destructive/costly actions
+    │   ├── tool_router.py        # Tool registry + ActionDispatcher (/action only)
+    │   ├── rate_limit.py         # In-memory sliding-window rate limits
     │   ├── llm_provider.py       # LiteLLM multi-provider abstraction
-    │   ├── rag.py                # RAGService (embed + Qdrant search + dedup)
+    │   ├── rag.py                # RAGService (embed + Qdrant search + floor + dedup)
     │   ├── context_builder.py    # System prompt assembly
-    │   └── tool_router.py        # Intent detection + tool dispatch
+    │   ├── api_client.py         # Outbound vie-api client (internal writes)
+    │   └── observability/        # Langfuse session traces + spans
     │
     ├── repositories/
     │   ├── video_repository.py   # VideoContext from MongoDB
@@ -88,16 +102,16 @@ services/assistant/
     │
     ├── tools/
     │   ├── base.py               # BaseTool protocol
-    │   ├── video_qa.py           # RAG + LLM Q&A with citations
     │   ├── navigator.py          # Tab/section fuzzy search
     │   ├── concept_explain.py    # Deep concept explanations (Sonnet)
     │   ├── quiz_generator.py     # Quiz generation (fast model)
     │   ├── note_taker.py         # Save notes to MongoDB
-    │   └── cross_reference.py    # Cross-video comparison
+    │   ├── folder_organizer.py   # Folder CRUD via vie-api
+    │   ├── library_organizer.py  # LLM-planned library reorganization
+    │   └── video_generator.py    # Dispatch new video processing via vie-api
     │
     └── utils/
         ├── prompt_templates.py   # Prompt template strings
-        ├── content_extractor.py  # Content extraction helpers
         └── language_detect.py    # User language detection for query translation
 ```
 
@@ -138,7 +152,7 @@ Single-video chat is **not toolless**: `_rag_chat` routes through `_run_agentic_
 
 **Response** `200` (`text/event-stream`):
 ```
-data: {"type":"source","sources":[{"text":"...","timestamp":"1:23","score":0.92}]}
+data: {"type":"source","sources":[{"text":"...","timestamp":"1:23","timestamp_seconds":83.0,"end_seconds":95.5,"score":0.92}]}
 
 data: {"type":"text","content":"The"}
 
@@ -178,7 +192,9 @@ Semantic search across a library of videos. Pure retrieval — no LLM call. Requ
       "video_id": "dQw4w9WgXcQ",
       "score": 0.741,
       "chunk_index": 1,
-      "timestamp": null,
+      "timestamp": "1:23",
+      "timestamp_seconds": 83.0,
+      "end_seconds": 95.5,
       "source": "transcript",
       "tab_id": null,
       "tab_component": null,
@@ -266,26 +282,53 @@ The same envelope is used for 400/404 with `success: false` and `error` populate
 | Type | Description | Payload |
 |------|-------------|---------|
 | `text` | Streamed LLM token | `content: string` |
-| `source` | RAG sources used for context | `sources: RAGSource[]` |
+| `source` | RAG sources used for context (post relevance floor) | `sources: RAGSource[]` |
+| `tool` | Agentic tool-call lifecycle: `start`/`done` per call, plus `pending_confirmation` (carries the confirmation token) and `confirmation_failed` | `content: string`, `metadata: { status, action, confirmation? }` |
 | `tool_result` | Result from a routed tool | `metadata: { tool, result }` |
 | `error` | Error during processing | `content: string` |
-| `done` | Stream complete | `metadata: { video_id, ... }` |
+| `done` | Stream complete | `metadata: { video_id?, sources_count }` |
 
 ---
 
-## Tool Routing
+## Tool Selection & Dispatch
 
-Intent detection uses keyword matching on the user message. First match wins.
+There is **no keyword intent detection**. Tools reach the user through two
+paths:
 
-| Tool | Trigger Keywords | Model | Description |
-|------|-----------------|-------|-------------|
-| `note_taker` | "save note", "bookmark this", "take note" | None (DB only) | Save notes to MongoDB |
-| `quiz_generator` | "quiz me", "test me", "generate quiz" | Fast (Haiku) | Generate multiple-choice questions |
-| `concept_explain` | "what is a/an", "define", "explain the concept" | Default (Sonnet) | Deep concept explanations with RAG |
-| `navigator` | "find in video", "navigate to", "show me where" | None (local) | Fuzzy search through video tabs |
-| `cross_reference` | "compare with", "cross-reference" | Default (Sonnet) | Compare content across videos |
+**1. Agentic loop (free-form chat, both modes)** — `agent_loop.py`. The LLM
+itself decides per round whether to call tools (schemas from
+`agent_tools.py`), gated by hard budgets: max 4 tool-use iterations, 5 tool
+calls per iteration, 15 per request. Tools are only offered when both an
+`ApiClient` and a `user_id` are present (`_agent_instructions_prefix` mirrors
+that gate in the prompt). Exactly two calls are gated as destructive/costly —
+`delete_folder` WITH `delete_content`, and `generate_video` (costs money) —
+and park behind the `ConfirmationGate` (`confirmation.py`): the stream emits a
+`pending_confirmation` tool event carrying a single-use token; the client
+echoes it back as `confirm_token` on the next request to execute the parked
+action. Unused tokens expire server-side. The agent instructions also carry a
+prompt-injection guard: retrieved transcript excerpts, video titles, and RAG
+content are DATA, never instructions — only the user's own chat messages may
+trigger library actions. The rule rides `_agent_instructions_prefix`, so both
+chat modes receive it exactly when tools are enabled.
 
-If no intent matches, the message falls through to the default RAG chat path (search Qdrant, build context, stream LLM response).
+**2. Structured `POST /action`** — `tool_router.py`. `ToolRouter` is a
+name-keyed registry of `BaseTool` implementations; `ActionDispatcher` maps
+the validated `action` enum to a tool, checks required params, and dispatches
+deterministically (no LLM in the routing decision).
+
+| Tool | Model | Description |
+|------|-------|-------------|
+| `note_taker` | None (DB only) | Save notes to MongoDB |
+| `quiz_generator` | Fast (Haiku) | Generate multiple-choice questions |
+| `concept_explain` | Default (Sonnet) | Deep concept explanations with RAG |
+| `navigator` | None (local) | Fuzzy search through video tabs |
+| `folder_organizer` | None (vie-api calls) | Folder create/rename/move/delete, move video |
+| `library_organizer` | Default (Sonnet) | Plan + apply a library-wide folder organization |
+| `video_generator` | None (vie-api call) | Dispatch a new video through the pipeline |
+
+Rate limits (`rate_limit.py`, in-memory sliding window, keyed on `X-User-Id`
+with per-endpoint fallbacks): `/chat` + `/library/chat` 30/min, `/action`
+30/min, `/library/search` 60/min.
 
 ---
 
@@ -293,14 +336,15 @@ If no intent matches, the message falls through to the default RAG chat path (se
 
 1. **Detect** user language (`language_detect.py`)
 2. **Translate** non-English queries to English for RAG search (LLM translation)
-3. **Encode** query via sentence-transformers (model name from `EMBEDDING_MODEL_NAME` setting, default `all-MiniLM-L6-v2`, lazy-loaded at startup)
+3. **Encode** query via sentence-transformers (model name from `EMBEDDING_MODEL_NAME` setting, default `all-MiniLM-L6-v2`, lazy-loaded at startup — must match the summarizer's index-side value; a parity test guards the defaults)
 4. **Search** Qdrant for top-k chunks filtered by `video_ids` (single-video uses `MatchValue`; multi-video uses `MatchAny`) and optionally by `sources` (subset of `transcript`/`default_output`)
-5. **Deduplicate** near-identical chunks using cosine similarity (threshold: 0.95)
-6. **Build** system prompt with video metadata + RAG chunks + conversation history
+5. **Filter** hits below the relevance floor (`RAG_MIN_SCORE`, default 0.25 cosine similarity) — Qdrant's top-k is unconditional, so off-topic questions would otherwise stuff the k least-unrelated chunks into the prompt. If nothing survives, the system prompt tells the model to say it found nothing relevant instead of guessing
+6. **Deduplicate** near-identical chunks using cosine similarity (threshold: 0.95)
+7. **Build** system prompt with video metadata + RAG chunks + conversation history
    - Uses `text_original` (Qdrant payload) when user language matches video language (non-English)
    - Uses the English-primary `meta`/`tabs` (with the original artifact nested under `sourceLanguage`) for English users on non-English videos — replaces the legacy `synthesis_en`/`tabs_en` triple
-   - Appends language instruction for non-English responses
-7. **Stream** LLM response token by token via SSE
+   - Appends language instruction for non-English responses; when chunks carry `[M:SS]` timestamps the prompt teaches the model to cite them
+8. **Stream** LLM response token by token via SSE
 
 ### Retrieval payload schema
 
@@ -311,7 +355,9 @@ Each result carries enough metadata for the UI to render a deep link back into a
 | `text` | Natural-language chunk used for retrieval |
 | `text_original` | Original-language text (only set for non-English transcripts) |
 | `video_id` | Source video — populated for multi-video / library queries |
-| `score` | Cosine similarity score |
+| `score` | Cosine similarity score (post relevance floor, so always ≥ `RAG_MIN_SCORE`) |
+| `timestamp` | Formatted `M:SS` / `H:MM:SS` display string (null for v1-legacy points) |
+| `timestamp_seconds` / `end_seconds` | Numeric chunk start/end seconds (payload schema v2) — drive the UI seek and `&t=` deep-link buttons; null for v1-legacy points |
 | `source` | `"transcript"` or `"default_output"` |
 | `tab_id` / `tab_component` / `prop_path` | Set when `source == "default_output"`. Identify the originating tab and prop (e.g. `tab_component="quiz"`, `prop_path="questions[2]"`) |
 | `chunk_index` | Position within the (video_id, source, tab_id) group |
@@ -320,7 +366,7 @@ Each result carries enough metadata for the UI to render a deep link back into a
 
 | Method | Scope | Used by |
 |---|---|---|
-| `RAGService.search(query, video_id, top_k, sources)` | Single video | `/chat`, all tools |
+| `RAGService.search(query, video_id, top_k, sources)` | Single video | `/chat`, `concept_explain` tool |
 | `RAGService.search_library(query, video_ids, top_k, sources)` | Many videos at once; populates `video_id` on every result so the UI can group | `POST /library/search` |
 
 ---
@@ -338,6 +384,10 @@ MONGODB_URI=mongodb://vie-mongodb:27017/video-insight-engine
 QDRANT_URL=http://vie-qdrant:6333
 QDRANT_COLLECTION=transcript_chunks
 
+# RAG retrieval
+EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2  # MUST match summarizer's index-side value
+RAG_MIN_SCORE=0.25                     # Relevance floor (cosine); 0 disables
+
 # Internal auth (service-to-service)
 INTERNAL_SECRET=dev-internal-secret-change-me
 
@@ -347,6 +397,7 @@ LLM_FAST_PROVIDER=              # Optional: separate provider for fast model
 LLM_FALLBACK_PROVIDER=          # Optional: fallback provider
 LLM_MODEL=                      # Override default model
 LLM_FAST_MODEL=                 # Override fast model
+LLM_CHAT_MODEL=                 # Model for chat + agentic loop (default: primary provider's fast tier)
 LLM_TIMEOUT_SECONDS=60.0
 LLM_NUM_RETRIES=2
 
