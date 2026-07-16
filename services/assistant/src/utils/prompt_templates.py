@@ -13,11 +13,7 @@ SYSTEM_BASE = Template(
 )
 
 CONTEXT_TEMPLATE = Template(
-    "## Overview\n"
-    "${summary}\n\n"
-    "${takeaways_section}"
-    "${tabs_section}"
-    "${rag_section}"
+    "## Overview\n${summary}\n\n${takeaways_section}${tabs_section}${rag_section}"
 )
 
 TAKEAWAYS_HEADER = "## Key Takeaways\n"
@@ -25,6 +21,22 @@ TAKEAWAYS_HEADER = "## Key Takeaways\n"
 TABS_HEADER = "## Content Tabs\n"
 
 RAG_HEADER = "## Relevant Transcript Sections\n"
+
+# Instruction appended under RAG_HEADER when at least one chunk carries a
+# [M:SS] timestamp — teaches the model to cite moments the UI can seek to.
+RAG_TIMESTAMP_CITE_NOTE = (
+    "When you draw on a section marked with a [M:SS] timestamp, cite that "
+    'timestamp in your answer (e.g. "around [12:34]").\n'
+)
+
+# Used instead of the chunk list when retrieval found nothing above the
+# relevance floor — the model must admit the gap, not improvise from noise.
+RAG_EMPTY_NOTE = (
+    "## Relevant Transcript Sections\n"
+    "No part of the video matched this question closely. If the material "
+    "above doesn't cover it, say you couldn't find anything relevant in the "
+    "video instead of guessing.\n"
+)
 
 LIBRARY_SYSTEM_BASE = (
     "You are a friendly, helpful assistant for the user's personal video library. "

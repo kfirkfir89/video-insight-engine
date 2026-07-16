@@ -105,7 +105,9 @@ class LLMProvider:
 
         try:
             start_monotonic = time.monotonic()
-            response = await acompletion(**kwargs)
+            # litellm types this as ModelResponse | CustomStreamWrapper; with
+            # stream unset it's always a ModelResponse — Any avoids the union.
+            response: Any = await acompletion(**kwargs)
             latency_ms = int((time.monotonic() - start_monotonic) * 1000)
             choice = response.choices[0]
             if choice.finish_reason == "length":
@@ -188,7 +190,9 @@ class LLMProvider:
 
         try:
             start_monotonic = time.monotonic()
-            response = await acompletion(**kwargs)
+            # litellm types this as ModelResponse | CustomStreamWrapper; with
+            # stream unset it's always a ModelResponse — Any avoids the union.
+            response: Any = await acompletion(**kwargs)
             latency_ms = int((time.monotonic() - start_monotonic) * 1000)
             choice = response.choices[0]
             message = choice.message
@@ -280,7 +284,9 @@ class LLMProvider:
         finish_reason: str | None = None
 
         try:
-            response = await acompletion(**kwargs)
+            # stream=True → CustomStreamWrapper (async-iterable); Any avoids
+            # litellm's ModelResponse | CustomStreamWrapper union.
+            response: Any = await acompletion(**kwargs)
             async for chunk in response:
                 choices = getattr(chunk, "choices", None) or []
                 if choices:
@@ -375,13 +381,15 @@ class LLMProvider:
             {
                 "role": "system",
                 "content": "Translate the following text to English. "
-                           "Return only the translation, nothing else.",
+                "Return only the translation, nothing else.",
             },
             {"role": "user", "content": text},
         ]
         try:
             result = await self.complete_with_messages(
-                messages, max_tokens=500, span_name="query_translate",
+                messages,
+                max_tokens=500,
+                span_name="query_translate",
             )
             return result.strip() if result else None
         except LLMError:
@@ -441,7 +449,8 @@ def _safe_completion_cost(
                     model=model,
                     prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
-                ) or 0.0
+                )
+                or 0.0
             )
     except Exception:  # noqa: BLE001  # litellm raises for unknown-cost models
         return 0.0

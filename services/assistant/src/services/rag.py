@@ -23,15 +23,29 @@ class RAGService:
         self,
         qdrant_repo: QdrantRepository,
         model_name: str = "all-MiniLM-L6-v2",
+        min_score: float = 0.25,
     ) -> None:
+        """Create the service.
+
+        Args:
+            qdrant_repo: Vector search repository.
+            model_name: Query-side encoder — must match the summarizer's
+                index-side ``EMBEDDING_MODEL_NAME`` (bootstrap passes
+                ``settings.EMBEDDING_MODEL_NAME``).
+            min_score: Relevance floor — hits below this cosine similarity
+                are dropped before context assembly (``settings.RAG_MIN_SCORE``).
+        """
         self._qdrant_repo = qdrant_repo
         self._model_name = model_name
+        self._min_score = min_score
         self._embedding_model: Any = None
 
     def _get_model(self) -> Any:
         """Lazy-load the sentence-transformers model."""
         if self._embedding_model is None:
-            from sentence_transformers import SentenceTransformer
+            # Heavy dep (pulls torch) — deliberately absent from the local
+            # typecheck env; installed in the service image.
+            from sentence_transformers import SentenceTransformer  # pyright: ignore[reportMissingImports]
 
             self._embedding_model = SentenceTransformer(self._model_name)
         return self._embedding_model
@@ -70,6 +84,7 @@ class RAGService:
                 top_k=top_k,
                 sources=sources,
             )
+            results = self._apply_relevance_floor(results)
 
             sources_list = [_result_to_source(r) for r in results]
             return await self._deduplicate(sources_list)
@@ -113,6 +128,7 @@ class RAGService:
                 top_k=top_k,
                 sources=sources,
             )
+            results = self._apply_relevance_floor(results)
 
             sources_list = [_result_to_source(r) for r in results]
             return await self._deduplicate(sources_list)
@@ -123,6 +139,24 @@ class RAGService:
                 error=str(exc),
             )
             return []
+
+    def _apply_relevance_floor(self, results: list[dict]) -> list[dict]:
+        """Drop hits whose cosine similarity is below the configured floor.
+
+        Qdrant's top-k is unconditional — off-topic questions still return
+        the k least-unrelated chunks. Filtering here keeps that noise out of
+        the system prompt; an empty result tells the context builder to say
+        nothing relevant was found instead.
+        """
+        kept = [r for r in results if float(r.get("score", 0.0)) >= self._min_score]
+        if len(kept) < len(results):
+            logger.info(
+                "rag_relevance_floor_filtered",
+                dropped=len(results) - len(kept),
+                kept=len(kept),
+                min_score=self._min_score,
+            )
+        return kept
 
     async def _deduplicate(self, sources: list[RAGSource]) -> list[RAGSource]:
         """Remove near-duplicate chunks using cosine similarity.
@@ -165,12 +199,50 @@ class RAGService:
         await asyncio.to_thread(self._get_model)
 
 
+def _format_timestamp(value: float | int | str | None) -> str | None:
+    """Render payload timestamp seconds as ``M:SS`` (or ``H:MM:SS``).
+
+    Payload schema v2 stores numeric seconds (e.g. ``754`` → ``"12:34"``).
+    Older v1 points have no timestamp — ``None`` passes through so downstream
+    formatters skip the citation prefix. Pre-formatted strings pass through
+    untouched for backward compatibility.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value or None
+    total = int(value)
+    if total < 0:
+        return None
+    hours, remainder = divmod(total, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes}:{seconds:02d}"
+
+
+def _numeric_seconds(value: float | int | str | None) -> float | None:
+    """Extract numeric payload seconds for UI seek/deep-link buttons.
+
+    Payload schema v2 stores numeric seconds; v1-legacy points have ``None``
+    and pre-formatted strings carry no reliable numeric value — both map to
+    ``None`` so the UI hides its seek affordance instead of mis-seeking.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if value < 0:
+        return None
+    return float(value)
+
+
 def _result_to_source(r: dict) -> RAGSource:
     """Map a Qdrant repository dict to a ``RAGSource``."""
     return RAGSource(
         text=r.get("text", ""),
         text_original=r.get("text_original"),
-        timestamp=r.get("timestamp"),
+        timestamp=_format_timestamp(r.get("timestamp")),
+        timestamp_seconds=_numeric_seconds(r.get("timestamp")),
+        end_seconds=_numeric_seconds(r.get("end_timestamp")),
         score=float(r.get("score", 0.0)),
         chunk_index=int(r.get("chunk_index", 0)),
         video_id=r.get("video_id", ""),

@@ -50,8 +50,8 @@ class QdrantRepository:
 
         Returns:
             List of dicts with text, video_id, score, chunk_index, timestamp,
-            source, tab_id, tab_component, prop_path. Returns empty list on
-            failure.
+            end_timestamp, source, tab_id, tab_component, prop_path. Returns
+            empty list on failure.
         """
         if not video_ids:
             return []
@@ -95,6 +95,7 @@ class QdrantRepository:
                     "score": r.score,
                     "chunk_index": r.payload.get("chunk_index", 0),
                     "timestamp": r.payload.get("timestamp"),
+                    "end_timestamp": r.payload.get("end_timestamp"),
                     "source": r.payload.get("source", "transcript"),
                     "tab_id": r.payload.get("tab_id"),
                     "tab_component": r.payload.get("tab_component"),

@@ -19,7 +19,9 @@ def detect_language(text: str) -> str:
 
     # Try langdetect first
     try:
-        from langdetect import detect
+        # Optional dep — ImportError below falls back to script detection.
+        from langdetect import detect  # pyright: ignore[reportMissingImports]
+
         code = detect(text[:2000])
         if code and len(code) >= 2:
             return code[:2].lower()

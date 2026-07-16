@@ -259,14 +259,10 @@ async def _dispatch(
         )
         return {"ok": True, "folder": folder}
     if name == "rename_folder":
-        folder = await api_client.update_folder(
-            user_id, args["folder_id"], name=args["name"]
-        )
+        folder = await api_client.update_folder(user_id, args["folder_id"], name=args["name"])
         return {"ok": True, "folder": folder}
     if name == "move_folder":
-        folder = await api_client.move_folder(
-            user_id, args["folder_id"], args.get("parent_id")
-        )
+        folder = await api_client.move_folder(user_id, args["folder_id"], args.get("parent_id"))
         return {"ok": True, "folder": folder}
     if name == "delete_folder":
         result = await api_client.delete_folder(
@@ -274,18 +270,52 @@ async def _dispatch(
         )
         return {"ok": True, "result": result}
     if name == "move_video":
-        result = await api_client.move_video(
-            user_id, args["video_id"], args["folder_id"]
-        )
+        result = await api_client.move_video(user_id, args["video_id"], args["folder_id"])
         return {"ok": True, "result": result}
     if name == "generate_video":
-        result = await api_client.generate_video(
-            user_id, args["url"], args.get("folder_id")
-        )
+        result = await api_client.generate_video(user_id, args["url"], args.get("folder_id"))
         return {"ok": True, "result": result}
     if name == "organize_library":
-        result = await LibraryOrganizerTool(api_client, llm).execute(
-            {}, {"user_id": user_id}
-        )
+        result = await LibraryOrganizerTool(api_client, llm).execute({}, {"user_id": user_id})
         return {"ok": True, "result": result}
     return {"error": f"unknown tool: {name}"}
+
+
+def summarize_tool_result(name: str, res: dict) -> str:
+    """Produce a short, human-readable summary of a tool result for the UI.
+
+    The web renders these as muted "✓ step" lines, so they must read like a
+    plain action recap — never expose ids or raw payloads.
+    """
+    if res.get("error"):
+        return f"{name} failed"
+    if name == "create_folder":
+        folder = res.get("folder") or {}
+        folder_name = folder.get("name") if isinstance(folder, dict) else None
+        return f'Created folder "{folder_name}"' if folder_name else "Created folder"
+    if name == "rename_folder":
+        folder = res.get("folder") or {}
+        folder_name = folder.get("name") if isinstance(folder, dict) else None
+        return f'Renamed folder to "{folder_name}"' if folder_name else "Renamed folder"
+    if name == "move_folder":
+        return "Moved folder"
+    if name == "delete_folder":
+        return "Deleted folder"
+    if name == "move_video":
+        return "Moved video"
+    if name == "generate_video":
+        return "Started video generation"
+    if name == "organize_library":
+        result = res.get("result") or {}
+        if isinstance(result, dict):
+            created = result.get("folders_created", 0)
+            moved = result.get("videos_moved", 0)
+            return f"Organized library: {created} folders, {moved} videos moved"
+        return "Organized library"
+    if name == "list_folders":
+        folders = res.get("folders") or []
+        return f"Found {len(folders)} folders"
+    if name == "list_videos":
+        videos = res.get("videos") or []
+        return f"Found {len(videos)} videos"
+    return f"Ran {name}"

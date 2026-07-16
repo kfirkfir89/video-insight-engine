@@ -24,9 +24,11 @@ class ChatRequest(BaseModel):
 
     video_id: str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_\-]+$")
     message: str = Field(..., min_length=1, max_length=10000)
-    conversation_history: list[ChatMessage] = Field(
-        default_factory=list, max_length=50
-    )
+    conversation_history: list[ChatMessage] = Field(default_factory=list, max_length=50)
+    # Single-use token echoed from a `pending_confirmation` SSE event to run
+    # the parked destructive/costly action. Only the client controls this —
+    # the model can never redeem a token via tool-call arguments.
+    confirm_token: str | None = Field(default=None, min_length=16, max_length=128)
 
 
 ActionName = Literal[
@@ -76,12 +78,12 @@ class LibraryChatRequest(BaseModel):
 
     video_ids: list[VideoId] = Field(default_factory=list, max_length=200)
     message: str = Field(..., min_length=1, max_length=10000)
-    conversation_history: list[ChatMessage] = Field(
-        default_factory=list, max_length=50
-    )
+    conversation_history: list[ChatMessage] = Field(default_factory=list, max_length=50)
     # Owned-video inventory ({video_id, title}) the gateway derives server-side so
     # the assistant can name videos by title and answer "what videos do I have?".
     library: list[LibraryVideo] = Field(default_factory=list, max_length=200)
+    # Single-use confirmation token — see ChatRequest.confirm_token.
+    confirm_token: str | None = Field(default=None, min_length=16, max_length=128)
 
 
 class LibrarySearchRequest(BaseModel):

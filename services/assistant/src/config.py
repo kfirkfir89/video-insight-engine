@@ -37,6 +37,7 @@ class Settings(BaseSettings):
 
     # Server
     ASSISTANT_PORT: int = 8001
+    ENVIRONMENT: str = ""  # development, test, staging, production
 
     # MongoDB
     MONGODB_URI: str = "mongodb://vie-mongodb:27017/video-insight-engine"
@@ -44,6 +45,18 @@ class Settings(BaseSettings):
     # Qdrant
     QDRANT_URL: str = "http://vie-qdrant:6333"
     QDRANT_COLLECTION: str = "transcript_chunks"
+
+    # ─── RAG retrieval ──────────────────────────────────────────────────
+    # Query-side encoder. MUST match the summarizer's index-side
+    # EMBEDDING_MODEL_NAME (same env var, same default) — mixed encoders make
+    # cosine scores meaningless. Guarded by tests/test_embedding_model_parity.py.
+    EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
+    # Minimum cosine similarity for a retrieved chunk to enter chat context.
+    # The collection uses Distance.COSINE, so scores are true cosine
+    # similarity in [-1, 1]: unrelated text pairs land ~0.0-0.2 with
+    # all-MiniLM, on-topic hits >= ~0.4. 0.25 is a conservative noise floor
+    # that keeps current on-topic behavior intact; 0 disables the floor.
+    RAG_MIN_SCORE: float = Field(default=0.25, ge=-1.0, le=1.0)
 
     # Internal auth
     INTERNAL_SECRET: str = Field(default=_DEFAULT_INTERNAL_SECRET, repr=False)
@@ -137,12 +150,30 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
-def validate_internal_secret() -> None:
-    """Warn if INTERNAL_SECRET is using the default value.
+# Environments where the dev-default secret is tolerated (warn only). Any
+# other value — production, staging, or an unrecognized name — fails startup.
+_DEV_ENVS = frozenset({"", "development", "dev", "test", "local"})
 
-    Called from application lifespan (not import time) to avoid breaking test imports.
+
+def validate_internal_secret() -> None:
+    """Fail startup if INTERNAL_SECRET is the dev default outside development.
+
+    Called from application lifespan (not import time) to avoid breaking test
+    imports. Mirrors the summarizer's ``validate_secrets`` but is stricter:
+    unknown ENVIRONMENT names are treated as production, not dev.
+
+    Raises:
+        ValueError: Default secret with a non-development ``ENVIRONMENT``.
     """
-    if settings.INTERNAL_SECRET == _DEFAULT_INTERNAL_SECRET:
-        logging.getLogger(__name__).warning(
-            "INTERNAL_SECRET is using the default value — set it via environment variable in production!"
+    if settings.INTERNAL_SECRET != _DEFAULT_INTERNAL_SECRET:
+        return
+
+    env_name = settings.ENVIRONMENT.lower()
+    if env_name not in _DEV_ENVS:
+        raise ValueError(
+            f"INTERNAL_SECRET must be set via environment variable in "
+            f"ENVIRONMENT={env_name!r}! Using the default value is a security risk."
         )
+    logging.getLogger(__name__).warning(
+        "INTERNAL_SECRET is using the default value — set it via environment variable in production!"
+    )

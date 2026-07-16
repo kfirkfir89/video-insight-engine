@@ -11,23 +11,26 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from structlog.types import Processor
 
 from src.config import settings
 
-try:
+if TYPE_CHECKING:
     from llm_common.middleware import HealthCheckFilter as _HealthCheckFilter
-except ImportError:
+else:
+    try:
+        from llm_common.middleware import HealthCheckFilter as _HealthCheckFilter
+    except ImportError:
 
-    class _HealthCheckFilter(logging.Filter):  # type: ignore[no-redef]
-        """Fallback filter when llm_common is not installed."""
+        class _HealthCheckFilter(logging.Filter):
+            """Fallback filter when llm_common is not installed."""
 
-        def filter(self, record: logging.LogRecord) -> bool:
-            msg = record.getMessage()
-            return "/health" not in msg
+            def filter(self, record: logging.LogRecord) -> bool:
+                msg = record.getMessage()
+                return "/health" not in msg
 
 
 def get_log_level() -> int:

@@ -10,7 +10,9 @@ from src.utils.prompt_templates import (
     LIBRARY_INVENTORY_HEADER,
     LIBRARY_SOURCES_HEADER,
     LIBRARY_SYSTEM_BASE,
+    RAG_EMPTY_NOTE,
     RAG_HEADER,
+    RAG_TIMESTAMP_CITE_NOTE,
     SYSTEM_BASE,
     TABS_HEADER,
     TAKEAWAYS_HEADER,
@@ -72,7 +74,9 @@ class ContextBuilder:
         # Add language instruction for non-English responses
         language_instruction = ""
         if user_language != "en":
-            language_instruction = f"\n\nIMPORTANT: Respond in the user's language ({user_language})."
+            language_instruction = (
+                f"\n\nIMPORTANT: Respond in the user's language ({user_language})."
+            )
 
         context = CONTEXT_TEMPLATE.safe_substitute(
             summary=summary,
@@ -110,15 +114,12 @@ class ContextBuilder:
             )
 
         title_by_id = {
-            v["video_id"]: str(v.get("title") or "")
-            for v in (inventory or [])
-            if v.get("video_id")
+            v["video_id"]: str(v.get("title") or "") for v in (inventory or []) if v.get("video_id")
         }
         inventory_section = self._build_library_inventory_section(inventory)
         sources_section = self._build_library_sources_section(rag_chunks, title_by_id)
         return (
-            f"{LIBRARY_SYSTEM_BASE}{language_instruction}\n\n"
-            f"{inventory_section}{sources_section}"
+            f"{LIBRARY_SYSTEM_BASE}{language_instruction}\n\n{inventory_section}{sources_section}"
         )
 
     def _build_library_inventory_section(self, inventory: list[dict] | None) -> str:
@@ -192,13 +193,18 @@ class ContextBuilder:
         """Format RAG chunks with optional timestamps.
 
         Uses text_original when user language matches video language (non-English).
+        Empty ``chunks`` (relevance floor filtered everything, or retrieval
+        degraded) renders an explicit "nothing relevant found" note instead.
         """
         if not chunks:
-            return ""
+            return RAG_EMPTY_NOTE
         lines: list[str] = []
         use_original = user_language == video_language and video_language != "en"
         for chunk in chunks:
             prefix = f"[{chunk.timestamp}] " if chunk.timestamp else ""
             text = (chunk.text_original or chunk.text) if use_original else chunk.text
             lines.append(f"{prefix}{text}")
-        return f"{RAG_HEADER}" + "\n\n".join(lines) + "\n"
+        header = RAG_HEADER
+        if any(chunk.timestamp for chunk in chunks):
+            header = f"{RAG_HEADER}{RAG_TIMESTAMP_CITE_NOTE}"
+        return header + "\n\n".join(lines) + "\n"
