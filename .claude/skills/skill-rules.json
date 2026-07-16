@@ -18,7 +18,7 @@
           "pagination", "websocket", "socket.io", "real-time", "file upload",
           "s3", "multer", "streaming", "llm", "openai", "claude",
           "ai integration", "rag", "embeddings", "vector", "mcp client",
-          "agents", "shared types", "@vie/types", "@vie/utils", "packages"
+          "agents", "shared types", "@vie/types", "packages"
         ],
         "intentPatterns": [
           "(create|add|implement|build|fix).*?(route|endpoint|api|controller|service)",
@@ -77,8 +77,8 @@
           "vie-assistant", "retry", "backoff", "dead letter", "dlq",
           "celery", "motor", "beanie", "pytest", "no transcript",
           "video too long", "edge case", "llm", "openai", "anthropic",
-          "claude api", "ai integration", "rag", "embeddings", "pinecone",
-          "pgvector", "mcp server", "mcp tool", "explain_auto", "explain_chat",
+          "claude api", "ai integration", "rag", "embeddings", "qdrant",
+          "vector search", "mcp server", "mcp tool", "assistant", "vie-admin",
           "agents"
         ],
         "intentPatterns": [
@@ -155,7 +155,9 @@
         "pathPatterns": [
           "apps/web/**/*.tsx",
           "apps/web/**/*.ts",
-          "apps/web/src/**/*"
+          "apps/web/src/**/*",
+          "services/admin/ui/**/*.tsx",
+          "services/admin/ui/**/*.ts"
         ],
         "contentPatterns": [
           "import.*from.*'react'",

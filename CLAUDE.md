@@ -6,7 +6,7 @@ Personal video knowledge management system — YouTube URL to interactive knowle
 
 ## ⚠️ Working-tree safety — READ FIRST
 
-**NEVER run any working-tree-mutating git command without explicit, current-turn user permission.** This includes `git commit`, `git push`, `git stash`, `git stash pop`, `git reset --hard`, `git checkout -- <file>` (to discard), `git clean`, `git rebase`, force-push, or branch deletion. Read-only ops (`git status`, `git diff`, `git log`, `git show`) are fine.
+**NEVER run any working-tree-mutating git command without explicit, current-turn user permission.** This includes `git commit`, `git push`, `git stash`, `git stash pop`, `git reset --hard`, `git checkout -- <file>` (to discard), `git restore`, `git clean`, `git rebase`, force-push, or branch deletion. Read-only ops (`git status`, `git diff`, `git log`, `git show`) are fine.
 
 - **`git stash` is BANNED for "let me quickly test against the clean tree" use cases.** Looks reversible — isn't. Hooks that auto-write files (session snapshots, log files) can fire between stash and pop, causing the pop to fail and stranding ALL modified files inside the stash. Happened 2026-05-28; nearly lost a day's work. If you need to compare against the clean tree, read files via `git show HEAD:<path>`, spawn an Agent in `isolation: worktree` mode, or just ask.
 - "Continue", "go ahead", "finish it", "do what's needed" are NOT commit/stash authorization. Only an explicit verb in the current turn ("commit", "stash", "push", "ship") counts.
@@ -51,7 +51,7 @@ video-insight-engine/
 ├── .claude/        # Skills, agents, hooks, commands, rules
 ├── docs/           # Architecture, security, error handling, services
 ├── dev/            # Task planning (survives context resets)
-├── packages/       # @vie/shared, @vie/types, @vie/utils
+├── packages/       # @vie/shared, @vie/types, llm-common (Python)
 ├── api/            # vie-api gateway (Node.js + Fastify)
 ├── services/       # summarizer, assistant (Python)
 ├── apps/           # web frontend (React)
@@ -85,4 +85,4 @@ curl http://localhost:3000/health && curl http://localhost:8000/health
 open http://localhost:5173
 ```
 
-This is a monorepo with 4 services (api, web, summarizer, assistant), shared packages (@vie/types, @vie/shared, @vie/utils), Redis+MongoDB caching (same video = instant serve at $0.00), and Qdrant for RAG-powered video chat. When the skill activation hook fires, always read SKILL.md and all suggested resources before writing any code — this is mandatory with no exceptions. Follow conventional commits, never commit to main directly, and validate all user input at system boundaries.
+This is a monorepo with 4 services (api, web, summarizer, assistant), shared packages (@vie/types, @vie/shared, llm-common), Redis+MongoDB caching (same video = instant serve at $0.00), and Qdrant for RAG-powered video chat. When the skill activation hook fires, always read SKILL.md and all suggested resources before writing any code — this is mandatory with no exceptions. Follow conventional commits, never commit to main directly, and validate all user input at system boundaries.

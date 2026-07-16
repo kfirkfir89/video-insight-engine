@@ -20,14 +20,16 @@ if [[ ! "$tool_name" =~ ^(Edit|MultiEdit|Write)$ ]] || [[ -z "$file_path" ]]; th
     exit 0  # Exit 0 for skip conditions
 fi
 
-# Skip markdown files
-if [[ "$file_path" =~ \.(md|markdown)$ ]]; then
-    exit 0  # Exit 0 for skip conditions
-fi
-
 # Create cache directory in project
 cache_dir="$CLAUDE_PROJECT_DIR/.claude/tsc-cache/${session_id:-default}"
 mkdir -p "$cache_dir"
+
+# Markdown edits: log for session-snapshot continuity, but skip repo/build tracking
+# (previously skipped entirely — doc/planning sessions recorded 0 edits)
+if [[ "$file_path" =~ \.(md|markdown)$ ]]; then
+    echo "$(date +%s):$file_path:docs" >> "$cache_dir/edited-files.log"
+    exit 0
+fi
 
 # Function to detect repo from file path
 detect_repo() {

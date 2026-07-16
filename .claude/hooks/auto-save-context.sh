@@ -47,6 +47,11 @@ if [[ -f "$edited_log" ]]; then
         | jq -s .)
 fi
 
+# Nothing edited this session: don't overwrite existing (richer) snapshots
+if [[ "$edit_count" -eq 0 ]]; then
+    exit 0
+fi
+
 # Collect affected repos
 affected_repos="[]"
 if [[ -f "$repos_file" ]]; then
@@ -63,10 +68,30 @@ resume_hint="Session edited $file_count unique files across $repos_list."
 # Current timestamp
 saved_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-# Write snapshot to each active task
+# Scope to relevant tasks: those whose dev/active/<task>/ files were edited
+# this session (previously broadcast to EVERY active task, overwriting good
+# snapshots with unrelated ones). Fallback: dev/active/.last-session-snapshot.json
+relevant_dirs=()
 for task_dir in "${task_dirs[@]}"; do
     task_name=$(basename "$task_dir")
-    snapshot_path="$task_dir/${task_name}-session-snapshot.json"
+    if echo "$files_edited" | jq -e --arg t "dev/active/$task_name/" 'map(startswith($t)) | any' > /dev/null; then
+        relevant_dirs+=("$task_dir")
+    fi
+done
+
+if [[ ${#relevant_dirs[@]} -eq 0 ]]; then
+    relevant_dirs=("$active_dir/.")
+fi
+
+# Write snapshot to each relevant task
+for task_dir in "${relevant_dirs[@]}"; do
+    if [[ "$task_dir" == "$active_dir/." ]]; then
+        task_name="last-session"
+        snapshot_path="$active_dir/.last-session-snapshot.json"
+    else
+        task_name=$(basename "$task_dir")
+        snapshot_path="$task_dir/${task_name}-session-snapshot.json"
+    fi
 
     jq -n \
         --arg sid "$session_id" \
@@ -88,7 +113,7 @@ for task_dir in "${task_dirs[@]}"; do
 done
 
 # Output confirmation
-task_names=$(printf '%s' "${task_dirs[@]}" | xargs -I{} basename {} | tr '\n' ', ' | sed 's/,$//')
+task_names=$(printf '%s\n' "${relevant_dirs[@]}" | xargs -I{} basename {} | paste -sd, - | sed 's/^\.$/last-session (no task-scoped edits)/')
 echo ""
 echo "💾 Session snapshot saved for: $task_names"
 echo "   Files: $file_count | Edits: $edit_count | Repos: $repos_list"

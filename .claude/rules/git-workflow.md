@@ -12,6 +12,10 @@
 
 **PRs:** Include description, link issues, all tests must pass, request review when ready.
 
-**This project:** Main branch `main`, feature branches from `main`, CI must pass before merge.
+**This project:** Main branch `main` (protected, tagged releases), feature branches from `main`, CI must pass before merge.
+
+**Commit cadence — commit-per-green-phase:** Task work is planned in phases (`dev/active/*/tasks.md`). Commit at every green phase boundary: when a phase's tasks are done and suites pass, that phase lands as one (or a few atomic) commits immediately — never let multiple phases of work accumulate uncommitted. Refactors/splits are one move per commit (bisectable). Milestones (task completion, audits) get a version tag. No working tree should hold >1 phase of unpushed work overnight.
+
+**Working-tree safety:** All mutations (commit, push, stash, reset, checkout --, restore, clean) require explicit current-turn user approval (see CLAUDE.md). Enforced by `.claude/hooks/git-safety-guard.sh`, which blocks destructive commands unless a single-use override file is present.
 
 **Enforcement:** Required — follow git workflow for all changes.
