@@ -10,6 +10,25 @@ interface CacheRowForBackfill {
   version?: number;
 }
 
+/** Minimal shape of a `listIndexes()` row we inspect at startup. */
+export interface IndexInfoForMigration {
+  name?: string;
+  expireAfterSeconds?: number;
+}
+
+/**
+ * True when the legacy 90-day-TTL variant of the `llm_usage` `createdAt_1`
+ * index is still present (pre-2026-07-06 deploys). The plain (non-TTL)
+ * `createdAt_1` index that replaces it must NOT match — dropping it on every
+ * boot would force a full index rebuild each startup. Exported so the
+ * decision logic is regression-testable without a live cluster.
+ */
+export function hasLegacyLlmUsageTtlIndex(indexes: IndexInfoForMigration[]): boolean {
+  return indexes.some(
+    (idx) => idx.name === 'createdAt_1' && idx.expireAfterSeconds !== undefined,
+  );
+}
+
 /**
  * Idempotent one-shot backfill: populate `dedupKey` on legacy
  * `videoSummaryCache` rows that pre-date the content-addressed dedup scheme.
@@ -153,9 +172,22 @@ async function mongodb(fastify: FastifyInstance) {
         { key: { shareSlug: 1, ipHash: 1 }, unique: true },
       ]);
 
-      // llm_usage indexes (auto-cleanup old records)
-      await db.collection('llm_usage').createIndexes([
-        { key: { createdAt: 1 }, expireAfterSeconds: 90 * 24 * 60 * 60 }, // 90-day TTL
+      // llm_usage is the financial ledger — rows are kept forever (decision
+      // 2026-07-06, docs/llm-cost-model.md). A 90-day TTL used to silently
+      // erase billing history; drop it if it survives from an older deploy.
+      // Drop ONLY when the TTL option is actually present — an unconditional
+      // drop would rebuild the ledger index on every boot (expensive as the
+      // collection grows, and cost queries scan unindexed in the gap).
+      const llmUsage = db.collection('llm_usage');
+      const llmUsageIndexes = await llmUsage
+        .listIndexes()
+        .toArray()
+        .catch(() => []); // collection may not exist yet on fresh databases
+      if (hasLegacyLlmUsageTtlIndex(llmUsageIndexes)) {
+        await llmUsage.dropIndex('createdAt_1').catch(() => undefined);
+      }
+      await llmUsage.createIndexes([
+        { key: { createdAt: 1 } },
       ]);
 
       // userCosts indexes — per-user daily cost aggregates

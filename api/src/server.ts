@@ -45,6 +45,9 @@ export async function startServer(): Promise<void> {
   try {
     await app.listen({ port: config.PORT, host: '0.0.0.0' });
     app.log.info(`vie-api running on port ${config.PORT}`);
+    // Canonical pipeline version (packages/shared/src/config/pipeline-version.json)
+    // — the summarizer logs the same key at boot; the two lines must match.
+    app.log.info({ version: config.PIPELINE_VERSION }, 'pipeline_version');
   } catch (err) {
     app.log.error(err, 'Failed to start server');
     process.exit(1);

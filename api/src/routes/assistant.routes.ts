@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { VideoNotFoundError } from '../utils/errors.js';
+import { disableSocketInactivityTimeout } from '../utils/sse.js';
 import { actionParamsSchema } from '../schemas/assistant.schema.js';
 import type { AssistantAction } from '../services/assistant-client.js';
 
@@ -10,6 +11,10 @@ const chatBodySchema = z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string().max(10000),
   })).max(50).optional(),
+  // Single-use token echoed from a `pending_confirmation` SSE event so the
+  // assistant runs the parked destructive/costly action. Pass-through only —
+  // the assistant validates ownership + expiry server-side.
+  confirmToken: z.string().min(16).max(128).optional(),
 });
 
 const actionBodySchema = z.object({
@@ -43,13 +48,25 @@ export async function assistantRoutes(fastify: FastifyInstance) {
       throw new VideoNotFoundError();
     }
 
+    // Upstream abort tied to client disconnect: when the browser goes away,
+    // tear down the assistant fetch/stream immediately instead of proxying
+    // into the void (same idea as stream.routes.ts). Listen on the RESPONSE:
+    // on POST routes the request body is already consumed, so `req.raw` emits
+    // 'close' at message completion — long before any disconnect. The
+    // ServerResponse only closes on premature connection termination or after
+    // we end the stream ourselves (by which point aborting is a no-op).
+    const upstreamAbort = new AbortController();
+    reply.raw.on('close', () => upstreamAbort.abort());
+
     try {
       const stream = await assistantClient.chat({
         videoId: videoSummaryId,
         userId: req.user.userId,
         message: parsed.data.message,
         conversationHistory: parsed.data.conversationHistory,
+        confirmToken: parsed.data.confirmToken,
         requestId: req.id,
+        signal: upstreamAbort.signal,
       });
 
       // Set SSE headers and pipe the stream directly.
@@ -58,6 +75,8 @@ export async function assistantRoutes(fastify: FastifyInstance) {
       // the SSE stream (credentials: 'include' requires an explicit, non-* origin).
       const corsOrigin = reply.getHeader('access-control-allow-origin');
       const corsCreds = reply.getHeader('access-control-allow-credentials');
+      // Long-lived stream — exempt from the socket inactivity timeout
+      disableSocketInactivityTimeout(req);
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
@@ -82,6 +101,13 @@ export async function assistantRoutes(fastify: FastifyInstance) {
 
       reply.raw.end();
     } catch (error) {
+      if (upstreamAbort.signal.aborted) {
+        // Client disconnected — the fetch/read rejection is the abort working
+        // as designed, not an upstream failure.
+        req.log.debug('assistant chat client disconnected; upstream fetch aborted');
+        reply.raw.end();
+        return;
+      }
       // If headers already sent, can't change status
       if (reply.raw.headersSent) {
         reply.raw.end();

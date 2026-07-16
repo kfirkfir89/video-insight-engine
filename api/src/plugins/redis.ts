@@ -22,6 +22,16 @@ declare module 'fastify' {
  * caught by the summarizer's own lock" rather than "user submission silently
  * dropped."
  */
+/**
+ * Reconnect forever with linear backoff capped at 2s. Never returns null —
+ * a null return permanently ends the ioredis client, so a brief (~30s)
+ * Redis outage would kill the dispatch-guard for the rest of the process
+ * lifetime instead of healing on reconnect. Exported for regression tests.
+ */
+export function redisRetryStrategy(times: number): number {
+  return Math.min(times * 200, 2000);
+}
+
 async function redis(fastify: FastifyInstance): Promise<void> {
   const client = new Redis(config.REDIS_URL, {
     // Match the rabbitmq.ts ergonomics: connect eagerly but tolerate failure.
@@ -62,13 +72,7 @@ async function redis(fastify: FastifyInstance): Promise<void> {
     // when Redis is unreachable. Tune via observed p99 latency if real
     // outages mask as healthy traffic.
     commandTimeout: 500,
-    retryStrategy: (times) => {
-      // Linear backoff capped at 2s; null returns abort retries. We keep
-      // retrying because a brief network blip shouldn't permanently kill
-      // dispatch-guard functionality.
-      if (times > 20) return null;
-      return Math.min(times * 200, 2000);
-    },
+    retryStrategy: redisRetryStrategy,
   });
 
   client.on('error', (err) => {

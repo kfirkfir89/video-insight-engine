@@ -31,8 +31,15 @@ export interface AssistantChatOptions {
   userId: string;
   message: string;
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  /** Single-use token echoed from a `pending_confirmation` SSE event — lets the
+   *  assistant run a parked destructive/costly action. Validated server-side. */
+  confirmToken?: string;
   /** Forwarded as `X-Request-ID` header so the assistant binds it on contextvars. */
   requestId?: string;
+  /** Caller abort (e.g. the HTTP client disconnecting). Tears down both the
+   *  connect and the returned SSE body stream — the internal 60s timeout only
+   *  covers connect. */
+  signal?: AbortSignal;
 }
 
 export interface AssistantActionOptions {
@@ -62,8 +69,15 @@ export interface AssistantLibraryChatOptions {
   /** Owned-video inventory ({video_id, title}) so the assistant can name videos
    *  by title and answer "what videos do I have?". Derived server-side. */
   library?: Array<{ video_id: string; title: string }>;
+  /** Single-use token echoed from a `pending_confirmation` SSE event — lets the
+   *  assistant run a parked destructive/costly action. Validated server-side. */
+  confirmToken?: string;
   /** Forwarded as `X-Request-ID` header so the assistant binds it on contextvars. */
   requestId?: string;
+  /** Caller abort (e.g. the HTTP client disconnecting). Tears down both the
+   *  connect and the returned SSE body stream — the internal 60s timeout only
+   *  covers connect. */
+  signal?: AbortSignal;
 }
 
 export interface AssistantLibrarySearchOptions {
@@ -81,6 +95,21 @@ export class AssistantClient {
   constructor(private readonly logger: FastifyBaseLogger) {}
 
   /**
+   * Forward a caller-supplied abort signal onto the fetch controller. The
+   * internal timeout is cleared once the SSE body is handed back, so this is
+   * what lets a client disconnect tear down the upstream stream mid-read —
+   * aborting the fetch signal also errors the returned body's reader loop.
+   */
+  private forwardAbort(signal: AbortSignal | undefined, controller: AbortController): void {
+    if (!signal) return;
+    if (signal.aborted) {
+      controller.abort();
+      return;
+    }
+    signal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+
+  /**
    * Send a chat message to the assistant service and get SSE stream back.
    * Returns a ReadableStream that can be piped directly to the client.
    */
@@ -89,6 +118,7 @@ export class AssistantClient {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ASSISTANT_TIMEOUT_MS);
+    this.forwardAbort(options.signal, controller);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -112,6 +142,8 @@ export class AssistantClient {
             role: m.role,
             content: m.content,
           })),
+          // undefined is dropped by JSON.stringify — only sent when present.
+          confirm_token: options.confirmToken,
         }),
         signal: controller.signal,
       });
@@ -220,6 +252,7 @@ export class AssistantClient {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ASSISTANT_TIMEOUT_MS);
+    this.forwardAbort(options.signal, controller);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -242,6 +275,8 @@ export class AssistantClient {
             content: m.content,
           })),
           library: options.library ?? [],
+          // undefined is dropped by JSON.stringify — only sent when present.
+          confirm_token: options.confirmToken,
         }),
         signal: controller.signal,
       });

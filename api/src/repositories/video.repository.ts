@@ -44,7 +44,11 @@ export interface VideoSummaryCacheDocument {
   // Expiration (V1.4)
   expiresAt?: Date | null;
   // Pipeline output fields
-  pipelineVersion?: string; // Legacy field in DB, no longer set
+  // Canonical version stamp written by the summarizer at pipeline write time
+  // (packages/shared/src/config/pipeline-version.json). Absent on docs that
+  // predate stamping — those are treated as current-legacy and served as-is;
+  // a mismatching stamp triggers regen in video.service.ts.isStaleVersion.
+  pipelineVersion?: string;
   intent?: unknown;
   triage?: unknown;
   output?: unknown;
@@ -419,6 +423,14 @@ export class VideoRepository {
       },
       { $unwind: { path: '$cache', preserveNullAndEmptyArrays: true } },
     ]).toArray() as Promise<Array<UserVideoDocument & { cache?: VideoSummaryCacheDocument }>>;
+  }
+
+  async countUserVideos(userId: string, folderId?: string): Promise<number> {
+    const query: Record<string, unknown> = { userId: new ObjectId(userId) };
+    if (folderId) {
+      query.folderId = new ObjectId(folderId);
+    }
+    return this.userVideosCollection.countDocuments(query);
   }
 
   async userOwnsVideo(userId: string, youtubeId: string): Promise<boolean> {

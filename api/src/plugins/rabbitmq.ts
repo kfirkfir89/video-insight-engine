@@ -21,6 +21,12 @@ interface ConnectionState {
   connection: ChannelModel | null;
   channel: ConfirmChannel | null;
   topologyAsserted: boolean;
+  /**
+   * Connect mutex: the in-flight connect attempt, shared by every caller that
+   * arrives while it is pending. Without this, N concurrent publishes during
+   * a broker blip each open their own connection (N-1 leak immediately).
+   */
+  connecting: Promise<ConfirmChannel> | null;
 }
 
 async function assertTopology(channel: ConfirmChannel): Promise<void> {
@@ -48,6 +54,7 @@ async function rabbitmq(fastify: FastifyInstance): Promise<void> {
     connection: null,
     channel: null,
     topologyAsserted: false,
+    connecting: null,
   };
 
   async function connect(): Promise<ConfirmChannel> {
@@ -86,7 +93,15 @@ async function rabbitmq(fastify: FastifyInstance): Promise<void> {
     if (state.channel && state.topologyAsserted) {
       return state.channel;
     }
-    return connect();
+    // Share any in-flight connect; only start a new one when none is pending.
+    // The finally-clear runs on both resolve and reject so a failed attempt
+    // never poisons later retries.
+    if (!state.connecting) {
+      state.connecting = connect().finally(() => {
+        state.connecting = null;
+      });
+    }
+    return state.connecting;
   }
 
   fastify.decorate('rabbitmq', {

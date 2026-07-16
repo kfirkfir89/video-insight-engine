@@ -198,6 +198,22 @@ export class VideoService {
     }
   }
 
+  /**
+   * A completed doc is stale when it carries a `pipelineVersion` stamp that
+   * differs from the canonical version (packages/shared/src/config/
+   * pipeline-version.json). Docs WITHOUT the field predate stamping and are
+   * treated as current-legacy — served as-is, never regenerated — so a
+   * version bump can never mass-invalidate the existing cache. Stamping
+   * happens summarizer-side at pipeline write time; the regen here replaces
+   * the old out-of-band DB flush.
+   */
+  private isStaleVersion(doc: Pick<VideoSummaryCacheDocument, 'pipelineVersion'>): boolean {
+    return (
+      typeof doc.pipelineVersion === 'string' &&
+      doc.pipelineVersion !== config.PIPELINE_VERSION
+    );
+  }
+
   async createVideo(userId: string, url: string, options: CreateVideoOptions) {
     const { folderId, bypassCache = false, providers, tier, requestId } = options;
     const youtubeId = extractYoutubeId(url);
@@ -318,6 +334,47 @@ export class VideoService {
       if (existingInFolder) {
         // Already exists in this folder - return existing
         const summary = await this.videoRepository.findCacheById(existingInFolder.videoSummaryId.toString());
+
+        // Version-stamped doc from an older pipeline → regenerate on the same
+        // row instead of serving stale output. The user asked for this video
+        // NOW, so this is the natural (and only cost-reserved) regen moment;
+        // plain GETs never trigger regen. Unstamped docs never land here.
+        if (summary && summary.status === 'completed' && this.isStaleVersion(summary)) {
+          this.logger.info(
+            {
+              videoSummaryId: summary._id.toString(),
+              storedVersion: summary.pipelineVersion,
+              currentVersion: config.PIPELINE_VERSION,
+            },
+            'Completed doc has stale pipelineVersion — re-dispatching pipeline',
+          );
+
+          await this.dispatchPipeline({
+            videoSummaryId: summary._id.toString(),
+            youtubeId,
+            url,
+            userId,
+            tier,
+            providers,
+            requestId,
+          });
+
+          return {
+            video: {
+              id: existingInFolder._id.toString(),
+              videoSummaryId: summary._id.toString(),
+              youtubeId,
+              title: summary.title,
+              channel: summary.channel,
+              duration: summary.duration,
+              thumbnailUrl: summary.thumbnailUrl,
+              status: 'pending',
+            },
+            cached: false,
+            regenerating: true,
+          };
+        }
+
         return {
           video: {
             id: existingInFolder._id.toString(),
@@ -397,6 +454,49 @@ export class VideoService {
     await this.upgradeExpiresAtIfNeeded(cached, tier);
 
     if (cached.status === 'completed') {
+      // Stale version stamp → regen on the same row (mirrors the failed-row
+      // retry mechanics below) instead of serving outdated output. Unstamped
+      // legacy docs are current by definition (see isStaleVersion).
+      if (this.isStaleVersion(cached)) {
+        this.logger.info(
+          {
+            videoSummaryId: cached._id.toString(),
+            storedVersion: cached.pipelineVersion,
+            currentVersion: config.PIPELINE_VERSION,
+          },
+          'Attached to completed doc with stale pipelineVersion — re-dispatching pipeline',
+        );
+
+        const staleUserVideo = await this.videoRepository.createUserVideo({
+          userId,
+          videoSummaryId: cached._id.toString(),
+          youtubeId,
+          status: 'pending',
+          folderId,
+        });
+
+        await this.dispatchPipeline({
+          videoSummaryId: cached._id.toString(),
+          youtubeId,
+          url,
+          userId,
+          tier,
+          providers,
+          requestId,
+        });
+
+        return {
+          video: {
+            id: staleUserVideo._id.toString(),
+            videoSummaryId: cached._id.toString(),
+            youtubeId,
+            status: 'pending',
+          },
+          cached: false,
+          regenerating: true,
+        };
+      }
+
       const userVideo = await this.videoRepository.createUserVideo({
         userId,
         videoSummaryId: cached._id.toString(),
@@ -533,20 +633,28 @@ export class VideoService {
     folderId?: string,
     options: { limit?: number; offset?: number } = {}
   ) {
-    const videos = await this.videoRepository.getUserVideos(userId, folderId, options);
+    // Total counts the full filtered set (not just the current page) so the
+    // route can expose pagination metadata alongside the page of videos.
+    const [videos, total] = await Promise.all([
+      this.videoRepository.getUserVideos(userId, folderId, options),
+      this.videoRepository.countUserVideos(userId, folderId),
+    ]);
 
-    return videos.map(v => ({
-      id: v._id.toString(),
-      videoSummaryId: v.videoSummaryId.toString(),
-      youtubeId: v.youtubeId,
-      title: v.title || v.cache?.title,
-      channel: v.channel || v.cache?.channel,
-      duration: v.duration || v.cache?.duration,
-      thumbnailUrl: v.thumbnailUrl || v.cache?.thumbnailUrl,
-      status: v.cache?.status || v.status,
-      folderId: v.folderId?.toString() || null,
-      createdAt: v.createdAt.toISOString(),
-    }));
+    return {
+      videos: videos.map(v => ({
+        id: v._id.toString(),
+        videoSummaryId: v.videoSummaryId.toString(),
+        youtubeId: v.youtubeId,
+        title: v.title || v.cache?.title,
+        channel: v.channel || v.cache?.channel,
+        duration: v.duration || v.cache?.duration,
+        thumbnailUrl: v.thumbnailUrl || v.cache?.thumbnailUrl,
+        status: v.cache?.status || v.status,
+        folderId: v.folderId?.toString() || null,
+        createdAt: v.createdAt.toISOString(),
+      })),
+      total,
+    };
   }
 
   async getVideo(userId: string, videoId: string) {

@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { idParamSchema, objectIdSchema } from '../utils/validation.js';
 import { config } from '../config.js';
-import { extractYoutubeId } from '../utils/youtube.js';
+import { VideoSubmissionService } from '../services/video-submission.service.js';
 
 // Stripe's spec is "1–255 chars, opaque to us". Reject longer to keep junk out
 // of the DB; reject control chars/whitespace because they're never produced by
@@ -30,6 +30,8 @@ const moveVideoSchema = z.object({
 
 const videosQuerySchema = z.object({
   folderId: objectIdSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  offset: z.coerce.number().int().min(0).optional().default(0),
 });
 
 // YouTube ID validation: 11 characters, alphanumeric plus dash/underscore
@@ -45,6 +47,15 @@ const versionsQuerySchema = z.object({
 
 export async function videosRoutes(fastify: FastifyInstance) {
   const { videoService, costMonitorService, idempotencyService, videoRepository } = fastify.container;
+  // Constructed here (not in the container) so route tests that override
+  // container services via `buildTestApp` keep full control over its deps.
+  const videoSubmissionService = new VideoSubmissionService(
+    videoService,
+    costMonitorService,
+    idempotencyService,
+    videoRepository,
+    fastify.log,
+  );
 
   // GET /api/videos
   fastify.get<{
@@ -52,9 +63,10 @@ export async function videosRoutes(fastify: FastifyInstance) {
   }>('/', {
     preHandler: [fastify.authenticate],
   }, async (req) => {
-    const { folderId } = videosQuerySchema.parse(req.query);
-    const videos = await videoService.getVideos(req.user.userId, folderId);
-    return { videos };
+    const { folderId, limit, offset } = videosQuerySchema.parse(req.query);
+    const { videos, total } = await videoService.getVideos(req.user.userId, folderId, { limit, offset });
+    // `pagination` is an additive sibling — existing consumers keep reading `videos`.
+    return { videos, pagination: { limit, offset, total } };
   });
 
   // GET /api/videos/:id
@@ -88,10 +100,10 @@ export async function videosRoutes(fastify: FastifyInstance) {
   }, async (req, reply) => {
     const input = createVideoSchema.parse(req.body);
 
-    // ─── Idempotency gate ────────────────────────────────────────────────
     // Validate the optional client-supplied header before doing any work.
     // We bound the size + alphabet so a misbehaving client can't pollute
-    // the index.
+    // the index. Header parsing/validation is HTTP-boundary work, so it
+    // stays here rather than in the submission service.
     const rawHeader = req.headers['idempotency-key'];
     const clientKey = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
     if (clientKey && !IDEMPOTENCY_KEY_PATTERN.test(clientKey)) {
@@ -101,165 +113,31 @@ export async function videosRoutes(fastify: FastifyInstance) {
       });
     }
 
-    // Extract youtubeId early — it's the dedup primary key. Malformed URLs
-    // fall through to `createVideo` which raises InvalidYouTubeUrlError; we
-    // just skip the gate.
-    const youtubeId = extractYoutubeId(input.url);
+    // Full submission flow (idempotency gate → cost reservation → createVideo
+    // → unwind on failure) lives in the service so the assistant's internal
+    // generate route enforces the exact same gates. DailyLimitReachedError and
+    // createVideo errors propagate to the app-level error handler.
+    const submission = await videoSubmissionService.submit({
+      userId: req.user.userId,
+      url: input.url,
+      tier: req.tier.name,
+      folderId: input.folderId,
+      bypassCache: input.bypassCache,
+      providers: input.providers,
+      clientKey,
+      requestId: req.id,
+    });
 
-    // `bypassCache=true` is the explicit escape hatch — admin/power-user
-    // wants a fresh run even though inputs match. Skip the gate entirely.
-    let hash: string | null = null;
-    if (youtubeId && !input.bypassCache) {
-      hash = idempotencyService.computeKey({
-        userId: req.user.userId,
-        youtubeId,
-        providers: input.providers,
-        clientKey,
-      });
-
-      // Reserve-before-work: atomic insert of a `pending` placeholder on the
-      // unique-hash index. Concurrent identical submits race here — exactly
-      // one inserts, the rest see the existing row.
-      let reserveResult = await idempotencyService.reserveHash({
-        hash,
-        userId: req.user.userId,
-        youtubeId,
-      });
-
-      if (!reserveResult.created) {
-        const existing = reserveResult.doc;
-        if (existing.status === 'completed' && existing.userVideoId && existing.videoSummaryId) {
-          // Original finished — check the referenced user-video still exists.
-          // If the user deleted it, drop the stale hash and reserve fresh.
-          const userVideo = await videoRepository.findUserVideo(
-            req.user.userId,
-            existing.userVideoId.toString(),
-          );
-          if (userVideo) {
-            const summary = await videoRepository.findCacheById(
-              userVideo.videoSummaryId.toString(),
-            );
-            return reply.code(200).send({
-              video: {
-                id: userVideo._id.toString(),
-                videoSummaryId: userVideo.videoSummaryId.toString(),
-                youtubeId: userVideo.youtubeId,
-                title: summary?.title || userVideo.title,
-                channel: summary?.channel || userVideo.channel,
-                duration: summary?.duration || userVideo.duration,
-                thumbnailUrl: summary?.thumbnailUrl || userVideo.thumbnailUrl,
-                status: summary?.status || userVideo.status,
-              },
-              cached: true,
-              duplicate: true,
-            });
-          }
-          // Scoped invalidate: delete only the specific completed row we saw.
-          // If another submit raced and re-reserved this hash between our
-          // findUserVideo and this deleteOne, we leave that new row alone.
-          await idempotencyService.invalidateStaleCompleted(hash, existing.videoSummaryId.toString());
-          reserveResult = await idempotencyService.reserveHash({
-            hash,
-            userId: req.user.userId,
-            youtubeId,
-          });
-          if (!reserveResult.created) {
-            // Someone else won between our delete and retry — bow out gracefully.
-            return reply.code(409).send({
-              error: 'IDEMPOTENCY_IN_FLIGHT',
-              message: 'Another request with the same key is currently processing. Retry shortly.',
-            });
-          }
-        } else {
-          // status === 'pending' — original work is still in flight.
-          return reply.code(409).send({
-            error: 'IDEMPOTENCY_IN_FLIGHT',
-            message: 'Another request with the same key is currently processing. Retry shortly.',
-          });
-        }
-      }
+    if (submission.outcome === 'duplicate') {
+      return reply.code(200).send({ video: submission.video, cached: true, duplicate: true });
     }
-
-    // We hold the hash reservation (or are not gated). On any failure from
-    // here on, unwind the hash so retries are allowed without waiting for TTL.
-    const unwindHash = async () => {
-      if (!hash) return;
-      await idempotencyService.invalidateByHash(hash).catch((err) => {
-        // Log only a hash prefix — full hash is a stable per-(user,video) ID
-        // and PII-adjacent. 8 hex chars is enough for log correlation.
-        req.log.warn({ err, hashPrefix: hash.slice(0, 8) }, 'idempotency invalidate-on-unwind failed');
-      });
-    };
-
-    // Atomic reservation — increment-then-check serializes concurrent starts on
-    // the per-user/day doc. Throws DailyLimitReachedError if the user is past
-    // their tier cap. `reservation` is null for unlimited tiers.
-    let reservation: Awaited<ReturnType<typeof costMonitorService.reserveUserCost>>;
-    try {
-      reservation = await costMonitorService.reserveUserCost(
-        req.user.userId,
-        req.tier.name,
-      );
-    } catch (err) {
-      await unwindHash();
-      throw err;
-    }
-
-    let result: Awaited<ReturnType<typeof videoService.createVideo>>;
-    try {
-      result = await videoService.createVideo(
-        req.user.userId,
-        input.url,
-        {
-          folderId: input.folderId,
-          bypassCache: input.bypassCache,
-          providers: input.providers,
-          tier: req.tier.name,
-          requestId: req.id,
-        }
-      );
-    } catch (err) {
-      await costMonitorService.refundReservation(reservation);
-      await unwindHash();
-      throw err;
-    }
-
-    // Cached videos run no pipeline, so no llm_usage rows will arrive — refund now.
-    // Attached videos (cross-user single-flight: the upsert in createVideo
-    // returned an existing in-flight row) behave identically — this caller
-    // didn't trigger work, the LLM usage will land on the originator's run.
-    // Swallow refund errors: the user's video is already created, and the nightly
-    // reconcile will heal a stuck reservation if the refund Mongo call transiently fails.
-    if (result.cached || result.attached) {
-      await costMonitorService.refundReservation(reservation).catch((err) => {
-        req.log.warn({ err, userId: req.user.userId }, 'cached/attached-video refund failed; nightly reconcile will recover');
+    if (submission.outcome === 'in_flight') {
+      return reply.code(409).send({
+        error: 'IDEMPOTENCY_IN_FLIGHT',
+        message: 'Another request with the same key is currently processing. Retry shortly.',
       });
     }
-
-    // Promote the pending hash to `completed` with the real IDs. Failure here
-    // leaves the placeholder pending until TTL, which would lock the user out
-    // of retries — so on missing IDs or a Mongo error, invalidate instead so
-    // the next submit can re-reserve.
-    if (hash) {
-      // Capture into a `const` so TS narrowing holds inside the `.catch`
-      // callback below — without this, a future edit that reassigns `hash`
-      // would silently turn `stableHash.slice(0, 8)` into a possible-null call.
-      const stableHash = hash;
-      if (result.video?.id && result.video?.videoSummaryId) {
-        await idempotencyService.completeHash({
-          hash: stableHash,
-          videoSummaryId: result.video.videoSummaryId,
-          userVideoId: result.video.id,
-        }).catch((err) => {
-          req.log.warn({ err, hashPrefix: stableHash.slice(0, 8) }, 'idempotency complete failed; invalidating placeholder');
-          return unwindHash();
-        });
-      } else {
-        await unwindHash();
-      }
-    }
-
-    return reply.code(201).send(result);
+    return reply.code(201).send(submission.result);
   });
 
   // DELETE /api/videos/:id

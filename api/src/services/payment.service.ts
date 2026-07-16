@@ -20,6 +20,11 @@ const TIER_LIMITS_MAP: Record<UserTier, TierLimits> = {
 
 const EXPIRATION_DAYS = 30;
 
+// Paddle signs `${ts}:${rawBody}` where `ts` is a unix-seconds timestamp.
+// Rejecting stale timestamps bounds the replay window of a captured webhook
+// to 5 minutes (Paddle's own recommended tolerance).
+const WEBHOOK_MAX_AGE_SECONDS = 300;
+
 export class PaymentService {
   constructor(
     private readonly userRepository: UserRepository,
@@ -42,6 +47,12 @@ export class PaymentService {
       const ts = parts.ts;
       const h1 = parts.h1;
       if (!ts || !h1) return false;
+
+      // Freshness check — a valid-but-old signature is a replay, not a webhook.
+      const tsSeconds = Number(ts);
+      if (!Number.isFinite(tsSeconds)) return false;
+      const ageSeconds = Math.floor(Date.now() / 1000) - tsSeconds;
+      if (ageSeconds > WEBHOOK_MAX_AGE_SECONDS) return false;
 
       const hmac = createHmac('sha256', config.PADDLE_WEBHOOK_SECRET);
       hmac.update(`${ts}:${rawBody}`);

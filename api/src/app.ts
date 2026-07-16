@@ -36,6 +36,7 @@ import { paymentRoutes } from './routes/payment.routes.js';
 import { preferencesRoutes, userUsageRoutes } from './routes/preferences.routes.js';
 import { adminQueueRoutes } from './routes/admin/queue.routes.js';
 import { userMeRoutes, adminUsersRoutes } from './routes/users.routes.js';
+import { healthRoutes } from './routes/health.routes.js';
 
 export interface BuildAppOptions {
   logger?: FastifyServerOptions['logger'];
@@ -63,6 +64,11 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
     // limits all collapse to the proxy's single IP. Default is `false` so
     // local-dev (no proxy) keeps the safe direct-connection behaviour.
     trustProxy: config.TRUST_PROXY_VALUE,
+    // Slow-loris protection (request phase only — SSE responses unaffected)
+    // and a socket inactivity ceiling. SSE routes opt out of the latter via
+    // disableSocketInactivityTimeout(); see config.ts for the full rationale.
+    requestTimeout: config.HTTP_REQUEST_TIMEOUT_MS,
+    connectionTimeout: config.HTTP_CONNECTION_TIMEOUT_MS,
     logger: options?.logger ?? {
       level: isDev ? 'debug' : 'info',
       base: { service: 'vie-api' },
@@ -136,13 +142,23 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   // Tier middleware (after JWT, uses container)
   await fastify.register(tierPlugin);
 
-  // Global error handler
+  // Global error handler — every branch emits the documented envelope
+  // `{ error, message, statusCode }` (docs/ERROR-HANDLING.md), plus
+  // `details` when structured context exists (Zod issue list) and the
+  // documented `resetAt`/`limitUsd` extras for the daily cost cap.
   fastify.setErrorHandler((error, request, reply) => {
     // Zod validation errors
     if (error instanceof ZodError) {
       return reply.status(400).send({
         error: 'VALIDATION_ERROR',
         message: error.errors[0]?.message || 'Invalid input',
+        statusCode: 400,
+        details: {
+          issues: error.errors.map((issue) => ({
+            path: issue.path.join('.'),
+            message: issue.message,
+          })),
+        },
       });
     }
 
@@ -151,6 +167,7 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
       return reply.status(error.status).send({
         error: error.code,
         message: error.message,
+        statusCode: error.status,
         resetAt: error.resetAt,
         limitUsd: error.limitUsd,
       });
@@ -161,6 +178,7 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
       return reply.status(error.status).send({
         error: error.code,
         message: error.message,
+        statusCode: error.status,
       });
     }
 
@@ -169,15 +187,27 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
       return reply.status(400).send({
         error: 'INVALID_ID_FORMAT',
         message: 'Invalid ID format',
+        statusCode: 400,
       });
     }
 
     // Fastify plugin errors (rate-limit, auth, etc.) — respect their statusCode
     if (typeof error.statusCode === 'number' && error.statusCode !== 500) {
-      const errorCode = 'code' in error && typeof error.code === 'string' ? error.code : 'ERROR';
+      // @fastify/rate-limit THROWS its errorResponseBuilder result, so the
+      // documented envelope arrives here as `{ error, message, statusCode }`.
+      // Prefer that `error` string over the generic fallback — without this,
+      // every 429 left the API as `error: 'ERROR'` and broke client-side
+      // error-code maps expecting RATE_LIMITED (docs/ERROR-HANDLING.md).
+      const envelopeCode =
+        'error' in error && typeof (error as { error?: unknown }).error === 'string'
+          ? (error as { error: string }).error
+          : undefined;
+      const errorCode =
+        envelopeCode ?? ('code' in error && typeof error.code === 'string' ? error.code : 'ERROR');
       return reply.status(error.statusCode).send({
         error: errorCode,
         message: error.message,
+        statusCode: error.statusCode,
       });
     }
 
@@ -192,6 +222,7 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
     return reply.status(500).send({
       error: 'INTERNAL_ERROR',
       message,
+      statusCode: 500,
     });
   });
 
@@ -218,11 +249,8 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   // SSR routes (top-level, no /api prefix — for social media crawlers)
   await fastify.register(ssrRoutes);
 
-  // Health check
-  fastify.get('/health', async () => ({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-  }));
+  // Liveness (/health) + readiness (/ready) probes
+  await fastify.register(healthRoutes);
 
   return fastify;
 }

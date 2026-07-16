@@ -37,6 +37,19 @@ export class ConflictError extends AppError {
   }
 }
 
+/**
+ * Refresh-token failure on /api/auth/refresh — missing, expired, malformed,
+ * or type-confused cookie. Deliberately one code for every failure mode so
+ * the endpoint doesn't oracle which cookies are structurally valid; the FE
+ * reaction is identical anyway (session gone → re-login).
+ */
+export class RefreshExpiredError extends AppError {
+  constructor() {
+    super('REFRESH_EXPIRED', 401, 'Session expired, please login');
+    this.name = 'RefreshExpiredError';
+  }
+}
+
 // Video-specific errors
 export class InvalidYouTubeUrlError extends AppError {
   constructor() {

@@ -1,14 +1,18 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply, FastifyBaseLogger } from 'fastify';
 import { config } from '../../config.js';
+import { isValidAdminKey } from '../../utils/admin-auth.js';
 import { QUEUE_TOPOLOGY } from '../../services/queue-topology.js';
+import type { ConfirmChannel, GetMessage } from 'amqplib';
 
 /**
  * Admin endpoints for observing and replaying the pipeline job queue.
  *
- * Uses the RabbitMQ management HTTP API (port 15672) for stats and DLQ
- * inspection — much simpler than implementing those over AMQP. The replay
- * endpoint pulls messages from the DLQ via the management API and re-publishes
- * them through the API's own confirm channel so we get publisher confirms.
+ * Uses the RabbitMQ management HTTP API (port 15672) for read-only stats and
+ * DLQ inspection — much simpler than implementing those over AMQP. The replay
+ * endpoint is loss-proof and works entirely over AMQP: it validates the live
+ * channel BEFORE touching the DLQ, then drains one message at a time with
+ * publish → publisher-confirm → ack ordering so a crash at any point leaves
+ * unconfirmed messages safely in the DLQ (at-least-once semantics).
  */
 
 interface MgmtQueueInfo {
@@ -30,8 +34,7 @@ interface MgmtMessageEnvelope {
 }
 
 function requireAdmin(req: FastifyRequest, reply: FastifyReply): boolean {
-  const key = req.headers['x-admin-key'];
-  if (key !== config.ADMIN_API_KEY) {
+  if (!isValidAdminKey(req.headers['x-admin-key'])) {
     reply.code(401).send({ error: 'UNAUTHORIZED', message: 'Admin key required' });
     return false;
   }
@@ -72,30 +75,68 @@ async function fetchQueueInfo(queue: string): Promise<MgmtQueueInfo> {
   return (await res.json()) as MgmtQueueInfo;
 }
 
-async function fetchDlqMessages(count: number): Promise<MgmtMessageEnvelope[]> {
-  const { url, auth } = managementBase();
-  const target = `${url}/api/queues/${vhostPath()}/${encodeURIComponent(QUEUE_TOPOLOGY.dlq)}/get`;
-  // ackmode=ack_requeue_false consumes the message from the queue without
-  // requeueing — same effect as a successful consumer ack. This is the
-  // documented way to drain a queue via the management API.
-  const res = await fetch(target, {
-    method: 'POST',
-    headers: {
-      Authorization: auth,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify({
-      count,
-      ackmode: 'ack_requeue_false',
-      encoding: 'auto',
-      truncate: 50000,
-    }),
-  });
-  if (!res.ok) {
-    throw new Error(`Management API ${res.status}: ${await res.text()}`);
+/**
+ * Reset the attempt counter so the worker's retry budget starts fresh —
+ * otherwise a replayed message re-hits the retry cap on its first failure and
+ * lands right back in the DLQ. Non-JSON payloads pass through verbatim; the
+ * worker's validator will quarantine them.
+ */
+function resetAttempt(content: Buffer): Buffer {
+  try {
+    const obj = JSON.parse(content.toString('utf8')) as Record<string, unknown>;
+    obj.attempt = 1;
+    return Buffer.from(JSON.stringify(obj), 'utf8');
+  } catch {
+    return content;
   }
-  return (await res.json()) as MgmtMessageEnvelope[];
+}
+
+interface DrainResult {
+  replayed: number;
+  failure?: unknown;
+}
+
+/**
+ * Drain up to `cap` messages from the DLQ, one at a time. Per-message ordering
+ * is publish → waitForConfirms → ack: a crash between any two steps leaves the
+ * message safely in the DLQ. On failure the in-flight message is nacked back
+ * (requeue) and the partial count is returned alongside the error.
+ */
+async function drainDlq(channel: ConfirmChannel, cap: number, log: FastifyBaseLogger): Promise<DrainResult> {
+  let replayed = 0;
+  let inFlight: GetMessage | false = false;
+  try {
+    while (replayed < cap) {
+      inFlight = await channel.get(QUEUE_TOPOLOGY.dlq, { noAck: false });
+      if (!inFlight) break;
+
+      channel.publish(QUEUE_TOPOLOGY.exchange, QUEUE_TOPOLOGY.routingKey, resetAttempt(inFlight.content), {
+        persistent: true,
+        priority: inFlight.properties.priority,
+        contentType: 'application/json',
+        messageId: inFlight.properties.messageId,
+        headers: {
+          ...(inFlight.properties.headers ?? {}),
+          'x-attempt': 1,
+          'x-replayed-at': new Date().toISOString(),
+        },
+      });
+      await channel.waitForConfirms();
+      channel.ack(inFlight);
+      inFlight = false;
+      replayed++;
+    }
+    return { replayed };
+  } catch (err) {
+    if (inFlight) {
+      try {
+        channel.nack(inFlight, false, true); // requeue — back into the DLQ, not dropped
+      } catch (nackErr) {
+        log.warn({ err: nackErr }, 'DLQ replay: nack after failure also failed');
+      }
+    }
+    return { replayed, failure: err };
+  }
 }
 
 export async function adminQueueRoutes(fastify: FastifyInstance): Promise<void> {
@@ -162,68 +203,37 @@ export async function adminQueueRoutes(fastify: FastifyInstance): Promise<void> 
     }
   });
 
-  // POST /replay — drain DLQ and re-publish every message back through the main exchange
+  // POST /replay — drain the DLQ over AMQP, one message at a time
   fastify.post<{ Body: { max?: number } }>('/replay', async (req, reply) => {
     if (!requireAdmin(req, reply)) return;
     const cap = clampedInt(req.body?.max, 100, 1, 500);
 
+    // Validate the queue integration BEFORE any destructive fetch — the old
+    // flow drained up to 500 messages first and only then noticed the plugin
+    // was disabled, losing everything it had fetched.
+    if (!fastify.rabbitmq) {
+      return reply.code(503).send({
+        error: 'QUEUE_DISABLED',
+        message: 'RabbitMQ plugin is not enabled — set USE_QUEUE_PIPELINE=true',
+      });
+    }
+
+    let channel: ConfirmChannel;
     try {
-      const messages = await fetchDlqMessages(cap);
-      if (messages.length === 0) {
-        // Empty DLQ short-circuits before any channel work — useful for monitoring.
-        return reply.send({ replayed: 0 });
-      }
-
-      // Replay requires the live channel — only available when the rabbitmq
-      // plugin is registered (i.e., USE_QUEUE_PIPELINE=true).
-      if (!fastify.rabbitmq) {
-        return reply.code(503).send({
-          error: 'QUEUE_DISABLED',
-          message: 'RabbitMQ plugin is not enabled — set USE_QUEUE_PIPELINE=true',
-        });
-      }
-      const liveChannel = await fastify.rabbitmq.getChannel();
-
-      let replayed = 0;
-      for (const m of messages) {
-        const decoded =
-          m.payload_encoding === 'base64'
-            ? Buffer.from(m.payload, 'base64').toString('utf8')
-            : m.payload;
-
-        // Reset attempt so the worker's retry policy starts fresh — otherwise
-        // a DLQ replay re-hits the cap on first failure and lands right back
-        // in the DLQ. Wrap in try/catch so non-JSON payloads still flow
-        // through; the worker's validator will quarantine them.
-        let body: Buffer;
-        try {
-          const obj = JSON.parse(decoded) as Record<string, unknown>;
-          obj.attempt = 1;
-          body = Buffer.from(JSON.stringify(obj), 'utf8');
-        } catch {
-          body = Buffer.from(decoded, 'utf8');
-        }
-
-        liveChannel.publish(QUEUE_TOPOLOGY.exchange, QUEUE_TOPOLOGY.routingKey, body, {
-          persistent: true,
-          priority: m.properties?.priority,
-          contentType: 'application/json',
-          messageId: m.properties?.message_id,
-          headers: {
-            ...(m.properties?.headers ?? {}),
-            'x-attempt': 1,
-            'x-replayed-at': new Date().toISOString(),
-          },
-        });
-        replayed++;
-      }
-      await liveChannel.waitForConfirms();
-      return reply.send({ replayed });
+      channel = await fastify.rabbitmq.getChannel();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      fastify.log.error({ err }, 'DLQ replay failed');
-      return reply.code(502).send({ error: 'REPLAY_FAILED', message });
+      fastify.log.error({ err }, 'DLQ replay: channel unavailable — DLQ untouched');
+      return reply.code(503).send({ error: 'QUEUE_UNAVAILABLE', message });
     }
+
+    const result = await drainDlq(channel, cap, fastify.log);
+    if (result.failure !== undefined) {
+      const message = result.failure instanceof Error ? result.failure.message : String(result.failure);
+      fastify.log.error({ err: result.failure, replayed: result.replayed }, 'DLQ replay failed mid-drain');
+      return reply.code(502).send({ error: 'REPLAY_FAILED', message, replayed: result.replayed });
+    }
+    return reply.send({ replayed: result.replayed });
   });
 }
 

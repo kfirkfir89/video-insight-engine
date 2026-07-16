@@ -20,6 +20,12 @@ export interface NormalizedMeta {
   descriptionAnalysis?: unknown;
   language?: string;
   isRTL?: boolean;
+  /**
+   * Partial-result flag set by the summarizer assembly phase (dropped
+   * extraction batches / critical coverage). Passed through untouched on
+   * new-shape docs; the web renders a "partial result — retry" affordance.
+   */
+  degraded?: boolean;
 }
 
 export function buildMetaFromDoc(doc: Record<string, unknown>): NormalizedMeta | null {

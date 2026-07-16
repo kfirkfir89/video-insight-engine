@@ -1,6 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { idParamSchema, objectIdSchema } from '../utils/validation.js';
+import { config } from '../config.js';
+import { VideoSubmissionService } from '../services/video-submission.service.js';
 import type { UserTier } from '@vie/types';
 
 // Bound how many owned videos the assistant can enumerate in a single call so a
@@ -48,7 +50,23 @@ function resolveTier(tier: string | undefined): UserTier {
  * scopes all work to that userId — a body-supplied userId is never trusted.
  */
 export async function internalAssistantRoutes(fastify: FastifyInstance): Promise<void> {
-  const { folderService, videoService, videoRepository, userRepository } = fastify.container;
+  const {
+    folderService,
+    videoService,
+    videoRepository,
+    userRepository,
+    costMonitorService,
+    idempotencyService,
+  } = fastify.container;
+  // Same submission flow as POST /api/videos — the assistant must not be able
+  // to bypass the daily cost cap, idempotency gate, or reservation unwind.
+  const videoSubmissionService = new VideoSubmissionService(
+    videoService,
+    costMonitorService,
+    idempotencyService,
+    videoRepository,
+    fastify.log,
+  );
 
   // GET /internal/assistant/folders
   fastify.get('/folders', {
@@ -135,23 +153,53 @@ export async function internalAssistantRoutes(fastify: FastifyInstance): Promise
   });
 
   // POST /internal/assistant/generate
+  // Mirrors POST /api/videos: same per-user daily request limit (the limiter
+  // key is user-scoped because authenticateInternal populates req.user before
+  // the preHandler-hooked rate limit runs) and the same submission service.
+  const videoDailyLimit = config.RATE_LIMITS.VIDEO_DAILY;
   fastify.post<{
     Body: z.infer<typeof generateSchema>;
   }>('/generate', {
     preHandler: [fastify.authenticateInternal],
-  }, async (req) => {
+    config: {
+      rateLimit: videoDailyLimit > 0 ? {
+        max: videoDailyLimit,
+        timeWindow: '24 hours',
+        errorResponseBuilder: () => ({
+          error: 'RATE_LIMITED',
+          message: `Daily video limit reached (${videoDailyLimit} videos per 24 hours). Try again tomorrow.`,
+          statusCode: 429,
+        }),
+      } : false, // Disable rate limiting when limit is 0
+    },
+  }, async (req, reply) => {
     const { url, folderId } = generateSchema.parse(req.body);
     const userId = req.user.userId;
 
-    // Resolve the tier so createVideo keeps its cost reservation + dispatch guard.
+    // Resolve the tier so the submission service enforces the right daily cap.
     const user = await userRepository.findById(userId);
     const tier = resolveTier(user?.tier);
 
-    const data = await videoService.createVideo(userId, url, {
+    const submission = await videoSubmissionService.submit({
+      userId,
+      url,
       tier,
       folderId,
       requestId: req.id,
     });
-    return { success: true, data };
+
+    if (submission.outcome === 'duplicate') {
+      return {
+        success: true,
+        data: { video: submission.video, cached: true, duplicate: true },
+      };
+    }
+    if (submission.outcome === 'in_flight') {
+      return reply.code(409).send({
+        error: 'IDEMPOTENCY_IN_FLIGHT',
+        message: 'Another request with the same key is currently processing. Retry shortly.',
+      });
+    }
+    return { success: true, data: submission.result };
   });
 }

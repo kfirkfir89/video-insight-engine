@@ -31,8 +31,20 @@ declare module 'fastify' {
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
-    payload: { userId: string; email?: string };
-    user: { userId: string; email?: string };
+    payload: { userId: string; email?: string; type?: 'access' | 'refresh' };
+    user: { userId: string; email?: string; type?: 'access' | 'refresh' };
+  }
+  interface JWT {
+    /**
+     * Refresh-token namespace registered with `JWT_REFRESH_SECRET`. Signing
+     * and verifying refresh tokens through `fastify.jwt.refresh` keeps them
+     * cryptographically separate from access tokens — a stolen access token
+     * cannot be replayed against `/api/auth/refresh` to self-renew forever.
+     *
+     * Typed as `this` (the JWT interface itself) — declaration emit rejects a
+     * direct `JWT` reference inside an augmentation of an `export =` module.
+     */
+    refresh: this;
   }
 }
 
@@ -44,15 +56,58 @@ async function jwt(fastify: FastifyInstance) {
     sign: { expiresIn: config.JWT_EXPIRES_IN },
   });
 
-  // Issue #9: Standardized error response format per ERROR-HANDLING.md
+  // Separate secret + namespace for refresh tokens (see JWT augmentation above).
+  await fastify.register(fastifyJwt, {
+    secret: config.JWT_REFRESH_SECRET,
+    namespace: 'refresh',
+    sign: { expiresIn: config.JWT_REFRESH_EXPIRES_IN },
+  });
+
+  // Standardized error envelope + codes per docs/ERROR-HANDLING.md:
+  // UNAUTHORIZED (no token) / TOKEN_EXPIRED (renewable — FE should hit
+  // /api/auth/refresh) / TOKEN_INVALID (malformed/tampered — FE should log
+  // out). Distinguishing expired from invalid leaks nothing (the client
+  // holds the token) and lets the FE auto-refresh instead of hard-logout.
   fastify.decorate('authenticate', async (req: FastifyRequest, reply: FastifyReply) => {
     try {
       await req.jwtVerify();
     } catch (err) {
+      const jwtErrorCode =
+        err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
+          ? err.code
+          : undefined;
+
+      if (jwtErrorCode === 'FST_JWT_NO_AUTHORIZATION_IN_HEADER') {
+        return reply.code(401).send({
+          error: 'UNAUTHORIZED',
+          message: 'Authentication required',
+          statusCode: 401,
+        });
+      }
+      if (jwtErrorCode === 'FST_JWT_AUTHORIZATION_TOKEN_EXPIRED') {
+        return reply.code(401).send({
+          error: 'TOKEN_EXPIRED',
+          message: 'Token has expired',
+          statusCode: 401,
+        });
+      }
       return reply.code(401).send({
-        error: 'UNAUTHORIZED',
-        message: 'Invalid or expired token',
-        statusCode: 401
+        error: 'TOKEN_INVALID',
+        message: 'Invalid token',
+        statusCode: 401,
+      });
+    }
+
+    // Token-type confusion guard: refresh tokens must never authenticate API
+    // requests. Legacy tokens issued before the `type` claim existed carry no
+    // `type` and are still accepted as access tokens — a deliberate migration
+    // window that closes once every pre-rollout token has expired (15m for
+    // access, 7d for refresh). See docs/SECURITY.md "Token type claim".
+    if (req.user.type === 'refresh') {
+      return reply.code(401).send({
+        error: 'TOKEN_INVALID',
+        message: 'Invalid token',
+        statusCode: 401,
       });
     }
 

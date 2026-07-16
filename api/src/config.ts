@@ -1,4 +1,60 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { z } from 'zod';
+
+// ─── Canonical pipeline version ───────────────────────────────────────
+// Single-sourced from packages/shared/src/config/pipeline-version.json,
+// shared with the summarizer (which namespaces its Redis response cache by
+// it and stamps it as `pipelineVersion` on every persisted Mongo summary
+// doc). Here it feeds idempotency request hashes, the content-addressed
+// `videoSummaryCache.dedupKey`, and the stale-doc regen check in
+// video.service.ts. Deliberately NOT env-overridable — a divergent env
+// value would resurrect the two-independent-knobs drift this replaces.
+function loadPipelineVersion(): string {
+  const candidates = [
+    // Docker: mounted next to domains.json (see docker-compose.yml volumes).
+    '/app/shared/pipeline-version.json',
+    // Local dev + tests: repo-relative (api/src or api/dist → repo root).
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../packages/shared/src/config/pipeline-version.json',
+    ),
+  ];
+  for (const path of candidates) {
+    try {
+      const parsed = JSON.parse(readFileSync(path, 'utf-8')) as { version?: unknown };
+      if (typeof parsed.version === 'string' && parsed.version.length > 0) {
+        return parsed.version;
+      }
+    } catch {
+      // Candidate missing/unreadable — fall through to the next location.
+    }
+  }
+  throw new Error(
+    `pipeline-version.json not found or invalid (tried: ${candidates.join(', ')})`,
+  );
+}
+
+// Well-known dev placeholder secrets (config defaults, .env.example, and
+// docker-compose fallbacks). Booting production with any of these is a
+// full-compromise misconfiguration, so the schema refuses to start.
+const DEV_DEFAULT_SECRETS: Record<string, string[]> = {
+  JWT_SECRET: [
+    'your-super-secret-jwt-key-change-this-in-production',
+    'dev-jwt-secret-change-in-production',
+  ],
+  JWT_REFRESH_SECRET: [
+    'your-refresh-secret-key-change-this-in-production',
+    'dev-refresh-secret-change-in-production',
+  ],
+  INTERNAL_SECRET: [
+    'dev-internal-secret-change-me',
+    'your-internal-secret-generate-with-openssl-rand',
+  ],
+  ADMIN_API_KEY: ['dev-admin-key-change-me'],
+};
 
 const envSchema = z.object({
   PORT: z.string().default('3000').transform(Number),
@@ -52,10 +108,9 @@ const envSchema = z.object({
   // INTERNAL_SECRET so a leaked admin key cannot impersonate the summarizer.
   ADMIN_API_KEY: z.string().min(8).default('dev-admin-key-change-me'),
   // ─── Idempotency ────────────────────────────────────────────────────
-  // Canonical pipeline version string baked into idempotency hashes. Bump
-  // this when prompts, schemas, or any other pipeline output-shaping logic
-  // changes — every stale key auto-misses on the next submit.
-  PIPELINE_VERSION: z.string().min(1).default('v2'),
+  // NOTE: PIPELINE_VERSION is intentionally absent here — it is single-
+  // sourced from pipeline-version.json (see loadPipelineVersion above) and
+  // merged into the exported config object, never read from env.
   // TTL window for an idempotency hit. 24h is long enough for accidental
   // double-submits and short enough that "I want to retry tomorrow" still works.
   IDEMPOTENCY_TTL_SECONDS: z.string().default('86400').transform(Number),
@@ -105,6 +160,16 @@ const envSchema = z.object({
   AWS_ENDPOINT_URL: z.string().default(''),
   // 6h gives a comfortable session window without making links durably shareable.
   FRAME_URL_TTL_SECONDS: z.string().default('21600').transform(Number),
+  // ─── HTTP server timeouts ───────────────────────────────────────────
+  // Slow-loris protection: max time for a client to deliver the ENTIRE
+  // request (headers + body). Applies to the request phase only, so
+  // long-lived streaming RESPONSES (SSE) are unaffected. 0 disables.
+  HTTP_REQUEST_TIMEOUT_MS: z.string().default('30000').transform(Number),
+  // Socket inactivity ceiling (Node's `server.timeout`): a connection with no
+  // bytes flowing in either direction for this long is destroyed. SSE routes
+  // opt out per-socket via disableSocketInactivityTimeout(); WebSocket
+  // sockets are exempted by `ws` itself (setSocket calls setTimeout(0)).
+  HTTP_CONNECTION_TIMEOUT_MS: z.string().default('60000').transform(Number),
   // ─── Trust proxy ────────────────────────────────────────────────────
   // OFF by default — `req.ip` returns the direct-TCP-connection address.
   // Behind a CDN / load balancer / ingress, that's the proxy's IP and ALL
@@ -117,6 +182,34 @@ const envSchema = z.object({
   // ("1" → trust last hop only), or a comma-separated CIDR list
   // ("10.0.0.0/8,172.16.0.0/12") for a stricter allowlist.
   TRUST_PROXY: z.string().default('false'),
+}).superRefine((env, ctx) => {
+  if (env.NODE_ENV !== 'production') return;
+
+  const secrets: Array<{ key: string; value: string }> = [
+    { key: 'JWT_SECRET', value: env.JWT_SECRET },
+    { key: 'JWT_REFRESH_SECRET', value: env.JWT_REFRESH_SECRET },
+    { key: 'INTERNAL_SECRET', value: env.INTERNAL_SECRET },
+    { key: 'ADMIN_API_KEY', value: env.ADMIN_API_KEY },
+  ];
+  for (const { key, value } of secrets) {
+    if (DEV_DEFAULT_SECRETS[key].includes(value)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [key],
+        message: `${key} is set to a well-known dev default — generate a real secret (openssl rand -base64 32) before deploying to production`,
+      });
+    }
+  }
+
+  // Without a secret the webhook route would accept unverified Paddle events,
+  // letting anyone flip user tiers with a curl. Dev/test may skip it; prod may not.
+  if (!env.PADDLE_WEBHOOK_SECRET) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['PADDLE_WEBHOOK_SECRET'],
+      message: 'PADDLE_WEBHOOK_SECRET is required in production — unsigned webhooks must never be accepted',
+    });
+  }
 });
 
 const parsedConfig = envSchema.parse(process.env);
@@ -178,6 +271,8 @@ function parseTrustProxy(raw: string): boolean | number | string[] {
 
 export const config = {
   ...parsedConfig,
+  // Canonical pipeline version — packages/shared/src/config/pipeline-version.json.
+  PIPELINE_VERSION: loadPipelineVersion(),
   // Computed property: list of all allowed CORS origins
   ALLOWED_ORIGINS: buildAllowedOrigins(),
   // Computed property: Fastify-shaped trustProxy value

@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { config } from '../config.js';
+import { isValidAdminKey } from '../utils/admin-auth.js';
 
 /**
  * Self-service GDPR Article 17 endpoints.
@@ -94,7 +94,7 @@ export async function adminUsersRoutes(fastify: FastifyInstance): Promise<void> 
       rateLimit: { max: 30, timeWindow: '1 hour' },
     },
   }, async (req, reply) => {
-    if (req.headers['x-admin-key'] !== config.ADMIN_API_KEY) {
+    if (!isValidAdminKey(req.headers['x-admin-key'])) {
       return reply.code(401).send({
         error: 'UNAUTHORIZED',
         message: 'Admin key required',

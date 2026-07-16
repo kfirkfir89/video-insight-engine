@@ -16,6 +16,9 @@ export interface UserDocument {
   lastLoginAt?: Date;
   createdAt: Date;
   updatedAt: Date;
+  // Grants access to the vie-admin panel's email/password login. Only ever
+  // set by scripts/create-admin.ts — the public register flow never writes it.
+  role?: 'admin';
   // Profile fields (V1.5)
   username?: string;
   displayName?: string;

@@ -4,6 +4,7 @@ import { ObjectId } from 'mongodb';
 import { config } from '../config.js';
 import { VideoNotFoundError } from '../utils/errors.js';
 import { handleSSEPreflight, setSSECorsHeaders, setSSEResponseHeaders } from '../utils/cors.js';
+import { disableSocketInactivityTimeout } from '../utils/sse.js';
 
 const videoSummaryIdParamSchema = z.object({
   videoSummaryId: z.string().refine((val) => ObjectId.isValid(val), 'Invalid ID'),
@@ -42,15 +43,24 @@ export async function streamRoutes(fastify: FastifyInstance) {
     // Set CORS and SSE headers (reply.raw bypasses Fastify CORS plugin)
     setSSECorsHeaders(req, reply);
     setSSEResponseHeaders(reply);
+    // Long-lived stream — exempt from the server-wide socket inactivity timeout
+    disableSocketInactivityTimeout(req);
 
     // Proxy the stream from summarizer
     const summarizerUrl = `${config.SUMMARIZER_URL}/summarize/stream/${videoSummaryId}`;
+
+    // Upstream abort tied to client disconnect: when the browser goes away,
+    // tear down the summarizer fetch immediately instead of streaming into
+    // the void for the rest of the pipeline run.
+    const upstreamAbort = new AbortController();
+    req.raw.on('close', () => upstreamAbort.abort());
 
     try {
       const response = await fetch(summarizerUrl, {
         headers: {
           'Accept': 'text/event-stream',
         },
+        signal: upstreamAbort.signal,
       });
 
       // Issue #1: Improved error handling with proper status codes
@@ -183,6 +193,13 @@ export async function streamRoutes(fastify: FastifyInstance) {
 
       reply.raw.end();
     } catch (error) {
+      if (upstreamAbort.signal.aborted) {
+        // Client disconnected — the fetch/read rejection is the abort working
+        // as designed, not an upstream failure.
+        req.log.debug('SSE client disconnected; upstream fetch aborted');
+        reply.raw.end();
+        return;
+      }
       req.log.error(error, 'Stream proxy error');
       reply.raw.write(`data: ${JSON.stringify({ event: 'error', message: 'Stream connection failed', code: 'CONNECTION_FAILED' })}\n\n`);
       reply.raw.end();

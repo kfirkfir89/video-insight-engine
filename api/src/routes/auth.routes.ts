@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { registerSchema, loginSchema } from '../schemas/auth.schema.js';
 import { config } from '../config.js';
-import { UnauthorizedError } from '../utils/errors.js';
+import { RefreshExpiredError } from '../utils/errors.js';
 
 const ACCESS_TOKEN_EXPIRY_SECONDS = 900;
 const REFRESH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 7 days
@@ -21,12 +21,15 @@ function generateAuthTokens(
   user: TokenUser
 ): { accessToken: string; expiresIn: number } {
   const accessToken = fastify.jwt.sign(
-    { userId: user.id, email: user.email },
+    { userId: user.id, email: user.email, type: 'access' },
     { expiresIn: config.JWT_EXPIRES_IN }
   );
 
-  const refreshToken = fastify.jwt.sign(
-    { userId: user.id },
+  // Refresh tokens are signed with JWT_REFRESH_SECRET (separate @fastify/jwt
+  // namespace) and carry `type: 'refresh'` so neither token can stand in for
+  // the other — see plugins/jwt.ts.
+  const refreshToken = fastify.jwt.refresh.sign(
+    { userId: user.id, type: 'refresh' },
     { expiresIn: config.JWT_REFRESH_EXPIRES_IN }
   );
 
@@ -75,23 +78,37 @@ export async function authRoutes(fastify: FastifyInstance) {
   });
 
   // POST /api/auth/refresh
-  fastify.post('/refresh', async (req, reply) => {
+  // docs/SECURITY.md: 30 / 15 min, IP-scoped — pre-auth route, so the global
+  // preHandler keyGenerator falls back to the `ip:` key. Bounds cookie-
+  // guessing and refresh-storm loops without throttling legitimate tab herds.
+  fastify.post('/refresh', {
+    config: {
+      rateLimit: { max: 30, timeWindow: '15 minutes' },
+    },
+  }, async (req, reply) => {
     const refreshToken = req.cookies.refreshToken;
     if (!refreshToken) {
-      throw new UnauthorizedError('Refresh token expired');
+      throw new RefreshExpiredError();
     }
 
     try {
-      const payload = fastify.jwt.verify<{ userId: string }>(refreshToken);
+      // Verified against JWT_REFRESH_SECRET — an access token (JWT_SECRET)
+      // presented here fails signature verification. The explicit type check
+      // is defence in depth against any same-secret token slipping through.
+      const payload = fastify.jwt.refresh.verify<{ userId: string; type?: string }>(refreshToken);
+      if (payload.type !== 'refresh') {
+        throw new RefreshExpiredError();
+      }
+
       const accessToken = fastify.jwt.sign(
-        { userId: payload.userId },
+        { userId: payload.userId, type: 'access' },
         { expiresIn: config.JWT_EXPIRES_IN }
       );
 
       return { accessToken, expiresIn: ACCESS_TOKEN_EXPIRY_SECONDS };
     } catch {
       reply.clearCookie('refreshToken', { path: '/api/auth/refresh' });
-      throw new UnauthorizedError('Refresh token expired');
+      throw new RefreshExpiredError();
     }
   });
 
