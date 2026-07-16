@@ -3,7 +3,10 @@
 # ================================================
 dev/research/*
 dev/completed/*
-dev/golden-dataset/
+# golden-dataset: eval CI reads baseline.json + videos.yaml — keep those in git
+dev/golden-dataset/*
+!dev/golden-dataset/baseline.json
+!dev/golden-dataset/videos.yaml
 .claude/skills/impeccable2
 
 # Skill / audit workspaces (generated artifacts, not source-of-truth)
@@ -43,6 +46,7 @@ npm-debug.log*
 # Testing
 coverage/
 .coverage
+vitest-report.json
 htmlcov/
 .pytest_cache/
 playwright-report/
@@ -69,3 +73,6 @@ docker-compose.override.yml
 # Claude Code
 .claude/tdd-state.json
 .claude/tsc-cache/
+
+# Data backups (scripts/backup.sh output)
+backups/

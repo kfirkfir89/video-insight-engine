@@ -2,6 +2,38 @@
   "include": ["src"],
   "typeCheckingMode": "basic",
   "pythonVersion": "3.11",
+  // Local runs resolve imports from the service venv (sentence-transformers,
+  // langdetect, ...). In CI there is no .venv: pyright logs a "venv ... not
+  // found" note and falls back to the default interpreter, where the job's
+  // `pip install -r requirements.txt` provides the same packages.
+  "venvPath": ".",
+  "venv": ".venv",
   "reportMissingImports": true,
-  "reportMissingTypeStubs": false
+  "reportMissingTypeStubs": false,
+  // TRACKING: 57 pre-existing basic-mode errors in the 20 files below
+  // (counted 2026-07-07, pyright 1.1.407). Diagnostics are suppressed per-file
+  // so the CI gate lands green for everything else; remove entries as the
+  // owning workstreams clean them up. New files are fully gated.
+  "ignore": [
+    "src/logging_config.py",
+    "src/models/domain_types.py",
+    "src/models/pipeline_types.py",
+    "src/services/cache/pipeline_event_stream.py",
+    "src/services/llm_provider.py",
+    "src/services/media/download_utils.py",
+    "src/services/media/frame_analyzer.py",
+    "src/services/media/frame_scorer.py",
+    "src/services/media/image_dedup.py",
+    "src/services/media/s3_client.py",
+    "src/services/observability/langfuse_client.py",
+    "src/services/pipeline/phases/assembly.py",
+    "src/services/pipeline/phases/transcript.py",
+    "src/services/transcription/gemini_transcriber.py",
+    "src/services/transcription/transcript.py",
+    "src/services/transcription/transcript_store.py",
+    "src/services/video/description_analyzer.py",
+    "src/services/video/playlist.py",
+    "src/services/video/youtube.py",
+    "src/worker/__main__.py"
+  ]
 }

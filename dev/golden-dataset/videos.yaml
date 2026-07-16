@@ -1,0 +1,225 @@
+# Golden dataset — 20 hand-curated YouTube videos used to track pipeline
+# quality regressions over time.
+#
+# Distribution (matches dev/active/langfuse-observability/plan):
+#   - 3 food          - 3 tech         - 2 learning
+#   - 2 language      - 2 science      - 2 travel
+#   - 2 fitness       - 2 review       - 1 music   - 1 narrative
+#
+# Each entry is a contract:
+#   id                — stable slug used as the Langfuse dataset item ID
+#   url               — YouTube URL the pipeline will fetch
+#   domain            — primary contentTag the pipeline must produce
+#   format            — one of the 17 content formats (see classifier.py)
+#   language          — ISO-639-1 (en, es, fr, ja, …) — drives translation
+#   expectedTabs      — tabs the pipeline SHOULD emit (count target ±1)
+#   requiredComponents— components every successful run must include
+#   keyContent        — terms the extraction should mention (80%+ overlap target)
+#
+# Curation rules:
+#   - All videos are <30 minutes (so eval runs in ~2 hours, not days).
+#   - All videos have working captions on YouTube.
+#   - At least 5 entries are non-English to exercise translation.
+#   - No celebrity / news content — those drift quickly.
+
+videos:
+
+  # ─── Food (3) ─────────────────────────────────────────────────────
+  - id: food-knife-skills
+    url: https://www.youtube.com/watch?v=YrHpeEwk_-U
+    domain: food
+    format: tutorial
+    language: en
+    expectedTabs: [overview, ingredients, steps, tips]
+    requiredComponents: [overview, info_grid, step_player]
+    keyContent: [knife, technique, julienne, chef, grip]
+
+  - id: food-sourdough-bread
+    url: https://www.youtube.com/watch?v=A2INwc4OZAo
+    disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
+    domain: food
+    format: recipe
+    language: en
+    expectedTabs: [overview, ingredients, steps, tips]
+    requiredComponents: [overview, info_grid, step_player]
+    keyContent: [sourdough, hydration, autolyse, bulk fermentation, scoring]
+
+  - id: food-ramen-broth
+    url: https://www.youtube.com/watch?v=DnzpW1cdJeg
+    disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
+    domain: food
+    format: recipe
+    language: en
+    expectedTabs: [overview, ingredients, steps]
+    requiredComponents: [overview, step_player]
+    keyContent: [tonkotsu, broth, simmer, aromatic, pork bones]
+
+  # ─── Tech (3) ─────────────────────────────────────────────────────
+  - id: tech-react-hooks
+    url: https://www.youtube.com/watch?v=TNhaISOUy6Q
+    domain: tech
+    format: tutorial
+    language: en
+    expectedTabs: [overview, code, patterns, cheat_sheet]
+    requiredComponents: [overview, code_explorer]
+    keyContent: [useState, useEffect, dependency array, custom hook, render]
+
+  - id: tech-rust-ownership
+    url: https://www.youtube.com/watch?v=VFIOSWy93H0
+    domain: tech
+    format: explainer
+    language: en
+    expectedTabs: [overview, concepts, code, cheat_sheet]
+    requiredComponents: [overview, code_explorer, info_grid]
+    keyContent: [ownership, borrow, lifetime, move, reference]
+
+  - id: tech-docker-basics
+    url: https://www.youtube.com/watch?v=fqMOX6JJhGo
+    domain: tech
+    format: tutorial
+    language: en
+    expectedTabs: [overview, setup, code, cheat_sheet]
+    requiredComponents: [overview, step_player, code_explorer]
+    keyContent: [Dockerfile, container, image, layer, volume]
+
+  # ─── Learning (2) ─────────────────────────────────────────────────
+  - id: learning-photosynthesis
+    url: https://www.youtube.com/watch?v=eo5XndJaz-Y
+    domain: learning
+    format: lecture
+    language: en
+    expectedTabs: [key_points, concepts, takeaways, quizzes]
+    requiredComponents: [overview, spot_explorer, quiz]
+    keyContent: [chlorophyll, light reaction, calvin cycle, ATP, glucose]
+
+  - id: learning-double-slit
+    url: https://www.youtube.com/watch?v=Iuv6hY6zsd0
+    domain: learning
+    format: lecture
+    language: en
+    expectedTabs: [key_points, concepts, takeaways, quizzes, flashcards]
+    requiredComponents: [overview, spot_explorer, quiz, flash_deck]
+    keyContent: [interference, wave function, observer, quantum, particle]
+
+  # ─── Language (2) ─────────────────────────────────────────────────
+  - id: language-spanish-basics
+    url: https://www.youtube.com/watch?v=t6Jrg-z4Gi8
+    disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
+    domain: language
+    format: tutorial
+    language: en
+    expectedTabs: [phrases, rules, drills, vocabulary]
+    requiredComponents: [spot_explorer, info_grid, flash_deck]
+    keyContent: [ser, estar, gendered noun, conjugation, accent]
+
+  - id: language-japanese-particles
+    url: https://www.youtube.com/watch?v=ZbeagFy2cQU
+    disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
+    domain: language
+    format: explainer
+    language: en
+    expectedTabs: [phrases, rules, drills, vocabulary]
+    requiredComponents: [spot_explorer, info_grid, flash_deck]
+    keyContent: [wa, ga, ni, particle, topic marker]
+
+  # ─── Science (2) ──────────────────────────────────────────────────
+  - id: science-crispr-intro
+    url: https://www.youtube.com/watch?v=2pp17E4E-O8
+    domain: science
+    format: explainer
+    language: en
+    expectedTabs: [concepts, key_facts, experiments]
+    requiredComponents: [overview, spot_explorer, info_grid]
+    keyContent: [crispr, cas9, guide rna, gene edit, double strand]
+
+  - id: science-black-holes
+    url: https://www.youtube.com/watch?v=e-P5IFTqB98
+    domain: science
+    format: explainer
+    language: en
+    expectedTabs: [concepts, key_facts, takeaways]
+    requiredComponents: [overview, spot_explorer]
+    keyContent: [event horizon, singularity, schwarzschild, gravity, time]
+
+  # ─── Travel (2) ───────────────────────────────────────────────────
+  - id: travel-tokyo-3day
+    url: https://www.youtube.com/watch?v=35jjzCRX7Lk
+    disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
+    domain: travel
+    format: vlog
+    language: en
+    expectedTabs: [overview, itinerary, packing, budget]
+    requiredComponents: [overview, step_player, info_grid, budget]
+    keyContent: [shibuya, shinjuku, jr pass, tsukiji, asakusa]
+
+  - id: travel-iceland-ring-road
+    url: https://www.youtube.com/watch?v=KsCgEHFI23M
+    disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
+    domain: travel
+    format: guide
+    language: en
+    expectedTabs: [overview, itinerary, packing, budget]
+    requiredComponents: [overview, step_player, info_grid, budget]
+    keyContent: [ring road, vik, jokulsarlon, reykjavik, waterfall]
+
+  # ─── Fitness (2) ──────────────────────────────────────────────────
+  - id: fitness-pushup-form
+    url: https://www.youtube.com/watch?v=IODxDxX7oi4
+    domain: fitness
+    format: tutorial
+    language: en
+    expectedTabs: [overview, exercises, tips]
+    requiredComponents: [overview, step_player]
+    keyContent: [scapula, elbow, plank, descent, lockout]
+
+  - id: fitness-mobility-routine
+    url: https://www.youtube.com/watch?v=PEMSL0BAYjs
+    disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
+    domain: fitness
+    format: routine
+    language: en
+    expectedTabs: [overview, exercises, timer]
+    requiredComponents: [overview, step_player]
+    keyContent: [hip flexor, thoracic, ankle, mobility, range of motion]
+
+  # ─── Review (2) ───────────────────────────────────────────────────
+  - id: review-airpods-pro
+    url: https://www.youtube.com/watch?v=nMfPqeZjc2c
+    domain: review
+    format: review
+    language: en
+    expectedTabs: [overview, verdict, pros_cons, specs]
+    requiredComponents: [overview, verdict, comparison, info_grid]
+    keyContent: [transparency, anc, battery, fit, sound stage]
+
+  - id: review-iphone-16
+    url: https://www.youtube.com/watch?v=tZv2KsdwWZk
+    disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
+    domain: review
+    format: review
+    language: en
+    expectedTabs: [overview, verdict, pros_cons, specs]
+    requiredComponents: [overview, verdict, comparison, info_grid]
+    keyContent: [camera, a18, battery life, display, button]
+
+  # ─── Music (1) ────────────────────────────────────────────────────
+  - id: music-bohemian-rhapsody-analysis
+    url: https://www.youtube.com/watch?v=Em9aCJaImqM
+    disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
+    domain: music
+    format: analysis
+    language: en
+    expectedTabs: [overview, analysis, structure]
+    requiredComponents: [overview, spot_explorer]
+    keyContent: [opera, ballad, key change, freddie mercury, harmony]
+
+  # ─── Narrative (1) ────────────────────────────────────────────────
+  - id: narrative-mt-everest-1996
+    url: https://www.youtube.com/watch?v=83uxytFIGCM
+    disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
+    domain: narrative
+    format: documentary
+    language: en
+    expectedTabs: [key_moments, quotes, takeaways]
+    requiredComponents: [overview, spot_explorer]
+    keyContent: [hillary step, krakauer, scott fischer, hall, summit fever]

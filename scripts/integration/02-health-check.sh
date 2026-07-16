@@ -80,7 +80,7 @@ if [ "$INDEX_CHECK" -gt "1" ]; then
   echo -e "  ${GREEN}PASS${NC}: MongoDB indexes exist (found $INDEX_CHECK)"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  echo -e "  ${YELLOW}WARN${NC}: MongoDB indexes may not be set up (run scripts/setup-mongo.js)"
+  echo -e "  ${YELLOW}WARN${NC}: MongoDB indexes may not be set up (created by vie-api on startup — is it healthy?)"
 fi
 
 # ============================================

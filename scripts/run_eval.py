@@ -39,7 +39,7 @@ import logging
 import os
 import sys
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -54,12 +54,14 @@ _DATASET_PATH = _REPO_ROOT / "dev" / "golden-dataset" / "videos.yaml"
 # malicious PR could swap a URL to an internal host and the eval would
 # happily POST it to vie-api — a low-impact SSRF vector that we cut off
 # at the script layer.
-_ALLOWED_VIDEO_HOSTS: frozenset[str] = frozenset({
-    "youtube.com",
-    "www.youtube.com",
-    "m.youtube.com",
-    "youtu.be",
-})
+_ALLOWED_VIDEO_HOSTS: frozenset[str] = frozenset(
+    {
+        "youtube.com",
+        "www.youtube.com",
+        "m.youtube.com",
+        "youtu.be",
+    }
+)
 
 
 def _is_allowed_video_url(url: str) -> bool:
@@ -270,22 +272,54 @@ async def run_pipeline(api_url: str, url: str, token: str) -> dict[str, Any]:
         if not user_video_id:
             raise RuntimeError(f"No video.id in response: {body}")
 
-        # Poll the GET endpoint until status==completed (simpler than parsing SSE).
-        # 360 × 5s = 30 min cap. Real pipeline runs land 12-20 min on a fresh
-        # video; 30 gives buffer without burning an hour on a wedged worker.
-        for _ in range(360):
-            await asyncio.sleep(5)
+        # CRITICAL: the pipeline only runs while a client consumes the SSE
+        # stream — POST /summarize merely registers the request (see the
+        # NOTE in summarizer main.py). Poll-only clients wait forever on a
+        # 'pending' row (2026-07-14: 20/20 entries timed out this way).
+        # So: hold the stream open until a terminal event, THEN read the
+        # persisted doc. Keepalives bound the read gaps; 30 min total cap.
+        if video_summary_id:
+            terminal = {"done", "complete", "error", "stream_error", "cached"}
+            stream_timeout = httpx.Timeout(30.0, read=300.0)
+            async with client.stream(
+                "GET",
+                f"{api_url}/api/videos/{video_summary_id}/stream",
+                timeout=stream_timeout,
+            ) as stream:
+                stream.raise_for_status()
+                deadline = time.monotonic() + 1800
+                async for line in stream.aiter_lines():
+                    if time.monotonic() > deadline:
+                        raise TimeoutError(
+                            f"Video {video_summary_id} did not complete within 30 min"
+                        )
+                    if line.startswith("event:") and line.split(":", 1)[1].strip() in terminal:
+                        break
+
+        # Stream reached a terminal event (or the video was already cached) —
+        # the persisted doc should flip to completed within seconds.
+        for _ in range(24):
             r = await client.get(f"{api_url}/api/videos/{user_video_id}")
-            if r.status_code == 404:
-                continue
-            data = r.json()
-            if data.get("status") == "completed":
-                return {
-                    "meta": data.get("meta") or data.get("assembledMeta") or {},
-                    "tabs": data.get("tabs") or data.get("assembledTabs") or [],
-                }
+            if r.status_code == 401:
+                # Tokens don't survive multi-hour runs; bubble so the caller
+                # re-authenticates and retries (cache serves the redo at $0).
+                r.raise_for_status()
+            if r.status_code != 404:
+                data = r.json()
+                if data.get("status") == "completed":
+                    return {
+                        "meta": data.get("meta") or data.get("assembledMeta") or {},
+                        "tabs": data.get("tabs") or data.get("assembledTabs") or [],
+                    }
+                if data.get("status") == "failed":
+                    raise RuntimeError(
+                        f"Video {video_summary_id or user_video_id} pipeline failed: "
+                        f"{data.get('error') or 'unknown'}"
+                    )
+            await asyncio.sleep(5)
         raise TimeoutError(
-            f"Video {video_summary_id or user_video_id} did not complete within 30 min"
+            f"Video {video_summary_id or user_video_id} stream ended but doc "
+            "never reached completed"
         )
 
 
@@ -301,12 +335,14 @@ def _stub_actual(expected: dict[str, Any]) -> dict[str, Any]:
         expected.get("requiredComponents", []) + ["overview"] * 10,
         strict=False,
     ):
-        tabs.append({
-            "id": tab_id,
-            "label": tab_id.replace("_", " ").title(),
-            "component": component,
-            "props": {"items": [{"text": term} for term in expected.get("keyContent", [])]},
-        })
+        tabs.append(
+            {
+                "id": tab_id,
+                "label": tab_id.replace("_", " ").title(),
+                "component": component,
+                "props": {"items": [{"text": term} for term in expected.get("keyContent", [])]},
+            }
+        )
     return {"meta": {"language": expected.get("language", "en")}, "tabs": tabs}
 
 
@@ -371,6 +407,13 @@ def post_to_langfuse(results: list[EvalResult], run_name: str) -> None:
 # ─── Entry point ───────────────────────────────────────────────────────
 async def _run_all(args) -> int:
     records = load_dataset()
+    # Entries marked disabled (e.g. dead YouTube links, verified 2026-07-14)
+    # are excluded from the run AND the average — scoring them 0 would make
+    # the weekly live gate fail on dataset rot instead of pipeline quality.
+    skipped = [r["id"] for r in records if r.get("disabled")]
+    if skipped:
+        logger.warning("Skipping %d disabled entries: %s", len(skipped), ", ".join(skipped))
+        records = [r for r in records if not r.get("disabled")]
     if args.filter:
         records = [r for r in records if args.filter in r.get("id", "")]
     if args.limit:
@@ -388,27 +431,56 @@ async def _run_all(args) -> int:
         url = rec.get("url", "")
         if not args.dry_run and not _is_allowed_video_url(url):
             logger.warning("Skipping %s — url %r is not an allowed YouTube host", rid, url)
-            results.append(EvalResult(
-                id=rid, domain=rec.get("domain", "?"),
-                tab_count=0, expected_tab_count=len(rec.get("expectedTabs") or []),
-                tab_count_score=0.0, component_coverage=0.0, content_coverage=0.0,
-                empty_tab_count=0, overall=0.0, notes="rejected URL host",
-            ))
+            results.append(
+                EvalResult(
+                    id=rid,
+                    domain=rec.get("domain", "?"),
+                    tab_count=0,
+                    expected_tab_count=len(rec.get("expectedTabs") or []),
+                    tab_count_score=0.0,
+                    component_coverage=0.0,
+                    content_coverage=0.0,
+                    empty_tab_count=0,
+                    overall=0.0,
+                    notes="rejected URL host",
+                )
+            )
             continue
         try:
-            actual = (
-                _stub_actual(rec)
-                if args.dry_run
-                else await run_pipeline(args.api_url, url, token or "")
-            )
+            try:
+                actual = (
+                    _stub_actual(rec)
+                    if args.dry_run
+                    else await run_pipeline(args.api_url, url, token or "")
+                )
+            except Exception as exc:
+                # Access tokens don't survive multi-hour runs (2026-07-14: 18/20
+                # entries 401'd after ~2h). Re-authenticate once and retry the
+                # entry; anything already pipelined serves from cache instantly.
+                import httpx
+
+                is_401 = isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 401
+                if not is_401 or args.dry_run:
+                    raise
+                logger.info("Token expired — re-authenticating, retrying %s", rid)
+                token = await authenticate(args.api_url)
+                actual = await run_pipeline(args.api_url, url, token)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Pipeline failed for %s: %s", rid, exc)
-            results.append(EvalResult(
-                id=rid, domain=rec.get("domain", "?"),
-                tab_count=0, expected_tab_count=len(rec.get("expectedTabs") or []),
-                tab_count_score=0.0, component_coverage=0.0, content_coverage=0.0,
-                empty_tab_count=0, overall=0.0, notes=str(exc)[:200],
-            ))
+            results.append(
+                EvalResult(
+                    id=rid,
+                    domain=rec.get("domain", "?"),
+                    tab_count=0,
+                    expected_tab_count=len(rec.get("expectedTabs") or []),
+                    tab_count_score=0.0,
+                    component_coverage=0.0,
+                    content_coverage=0.0,
+                    empty_tab_count=0,
+                    overall=0.0,
+                    notes=str(exc)[:200],
+                )
+            )
             continue
         results.append(score_entry(rec, actual))
 
@@ -434,8 +506,9 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--fail-under", type=float, default=0.0)
     parser.add_argument("--dataset-name", default="vie-golden-v1")
-    parser.add_argument("--publish-run", default="",
-                        help="Run name to publish to Langfuse (empty = skip).")
+    parser.add_argument(
+        "--publish-run", default="", help="Run name to publish to Langfuse (empty = skip)."
+    )
     args = parser.parse_args()
     return asyncio.run(_run_all(args))
 

@@ -58,6 +58,13 @@ x-summarizer-env: &summarizer-env
   LANGFUSE_FAITHFULNESS_SAMPLE_RATE: ${LANGFUSE_FAITHFULNESS_SAMPLE_RATE:-0.2}
   LANGFUSE_USER_ID_MODE: ${LANGFUSE_USER_ID_MODE:-identity}
   LANGFUSE_USER_ID_HASH_SALT: ${LANGFUSE_USER_ID_HASH_SALT:-}
+  # Sentry — empty DSN = SDK no-ops (consumed by vie-summarizer AND vie-summarizer-worker)
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
+  SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+  SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+  # LLM alert webhook — empty URL = alerts stay Mongo-only (llm_common/alerts.py)
+  ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
 
 x-assistant-env: &assistant-env
   PYTHONUNBUFFERED: "1"
@@ -83,6 +90,25 @@ x-assistant-env: &assistant-env
   LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
   LANGFUSE_USER_ID_MODE: ${LANGFUSE_USER_ID_MODE:-identity}
   LANGFUSE_USER_ID_HASH_SALT: ${LANGFUSE_USER_ID_HASH_SALT:-}
+  # Sentry — empty DSN = SDK no-ops
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
+  SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+  SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+  # LLM alert webhook — empty URL = alerts stay Mongo-only (llm_common/alerts.py)
+  ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+
+# ----------------------------------------
+# Container log rotation (YAML anchor)
+# ----------------------------------------
+# Without this the json-file driver grows unbounded and can fill the host
+# disk. Applied to every service: ~30 MB cap per container (3 x 10 MB).
+# Keep in sync with docker-compose.prod.yml.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
   # ----------------------------------------
@@ -93,8 +119,13 @@ services:
     image: mongo:7
     container_name: vie-mongodb
     restart: unless-stopped
+    logging: *default-logging
+    # Dev resource caps (all services) protect the WSL2 host from a runaway
+    # container eating the whole VM. Generous vs. observed usage; bump before
+    # removing if a service legitimately outgrows its cap.
+    mem_limit: 1g
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     volumes:
       - vie_mongodb_data:/data/db
     environment:
@@ -109,12 +140,16 @@ services:
       start_period: 10s
 
   vie-qdrant:
-    image: qdrant/qdrant:latest
+    # Pinned (was :latest) — silent major bumps can change the on-disk storage
+    # format. Match this tag when bumping docker-compose.prod.yml.
+    image: qdrant/qdrant:v1.18.2
     container_name: vie-qdrant
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 2g
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
     volumes:
       - vie_qdrant_data:/qdrant/storage
     networks:
@@ -130,8 +165,10 @@ services:
     image: redis:7-alpine
     container_name: vie-redis
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 512m
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - vie_redis_data:/data
     command: redis-server --appendonly yes
@@ -148,9 +185,11 @@ services:
     image: rabbitmq:3.13-management-alpine
     container_name: vie-rabbitmq
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 1g
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     volumes:
       - vie_rabbitmq_data:/var/lib/rabbitmq
     environment:
@@ -177,11 +216,16 @@ services:
     image: vie-api:latest
     container_name: vie-api
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 1g
     ports:
       - "3000:3000"
     volumes:
       - ./api/src:/app/src:ro
       - /app/node_modules
+      # Canonical pipeline version — same file the summarizer mounts, so the
+      # two services can never disagree (config.ts prefers this docker path).
+      - ./packages/shared/src/config/pipeline-version.json:/app/shared/pipeline-version.json:ro
     environment:
       NODE_ENV: development
       PORT: 3000
@@ -193,6 +237,9 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      # Extra allowed origins (e.g. the :5273 Playwright e2e webServer) — without
+      # the passthrough, browser e2e API calls are CORS-blocked at login.
+      CORS_ADDITIONAL_ORIGINS: ${CORS_ADDITIONAL_ORIGINS:-}
       INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
       # RabbitMQ — see docs/INFRASTRUCTURE.md
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-vie}:${RABBITMQ_DEFAULT_PASS:-vie-dev}@vie-rabbitmq:5672/
@@ -257,6 +304,7 @@ services:
       context: .
       dockerfile: services/summarizer/Dockerfile
     restart: "no"
+    logging: *default-logging
     command: ["python", "/repo/scripts/register_prompts.py", "--commit"]
     working_dir: /repo
     environment:
@@ -277,8 +325,10 @@ services:
     image: vie-summarizer:latest
     container_name: vie-summarizer
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 4g
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./services/summarizer/src:/app/src:ro
       # Repo-root scripts/ — register_prompts, build_golden_dataset, run_eval, etc.
@@ -294,6 +344,7 @@ services:
       # and scripts/run_eval.py (both compute REPO_ROOT=/app and read dev/...).
       - ./dev:/app/dev:ro
       - ./packages/shared/src/config/domains.json:/app/shared/domains.json:ro
+      - ./packages/shared/src/config/pipeline-version.json:/app/shared/pipeline-version.json:ro
     environment:
       <<: *summarizer-env
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
@@ -326,6 +377,8 @@ services:
     image: vie-summarizer:latest
     container_name: vie-summarizer-worker
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 4g
     command: ["python", "-m", "src.worker"]
     volumes:
       - ./services/summarizer/src:/app/src:ro
@@ -342,6 +395,7 @@ services:
       # and scripts/run_eval.py (both compute REPO_ROOT=/app and read dev/...).
       - ./dev:/app/dev:ro
       - ./packages/shared/src/config/domains.json:/app/shared/domains.json:ro
+      - ./packages/shared/src/config/pipeline-version.json:/app/shared/pipeline-version.json:ro
     environment:
       <<: *summarizer-env
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
@@ -361,6 +415,14 @@ services:
         condition: service_healthy
       vie-rabbitmq:
         condition: service_healthy
+    # No HTTP surface — liveness = heartbeat file mtime, touched every 30s by
+    # the worker loop (src/worker/__main__.py). Stale >90s → unhealthy.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys,time; st=os.stat('/tmp/vie-worker-heartbeat'); sys.exit(0 if time.time()-st.st_mtime < 90 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   vie-assistant:
     build:
@@ -369,8 +431,9 @@ services:
     image: vie-assistant:latest
     container_name: vie-assistant
     restart: unless-stopped
-    ports:
-      - "8001:8001"
+    logging: *default-logging
+    mem_limit: 3g
+    # No host port: internal-only service (reachable on vie-network as vie-assistant:8001)
     volumes:
       - ./services/assistant/src:/app/src:ro
     environment:
@@ -402,10 +465,15 @@ services:
     image: vie-admin:latest
     container_name: vie-admin
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 512m
     ports:
-      - "8002:8002"
+      - "127.0.0.1:8002:8002"
     volumes:
       - ./services/admin/src:/app/src:ro
+      # Host backups dir (read-only) — the evaluator's backup-stale dead-man's
+      # switch reads the newest manifest.json timestamp from here.
+      - ./backups:/backups:ro
     environment:
       PYTHONUNBUFFERED: 1
       MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
@@ -414,6 +482,13 @@ services:
       VIE_SUMMARIZER_URL: http://vie-summarizer:8000
       VIE_ASSISTANT_URL: http://vie-assistant:8001
       ALERT_COST_THRESHOLD_USD: ${ALERT_COST_THRESHOLD_USD:-0.50}
+      # LLM alert webhook — the admin evaluator (daily spike / failure rate)
+      # POSTs tripped alerts here; empty URL = alerts stay Mongo-only
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      # Backup dead-man's switch — newest manifest under BACKUP_DIR older than
+      # BACKUP_MAX_AGE_HOURS trips a backup_stale alert (alert_evaluator.py).
+      BACKUP_DIR: /backups
+      BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-26}
       # Langfuse — read-only, only to build "Open in Langfuse" deep-links.
       # Project id is auto-resolved from the keys when LANGFUSE_PROJECT_ID is blank.
       LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
@@ -430,27 +505,44 @@ services:
     depends_on:
       vie-mongodb:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   vie-web:
     build:
       context: .
       dockerfile: ./apps/web/Dockerfile
+      args:
+        # Vite bakes these into the bundle at BUILD time — runtime env on this
+        # container has no effect (the image serves static files via nginx).
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
+        VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3000/ws}
+        # Dev login is opt-in per environment; the Dockerfile default is false
+        VITE_ENABLE_DEV_LOGIN: ${VITE_ENABLE_DEV_LOGIN:-true}
+        # Sentry — empty DSN = SDK not initialized (apps/web/src/main.tsx)
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+        VITE_SENTRY_RELEASE: ${VITE_SENTRY_RELEASE:-}
     image: vie-web:latest
     container_name: vie-web
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 256m
     ports:
       - "5173:5173"
-    volumes:
-      - ./apps/web/src:/app/src:ro
-      - ./apps/web/public:/app/public:ro
-      - /app/node_modules
-    environment:
-      VITE_API_URL: http://localhost:3000/api
-      VITE_WS_URL: ws://localhost:3000/ws
     networks:
       - vie-network
     depends_on:
       - vie-api
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5173/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 # ----------------------------------------
 # Networks

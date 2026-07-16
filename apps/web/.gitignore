@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# e2e smoke-seed handoff (written by e2e/smoke.setup.ts, holds a live token)
+e2e/.smoke-seed.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

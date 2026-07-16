@@ -1,38 +1,44 @@
+# ----------------------------
+# Stage 1: Builder (pnpm workspace — mirrors api/Dockerfile)
+# ----------------------------
 FROM node:20-alpine AS builder
+
+RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
 
 WORKDIR /app
 
-# Build args for Vite (must be available at build time)
+# Build args for Vite (baked into the bundle at build time)
 ARG VITE_API_URL=http://localhost:3000/api
 ARG VITE_WS_URL=ws://localhost:3000
-ARG VITE_ENABLE_DEV_LOGIN=true
+# Dev login is opt-in per environment — never default-on in an image
+ARG VITE_ENABLE_DEV_LOGIN=false
+# Sentry — empty DSN = SDK not initialized (see src/main.tsx)
+ARG VITE_SENTRY_DSN=
+ARG VITE_SENTRY_RELEASE=
 
-# Make build args available as env vars for Vite build
-ENV VITE_API_URL=$VITE_API_URL
-ENV VITE_WS_URL=$VITE_WS_URL
-ENV VITE_ENABLE_DEV_LOGIN=$VITE_ENABLE_DEV_LOGIN
+ENV VITE_API_URL=$VITE_API_URL \
+    VITE_WS_URL=$VITE_WS_URL \
+    VITE_ENABLE_DEV_LOGIN=$VITE_ENABLE_DEV_LOGIN \
+    VITE_SENTRY_DSN=$VITE_SENTRY_DSN \
+    VITE_SENTRY_RELEASE=$VITE_SENTRY_RELEASE
 
-# Copy all source files first
-COPY packages/shared/ packages/shared/
-COPY packages/types/ packages/types/
-COPY apps/web/ apps/web/
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY packages/shared ./packages/shared
+COPY packages/types ./packages/types
+COPY apps/web ./apps/web
 
-# Build the shared package first (types depends on it)
-RUN cd packages/shared && npm install && npm run build
+# Scoped install (web + workspace deps only), from the committed lockfile
+RUN pnpm install --frozen-lockfile --filter web...
 
-# Build the types package
-RUN cd packages/types && \
-    sed -i 's/"@vie\/shared": "workspace:\*"/"@vie\/shared": "file:..\/shared"/' package.json && \
-    npm install && npm run build
+# Build shared first, then types, then the web bundle
+RUN pnpm --filter @vie/shared build \
+    && pnpm --filter @vie/types build \
+    && pnpm --filter web build
 
-# Install and build web app
-# Replace workspace references with local paths
-RUN cd apps/web && \
-    sed -i 's/"@vie\/types": "workspace:\^"/"@vie\/types": "file:..\/..\/packages\/types"/' package.json && \
-    sed -i 's/"@vie\/shared": "workspace:\*"/"@vie\/shared": "file:..\/..\/packages\/shared"/' package.json && \
-    npm install && npm run build
-
-FROM nginx:alpine
+# ----------------------------
+# Stage 2: Static serve (unprivileged nginx, runs as uid 101)
+# ----------------------------
+FROM nginxinc/nginx-unprivileged:1.29-alpine
 
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf

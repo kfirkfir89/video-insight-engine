@@ -10,15 +10,21 @@ RUN npm run build
 FROM python:3.11-slim
 WORKDIR /app
 
-# Install Python dependencies
-COPY services/admin/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies from the uv-compiled lockfile (reproducible
+# builds — regenerate with the command in the lockfile header).
+COPY services/admin/requirements.lock .
+RUN pip install --no-cache-dir --timeout 120 --retries 5 -r requirements.lock
 
 # Copy backend source
 COPY services/admin/src/ ./src/
 
-# Copy built React UI from stage 1
+# Copy built React UI from stage 1 (vite outputs to ../static relative to /ui)
 COPY --from=ui-builder /ui/../static ./static/
+
+# Non-root runtime user — the service only reads /app at runtime.
+RUN useradd --create-home --uid 10001 app
+USER app
+ENV HOME=/home/app
 
 EXPOSE 8002
 

@@ -1,0 +1,201 @@
+name: Eval
+
+# LLM-quality gates (project-score-9 Phase 3):
+#
+#   golden-eval-dry-run  PR-triggered, zero spend. Exercises the golden-dataset
+#                        scoring path end to end (load → score → report →
+#                        --fail-under gate) so prompt/pipeline PRs can't break
+#                        the eval machinery itself.
+#   retrieval-eval       PR-triggered, zero LLM spend. Recall@k + MRR floors
+#                        over the golden query→chunk fixture against an
+#                        ephemeral Qdrant service container. Baseline:
+#                        dev/golden-dataset/baseline.json (recall@3=1.0,
+#                        MRR=0.865; floors 0.85 / 0.7).
+#   golden-eval-live     WEEKLY scheduled (cadence decision 2026-07-07): runs
+#                        the 20-video golden dataset through the real pipeline
+#                        (~$2 LLM spend, hours) and publishes the run to
+#                        Langfuse. Requires repo secrets — skips cleanly when
+#                        they are absent (e.g. forks).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "services/summarizer/src/prompts/**"
+      - "services/summarizer/src/services/pipeline/**"
+      - "services/summarizer/src/services/vector/**"
+      - "services/summarizer/tests/eval/**"
+      - "services/summarizer/tests/fixtures/retrieval_golden.json"
+      # Assistant query-side retrieval shares the Qdrant collection + encoder
+      # with the summarizer's index side — changes here (relevance floor,
+      # embedding model, search filters) must also trigger the retrieval eval.
+      - "services/assistant/src/services/rag.py"
+      - "services/assistant/src/repositories/qdrant_repository.py"
+      - "services/assistant/src/config.py"
+      - "scripts/run_eval.py"
+      - "dev/golden-dataset/**"
+      - ".github/workflows/eval.yml"
+  schedule:
+    # Weekly live eval — Mondays 03:00 UTC.
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  golden-eval-dry-run:
+    name: Golden Eval (dry-run gate)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install pyyaml
+
+      # --dry-run makes zero network/LLM calls: it stubs each entry's output
+      # and runs the real scoring + reporting + --fail-under exit-code path.
+      # The floor is single-sourced from the committed baseline file.
+      - name: Run scoring dry-run against the committed floor
+        run: |
+          FLOOR=$(python3 -c "import json; print(json.load(open('dev/golden-dataset/baseline.json'))['goldenEval']['failUnder'])")
+          echo "fail-under floor: $FLOOR"
+          python3 scripts/run_eval.py --dry-run --fail-under "$FLOOR" --output reports/
+
+      - name: Upload dry-run report
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-eval-dry-run-report
+          path: reports/eval-*.md
+          retention-days: 14
+
+  retrieval-eval:
+    name: Retrieval Eval (recall@k + MRR floor)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.18.2
+        ports:
+          - 6333:6333
+    defaults:
+      run:
+        working-directory: services/summarizer
+    env:
+      QDRANT_HOST: localhost
+      QDRANT_PORT: 6333
+      # CI runners have no GPU; force the CPU embedding path.
+      CUDA_VISIBLE_DEVICES: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: services/summarizer/requirements.txt
+
+      - run: pip install -r requirements.txt
+
+      - name: Install llm-common package
+        run: pip install -e ../../packages/llm-common
+
+      # The SentenceTransformer weights (~90MB) download on first use; cache
+      # them so the job doesn't re-pull the model every run.
+      - name: Cache embedding model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-embedding-model-${{ runner.os }}
+
+      # The harness skips when Qdrant is unreachable (local-dev affordance);
+      # the service container above guarantees it runs here, so assert that no
+      # test skipped — a silently-skipped floor is not a gate.
+      - name: Run retrieval eval against ephemeral Qdrant
+        run: |
+          python -m pytest tests/eval/test_retrieval_eval.py -s -rs 2>&1 | tee retrieval-eval.log
+          if grep -qE "^SKIPPED|[0-9]+ skipped" retrieval-eval.log; then
+            echo "::error::retrieval eval skipped — Qdrant service container not reachable"
+            exit 1
+          fi
+
+  golden-eval-live:
+    name: Golden Eval (weekly live run → Langfuse)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # 20 videos × 12–20 min pipeline time, sequential, 30-min cap each.
+    timeout-minutes: 350
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+      LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+      EVAL_USER_PASSWORD: ${{ secrets.EVAL_USER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Forks / repos without spend secrets: exit green without booting
+      # anything. `if:` cannot read secrets directly, hence the env probe.
+      - name: Check spend secrets
+        id: secrets
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ] || [ -z "$EVAL_USER_PASSWORD" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Spend secrets not configured — skipping live eval."
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare compose environment
+        if: steps.secrets.outputs.available == 'true'
+        run: |
+          cp .env.example .env
+          {
+            echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY"
+            echo "LANGFUSE_PUBLIC_KEY=$LANGFUSE_PUBLIC_KEY"
+            echo "LANGFUSE_SECRET_KEY=$LANGFUSE_SECRET_KEY"
+          } >> .env
+
+      - name: Boot the stack
+        if: steps.secrets.outputs.available == 'true'
+        run: |
+          docker compose up -d --build
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3000/health >/dev/null 2>&1 \
+               && curl -fsS http://localhost:8000/health >/dev/null 2>&1; then
+              echo "stack healthy"; exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::stack failed to become healthy"; docker compose ps; exit 1
+
+      - uses: actions/setup-python@v5
+        if: steps.secrets.outputs.available == 'true'
+        with:
+          python-version: "3.11"
+
+      - name: Run live eval + publish to Langfuse
+        if: steps.secrets.outputs.available == 'true'
+        run: |
+          pip install pyyaml httpx langfuse
+          FLOOR=$(python3 -c "import json; print(json.load(open('dev/golden-dataset/baseline.json'))['goldenEval']['failUnder'])")
+          python3 scripts/run_eval.py \
+            --output reports/ \
+            --fail-under "$FLOOR" \
+            --publish-run "weekly-$(date +%Y%m%d)"
+
+      - name: Upload live eval report
+        if: always() && steps.secrets.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-eval-live-report
+          path: reports/eval-*
+          retention-days: 90
+
+      - name: Tear down
+        if: always() && steps.secrets.outputs.available == 'true'
+        run: docker compose down -v

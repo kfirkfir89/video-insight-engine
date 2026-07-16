@@ -14,8 +14,10 @@ dependencies = [
     "httpx>=0.26.0",
     "cachetools>=5.3.0",
     "structlog>=24.0.0",
+    "bcrypt>=4.1.0",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
+    "sentry-sdk[fastapi]>=1.40.0,<3",
 ]
 
 [project.optional-dependencies]

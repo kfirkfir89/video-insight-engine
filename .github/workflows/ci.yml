@@ -11,6 +11,66 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ts-quality:
+    name: TS Typecheck + Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages
+        run: pnpm --filter @vie/types --filter @vie/shared build
+
+      - name: API typecheck (tsc --noEmit)
+        run: pnpm --filter @vie/api typecheck
+
+      - name: API lint (eslint flat config)
+        run: pnpm --filter @vie/api lint
+
+      # Root `tsc --noEmit` is a known no-op for the web solution config —
+      # only `tsc -b` actually typechecks apps/web.
+      - name: Web typecheck (tsc -b)
+        run: pnpm --filter web exec tsc -b
+
+  design-guards:
+    name: Design Guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Accent-Only-In-Outputs (DESIGN.md §6): interactive output components
+      # must use var(--vie-accent) / semantic tokens, never primary/cta.
+      - name: Accent-only guard
+        run: bash scripts/check-accent-only.sh
+
+  python-lint:
+    name: Python Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Pinned to the version the root ruff.toml baseline was verified with.
+      - run: pip install ruff==0.15.20
+
+      - name: Ruff over all 4 Python packages (root ruff.toml)
+        run: >
+          ruff check --config ruff.toml
+          services/summarizer services/assistant services/admin packages/llm-common
+
   api:
     name: API Tests
     runs-on: ubuntu-latest
@@ -19,8 +79,18 @@ jobs:
         image: mongo:7
         ports:
           - 27017:27017
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     env:
       MONGODB_URI: mongodb://localhost:27017/vie-test
+      REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-test-jwt-secret-minimum-32-chars-long
       JWT_REFRESH_SECRET: ci-test-jwt-refresh-secret-min-32-chars
     defaults:
@@ -53,7 +123,16 @@ jobs:
           path: ~/.cache/mongodb-binaries
           key: mongodb-binaries-7.0.24-${{ runner.os }}
 
-      - run: pnpm test
+      - name: Run tests (coverage + JSON report)
+        run: >
+          pnpm exec vitest run --coverage
+          --reporter=default --reporter=json --outputFile=vitest-report.json
+
+      # 9 tests skip legitimately today. When backing services are missing,
+      # 200+ tests skip SILENTLY while the suite stays green — fail loudly
+      # instead. Budget 15 leaves headroom for a few new intentional skips.
+      - name: Skipped-test guard
+        run: node ../scripts/ci-vitest-skip-guard.mjs vitest-report.json 15
 
   web:
     name: Web Tests
@@ -80,7 +159,20 @@ jobs:
         run: pnpm --filter @vie/types --filter @vie/shared build
         working-directory: .
 
-      - run: pnpm test
+      # TRACKING: coverage is surfaced but the vitest.config 80% thresholds are
+      # neutralized here — they have never been measured in CI. Once a green
+      # baseline is recorded, delete the four overrides to enforce them.
+      - name: Run tests (coverage surfaced, thresholds not yet enforced)
+        run: >
+          pnpm exec vitest run --coverage
+          --coverage.thresholds.statements=0 --coverage.thresholds.branches=0
+          --coverage.thresholds.functions=0 --coverage.thresholds.lines=0
+          --reporter=default --reporter=json --outputFile=vitest-report.json
+
+      # Web has zero intentional skips today; a small budget catches suites
+      # accidentally landing with describe.skip / mass conditional bail-outs.
+      - name: Skipped-test guard
+        run: node ../../scripts/ci-vitest-skip-guard.mjs vitest-report.json 15
 
   summarizer:
     name: Summarizer Tests
@@ -105,7 +197,12 @@ jobs:
       - name: Download spaCy model
         run: python -m spacy download en_core_web_sm
 
-      - run: pytest
+      # Basic-mode typecheck; pre-existing errors are baselined via the
+      # "ignore" list in pyrightconfig.json (see TRACKING note there).
+      - name: Pyright (basic)
+        run: npx pyright@1.1.407 --project .
+
+      - run: pytest --cov=src --cov-report=term
 
   assistant:
     name: Assistant Tests
@@ -122,9 +219,108 @@ jobs:
           cache: pip
           cache-dependency-path: services/assistant/requirements.txt
 
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt pytest-cov
 
       - name: Install llm-common package
         run: pip install -e ../../packages/llm-common
 
-      - run: python -m pytest
+      - name: Pyright (basic)
+        run: npx pyright@1.1.407 --project .
+
+      - run: python -m pytest --cov=src --cov-report=term
+
+  admin-backend:
+    name: Admin Backend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/admin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: services/admin/pyproject.toml
+
+      - run: pip install -e ".[dev]"
+
+      - run: python -m pytest --cov=src --cov-report=term
+
+  admin-ui:
+    name: Admin UI Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/admin/ui
+    steps:
+      - uses: actions/checkout@v4
+
+      # The admin UI is a standalone npm project (own package-lock.json),
+      # intentionally outside the pnpm workspace.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: services/admin/ui/package-lock.json
+
+      - run: npm ci
+
+      - run: npx vitest run
+
+  llm-common:
+    name: llm-common Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/llm-common
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: packages/llm-common/pyproject.toml
+
+      - run: pip install -e ".[dev]"
+
+      - run: python -m pytest --cov=llm_common --cov-report=term
+
+  docker-build:
+    name: Docker Compose Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # Compose interpolates optional vars from .env; placeholder values are
+      # fine because nothing is started — this job only proves every
+      # Dockerfile still builds.
+      - name: Prepare compose environment
+        run: cp .env.example .env
+
+      - name: Build all images
+        run: docker compose build
+
+      # docker-compose.prod.yml never boots in CI, but its YAML + interpolation
+      # (including every ${VAR:?} required-secret guard) must stay valid:
+      # supply dummy values for the required vars and run `config -q`.
+      - name: Validate prod compose interpolation
+        run: |
+          cp .env.example /tmp/prod-validate.env
+          cat >> /tmp/prod-validate.env <<'EOF'
+          MONGO_ROOT_USER=ci
+          MONGO_ROOT_PASS=ci
+          REDIS_PASSWORD=ci
+          RABBITMQ_USER=ci
+          RABBITMQ_PASS=ci
+          JWT_REFRESH_SECRET=ci-dummy-refresh-secret-32-chars-xx
+          INTERNAL_SECRET=ci
+          ADMIN_API_KEY=ci
+          PADDLE_WEBHOOK_SECRET=ci
+          FRONTEND_URL=https://ci.invalid
+          VITE_WS_URL=wss://ci.invalid/ws
+          EOF
+          docker compose --env-file /tmp/prod-validate.env -f docker-compose.prod.yml config -q

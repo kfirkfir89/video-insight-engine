@@ -32,6 +32,10 @@ COPY --from=builder /prod/api/dist ./dist
 COPY --from=builder /prod/api/node_modules ./node_modules
 COPY --from=builder /prod/api/package.json ./
 
+# Run as the unprivileged `node` user (uid 1000, ships with the base image).
+# The app only reads /app — no chown needed.
+USER node
+
 EXPOSE 3000
 
 CMD ["node", "dist/index.js"]

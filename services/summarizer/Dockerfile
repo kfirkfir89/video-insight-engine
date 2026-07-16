@@ -9,31 +9,38 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 
-# Install shared llm-common package
-COPY packages/llm-common/ /tmp/llm-common/
-RUN pip install --no-cache-dir /tmp/llm-common/ && rm -rf /tmp/llm-common/
-
-# Install Python dependencies.
-# sentence-transformers pulls torch, whose default PyPI wheel bundles ~1.5GB of
-# CUDA libraries (nvidia-*, triton) this CPU-only service never uses — they bloat
-# the image and the large downloads time out on slow networks. Install the
-# CPU-only torch wheel FIRST (PyTorch CPU index, PyPI as extra for torch's
-# pure-python deps) so the requirements below resolve against it.
-COPY services/summarizer/requirements.txt .
+# Install Python dependencies from the uv-compiled lockfile (reproducible
+# builds — regenerate with the command in the lockfile header). The lock pins
+# torch==<ver>+cpu, whose wheel only exists on the PyTorch CPU index; the
+# default PyPI wheel would bundle ~1.5GB of CUDA libraries this CPU-only
+# service never uses. --timeout/--retries harden the large downloads against
+# transient read timeouts.
+COPY services/summarizer/requirements.lock .
 RUN pip install --no-cache-dir --timeout 120 --retries 5 \
-        --index-url https://download.pytorch.org/whl/cpu \
-        --extra-index-url https://pypi.org/simple \
-        torch \
- && pip install --no-cache-dir --timeout 120 --retries 5 -r requirements.txt
+        --extra-index-url https://download.pytorch.org/whl/cpu \
+        -r requirements.lock
+
+# Install shared llm-common package. --no-deps: its dependency tree is already
+# pinned by requirements.lock (compiled from requirements.txt + the package's
+# own pyproject.toml), so resolving again would bypass the lock.
+COPY packages/llm-common/ /tmp/llm-common/
+RUN pip install --no-cache-dir --no-deps /tmp/llm-common/ && rm -rf /tmp/llm-common/
 
 # Download spaCy model for sentence segmentation
 RUN python -m spacy download en_core_web_sm
 
-# Create frame storage directory
-RUN mkdir -p storage/frames
+# Non-root runtime user. Needs: writable frame storage, a writable HOME for
+# runtime model caches (HuggingFace/sentence-transformers download on first
+# use), and /tmp for yt-dlp scratch (world-writable already).
+RUN useradd --create-home --uid 10001 app \
+    && mkdir -p storage/frames \
+    && chown -R app:app /app
 
 # Copy source
-COPY services/summarizer/src/ ./src/
+COPY --chown=app:app services/summarizer/src/ ./src/
+
+USER app
+ENV HOME=/home/app
 
 # Health endpoint
 EXPOSE 8000
