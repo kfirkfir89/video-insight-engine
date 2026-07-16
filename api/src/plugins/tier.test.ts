@@ -29,7 +29,7 @@ describe('tier plugin', () => {
   });
 
   it('should set default free tier on request decorator', async () => {
-    mockContainer.videoService.getVideos.mockResolvedValue([]);
+    mockContainer.videoService.getVideos.mockResolvedValue({ videos: [], total: 0 });
 
     const response = await app.inject({
       method: 'GET',

@@ -14,11 +14,15 @@ def anyio_backend():
 @pytest.mark.anyio
 async def test_timing_safe_comparison():
     """Auth should use timing-safe comparison (hmac.compare_digest)."""
+
     import src.auth as auth_module
-    import hmac
+
     # Verify hmac is imported in auth module
-    assert hasattr(auth_module, 'hmac') or 'hmac' in dir(auth_module) or \
-        'compare_digest' in open(auth_module.__file__).read()
+    assert (
+        hasattr(auth_module, "hmac")
+        or "hmac" in dir(auth_module)
+        or "compare_digest" in open(auth_module.__file__).read()
+    )
 
 
 @pytest.mark.anyio

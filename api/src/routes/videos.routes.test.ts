@@ -23,12 +23,12 @@ describe('videos routes', () => {
   });
 
   describe('GET /api/videos', () => {
-    it('should return list of videos', async () => {
+    it('should return list of videos with default pagination', async () => {
       const mockVideos = [
         { id: 'v1', youtubeId: 'abc123', title: 'Test Video', status: 'completed' },
         { id: 'v2', youtubeId: 'def456', title: 'Another Video', status: 'processing' },
       ];
-      mockContainer.videoService.getVideos.mockResolvedValue(mockVideos);
+      mockContainer.videoService.getVideos.mockResolvedValue({ videos: mockVideos, total: 2 });
 
       const response = await app.inject({
         method: 'GET',
@@ -37,12 +37,19 @@ describe('videos routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(mockContainer.videoService.getVideos).toHaveBeenCalledWith('test-user-id', undefined);
-      expect(response.json()).toEqual({ videos: mockVideos });
+      expect(mockContainer.videoService.getVideos).toHaveBeenCalledWith(
+        'test-user-id',
+        undefined,
+        { limit: 50, offset: 0 },
+      );
+      expect(response.json()).toEqual({
+        videos: mockVideos,
+        pagination: { limit: 50, offset: 0, total: 2 },
+      });
     });
 
     it('should filter by folderId when provided', async () => {
-      mockContainer.videoService.getVideos.mockResolvedValue([]);
+      mockContainer.videoService.getVideos.mockResolvedValue({ videos: [], total: 0 });
 
       const response = await app.inject({
         method: 'GET',
@@ -53,8 +60,60 @@ describe('videos routes', () => {
       expect(response.statusCode).toBe(200);
       expect(mockContainer.videoService.getVideos).toHaveBeenCalledWith(
         'test-user-id',
-        '507f1f77bcf86cd799439011'
+        '507f1f77bcf86cd799439011',
+        { limit: 50, offset: 0 },
       );
+    });
+
+    it('should pass validated limit and offset through to the service', async () => {
+      mockContainer.videoService.getVideos.mockResolvedValue({ videos: [], total: 120 });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/videos?limit=10&offset=20',
+        headers: { authorization: authHeader },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockContainer.videoService.getVideos).toHaveBeenCalledWith(
+        'test-user-id',
+        undefined,
+        { limit: 10, offset: 20 },
+      );
+      expect(response.json().pagination).toEqual({ limit: 10, offset: 20, total: 120 });
+    });
+
+    it('should return 400 when limit exceeds the cap of 100', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/videos?limit=101',
+        headers: { authorization: authHeader },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mockContainer.videoService.getVideos).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 when limit is zero', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/videos?limit=0',
+        headers: { authorization: authHeader },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mockContainer.videoService.getVideos).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 when offset is negative', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/videos?offset=-5',
+        headers: { authorization: authHeader },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mockContainer.videoService.getVideos).not.toHaveBeenCalled();
     });
 
     it('should return 401 without auth token', async () => {

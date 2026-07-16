@@ -164,7 +164,7 @@ export function createMockContainer(): MockContainer {
     },
     videoService: {
       createVideo: vi.fn(),
-      getVideos: vi.fn(),
+      getVideos: vi.fn().mockResolvedValue({ videos: [], total: 0 }),
       getVideo: vi.fn(),
       deleteVideo: vi.fn(),
       moveToFolder: vi.fn(),
@@ -340,7 +340,7 @@ export const testUser = {
 
 // Generate a valid JWT for testing
 export async function getAuthHeader(app: FastifyInstance): Promise<string> {
-  const token = app.jwt.sign({ userId: testUser.userId, email: testUser.email });
+  const token = app.jwt.sign({ userId: testUser.userId, email: testUser.email, type: 'access' });
   return `Bearer ${token}`;
 }
 

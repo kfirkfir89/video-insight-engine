@@ -51,6 +51,77 @@ describe('AssistantClient', () => {
       expect(sentHeaders['X-User-Id']).toBe('user-42');
       expect(sentHeaders['X-Request-ID']).toBe('req-9');
     });
+
+    it('should abort the upstream fetch when the caller signal aborts after connect', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        body: new ReadableStream(),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      const caller = new AbortController();
+
+      await client.chat({
+        videoId: 'vsid-1',
+        userId: 'user-42',
+        message: 'hi',
+        signal: caller.signal,
+      });
+
+      const fetchSignal = fetchMock.mock.calls[0][1].signal as AbortSignal;
+      expect(fetchSignal.aborted).toBe(false);
+
+      caller.abort();
+
+      expect(fetchSignal.aborted).toBe(true);
+    });
+
+    it('should hand fetch an already-aborted signal when the caller aborted before connect', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        body: new ReadableStream(),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      const caller = new AbortController();
+      caller.abort();
+
+      await client.chat({
+        videoId: 'vsid-1',
+        userId: 'user-42',
+        message: 'hi',
+        signal: caller.signal,
+      });
+
+      const fetchSignal = fetchMock.mock.calls[0][1].signal as AbortSignal;
+      expect(fetchSignal.aborted).toBe(true);
+    });
+  });
+
+  describe('libraryChat', () => {
+    it('should abort the upstream fetch when the caller signal aborts after connect', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        body: new ReadableStream(),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      const caller = new AbortController();
+
+      await client.libraryChat({
+        youtubeIds: ['vidA'],
+        userId: 'user-42',
+        message: 'hi',
+        signal: caller.signal,
+      });
+
+      const fetchSignal = fetchMock.mock.calls[0][1].signal as AbortSignal;
+      expect(fetchSignal.aborted).toBe(false);
+
+      caller.abort();
+
+      expect(fetchSignal.aborted).toBe(true);
+    });
   });
 
   describe('ASSISTANT_ACTIONS', () => {

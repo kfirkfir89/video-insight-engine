@@ -1,6 +1,6 @@
 """Tests for llm_common.models."""
 
-from datetime import UTC, datetime
+from datetime import datetime
 from unittest.mock import patch
 
 import pytest
@@ -76,7 +76,10 @@ def test_usage_record_unit_defaults_to_tokens():
 
 def test_usage_record_audio_unit_round_trips():
     record = UsageRecord(
-        model="whisper-1", provider="openai", unit="audio_seconds", audio_seconds=90.0,
+        model="whisper-1",
+        provider="openai",
+        unit="audio_seconds",
+        audio_seconds=90.0,
     )
     assert record.unit == "audio_seconds"
     assert record.model_dump()["audio_seconds"] == 90.0
@@ -100,7 +103,9 @@ def test_whisper_cost_ignores_tokens():
 def test_gemini_cost_is_per_token():
     """Gemini transcription bills per token (input $0.30/1M + output $0.40/1M)."""
     cost = compute_transcription_cost_usd(
-        "gemini-2.5-flash-lite", tokens_in=1_000_000, tokens_out=1_000_000,
+        "gemini-2.5-flash-lite",
+        tokens_in=1_000_000,
+        tokens_out=1_000_000,
     )
     assert cost == pytest.approx(0.30 + 0.40)
 

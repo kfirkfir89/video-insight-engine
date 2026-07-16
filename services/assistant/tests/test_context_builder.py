@@ -6,21 +6,32 @@ from tests.conftest import make_video_context, make_rag_sources
 
 
 class TestContextBuilderBuild:
-
-    async def test_should_include_title_and_creator(self, context_builder, sample_video_context, sample_rag_sources):
-        prompt = context_builder.build(video_ctx=sample_video_context, rag_chunks=sample_rag_sources)
+    async def test_should_include_title_and_creator(
+        self, context_builder, sample_video_context, sample_rag_sources
+    ):
+        prompt = context_builder.build(
+            video_ctx=sample_video_context, rag_chunks=sample_rag_sources
+        )
 
         assert sample_video_context.title in prompt
         assert sample_video_context.creator in prompt
 
-    async def test_should_include_tabs_overview(self, context_builder, sample_video_context, sample_rag_sources):
-        prompt = context_builder.build(video_ctx=sample_video_context, rag_chunks=sample_rag_sources)
+    async def test_should_include_tabs_overview(
+        self, context_builder, sample_video_context, sample_rag_sources
+    ):
+        prompt = context_builder.build(
+            video_ctx=sample_video_context, rag_chunks=sample_rag_sources
+        )
 
         assert "Key Points" in prompt
         assert "Concepts" in prompt
 
-    async def test_should_include_rag_chunks(self, context_builder, sample_video_context, sample_rag_sources):
-        prompt = context_builder.build(video_ctx=sample_video_context, rag_chunks=sample_rag_sources)
+    async def test_should_include_rag_chunks(
+        self, context_builder, sample_video_context, sample_rag_sources
+    ):
+        prompt = context_builder.build(
+            video_ctx=sample_video_context, rag_chunks=sample_rag_sources
+        )
 
         assert "neural network" in prompt.lower() or "layers" in prompt.lower()
 
@@ -43,6 +54,85 @@ class TestContextBuilderBuild:
         assert minimal_ctx.title in prompt
         assert len(prompt) > 0
 
+    async def test_should_prefix_chunks_with_timestamp_citation(
+        self, context_builder, sample_video_context
+    ):
+        from src.models.responses import RAGSource
+
+        chunks = [
+            RAGSource(
+                text="Attention is all you need.",
+                video_id="abc",
+                timestamp="12:34",
+                score=0.9,
+                chunk_index=0,
+            )
+        ]
+        prompt = context_builder.build(video_ctx=sample_video_context, rag_chunks=chunks)
+
+        assert "[12:34] Attention is all you need." in prompt
+
+    async def test_should_omit_citation_for_null_timestamp(
+        self, context_builder, sample_video_context
+    ):
+        """Legacy v1 points carry no timestamp — chunk renders without a prefix."""
+        from src.models.responses import RAGSource
+
+        chunks = [
+            RAGSource(
+                text="Old chunk without timeline.",
+                video_id="abc",
+                timestamp=None,
+                score=0.9,
+                chunk_index=0,
+            )
+        ]
+        prompt = context_builder.build(video_ctx=sample_video_context, rag_chunks=chunks)
+
+        assert "Old chunk without timeline." in prompt
+        assert "[None]" not in prompt
+        assert "[] Old chunk" not in prompt
+
+    async def test_should_say_nothing_relevant_when_no_chunks(
+        self, context_builder, sample_video_context
+    ):
+        """Relevance-floor wipeout → the model is told to admit the gap."""
+        from src.utils.prompt_templates import RAG_EMPTY_NOTE
+
+        prompt = context_builder.build(video_ctx=sample_video_context, rag_chunks=[])
+
+        assert RAG_EMPTY_NOTE in prompt
+
+    async def test_should_teach_timestamp_citation_when_chunks_carry_timestamps(
+        self, context_builder, sample_video_context
+    ):
+        from src.models.responses import RAGSource
+        from src.utils.prompt_templates import RAG_TIMESTAMP_CITE_NOTE
+
+        chunks = [
+            RAGSource(
+                text="Timed chunk.", video_id="abc", timestamp="1:23", score=0.9, chunk_index=0
+            )
+        ]
+        prompt = context_builder.build(video_ctx=sample_video_context, rag_chunks=chunks)
+
+        assert RAG_TIMESTAMP_CITE_NOTE in prompt
+
+    async def test_should_omit_citation_note_when_no_chunk_has_timestamp(
+        self, context_builder, sample_video_context
+    ):
+        from src.models.responses import RAGSource
+        from src.utils.prompt_templates import RAG_TIMESTAMP_CITE_NOTE
+
+        chunks = [
+            RAGSource(
+                text="Untimed chunk.", video_id="abc", timestamp=None, score=0.9, chunk_index=0
+            )
+        ]
+        prompt = context_builder.build(video_ctx=sample_video_context, rag_chunks=chunks)
+
+        assert RAG_TIMESTAMP_CITE_NOTE not in prompt
+
 
 class TestContextBuilderBuildLibrary:
     """build_library: multi-video, conversational, title-attributed prompt."""
@@ -50,7 +140,9 @@ class TestContextBuilderBuildLibrary:
     async def test_should_not_leak_raw_ids_or_excerpt_jargon(self, context_builder):
         from src.models.responses import RAGSource
 
-        chunks = [RAGSource(text="React uses hooks.", video_id="react_id", score=0.9, chunk_index=0)]
+        chunks = [
+            RAGSource(text="React uses hooks.", video_id="react_id", score=0.9, chunk_index=0)
+        ]
         prompt = context_builder.build_library(rag_chunks=chunks)
 
         # The model must never be told to print raw ids or cite "[video: id]".
@@ -62,7 +154,9 @@ class TestContextBuilderBuildLibrary:
 
         chunks = [
             RAGSource(text="React uses hooks.", video_id="react_id", score=0.9, chunk_index=0),
-            RAGSource(text="Vue tracks reactive refs.", video_id="vue_id", score=0.8, chunk_index=0),
+            RAGSource(
+                text="Vue tracks reactive refs.", video_id="vue_id", score=0.8, chunk_index=0
+            ),
         ]
         inventory = [
             {"video_id": "react_id", "title": "React Deep Dive"},
@@ -85,7 +179,9 @@ class TestContextBuilderBuildLibrary:
         assert "My First Video" in prompt
         assert "My Second Video" in prompt
 
-    async def test_should_add_language_instruction_for_non_english(self, context_builder, sample_rag_sources):
+    async def test_should_add_language_instruction_for_non_english(
+        self, context_builder, sample_rag_sources
+    ):
         prompt = context_builder.build_library(rag_chunks=sample_rag_sources, user_language="he")
 
         assert "he" in prompt
@@ -114,7 +210,9 @@ def _make_translated_context():
 class TestContextBuilderSourceLanguage:
     """sourceLanguage grounding: English promoted to top level, native nested."""
 
-    async def test_should_use_top_level_english_summary_for_english_user(self, context_builder, sample_rag_sources):
+    async def test_should_use_top_level_english_summary_for_english_user(
+        self, context_builder, sample_rag_sources
+    ):
         ctx = _make_translated_context()
 
         prompt = context_builder.build(

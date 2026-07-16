@@ -142,12 +142,12 @@ describe('JWT plugin', () => {
       expect(response.statusCode).toBe(401);
       expect(response.json()).toEqual({
         error: 'UNAUTHORIZED',
-        message: 'Invalid or expired token',
+        message: 'Authentication required',
         statusCode: 401,
       });
     });
 
-    it('should return 401 with invalid token', async () => {
+    it('should return 401 TOKEN_INVALID with invalid token', async () => {
       const response = await authApp.inject({
         method: 'GET',
         url: '/protected',
@@ -157,13 +157,14 @@ describe('JWT plugin', () => {
       });
 
       expect(response.statusCode).toBe(401);
-      expect(response.json()).toMatchObject({
-        error: 'UNAUTHORIZED',
-        message: 'Invalid or expired token',
+      expect(response.json()).toEqual({
+        error: 'TOKEN_INVALID',
+        message: 'Invalid token',
+        statusCode: 401,
       });
     });
 
-    it('should return 401 with expired token', async () => {
+    it('should return 401 TOKEN_EXPIRED with expired token', async () => {
       const expiredToken = authApp.jwt.sign({ userId: 'user-123' }, { expiresIn: '1s' });
 
       // Wait for expiration (1.5 seconds to be safe)
@@ -178,8 +179,10 @@ describe('JWT plugin', () => {
       });
 
       expect(response.statusCode).toBe(401);
-      expect(response.json()).toMatchObject({
-        error: 'UNAUTHORIZED',
+      expect(response.json()).toEqual({
+        error: 'TOKEN_EXPIRED',
+        message: 'Token has expired',
+        statusCode: 401,
       });
     });
 

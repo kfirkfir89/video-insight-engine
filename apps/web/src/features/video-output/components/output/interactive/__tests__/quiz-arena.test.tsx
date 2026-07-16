@@ -120,4 +120,34 @@ describe('QuizArena', () => {
     const { container } = render(<QuizArena questions={questions} withTimer={false} />);
     expect(container.querySelector('[data-slot="countdown-ring"]')).toBeNull();
   });
+
+  describe('aria-live answer feedback', () => {
+    it('should expose an initially empty polite live region', () => {
+      render(<QuizArena questions={questions} withTimer={false} />);
+      const region = screen.getByRole('status');
+      expect(region).toHaveAttribute('aria-live', 'polite');
+      expect(region).toHaveTextContent('');
+    });
+
+    it('should announce "Correct!" when the right answer is selected', () => {
+      render(<QuizArena questions={questions} withTimer={false} />);
+      fireEvent.click(screen.getByText('4'));
+      expect(screen.getByRole('status')).toHaveTextContent('Correct!');
+    });
+
+    it('should announce the correct answer when a wrong answer is selected', () => {
+      render(<QuizArena questions={questions} withTimer={false} />);
+      fireEvent.click(screen.getByText('3'));
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Incorrect. The correct answer is 4.',
+      );
+    });
+
+    it('should clear the announcement when the quiz is reset', () => {
+      render(<QuizArena questions={questions.slice(0, 1)} withTimer={false} />);
+      fireEvent.click(screen.getByText('4'));
+      fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+      expect(screen.getByRole('status')).toHaveTextContent('');
+    });
+  });
 });

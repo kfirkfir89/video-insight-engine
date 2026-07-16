@@ -7,7 +7,7 @@ from httpx import ASGITransport, AsyncClient
 
 from src.config import settings
 from src.main import app
-from src.routes.usage import RunSummary, _build_run_call, _build_run_summary
+from src.routes.usage import _build_run_call, _build_run_summary, _degraded_by_summary_id
 
 
 @pytest.fixture
@@ -250,3 +250,83 @@ class TestBuildRunSummary:
         summary = _build_run_summary(group, [raw_call], ordinal=1)
         assert len(summary.calls) == 1
         assert summary.calls[0].feature == "summarizer:extraction"
+
+    def test_degraded_defaults_to_none(self) -> None:
+        """Runs start with degraded=None until the doc lookup fills it in."""
+        from datetime import UTC, datetime
+
+        group = {
+            "_id": "req-abc",
+            "video_id": "vid1",
+            "video_summary_id": "664f000000000000000000aa",
+            "user_id": None,
+            "first_call": datetime(2026, 6, 1, tzinfo=UTC),
+            "last_call": datetime(2026, 6, 1, tzinfo=UTC),
+            "total_cost_usd": 0.0,
+            "call_count": 1,
+        }
+        summary = _build_run_summary(group, [], ordinal=None)
+        assert summary.degraded is None
+
+
+# ─── Degraded-run badge lookup ───
+
+
+class _FakeCursor:
+    def __init__(self, docs: list[dict]) -> None:
+        self._docs = docs
+
+    async def to_list(self, _limit: int) -> list[dict]:
+        return self._docs
+
+
+class _FakeDb:
+    """Motor stand-in exposing videoSummaryCache.find(filter, projection)."""
+
+    def __init__(self, docs: list[dict]) -> None:
+        self._docs = docs
+        self.last_filter: dict | None = None
+
+    @property
+    def videoSummaryCache(self):  # noqa: N802 — mirrors the Mongo collection name
+        return self
+
+    def find(self, filter_: dict, projection: dict) -> _FakeCursor:
+        self.last_filter = filter_
+        wanted = set(filter_["_id"]["$in"])
+        return _FakeCursor([d for d in self._docs if d["_id"] in wanted])
+
+
+class TestDegradedBySummaryId:
+    """_degraded_by_summary_id maps videoSummaryCache docs to badge flags."""
+
+    @pytest.mark.anyio
+    async def test_maps_degraded_and_clean_docs(self) -> None:
+        from bson import ObjectId
+
+        degraded_id = "664f000000000000000000aa"
+        clean_id = "664f000000000000000000bb"
+        db = _FakeDb(
+            [
+                {"_id": ObjectId(degraded_id), "degraded": True},
+                {"_id": ObjectId(clean_id)},  # pre-feature/clean doc: no field
+            ]
+        )
+        result = await _degraded_by_summary_id(db, {degraded_id, clean_id})
+        assert result[degraded_id] is True
+        assert result[clean_id] is False
+
+    @pytest.mark.anyio
+    async def test_invalid_object_ids_are_skipped(self) -> None:
+        db = _FakeDb([])
+        result = await _degraded_by_summary_id(db, {"not-an-oid", ""})
+        assert result == {}
+        # No query was issued — nothing valid to look up.
+        assert db.last_filter is None
+
+    @pytest.mark.anyio
+    async def test_missing_docs_are_absent_from_map(self) -> None:
+        missing_id = "664f0000000000000000cc00"
+        db = _FakeDb([])
+        result = await _degraded_by_summary_id(db, {missing_id})
+        assert missing_id not in result

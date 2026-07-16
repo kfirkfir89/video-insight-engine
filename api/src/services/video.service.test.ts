@@ -32,6 +32,7 @@ describe('VideoService', () => {
     findUserVideo: ReturnType<typeof vi.fn>;
     findUserVideoByYoutubeId: ReturnType<typeof vi.fn>;
     getUserVideos: ReturnType<typeof vi.fn>;
+    countUserVideos: ReturnType<typeof vi.fn>;
     deleteUserVideo: ReturnType<typeof vi.fn>;
     deleteUserVideoByYoutubeId: ReturnType<typeof vi.fn>;
     updateUserVideoFolder: ReturnType<typeof vi.fn>;
@@ -68,6 +69,7 @@ describe('VideoService', () => {
       findUserVideo: vi.fn(),
       findUserVideoByYoutubeId: vi.fn(),
       getUserVideos: vi.fn(),
+      countUserVideos: vi.fn(),
       deleteUserVideo: vi.fn(),
       deleteUserVideoByYoutubeId: vi.fn(),
       updateUserVideoFolder: vi.fn(),
@@ -107,6 +109,42 @@ describe('VideoService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  describe('getVideos', () => {
+    it('should return mapped videos plus the total filtered count', async () => {
+      mockVideoRepository.getUserVideos.mockResolvedValue([
+        {
+          _id: { toString: () => 'uv1' },
+          videoSummaryId: { toString: () => 'vs1' },
+          youtubeId: 'abc123',
+          title: 'Video One',
+          status: 'completed',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      ]);
+      mockVideoRepository.countUserVideos.mockResolvedValue(75);
+
+      const result = await videoService.getVideos('user123', undefined, { limit: 1, offset: 0 });
+
+      expect(result.total).toBe(75);
+      expect(result.videos).toHaveLength(1);
+      expect(result.videos[0]).toMatchObject({ id: 'uv1', youtubeId: 'abc123', title: 'Video One' });
+    });
+
+    it('should forward limit/offset to the repository and count with the same folder filter', async () => {
+      mockVideoRepository.getUserVideos.mockResolvedValue([]);
+      mockVideoRepository.countUserVideos.mockResolvedValue(0);
+
+      await videoService.getVideos('user123', 'folder1', { limit: 10, offset: 20 });
+
+      expect(mockVideoRepository.getUserVideos).toHaveBeenCalledWith(
+        'user123',
+        'folder1',
+        { limit: 10, offset: 20 },
+      );
+      expect(mockVideoRepository.countUserVideos).toHaveBeenCalledWith('user123', 'folder1');
+    });
   });
 
   describe('getVideo', () => {
@@ -831,6 +869,132 @@ describe('VideoService', () => {
         const cacheArg = mockVideoRepository.createCacheEntry.mock.calls[0][0];
         expect(cacheArg.version).toBe(2);
         expect(cacheArg.dedupKey).toBe('content-key-v2');
+      });
+    });
+
+    describe('pipelineVersion serve/regen gate (project-score-9 4.3)', () => {
+      // Docs are stamped with the canonical version at pipeline write time
+      // (packages/shared/src/config/pipeline-version.json). The serve path
+      // regens docs stamped with a DIFFERENT version; docs WITHOUT the field
+      // predate stamping and are served as-is (current-legacy) — a version
+      // bump must never mass-invalidate them.
+      const youtubeId = 'dQw4w9WgXcQ';
+      const url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+      const videoSummaryId = 'summary-versioned';
+
+      const existingUserVideo = () => ({
+        _id: { toString: () => 'userVideo-existing' },
+        videoSummaryId: { toString: () => videoSummaryId },
+        youtubeId,
+        status: 'completed',
+      });
+
+      it('re-dispatches (regen) when the user already has a completed doc stamped with a stale version', async () => {
+        mockVideoRepository.findUserVideoByYoutubeId.mockResolvedValue(existingUserVideo());
+        mockVideoRepository.findCacheById.mockResolvedValue({
+          _id: { toString: () => videoSummaryId },
+          youtubeId,
+          status: 'completed',
+          title: 'Old Version Video',
+          pipelineVersion: 'v0-stale',
+          updatedAt: new Date(),
+        });
+
+        const result = await videoService.createVideo('user123', url, { tier: 'free' });
+
+        expect(mockSummarizerClient.triggerSummarization).toHaveBeenCalledTimes(1);
+        expect(result.video.status).toBe('pending');
+        expect(result.cached).toBe(false);
+        expect(result.regenerating).toBe(true);
+      });
+
+      it('serves as-is when the existing completed doc has NO pipelineVersion (current-legacy)', async () => {
+        mockVideoRepository.findUserVideoByYoutubeId.mockResolvedValue(existingUserVideo());
+        mockVideoRepository.findCacheById.mockResolvedValue({
+          _id: { toString: () => videoSummaryId },
+          youtubeId,
+          status: 'completed',
+          title: 'Legacy Video',
+          updatedAt: new Date(),
+        });
+
+        const result = await videoService.createVideo('user123', url, { tier: 'free' });
+
+        expect(mockSummarizerClient.triggerSummarization).not.toHaveBeenCalled();
+        expect(mockQueuePublisher.publishVideoJob).not.toHaveBeenCalled();
+        expect(result.cached).toBe(true);
+        expect(result.alreadyExists).toBe(true);
+      });
+
+      it('serves as-is when the stored version matches the canonical version', async () => {
+        mockVideoRepository.findUserVideoByYoutubeId.mockResolvedValue(existingUserVideo());
+        mockVideoRepository.findCacheById.mockResolvedValue({
+          _id: { toString: () => videoSummaryId },
+          youtubeId,
+          status: 'completed',
+          title: 'Current Video',
+          pipelineVersion: config.PIPELINE_VERSION,
+          updatedAt: new Date(),
+        });
+
+        const result = await videoService.createVideo('user123', url, { tier: 'free' });
+
+        expect(mockSummarizerClient.triggerSummarization).not.toHaveBeenCalled();
+        expect(result.cached).toBe(true);
+        expect(result.alreadyExists).toBe(true);
+      });
+
+      it('regens instead of serving when attaching to a completed row stamped with a stale version', async () => {
+        mockVideoRepository.findUserVideoByYoutubeId.mockResolvedValue(null);
+        mockVideoRepository.upsertCacheByDedupKey.mockResolvedValue({
+          wasInsert: false,
+          doc: {
+            _id: { toString: () => videoSummaryId },
+            youtubeId,
+            status: 'completed',
+            title: 'Old Version Video',
+            pipelineVersion: 'v0-stale',
+            updatedAt: new Date(),
+          },
+        });
+        mockVideoRepository.createUserVideo.mockResolvedValue({
+          _id: { toString: () => 'userVideo-new' },
+          videoSummaryId: { toString: () => videoSummaryId },
+          youtubeId,
+          status: 'pending',
+        });
+
+        const result = await videoService.createVideo('user-2', url, { tier: 'free' });
+
+        expect(mockSummarizerClient.triggerSummarization).toHaveBeenCalledTimes(1);
+        expect(result.video.status).toBe('pending');
+        expect(result.cached).toBe(false);
+      });
+
+      it('still serves a version-matching completed row on attach', async () => {
+        mockVideoRepository.findUserVideoByYoutubeId.mockResolvedValue(null);
+        mockVideoRepository.upsertCacheByDedupKey.mockResolvedValue({
+          wasInsert: false,
+          doc: {
+            _id: { toString: () => videoSummaryId },
+            youtubeId,
+            status: 'completed',
+            title: 'Current Video',
+            pipelineVersion: config.PIPELINE_VERSION,
+            updatedAt: new Date(),
+          },
+        });
+        mockVideoRepository.createUserVideo.mockResolvedValue({
+          _id: { toString: () => 'userVideo-new' },
+          videoSummaryId: { toString: () => videoSummaryId },
+          youtubeId,
+          status: 'completed',
+        });
+
+        const result = await videoService.createVideo('user-2', url, { tier: 'free' });
+
+        expect(mockSummarizerClient.triggerSummarization).not.toHaveBeenCalled();
+        expect(result.cached).toBe(true);
       });
     });
   });

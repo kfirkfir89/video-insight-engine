@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from src.services.pipeline.assembly.assemblers import (
-    ASSEMBLER_REGISTRY,
+from src.services.pipeline.assembly.assemblers_overhaul import (
     assemble_concept_canvas,
     assemble_packing_mission,
     assemble_video_filmstrip,
 )
+from src.services.pipeline.assembly.registry import ASSEMBLER_REGISTRY
 from src.services.vector.output_chunker import (
     _COMPONENT_HANDLERS,
     OutputChunk,
@@ -132,7 +132,13 @@ class TestMomentTrack:
     def test_should_emit_only_description_when_label_absent(self):
         tab = _tab(
             "moment_track",
-            {"items": [{"description": "Walks through resolving a conflict during an interactive rebase."}]},
+            {
+                "items": [
+                    {
+                        "description": "Walks through resolving a conflict during an interactive rebase."
+                    }
+                ]
+            },
         )
         chunks = chunk_assembled_tabs([tab])
         assert len(chunks) == 1
@@ -370,13 +376,22 @@ class TestVideoFilmstrip:
 
     def test_should_emit_caption_for_each_frame_from_assembler_shape(self):
         props = assemble_video_filmstrip(
-            {}, [
-                {"thumbnailUrl": "https://example/1.jpg", "timestamp": 12,
-                 "caption": "Sunset over the canyon at golden hour today."},
+            {},
+            [
+                {
+                    "thumbnailUrl": "https://example/1.jpg",
+                    "timestamp": 12,
+                    "caption": "Sunset over the canyon at golden hour today.",
+                },
                 {"thumbnailUrl": "https://example/2.jpg", "timestamp": 30},  # no caption
-                {"thumbnailUrl": "https://example/3.jpg", "timestamp": 48,
-                 "caption": "Hikers reaching the ridge as the light fades slowly."},
-            ], {}, None,
+                {
+                    "thumbnailUrl": "https://example/3.jpg",
+                    "timestamp": 48,
+                    "caption": "Hikers reaching the ridge as the light fades slowly.",
+                },
+            ],
+            {},
+            None,
         )
         assert props is not None and "frames" in props  # assembler emits {frames}
         chunks = chunk_assembled_tabs([_tab("video_filmstrip", props)])
@@ -392,10 +407,16 @@ class TestConceptCanvas:
 
     def test_should_emit_chunk_per_concept_from_assembler_shape(self):
         props = assemble_concept_canvas(
-            {}, [
+            {},
+            [
                 {"name": "Convolution", "definition": "A sliding-window blend of two functions."},
-                {"name": "Kernel", "definition": "The small weighted window slid across the signal."},
-            ], {}, None,
+                {
+                    "name": "Kernel",
+                    "definition": "The small weighted window slid across the signal.",
+                },
+            ],
+            {},
+            None,
         )
         assert props is not None and "concepts" in props
         chunks = chunk_assembled_tabs([_tab("concept_canvas", props)])
@@ -413,10 +434,13 @@ class TestPackingMission:
 
     def test_handler_should_read_item_key_not_label(self):
         props = assemble_packing_mission(
-            {}, [
+            {},
+            [
                 {"item": "Down jacket", "category": "Clothing"},
                 {"item": "Headlamp"},
-            ], {}, None,
+            ],
+            {},
+            None,
         )
         assert props is not None and "items" in props
         handler = _COMPONENT_HANDLERS["packing_mission"]
@@ -543,7 +567,10 @@ class TestMinimumWordCount:
 
 class TestUnknownComponent:
     def test_should_emit_zero_chunks_for_unknown_component(self):
-        tab = _tab("nonexistent_component_xyz", {"items": [{"text": "Whatever lives here is irrelevant entirely."}]})
+        tab = _tab(
+            "nonexistent_component_xyz",
+            {"items": [{"text": "Whatever lives here is irrelevant entirely."}]},
+        )
         chunks = chunk_assembled_tabs([tab])
         assert chunks == []
 
@@ -556,8 +583,20 @@ class TestUnknownComponent:
 class TestMultipleTabs:
     def test_should_aggregate_chunks_across_tabs(self):
         tabs = [
-            _tab("overview", {"masterSummary": "An introductory walkthrough across all the topics covered today."}),
-            _tab("checklist", {"items": [{"label": "Verify that the connection string is properly configured here"}]}),
+            _tab(
+                "overview",
+                {
+                    "masterSummary": "An introductory walkthrough across all the topics covered today."
+                },
+            ),
+            _tab(
+                "checklist",
+                {
+                    "items": [
+                        {"label": "Verify that the connection string is properly configured here"}
+                    ]
+                },
+            ),
         ]
         chunks = chunk_assembled_tabs(tabs)
         components = {c.tab_component for c in chunks}
@@ -570,7 +609,10 @@ class TestMalformedInput:
         assert chunks == []
 
     def test_should_skip_tab_with_missing_id(self):
-        tab = {"component": "overview", "props": {"masterSummary": "Long enough sentence to pass the threshold."}}
+        tab = {
+            "component": "overview",
+            "props": {"masterSummary": "Long enough sentence to pass the threshold."},
+        }
         chunks = chunk_assembled_tabs([tab])
         assert chunks == []
 

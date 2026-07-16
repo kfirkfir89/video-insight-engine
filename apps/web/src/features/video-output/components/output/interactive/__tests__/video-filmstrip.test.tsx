@@ -49,9 +49,9 @@ describe('VideoFilmstrip', () => {
   it('should highlight the cell whose timestamp is within ±5s of currentTime', () => {
     render(<VideoFilmstrip frames={frames} currentTime={32} />);
     const activeBtn = screen.getByLabelText(/Jump to 0:30/);
-    expect(activeBtn.className).toContain('ring-primary');
+    expect(activeBtn.className).toContain('ring-[var(--vie-accent)]');
     const inactiveBtn = screen.getByLabelText(/Jump to 0:00/);
-    expect(inactiveBtn.className).not.toContain('ring-primary');
+    expect(inactiveBtn.className).not.toContain('ring-[var(--vie-accent)]');
   });
 
   it("mode='overlay' should not render label text below cells", () => {

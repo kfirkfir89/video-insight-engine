@@ -1,0 +1,134 @@
+{
+  "_comment": "Golden LLM response fixture for the news domain. Hand-built against PlanResult, NewsData, SynthesisResult — a valid per-stage output set for a (fictional) news explainer. News has no enrichment mapping, so enrichment_response is null. Drift canary consumed by tests/test_llm_response_fixtures.py.",
+  "domain": "news",
+  "video_meta": {
+    "videoId": "fixture-news-001",
+    "title": "The Harborlink Bridge Closure, Explained",
+    "channel": "Civic Desk",
+    "duration": 720,
+    "chapters": []
+  },
+  "plan_response": {
+    "reasoning": "Reported explainer on a fictional infrastructure closure with a clear event timeline, named actors, and checkable claims.",
+    "identity": {
+      "creatorType": "local news explainer desk",
+      "tone": "neutral, sourced",
+      "audience": "affected commuters"
+    },
+    "corePromise": "Know why the bridge closed, who decided, and what happens next",
+    "uniqueAngle": "Obtained the full inspection report, not just the summary memo",
+    "extractionGuidance": {
+      "primaryFocus": "Claims with sources and verification status; timeline in order",
+      "watchOutFor": "The mayor's office and the engineers dispute the timeline — keep both versions as claims"
+    },
+    "itemCounts": {},
+    "contentTags": ["news"],
+    "modifiers": [],
+    "primaryTag": "news",
+    "userGoal": "Understand the closure and its accountability trail",
+    "confidence": 0.9,
+    "tabs": [
+      {
+        "id": "timeline",
+        "label": "Timeline",
+        "emoji": "🕒",
+        "component": "moment_track",
+        "dataSource": "news.storyTimeline",
+        "goal": "The story beat by beat, in order."
+      },
+      {
+        "id": "claims",
+        "label": "Claims",
+        "emoji": "🔍",
+        "component": "claims_tracker",
+        "dataSource": "news.claims",
+        "goal": "Who said what, and whether it checks out."
+      },
+      {
+        "id": "entities",
+        "label": "Who's Who",
+        "emoji": "👥",
+        "component": "spot_explorer",
+        "dataSource": "news.entities",
+        "goal": "The people and agencies driving the story."
+      },
+      {
+        "id": "context",
+        "label": "Context",
+        "emoji": "📚",
+        "component": "info_grid",
+        "dataSource": "news.context",
+        "goal": "Background numbers that frame the story."
+      }
+    ]
+  },
+  "extraction_response": {
+    "headline": "City closes Harborlink Bridge indefinitely after inspection finds cable corrosion",
+    "storyTimeline": [
+      {"label": "Routine inspection begins", "description": "Contracted engineers start the biennial cable inspection.", "timestamp": 45},
+      {"label": "Corrosion report filed", "description": "Inspection report flags stage-3 corrosion in 12 of 96 suspender cables.", "timestamp": 130},
+      {"label": "Emergency closure ordered", "description": "The transit authority closes the bridge to all traffic overnight.", "timestamp": 280},
+      {"label": "Repair plan announced", "description": "A phased cable-replacement plan is announced with an 18-month estimate.", "timestamp": 520}
+    ],
+    "entities": [
+      {"name": "Harborlink Transit Authority", "role": "Bridge operator", "description": "Ordered the closure and owns the repair timeline.", "emoji": "🏛️"},
+      {"name": "Mayor Dana Reyes", "role": "City executive", "description": "Says her office learned of the report only two days before closure.", "emoji": "👩‍💼"},
+      {"name": "Castellan Engineering", "role": "Inspection contractor", "description": "Filed the corrosion report; says it was delivered three weeks earlier.", "emoji": "🧰"},
+      {"name": "Ferry Riders Coalition", "role": "Commuter group", "description": "Pushing for expanded ferry service during the closure.", "emoji": "⛴️"}
+    ],
+    "claims": [
+      {
+        "claim": "12 of 96 suspender cables show stage-3 corrosion",
+        "source": "Castellan Engineering inspection report",
+        "status": "verified",
+        "sourceCitation": "Inspection report p.14, obtained by the channel",
+        "timestamp": 150
+      },
+      {
+        "claim": "The mayor's office received the report three weeks before the closure",
+        "source": "Castellan Engineering",
+        "status": "disputed",
+        "sourceCitation": "Delivery log cited on camera; mayor's office denies receipt",
+        "timestamp": 330
+      },
+      {
+        "claim": "The office learned of the corrosion two days before closing the bridge",
+        "source": "Mayor Dana Reyes",
+        "status": "disputed",
+        "sourceCitation": "Press conference statement",
+        "timestamp": 360
+      },
+      {
+        "claim": "Repairs will take 18 months and cost $210 million",
+        "source": "Harborlink Transit Authority",
+        "status": "context",
+        "sourceCitation": "Official repair plan announcement",
+        "timestamp": 540
+      },
+      {
+        "claim": "The bridge carried about 84,000 vehicles a day before closure",
+        "source": "Transit authority traffic data",
+        "status": "verified",
+        "sourceCitation": "2025 annual traffic count",
+        "timestamp": 60
+      }
+    ],
+    "context": [
+      {"key": "Bridge opened", "value": "1974, last major cable work in 1998"},
+      {"key": "Daily traffic", "value": "~84,000 vehicles"},
+      {"key": "Repair estimate", "value": "$210M over 18 months"},
+      {"key": "Detour impact", "value": "Adds 35–50 minutes at peak via the Eastgate crossing"}
+    ]
+  },
+  "enrichment_response": null,
+  "synthesis_response": {
+    "tldr": "The Harborlink Bridge closed after inspectors found corrosion in 12 suspender cables; who knew what, and when, is now disputed.",
+    "keyTakeaways": [
+      "Stage-3 corrosion in 12 of 96 cables triggered the closure — verified from the report itself",
+      "The engineers and the mayor's office give conflicting report-delivery timelines",
+      "Repairs are estimated at 18 months and $210M, with 35–50 minute peak detours"
+    ],
+    "masterSummary": "A sourced explainer of the fictional Harborlink Bridge closure: the inspection that found stage-3 cable corrosion, the overnight emergency closure, the disputed three-week gap between report delivery and action, and the announced 18-month, $210M phased repair — with each claim tracked against its source and verification status.",
+    "seoDescription": "Why the Harborlink Bridge closed: the corrosion report, the disputed timeline, and the 18-month repair plan."
+  }
+}

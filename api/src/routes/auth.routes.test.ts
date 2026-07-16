@@ -158,13 +158,147 @@ describe('auth routes', () => {
   });
 
   describe('POST /api/auth/refresh', () => {
-    it('should return 401 when no refresh token cookie', async () => {
+    it('should return 401 REFRESH_EXPIRED when no refresh token cookie', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/auth/refresh',
       });
 
       expect(response.statusCode).toBe(401);
+      // Documented envelope (docs/ERROR-HANDLING.md): REFRESH_EXPIRED tells
+      // the FE the session is gone — re-login, don't retry.
+      expect(response.json()).toEqual({
+        error: 'REFRESH_EXPIRED',
+        message: 'Session expired, please login',
+        statusCode: 401,
+      });
+    });
+
+    it('should issue a new access token when a valid refresh cookie is presented', async () => {
+      const mockUser = { id: 'u1', email: 'user@example.com' };
+      mockContainer.authService.login.mockResolvedValue(mockUser);
+
+      const loginResponse = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        headers: { 'content-type': 'application/json' },
+        payload: { email: 'user@example.com', password: 'correctPassword' },
+      });
+      const setCookie = loginResponse.headers['set-cookie'];
+      const cookieLine = Array.isArray(setCookie) ? setCookie[0] : setCookie;
+      const refreshToken = cookieLine?.match(/refreshToken=([^;]+)/)?.[1];
+      expect(refreshToken).toBeDefined();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/refresh',
+        headers: { cookie: `refreshToken=${refreshToken}` },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body).toHaveProperty('accessToken');
+      expect(body).toHaveProperty('expiresIn');
+
+      // The freshly minted access token must authenticate protected routes
+      mockContainer.authService.getUser.mockResolvedValue(mockUser);
+      const meResponse = await app.inject({
+        method: 'GET',
+        url: '/api/auth/me',
+        headers: { authorization: `Bearer ${body.accessToken}` },
+      });
+      expect(meResponse.statusCode).toBe(200);
+    });
+
+    it('should return 401 when an access token is presented as the refresh cookie', async () => {
+      // Signed with JWT_SECRET — fails verification against JWT_REFRESH_SECRET
+      const accessToken = app.jwt.sign({ userId: 'u1', email: 'user@example.com', type: 'access' });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/refresh',
+        headers: { cookie: `refreshToken=${accessToken}` },
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 401 when a refresh-secret token is missing the refresh type claim', async () => {
+      // Correct secret, wrong (absent) type — exercises the explicit type check
+      const typelessToken = app.jwt.refresh.sign({ userId: 'u1' });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/refresh',
+        headers: { cookie: `refreshToken=${typelessToken}` },
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+  });
+
+  describe('POST /api/auth/refresh rate limiting', () => {
+    it('should return 429 RATE_LIMITED after 30 attempts within the window (docs/SECURITY.md: 30 / 15 min, IP-scoped)', async () => {
+      // Fresh app so the in-memory per-route counter starts at zero and the
+      // shared app's refresh tests are not polluted by 31 extra hits.
+      const freshApp = await buildTestApp(createMockContainer());
+      await freshApp.ready();
+      try {
+        for (let i = 0; i < 30; i++) {
+          const response = await freshApp.inject({ method: 'POST', url: '/api/auth/refresh' });
+          // No cookie → REFRESH_EXPIRED, but still under the limit.
+          expect(response.statusCode).toBe(401);
+        }
+
+        const limited = await freshApp.inject({ method: 'POST', url: '/api/auth/refresh' });
+        expect(limited.statusCode).toBe(429);
+        expect(limited.json()).toMatchObject({ error: 'RATE_LIMITED' });
+      } finally {
+        await freshApp.close();
+      }
+    });
+  });
+
+  describe('token type separation', () => {
+    it('should return 401 when a refresh token is presented as a Bearer token', async () => {
+      // Signed with JWT_REFRESH_SECRET — fails verification against JWT_SECRET
+      const refreshToken = app.jwt.refresh.sign({ userId: 'test-user-id', type: 'refresh' });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/auth/me',
+        headers: { authorization: `Bearer ${refreshToken}` },
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 401 when an access-secret token carries type refresh', async () => {
+      // Valid signature, wrong type — exercises the authenticate type guard
+      const confusedToken = app.jwt.sign({ userId: 'test-user-id', type: 'refresh' });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/auth/me',
+        headers: { authorization: `Bearer ${confusedToken}` },
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should accept a legacy token without a type claim as an access token', async () => {
+      // Migration window: tokens issued before the type claim existed still work
+      const mockUser = { id: 'test-user-id', email: 'test@example.com' };
+      mockContainer.authService.getUser.mockResolvedValue(mockUser);
+      const legacyToken = app.jwt.sign({ userId: 'test-user-id', email: 'test@example.com' });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/auth/me',
+        headers: { authorization: `Bearer ${legacyToken}` },
+      });
+
+      expect(response.statusCode).toBe(200);
     });
   });
 

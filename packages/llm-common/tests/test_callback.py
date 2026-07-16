@@ -1,7 +1,7 @@
 """Tests for llm_common.callback — MongoDBUsageCallback."""
 
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -89,7 +89,7 @@ class TestSyncCallback:
 
         # Should not raise
         try:
-            cb = MongoDBUsageCallback(mock_db, service="summarizer", mode="sync")
+            MongoDBUsageCallback(mock_db, service="summarizer", mode="sync")
         except Exception:
             pass  # Construction may fail but that's initialization, not callback
 
@@ -127,7 +127,9 @@ class TestAsyncCallback:
         mock_alerts_col = AsyncMock()
         mock_usage_col = AsyncMock()
         mock_db = MagicMock()
-        mock_db.__getitem__ = MagicMock(side_effect=lambda k: mock_alerts_col if k == "llm_alerts" else mock_usage_col)
+        mock_db.__getitem__ = MagicMock(
+            side_effect=lambda k: mock_alerts_col if k == "llm_alerts" else mock_usage_col
+        )
         cb = MongoDBUsageCallback(mock_db, service="explainer", mode="async", cost_threshold=0.01)
 
         with patch("llm_common.callback.litellm") as mock_litellm:
@@ -213,7 +215,10 @@ class TestCachePlumbing:
             mock_litellm.version = "1.80.0"
 
             cb.log_success_event(
-                kwargs={"model": "anthropic/claude-haiku-4-5-20251001", "messages": [{"content": "x"}]},
+                kwargs={
+                    "model": "anthropic/claude-haiku-4-5-20251001",
+                    "messages": [{"content": "x"}],
+                },
                 response_obj=MockResponse(cache_read_input_tokens=100_000),
                 start_time=datetime.now(UTC),
                 end_time=datetime.now(UTC),

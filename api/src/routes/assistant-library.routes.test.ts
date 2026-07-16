@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import http from 'node:http';
 import { FastifyInstance } from 'fastify';
-import { buildTestApp, createMockContainer, getAuthHeader, type MockContainer } from '../test/helpers.js';
+import { buildTestApp, createMockContainer, getAuthHeader, testUser, type MockContainer } from '../test/helpers.js';
 
 // The shared mock container predates library mode, so it lacks
 // `videoRepository.getUserVideos` and the library assistant-client methods.
@@ -242,6 +243,85 @@ describe('assistant library routes', () => {
 
       expect(response.statusCode).toBe(502);
       expect(response.json().error).toBe('SERVICE_UNAVAILABLE');
+    });
+
+    it('should pass an abort signal tied to the request to the assistant client', async () => {
+      mockContainer.videoRepository.getUserVideos.mockResolvedValue([{ youtubeId: 'vidA' }]);
+
+      const encoder = new TextEncoder();
+      const mockStream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
+          controller.close();
+        },
+      });
+      mockContainer.assistantClient.libraryChat.mockResolvedValue(mockStream);
+
+      await app.inject({
+        method: 'POST',
+        url: '/api/assistant/library/chat',
+        headers: { authorization: authHeader },
+        payload: { message: 'hi' },
+      });
+
+      expect(mockContainer.assistantClient.libraryChat).toHaveBeenCalledWith(
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+    });
+
+    it('should abort the upstream assistant stream when the client disconnects mid-stream', async () => {
+      // Live server: light-my-request can't simulate a mid-stream client
+      // disconnect, so listen on a real port and destroy the raw socket.
+      const liveContainer = createLibraryMockContainer();
+      const liveApp = await buildTestApp(liveContainer);
+      await liveApp.listen({ port: 0 });
+      const address = liveApp.server.address();
+      const port = typeof address === 'object' && address !== null ? address.port : 0;
+      const token = liveApp.jwt.sign({ userId: testUser.userId, email: testUser.email, type: 'access' });
+
+      liveContainer.videoRepository.getUserVideos.mockResolvedValue([{ youtubeId: 'vidA' }]);
+
+      let upstreamSignal: AbortSignal | undefined;
+      liveContainer.assistantClient.libraryChat.mockImplementation(
+        async (opts: { signal?: AbortSignal }) => {
+          upstreamSignal = opts.signal;
+          // Upstream never sends a byte — the proxy parks on read(). Mirror a
+          // real aborted fetch body: error the stream when the signal aborts
+          // so the read loop exits.
+          return new ReadableStream<Uint8Array>({
+            start(controller) {
+              opts.signal?.addEventListener(
+                'abort',
+                () => controller.error(new Error('aborted')),
+                { once: true },
+              );
+            },
+          });
+        },
+      );
+
+      const body = JSON.stringify({ message: 'hello library' });
+      const clientReq = http.request({
+        port,
+        method: 'POST',
+        path: '/api/assistant/library/chat',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(body),
+        },
+      });
+      clientReq.on('error', () => undefined); // destroy() emits expected noise
+      clientReq.end(body);
+
+      await vi.waitFor(() => expect(liveContainer.assistantClient.libraryChat).toHaveBeenCalled());
+      clientReq.destroy();
+
+      await vi.waitFor(() => {
+        expect(upstreamSignal?.aborted).toBe(true);
+      });
+
+      await liveApp.close();
     });
 
     it('should still forward all derived ids when the library is at the truncation cap', async () => {

@@ -4,7 +4,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 
-import { ComparisonInteractive, scoreComparisonAxes } from '../ComparisonInteractive';
+import { ComparisonInteractive } from '../ComparisonInteractive';
+import { scoreComparisonAxes } from '../comparison/radar-scoring';
 
 const comparisons = [
   { feature: 'Battery', thisProduct: '4000mAh', competitor: '3500mAh', competitorName: 'Brand X' },

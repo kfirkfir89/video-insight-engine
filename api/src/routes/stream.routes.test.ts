@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import http from 'node:http';
 import { FastifyInstance } from 'fastify';
 import { buildTestApp, createMockContainer, type MockContainer } from '../test/helpers.js';
 import { ObjectId } from 'mongodb';
@@ -614,6 +615,76 @@ describe('stream routes', () => {
 
         // Reader should be cancelled on cleanup
         expect(mockCancel).toHaveBeenCalled();
+      });
+
+      it('should pass an abort signal to the upstream fetch', async () => {
+        const mockReader = {
+          read: vi.fn().mockResolvedValue({ done: true, value: undefined }),
+          cancel: vi.fn().mockResolvedValue(undefined),
+        };
+        mockFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          body: { getReader: () => mockReader },
+        });
+
+        await app.inject({
+          method: 'GET',
+          url: `/api/videos/${validVideoSummaryId}/stream`,
+          headers: { authorization: authHeader, accept: 'text/event-stream' },
+        });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ signal: expect.any(AbortSignal) }),
+        );
+      });
+
+      it('should abort the upstream fetch when the client disconnects mid-stream', async () => {
+        // Live server: light-my-request can't simulate a mid-stream client
+        // disconnect, so listen on a real port and destroy the raw socket.
+        const liveApp = await buildTestApp(createMockContainer());
+        await liveApp.listen({ port: 0 });
+        const address = liveApp.server.address();
+        const port = typeof address === 'object' && address !== null ? address.port : 0;
+        const token = liveApp.jwt.sign({ userId: validUserObjectId, email: 'test@example.com' });
+
+        let upstreamSignal: AbortSignal | undefined;
+        let rejectPendingRead: ((err: Error) => void) | undefined;
+        const stalledReader = {
+          // Upstream never sends a byte — the handler parks on read()
+          read: vi.fn(
+            () =>
+              new Promise((_, reject) => {
+                rejectPendingRead = reject;
+              }),
+          ),
+          // Mirror real fetch-body behavior: cancel() rejects the pending read
+          cancel: vi.fn(async () => {
+            rejectPendingRead?.(new Error('aborted'));
+          }),
+        };
+        mockFetch.mockImplementation(async (_url: string, init: RequestInit) => {
+          upstreamSignal = init.signal ?? undefined;
+          return { ok: true, status: 200, body: { getReader: () => stalledReader } };
+        });
+
+        const clientReq = http.get({
+          port,
+          path: `/api/videos/${validVideoSummaryId}/stream`,
+          headers: { authorization: `Bearer ${token}`, accept: 'text/event-stream' },
+        });
+        clientReq.on('error', () => undefined); // destroy() emits expected noise
+
+        await vi.waitFor(() => expect(mockFetch).toHaveBeenCalled());
+        clientReq.destroy();
+
+        await vi.waitFor(() => {
+          expect(upstreamSignal?.aborted).toBe(true);
+        });
+        expect(stalledReader.cancel).toHaveBeenCalled();
+
+        await liveApp.close();
       });
 
       it('should handle reader cancellation errors gracefully', async () => {

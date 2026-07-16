@@ -6,15 +6,15 @@ Uses httpx TestClient for async route testing.
 
 import asyncio
 import json
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 from bson import ObjectId
+from httpx import ASGITransport, AsyncClient
 
-from httpx import AsyncClient, ASGITransport
-
-from src.main import app
-from src.models.schemas import ProcessingStatus, ErrorCode
 from src.exceptions import TranscriptError
+from src.main import app
+from src.models.schemas import ErrorCode, ProcessingStatus
 
 
 @pytest.fixture(autouse=True)
@@ -25,6 +25,7 @@ def _reset_response_cache():
     from polluting stream tests with 'Event loop is closed' errors.
     """
     from src.services.cache.response_cache import response_cache
+
     response_cache._client = None
     yield
     response_cache._client = None
@@ -142,7 +143,12 @@ def completed_video_entry(valid_object_id):
             "primaryTag": "learning",
             "userGoal": "Learn about the topic",
             "tabs": [
-                {"id": "key_points", "label": "Key Points", "emoji": "📝", "description": "Main points"},
+                {
+                    "id": "key_points",
+                    "label": "Key Points",
+                    "emoji": "📝",
+                    "description": "Main points",
+                },
             ],
             "confidence": 0.9,
         },
@@ -179,16 +185,20 @@ def mock_llm_service():
     """Mock LLM service."""
     service = AsyncMock()
     service.fast_model = "anthropic/claude-haiku-4-5-20251001"
-    service.generate_metadata_tldr = AsyncMock(return_value={
-        "tldr": "Test TLDR",
-        "keyTakeaways": ["Point 1"],
-    })
-    service.summarize_section = AsyncMock(return_value={
-        "content": [
-            {"type": "paragraph", "text": "Section summary"},
-            {"type": "bullets", "items": ["Bullet 1"]},
-        ],
-    })
+    service.generate_metadata_tldr = AsyncMock(
+        return_value={
+            "tldr": "Test TLDR",
+            "keyTakeaways": ["Point 1"],
+        }
+    )
+    service.summarize_section = AsyncMock(
+        return_value={
+            "content": [
+                {"type": "paragraph", "text": "Section summary"},
+                {"type": "bullets", "items": ["Bullet 1"]},
+            ],
+        }
+    )
 
     async def mock_stream_detect(*args, **kwargs):
         yield ("complete", [{"title": "Section 1", "startSeconds": 0, "endSeconds": 60}])
@@ -207,7 +217,7 @@ def mock_llm_service():
 @pytest.fixture
 async def client(mock_repository, mock_llm_service):
     """Async test client with mocked dependencies."""
-    from src.dependencies import get_video_repository, get_llm_service
+    from src.dependencies import get_llm_service, get_video_repository
 
     app.dependency_overrides[get_video_repository] = lambda: mock_repository
     app.dependency_overrides[get_llm_service] = lambda: mock_llm_service
@@ -270,7 +280,9 @@ class TestStreamRouteValidation:
 class TestStreamCachedResult:
     """Tests for streaming cached results."""
 
-    async def test_streams_cached_result(self, client, mock_repository, completed_video_entry, valid_object_id):
+    async def test_streams_cached_result(
+        self, client, mock_repository, completed_video_entry, valid_object_id
+    ):
         """Test streaming a cached (completed) result."""
         mock_repository.get_video_summary.return_value = completed_video_entry
 
@@ -290,7 +302,9 @@ class TestStreamCachedResult:
         assert "synthesis_complete" in event_types
         assert "done" in event_types
 
-    async def test_cached_result_includes_metadata(self, client, mock_repository, completed_video_entry, valid_object_id):
+    async def test_cached_result_includes_metadata(
+        self, client, mock_repository, completed_video_entry, valid_object_id
+    ):
         """Test that cached result includes all metadata."""
         mock_repository.get_video_summary.return_value = completed_video_entry
 
@@ -303,7 +317,9 @@ class TestStreamCachedResult:
         assert metadata_event["channel"] == "Test Channel"
         assert metadata_event["duration"] == 300
 
-    async def test_cached_result_includes_synthesis(self, client, mock_repository, completed_video_entry, valid_object_id):
+    async def test_cached_result_includes_synthesis(
+        self, client, mock_repository, completed_video_entry, valid_object_id
+    ):
         """Test that cached result includes TLDR and takeaways."""
         mock_repository.get_video_summary.return_value = completed_video_entry
 
@@ -315,7 +331,9 @@ class TestStreamCachedResult:
         assert synthesis_event["tldr"] == "Test TLDR"
         assert "Point 1" in synthesis_event["keyTakeaways"]
 
-    async def test_cached_result_includes_triage(self, client, mock_repository, completed_video_entry, valid_object_id):
+    async def test_cached_result_includes_triage(
+        self, client, mock_repository, completed_video_entry, valid_object_id
+    ):
         """Test that cached result includes triage event."""
         mock_repository.get_video_summary.return_value = completed_video_entry
 
@@ -326,7 +344,9 @@ class TestStreamCachedResult:
         assert triage_event is not None
         assert triage_event["primaryTag"] == "learning"
 
-    async def test_cached_result_includes_tabs(self, client, mock_repository, completed_video_entry, valid_object_id):
+    async def test_cached_result_includes_tabs(
+        self, client, mock_repository, completed_video_entry, valid_object_id
+    ):
         """Test that cached result includes tab_ready events."""
         mock_repository.get_video_summary.return_value = completed_video_entry
 
@@ -360,8 +380,18 @@ def structured_video_entry(valid_object_id):
             "primaryTag": "review",
             "userGoal": "Find best camera phone",
             "tabs": [
-                {"id": "overview", "label": "Overview", "emoji": "⭐", "description": "Product overview"},
-                {"id": "pros_cons", "label": "Pros & Cons", "emoji": "⚖️", "description": "Pros and cons"},
+                {
+                    "id": "overview",
+                    "label": "Overview",
+                    "emoji": "⭐",
+                    "description": "Product overview",
+                },
+                {
+                    "id": "pros_cons",
+                    "label": "Pros & Cons",
+                    "emoji": "⚖️",
+                    "description": "Pros and cons",
+                },
             ],
             "confidence": 0.95,
         },
@@ -513,7 +543,14 @@ class TestStreamStructuredCachedResult:
     ):
         """Test that cached results never emit enrichment_complete (enrichment is embedded in tabs)."""
         structured_video_entry["enrichment"] = {
-            "quiz": [{"question": "Q1?", "options": ["A", "B"], "correctIndex": 0, "explanation": "Because A"}],
+            "quiz": [
+                {
+                    "question": "Q1?",
+                    "options": ["A", "B"],
+                    "correctIndex": 0,
+                    "explanation": "Because A",
+                }
+            ],
         }
         mock_repository.get_video_summary.return_value = structured_video_entry
 
@@ -534,16 +571,20 @@ class TestSSEEventFormat:
     """Tests for SSE event formatting."""
 
     def test_sse_event_format(self):
-        """Test sse_event helper function format."""
+        """Test sse_event helper function format.
+
+        Uses a registered event name — sse_event now validates every emission
+        against src/models/sse_events.py and rejects unknown names.
+        """
         from src.services.pipeline.pipeline_helpers import sse_event
 
-        result = sse_event("test", {"key": "value"})
+        result = sse_event("phase", {"phase": "translation", "key": "value"})
 
         assert result.startswith("data: ")
         assert result.endswith("\n\n")
 
         data = json.loads(result[6:-2])  # Remove "data: " and "\n\n"
-        assert data["event"] == "test"
+        assert data["event"] == "phase"
         assert data["key"] == "value"
 
     def test_sse_token_format(self):
@@ -578,7 +619,9 @@ class TestStreamErrorHandling:
     ):
         """Test handling TranscriptError during processing."""
         mock_repository.get_video_summary.return_value = sample_video_entry
-        mock_extract.side_effect = TranscriptError("No transcript available", ErrorCode.NO_TRANSCRIPT)
+        mock_extract.side_effect = TranscriptError(
+            "No transcript available", ErrorCode.NO_TRANSCRIPT
+        )
 
         response = await client.get(f"/summarize/stream/{valid_object_id}")
         events = parse_sse_events(response.text)
@@ -686,7 +729,8 @@ class TestStreamErrorHandling:
         mock_repository.update_status.assert_called()
         # Find the FAILED status call
         failed_calls = [
-            call for call in mock_repository.update_status.call_args_list
+            call
+            for call in mock_repository.update_status.call_args_list
             if call[0][1] == ProcessingStatus.FAILED
         ]
         assert len(failed_calls) >= 1
@@ -753,7 +797,6 @@ class TestHelperFunctions:
         assert result[0]["endMs"] == 3500
 
 
-
 class TestTranscriptData:
     """Tests for TranscriptData dataclass."""
 
@@ -771,7 +814,6 @@ class TestTranscriptData:
         assert len(data.segments) == 1
         assert data.raw_text == "Hello"
         assert data.source == "ytdlp"
-
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -806,7 +848,9 @@ class TestStreamIntegration:
         assert data["service"] == "vie-summarizer"
         assert "version" in data
 
-    async def test_stream_response_headers(self, client, mock_repository, completed_video_entry, valid_object_id):
+    async def test_stream_response_headers(
+        self, client, mock_repository, completed_video_entry, valid_object_id
+    ):
         """Test that stream response has correct headers."""
         mock_repository.get_video_summary.return_value = completed_video_entry
 
@@ -815,14 +859,15 @@ class TestStreamIntegration:
         assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
         assert response.headers.get("cache-control") == "no-cache"
 
-    async def test_done_signal_sent_at_end(self, client, mock_repository, completed_video_entry, valid_object_id):
+    async def test_done_signal_sent_at_end(
+        self, client, mock_repository, completed_video_entry, valid_object_id
+    ):
         """Test that [DONE] signal is sent at end of stream."""
         mock_repository.get_video_summary.return_value = completed_video_entry
 
         response = await client.get(f"/summarize/stream/{valid_object_id}")
 
         assert "data: [DONE]" in response.text
-
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -850,18 +895,57 @@ class TestStreamStructuredCachedResultNewPipeline:
                 "primaryTag": "review",
                 "userGoal": "Evaluate camera quality",
                 "tabs": [
-                    {"id": "overview", "label": "Overview", "emoji": "📋", "description": "Summary"},
-                    {"id": "pros_cons", "label": "Pros & Cons", "emoji": "⚖️", "description": "Comparison"},
+                    {
+                        "id": "overview",
+                        "label": "Overview",
+                        "emoji": "📋",
+                        "description": "Summary",
+                    },
+                    {
+                        "id": "pros_cons",
+                        "label": "Pros & Cons",
+                        "emoji": "⚖️",
+                        "description": "Comparison",
+                    },
                     {"id": "ratings", "label": "Ratings", "emoji": "⭐", "description": "Scores"},
-                    {"id": "verdict", "label": "Verdict", "emoji": "🏆", "description": "Final call"},
+                    {
+                        "id": "verdict",
+                        "label": "Verdict",
+                        "emoji": "🏆",
+                        "description": "Final call",
+                    },
                 ],
                 "confidence": 0.92,
             },
             "assembledTabs": [
-                {"id": "overview", "label": "Overview", "emoji": "📋", "component": "overview", "props": {"product": "iPhone 15 Camera"}},
-                {"id": "pros_cons", "label": "Pros & Cons", "emoji": "⚖️", "component": "comparison", "props": {"pros": ["Great photo quality"], "cons": ["Expensive"]}},
-                {"id": "ratings", "label": "Ratings", "emoji": "⭐", "component": "verdict", "props": {"score": 8.5}},
-                {"id": "verdict", "label": "Verdict", "emoji": "🏆", "component": "verdict", "props": {"bottomLine": "Excellent camera"}},
+                {
+                    "id": "overview",
+                    "label": "Overview",
+                    "emoji": "📋",
+                    "component": "overview",
+                    "props": {"product": "iPhone 15 Camera"},
+                },
+                {
+                    "id": "pros_cons",
+                    "label": "Pros & Cons",
+                    "emoji": "⚖️",
+                    "component": "comparison",
+                    "props": {"pros": ["Great photo quality"], "cons": ["Expensive"]},
+                },
+                {
+                    "id": "ratings",
+                    "label": "Ratings",
+                    "emoji": "⭐",
+                    "component": "verdict",
+                    "props": {"score": 8.5},
+                },
+                {
+                    "id": "verdict",
+                    "label": "Verdict",
+                    "emoji": "🏆",
+                    "component": "verdict",
+                    "props": {"bottomLine": "Excellent camera"},
+                },
             ],
             "synthesis": {
                 "tldr": "iPhone 15 camera is excellent for photography",
@@ -1021,7 +1105,12 @@ class TestStreamLegacyCachedFormats:
                 "confidence": 0.85,
                 "userGoal": "Learn about the topic",
                 "sections": [
-                    {"id": "overview", "label": "Overview", "emoji": "📋", "description": "Summary"},
+                    {
+                        "id": "overview",
+                        "label": "Overview",
+                        "emoji": "📋",
+                        "description": "Summary",
+                    },
                     {"id": "details", "label": "Details", "emoji": "📝", "description": "Detail"},
                 ],
             },
@@ -1210,7 +1299,9 @@ class TestResolveHelpers:
         """Triage resolved from meta.contentTags."""
         from src.routes.cached_response import resolve_triage_event as _resolve_triage_event
 
-        entry = {"meta": {"contentTags": ["learning"], "primaryTag": "learning", "userGoal": "Learn"}}
+        entry = {
+            "meta": {"contentTags": ["learning"], "primaryTag": "learning", "userGoal": "Learn"}
+        }
         result = _resolve_triage_event(entry)
         assert result is not None
         assert result["contentTags"] == ["learning"]
@@ -1263,7 +1354,9 @@ class TestResolveHelpers:
         """Synthesis resolved from meta fields."""
         from src.routes.cached_response import resolve_synthesis as _resolve_synthesis
 
-        entry = {"meta": {"tldr": "Meta TLDR", "masterSummary": "Meta summary", "seoDescription": "SEO"}}
+        entry = {
+            "meta": {"tldr": "Meta TLDR", "masterSummary": "Meta summary", "seoDescription": "SEO"}
+        }
         result = _resolve_synthesis(entry)
         assert result["tldr"] == "Meta TLDR"
         assert result["masterSummary"] == "Meta summary"
@@ -1272,7 +1365,14 @@ class TestResolveHelpers:
         """Synthesis resolved from synthesis field."""
         from src.routes.cached_response import resolve_synthesis as _resolve_synthesis
 
-        entry = {"synthesis": {"tldr": "Syn TLDR", "keyTakeaways": ["A"], "masterSummary": "Syn summary", "seoDescription": "SEO"}}
+        entry = {
+            "synthesis": {
+                "tldr": "Syn TLDR",
+                "keyTakeaways": ["A"],
+                "masterSummary": "Syn summary",
+                "seoDescription": "SEO",
+            }
+        }
         result = _resolve_synthesis(entry)
         assert result["tldr"] == "Syn TLDR"
         assert result["keyTakeaways"] == ["A"]

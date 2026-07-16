@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { VIEResponse, TabEntry } from '@vie/types';
@@ -12,6 +12,10 @@ vi.mock('../link-rules', () => ({
 }));
 
 import { ComposableOutput } from '../ComposableOutput';
+import {
+  getTelemetryCounter,
+  resetTelemetryCounters,
+} from '@/features/video-output/lib/telemetry';
 
 const baseMeta = {
   videoId: 'v1',
@@ -153,7 +157,16 @@ describe('ComposableOutput', () => {
           label: '🧪 Quizzes',
           emoji: '🧪',
           component: 'quiz_arena',
-          props: { questions: [{ q: '1' }, { q: '2' }, { q: '3' }] },
+          // Schema-valid questions — tabs pass the 4.4 validation boundary
+          // before count inference, so shorthand fixtures would remap to
+          // display_section and lose their count.
+          props: {
+            questions: [
+              { question: 'Q1?', options: ['A', 'B'], correctIndex: 0 },
+              { question: 'Q2?', options: ['A', 'B'], correctIndex: 1 },
+              { question: 'Q3?', options: ['A', 'B'], correctIndex: 0 },
+            ],
+          },
         },
         {
           id: 'concepts',
@@ -311,6 +324,72 @@ describe('ComposableOutput', () => {
         />,
       );
       expect(screen.queryByRole('button', { name: /Enter .* Mode/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('cached-tabs validation boundary (4.4 follow-up)', () => {
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      resetTelemetryCounters();
+      warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      warnSpy.mockRestore();
+      resetTelemetryCounters();
+    });
+
+    // REST-fetched assembledTabs (cached videos) never pass through
+    // handleTabReady — this proves the ComposableOutput boundary gates them.
+    it('should render the display_section fallback and count drift for a malformed cached tab', () => {
+      const tabs: TabEntry[] = [
+        {
+          id: 'ingredients',
+          label: 'Ingredients',
+          emoji: '🧅',
+          component: 'checklist',
+          // String masquerading as the items list — fails the checklist schema.
+          props: { items: 'Pasta, Oil, Garlic' },
+        },
+      ];
+      render(
+        <ComposableOutput
+          response={null}
+          tabs={tabs}
+          activeTab="ingredients"
+          onNavigateTab={vi.fn()}
+        />,
+      );
+      // Fallback path: DisplaySection prints the raw payload; the checklist
+      // interactive (checkbox list) must NOT mount on malformed props.
+      expect(screen.getByText('Pasta, Oil, Garlic')).toBeInTheDocument();
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+      expect(getTelemetryCounter('tab_props_invalid')).toBe(1);
+      expect(getTelemetryCounter('tab_props_invalid.checklist')).toBe(1);
+    });
+
+    it('should render a valid cached tab through its component without counting', () => {
+      const tabs: TabEntry[] = [
+        {
+          id: 'ingredients',
+          label: 'Ingredients',
+          emoji: '🧅',
+          component: 'checklist',
+          props: { items: [{ label: 'Pasta' }] },
+        },
+      ];
+      render(
+        <ComposableOutput
+          response={null}
+          tabs={tabs}
+          activeTab="ingredients"
+          onNavigateTab={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Pasta')).toBeInTheDocument();
+      expect(getTelemetryCounter('tab_props_invalid')).toBe(0);
+      expect(getTelemetryCounter('tab_component_unknown')).toBe(0);
     });
   });
 

@@ -13,7 +13,7 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -35,8 +35,10 @@ def test_flatten_claims_picks_known_leaf_fields():
     """Claims under 20 chars are filtered as boilerplate; longer leaves are kept."""
     data = {
         "concepts": [
-            {"name": "Photosynthesis basics 101",  # > 20 chars so it survives
-             "definition": "the process by which plants make food from sunlight"},
+            {
+                "name": "Photosynthesis basics 101",  # > 20 chars so it survives
+                "definition": "the process by which plants make food from sunlight",
+            },
         ],
         "key_points": [
             {"text": "chlorophyll absorbs red and blue light, reflects green"},
@@ -51,7 +53,9 @@ def test_flatten_claims_picks_known_leaf_fields():
 
 
 def test_flatten_claims_filters_short_text():
-    data = {"key_points": [{"text": "ok"}, {"text": "long enough to be a real claim about something"}]}
+    data = {
+        "key_points": [{"text": "ok"}, {"text": "long enough to be a real claim about something"}]
+    }
     claims = fh._flatten_claims(data)
     assert len(claims) == 1
     assert "long enough" in claims[0]
@@ -158,11 +162,13 @@ async def test_reports_grounded_score_and_logs_to_langfuse(monkeypatch):
     fake_trace = MagicMock()
     lc._client.trace.return_value = fake_trace
 
-    llm = _llm_returning([
-        '{"grounded": true, "evidence": ""}',
-        '{"grounded": false, "evidence": ""}',
-        '{"grounded": true, "evidence": ""}',
-    ])
+    llm = _llm_returning(
+        [
+            '{"grounded": true, "evidence": ""}',
+            '{"grounded": false, "evidence": ""}',
+            '{"grounded": true, "evidence": ""}',
+        ]
+    )
     extraction = {
         "key_points": [
             {"text": "claim about photosynthesis being the process plants use"},
@@ -192,9 +198,11 @@ async def test_reports_grounded_score_and_logs_to_langfuse(monkeypatch):
 async def test_judge_errors_dont_crash():
     """When the judge returns garbage, we just skip that verdict."""
     llm = _llm_returning(["garbage", '{"grounded": true}', '{"grounded": true}'])
-    extraction = {"key_points": [
-        {"text": f"claim {i} about something with enough length to count"} for i in range(3)
-    ]}
+    extraction = {
+        "key_points": [
+            {"text": f"claim {i} about something with enough length to count"} for i in range(3)
+        ]
+    }
     report = await fh.run_faithfulness_check(
         llm_service=llm,
         transcript="t",
@@ -219,14 +227,121 @@ async def test_transcript_window_covers_long_videos():
     assert fh._TRANSCRIPT_BUDGET_CHARS >= 60_000
 
 
+# ─── Claim-localized context selection ──────────────────────────────────
+_FILLER_SENTENCE = (
+    "the presenter keeps talking about general background material and "
+    "various unrelated housekeeping remarks for quite a while here. "
+)
+_TAIL_EVIDENCE = (
+    "the quantum flux capacitor requires exactly three plutonium rods "
+    "to reach eighty eight miles per hour according to doc brown"
+)
+
+
+def _long_transcript_with_tail_evidence() -> str:
+    """~120K chars of filler with the supporting evidence past the 80K mark."""
+    filler = _FILLER_SENTENCE * 900  # ~100K chars
+    assert len(filler) > fh._TRANSCRIPT_BUDGET_CHARS
+    return filler + _TAIL_EVIDENCE + " " + _FILLER_SENTENCE * 150
+
+
+class TestSelectClaimContext:
+    def test_short_transcript_passes_through_whole(self):
+        transcript = "a short transcript about photosynthesis and chlorophyll"
+        result = fh._select_claim_context(transcript, "claim about chlorophyll")
+        assert result == transcript
+
+    def test_empty_transcript_returns_empty(self):
+        assert fh._select_claim_context("", "any claim at all") == ""
+
+    def test_includes_supporting_segment_beyond_head_budget(self):
+        """The tail evidence lives past the first 80K chars — a head slice
+        could never contain it; claim-localized selection must."""
+        transcript = _long_transcript_with_tail_evidence()
+        claim = "The flux capacitor needs three plutonium rods to hit 88 mph"
+
+        head_slice = transcript[: fh._TRANSCRIPT_BUDGET_CHARS]
+        assert _TAIL_EVIDENCE not in head_slice  # old behavior judged against this
+
+        context = fh._select_claim_context(transcript, claim)
+        assert _TAIL_EVIDENCE in context
+
+    def test_respects_budget(self):
+        transcript = _long_transcript_with_tail_evidence()
+        claim = "The flux capacitor needs three plutonium rods"
+        context = fh._select_claim_context(transcript, claim)
+        # Budget + join/gap-marker slack
+        assert len(context) <= fh._TRANSCRIPT_BUDGET_CHARS + 2_048
+
+    def test_no_overlap_falls_back_to_head_slice(self):
+        transcript = _FILLER_SENTENCE * 900
+        claim = "zzzxqwv jjkkyy uuvvww"  # shares no vocabulary
+        context = fh._select_claim_context(transcript, claim)
+        assert context.startswith(transcript[:200])
+        assert len(context) <= fh._TRANSCRIPT_BUDGET_CHARS + len("\n[truncated]")
+
+    def test_stopword_only_claim_falls_back_to_head_slice(self):
+        transcript = _FILLER_SENTENCE * 900
+        context = fh._select_claim_context(transcript, "the and for that this")
+        assert context.startswith(transcript[:200])
+
+    def test_selected_windows_preserve_document_order(self):
+        early = "alpha wombat discusses the migration pattern of wombats early on "
+        late = "and much later the wombat migration pattern conclusion is revealed "
+        transcript = early * 80 + _FILLER_SENTENCE * 900 + late * 80
+        context = fh._select_claim_context(transcript, "wombat migration pattern")
+        first_early = context.find("alpha wombat")
+        first_late = context.find("later the wombat")
+        assert first_early != -1 and first_late != -1
+        assert first_early < first_late  # document order preserved
+
+    def test_split_windows_covers_whole_transcript_in_order(self):
+        transcript = "word " * 5000  # 25K chars
+        windows = fh._split_windows(transcript, window_chars=4_000)
+        assert [w.index for w in windows] == list(range(len(windows)))
+        assert windows[0].offset == 0
+        reassembled = "".join(w.text for w in windows)
+        assert reassembled == transcript
+
+    def test_split_windows_empty(self):
+        assert fh._split_windows("") == []
+
+
+@pytest.mark.asyncio
+async def test_judge_receives_claim_localized_context_for_long_video():
+    """End-to-end: for a 3h-style transcript the prompt sent to the judge
+    contains the tail evidence, not just the transcript head."""
+    transcript = _long_transcript_with_tail_evidence()
+    claim_text = (
+        "the quantum flux capacitor requires exactly three plutonium rods "
+        "to reach eighty eight miles per hour"
+    )
+    llm = _llm_returning(['{"grounded": true, "evidence": "flux capacitor"}'])
+    extraction = {"key_points": [{"text": claim_text}]}
+
+    report = await fh.run_faithfulness_check(
+        llm_service=llm,
+        transcript=transcript,
+        extraction_data=extraction,
+        youtube_id="vid-long",
+        sample_rate=1.0,
+    )
+
+    assert report is not None
+    prompt_sent = llm.call_llm_fast.call_args.args[0]
+    assert _TAIL_EVIDENCE in prompt_sent
+
+
 @pytest.mark.asyncio
 async def test_run_logs_diagnostic_summary(caplog):
     """Every run should emit a one-line summary with transcript size + sample size."""
     llm = _llm_returning(['{"grounded": true}', '{"grounded": true}'])
-    extraction = {"key_points": [
-        {"text": "claim one with enough characters to be considered"},
-        {"text": "claim two with enough characters to be considered"},
-    ]}
+    extraction = {
+        "key_points": [
+            {"text": "claim one with enough characters to be considered"},
+            {"text": "claim two with enough characters to be considered"},
+        ]
+    }
     with caplog.at_level("INFO"):
         await fh.run_faithfulness_check(
             llm_service=llm,
@@ -235,7 +350,11 @@ async def test_run_logs_diagnostic_summary(caplog):
             youtube_id="vid-log",
             sample_rate=1.0,
         )
-    summary = [r for r in caplog.records if "[faithfulness]" in r.getMessage() and "claims_total" in r.getMessage()]
+    summary = [
+        r
+        for r in caplog.records
+        if "[faithfulness]" in r.getMessage() and "claims_total" in r.getMessage()
+    ]
     assert summary, "expected one diagnostic summary log line per run"
     assert "vid-log" in summary[0].getMessage()
     assert "truncated=False" in summary[0].getMessage()

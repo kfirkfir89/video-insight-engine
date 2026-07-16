@@ -159,15 +159,19 @@ describe('VideoHero', () => {
       expect(screen.getByText('Advanced')).toBeInTheDocument();
     });
 
-    it('should render a Brief eyebrow above the TLDR', () => {
+    it('should render the brief inline with no Brief collapse toggle', () => {
       renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
-      expect(screen.getByText('Brief')).toBeInTheDocument();
+      // The brief now rides beside the action cluster as plain prose — there is
+      // no longer a "Brief" disclosure button.
       expect(screen.getByText(DEFAULT_PROPS.tldr)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^brief$/i })).not.toBeInTheDocument();
     });
 
-    it('should render Key takeaways block when takeaways are present', () => {
+    it('should render Key takeaways disclosure with a count when takeaways are present', () => {
       renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
-      expect(screen.getByText('Key takeaways')).toBeInTheDocument();
+      // Label carries the count: "Key takeaways · 3".
+      expect(screen.getByRole('button', { name: /key takeaways/i })).toHaveTextContent('3');
+      // Children stay mounted even while collapsed (grid-rows morph).
       expect(screen.getByText('Takeaway one')).toBeInTheDocument();
       expect(screen.getByText('Takeaway two')).toBeInTheDocument();
       expect(screen.getByText('Takeaway three')).toBeInTheDocument();
@@ -182,21 +186,19 @@ describe('VideoHero', () => {
 
     it('should not render the Key takeaways block when none are present and not streaming', () => {
       renderWithPlayer(<VideoHero {...DEFAULT_PROPS} keyTakeaways={undefined} />);
-      expect(screen.queryByText('Key takeaways')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /key takeaways/i })).not.toBeInTheDocument();
     });
 
-    it('should render the YouTube outbound link when youtubeId is provided', () => {
+    it('should not render a separate YouTube link (Watch is the only video action)', () => {
       renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
-      const link = screen.getByRole('link', { name: /youtube/i });
-      expect(link).toHaveAttribute('href', `https://youtu.be/${DEFAULT_PROPS.youtubeId}`);
-      expect(link).toHaveAttribute('target', '_blank');
-      expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+      expect(screen.queryByRole('link', { name: /youtube/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /watch/i })).toBeInTheDocument();
     });
   });
 
-  describe('Collapsible Brief and Key takeaways', () => {
+  describe('Collapsible Key takeaways', () => {
     beforeEach(() => {
-      // Each test starts with no persisted preference so the default-open
+      // Each test starts with no persisted preference so the default-collapsed
       // behavior is exercised explicitly.
       localStorage.clear();
     });
@@ -205,56 +207,40 @@ describe('VideoHero', () => {
       localStorage.clear();
     });
 
-    it('should default to expanded when no localStorage preference is set', () => {
+    it('should default to collapsed when no localStorage preference is set', () => {
       renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
 
-      const briefBtn = screen.getByRole('button', { name: /brief/i });
       const takeawaysBtn = screen.getByRole('button', { name: /key takeaways/i });
+      expect(takeawaysBtn).toHaveAttribute('aria-expanded', 'false');
+    });
 
-      expect(briefBtn).toHaveAttribute('aria-expanded', 'true');
+    it('should expand the Key takeaways when its toggle is clicked', async () => {
+      const user = userEvent.setup();
+      renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
+
+      const takeawaysBtn = screen.getByRole('button', { name: /key takeaways/i });
+      expect(takeawaysBtn).toHaveAttribute('aria-expanded', 'false');
+
+      await user.click(takeawaysBtn);
+
       expect(takeawaysBtn).toHaveAttribute('aria-expanded', 'true');
     });
 
-    it('should collapse the Brief when the brief toggle is clicked', async () => {
+    it('should persist the expanded state to localStorage', async () => {
       const user = userEvent.setup();
       renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
 
-      const briefBtn = screen.getByRole('button', { name: /brief/i });
-      await user.click(briefBtn);
+      await user.click(screen.getByRole('button', { name: /key takeaways/i }));
 
-      expect(briefBtn).toHaveAttribute('aria-expanded', 'false');
-      // Takeaways stay open — the toggles are independent.
+      expect(localStorage.getItem('vie-hero-takeaways-open')).toBe('true');
+    });
+
+    it('should restore the expanded state from localStorage on mount', () => {
+      localStorage.setItem('vie-hero-takeaways-open', 'true');
+
+      renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
+
       expect(screen.getByRole('button', { name: /key takeaways/i })).toHaveAttribute('aria-expanded', 'true');
-    });
-
-    it('should collapse the Key takeaways when its toggle is clicked', async () => {
-      const user = userEvent.setup();
-      renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
-
-      const takeawaysBtn = screen.getByRole('button', { name: /key takeaways/i });
-      await user.click(takeawaysBtn);
-
-      expect(takeawaysBtn).toHaveAttribute('aria-expanded', 'false');
-      expect(screen.getByRole('button', { name: /brief/i })).toHaveAttribute('aria-expanded', 'true');
-    });
-
-    it('should persist the toggle state to localStorage', async () => {
-      const user = userEvent.setup();
-      renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
-
-      await user.click(screen.getByRole('button', { name: /brief/i }));
-
-      expect(localStorage.getItem('vie-hero-brief-open')).toBe('false');
-    });
-
-    it('should restore the collapsed state from localStorage on mount', () => {
-      localStorage.setItem('vie-hero-brief-open', 'false');
-      localStorage.setItem('vie-hero-takeaways-open', 'false');
-
-      renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
-
-      expect(screen.getByRole('button', { name: /brief/i })).toHaveAttribute('aria-expanded', 'false');
-      expect(screen.getByRole('button', { name: /key takeaways/i })).toHaveAttribute('aria-expanded', 'false');
     });
   });
 });

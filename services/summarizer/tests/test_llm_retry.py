@@ -2,6 +2,7 @@
 
 import asyncio
 import pytest
+from unittest import mock
 from unittest.mock import AsyncMock, MagicMock
 
 from litellm.exceptions import (
@@ -32,8 +33,12 @@ class TestCallLlmWithRetry:
         mock_llm.call_llm.return_value = '{"key": "value"}'
 
         result = await call_llm_with_retry(
-            mock_llm, "test prompt",
-            max_tokens=1000, timeout=10.0, max_retries=2, stage_name="test",
+            mock_llm,
+            "test prompt",
+            max_tokens=1000,
+            timeout=10.0,
+            max_retries=2,
+            stage_name="test",
         )
 
         assert result == '{"key": "value"}'
@@ -47,8 +52,11 @@ class TestCallLlmWithRetry:
         ]
 
         result = await call_llm_with_retry(
-            mock_llm, "test prompt",
-            timeout=5.0, max_retries=1, stage_name="test",
+            mock_llm,
+            "test prompt",
+            timeout=5.0,
+            max_retries=1,
+            stage_name="test",
         )
 
         assert result == '{"success": true}'
@@ -57,13 +65,18 @@ class TestCallLlmWithRetry:
     @pytest.mark.asyncio
     async def test_retries_on_exception(self, mock_llm):
         mock_llm.call_llm.side_effect = [
-            LitellmAPIError(status_code=500, message="API error", llm_provider="anthropic", model="test-model"),
+            LitellmAPIError(
+                status_code=500, message="API error", llm_provider="anthropic", model="test-model"
+            ),
             '{"recovered": true}',
         ]
 
         result = await call_llm_with_retry(
-            mock_llm, "test prompt",
-            timeout=10.0, max_retries=1, stage_name="test",
+            mock_llm,
+            "test prompt",
+            timeout=10.0,
+            max_retries=1,
+            stage_name="test",
         )
 
         assert result == '{"recovered": true}'
@@ -78,8 +91,11 @@ class TestCallLlmWithRetry:
         ]
 
         result = await call_llm_with_retry(
-            mock_llm, "test prompt",
-            timeout=10.0, max_retries=2, stage_name="test",
+            mock_llm,
+            "test prompt",
+            timeout=10.0,
+            max_retries=2,
+            stage_name="test",
         )
 
         assert result == '{"data": true}'
@@ -90,8 +106,11 @@ class TestCallLlmWithRetry:
         mock_llm.call_llm.side_effect = asyncio.TimeoutError()
 
         result = await call_llm_with_retry(
-            mock_llm, "test prompt",
-            timeout=5.0, max_retries=2, stage_name="test",
+            mock_llm,
+            "test prompt",
+            timeout=5.0,
+            max_retries=2,
+            stage_name="test",
         )
 
         assert result is None
@@ -102,8 +121,11 @@ class TestCallLlmWithRetry:
         mock_llm.call_llm.side_effect = asyncio.TimeoutError()
 
         result = await call_llm_with_retry(
-            mock_llm, "test prompt",
-            timeout=5.0, max_retries=0, stage_name="test",
+            mock_llm,
+            "test prompt",
+            timeout=5.0,
+            max_retries=0,
+            stage_name="test",
         )
 
         assert result is None
@@ -114,16 +136,26 @@ class TestCallLlmWithRetry:
         mock_llm.call_llm.return_value = '{"ok": true}'
 
         await call_llm_with_retry(
-            mock_llm, "my prompt",
-            max_tokens=8192, timeout=30.0, max_retries=0, stage_name="triage",
+            mock_llm,
+            "my prompt",
+            max_tokens=8192,
+            timeout=30.0,
+            max_retries=0,
+            stage_name="triage",
         )
 
         mock_llm.call_llm.assert_called_once_with(
-            "my prompt", max_tokens=8192, timeout=30.0, json_mode=False, cache_static=None,
+            "my prompt",
+            max_tokens=8192,
+            timeout=30.0,
+            json_mode=False,
+            cache_static=None,
             span_name="triage",
             span_metadata={
-                "attempt": 1, "maxAttempts": 1,
-                "useFastModel": False, "modelOverride": None,
+                "attempt": 1,
+                "maxAttempts": 1,
+                "useFastModel": False,
+                "modelOverride": None,
             },
         )
 
@@ -132,8 +164,11 @@ class TestCallLlmWithRetry:
         mock_llm.call_llm.return_value = ""
 
         result = await call_llm_with_retry(
-            mock_llm, "test prompt",
-            timeout=10.0, max_retries=1, stage_name="test",
+            mock_llm,
+            "test prompt",
+            timeout=10.0,
+            max_retries=1,
+            stage_name="test",
         )
 
         assert result is None
@@ -144,8 +179,11 @@ class TestCallLlmWithRetry:
         mock_llm.call_llm.return_value = "response"
 
         result = await call_llm_with_retry(
-            mock_llm, "prompt",
-            timeout=60.0, max_retries=5, stage_name="test",
+            mock_llm,
+            "prompt",
+            timeout=60.0,
+            max_retries=5,
+            stage_name="test",
         )
 
         assert result == "response"
@@ -155,13 +193,21 @@ class TestCallLlmWithRetry:
     async def test_mixed_failure_types(self, mock_llm):
         mock_llm.call_llm.side_effect = [
             asyncio.TimeoutError(),
-            LitellmAPIError(status_code=429, message="rate limited", llm_provider="anthropic", model="test-model"),
+            LitellmAPIError(
+                status_code=429,
+                message="rate limited",
+                llm_provider="anthropic",
+                model="test-model",
+            ),
             '{"finally": true}',
         ]
 
         result = await call_llm_with_retry(
-            mock_llm, "prompt",
-            timeout=5.0, max_retries=2, stage_name="test",
+            mock_llm,
+            "prompt",
+            timeout=5.0,
+            max_retries=2,
+            stage_name="test",
         )
 
         assert result == '{"finally": true}'
@@ -172,8 +218,12 @@ class TestCallLlmWithRetry:
         mock_llm.call_llm_fast.return_value = '{"fast": true}'
 
         result = await call_llm_with_retry(
-            mock_llm, "test prompt",
-            max_tokens=1000, timeout=10.0, max_retries=0, stage_name="test",
+            mock_llm,
+            "test prompt",
+            max_tokens=1000,
+            timeout=10.0,
+            max_retries=0,
+            stage_name="test",
             use_fast_model=True,
         )
 
@@ -186,14 +236,37 @@ class TestCallLlmWithRetry:
         mock_llm.call_llm.return_value = '{"default": true}'
 
         result = await call_llm_with_retry(
-            mock_llm, "test prompt",
-            max_tokens=1000, timeout=10.0, max_retries=0, stage_name="test",
+            mock_llm,
+            "test prompt",
+            max_tokens=1000,
+            timeout=10.0,
+            max_retries=0,
+            stage_name="test",
             use_fast_model=False,
         )
 
         assert result == '{"default": true}'
         mock_llm.call_llm.assert_called_once()
         mock_llm.call_llm_fast.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_backoff_schedule_is_linear(self, mock_llm):
+        """Backoff grows linearly (1s, 2s, ...) between attempts — the
+        docstring must match this schedule (project-score-9 6.1)."""
+        mock_llm.call_llm.return_value = ""
+
+        with mock.patch("src.utils.llm_retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            result = await call_llm_with_retry(
+                mock_llm,
+                "test prompt",
+                max_tokens=1000,
+                timeout=10.0,
+                max_retries=2,
+                stage_name="test",
+            )
+
+        assert result is None
+        assert [c.args[0] for c in mock_sleep.await_args_list] == [1.0, 2.0]
 
 
 class TestPropagateRateLimit:
@@ -204,15 +277,20 @@ class TestPropagateRateLimit:
     @pytest.mark.asyncio
     async def test_re_raises_terminal_rate_limit_error(self, mock_llm):
         rate_err = RateLimitError(
-            message="429", model="anthropic/claude-sonnet-4-6",
+            message="429",
+            model="anthropic/claude-sonnet-4-6",
             llm_provider="anthropic",
         )
         mock_llm.call_llm.side_effect = rate_err
 
         with pytest.raises(RateLimitError):
             await call_llm_with_retry(
-                mock_llm, "prompt",
-                max_tokens=100, timeout=1.0, max_retries=1, stage_name="test",
+                mock_llm,
+                "prompt",
+                max_tokens=100,
+                timeout=1.0,
+                max_retries=1,
+                stage_name="test",
                 propagate_rate_limit=True,
             )
         # 1 initial + 1 retry = 2 attempts before re-raising.
@@ -221,15 +299,20 @@ class TestPropagateRateLimit:
     @pytest.mark.asyncio
     async def test_re_raises_terminal_service_unavailable(self, mock_llm):
         svc_err = ServiceUnavailableError(
-            message="529", model="anthropic/claude-sonnet-4-6",
+            message="529",
+            model="anthropic/claude-sonnet-4-6",
             llm_provider="anthropic",
         )
         mock_llm.call_llm.side_effect = svc_err
 
         with pytest.raises(ServiceUnavailableError):
             await call_llm_with_retry(
-                mock_llm, "prompt",
-                max_tokens=100, timeout=1.0, max_retries=0, stage_name="test",
+                mock_llm,
+                "prompt",
+                max_tokens=100,
+                timeout=1.0,
+                max_retries=0,
+                stage_name="test",
                 propagate_rate_limit=True,
             )
         assert mock_llm.call_llm.call_count == 1
@@ -238,14 +321,19 @@ class TestPropagateRateLimit:
     async def test_default_returns_none_on_terminal_rate_limit(self, mock_llm):
         """Default contract preserved: callers without the flag still get None."""
         rate_err = RateLimitError(
-            message="429", model="anthropic/claude-sonnet-4-6",
+            message="429",
+            model="anthropic/claude-sonnet-4-6",
             llm_provider="anthropic",
         )
         mock_llm.call_llm.side_effect = rate_err
 
         result = await call_llm_with_retry(
-            mock_llm, "prompt",
-            max_tokens=100, timeout=1.0, max_retries=0, stage_name="test",
+            mock_llm,
+            "prompt",
+            max_tokens=100,
+            timeout=1.0,
+            max_retries=0,
+            stage_name="test",
         )
 
         assert result is None
@@ -255,14 +343,19 @@ class TestPropagateRateLimit:
     async def test_propagate_flag_recovers_if_retry_succeeds(self, mock_llm):
         """A rate-limit on attempt 1 + success on attempt 2 should NOT raise."""
         rate_err = RateLimitError(
-            message="429", model="anthropic/claude-sonnet-4-6",
+            message="429",
+            model="anthropic/claude-sonnet-4-6",
             llm_provider="anthropic",
         )
         mock_llm.call_llm.side_effect = [rate_err, '{"recovered": true}']
 
         result = await call_llm_with_retry(
-            mock_llm, "prompt",
-            max_tokens=100, timeout=1.0, max_retries=1, stage_name="test",
+            mock_llm,
+            "prompt",
+            max_tokens=100,
+            timeout=1.0,
+            max_retries=1,
+            stage_name="test",
             propagate_rate_limit=True,
         )
 

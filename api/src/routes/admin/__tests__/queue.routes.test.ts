@@ -1,7 +1,43 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { FastifyInstance } from 'fastify';
+import type { ConfirmChannel } from 'amqplib';
 import { buildTestApp, createMockContainer, type MockContainer } from '../../../test/helpers.js';
 import { config } from '../../../config.js';
+
+interface FakeDlqMessage {
+  content: Buffer;
+  properties: {
+    priority?: number;
+    messageId?: string;
+    headers?: Record<string, unknown>;
+  };
+}
+
+interface FakeChannel {
+  get: ReturnType<typeof vi.fn>;
+  publish: ReturnType<typeof vi.fn>;
+  waitForConfirms: ReturnType<typeof vi.fn>;
+  ack: ReturnType<typeof vi.fn>;
+  nack: ReturnType<typeof vi.fn>;
+}
+
+function fakeDlqMessage(payload: unknown, props: FakeDlqMessage['properties'] = {}): FakeDlqMessage {
+  const content =
+    typeof payload === 'string' ? Buffer.from(payload, 'utf8') : Buffer.from(JSON.stringify(payload), 'utf8');
+  return { content, properties: props };
+}
+
+/** Fake AMQP channel: `get` drains the provided messages, then returns false. */
+function createFakeChannel(messages: FakeDlqMessage[]): FakeChannel {
+  let idx = 0;
+  return {
+    get: vi.fn(async () => (idx < messages.length ? messages[idx++] : false)),
+    publish: vi.fn(() => true),
+    waitForConfirms: vi.fn(async () => undefined),
+    ack: vi.fn(),
+    nack: vi.fn(),
+  };
+}
 
 describe('admin queue routes', () => {
   let app: FastifyInstance;
@@ -77,46 +113,164 @@ describe('admin queue routes', () => {
     });
   });
 
-  describe('POST /api/admin/queue/replay', () => {
-    it('returns 0 replayed when DLQ has no messages', async () => {
-      // /get returns an array of messages — empty here means nothing to replay
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        new Response('[]', { status: 200 }),
-      );
+  describe('POST /api/admin/queue/replay (queue disabled)', () => {
+    it('returns 503 BEFORE touching the DLQ when the rabbitmq plugin is absent', async () => {
+      // Loss-proofing regression: the old flow destructively drained up to 500
+      // messages over the management API and only then noticed the plugin was
+      // disabled — losing everything it had fetched. The management API must
+      // not be called at all on this path.
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
       const res = await app.inject({
         method: 'POST',
         url: '/api/admin/queue/replay',
         headers: adminHeaders,
       });
-      expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({ replayed: 0 });
-    });
 
-    it('returns 503 when the queue plugin is disabled and DLQ has messages', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        new Response(
-          JSON.stringify([
-            {
-              payload: '{"videoSummaryId":"x"}',
-              payload_encoding: 'string',
-              properties: { message_id: 'm1' },
-              routing_key: 'video.process.dead',
-            },
-          ]),
-          { status: 200 },
-        ),
-      );
-
-      const res = await app.inject({
-        method: 'POST',
-        url: '/api/admin/queue/replay',
-        headers: adminHeaders,
-      });
-      // Test env doesn't register the rabbitmq plugin, so replay needs the
-      // queue path enabled to actually re-publish.
       expect(res.statusCode).toBe(503);
       expect(res.json().error).toBe('QUEUE_DISABLED');
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /api/admin/queue/replay (queue enabled)', () => {
+    let queueApp: FastifyInstance;
+    let channel: FakeChannel;
+    let getChannel: ReturnType<typeof vi.fn>;
+
+    async function buildQueueApp(fake: FakeChannel, getChannelImpl?: () => Promise<ConfirmChannel>): Promise<void> {
+      channel = fake;
+      getChannel = vi.fn(
+        getChannelImpl ?? (async () => fake as unknown as ConfirmChannel),
+      );
+      queueApp = await buildTestApp(mockContainer);
+      queueApp.decorate('rabbitmq', {
+        getChannel,
+        isReady: () => true,
+      });
+      await queueApp.ready();
+    }
+
+    afterEach(async () => {
+      await queueApp?.close();
+    });
+
+    it('returns 0 replayed when the DLQ is empty', async () => {
+      await buildQueueApp(createFakeChannel([]));
+
+      const res = await queueApp.inject({
+        method: 'POST',
+        url: '/api/admin/queue/replay',
+        headers: adminHeaders,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ replayed: 0 });
+      expect(channel.publish).not.toHaveBeenCalled();
+    });
+
+    it('returns 503 when the channel cannot be acquired — DLQ untouched', async () => {
+      const fake = createFakeChannel([fakeDlqMessage({ videoSummaryId: 'x' })]);
+      await buildQueueApp(fake, async () => {
+        throw new Error('broker down');
+      });
+
+      const res = await queueApp.inject({
+        method: 'POST',
+        url: '/api/admin/queue/replay',
+        headers: adminHeaders,
+      });
+
+      expect(res.statusCode).toBe(503);
+      expect(res.json().error).toBe('QUEUE_UNAVAILABLE');
+      expect(channel.get).not.toHaveBeenCalled();
+    });
+
+    it('republishes each message with attempt reset, then acks — confirm before ack', async () => {
+      const m1 = fakeDlqMessage({ videoSummaryId: 'a', attempt: 3 }, { priority: 5, messageId: 'm1' });
+      const m2 = fakeDlqMessage({ videoSummaryId: 'b', attempt: 2 }, { messageId: 'm2' });
+      await buildQueueApp(createFakeChannel([m1, m2]));
+
+      const res = await queueApp.inject({
+        method: 'POST',
+        url: '/api/admin/queue/replay',
+        headers: adminHeaders,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ replayed: 2 });
+      expect(channel.publish).toHaveBeenCalledTimes(2);
+      expect(channel.ack).toHaveBeenCalledTimes(2);
+      expect(channel.nack).not.toHaveBeenCalled();
+
+      // attempt reset so the worker's retry budget starts fresh
+      const firstBody = JSON.parse((channel.publish.mock.calls[0][2] as Buffer).toString('utf8'));
+      expect(firstBody).toMatchObject({ videoSummaryId: 'a', attempt: 1 });
+      // priority survives the round-trip
+      expect(channel.publish.mock.calls[0][3]).toMatchObject({ priority: 5, messageId: 'm1' });
+
+      // Per-message ordering: publish → confirm → ack (a crash between any two
+      // steps leaves the message safely in the DLQ — at-least-once semantics).
+      const publishOrder = channel.publish.mock.invocationCallOrder[0];
+      const confirmOrder = channel.waitForConfirms.mock.invocationCallOrder[0];
+      const ackOrder = channel.ack.mock.invocationCallOrder[0];
+      expect(publishOrder).toBeLessThan(confirmOrder);
+      expect(confirmOrder).toBeLessThan(ackOrder);
+    });
+
+    it('loses nothing when a republish fails mid-replay: acked before, nacked (requeue) at failure', async () => {
+      const m1 = fakeDlqMessage({ videoSummaryId: 'a', attempt: 3 });
+      const m2 = fakeDlqMessage({ videoSummaryId: 'b', attempt: 1 });
+      const fake = createFakeChannel([m1, m2]);
+      fake.waitForConfirms
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error('channel closed'));
+      await buildQueueApp(fake);
+
+      const res = await queueApp.inject({
+        method: 'POST',
+        url: '/api/admin/queue/replay',
+        headers: adminHeaders,
+      });
+
+      expect(res.statusCode).toBe(502);
+      expect(res.json().error).toBe('REPLAY_FAILED');
+      expect(res.json().replayed).toBe(1);
+      // first message fully replayed
+      expect(channel.ack).toHaveBeenCalledTimes(1);
+      // failed message returned to the DLQ, not dropped
+      expect(channel.nack).toHaveBeenCalledTimes(1);
+      expect(channel.nack.mock.calls[0][2]).toBe(true); // requeue=true
+    });
+
+    it('passes non-JSON payloads through verbatim', async () => {
+      await buildQueueApp(createFakeChannel([fakeDlqMessage('not-json{{')]));
+
+      const res = await queueApp.inject({
+        method: 'POST',
+        url: '/api/admin/queue/replay',
+        headers: adminHeaders,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ replayed: 1 });
+      expect((channel.publish.mock.calls[0][2] as Buffer).toString('utf8')).toBe('not-json{{');
+    });
+
+    it('stops at the max cap', async () => {
+      const messages = Array.from({ length: 5 }, (_, i) => fakeDlqMessage({ videoSummaryId: `v${i}`, attempt: 2 }));
+      await buildQueueApp(createFakeChannel(messages));
+
+      const res = await queueApp.inject({
+        method: 'POST',
+        url: '/api/admin/queue/replay',
+        headers: adminHeaders,
+        payload: { max: 3 },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ replayed: 3 });
+      expect(channel.ack).toHaveBeenCalledTimes(3);
     });
   });
 });

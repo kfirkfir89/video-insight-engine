@@ -81,8 +81,14 @@ class TestSerializeDoc:
         """Regression: lists of subdocuments with ObjectIds must serialize."""
         doc = {
             "calls": [
-                {"_id": ObjectId("aaaaaaaaaaaaaaaaaaaaaaaa"), "ts": datetime(2026, 1, 1, tzinfo=UTC)},
-                {"_id": ObjectId("bbbbbbbbbbbbbbbbbbbbbbbb"), "ts": datetime(2026, 1, 2, tzinfo=UTC)},
+                {
+                    "_id": ObjectId("aaaaaaaaaaaaaaaaaaaaaaaa"),
+                    "ts": datetime(2026, 1, 1, tzinfo=UTC),
+                },
+                {
+                    "_id": ObjectId("bbbbbbbbbbbbbbbbbbbbbbbb"),
+                    "ts": datetime(2026, 1, 2, tzinfo=UTC),
+                },
             ]
         }
         result = _serialize_doc(doc)

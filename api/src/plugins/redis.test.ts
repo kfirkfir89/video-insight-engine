@@ -58,4 +58,16 @@ describe('Redis plugin', () => {
     await app.close();
     expect(quitSpy).toHaveBeenCalled();
   });
+
+  it('retry strategy never aborts reconnection — a brief outage must not permanently kill the dispatch-guard client', async () => {
+    const { redisRetryStrategy } = await import('./redis.js');
+
+    // Regression: `times > 20 → null` ended the client for good, so a ~30s
+    // Redis blip left the dispatch guard failing open until process restart.
+    for (const times of [1, 10, 21, 500, 10_000]) {
+      const delay = redisRetryStrategy(times);
+      expect(delay).toBeGreaterThan(0);
+      expect(delay).toBeLessThanOrEqual(2000);
+    }
+  });
 });

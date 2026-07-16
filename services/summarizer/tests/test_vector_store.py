@@ -24,7 +24,11 @@ class TestStoreTranscriptChunks:
     @patch("src.services.vector.store.chunk_transcript")
     @patch("src.services.vector.store.settings")
     async def test_chunks_embeds_and_stores(
-        self, mock_settings, mock_chunk, mock_embed, mock_get_svc,
+        self,
+        mock_settings,
+        mock_chunk,
+        mock_embed,
+        mock_get_svc,
     ):
         mock_settings.QDRANT_ENABLED = True
         mock_chunk.return_value = [
@@ -47,7 +51,11 @@ class TestStoreTranscriptChunks:
     @patch("src.services.vector.store.chunk_transcript")
     @patch("src.services.vector.store.settings")
     async def test_pre_deletes_before_upsert(
-        self, mock_settings, mock_chunk, mock_embed, mock_get_svc,
+        self,
+        mock_settings,
+        mock_chunk,
+        mock_embed,
+        mock_get_svc,
     ):
         """Pre-delete must happen before upsert so reprocesses with fewer
         chunks don't leave orphan points behind."""
@@ -57,12 +65,10 @@ class TestStoreTranscriptChunks:
 
         call_order: list[str] = []
         mock_svc = MagicMock()
-        mock_svc.delete_by_video_and_source.side_effect = (
-            lambda *_a, **_kw: call_order.append("delete")
+        mock_svc.delete_by_video_and_source.side_effect = lambda *_a, **_kw: call_order.append(
+            "delete"
         )
-        mock_svc.store_chunks.side_effect = lambda *_a, **_kw: (
-            call_order.append("store") or True
-        )
+        mock_svc.store_chunks.side_effect = lambda *_a, **_kw: call_order.append("store") or True
         mock_get_svc.return_value = mock_svc
 
         await store_transcript_chunks("video123", "text")
@@ -78,8 +84,71 @@ class TestStoreTranscriptChunks:
     @patch("src.services.vector.store.embed_texts")
     @patch("src.services.vector.store.chunk_transcript")
     @patch("src.services.vector.store.settings")
+    async def test_segments_produce_chunk_timestamps(
+        self,
+        mock_settings,
+        mock_chunk,
+        mock_embed,
+        mock_get_svc,
+    ):
+        """When segments are passed, the chunks handed to store_chunks carry
+        start_time/end_time so the payload gets non-null [MM:SS] timestamps."""
+        mock_settings.QDRANT_ENABLED = True
+        mock_chunk.return_value = [
+            {"text": "chunk 1", "start_char": 0, "end_char": 20},
+            {"text": "chunk 2", "start_char": 21, "end_char": 41},
+        ]
+        mock_embed.return_value = [[0.1] * 384, [0.2] * 384]
+        mock_svc = MagicMock()
+        mock_svc.store_chunks.return_value = True
+        mock_get_svc.return_value = mock_svc
+
+        segments = [
+            {"text": "a" * 20, "start": 0.0, "duration": 30.0},
+            {"text": "b" * 20, "start": 30.0, "duration": 30.0},
+        ]
+        await store_transcript_chunks("video123", "text", segments=segments)
+
+        stored_chunks = mock_svc.store_chunks.call_args.args[1]
+        assert stored_chunks[0]["start_time"] == 0.0
+        assert stored_chunks[1]["start_time"] == 30.0
+        assert stored_chunks[1]["end_time"] == 60.0
+
+    @patch("src.services.vector.store._get_vector_service")
+    @patch("src.services.vector.store.embed_texts")
+    @patch("src.services.vector.store.chunk_transcript")
+    @patch("src.services.vector.store.settings")
+    async def test_no_segments_stores_chunks_without_timestamps(
+        self,
+        mock_settings,
+        mock_chunk,
+        mock_embed,
+        mock_get_svc,
+    ):
+        """Metadata-only transcripts have no segments — storage still works,
+        chunks simply carry no start_time (payload timestamp stays null)."""
+        mock_settings.QDRANT_ENABLED = True
+        mock_chunk.return_value = [{"text": "chunk", "start_char": 0, "end_char": 5}]
+        mock_embed.return_value = [[0.1] * 384]
+        mock_svc = MagicMock()
+        mock_svc.store_chunks.return_value = True
+        mock_get_svc.return_value = mock_svc
+
+        await store_transcript_chunks("video123", "text", segments=None)
+
+        stored_chunks = mock_svc.store_chunks.call_args.args[1]
+        assert "start_time" not in stored_chunks[0]
+
+    @patch("src.services.vector.store._get_vector_service")
+    @patch("src.services.vector.store.embed_texts")
+    @patch("src.services.vector.store.chunk_transcript")
+    @patch("src.services.vector.store.settings")
     async def test_empty_chunks_skips_storage(
-        self, mock_settings, mock_chunk, mock_embed, mock_get_svc,
+        self,
+        mock_settings,
+        mock_chunk,
+        mock_embed,
+        mock_get_svc,
     ):
         mock_settings.QDRANT_ENABLED = True
         mock_chunk.return_value = []
@@ -93,7 +162,11 @@ class TestStoreTranscriptChunks:
     @patch("src.services.vector.store.chunk_transcript")
     @patch("src.services.vector.store.settings")
     async def test_handles_exception_gracefully(
-        self, mock_settings, mock_chunk, mock_embed, mock_get_svc,
+        self,
+        mock_settings,
+        mock_chunk,
+        mock_embed,
+        mock_get_svc,
     ):
         mock_settings.QDRANT_ENABLED = True
         mock_chunk.side_effect = Exception("boom")
@@ -122,12 +195,10 @@ class TestStoreDefaultOutputChunks:
 
         call_order: list[str] = []
         mock_svc = MagicMock()
-        mock_svc.delete_by_video_and_source.side_effect = (
-            lambda *_a, **_kw: call_order.append("delete")
+        mock_svc.delete_by_video_and_source.side_effect = lambda *_a, **_kw: call_order.append(
+            "delete"
         )
-        mock_svc.store_chunks.side_effect = lambda *_a, **_kw: (
-            call_order.append("store") or True
-        )
+        mock_svc.store_chunks.side_effect = lambda *_a, **_kw: call_order.append("store") or True
         mock_get_svc.return_value = mock_svc
 
         tabs = [
@@ -162,7 +233,8 @@ class TestStoreDefaultOutputChunks:
         await store_default_output_chunks("video123", [])
 
         mock_svc.delete_by_video_and_source.assert_called_once_with(
-            "video123", "default_output",
+            "video123",
+            "default_output",
         )
         mock_svc.store_chunks.assert_not_called()
         mock_embed.assert_not_called()
@@ -171,7 +243,10 @@ class TestStoreDefaultOutputChunks:
     @patch("src.services.vector.store.embed_texts")
     @patch("src.services.vector.store.settings")
     async def test_handles_chunker_exception_gracefully(
-        self, mock_settings, mock_embed, mock_get_svc,
+        self,
+        mock_settings,
+        mock_embed,
+        mock_get_svc,
     ):
         mock_settings.QDRANT_ENABLED = True
         mock_get_svc.return_value = MagicMock()
@@ -189,7 +264,10 @@ class TestStoreDefaultOutputChunks:
     @patch("src.services.vector.store.embed_texts")
     @patch("src.services.vector.store.settings")
     async def test_pre_delete_runs_even_when_chunker_raises(
-        self, mock_settings, mock_embed, mock_get_svc,
+        self,
+        mock_settings,
+        mock_embed,
+        mock_get_svc,
     ):
         """Regression: chunker exception must NOT strand orphan output chunks
         — pre-delete fires before chunking so prior runs are always cleaned up."""
@@ -206,7 +284,8 @@ class TestStoreDefaultOutputChunks:
             )
 
         mock_svc.delete_by_video_and_source.assert_called_once_with(
-            "video123", "default_output",
+            "video123",
+            "default_output",
         )
 
     @patch("src.services.vector.store._get_vector_service")
@@ -225,12 +304,16 @@ class TestStoreDefaultOutputChunks:
             {
                 "id": "overview_tab",
                 "component": "overview",
-                "props": {"masterSummary": "Long enough overview summary text crossing six words easily."},
+                "props": {
+                    "masterSummary": "Long enough overview summary text crossing six words easily."
+                },
             },
             {
                 "id": "checklist_tab",
                 "component": "checklist",
-                "props": {"items": [{"label": "Long enough checklist label text crossing six words"}]},
+                "props": {
+                    "items": [{"label": "Long enough checklist label text crossing six words"}]
+                },
             },
         ]
 

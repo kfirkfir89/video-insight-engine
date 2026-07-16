@@ -61,6 +61,22 @@ describe('buildApp', () => {
     });
   });
 
+  describe('HTTP server timeouts', () => {
+    it('should apply requestTimeout (slow-loris) and connectionTimeout to the server', async () => {
+      const app = await buildApp({ logger: false });
+      await app.ready();
+
+      // Config defaults: HTTP_REQUEST_TIMEOUT_MS=30000, HTTP_CONNECTION_TIMEOUT_MS=60000.
+      // requestTimeout covers the request phase only, so SSE responses are
+      // unaffected; SSE routes additionally opt out of the inactivity timeout
+      // via disableSocketInactivityTimeout().
+      expect(app.server.requestTimeout).toBe(30000);
+      expect(app.server.timeout).toBe(60000);
+
+      await app.close();
+    });
+  });
+
   describe('sentry plugin registration', () => {
     it('should boot cleanly when Sentry has no DSN (no-op mode)', async () => {
       // The plugin's onError hook is wired regardless of DSN; verifying the
@@ -105,6 +121,79 @@ describe('buildApp', () => {
       });
 
       expect(response.headers['x-request-id']).toBe(incoming);
+
+      await app.close();
+    });
+  });
+
+  describe('error envelope (docs/ERROR-HANDLING.md, project-score-9 4.5b)', () => {
+    // Every error funneled through the global handler must emit the
+    // documented `{ error, message, statusCode }` envelope; Zod failures
+    // additionally carry `details.issues`.
+    it('should emit the documented envelope for AppError subclasses', async () => {
+      const app = await buildApp({ logger: false });
+      const { NotFoundError } = await import('./utils/errors.js');
+      app.get('/boom-app', async () => {
+        throw new NotFoundError('Video');
+      });
+      await app.ready();
+
+      const response = await app.inject({ method: 'GET', url: '/boom-app' });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toEqual({
+        error: 'NOT_FOUND',
+        message: 'Video not found',
+        statusCode: 404,
+      });
+
+      await app.close();
+    });
+
+    it('should emit envelope + details.issues for Zod validation errors', async () => {
+      const app = await buildApp({ logger: false });
+      const { z } = await import('zod');
+      app.post('/boom-zod', async (req) => {
+        return z.object({ url: z.string().url() }).parse(req.body);
+      });
+      await app.ready();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/boom-zod',
+        headers: { 'content-type': 'application/json' },
+        payload: { url: 123 },
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = response.json();
+      expect(body).toMatchObject({
+        error: 'VALIDATION_ERROR',
+        statusCode: 400,
+      });
+      expect(typeof body.message).toBe('string');
+      expect(Array.isArray(body.details.issues)).toBe(true);
+      expect(body.details.issues[0]).toHaveProperty('path');
+      expect(body.details.issues[0]).toHaveProperty('message');
+
+      await app.close();
+    });
+
+    it('should emit the documented envelope for unexpected 500s', async () => {
+      const app = await buildApp({ logger: false });
+      app.get('/boom-500', async () => {
+        throw new Error('kaboom');
+      });
+      await app.ready();
+
+      const response = await app.inject({ method: 'GET', url: '/boom-500' });
+
+      expect(response.statusCode).toBe(500);
+      expect(response.json()).toEqual({
+        error: 'INTERNAL_ERROR',
+        message: 'kaboom', // non-production echoes the message
+        statusCode: 500,
+      });
 
       await app.close();
     });

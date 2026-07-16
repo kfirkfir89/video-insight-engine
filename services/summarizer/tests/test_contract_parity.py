@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from src.services.pipeline.assembly.assemblers import (
+from src.services.pipeline.assembly.registry import (
     ASSEMBLER_REGISTRY,
     _TAB_ID_TO_COMPONENT,
 )
@@ -127,9 +127,7 @@ class TestContractParity:
         assert "{valid_components}" in text, "plan.txt must declare {valid_components}"
         # The hardcoded list must be gone (guard against drift-back). The rendered
         # block has many backtick names on the VALID line; the raw file shouldn't.
-        valid_line = next(
-            (ln for ln in text.splitlines() if "VALID component names" in ln), ""
-        )
+        valid_line = next((ln for ln in text.splitlines() if "VALID component names" in ln), "")
         assert valid_line.count("`") == 0, f"plan.txt still hardcodes the list: {valid_line!r}"
 
     def test_toolkit_uses_density_gates_placeholder(self):

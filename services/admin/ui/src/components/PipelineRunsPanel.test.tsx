@@ -200,6 +200,27 @@ describe('PipelineRunsPanel', () => {
     });
   });
 
+  it('should show a degraded badge when the run doc is flagged degraded', async () => {
+    mockByRun.mockResolvedValue([{ ...RUN_1, degraded: true }]);
+    const { PipelineRunsPanel } = await import('./PipelineRunsPanel');
+    const wrapper = makeWrapper();
+    render(<PipelineRunsPanel days={7} />, { wrapper });
+    await waitFor(() => {
+      expect(screen.getByText(/degraded/i)).toBeTruthy();
+    });
+  });
+
+  it('should NOT show a degraded badge for clean or unresolved runs', async () => {
+    mockByRun.mockResolvedValue([{ ...RUN_1, degraded: false }, UNATTRIBUTED_RUN]);
+    const { PipelineRunsPanel } = await import('./PipelineRunsPanel');
+    const wrapper = makeWrapper();
+    render(<PipelineRunsPanel days={7} />, { wrapper });
+    await waitFor(() => {
+      expect(screen.getByText('unattributed (legacy)')).toBeTruthy();
+    });
+    expect(screen.queryByText(/degraded/i)).toBeNull();
+  });
+
   it('should expand call details when a row is clicked', async () => {
     mockByRun.mockResolvedValue([RUN_1]);
     const { PipelineRunsPanel } = await import('./PipelineRunsPanel');

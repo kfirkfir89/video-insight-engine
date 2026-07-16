@@ -54,7 +54,9 @@ describe('PaymentService', () => {
       (config as Record<string, unknown>).PADDLE_WEBHOOK_SECRET = secret;
 
       const { createHmac } = require('node:crypto');
-      const ts = '1700000000';
+      // ts must be fresh: verifyWebhook rejects signatures older than
+      // WEBHOOK_MAX_AGE_SECONDS (replay protection, task 1.7)
+      const ts = String(Math.floor(Date.now() / 1000));
       const rawBody = '{"event_type":"subscription.created","data":{}}';
       const hmac = createHmac('sha256', secret);
       hmac.update(`${ts}:${rawBody}`);

@@ -76,10 +76,19 @@ async def test_redis_cache_set_for_english_videos() -> None:
     from src.services.pipeline.phases import assembly as phase
 
     ctx = _build_ctx()
-    with patch.object(phase, "assemble_response", return_value={"tabs": [], "meta": {}}), \
-         patch.object(phase, "settings", SimpleNamespace(REDIS_ENABLED=True, QDRANT_ENABLED=False)), \
-         patch.object(phase, "response_cache") as mock_cache, \
-         patch("src.routes.cached_response.build_frontend_response", return_value={"meta": {}, "tabs": []}):
+    with (
+        patch.object(phase, "assemble_response", return_value={"tabs": [], "meta": {}}),
+        patch.object(
+            phase,
+            "settings",
+            SimpleNamespace(REDIS_ENABLED=True, QDRANT_ENABLED=False, PIPELINE_VERSION="vtest"),
+        ),
+        patch.object(phase, "response_cache") as mock_cache,
+        patch(
+            "src.routes.cached_response.build_frontend_response",
+            return_value={"meta": {}, "tabs": []},
+        ),
+    ):
         mock_cache.set_response = AsyncMock(return_value=True)
         await _drain(phase.run_phase_assembly(ctx))  # type: ignore[arg-type]
         mock_cache.set_response.assert_called_once()
@@ -91,9 +100,15 @@ async def test_redis_cache_skipped_for_non_english_videos() -> None:
     from src.services.pipeline.phases import assembly as phase
 
     ctx = _build_ctx(source_language_code="he")
-    with patch.object(phase, "assemble_response", return_value={"tabs": [], "meta": {}}), \
-         patch.object(phase, "settings", SimpleNamespace(REDIS_ENABLED=True, QDRANT_ENABLED=False)), \
-         patch.object(phase, "response_cache") as mock_cache:
+    with (
+        patch.object(phase, "assemble_response", return_value={"tabs": [], "meta": {}}),
+        patch.object(
+            phase,
+            "settings",
+            SimpleNamespace(REDIS_ENABLED=True, QDRANT_ENABLED=False, PIPELINE_VERSION="vtest"),
+        ),
+        patch.object(phase, "response_cache") as mock_cache,
+    ):
         mock_cache.set_response = AsyncMock(return_value=True)
         await _drain(phase.run_phase_assembly(ctx))  # type: ignore[arg-type]
         mock_cache.set_response.assert_not_called()
@@ -106,9 +121,15 @@ async def test_status_completed_and_done_emitted_for_english_videos() -> None:
     from src.services.pipeline.phases import assembly as phase
 
     ctx = _build_ctx()
-    with patch.object(phase, "assemble_response", return_value={"tabs": [], "meta": {}}), \
-         patch.object(phase, "settings", SimpleNamespace(REDIS_ENABLED=False, QDRANT_ENABLED=False)), \
-         patch.object(phase, "response_cache"):
+    with (
+        patch.object(phase, "assemble_response", return_value={"tabs": [], "meta": {}}),
+        patch.object(
+            phase,
+            "settings",
+            SimpleNamespace(REDIS_ENABLED=False, QDRANT_ENABLED=False, PIPELINE_VERSION="vtest"),
+        ),
+        patch.object(phase, "response_cache"),
+    ):
         events = await _collect(phase.run_phase_assembly(ctx))  # type: ignore[arg-type]
 
     saved = ctx.repository.save_structured_result.call_args.args[1]
@@ -124,9 +145,15 @@ async def test_status_processing_and_done_deferred_for_non_english_videos() -> N
     from src.services.pipeline.phases import assembly as phase
 
     ctx = _build_ctx(source_language_code="he")
-    with patch.object(phase, "assemble_response", return_value={"tabs": [], "meta": {}}), \
-         patch.object(phase, "settings", SimpleNamespace(REDIS_ENABLED=False, QDRANT_ENABLED=False)), \
-         patch.object(phase, "response_cache"):
+    with (
+        patch.object(phase, "assemble_response", return_value={"tabs": [], "meta": {}}),
+        patch.object(
+            phase,
+            "settings",
+            SimpleNamespace(REDIS_ENABLED=False, QDRANT_ENABLED=False, PIPELINE_VERSION="vtest"),
+        ),
+        patch.object(phase, "response_cache"),
+    ):
         events = await _collect(phase.run_phase_assembly(ctx))  # type: ignore[arg-type]
 
     saved = ctx.repository.save_structured_result.call_args.args[1]
@@ -139,9 +166,15 @@ async def test_redis_disabled_skips_cache_write_regardless_of_language() -> None
     from src.services.pipeline.phases import assembly as phase
 
     ctx = _build_ctx()
-    with patch.object(phase, "assemble_response", return_value={"tabs": [], "meta": {}}), \
-         patch.object(phase, "settings", SimpleNamespace(REDIS_ENABLED=False, QDRANT_ENABLED=False)), \
-         patch.object(phase, "response_cache") as mock_cache:
+    with (
+        patch.object(phase, "assemble_response", return_value={"tabs": [], "meta": {}}),
+        patch.object(
+            phase,
+            "settings",
+            SimpleNamespace(REDIS_ENABLED=False, QDRANT_ENABLED=False, PIPELINE_VERSION="vtest"),
+        ),
+        patch.object(phase, "response_cache") as mock_cache,
+    ):
         mock_cache.set_response = AsyncMock(return_value=True)
         await _drain(phase.run_phase_assembly(ctx))  # type: ignore[arg-type]
         mock_cache.set_response.assert_not_called()

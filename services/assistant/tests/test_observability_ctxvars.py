@@ -4,7 +4,7 @@ Verifies that:
 - Each endpoint sets the correct llm_feature_var / llm_video_id_var /
   llm_user_id_var / llm_request_id_var at request time.
 - Concurrent requests do not leak ctxvar state into each other.
-- The tool router sets llm_feature_var before dispatching a tool.
+- The action dispatcher sets llm_feature_var before executing a tool.
 - The /action endpoint opens a session_trace + span (best-effort).
 """
 
@@ -19,7 +19,7 @@ from llm_common.context import (
     llm_user_id_var,
     llm_video_id_var,
 )
-from src.services.tool_router import ToolRouter
+from src.services.tool_router import ActionDispatcher, ToolRouter
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
@@ -202,7 +202,11 @@ class TestActionEndpointCtxvars:
 
         captured: dict = {}
 
-        original_dispatch = app.state.assistant_service.dispatch_action if hasattr(app.state, "assistant_service") else None
+        original_dispatch = (
+            app.state.assistant_service.dispatch_action
+            if hasattr(app.state, "assistant_service")
+            else None
+        )
 
         spy = AsyncMock()
 
@@ -277,13 +281,13 @@ class TestActionEndpointCtxvars:
         assert captured.get("feature") == "assistant:action:organize_library"
 
 
-# ─── 1B: tool router sets feature ctxvar ────────────────────────────────────
+# ─── 1B: action dispatcher sets feature ctxvar ──────────────────────────────
 
 
-class TestToolRouterCtxvar:
-    """ToolRouter.route sets llm_feature_var before tool execution."""
+class TestActionDispatchCtxvar:
+    """ActionDispatcher.dispatch sets llm_feature_var before tool execution."""
 
-    async def test_should_set_tool_feature_ctxvar_during_route(self, sample_video_context):
+    async def test_should_set_tool_feature_ctxvar_during_dispatch(self, sample_video_context):
         """llm_feature_var must equal 'assistant:tool:<name>' when execute() runs."""
         captured: dict = {}
 
@@ -296,12 +300,14 @@ class TestToolRouterCtxvar:
 
         router = ToolRouter()
         router.register(stub)
+        dispatcher = ActionDispatcher(router)
 
-        events = []
-        async for event in router.route(
-            "quiz_generator", "quiz me", "vid1", sample_video_context
-        ):
-            events.append(event)
+        await dispatcher.dispatch(
+            action="quiz_me",
+            video_id="vid1",
+            params={},
+            video_ctx=sample_video_context,
+        )
 
         assert captured.get("feature") == "assistant:tool:quiz_generator"
 
@@ -325,11 +331,20 @@ class TestToolRouterCtxvar:
         router = ToolRouter()
         router.register(note_tool)
         router.register(quiz_tool)
+        dispatcher = ActionDispatcher(router)
 
-        async for _ in router.route("note_taker", "save note hi", "vid1", sample_video_context):
-            pass
-        async for _ in router.route("quiz_generator", "quiz me", "vid1", sample_video_context):
-            pass
+        await dispatcher.dispatch(
+            action="save_note",
+            video_id="vid1",
+            params={"text": "hi"},
+            video_ctx=sample_video_context,
+        )
+        await dispatcher.dispatch(
+            action="quiz_me",
+            video_id="vid1",
+            params={},
+            video_ctx=sample_video_context,
+        )
 
         assert features_seen == [
             "assistant:tool:note_taker",
@@ -419,27 +434,30 @@ class TestToolFeatureRestore:
     """The tool feature must be scoped to the tool call and restored after, so
     a generation running later in the same request keeps the chat feature."""
 
-    async def test_route_restores_feature_after_tool(self, sample_video_context):
-        """After ToolRouter.route() completes, the prior feature is restored."""
+    async def test_dispatch_restores_feature_after_tool(self, sample_video_context):
+        """After ActionDispatcher.dispatch() completes, the prior feature is restored."""
         from unittest.mock import AsyncMock
 
         stub = _StubTool("quiz_generator")
         stub.execute = AsyncMock(return_value={"ok": True})
         router = ToolRouter()
         router.register(stub)
+        dispatcher = ActionDispatcher(router)
 
         token = llm_feature_var.set("assistant:rag_chat")
         try:
-            async for _ in router.route(
-                "quiz_generator", "quiz me", "vid1", sample_video_context
-            ):
-                pass
+            await dispatcher.dispatch(
+                action="quiz_me",
+                video_id="vid1",
+                params={},
+                video_ctx=sample_video_context,
+            )
             after = llm_feature_var.get()
         finally:
             llm_feature_var.reset(token)
 
         assert after == "assistant:rag_chat", (
-            "route() must restore the feature var — else a post-tool generation "
+            "dispatch() must restore the feature var — else a post-tool generation "
             "would be mislabelled with the tool's feature."
         )
 

@@ -159,7 +159,10 @@ class TestVectorService:
         mock_client.query_points.return_value = self._query_response([])
 
         service.search_multi_video(
-            [0.1] * 384, ["v1", "v2"], limit=10, sources=["transcript", "default_output"],
+            [0.1] * 384,
+            ["v1", "v2"],
+            limit=10,
+            sources=["transcript", "default_output"],
         )
 
         call_args = mock_client.query_points.call_args
@@ -173,8 +176,16 @@ class TestVectorService:
         """A single batch can carry per-chunk tab_id/tab_component, so multiple
         tabs upsert in one round-trip instead of N HTTP calls."""
         chunks = [
-            {"text": "Overview chunk text content here long enough", "start_char": 0, "end_char": 40},
-            {"text": "Quiz chunk text content here long enough now", "start_char": 0, "end_char": 40},
+            {
+                "text": "Overview chunk text content here long enough",
+                "start_char": 0,
+                "end_char": 40,
+            },
+            {
+                "text": "Quiz chunk text content here long enough now",
+                "start_char": 0,
+                "end_char": 40,
+            },
         ]
         embeddings = [[0.1] * 384, [0.2] * 384]
 
@@ -242,15 +253,90 @@ class TestVectorService:
         assert point.payload["prop_path"] == "masterSummary"
         assert point.payload["user_id"] is None
 
+    def test_store_chunks_writes_timestamps_and_schema_version(self, service, mock_client):
+        """Payload schema v2: chunks with start_time/end_time carry them as
+        timestamp/end_timestamp (seconds) so the assistant renders [MM:SS]."""
+        chunks = [
+            {
+                "text": "First chunk",
+                "start_char": 0,
+                "end_char": 11,
+                "start_time": 0.0,
+                "end_time": 42.5,
+            },
+            {
+                "text": "Second chunk",
+                "start_char": 12,
+                "end_char": 24,
+                "start_time": 754.0,
+                "end_time": 812.0,
+            },
+        ]
+        embeddings = [[0.1] * 384, [0.2] * 384]
+
+        service.store_chunks("video123", chunks, embeddings)
+
+        points = mock_client.upsert.call_args[1]["points"]
+        assert points[0].payload["timestamp"] == 0.0
+        assert points[0].payload["end_timestamp"] == 42.5
+        assert points[1].payload["timestamp"] == 754.0
+        assert points[1].payload["end_timestamp"] == 812.0
+        assert all(p.payload["schema_version"] == 2 for p in points)
+
+    def test_store_chunks_without_times_writes_null_timestamp(self, service, mock_client):
+        """Output chunks (no timeline) and unmapped transcripts store a null
+        timestamp — downstream formatters must null-check, never crash."""
+        chunks = [{"text": "No timeline chunk", "start_char": 0, "end_char": 17}]
+
+        service.store_chunks("video123", chunks, [[0.1] * 384])
+
+        point = mock_client.upsert.call_args[1]["points"][0]
+        assert point.payload["timestamp"] is None
+        assert point.payload["end_timestamp"] is None
+        assert point.payload["schema_version"] == 2
+
+    def test_result_to_dict_surfaces_timestamp(self, service, mock_client):
+        mock_result = MagicMock()
+        mock_result.payload = {
+            "text": "Hello",
+            "video_id": "video123",
+            "chunk_index": 0,
+            "timestamp": 754.0,
+            "end_timestamp": 812.0,
+        }
+        mock_result.score = 0.9
+        mock_client.query_points.return_value = self._query_response([mock_result])
+
+        results = service.search([0.1] * 384, video_id="video123")
+
+        assert results[0]["timestamp"] == 754.0
+        assert results[0]["end_timestamp"] == 812.0
+
+    def test_result_to_dict_handles_legacy_payload_without_timestamp(self, service, mock_client):
+        """v1 points written before schema v2 have no timestamp keys."""
+        mock_result = MagicMock()
+        mock_result.payload = {"text": "Old point", "video_id": "v1", "chunk_index": 0}
+        mock_result.score = 0.8
+        mock_client.query_points.return_value = self._query_response([mock_result])
+
+        results = service.search([0.1] * 384, video_id="v1")
+
+        assert results[0]["timestamp"] is None
+        assert results[0]["end_timestamp"] is None
+
 
 class TestPointId:
     """Test the _point_id helper directly."""
 
     def test_transcript_id_preserves_legacy_hash(self):
         """Existing transcript points were written with sha256("video_idx")."""
-        legacy = int.from_bytes(
-            hashlib.sha256("video123_0".encode()).digest()[:8], "big",
-        ) & 0x7FFFFFFFFFFFFFFF
+        legacy = (
+            int.from_bytes(
+                hashlib.sha256("video123_0".encode()).digest()[:8],
+                "big",
+            )
+            & 0x7FFFFFFFFFFFFFFF
+        )
         new = _point_id(SOURCE_TRANSCRIPT, "video123", None, None, 0)
         assert new == legacy
 

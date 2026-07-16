@@ -263,11 +263,20 @@ describe('WebSocket plugin', () => {
   });
 });
 
-// E2E-style tests that would require actual WebSocket connections
-// These tests are for documentation and would run in integration test suite
-describe.skip('WebSocket plugin E2E (requires running server)', () => {
+// Live-connection tests for the Sec-WebSocket-Protocol auth handshake.
+// Clients offer ['vie-auth', <jwt>]; the server validates the JWT and selects
+// the 'vie-auth' subprotocol. Tokens never appear in the URL (access logs).
+describe('WebSocket subprotocol auth (live server)', () => {
   let app: FastifyInstance;
   let baseUrl: string;
+
+  /** Resolve with the next JSON message received on the socket. */
+  function onceMessage(ws: WebSocket): Promise<{ type: string }> {
+    return new Promise((resolve, reject) => {
+      ws.once('message', (data) => resolve(JSON.parse(data.toString())));
+      ws.once('error', reject);
+    });
+  }
 
   beforeAll(async () => {
     app = Fastify({ logger: false });
@@ -284,12 +293,13 @@ describe.skip('WebSocket plugin E2E (requires running server)', () => {
     await app.close();
   });
 
-  it('should establish WebSocket connection with valid token', async () => {
-    const token = app.jwt.sign({ userId: 'user-123' });
-    const ws = new WebSocket(`${baseUrl}/ws?token=${token}`);
+  it('should establish a connection when the token rides the vie-auth subprotocol', async () => {
+    const token = app.jwt.sign({ userId: 'user-123', type: 'access' });
+    const ws = new WebSocket(`${baseUrl}/ws`, ['vie-auth', token]);
 
     return new Promise<void>((resolve, reject) => {
       ws.on('open', () => {
+        expect(ws.protocol).toBe('vie-auth');
         ws.close();
         resolve();
       });
@@ -298,8 +308,8 @@ describe.skip('WebSocket plugin E2E (requires running server)', () => {
   });
 
   it('should receive connected message on connection', async () => {
-    const token = app.jwt.sign({ userId: 'user-123' });
-    const ws = new WebSocket(`${baseUrl}/ws?token=${token}`);
+    const token = app.jwt.sign({ userId: 'user-123', type: 'access' });
+    const ws = new WebSocket(`${baseUrl}/ws`, ['vie-auth', token]);
 
     return new Promise<void>((resolve, reject) => {
       ws.on('message', (data) => {
@@ -313,8 +323,8 @@ describe.skip('WebSocket plugin E2E (requires running server)', () => {
   });
 
   it('should receive broadcast messages', async () => {
-    const token = app.jwt.sign({ userId: 'broadcast-test-user' });
-    const ws = new WebSocket(`${baseUrl}/ws?token=${token}`);
+    const token = app.jwt.sign({ userId: 'broadcast-test-user', type: 'access' });
+    const ws = new WebSocket(`${baseUrl}/ws`, ['vie-auth', token]);
 
     return new Promise<void>((resolve, reject) => {
       let messageCount = 0;
@@ -340,18 +350,20 @@ describe.skip('WebSocket plugin E2E (requires running server)', () => {
     });
   });
 
-  it('should close connection on invalid token', async () => {
-    const ws = new WebSocket(`${baseUrl}/ws?token=invalid`);
+  it('should close with 4001 on an invalid token', async () => {
+    const ws = new WebSocket(`${baseUrl}/ws`, ['vie-auth', 'invalid-token']);
 
     return new Promise<void>((resolve) => {
       ws.on('close', (code) => {
         expect(code).toBe(4001);
         resolve();
       });
+      // Server closes post-upgrade; client-side error events are expected noise
+      ws.on('error', () => undefined);
     });
   });
 
-  it('should close connection when no token provided', async () => {
+  it('should close with 4001 when no subprotocol token is provided', async () => {
     const ws = new WebSocket(`${baseUrl}/ws`);
 
     return new Promise<void>((resolve) => {
@@ -359,12 +371,80 @@ describe.skip('WebSocket plugin E2E (requires running server)', () => {
         expect(code).toBe(4001);
         resolve();
       });
+      ws.on('error', () => undefined);
     });
   });
 
+  it('should close with 4001 when only the vie-auth marker is offered without a token', async () => {
+    const ws = new WebSocket(`${baseUrl}/ws`, ['vie-auth']);
+
+    return new Promise<void>((resolve) => {
+      ws.on('close', (code) => {
+        expect(code).toBe(4001);
+        resolve();
+      });
+      ws.on('error', () => undefined);
+    });
+  });
+
+  it('should close with 4001 when a refresh token is offered', async () => {
+    // Signed with JWT_REFRESH_SECRET — must never authenticate a live connection
+    const refreshToken = app.jwt.refresh.sign({ userId: 'user-123', type: 'refresh' });
+    const ws = new WebSocket(`${baseUrl}/ws`, ['vie-auth', refreshToken]);
+
+    return new Promise<void>((resolve) => {
+      ws.on('close', (code) => {
+        expect(code).toBe(4001);
+        resolve();
+      });
+      ws.on('error', () => undefined);
+    });
+  });
+
+  it('should deliver broadcasts to ALL tabs of the same user', async () => {
+    // Regression: the registry used to be Map<userId, WebSocket>, so a second
+    // tab evicted the first — only the newest tab ever received broadcasts.
+    const token = app.jwt.sign({ userId: 'multi-tab-user', type: 'access' });
+    const tab1 = new WebSocket(`${baseUrl}/ws`, ['vie-auth', token]);
+    await onceMessage(tab1); // connected
+    const tab2 = new WebSocket(`${baseUrl}/ws`, ['vie-auth', token]);
+    await onceMessage(tab2); // connected
+
+    const fromTab1 = onceMessage(tab1);
+    const fromTab2 = onceMessage(tab2);
+    app.broadcast('multi-tab-user', { type: 'both-tabs' });
+
+    const [m1, m2] = await Promise.all([fromTab1, fromTab2]);
+    expect(m1.type).toBe('both-tabs');
+    expect(m2.type).toBe('both-tabs');
+
+    tab1.close();
+    tab2.close();
+  });
+
+  it('should keep broadcasting to remaining tabs after one tab closes', async () => {
+    const token = app.jwt.sign({ userId: 'closing-tab-user', type: 'access' });
+    const tab1 = new WebSocket(`${baseUrl}/ws`, ['vie-auth', token]);
+    await onceMessage(tab1); // connected
+    const tab2 = new WebSocket(`${baseUrl}/ws`, ['vie-auth', token]);
+    await onceMessage(tab2); // connected
+
+    await new Promise<void>((resolve) => {
+      tab1.on('close', () => resolve());
+      tab1.close(1000, 'tab closed');
+    });
+
+    const fromTab2 = onceMessage(tab2);
+    app.broadcast('closing-tab-user', { type: 'still-here' });
+    const message = await fromTab2;
+    expect(message.type).toBe('still-here');
+
+    tab2.close();
+  });
+
   it('should remove connection on client disconnect', async () => {
-    const token = app.jwt.sign({ userId: 'disconnect-test-user' });
-    const ws = new WebSocket(`${baseUrl}/ws?token=${token}`);
+    const token = app.jwt.sign({ userId: 'disconnect-test-user', type: 'access' });
+    const ws = new WebSocket(`${baseUrl}/ws`, ['vie-auth', token]);
 
     return new Promise<void>((resolve, reject) => {
       ws.on('open', () => {

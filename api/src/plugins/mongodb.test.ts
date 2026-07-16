@@ -160,6 +160,49 @@ describe('MongoDB plugin', () => {
 
   });
 
+  describe('llm_usage legacy TTL index migration', () => {
+    it('should decide drop-vs-keep from the TTL option, not the index name', async () => {
+      const { hasLegacyLlmUsageTtlIndex } = await import('./mongodb.js');
+
+      // Legacy 90-day TTL variant → must be dropped.
+      expect(hasLegacyLlmUsageTtlIndex([
+        { name: 'createdAt_1', expireAfterSeconds: 90 * 24 * 60 * 60 },
+      ])).toBe(true);
+
+      // Current plain variant → dropping it would rebuild the ledger index
+      // on EVERY boot (regression: the drop used to be unconditional).
+      expect(hasLegacyLlmUsageTtlIndex([{ name: 'createdAt_1' }])).toBe(false);
+
+      // Unrelated indexes / fresh collection → nothing to drop.
+      expect(hasLegacyLlmUsageTtlIndex([{ name: '_id_' }])).toBe(false);
+      expect(hasLegacyLlmUsageTtlIndex([])).toBe(false);
+    });
+
+    it('should replace a legacy TTL createdAt index with a plain (keep-forever) one', async () => {
+      const { mongodbPlugin } = await import('./mongodb.js');
+
+      // Pre-seed the pre-2026-07 state: createdAt_1 WITH a 90-day TTL.
+      const raw = new MongoClient(process.env.MONGODB_URI as string);
+      await raw.connect();
+      const ledger = raw.db().collection('llm_usage');
+      await ledger.dropIndex('createdAt_1').catch(() => undefined);
+      await ledger.createIndex({ createdAt: 1 }, { expireAfterSeconds: 90 * 24 * 60 * 60 });
+
+      const app = Fastify({ logger: false });
+      await app.register(mongodbPlugin);
+      await app.ready();
+
+      const indexes = await app.mongo.db.collection('llm_usage').indexes();
+      const createdAtIndex = indexes.find((idx) => idx.name === 'createdAt_1');
+      expect(createdAtIndex).toBeDefined();
+      // The financial ledger is kept forever — no TTL may survive startup.
+      expect(createdAtIndex?.expireAfterSeconds).toBeUndefined();
+
+      await app.close();
+      await raw.close();
+    });
+  });
+
   describe('dedupKey backfill (Step 1a)', () => {
     let app: FastifyInstance;
 

@@ -1,0 +1,113 @@
+{
+  "description": "SYNTHETIC labeled dataset for offline validation of the faithfulness judge. The transcript describes a fictional deep-sea research station ('Aurora Station') invented for this fixture — no real facts. Each claim is labeled 'supported' (explicitly stated or directly paraphrased by the transcript) or 'hallucinated' (absent from or contradicted by the transcript). Used by tests/test_faithfulness_live_eval.py, which is skip-gated behind LIVE_EVAL=1 because judging spends real LLM tokens.",
+  "version": 1,
+  "validation": {
+    "date": "2026-07-07",
+    "judge_path": "_select_claim_context + _judge_one (fast-tier judge, json_mode)",
+    "accuracy": "20/20 = 100%",
+    "note": "Live run via LIVE_EVAL=1 tests/test_faithfulness_live_eval.py: all 12 supported and 8 hallucinated claims judged correctly. Re-validate after judge-prompt or fast-model changes."
+  },
+  "transcript": "Welcome back to the channel. Today we're taking an exclusive tour of Aurora Station, the fictional deep-sea research habitat we've been building for this series. Aurora Station sits at a depth of 2,400 meters on the slope of the imaginary Meridian Trench, and it has been continuously staffed since its fictional commissioning in 2019. The station houses a rotating crew of twelve researchers, who work in six-week shifts before returning to the surface. Power comes from three vertical-axis tidal turbines anchored two hundred meters upslope, backed by a bank of sodium-ion batteries that can run the habitat for nine days without turbine input. Let's start in the wet lab. The wet lab maintains a row of sixteen pressurized aquaria, each tuned to match the exact temperature and salinity of the sampling site it serves. Dr. Imara Voss, the station's chief biologist, explains that her team has catalogued over three hundred previously undescribed invertebrate species in the past four years alone. Her personal favorite is the lantern polyp, a bioluminescent colonial organism that pulses in synchronized waves when disturbed. The lantern polyp produces light using a novel luciferin variant that the team nicknamed aurorin. Interestingly, aurorin keeps glowing at pressures that destroy other known luciferins, which is why two pharmaceutical groups have licensed it for pressure-sensor research. Moving through the central corridor, you'll notice the walls are lined with a triple-layer composite: an inner titanium alloy shell, a middle aerogel insulation blanket, and an outer basalt-fiber jacket. This sandwich keeps the interior at a steady twenty-one degrees Celsius even though the surrounding water sits at just above four degrees. The corridor connects to the hydroponics bay, where the crew grows about forty percent of their fresh food — mostly leafy greens, dwarf tomatoes, and an unusually productive strain of strawberries that the crew credits to the slightly elevated carbon dioxide levels inside the habitat. Next is the drone hangar. Aurora Station operates five autonomous survey drones, each named after a sea in Earth's oceans: Coral, Ross, Banda, Labrador, and Tasman. The drones map roughly ninety square kilometers of trench slope every month, and their sonar returns feed a machine-learning model that flags geological instability. Last March, that model predicted a small sediment slide eleven hours before it happened, giving the crew time to recall two drones and re-anchor a sensor line. The station commander, a former submarine engineer named Elias Okonkwo, points out that the hangar doors are the single most maintenance-hungry system on the station — the seals must be replaced every ninety days. Communication with the surface runs through a buoy tethered four kilometers away, which uplinks to satellites; bandwidth is modest, about forty megabits per second, so the crew queues large datasets for physical pickup by the supply submersible that visits every three weeks. Finally, the observation dome. The dome's acrylic is thirty-two centimeters thick, and it is the crew's favorite spot for what they call trench television: watching siphonophores drift past the floodlights. Dr. Voss says the longest siphonophore they've measured from the dome stretched an estimated forty-one meters, which would make it one of the longest animals ever recorded — fictionally speaking, of course. That's the tour. Next episode we'll cover the station's emergency ascent pods and the twice-yearly full evacuation drill. Thanks for watching, and as always, remember that Aurora Station is an invented setting for this series.",
+  "claims": [
+    {
+      "id": "c01",
+      "claim": "Aurora Station is located at a depth of 2,400 meters in the Meridian Trench.",
+      "label": "supported"
+    },
+    {
+      "id": "c02",
+      "claim": "The station hosts a rotating crew of twelve researchers working six-week shifts.",
+      "label": "supported"
+    },
+    {
+      "id": "c03",
+      "claim": "Power is supplied by three tidal turbines backed by sodium-ion batteries that last nine days.",
+      "label": "supported"
+    },
+    {
+      "id": "c04",
+      "claim": "The wet lab contains sixteen pressurized aquaria matched to their sampling sites.",
+      "label": "supported"
+    },
+    {
+      "id": "c05",
+      "claim": "Dr. Voss's team catalogued over three hundred undescribed invertebrate species in four years.",
+      "label": "supported"
+    },
+    {
+      "id": "c06",
+      "claim": "The lantern polyp glows using a luciferin variant nicknamed aurorin.",
+      "label": "supported"
+    },
+    {
+      "id": "c07",
+      "claim": "The corridor walls use a triple-layer composite of titanium alloy, aerogel, and basalt fiber.",
+      "label": "supported"
+    },
+    {
+      "id": "c08",
+      "claim": "The hydroponics bay supplies about forty percent of the crew's fresh food.",
+      "label": "supported"
+    },
+    {
+      "id": "c09",
+      "claim": "Aurora Station operates five survey drones named after seas, including Coral and Tasman.",
+      "label": "supported"
+    },
+    {
+      "id": "c10",
+      "claim": "A machine-learning model predicted a sediment slide eleven hours in advance last March.",
+      "label": "supported"
+    },
+    {
+      "id": "c11",
+      "claim": "The hangar door seals must be replaced every ninety days.",
+      "label": "supported"
+    },
+    {
+      "id": "c12",
+      "claim": "The observation dome's acrylic is thirty-two centimeters thick.",
+      "label": "supported"
+    },
+    {
+      "id": "c13",
+      "claim": "Aurora Station was commissioned in 2007 and has been staffed ever since.",
+      "label": "hallucinated"
+    },
+    {
+      "id": "c14",
+      "claim": "The station is powered primarily by a small modular nuclear reactor.",
+      "label": "hallucinated"
+    },
+    {
+      "id": "c15",
+      "claim": "Dr. Voss discovered a new species of deep-sea octopus that mimics station floodlights.",
+      "label": "hallucinated"
+    },
+    {
+      "id": "c16",
+      "claim": "The crew grows sixty percent of their food, mostly potatoes and rice.",
+      "label": "hallucinated"
+    },
+    {
+      "id": "c17",
+      "claim": "The station operates nine drones named after famous explorers.",
+      "label": "hallucinated"
+    },
+    {
+      "id": "c18",
+      "claim": "Commander Okonkwo previously worked as a commercial airline pilot.",
+      "label": "hallucinated"
+    },
+    {
+      "id": "c19",
+      "claim": "The communication buoy provides a gigabit fiber link to the mainland.",
+      "label": "hallucinated"
+    },
+    {
+      "id": "c20",
+      "claim": "The longest siphonophore observed from the dome measured about twelve meters.",
+      "label": "hallucinated"
+    }
+  ]
+}

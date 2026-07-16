@@ -113,6 +113,142 @@ class TestChatEndpoint:
         assert captured.get("video_id") == "abc123"
 
 
+class TestChatRateLimitKeying:
+    """/chat rate limiting is bucketed per user, not per video."""
+
+    @staticmethod
+    def _install_mock_chat():
+        from src.server import app
+
+        async def _mock_chat(*_args, **_kwargs):
+            yield 'data: {"type": "done", "content": ""}\n\n'
+
+        mock_service = AsyncMock()
+        mock_service.chat = _mock_chat
+        app.state.assistant_service = mock_service
+
+    async def test_should_give_each_user_an_independent_bucket_on_same_video(self):
+        from httpx import ASGITransport, AsyncClient
+        from src import server as server_module
+        from src.services import rate_limit as rate_limit_module
+        from src.server import app
+
+        self._install_mock_chat()
+        payload = {"video_id": "abc123", "message": "hello"}
+        base_headers = {"X-Internal-Secret": "dev-internal-secret-change-me"}
+
+        server_module._rate_tracker.clear()
+        try:
+            with patch.object(rate_limit_module, "_RATE_LIMIT_MAX", 1):
+                transport = ASGITransport(app=app)
+                async with AsyncClient(
+                    transport=transport,
+                    base_url="http://test",
+                    headers=base_headers,
+                ) as client:
+                    first_a = await client.post(
+                        "/chat",
+                        json=payload,
+                        headers={"X-User-Id": "user-a"},
+                    )
+                    first_b = await client.post(
+                        "/chat",
+                        json=payload,
+                        headers={"X-User-Id": "user-b"},
+                    )
+                    second_a = await client.post(
+                        "/chat",
+                        json=payload,
+                        headers={"X-User-Id": "user-a"},
+                    )
+
+            assert first_a.status_code == 200
+            # Same video, different user — must NOT share user-a's bucket.
+            assert first_b.status_code == 200
+            assert second_a.status_code == 429
+        finally:
+            server_module._rate_tracker.clear()
+            app.state.assistant_service = None
+
+    async def test_should_fall_back_to_video_id_when_user_header_absent(self):
+        from httpx import ASGITransport, AsyncClient
+        from src import server as server_module
+        from src.services import rate_limit as rate_limit_module
+        from src.server import app
+
+        self._install_mock_chat()
+        base_headers = {"X-Internal-Secret": "dev-internal-secret-change-me"}
+
+        server_module._rate_tracker.clear()
+        try:
+            with patch.object(rate_limit_module, "_RATE_LIMIT_MAX", 1):
+                transport = ASGITransport(app=app)
+                async with AsyncClient(
+                    transport=transport,
+                    base_url="http://test",
+                    headers=base_headers,
+                ) as client:
+                    first = await client.post(
+                        "/chat",
+                        json={"video_id": "vidX", "message": "hi"},
+                    )
+                    second = await client.post(
+                        "/chat",
+                        json={"video_id": "vidX", "message": "hi"},
+                    )
+                    other_video = await client.post(
+                        "/chat",
+                        json={"video_id": "vidY", "message": "hi"},
+                    )
+
+            assert first.status_code == 200
+            assert second.status_code == 429
+            assert other_video.status_code == 200
+        finally:
+            server_module._rate_tracker.clear()
+            app.state.assistant_service = None
+
+
+class TestChatConfirmTokenForwarding:
+    """confirm_token on the request body must reach AssistantService.chat."""
+
+    async def test_should_forward_confirm_token_to_service(self):
+        from httpx import ASGITransport, AsyncClient
+        from src.server import app
+
+        captured: dict = {}
+
+        async def _spy_chat(*, confirm_token=None, **_kwargs):
+            captured["confirm_token"] = confirm_token
+            yield 'data: {"type": "done", "content": ""}\n\n'
+
+        spy_service = AsyncMock()
+        spy_service.chat = _spy_chat
+        app.state.assistant_service = spy_service
+
+        transport = ASGITransport(app=app)
+        try:
+            async with AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                headers={"X-Internal-Secret": "dev-internal-secret-change-me"},
+            ) as client:
+                resp = await client.post(
+                    "/chat",
+                    json={
+                        "video_id": "abc123",
+                        "message": "Yes, do it",
+                        "confirm_token": "tok-1234567890123456",
+                    },
+                )
+                assert resp.status_code == 200
+                _ = resp.content
+        finally:
+            app.state.assistant_service = None
+
+        assert captured.get("confirm_token") == "tok-1234567890123456"
+
+
 class TestActionEndpoint:
     """POST /action endpoint tests — see test_action.py for richer coverage."""
 
@@ -256,10 +392,20 @@ class TestLibrarySearchEndpoint:
     async def test_should_return_200_with_ranked_results_when_valid(self, app_client, mock_rag):
         # Arrange
         from src.models.responses import RAGSource
-        mock_rag.search_library = AsyncMock(return_value=[
-            RAGSource(text="A neural network has layers.", video_id="v1", score=0.9, chunk_index=0),
-            RAGSource(text="Backpropagation computes gradients.", video_id="v2", score=0.8, chunk_index=1),
-        ])
+
+        mock_rag.search_library = AsyncMock(
+            return_value=[
+                RAGSource(
+                    text="A neural network has layers.", video_id="v1", score=0.9, chunk_index=0
+                ),
+                RAGSource(
+                    text="Backpropagation computes gradients.",
+                    video_id="v2",
+                    score=0.8,
+                    chunk_index=1,
+                ),
+            ]
+        )
         payload = {
             "video_ids": ["v1", "v2"],
             "query": "neural networks",

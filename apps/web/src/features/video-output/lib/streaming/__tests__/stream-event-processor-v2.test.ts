@@ -1,6 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Dispatch, SetStateAction } from 'react';
 import { processEvent } from '@/features/video-output/lib/streaming/stream-event-processor';
+import {
+  getTelemetryCounter,
+  resetTelemetryCounters,
+} from '@/features/video-output/lib/telemetry';
 import type { StreamState } from '@/features/video-output/hooks/use-summary-stream';
 
 // Mock validators used by the processor
@@ -15,7 +19,10 @@ vi.mock('@/features/video-output/lib/streaming/sse-validators', () => ({
     tldr: typeof event.tldr === 'string' ? event.tldr : '',
     keyTakeaways: Array.isArray(event.keyTakeaways) ? event.keyTakeaways : [],
   })),
-  validateDoneEvent: vi.fn((event: Record<string, unknown>) => event.processingTimeMs ?? null),
+  validateDoneEvent: vi.fn((event: Record<string, unknown>) => ({
+    processingTimeMs: event.processingTimeMs ?? null,
+    degraded: event.degraded === true,
+  })),
   validateErrorEvent: vi.fn((event: Record<string, unknown>) => ({
     message: event.message ?? 'Unknown error',
     code: event.code,
@@ -38,6 +45,7 @@ const initialState: StreamState = {
   error: null,
   isCached: false,
   processingTimeMs: null,
+  degraded: false,
   warnings: [],
   confettiCount: 0,
   triage: null,
@@ -433,6 +441,31 @@ describe('stream-event-processor — Pipeline events', () => {
 
       expect(mockSetState.getState().confettiCount).toBe(0);
     });
+
+    it('should surface degraded from the done event', () => {
+      processEvent(
+        { event: 'done', processingTimeMs: 5000, degraded: true },
+        mockSetState.setState,
+      );
+
+      expect(mockSetState.getState().degraded).toBe(true);
+    });
+
+    it('should keep degraded false when the done event omits it', () => {
+      processEvent({ event: 'done', processingTimeMs: 5000 }, mockSetState.setState);
+
+      expect(mockSetState.getState().degraded).toBe(false);
+    });
+
+    it('should keep degraded sticky when complete flagged it and done does not', () => {
+      processEvent(
+        { event: 'complete', tabCount: 3, processingTimeMs: 100, degraded: true },
+        mockSetState.setState,
+      );
+      processEvent({ event: 'done', processingTimeMs: 100 }, mockSetState.setState);
+
+      expect(mockSetState.getState().degraded).toBe(true);
+    });
   });
 
   // ─────────────────────────────────────────────────────
@@ -579,6 +612,18 @@ describe('stream-event-processor — Pipeline events', () => {
       expect(state.tabCount).toBe(0);
       expect(state.tabLabels).toEqual([]);
     });
+
+    it('should carry the degraded flag onto meta (cached degraded serves)', () => {
+      processEvent({ event: 'meta', degraded: true }, mockSetState.setState);
+
+      expect(mockSetState.getState().meta?.degraded).toBe(true);
+    });
+
+    it('should leave meta.degraded unset when the event omits it', () => {
+      processEvent({ event: 'meta' }, mockSetState.setState);
+
+      expect(mockSetState.getState().meta?.degraded).toBeUndefined();
+    });
   });
 
   describe('tab_ready (v2)', () => {
@@ -626,6 +671,102 @@ describe('stream-event-processor — Pipeline events', () => {
     });
   });
 
+  // ─────────────────────────────────────────────────────
+  // tab_ready prop validation at the boundary (4.4)
+  // ─────────────────────────────────────────────────────
+
+  describe('tab_ready prop validation (v2, project-score-9 4.4)', () => {
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      resetTelemetryCounters();
+      warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      warnSpy.mockRestore();
+      resetTelemetryCounters();
+    });
+
+    it('should remap a tab with malformed props to display_section and increment the drift counter', () => {
+      const malformedProps = { items: 'Pasta, Oil, Garlic' }; // string masquerading as list
+      processEvent(
+        { event: 'tab_ready', id: 'ingredients', label: 'Ingredients', emoji: '🧅', component: 'checklist', props: malformedProps },
+        mockSetState.setState,
+      );
+
+      const tab = mockSetState.getState().tabs[0];
+      expect(tab.component).toBe('display_section');
+      // Raw payload is preserved for the fallback renderer — never dropped.
+      expect(tab.props).toEqual({ data: malformedProps });
+      expect(getTelemetryCounter('tab_props_invalid')).toBe(1);
+      expect(getTelemetryCounter('tab_props_invalid.checklist')).toBe(1);
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it('should remap a quiz tab whose correctIndex is out of bounds', () => {
+      processEvent(
+        {
+          event: 'tab_ready',
+          id: 'quiz',
+          label: 'Quiz',
+          emoji: '🧪',
+          component: 'quiz_arena',
+          props: { questions: [{ question: 'Q?', options: ['A', 'B'], correctIndex: 5 }] },
+        },
+        mockSetState.setState,
+      );
+
+      expect(mockSetState.getState().tabs[0].component).toBe('display_section');
+      expect(getTelemetryCounter('tab_props_invalid.quiz_arena')).toBe(1);
+    });
+
+    it('should remap a tab with an unknown component and count it separately', () => {
+      processEvent(
+        { event: 'tab_ready', id: 'mystery', label: 'Mystery', emoji: '❓', component: 'does_not_exist', props: { foo: 1 } },
+        mockSetState.setState,
+      );
+
+      const tab = mockSetState.getState().tabs[0];
+      expect(tab.component).toBe('display_section');
+      expect(tab.props).toEqual({ data: { foo: 1 } });
+      expect(getTelemetryCounter('tab_component_unknown')).toBe(1);
+      expect(getTelemetryCounter('tab_props_invalid')).toBe(0);
+    });
+
+    it('should leave a valid tab untouched and not increment any counter', () => {
+      const props = { items: [{ label: 'Pasta', note: null }], scalable: true };
+      processEvent(
+        { event: 'tab_ready', id: 'ingredients', label: 'Ingredients', emoji: '🧅', component: 'checklist', props },
+        mockSetState.setState,
+      );
+
+      const tab = mockSetState.getState().tabs[0];
+      expect(tab.component).toBe('checklist');
+      expect(tab.props).toEqual(props);
+      expect(getTelemetryCounter('tab_props_invalid')).toBe(0);
+      expect(getTelemetryCounter('tab_component_unknown')).toBe(0);
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    it('should tolerate assembler fields the frontend does not know yet', () => {
+      processEvent(
+        {
+          event: 'tab_ready',
+          id: 'steps',
+          label: 'Steps',
+          emoji: '👣',
+          component: 'step_player',
+          props: { steps: [{ number: 1, instruction: 'Cut', frameCaption: 'Saw on plank' }], futureTopLevel: true },
+        },
+        mockSetState.setState,
+      );
+
+      expect(mockSetState.getState().tabs[0].component).toBe('step_player');
+      expect(getTelemetryCounter('tab_props_invalid')).toBe(0);
+    });
+  });
+
   describe('complete (v2)', () => {
     it('should store processingTimeMs without setting phase (done event handles that)', () => {
       processEvent(
@@ -644,6 +785,24 @@ describe('stream-event-processor — Pipeline events', () => {
       processEvent({ event: 'complete', tabCount: 3, processingTimeMs: 100 }, mockSetState.setState);
 
       expect(mockSetState.getState().confettiCount).toBe(0);
+    });
+
+    it('should surface degraded from the complete event', () => {
+      processEvent(
+        { event: 'complete', tabCount: 4, processingTimeMs: 3500, degraded: true },
+        mockSetState.setState,
+      );
+
+      expect(mockSetState.getState().degraded).toBe(true);
+    });
+
+    it('should keep degraded false when the complete event omits it', () => {
+      processEvent(
+        { event: 'complete', tabCount: 4, processingTimeMs: 3500 },
+        mockSetState.setState,
+      );
+
+      expect(mockSetState.getState().degraded).toBe(false);
     });
   });
 });

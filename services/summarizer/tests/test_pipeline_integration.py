@@ -3,11 +3,12 @@
 Each test mocks the LLM to return realistic JSON for its domain,
 then verifies the full chain produces valid data and correct events.
 """
+
 import json
 import pytest
 from unittest.mock import MagicMock, AsyncMock
 
-from src.services.pipeline.triage import run_triage, TriageResult
+from src.services.pipeline.triage import TriageResult
 from src.services.pipeline.extractor import extract
 from src.services.pipeline.enrichment import enrich
 from src.services.pipeline.synthesis import synthesize
@@ -20,14 +21,102 @@ from src.models.domain_types import DOMAIN_MODELS, validate_domain_output
 # ─────────────────────────────────────────────────────────────────────────────
 
 _TRIAGE_RESPONSES = {
-    "learning": {"contentTags": ["learning"], "primaryTag": "learning", "confidence": 0.95, "userGoal": "Understand the topic", "modifiers": [], "tabs": [{"id": "key_points", "label": "Key Points", "emoji": "💡", "dataSource": "learning.keyPoints"}]},
-    "food": {"contentTags": ["food"], "primaryTag": "food", "confidence": 0.98, "userGoal": "Learn a recipe", "modifiers": [], "tabs": [{"id": "ingredients", "label": "Ingredients", "emoji": "🛒", "dataSource": "food.ingredients"}]},
-    "tech": {"contentTags": ["tech"], "primaryTag": "tech", "confidence": 0.92, "userGoal": "Learn coding", "modifiers": [], "tabs": [{"id": "code", "label": "Code", "emoji": "📝", "dataSource": "tech.snippets"}]},
-    "travel": {"contentTags": ["travel"], "primaryTag": "travel", "confidence": 0.90, "userGoal": "Plan a trip", "modifiers": [], "tabs": [{"id": "itinerary", "label": "Itinerary", "emoji": "🗺️", "dataSource": "travel.itinerary"}]},
-    "fitness": {"contentTags": ["fitness"], "primaryTag": "fitness", "confidence": 0.91, "userGoal": "Follow a workout", "modifiers": [], "tabs": [{"id": "exercises", "label": "Exercises", "emoji": "🏋️", "dataSource": "fitness.exercises"}]},
-    "review": {"contentTags": ["review"], "primaryTag": "review", "confidence": 0.94, "userGoal": "Evaluate a product", "modifiers": [], "tabs": [{"id": "verdict", "label": "Verdict", "emoji": "🏆", "dataSource": "review.verdict"}]},
-    "music": {"contentTags": ["music"], "primaryTag": "music", "confidence": 0.89, "userGoal": "Analyze music", "modifiers": [], "tabs": [{"id": "analysis", "label": "Analysis", "emoji": "🎼", "dataSource": "music.analysis"}]},
-    "project": {"contentTags": ["project"], "primaryTag": "project", "confidence": 0.91, "userGoal": "Build a project", "modifiers": [], "tabs": [{"id": "steps", "label": "Steps", "emoji": "📝", "dataSource": "project.steps"}]},
+    "learning": {
+        "contentTags": ["learning"],
+        "primaryTag": "learning",
+        "confidence": 0.95,
+        "userGoal": "Understand the topic",
+        "modifiers": [],
+        "tabs": [
+            {
+                "id": "key_points",
+                "label": "Key Points",
+                "emoji": "💡",
+                "dataSource": "learning.keyPoints",
+            }
+        ],
+    },
+    "food": {
+        "contentTags": ["food"],
+        "primaryTag": "food",
+        "confidence": 0.98,
+        "userGoal": "Learn a recipe",
+        "modifiers": [],
+        "tabs": [
+            {
+                "id": "ingredients",
+                "label": "Ingredients",
+                "emoji": "🛒",
+                "dataSource": "food.ingredients",
+            }
+        ],
+    },
+    "tech": {
+        "contentTags": ["tech"],
+        "primaryTag": "tech",
+        "confidence": 0.92,
+        "userGoal": "Learn coding",
+        "modifiers": [],
+        "tabs": [{"id": "code", "label": "Code", "emoji": "📝", "dataSource": "tech.snippets"}],
+    },
+    "travel": {
+        "contentTags": ["travel"],
+        "primaryTag": "travel",
+        "confidence": 0.90,
+        "userGoal": "Plan a trip",
+        "modifiers": [],
+        "tabs": [
+            {
+                "id": "itinerary",
+                "label": "Itinerary",
+                "emoji": "🗺️",
+                "dataSource": "travel.itinerary",
+            }
+        ],
+    },
+    "fitness": {
+        "contentTags": ["fitness"],
+        "primaryTag": "fitness",
+        "confidence": 0.91,
+        "userGoal": "Follow a workout",
+        "modifiers": [],
+        "tabs": [
+            {
+                "id": "exercises",
+                "label": "Exercises",
+                "emoji": "🏋️",
+                "dataSource": "fitness.exercises",
+            }
+        ],
+    },
+    "review": {
+        "contentTags": ["review"],
+        "primaryTag": "review",
+        "confidence": 0.94,
+        "userGoal": "Evaluate a product",
+        "modifiers": [],
+        "tabs": [
+            {"id": "verdict", "label": "Verdict", "emoji": "🏆", "dataSource": "review.verdict"}
+        ],
+    },
+    "music": {
+        "contentTags": ["music"],
+        "primaryTag": "music",
+        "confidence": 0.89,
+        "userGoal": "Analyze music",
+        "modifiers": [],
+        "tabs": [
+            {"id": "analysis", "label": "Analysis", "emoji": "🎼", "dataSource": "music.analysis"}
+        ],
+    },
+    "project": {
+        "contentTags": ["project"],
+        "primaryTag": "project",
+        "confidence": 0.91,
+        "userGoal": "Build a project",
+        "modifiers": [],
+        "tabs": [{"id": "steps", "label": "Steps", "emoji": "📝", "dataSource": "project.steps"}],
+    },
 }
 
 _EXTRACTION_RESPONSES: dict[str, dict] = {
@@ -65,22 +154,39 @@ _EXTRACTION_RESPONSES: dict[str, dict] = {
             "envVars": [{"name": "API_KEY", "description": "API authentication key"}],
         },
         "snippets": [
-            {"language": "python", "code": "app = FastAPI()", "explanation": "Create the FastAPI app"},
+            {
+                "language": "python",
+                "code": "app = FastAPI()",
+                "explanation": "Create the FastAPI app",
+            },
         ],
     },
     "travel": {
         "itinerary": [
-            {"day": 1, "theme": "Arrival", "spots": [
-                {"name": "Senso-ji Temple", "emoji": "⛩️", "description": "Historic temple"},
-            ]},
+            {
+                "day": 1,
+                "theme": "Arrival",
+                "spots": [
+                    {"name": "Senso-ji Temple", "emoji": "⛩️", "description": "Historic temple"},
+                ],
+            },
         ],
-        "budget": {"total": 2500, "currency": "USD", "breakdown": [
-            {"category": "Accommodation", "amount": 800, "currency": "USD"},
-        ]},
+        "budget": {
+            "total": 2500,
+            "currency": "USD",
+            "breakdown": [
+                {"category": "Accommodation", "amount": 800, "currency": "USD"},
+            ],
+        },
         "packingList": [{"item": "Passport", "category": "Essentials", "essential": True}],
     },
     "fitness": {
-        "meta": {"type": "HIIT", "difficulty": "intermediate", "duration": 30, "muscleGroups": ["legs", "core"]},
+        "meta": {
+            "type": "HIIT",
+            "difficulty": "intermediate",
+            "duration": 30,
+            "muscleGroups": ["legs", "core"],
+        },
         "exercises": [
             {"name": "Squats", "emoji": "🏋️", "sets": 3, "reps": "15"},
             {"name": "Push-ups", "emoji": "💪", "sets": 3, "reps": "12"},
@@ -107,7 +213,11 @@ _EXTRACTION_RESPONSES: dict[str, dict] = {
         "artist": "Queen",
         "genre": ["Rock", "Opera"],
         "analysis": [
-            {"aspect": "Production", "emoji": "🎛️", "detail": "A groundbreaking composition with multi-track layering"},
+            {
+                "aspect": "Production",
+                "emoji": "🎛️",
+                "detail": "A groundbreaking composition with multi-track layering",
+            },
         ],
         "structure": [
             {"name": "Intro/Ballad", "description": "Piano-driven opening"},
@@ -124,7 +234,11 @@ _EXTRACTION_RESPONSES: dict[str, dict] = {
             {"name": "Drill", "required": True},
         ],
         "steps": [
-            {"number": 1, "title": "Measure and Mark", "instruction": "Mark the wall at desired height"},
+            {
+                "number": 1,
+                "title": "Measure and Mark",
+                "instruction": "Mark the wall at desired height",
+            },
         ],
         "safetyWarnings": ["Always find wall studs"],
     },
@@ -139,7 +253,12 @@ _SYNTHESIS_RESPONSE = {
 
 _ENRICHMENT_STUDY = {
     "quiz": [
-        {"question": "What is a qubit?", "options": ["A classical bit", "A quantum bit", "A byte", "A register"], "correctIndex": 1, "explanation": "A qubit is the quantum equivalent of a classical bit"},
+        {
+            "question": "What is a qubit?",
+            "options": ["A classical bit", "A quantum bit", "A byte", "A register"],
+            "correctIndex": 1,
+            "explanation": "A qubit is the quantum equivalent of a classical bit",
+        },
     ],
     "flashcards": [
         {"front": "What is superposition?", "back": "Being in multiple states simultaneously"},
@@ -150,6 +269,7 @@ _ENRICHMENT_STUDY = {
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def mock_llm():
@@ -196,14 +316,10 @@ class TestPipelineIntegration:
     """Full pipeline integration for all 8 domains."""
 
     @pytest.mark.parametrize("tag", list(_EXTRACTION_RESPONSES.keys()))
-    async def test_triage_extract_validate_for_all_tags(self, mock_llm, tag):
-        """Test triage + extraction + domain validation for each content tag."""
-        # 1. Triage
-        mock_llm.call_llm.return_value = json.dumps(_TRIAGE_RESPONSES[tag])
-        triage = await run_triage(
-            "Test Video", "Description", 600, tag, mock_llm,
-            transcript_preview=_TRANSCRIPT[:2000],
-        )
+    async def test_extract_validate_for_all_tags(self, mock_llm, tag):
+        """Test extraction + domain validation for each content tag."""
+        # 1. Triage decision (plan-stage output carried as TriageResult)
+        triage = _make_triage(tag)
         assert isinstance(triage, TriageResult)
         assert triage.primary_tag == tag
 
@@ -253,10 +369,19 @@ class TestPipelineIntegration:
     @pytest.mark.parametrize("tag", ["food", "fitness", "review", "music", "travel", "project"])
     async def test_enrichment_runs_for_all_domains(self, mock_llm, tag):
         """All domains now get enrichment (quiz/flashcards/scenarios)."""
-        mock_llm.call_llm.return_value = json.dumps({
-            "quiz": [{"question": "Test?", "options": ["A", "B", "C", "D"], "correctIndex": 0, "explanation": "A"}],
-            "flashcards": [{"front": "Q", "back": "A"}],
-        })
+        mock_llm.call_llm.return_value = json.dumps(
+            {
+                "quiz": [
+                    {
+                        "question": "Test?",
+                        "options": ["A", "B", "C", "D"],
+                        "correctIndex": 0,
+                        "explanation": "A",
+                    }
+                ],
+                "flashcards": [{"front": "Q", "back": "A"}],
+            }
+        )
         result = await enrich(mock_llm, tag, {}, "Test Video")
 
         assert result is not None
@@ -265,24 +390,6 @@ class TestPipelineIntegration:
 
 class TestPipelineEdgeCases:
     """Edge cases for the pipeline."""
-
-    async def test_triage_low_confidence_falls_back_to_learning(self, mock_llm):
-        """Test that low confidence triage falls back to learning."""
-        mock_llm.call_llm.return_value = json.dumps({
-            "contentTags": ["food"], "primaryTag": "food", "confidence": 0.3,
-            "userGoal": "Unsure", "modifiers": [], "tabs": [],
-        })
-
-        triage = await run_triage("Vague Title", "", 300, None, mock_llm, transcript_preview="Some words")
-        assert triage.primary_tag == "learning"
-
-    async def test_triage_empty_json_response(self, mock_llm):
-        """Test that empty JSON from LLM produces fallback triage."""
-        mock_llm.call_llm.return_value = ""
-
-        triage = await run_triage("Video", "", 300, "education", mock_llm, transcript_preview="Learn physics")
-        assert triage.primary_tag == "learning"
-        assert triage.confidence == 0.0
 
     async def test_extraction_with_null_fields_in_fitness(self, mock_llm):
         """Test extraction handles LLM returning null for fitness fields."""
@@ -307,7 +414,8 @@ class TestPipelineEdgeCases:
         response = {
             "product": "Test Product",
             "rating": {"score": None, "maxScore": None, "label": "N/A"},
-            "pros": ["Good"], "cons": ["Bad"],
+            "pros": ["Good"],
+            "cons": ["Bad"],
             "verdict": {"badge": "invalid", "bestFor": [], "notFor": [], "bottomLine": "OK"},
         }
         mock_llm.call_llm.return_value = json.dumps(response)
@@ -328,7 +436,9 @@ class TestPipelineEdgeCases:
         mock_llm.call_llm.return_value = json.dumps(_SYNTHESIS_RESPONSE)
         large_extraction = json.dumps({"data": "x" * 10000})
 
-        result = await synthesize(mock_llm, "Long Video", "Channel", 7200, "learning", large_extraction)
+        result = await synthesize(
+            mock_llm, "Long Video", "Channel", 7200, "learning", large_extraction
+        )
         assert isinstance(result, SynthesisResult)
         assert result.tldr
 

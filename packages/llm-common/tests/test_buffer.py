@@ -1,11 +1,10 @@
 """Tests for llm_common.buffer — write batching."""
 
-import asyncio
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llm_common.buffer import SyncBuffer, AsyncBuffer, FLUSH_BATCH_SIZE
+from llm_common.buffer import FLUSH_BATCH_SIZE, AsyncBuffer, SyncBuffer
 
 
 class TestSyncBuffer:

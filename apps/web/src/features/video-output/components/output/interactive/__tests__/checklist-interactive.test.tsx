@@ -74,4 +74,27 @@ describe('ChecklistInteractive', () => {
     expect(screen.getByText('Dry')).toBeInTheDocument();
     expect(screen.getByText('Wet')).toBeInTheDocument();
   });
+
+  describe('aria-live toggle feedback', () => {
+    it('should announce progress via the polite live region when an item is toggled', () => {
+      render(<ChecklistInteractive items={items} tabLabel="Items" />);
+      const region = screen.getByRole('status');
+      expect(region).toHaveAttribute('aria-live', 'polite');
+      const flour = screen.getByText('Flour').closest('button')!;
+      fireEvent.click(flour);
+      expect(region).toHaveTextContent('Flour checked. 1 of 3 complete.');
+      fireEvent.click(flour);
+      expect(region).toHaveTextContent('Flour unchecked. 0 of 3 complete.');
+    });
+
+    it('should announce completion when the last item is checked', () => {
+      render(<ChecklistInteractive items={items} tabLabel="Items" />);
+      for (const label of ['Flour', 'Sugar', 'Salt']) {
+        fireEvent.click(screen.getByText(label).closest('button')!);
+      }
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Salt checked. All 3 items complete.',
+      );
+    });
+  });
 });

@@ -47,6 +47,23 @@ describe('payment routes', () => {
       expect(mockContainer.paymentService.handleWebhookEvent).toHaveBeenCalledWith(webhookPayload);
     });
 
+    it('should reject a webhook whose signature fails verification', async () => {
+      mockContainer.paymentService.verifyWebhook.mockReturnValue(false);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/payments/webhook',
+        headers: { 'content-type': 'application/json' },
+        payload: {
+          event_type: 'subscription.created',
+          data: { subscription_id: 'sub_123', customer_id: 'cust_456' },
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mockContainer.paymentService.handleWebhookEvent).not.toHaveBeenCalled();
+    });
+
     it('should not require authentication', async () => {
       mockContainer.paymentService.verifyWebhook.mockReturnValue(true);
       mockContainer.paymentService.handleWebhookEvent.mockResolvedValue(undefined);

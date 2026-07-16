@@ -375,6 +375,30 @@ describe('RAGChatPanel', () => {
 
       expect(onCancelAction).toHaveBeenCalledTimes(1);
     });
+
+    it('should show the pending action summary when provided', () => {
+      render(
+        <RAGChatPanel
+          {...defaultProps}
+          pendingAction
+          pendingSummary="Delete this folder AND every video inside it"
+        />,
+      );
+
+      expect(
+        screen.getByText('Delete this folder AND every video inside it'),
+      ).toBeInTheDocument();
+    });
+
+    it('should not render a summary line when pendingSummary is omitted', () => {
+      const { container } = render(
+        <RAGChatPanel {...defaultProps} pendingAction />,
+      );
+
+      expect(
+        container.querySelector('[data-slot="pending-summary"]'),
+      ).not.toBeInTheDocument();
+    });
   });
 
   describe('accessibility', () => {

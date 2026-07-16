@@ -42,7 +42,11 @@ describe("useSidebarChat", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Reset the persisted store between tests so transcripts never leak.
-    useChatStore.setState({ messages: [], status: "idle" });
+    useChatStore.setState({
+      messages: [],
+      status: "idle",
+      pendingConfirmation: null,
+    });
     localStorage.clear();
   });
 
@@ -65,6 +69,7 @@ describe("useSidebarChat", () => {
         expect.any(Array),
         expect.any(Function),
         expect.any(AbortSignal),
+        undefined, // no confirmToken on a regular turn
       );
     });
 
@@ -127,6 +132,7 @@ describe("useSidebarChat", () => {
         expect.any(Array),
         expect.any(Function),
         expect.any(AbortSignal),
+        undefined, // no confirmToken on a regular turn
       );
     });
 
@@ -257,6 +263,75 @@ describe("useSidebarChat", () => {
     });
   });
 
+  describe("source events carry numeric seconds for seek/deep-link", () => {
+    // The wire field is snake_case (Python RAGSource.timestamp_seconds); the
+    // shared AssistantSource type doesn't declare it yet, hence the cast.
+    type WireSource = AssistantChatEvent["sources"] extends
+      | (infer S)[]
+      | undefined
+      ? S & { timestamp_seconds?: number | null }
+      : never;
+
+    function driveSourceEvent(sources: WireSource[]) {
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useSidebarChat(), { wrapper });
+      act(() => {
+        result.current.sendMessage("where is this covered?");
+      });
+      const handleEvent = mockedSendLibraryMessage.mock.calls[0][2] as (
+        event: AssistantChatEvent,
+      ) => void;
+      act(() => {
+        handleEvent({ type: "source", sources });
+      });
+      return result;
+    }
+
+    it("should map timestamp_seconds to timestampSeconds (floored)", () => {
+      const result = driveSourceEvent([
+        {
+          text: "Attention is all you need.",
+          score: 0.9,
+          chunk_index: 0,
+          video_id: "vid1",
+          title: "Transformers Explained",
+          timestamp: "12:34",
+          timestamp_seconds: 754.6,
+        },
+      ]);
+
+      const assistantMsg = result.current.messages.find(
+        (m) => m.role === "assistant",
+      );
+      expect(assistantMsg?.sources).toEqual([
+        {
+          title: "Transformers Explained",
+          youtubeId: "vid1",
+          timestamp: "12:34",
+          timestampSeconds: 754,
+        },
+      ]);
+    });
+
+    it("should leave timestampSeconds undefined for v1-legacy null seconds", () => {
+      const result = driveSourceEvent([
+        {
+          text: "Old chunk without a timeline.",
+          score: 0.8,
+          chunk_index: 0,
+          video_id: "vid2",
+          title: "Legacy Video",
+          timestamp_seconds: null,
+        },
+      ]);
+
+      const assistantMsg = result.current.messages.find(
+        (m) => m.role === "assistant",
+      );
+      expect(assistantMsg?.sources?.[0].timestampSeconds).toBeUndefined();
+    });
+  });
+
   describe("persistence across remount", () => {
     it("should keep messages after the hook unmounts and re-renders", () => {
       const { wrapper } = makeWrapper();
@@ -328,6 +403,139 @@ describe("useSidebarChat", () => {
       });
 
       expect(invalidateSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("pending confirmation flow", () => {
+    /** Drive a turn to the point where the server parks a gated action and
+     * emits `pending_confirmation`; returns the hook handle. */
+    function primePendingConfirmation(
+      result: { current: ReturnType<typeof useSidebarChat> },
+      token = "tok-abc123456789",
+    ) {
+      act(() => {
+        result.current.sendMessage("delete the Old folder and its videos");
+      });
+      const handleEvent = mockedSendLibraryMessage.mock.calls[0][2] as (
+        event: AssistantChatEvent,
+      ) => void;
+      act(() => {
+        handleEvent({
+          type: "tool",
+          content: "Waiting for your confirmation…",
+          metadata: {
+            status: "pending_confirmation",
+            action: "delete_folder",
+            confirmation: {
+              token,
+              action: "delete_folder",
+              summary: "Delete this folder AND every video inside it",
+            },
+          },
+        });
+        handleEvent({ type: "done" });
+      });
+    }
+
+    it("should set pendingConfirmation from a pending_confirmation tool event", () => {
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useSidebarChat(), { wrapper });
+
+      primePendingConfirmation(result);
+
+      expect(result.current.pendingConfirmation).toEqual({
+        token: "tok-abc123456789",
+        action: "delete_folder",
+        summary: "Delete this folder AND every video inside it",
+      });
+    });
+
+    it("should ignore a malformed confirmation payload (no token)", () => {
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useSidebarChat(), { wrapper });
+
+      act(() => {
+        result.current.sendMessage("delete stuff");
+      });
+      const handleEvent = mockedSendLibraryMessage.mock.calls[0][2] as (
+        event: AssistantChatEvent,
+      ) => void;
+      act(() => {
+        handleEvent({
+          type: "tool",
+          metadata: {
+            status: "pending_confirmation",
+            confirmation: { action: "delete_folder" },
+          },
+        });
+      });
+
+      expect(result.current.pendingConfirmation).toBeNull();
+    });
+
+    it("should resend with the token and clear the pending state on confirm", () => {
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useSidebarChat(), { wrapper });
+      primePendingConfirmation(result);
+
+      act(() => {
+        result.current.confirmPendingAction();
+      });
+
+      expect(result.current.pendingConfirmation).toBeNull();
+      expect(mockedSendLibraryMessage).toHaveBeenCalledTimes(2);
+      const lastCall = mockedSendLibraryMessage.mock.calls.at(-1)!;
+      expect(lastCall[4]).toBe("tok-abc123456789");
+      // The confirmation is echoed into the transcript as a user turn.
+      const userMessages = result.current.messages.filter(
+        (m) => m.role === "user",
+      );
+      expect(userMessages.at(-1)?.content).toBe("Yes, do it");
+    });
+
+    it("should clear the pending state without resending on cancel", () => {
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useSidebarChat(), { wrapper });
+      primePendingConfirmation(result);
+
+      act(() => {
+        result.current.cancelPendingAction();
+      });
+
+      expect(result.current.pendingConfirmation).toBeNull();
+      // Only the original turn hit the transport — the token is never sent.
+      expect(mockedSendLibraryMessage).toHaveBeenCalledTimes(1);
+      const lastMsg = result.current.messages.at(-1);
+      expect(lastMsg?.role).toBe("assistant");
+      expect(lastMsg?.content).toBe("Okay, cancelled.");
+    });
+
+    it("should abandon a pending confirmation when a new message is sent", () => {
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useSidebarChat(), { wrapper });
+      primePendingConfirmation(result);
+
+      act(() => {
+        result.current.sendMessage("actually, tell me a joke instead");
+      });
+
+      expect(result.current.pendingConfirmation).toBeNull();
+      // The fresh turn never carries the token.
+      const lastCall = mockedSendLibraryMessage.mock.calls.at(-1)!;
+      expect(lastCall[4]).toBeUndefined();
+    });
+
+    it("should do nothing on confirm when no confirmation is pending", () => {
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useSidebarChat(), { wrapper });
+
+      act(() => {
+        result.current.confirmPendingAction();
+      });
+
+      expect(mockedSendLibraryMessage).not.toHaveBeenCalled();
+      expect(mockedSendAssistantMessage).not.toHaveBeenCalled();
+      expect(result.current.messages).toEqual([]);
     });
   });
 

@@ -329,5 +329,90 @@ describe('internal assistant routes', () => {
       expect(response.statusCode).toBe(400);
       expect(mockContainer.videoService.createVideo).not.toHaveBeenCalled();
     });
+
+    it('should return 429 and never call createVideo when the daily cost cap is reached', async () => {
+      // Regression test for the internal bypass: before the submission-service
+      // extraction, this route called createVideo directly and the assistant
+      // could submit unlimited paid pipeline runs past the daily cap.
+      const { DailyLimitReachedError } = await import('../utils/errors.js');
+      mockContainer.costMonitorService.reserveUserCost.mockRejectedValue(
+        new DailyLimitReachedError(2, '2026-07-07T00:00:00.000Z'),
+      );
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/internal/assistant/generate',
+        headers: internalHeaders(USER_A),
+        payload: { url: 'https://youtu.be/dQw4w9WgXcQ' },
+      });
+
+      expect(response.statusCode).toBe(429);
+      expect(response.json().error).toBe('DAILY_LIMIT_REACHED');
+      expect(mockContainer.costMonitorService.reserveUserCost).toHaveBeenCalledWith(USER_A, 'free');
+      expect(mockContainer.videoService.createVideo).not.toHaveBeenCalled();
+      // The reserved idempotency hash is unwound so a later retry isn't locked out.
+      expect(mockContainer.idempotencyService.invalidateByHash).toHaveBeenCalledWith('test-hash');
+    });
+
+    it('should refund the reservation and unwind the hash when createVideo throws', async () => {
+      const reservation = { userId: USER_A, dateKey: '2026-07-06', amountUsd: 0.15 };
+      mockContainer.costMonitorService.reserveUserCost.mockResolvedValue(reservation);
+      mockContainer.videoService.createVideo.mockRejectedValue(new Error('downstream-blew-up'));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/internal/assistant/generate',
+        headers: internalHeaders(USER_A),
+        payload: { url: 'https://youtu.be/dQw4w9WgXcQ' },
+      });
+
+      expect(response.statusCode).toBe(500);
+      expect(mockContainer.costMonitorService.refundReservation).toHaveBeenCalledWith(reservation);
+      expect(mockContainer.idempotencyService.invalidateByHash).toHaveBeenCalledWith('test-hash');
+    });
+
+    it('should refund the reservation when the video is served from cache', async () => {
+      const reservation = { userId: USER_A, dateKey: '2026-07-06', amountUsd: 0.15 };
+      mockContainer.costMonitorService.reserveUserCost.mockResolvedValue(reservation);
+      mockContainer.videoService.createVideo.mockResolvedValue({
+        video: { id: 'v1', videoSummaryId: 'sum1', status: 'completed' },
+        cached: true,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/internal/assistant/generate',
+        headers: internalHeaders(USER_A),
+        payload: { url: 'https://youtu.be/dQw4w9WgXcQ' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockContainer.costMonitorService.refundReservation).toHaveBeenCalledWith(reservation);
+    });
+
+    it('should return 409 when the same submission is already in flight', async () => {
+      mockContainer.idempotencyService.reserveHash.mockResolvedValue({
+        created: false,
+        doc: {
+          _id: { toString: () => 'idem-pending' },
+          hash: 'test-hash',
+          status: 'pending',
+          userId: { toString: () => USER_A },
+          youtubeId: 'dQw4w9WgXcQ',
+        },
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/internal/assistant/generate',
+        headers: internalHeaders(USER_A),
+        payload: { url: 'https://youtu.be/dQw4w9WgXcQ' },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error).toBe('IDEMPOTENCY_IN_FLIGHT');
+      expect(mockContainer.costMonitorService.reserveUserCost).not.toHaveBeenCalled();
+      expect(mockContainer.videoService.createVideo).not.toHaveBeenCalled();
+    });
   });
 });

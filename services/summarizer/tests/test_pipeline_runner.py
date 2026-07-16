@@ -10,15 +10,17 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from llm_common.context import llm_feature_var
+
 from src.routes import pipeline_runner
 
 
 def _phase_stub(label: str):
     """Build a single-event async-generator stand-in for a pipeline phase."""
+
     async def _gen(*_args: object, **_kwargs: object):
         yield f"data: {label}\n\n"
+
     return _gen
 
 
@@ -42,6 +44,7 @@ def _non_english_ctx() -> SimpleNamespace:
 def _patched_phases():
     """Patch every pipeline phase to a trivial stub so the orchestration —
     specifically the terminal-event ordering — can be tested in isolation."""
+
     async def _parallel_stub(_phases, _ctx):
         yield "data: parallel\n\n"
 
@@ -54,6 +57,103 @@ def _patched_phases():
         patch.object(pipeline_runner, "run_phase_enrichment", _phase_stub("enrichment")),
         patch.object(pipeline_runner, "run_phase_assembly", _phase_stub("assembly")),
     ]
+
+
+def _english_ctx(extraction_data: dict) -> SimpleNamespace:
+    """Minimal ctx for _run_pipeline_phases driving the English path."""
+    return SimpleNamespace(
+        youtube_id="yt1",
+        clean_text="",  # skip the visual-inject block and faithfulness spawn
+        frame_descriptions=None,
+        scene_frames_all=None,
+        transcript_data=None,
+        extraction_data=extraction_data,
+        source_language_code=None,
+        phase_times={},
+        plan_result=object(),
+        enrichment_data={"a": 1},
+        triage=SimpleNamespace(tabs=[]),
+    )
+
+
+@pytest.mark.asyncio
+async def test_synthesis_and_enrichment_parallel_when_extraction_has_data() -> None:
+    """Synthesis and enrichment both read only extraction output, so when the
+    extraction produced meaningful data they run through run_parallel_phases
+    (second parallel group after transcript+frames)."""
+    ctx = _english_ctx({"key_points": [{"text": "a claim long enough"}]})
+    timer = MagicMock()
+    timer.elapsed = MagicMock(return_value=1.0)
+
+    parallel_calls: list[list] = []
+
+    async def _capture_parallel(phases, _ctx):
+        parallel_calls.append(list(phases))
+        yield "data: parallel\n\n"
+
+    patches = [
+        patch.object(pipeline_runner, "run_phase_metadata", _phase_stub("metadata")),
+        patch.object(pipeline_runner, "run_parallel_phases", _capture_parallel),
+        patch.object(pipeline_runner, "run_phase_plan", _phase_stub("plan")),
+        patch.object(pipeline_runner, "run_phase_extraction", _phase_stub("extraction")),
+        patch.object(pipeline_runner, "run_phase_synthesis", _phase_stub("synthesis")),
+        patch.object(pipeline_runner, "run_phase_enrichment", _phase_stub("enrichment")),
+        patch.object(pipeline_runner, "run_phase_assembly", _phase_stub("assembly")),
+    ]
+    for p in patches:
+        p.start()
+    try:
+        _ = [
+            ev async for ev in pipeline_runner._run_pipeline_phases(ctx, MagicMock(), "vsid", timer)
+        ]
+        assert len(parallel_calls) == 2, "transcript+frames AND synthesis+enrichment"
+        assert parallel_calls[1] == [
+            pipeline_runner.run_phase_synthesis,
+            pipeline_runner.run_phase_enrichment,
+        ]
+    finally:
+        for p in patches:
+            p.stop()
+
+
+@pytest.mark.asyncio
+async def test_synthesis_enrichment_sequential_when_extraction_empty() -> None:
+    """When extraction came back empty, enrichment falls back to reading the
+    synthesis output as its context — that data dependency forces the
+    sequential order (synthesis strictly before enrichment)."""
+    ctx = _english_ctx({})
+    timer = MagicMock()
+    timer.elapsed = MagicMock(return_value=1.0)
+
+    parallel_calls: list[list] = []
+
+    async def _capture_parallel(phases, _ctx):
+        parallel_calls.append(list(phases))
+        yield "data: parallel\n\n"
+
+    patches = [
+        patch.object(pipeline_runner, "run_phase_metadata", _phase_stub("metadata")),
+        patch.object(pipeline_runner, "run_parallel_phases", _capture_parallel),
+        patch.object(pipeline_runner, "run_phase_plan", _phase_stub("plan")),
+        patch.object(pipeline_runner, "run_phase_extraction", _phase_stub("extraction")),
+        patch.object(pipeline_runner, "run_phase_synthesis", _phase_stub("synthesis")),
+        patch.object(pipeline_runner, "run_phase_enrichment", _phase_stub("enrichment")),
+        patch.object(pipeline_runner, "run_phase_assembly", _phase_stub("assembly")),
+    ]
+    for p in patches:
+        p.start()
+    try:
+        events = [
+            ev async for ev in pipeline_runner._run_pipeline_phases(ctx, MagicMock(), "vsid", timer)
+        ]
+    finally:
+        for p in patches:
+            p.stop()
+
+    assert len(parallel_calls) == 1, "only transcript+frames should parallelize"
+    synth_idx = next(i for i, ev in enumerate(events) if "synthesis" in ev)
+    enrich_idx = next(i for i, ev in enumerate(events) if "enrichment" in ev)
+    assert synth_idx < enrich_idx, "empty extraction keeps synthesis before enrichment"
 
 
 @pytest.mark.asyncio
@@ -76,9 +176,7 @@ async def test_done_emitted_after_translation_for_non_english() -> None:
         p.start()
     try:
         events = [
-            ev async for ev in pipeline_runner._run_pipeline_phases(
-                ctx, MagicMock(), "vsid", timer
-            )
+            ev async for ev in pipeline_runner._run_pipeline_phases(ctx, MagicMock(), "vsid", timer)
         ]
     finally:
         for p in patches:
@@ -111,9 +209,7 @@ async def test_no_done_when_translation_raises() -> None:
         p.start()
     try:
         events = [
-            ev async for ev in pipeline_runner._run_pipeline_phases(
-                ctx, MagicMock(), "vsid", timer
-            )
+            ev async for ev in pipeline_runner._run_pipeline_phases(ctx, MagicMock(), "vsid", timer)
         ]
     finally:
         for p in patches:
@@ -228,7 +324,6 @@ async def test_stream_sets_attribution_ctxvars_on_cache_hit():
     path skipped them, cache-hit cost would be unattributable.
     """
     import structlog
-
     from llm_common.context import (
         llm_request_id_var,
         llm_user_id_var,
@@ -266,12 +361,10 @@ async def test_stream_sets_attribution_ctxvars_on_cache_hit():
 
     structlog.contextvars.bind_contextvars(request_id="req_live_42")
     try:
-        with patch.object(
-            pipeline_runner.response_cache, "get_response", new=fake_get_response
-        ), patch.object(
-            pipeline_runner, "_stream_cached_structured", new=capture_then_stream
-        ), patch.object(
-            pipeline_runner.settings, "REDIS_ENABLED", True
+        with (
+            patch.object(pipeline_runner.response_cache, "get_response", new=fake_get_response),
+            patch.object(pipeline_runner, "_stream_cached_structured", new=capture_then_stream),
+            patch.object(pipeline_runner.settings, "REDIS_ENABLED", True),
         ):
             events = [
                 ev
@@ -300,7 +393,6 @@ async def test_stream_reads_user_id_from_contextvars_when_entry_has_none():
     matched zero rows.
     """
     import structlog
-
     from llm_common.context import llm_user_id_var
 
     cached = {
@@ -325,12 +417,10 @@ async def test_stream_reads_user_id_from_contextvars_when_entry_has_none():
 
     structlog.contextvars.bind_contextvars(request_id="req_x", user_id="payload_user_99")
     try:
-        with patch.object(
-            pipeline_runner.response_cache, "get_response", new=fake_get_response
-        ), patch.object(
-            pipeline_runner, "_stream_cached_structured", new=capture_then_stream
-        ), patch.object(
-            pipeline_runner.settings, "REDIS_ENABLED", True
+        with (
+            patch.object(pipeline_runner.response_cache, "get_response", new=fake_get_response),
+            patch.object(pipeline_runner, "_stream_cached_structured", new=capture_then_stream),
+            patch.object(pipeline_runner.settings, "REDIS_ENABLED", True),
         ):
             _ = [
                 ev

@@ -17,7 +17,11 @@ const MODE_IDS = ['cooking', 'workout', 'build', 'study', 'explore', 'practice',
 /** Navigate to the design system page and switch to the Modes tab. */
 async function goToModesTab(page: Page) {
   await page.goto(DESIGN_SYSTEM_URL);
-  await expect(page.getByRole('heading', { name: 'Design System' })).toBeVisible();
+  // 30s: the design-system route is a huge lazy chunk — a cold Vite dev
+  // server can take >5s to transform it (Suspense "Loading page..." flake).
+  await expect(
+    page.getByRole('heading', { name: 'Design System' }),
+  ).toBeVisible({ timeout: 30000 });
   await page.getByRole('tab', { name: /Modes/i }).click();
   await page.waitForTimeout(300);
   await expect(page.getByRole('heading', { name: 'Enter Modes' })).toBeVisible();

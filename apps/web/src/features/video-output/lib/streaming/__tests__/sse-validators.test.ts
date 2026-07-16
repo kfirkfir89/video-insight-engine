@@ -191,29 +191,43 @@ describe('sse-validators', () => {
 
       const result = validateDoneEvent(data);
 
-      expect(result).toBe(5000);
+      expect(result).toEqual({ processingTimeMs: 5000, degraded: false });
     });
 
-    it('should return null when processingTimeMs is null', () => {
+    it('should return null processing time when processingTimeMs is null', () => {
       const data = { event: 'done', processingTimeMs: null };
 
       const result = validateDoneEvent(data);
 
-      expect(result).toBeNull();
+      expect(result.processingTimeMs).toBeNull();
     });
 
-    it('should return null when processingTimeMs is undefined', () => {
+    it('should return null processing time when processingTimeMs is undefined', () => {
       const data = { event: 'done' };
 
       const result = validateDoneEvent(data);
 
-      expect(result).toBeNull();
+      expect(result.processingTimeMs).toBeNull();
     });
 
-    it('should return null for invalid event', () => {
+    it('should surface degraded true when the terminal event carries it', () => {
+      const data = { event: 'done', processingTimeMs: 5000, degraded: true };
+
+      const result = validateDoneEvent(data);
+
+      expect(result.degraded).toBe(true);
+    });
+
+    it('should default degraded to false when absent (legacy events)', () => {
+      const result = validateDoneEvent({ event: 'done', processingTimeMs: 100 });
+
+      expect(result.degraded).toBe(false);
+    });
+
+    it('should return defaults for invalid event', () => {
       const result = validateDoneEvent({ event: 'wrong' });
 
-      expect(result).toBeNull();
+      expect(result).toEqual({ processingTimeMs: null, degraded: false });
     });
   });
 

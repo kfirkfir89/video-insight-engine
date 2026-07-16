@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import http from 'node:http';
 import { FastifyInstance } from 'fastify';
-import { buildTestApp, createMockContainer, getAuthHeader, type MockContainer } from '../test/helpers.js';
+import { buildTestApp, createMockContainer, getAuthHeader, testUser, type MockContainer } from '../test/helpers.js';
 
 describe('assistant routes', () => {
   let app: FastifyInstance;
@@ -188,6 +189,85 @@ describe('assistant routes', () => {
 
       const arg = mockContainer.assistantClient.chat.mock.calls[0][0];
       expect(arg.requestId).toBe(incoming);
+    });
+
+    it('should pass an abort signal tied to the request to the assistant client', async () => {
+      mockContainer.videoRepository.userHasAccessToSummary.mockResolvedValue(true);
+
+      const encoder = new TextEncoder();
+      const mockStream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
+          controller.close();
+        },
+      });
+      mockContainer.assistantClient.chat.mockResolvedValue(mockStream);
+
+      await app.inject({
+        method: 'POST',
+        url: `/api/videos/${validVideoSummaryId}/chat`,
+        headers: { authorization: authHeader },
+        payload: { message: 'hi' },
+      });
+
+      expect(mockContainer.assistantClient.chat).toHaveBeenCalledWith(
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+    });
+
+    it('should abort the upstream assistant stream when the client disconnects mid-stream', async () => {
+      // Live server: light-my-request can't simulate a mid-stream client
+      // disconnect, so listen on a real port and destroy the raw socket.
+      const liveContainer = createMockContainer();
+      const liveApp = await buildTestApp(liveContainer);
+      await liveApp.listen({ port: 0 });
+      const address = liveApp.server.address();
+      const port = typeof address === 'object' && address !== null ? address.port : 0;
+      const token = liveApp.jwt.sign({ userId: testUser.userId, email: testUser.email, type: 'access' });
+
+      liveContainer.videoRepository.userHasAccessToSummary.mockResolvedValue(true);
+
+      let upstreamSignal: AbortSignal | undefined;
+      liveContainer.assistantClient.chat.mockImplementation(
+        async (opts: { signal?: AbortSignal }) => {
+          upstreamSignal = opts.signal;
+          // Upstream never sends a byte — the proxy parks on read(). Mirror a
+          // real aborted fetch body: error the stream when the signal aborts
+          // so the read loop exits.
+          return new ReadableStream<Uint8Array>({
+            start(controller) {
+              opts.signal?.addEventListener(
+                'abort',
+                () => controller.error(new Error('aborted')),
+                { once: true },
+              );
+            },
+          });
+        },
+      );
+
+      const body = JSON.stringify({ message: 'hello' });
+      const clientReq = http.request({
+        port,
+        method: 'POST',
+        path: `/api/videos/${validVideoSummaryId}/chat`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(body),
+        },
+      });
+      clientReq.on('error', () => undefined); // destroy() emits expected noise
+      clientReq.end(body);
+
+      await vi.waitFor(() => expect(liveContainer.assistantClient.chat).toHaveBeenCalled());
+      clientReq.destroy();
+
+      await vi.waitFor(() => {
+        expect(upstreamSignal?.aborted).toBe(true);
+      });
+
+      await liveApp.close();
     });
   });
 

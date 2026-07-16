@@ -1,0 +1,152 @@
+{
+  "_comment": "Golden LLM response fixture for the food domain. Hand-built against PlanResult, FoodData, EnrichmentData, SynthesisResult — a valid per-stage output set for a recipe video. Drift canary consumed by tests/test_llm_response_fixtures.py.",
+  "domain": "food",
+  "video_meta": {
+    "videoId": "fixture-food-001",
+    "title": "Weeknight Shakshuka — One Pan, 25 Minutes",
+    "channel": "Pan & Flame",
+    "duration": 780,
+    "chapters": []
+  },
+  "plan_response": {
+    "reasoning": "Straightforward recipe video with measured ingredients and sequential steps shown on screen.",
+    "identity": {
+      "creatorType": "home-cooking chef",
+      "tone": "calm, exact",
+      "audience": "weeknight cooks"
+    },
+    "corePromise": "A reliable one-pan shakshuka in 25 minutes",
+    "uniqueAngle": "Blooms the spices in oil before the tomatoes — most recipes skip this",
+    "extractionGuidance": {
+      "primaryFocus": "Exact quantities and temperatures; steps in order",
+      "watchOutFor": "Metric and imperial amounts both spoken — keep both in displayAmount"
+    },
+    "itemCounts": {
+      "ingredients": 8,
+      "steps": 5
+    },
+    "contentTags": ["food"],
+    "modifiers": [],
+    "primaryTag": "food",
+    "userGoal": "Cook this tonight without rewatching the video",
+    "confidence": 0.96,
+    "tabs": [
+      {
+        "id": "ingredients",
+        "label": "Ingredients",
+        "emoji": "🧾",
+        "component": "checklist",
+        "dataSource": "food.ingredients",
+        "goal": "Shop and mise-en-place from one list."
+      },
+      {
+        "id": "steps",
+        "label": "Steps",
+        "emoji": "👨‍🍳",
+        "component": "step_player",
+        "dataSource": "food.steps",
+        "goal": "Cook along step by step with timers."
+      },
+      {
+        "id": "flashcards",
+        "label": "Chef's Cards",
+        "emoji": "🃏",
+        "component": "flash_deck",
+        "dataSource": "enrichment.flashcards",
+        "goal": "Remember the technique cues next time you cook it."
+      }
+    ]
+  },
+  "extraction_response": {
+    "meta": {
+      "prepTime": 10,
+      "cookTime": 15,
+      "servings": 2,
+      "difficulty": "easy",
+      "cuisine": "Middle Eastern"
+    },
+    "ingredients": [
+      {"name": "Olive oil", "amount": 3, "displayAmount": "3 tbsp", "unit": "tbsp", "group": "Base"},
+      {"name": "Yellow onion", "amount": 1, "displayAmount": "1 medium, diced", "unit": "piece", "group": "Base"},
+      {"name": "Red bell pepper", "amount": 1, "displayAmount": "1 large, sliced", "unit": "piece", "group": "Base"},
+      {"name": "Garlic", "amount": 3, "displayAmount": "3 cloves, minced", "unit": "clove", "group": "Base"},
+      {"name": "Ground cumin", "amount": 1, "displayAmount": "1 tsp", "unit": "tsp", "group": "Spices"},
+      {"name": "Sweet paprika", "amount": 2, "displayAmount": "2 tsp", "unit": "tsp", "group": "Spices"},
+      {"name": "Crushed tomatoes", "amount": 800, "displayAmount": "800g / 28oz can", "unit": "g", "group": "Sauce"},
+      {"name": "Eggs", "amount": 4, "displayAmount": "4 large", "unit": "piece", "group": "Finish", "notes": "Room temperature so they cook evenly"}
+    ],
+    "steps": [
+      {"number": 1, "instruction": "Soften the diced onion and sliced pepper in olive oil over medium heat until the edges brown.", "duration": 6, "timestamp": 95},
+      {"number": 2, "instruction": "Push vegetables aside, bloom cumin and paprika with the garlic in the oil for 30 seconds until fragrant.", "duration": 1, "tips": "This is the flavor step most recipes skip — don't let the garlic burn.", "timestamp": 260},
+      {"number": 3, "instruction": "Pour in the crushed tomatoes, season with salt, and simmer until the sauce thickens enough to hold a trench.", "duration": 6, "timestamp": 340},
+      {"number": 4, "instruction": "Make four wells, crack an egg into each, cover, and cook until whites set but yolks stay loose.", "duration": 5, "tips": "Cover with a lid or foil — steam sets the whites from above.", "timestamp": 480},
+      {"number": 5, "instruction": "Finish with parsley and a drizzle of oil; serve straight from the pan with bread.", "timestamp": 650}
+    ],
+    "tips": [
+      {"type": "chef_tip", "text": "The sauce is ready for eggs when a spoon dragged through it leaves a trench that holds for two seconds."},
+      {"type": "substitution", "text": "Feta crumbled in at step 4 turns this into the richer Israeli café version."},
+      {"type": "storage", "text": "Sauce (without eggs) keeps 4 days refrigerated — re-simmer and add fresh eggs to serve."}
+    ],
+    "equipment": ["28cm skillet with lid", "Wooden spoon", "Can opener"],
+    "substitutions": [
+      {"original": "Crushed tomatoes", "substitute": "Whole peeled tomatoes, crushed by hand", "notes": "Slightly chunkier texture"},
+      {"original": "Sweet paprika", "substitute": "Smoked paprika (use half)", "notes": "Stronger flavor — halve the amount"}
+    ],
+    "nutrition": [
+      {"nutrient": "Calories", "amount": "420", "unit": "kcal per serving"},
+      {"nutrient": "Protein", "amount": "19", "unit": "g per serving"}
+    ]
+  },
+  "enrichment_response": {
+    "quiz": [
+      {
+        "question": "When is the tomato sauce ready for the eggs?",
+        "options": [
+          "As soon as it boils",
+          "When a dragged spoon leaves a trench that holds",
+          "After exactly 20 minutes",
+          "When it turns dark red"
+        ],
+        "correctIndex": 1,
+        "explanation": "The trench test tells you the sauce is thick enough to hold the egg wells."
+      },
+      {
+        "question": "Why bloom the spices in oil before adding tomatoes?",
+        "options": [
+          "It sterilizes the spices",
+          "Fat-soluble flavors release into the oil",
+          "It thickens the sauce",
+          "It prevents sticking"
+        ],
+        "correctIndex": 1,
+        "explanation": "Blooming releases fat-soluble aromatics — the step most recipes skip."
+      },
+      {
+        "question": "How do the egg whites set without overcooking the yolks?",
+        "options": [
+          "High heat, uncovered",
+          "Finishing under a broiler",
+          "Covering the pan so steam cooks from above",
+          "Stirring constantly"
+        ],
+        "correctIndex": 2,
+        "explanation": "A lid traps steam that sets the whites while the yolks stay loose."
+      }
+    ],
+    "flashcards": [
+      {"front": "Sauce-readiness test", "back": "A dragged spoon leaves a trench that holds for two seconds"},
+      {"front": "Spice technique most recipes skip", "back": "Bloom cumin + paprika in the oil for 30 seconds before the tomatoes"},
+      {"front": "Egg-cooking trick", "back": "Cover the pan — steam sets whites, yolks stay loose"}
+    ]
+  },
+  "synthesis_response": {
+    "tldr": "One-pan shakshuka in 25 minutes, built on a spice-blooming step and a trench-test sauce.",
+    "keyTakeaways": [
+      "Bloom the spices in oil before the tomatoes for deeper flavor",
+      "The sauce is ready when a spoon-trench holds for two seconds",
+      "Cover the pan so steam sets the whites while yolks stay runny"
+    ],
+    "masterSummary": "A weeknight shakshuka: soften onion and pepper, bloom cumin and paprika with garlic, simmer crushed tomatoes to the trench-test stage, poach four eggs under a lid, and finish with parsley — with substitutions, storage advice, and per-serving nutrition.",
+    "seoDescription": "25-minute one-pan shakshuka recipe with exact quantities, the spice-blooming trick, and foolproof egg timing."
+  }
+}
