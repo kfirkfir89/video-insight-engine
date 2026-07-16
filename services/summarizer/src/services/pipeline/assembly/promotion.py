@@ -17,16 +17,17 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .assemblers import assemble_concept_canvas, assemble_spot_explorer
+from .assemblers_overhaul import assemble_concept_canvas
+from .assemblers_primary import assemble_spot_explorer
 
 logger = logging.getLogger(__name__)
 
 # Promotion thresholds — each is a named constant with a dedicated unit test.
-RADAR_AXIS_THRESHOLD = 4        # comparison  -> comparison_radar (scoreable rows)
-CONCEPT_CONNECTION_MIN = 2      # flash_deck  -> concept_canvas (connected concepts)
-STEP_FLOW_THRESHOLD = 8         # step_player -> step_flow_canvas (step count)
-INFO_GRID_LONG_VALUE = 120      # info_grid   -> spot_explorer (value length, chars)
-INFO_GRID_LONG_MIN = 2          # need this many long, card-worthy rows to promote
+RADAR_AXIS_THRESHOLD = 4  # comparison  -> comparison_radar (scoreable rows)
+CONCEPT_CONNECTION_MIN = 2  # flash_deck  -> concept_canvas (connected concepts)
+STEP_FLOW_THRESHOLD = 8  # step_player -> step_flow_canvas (step count)
+INFO_GRID_LONG_VALUE = 120  # info_grid   -> spot_explorer (value length, chars)
+INFO_GRID_LONG_MIN = 2  # need this many long, card-worthy rows to promote
 
 # Domains whose `concepts` extraction carries a connection graph worth rendering
 # as a canvas rather than a flat flashcard deck.
@@ -58,16 +59,16 @@ def _promote_step_player(props: dict) -> tuple[str, dict] | None:
 
 
 def _resolve_concept_source(
-    data: Any, extraction: dict | None, domain: str,
+    data: Any,
+    extraction: dict | None,
+    domain: str,
 ) -> list | None:
     """Find the concept list that backs a flash_deck tab.
 
     Prefers the tab's own resolved data when it already carries connections;
     otherwise falls back to the domain's `concepts` extraction block.
     """
-    if isinstance(data, list) and any(
-        isinstance(x, dict) and x.get("connections") for x in data
-    ):
+    if isinstance(data, list) and any(isinstance(x, dict) and x.get("connections") for x in data):
         return data
     dom = extraction.get(domain) if isinstance(extraction, dict) else None
     if isinstance(dom, dict) and isinstance(dom.get("concepts"), list):
@@ -76,7 +77,9 @@ def _resolve_concept_source(
 
 
 def _promote_flash_deck(
-    data: Any, extraction: dict | None, domain: str,
+    data: Any,
+    extraction: dict | None,
+    domain: str,
 ) -> tuple[str, dict] | None:
     """flash_deck -> concept_canvas when the concepts form a connection graph."""
     if domain not in _CONCEPT_DOMAINS:
@@ -88,8 +91,7 @@ def _promote_flash_deck(
     if props is None:
         return None
     connected = sum(
-        1 for c in props.get("concepts", [])
-        if isinstance(c, dict) and c.get("connections")
+        1 for c in props.get("concepts", []) if isinstance(c, dict) and c.get("connections")
     )
     if connected >= CONCEPT_CONNECTION_MIN:
         return "concept_canvas", props
@@ -97,7 +99,8 @@ def _promote_flash_deck(
 
 
 def _promote_info_grid(
-    props: dict, extraction: dict | None,
+    props: dict,
+    extraction: dict | None,
 ) -> tuple[str, dict] | None:
     """info_grid -> spot_explorer when rows are description-heavy cards.
 
@@ -109,7 +112,8 @@ def _promote_info_grid(
     if not isinstance(items, list):
         return None
     long_items = [
-        it for it in items
+        it
+        for it in items
         if isinstance(it, dict) and len(str(it.get("value") or "")) > INFO_GRID_LONG_VALUE
     ]
     if len(long_items) < INFO_GRID_LONG_MIN:
@@ -120,7 +124,8 @@ def _promote_info_grid(
             "description": it.get("value", ""),
             **({"emoji": it["emoji"]} if it.get("emoji") else {}),
         }
-        for it in items if isinstance(it, dict)
+        for it in items
+        if isinstance(it, dict)
     ]
     new_props = assemble_spot_explorer({}, spot_input, extraction or {}, None)
     if new_props is None:

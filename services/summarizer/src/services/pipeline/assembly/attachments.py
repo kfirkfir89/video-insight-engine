@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .assemblers import ASSEMBLER_REGISTRY
+from .registry import ASSEMBLER_REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -113,13 +113,17 @@ def _tip_callout_attachment(extraction: dict | None, domain: str) -> dict | None
         tips = domain_data.get(field)
         if isinstance(tips, list) and tips:
             first = tips[0]
-            text = first if isinstance(first, str) else (
-                first.get("text") if isinstance(first, dict) else None
+            text = (
+                first
+                if isinstance(first, str)
+                else (first.get("text") if isinstance(first, dict) else None)
             )
             if isinstance(text, str) and text.strip():
                 style = "warning" if field == "safetyWarnings" else "tip"
                 return _build_attachment(
-                    "tip_callout", "bottom", {"text": text.strip(), "style": style},
+                    "tip_callout",
+                    "bottom",
+                    {"text": text.strip(), "style": style},
                 )
     return None
 
@@ -130,7 +134,8 @@ def _summary_header_attachment(tab: dict) -> dict | None:
     if not isinstance(goal, str) or not goal.strip():
         return None
     return _build_attachment(
-        "summary_header", "top",
+        "summary_header",
+        "top",
         {"summary": goal.strip(), "title": "In short", "emoji": "🧭"},
         size="banner",
     )
@@ -163,8 +168,7 @@ def attach_secondaries(
 
     if count <= _SPARSE_THRESHOLD:
         attachment = None
-        if (component not in _NO_FRAME_STRIP_COMPONENTS
-                and domain not in _NO_FRAME_STRIP_DOMAINS):
+        if component not in _NO_FRAME_STRIP_COMPONENTS and domain not in _NO_FRAME_STRIP_DOMAINS:
             attachment = _frame_strip_attachment(frames)
         if attachment is None and component not in _NO_QUICK_QUIZ_COMPONENTS:
             attachment = _quick_quiz_attachment(enrichment)

@@ -11,9 +11,10 @@ from src.config import settings
 from src.services.cache.response_cache import response_cache
 from src.services.media.s3_client import S3Client
 from src.services.pipeline.assembly import assemble_response
-from src.services.pipeline.pipeline_helpers import sse_event, normalize_segments
-from src.services.vector.store import store_default_output_chunks, store_transcript_chunks
+from src.services.pipeline.pipeline_helpers import normalize_segments, sse_event
+from src.services.pipeline.post_processor import coverage_is_degraded
 from src.services.transcription.whisper_transcriber import translate_audio_to_english
+from src.services.vector.store import store_default_output_chunks, store_transcript_chunks
 from src.services.video.description_analyzer import DescriptionAnalysis
 from src.utils.language_utils import get_language_name
 
@@ -40,7 +41,8 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
     }
     desc_analysis_dict = (
         ctx.description_analysis.to_dict()
-        if isinstance(ctx.description_analysis, DescriptionAnalysis) and ctx.description_analysis.has_content
+        if isinstance(ctx.description_analysis, DescriptionAnalysis)
+        and ctx.description_analysis.has_content
         else None
     )
     assembled = assemble_response(
@@ -66,24 +68,39 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
     if coverage and ctx.assembled_meta is not None:
         ctx.assembled_meta["extractionCoverage"] = coverage
 
+    # Degraded run: dropped extraction batches or critically-low coverage mean
+    # the output is a partial result. Flag it on meta (served to the FE, which
+    # renders the "partial result — retry" affordance) — set only when True so
+    # clean runs carry no extra field.
+    degraded = coverage_is_degraded(coverage)
+    if degraded and ctx.assembled_meta is not None:
+        ctx.assembled_meta["degraded"] = True
+
     # Emit tab_ready events (progressive rendering)
     for tab in assembled.get("tabs", []):
         yield sse_event("tab_ready", tab)
 
-    logger.info("pipeline.assembly", extra={
-        "video_id": ctx.video_summary_id,
-        "tabs_designed": len(ctx.triage.tabs),
-        "tabs_assembled": len(assembled.get("tabs", [])),
-        "tabs_dropped": len(ctx.triage.tabs) - len(assembled.get("tabs", [])),
-        "components_used": [t["component"] for t in assembled.get("tabs", [])],
-    })
+    logger.info(
+        "pipeline.assembly",
+        extra={
+            "video_id": ctx.video_summary_id,
+            "tabs_designed": len(ctx.triage.tabs),
+            "tabs_assembled": len(assembled.get("tabs", [])),
+            "tabs_dropped": len(ctx.triage.tabs) - len(assembled.get("tabs", [])),
+            "components_used": [t["component"] for t in assembled.get("tabs", [])],
+        },
+    )
 
     # Emit complete event
     processing_time = int(ctx.timer.elapsed() * 1000)
-    yield sse_event("complete", {
-        "tabCount": len(assembled.get("tabs", [])),
-        "processingTimeMs": processing_time,
-    })
+    yield sse_event(
+        "complete",
+        {
+            "tabCount": len(assembled.get("tabs", [])),
+            "processingTimeMs": processing_time,
+            "degraded": degraded,
+        },
+    )
 
     # Save result. Non-English videos stay "processing" until the translation
     # phase persists the sourceLanguage block and owns the "completed"
@@ -100,6 +117,10 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
         "tabs": assembled.get("tabs", []),
         "language": ctx.language,
         "isRTL": ctx.is_rtl,
+        # Version stamp — the api's serve path regens docs whose stored
+        # version differs from the canonical pipeline-version.json; docs
+        # WITHOUT the field predate stamping and are served as-is.
+        "pipelineVersion": settings.PIPELINE_VERSION,
         "pipeline": {
             "triage": ctx.triage_dict,
             "extraction": ctx.extraction_data,
@@ -114,6 +135,11 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
         "processedAt": datetime.now(timezone.utc),
         "processingTimeMs": processing_time,
     }
+    if degraded:
+        # Top-level mirror of meta.degraded — queryable by the admin run badge
+        # without unpacking meta. Only written when True; absence means clean
+        # (or pre-feature doc).
+        result["degraded"] = True
 
     await asyncio.to_thread(ctx.repository.save_structured_result, ctx.video_summary_id, result)
 
@@ -126,6 +152,7 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
     # whole TTL and hide the FE language toggle on every cache hit.
     if settings.REDIS_ENABLED and not ctx.source_language_code:
         from src.routes.cached_response import build_frontend_response
+
         frontend_response = build_frontend_response(result)
         try:
             await response_cache.set_response(ctx.youtube_id, frontend_response)
@@ -134,6 +161,7 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
 
     # Store transcript chunks in Qdrant (background, non-blocking)
     if settings.QDRANT_ENABLED:
+
         def _log_qdrant_error(t: asyncio.Task) -> None:
             if t.cancelled():
                 return
@@ -150,24 +178,34 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
         if ctx.source_language_code:
             # Try Whisper translate for English text
             try:
-                translated = await translate_audio_to_english(ctx.youtube_id, cached_audio_path=ctx.audio_path)
+                translated = await translate_audio_to_english(
+                    ctx.youtube_id, cached_audio_path=ctx.audio_path
+                )
                 if translated and len(translated) > len(ctx.clean_text) * 0.1:
                     english_text = translated
                     original_text = ctx.clean_text
                     logger.info(
-                        "Using Whisper-translated English text for Qdrant (%d chars, original %s: %d chars)",
-                        len(english_text), get_language_name(ctx.source_language_code), len(original_text),
+                        "Using Whisper-translated English text for Qdrant "
+                        "(%d chars, original %s: %d chars)",
+                        len(english_text),
+                        get_language_name(ctx.source_language_code),
+                        len(original_text),
                     )
                 else:
                     # Whisper translate failed or produced garbage — use LLM fallback
-                    logger.warning("Whisper translate too short or failed, using original text for Qdrant")
+                    logger.warning(
+                        "Whisper translate too short or failed, using original text for Qdrant"
+                    )
             except Exception as e:
                 logger.warning("Whisper translate for Qdrant failed: %s — using original text", e)
 
         task = asyncio.create_task(
             store_transcript_chunks(
-                ctx.youtube_id, english_text,
-                language=ctx.source_language_code or "en", transcript_original=original_text,
+                ctx.youtube_id,
+                english_text,
+                language=ctx.source_language_code or "en",
+                transcript_original=original_text,
+                segments=ctx.transcript_data.segments if ctx.transcript_data else None,
             )
         )
         task.add_done_callback(_log_qdrant_error)
@@ -189,9 +227,11 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
 
     # Store raw transcript to S3 (background, non-blocking, best-effort)
     if S3Client.is_available() and ctx.transcript_data:
+
         async def _store_transcript() -> None:
             try:
                 from src.services.transcription.transcript_store import transcript_store
+
                 normalized = normalize_segments(ctx.transcript_data.segments)
                 s3_key = await transcript_store.store(
                     youtube_id=ctx.youtube_id,
@@ -223,5 +263,12 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
     # the pipeline runner after translation persists the sourceLanguage block)
     # so the FE refetch on `done` sees a "completed" doc with the toggle.
     if not ctx.source_language_code:
-        yield sse_event("done", {"videoSummaryId": ctx.video_summary_id, "processingTimeMs": processing_time})
+        yield sse_event(
+            "done",
+            {
+                "videoSummaryId": ctx.video_summary_id,
+                "processingTimeMs": processing_time,
+                "degraded": degraded,
+            },
+        )
         yield "data: [DONE]\n\n"

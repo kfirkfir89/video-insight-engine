@@ -6,6 +6,8 @@ from typing import ClassVar
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+from src.shared_config.pipeline_version import get_pipeline_version
+
 _DEFAULT_INTERNAL_SECRET = "dev-internal-secret-change-me"
 
 
@@ -241,21 +243,21 @@ class Settings(BaseSettings):
     # Default False for local dev (yt-dlp/ffmpeg may not be installed).
     # docker-compose.yml sets FRAME_EXTRACTION_ENABLED=true for container environments.
     FRAME_EXTRACTION_ENABLED: bool = False
-    MAX_FRAMES_PER_VISUAL: int = 6     # Cap frames[] array length per visual block
-    MAX_FRAMES_PER_CHAPTER: int = 12   # Total frames across all visual blocks in one chapter
-    FRAME_MIN_SPACING_SECONDS: int = 20    # Min gap between frames in same block
-    FRAME_WITHIN_BLOCK_DEDUP_THRESHOLD: int = 12  # aHash hamming distance (relaxed for within-block)
+    MAX_FRAMES_PER_VISUAL: int = 6  # Cap frames[] array length per visual block
+    MAX_FRAMES_PER_CHAPTER: int = 12  # Total frames across all visual blocks in one chapter
+    FRAME_MIN_SPACING_SECONDS: int = 20  # Min gap between frames in same block
+    FRAME_WITHIN_BLOCK_DEDUP_THRESHOLD: int = (
+        12  # aHash hamming distance (relaxed for within-block)
+    )
 
-    # Prompt versioning (for regeneration tracking)
-    PROMPT_VERSION: str = "v1.0"
-
-    # Pipeline output-schema version. Baked into the REDIS response-cache key so
-    # a bump makes every cached VIEResponse in Redis unreachable (it TTLs out).
-    # NOTE: this only invalidates the Redis response cache — persisted MongoDB
-    # `assembledTabs`/`output` docs are NOT version-keyed and still require a
-    # reprocess / DB flush on a schema or props change. Bump on any
-    # schemas/*.txt or assembler props change.
-    PIPELINE_VERSION: str = "v6"
+    # Pipeline output-schema version — single-sourced from
+    # packages/shared/src/config/pipeline-version.json (shared with the api
+    # gateway; see docs/IDEMPOTENCY.md). Baked into the REDIS response-cache
+    # key (bump = cached VIEResponses unreachable, they TTL out) AND stamped
+    # as `pipelineVersion` on every persisted Mongo summary doc so the api's
+    # serve path regens stale docs — no more out-of-band DB flush. Bump the
+    # JSON on any schemas/*.txt or assembler props change; never set via env.
+    PIPELINE_VERSION: str = get_pipeline_version()
 
     # ─── RabbitMQ worker ────────────────────────────────────────────────
     # AMQP URL — kept aligned with the API's RABBITMQ_URL in docker-compose.
@@ -347,5 +349,6 @@ def validate_secrets() -> None:
     if env_name not in _DEV_ENVS:
         logging.getLogger(__name__).warning(
             "INTERNAL_SECRET is using the default value (ENVIRONMENT=%s) "
-            "— set it via environment variable in production!", env_name,
+            "— set it via environment variable in production!",
+            env_name,
         )

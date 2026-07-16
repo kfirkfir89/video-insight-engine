@@ -1,12 +1,14 @@
 """MongoDB implementation of video repository."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+
 from bson import ObjectId
 from pymongo.database import Database
 
-from src.models.schemas import ProcessingStatus, ErrorCode
+from src.models.schemas import ErrorCode, ProcessingStatus
 
 
 def _utc_now() -> datetime:
@@ -43,26 +45,51 @@ class MongoDBVideoRepository:
         if error_code:
             update["errorCode"] = error_code.value
 
-        self._collection.update_one(
-            {"_id": ObjectId(video_summary_id)},
-            {"$set": update}
-        )
+        self._collection.update_one({"_id": ObjectId(video_summary_id)}, {"$set": update})
 
     # Allowlist of fields the pipeline may write via save_structured_result.
     # New pipeline uses meta+tabs as the canonical shape.
-    _ALLOWED_RESULT_KEYS = frozenset({
-        "meta", "tabs", "triage", "enrichment",
-        "assembledMeta", "assembledTabs", "pipeline",
-        "status", "title", "creator", "duration", "thumbnailUrl",
-        "youtubeId", "rawTranscriptRef", "generation",
-        "descriptionAnalysis", "channel", "processedAt", "processingTimeMs",
-        # Language support — sourceLanguage is the nested original-language block
-        # written by the translation phase for non-English videos. Top-level
-        # tabs/meta/synthesis are English-primary post-translation.
-        "language", "isRTL", "sourceLanguage",
-        # Backward compat: older pipeline shapes / Redis-cached docs may include these
-        "output", "summary", "outputType", "context", "intent",
-    })
+    _ALLOWED_RESULT_KEYS = frozenset(
+        {
+            "meta",
+            "tabs",
+            "triage",
+            "enrichment",
+            "assembledMeta",
+            "assembledTabs",
+            "pipeline",
+            # Canonical pipeline-version stamp (packages/shared/src/config/
+            # pipeline-version.json) — read by the api's serve/regen check.
+            "pipelineVersion",
+            "status",
+            "title",
+            "creator",
+            "duration",
+            "thumbnailUrl",
+            "youtubeId",
+            "rawTranscriptRef",
+            "generation",
+            # Degraded-run flag (dropped extraction batches / critical coverage) —
+            # top-level mirror of meta.degraded for admin queries.
+            "degraded",
+            "descriptionAnalysis",
+            "channel",
+            "processedAt",
+            "processingTimeMs",
+            # Language support — sourceLanguage is the nested original-language block
+            # written by the translation phase for non-English videos. Top-level
+            # tabs/meta/synthesis are English-primary post-translation.
+            "language",
+            "isRTL",
+            "sourceLanguage",
+            # Backward compat: older pipeline shapes / Redis-cached docs may include these
+            "output",
+            "summary",
+            "outputType",
+            "context",
+            "intent",
+        }
+    )
 
     def save_structured_result(self, video_summary_id: str, result: dict) -> None:
         """Save structured pipeline result (triage-driven pipeline).
@@ -72,17 +99,12 @@ class MongoDBVideoRepository:
         """
         filtered = {k: v for k, v in result.items() if k in self._ALLOWED_RESULT_KEYS}
         filtered["updatedAt"] = _utc_now()
-        self._collection.update_one(
-            {"_id": ObjectId(video_summary_id)},
-            {"$set": filtered}
-        )
+        self._collection.update_one({"_id": ObjectId(video_summary_id)}, {"$set": filtered})
 
     def increment_retry(self, video_summary_id: str) -> int:
         """Increment retry count and return new value."""
         result = self._collection.find_one_and_update(
-            {"_id": ObjectId(video_summary_id)},
-            {"$inc": {"retryCount": 1}},
-            return_document=True
+            {"_id": ObjectId(video_summary_id)}, {"$inc": {"retryCount": 1}}, return_document=True
         )
         return result.get("retryCount", 1) if result else 1
 
@@ -95,5 +117,5 @@ class MongoDBVideoRepository:
         if providers:
             self._collection.update_one(
                 {"_id": ObjectId(video_summary_id)},
-                {"$set": {"providerConfig": providers, "updatedAt": _utc_now()}}
+                {"$set": {"providerConfig": providers, "updatedAt": _utc_now()}},
             )

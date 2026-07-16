@@ -252,7 +252,10 @@ def _h_comparison(tab_id: str, component: str, props: dict) -> list[OutputChunk]
 
 
 def _verdict_chunks(
-    tab_id: str, component: str, props: dict, prefix: str = "",
+    tab_id: str,
+    component: str,
+    props: dict,
+    prefix: str = "",
 ) -> list[OutputChunk]:
     """Chunk a verdict block (bottomLine + bestFor/notFor lists)."""
     out: list[OutputChunk] = []
@@ -629,7 +632,7 @@ def _h_video_filmstrip(tab_id: str, component: str, props: dict) -> list[OutputC
 
 _COMPONENT_HANDLERS: dict[str, Callable[[str, str, dict], list[OutputChunk]]] = {
     # ASSEMBLER_REGISTRY components — keep in sync with
-    # ``services/summarizer/src/services/pipeline/assembly/assemblers.py``.
+    # ``services/summarizer/src/services/pipeline/assembly/registry.py``.
     # Most new components DELEGATE to a legacy assembler (code_playground ->
     # assemble_code_explorer, etc.), so their props shape is identical and they
     # reuse the matching ``_h_*`` handler. Components whose assembler emits a

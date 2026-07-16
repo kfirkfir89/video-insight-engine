@@ -3,28 +3,26 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import FastAPI, Depends
-
+from fastapi import Depends, FastAPI
 from llm_common.sentry_init import init_sentry_from_settings
 
 from src.config import settings
+from src.dependencies import get_mongo_client, get_video_repository
 from src.logging_config import configure_structlog, get_logger
 from src.middleware import add_request_context_middleware
 from src.models.schemas import (
-    SummarizeRequest,
-    SummarizeResponse,
     PlaylistExtractRequest,
     PlaylistExtractResponse,
     PlaylistVideoInfo,
+    SummarizeRequest,
+    SummarizeResponse,
 )
-from src.dependencies import get_video_repository, get_mongo_client
 from src.repositories.mongodb_repository import MongoDBVideoRepository
-from src.routes.stream import router as stream_router
-from src.routes.override import router as override_router
 from src.routes.frames import router as frames_router
-from src.services.media.frame_extractor import check_dependencies as check_frame_deps
-from src.utils.worker_pool import shutdown_pool
+from src.routes.override import router as override_router
+from src.routes.stream import router as stream_router
 from src.services.cache.response_cache import response_cache
+from src.utils.worker_pool import shutdown_pool
 
 # Configure structured logging (JSON in production, console in development)
 configure_structlog(json_format=settings.LOG_FORMAT == "json")
@@ -43,6 +41,7 @@ def _init_sentry_from_settings() -> bool:
 
 _usage_callback = None
 
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan: register LLM usage tracking callback and preload models."""
@@ -50,7 +49,12 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Validate secrets before anything else
     from src.config import validate_secrets
+
     validate_secrets()
+
+    # Canonical pipeline version (packages/shared/src/config/pipeline-version.json)
+    # — the api logs the same key at boot; the two lines must match.
+    logger.info("pipeline_version", version=settings.PIPELINE_VERSION)
 
     # Sentry first — so a failure inside any subsequent boot step surfaces
     # with full stack traces in Sentry rather than vanishing into journald.
@@ -64,16 +68,20 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     # Fail hard if model missing — pipeline will crash on first video otherwise.
     try:
         from src.services.transcript.cleaner import _get_nlp
+
         await asyncio.to_thread(_get_nlp)
         logger.info("spacy_model_preloaded")
     except Exception as e:
-        logger.error("spacy_preload_failed — pipeline will not function without spaCy model", error=str(e))
+        logger.error(
+            "spacy_preload_failed — pipeline will not function without spaCy model", error=str(e)
+        )
         raise RuntimeError(f"Cannot start without spaCy model: {e}") from e
 
     # Preload SentenceTransformer model at startup (avoids cold-start latency
     # and repeated model load logs on first embedding request per worker).
     try:
         from src.services.vector.embedding import _get_model
+
         await asyncio.to_thread(_get_model)
         logger.info("sentence_transformer_model_preloaded")
     except Exception as e:
@@ -97,6 +105,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     # Initialize Langfuse observability — no-op when keys are unset.
     try:
         from src.services.observability import init_langfuse
+
         client = init_langfuse()
         logger.info("langfuse_init", enabled=client is not None)
     except Exception as e:
@@ -125,6 +134,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     # Drain Langfuse buffer so in-flight spans aren't lost on container stop.
     try:
         from src.services.observability import flush_langfuse
+
         await flush_langfuse()
     except Exception as e:
         logger.warning("langfuse_flush_failed", error=str(e))
@@ -157,6 +167,7 @@ async def health():
     if settings.AWS_ENDPOINT_URL or settings.AWS_ACCESS_KEY_ID:
         try:
             from src.services.media.s3_client import s3_client
+
             s3_health = await s3_client.health_check()
             s3_status = s3_health.get("status", "unknown")
         except Exception as e:
@@ -205,7 +216,7 @@ async def summarize(
                 "default": request.providers.default,
                 "fast": request.providers.fast,
                 "fallback": request.providers.fallback,
-            }
+            },
         )
 
     return SummarizeResponse(
@@ -227,10 +238,7 @@ async def extract_playlist(request: PlaylistExtractRequest):
     logger.info("Extracting playlist: %s (max=%s)", request.playlist_id, request.max_videos)
 
     try:
-        playlist = await extract_playlist_data(
-            request.playlist_id,
-            max_videos=request.max_videos
-        )
+        playlist = await extract_playlist_data(request.playlist_id, max_videos=request.max_videos)
 
         return PlaylistExtractResponse(
             playlist_id=playlist.playlist_id,
@@ -251,4 +259,5 @@ async def extract_playlist(request: PlaylistExtractRequest):
         )
     except ValueError as e:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail=str(e))

@@ -11,22 +11,21 @@ import re
 from typing import Any
 
 from src.shared_config.domain_config import (
+    assembler_item_caps,
     build_fallback_tabs,
+    domain_requirements,
     sibling_datasources,
 )
 from src.utils.data_helpers import is_empty_data
 
-from .assemblers import (
-    ASSEMBLER_REGISTRY,
-    _chapters_to_moments,
-    _normalize_filmstrip_frame,
-    assemble_display_section,
-    infer_component,
-)
+from .assemblers_learning import assemble_display_section
+from .assemblers_overhaul import _normalize_filmstrip_frame
 from .attachments import attach_secondaries
 from .cross_tab import resolve_cross_tab_links
 from .density import enforce_density
+from .normalizers import _chapters_to_moments
 from .promotion import promote_component
+from .registry import ASSEMBLER_REGISTRY, infer_component
 
 logger = logging.getLogger(__name__)
 
@@ -100,9 +99,16 @@ def find_nearest_frame(
 # (presenter face, video opener) and adding them as "evidence" pretends the
 # frame supports the claim when it doesn't. Talking_head frames pass through
 # only when the vision LLM marks them as educationally valuable.
-_NON_EVIDENCE_SCENE_TYPES: frozenset[str] = frozenset({
-    "talking_head", "intro", "outro", "transition", "black", "logo",
-})
+_NON_EVIDENCE_SCENE_TYPES: frozenset[str] = frozenset(
+    {
+        "talking_head",
+        "intro",
+        "outro",
+        "transition",
+        "black",
+        "logo",
+    }
+)
 
 
 def _attach_frame_metadata(
@@ -171,7 +177,12 @@ def inject_frame_thumbnails(
     match_pool = all_frames if all_frames else s3_frames
 
     for item in items:
-        ts = item.get("timestamp") or item.get("startTime") or item.get("seconds") or item.get("time")
+        ts = (
+            item.get("timestamp")
+            or item.get("startTime")
+            or item.get("seconds")
+            or item.get("time")
+        )
         if ts is None:
             continue
         try:
@@ -214,28 +225,10 @@ def find_description_for_frame(
 # Domain Requirement Validation
 # ─────────────────────────────────────────────────────
 
-_DOMAIN_REQUIREMENTS: dict[str, dict] = {
-    "food":     {"required": ["step_player", "checklist"], "max": {"flash_deck": 1}},
-    "project":  {"required": ["step_player", "checklist"], "max": {"flash_deck": 1}},
-    "review":   {"required": ["comparison"],               "max": {"flash_deck": 1}},
-    "fitness":  {"required": ["workout_room"],             "max": {"flash_deck": 1}},
-    "tech":     {"required": ["code_playground"],          "max": {"flash_deck": 1, "quiz_arena": 1}},
-    "travel":   {"required": ["spot_explorer"],            "max": {"flash_deck": 1}},
-    # music: lyrics_karaoke is OPTIONAL — moment_track stays primary nav, so
-    # videos without per-line lyric timing don't fail validation.
-    "music":    {"required": [],                           "max": {"flash_deck": 1}},
-    "learning": {"required": [],                           "max": {"flash_deck": 1, "quiz_arena": 1}},
-    "language": {"required": ["spot_explorer"],       "max": {"flash_deck": 1}},
-    "science":  {"required": ["spot_explorer"],       "max": {"flash_deck": 1, "quiz_arena": 1}},
-    # podcast: moment_track segments are the spine (talking-head, no filmstrip).
-    "podcast":  {"required": ["moment_track"],        "max": {"flash_deck": 1, "quiz_arena": 1}},
-    # news: claims_tracker is the signature accountability surface.
-    "news":     {"required": ["claims_tracker"],      "max": {"flash_deck": 1}},
-    # gaming: tier_list is the signature ranking surface.
-    "gaming":   {"required": ["tier_list"],           "max": {"flash_deck": 1, "quiz_arena": 1}},
-    # sport: formation_diagram is the signature tactical surface.
-    "sport":    {"required": ["formation_diagram"],   "max": {"flash_deck": 1}},
-}
+# Single-sourced from domains.json `domainRequirements` (project-score-9 4.5d)
+# — per-domain rationale (music optional lyrics, podcast moment_track spine,
+# news claims_tracker, etc.) documented in `domainRequirementsNote` there.
+_DOMAIN_REQUIREMENTS: dict[str, dict] = domain_requirements()
 
 
 # A required component is satisfied by any of its promotion targets — e.g.
@@ -272,32 +265,43 @@ def _backfill_required_component(
         data_source = cand.get("dataSource", "")
         data = resolve_data_source(data_source, extraction, enrichment)
         if is_empty_data(data):
-            data = _cross_domain_fallback(data_source, extraction, enrichment) or \
-                _in_domain_sibling_fallback(data_source, component, extraction, enrichment)
+            data = _cross_domain_fallback(
+                data_source, extraction, enrichment
+            ) or _in_domain_sibling_fallback(data_source, component, extraction, enrichment)
         if is_empty_data(data):
             continue
-        tab_with_hints = {**cand, "_primary_tag": primary_tag,
-                          "_synthesis": synthesis, "_video_meta": video_meta}
+        tab_with_hints = {
+            **cand,
+            "_primary_tag": primary_tag,
+            "_synthesis": synthesis,
+            "_video_meta": video_meta,
+        }
         assembler = ASSEMBLER_REGISTRY.get(component, assemble_display_section)
         try:
             props = assembler(tab_with_hints, data, extraction, enrichment)
         except Exception as e:
-            logger.warning("Backfill assembler raised for %r (%s): %s", cand.get("id"), component, e)
+            logger.warning(
+                "Backfill assembler raised for %r (%s): %s", cand.get("id"), component, e
+            )
             continue
         if props is None or not _validate_assembled_props(component, props):
             continue
-        tabs.append({
-            "id": cand.get("id", ""),
-            "label": cand.get("label", cand.get("id", "")),
-            "emoji": cand.get("emoji", ""),
-            "component": component,
-            "props": props,
-            "goal": cand.get("goal", ""),
-            "crossTabLinks": [],
-        })
+        tabs.append(
+            {
+                "id": cand.get("id", ""),
+                "label": cand.get("label", cand.get("id", "")),
+                "emoji": cand.get("emoji", ""),
+                "component": component,
+                "props": props,
+                "goal": cand.get("goal", ""),
+                "crossTabLinks": [],
+            }
+        )
         logger.info(
             "Backfilled required component '%s' for domain '%s' from %s",
-            component, primary_tag, data_source,
+            component,
+            primary_tag,
+            data_source,
         )
         return True
     return False
@@ -324,13 +328,20 @@ def _validate_domain_requirements(
         if any(c in accepted for c in tab_components):
             continue
         if _backfill_required_component(
-            tabs, primary_tag, accepted, extraction, enrichment, synthesis, video_meta,
+            tabs,
+            primary_tag,
+            accepted,
+            extraction,
+            enrichment,
+            synthesis,
+            video_meta,
         ):
             tab_components = [t.get("component", "") for t in tabs]
         else:
             logger.warning(
                 "Domain '%s' requires '%s' but it's missing from assembled tabs",
-                primary_tag, req,
+                primary_tag,
+                req,
             )
 
     for comp, limit in reqs.get("max", {}).items():
@@ -338,7 +349,11 @@ def _validate_domain_requirements(
         if len(indices) > limit:
             logger.warning(
                 "'%s' appears %dx (max %d for domain '%s') — keeping first %d only",
-                comp, len(indices), limit, primary_tag, limit,
+                comp,
+                len(indices),
+                limit,
+                primary_tag,
+                limit,
             )
             for idx in reversed(indices[limit:]):
                 tabs.pop(idx)
@@ -357,18 +372,13 @@ def _validate_domain_requirements(
 # Post-Processing
 # ─────────────────────────────────────────────────────
 
-_UNTITLED_RE = re.compile(r'<?\s*Untitled\s+Chapter\s+(\d+)\s*>?', re.IGNORECASE)
+_UNTITLED_RE = re.compile(r"<?\s*Untitled\s+Chapter\s+(\d+)\s*>?", re.IGNORECASE)
 _NO_COUNT_COMPONENTS = frozenset({"overview", "verdict", "budget"})
 
 # Maps component → required list key. If the list is empty after assembly, drop the tab.
+# Live (v2 registry) components only — legacy v1 names were dropped alongside
+# their ASSEMBLER_REGISTRY entries (cached rows fall through to display_section).
 _COMPONENT_REQUIRED_LISTS: dict[str, str] = {
-    # Legacy keys (kept for cached `assembledTabs` rows)
-    "code_explorer": "snippets",
-    "exercise_tracker": "exercises",
-    "quiz": "questions",
-    "scenario": "scenarios",
-    "lyrics_player": "sections",
-    "gallery": "images",
     # Kept across the overhaul
     "moment_track": "items",
     "spot_explorer": "spots",
@@ -404,7 +414,6 @@ _COMPONENT_REQUIRED_LISTS: dict[str, str] = {
 }
 
 
-
 def _validate_assembled_props(component: str, props: dict) -> bool:
     """Validate assembled props — return False if the tab should be dropped.
 
@@ -420,46 +429,38 @@ def _validate_assembled_props(component: str, props: dict) -> bool:
     if not isinstance(data_list, list) or len(data_list) == 0:
         logger.warning(
             "Validation: component=%r has empty required list %r — dropping tab",
-            component, required_key,
+            component,
+            required_key,
         )
         return False
     return True
 
+
+# Component → name of its user-facing list prop. Stays code-side (it names
+# assembler prop keys, not tunables); every component in domains.json
+# `assemblerItemCaps` MUST appear here or its cap silently never enforces
+# (pinned by tests/test_assembly_caps_config.py). v1-legacy names (quiz,
+# scenario, exercise_tracker, code_explorer, gallery, lyrics_player) removed
+# 2026-07-12 — they are no longer registry components.
 _COUNT_KEYS: dict[str, str] = {
     "spot_explorer": "spots",
     "checklist": "items",
     "step_player": "steps",
-    "exercise_tracker": "exercises",
     "flash_deck": "cards",
-    "quiz": "questions",
-    "scenario": "scenarios",
     "info_grid": "items",
     "moment_track": "items",
-    "code_explorer": "snippets",
-    "gallery": "images",
     "comparison": "comparisons",
-    "lyrics_player": "sections",
     "claims_tracker": "claims",
     "tier_list": "items",
     "formation_diagram": "positions",
 }
 
 # Per-component user-facing item caps. Long videos otherwise produce
-# unscannable lists (29-row "comparisons", 55-item timelines). The Plan
-# prompt instructs the model to respect these; we enforce in code as
-# a backstop so output stays within budget regardless of prompt drift.
-_TAB_ITEM_CAPS: dict[str, int] = {
-    "comparison": 10,
-    "moment_track": 20,
-    "info_grid": 20,
-    "flash_deck": 15,
-    "spot_explorer": 25,
-    "step_player": 25,
-    "checklist": 30,
-    "claims_tracker": 20,
-    "tier_list": 30,
-    "formation_diagram": 23,
-}
+# unscannable lists (29-row "comparisons", 55-item timelines). Single-sourced
+# from domains.json `assemblerItemCaps` (project-score-9 4.5d) — deliberately
+# INDEPENDENT of the advisory `densityGates` the planner sees; this is the
+# code backstop that holds regardless of prompt drift.
+_TAB_ITEM_CAPS: dict[str, int] = assembler_item_caps()
 
 
 # moment_track is a timeline: its cap scales with duration and the kept items
@@ -503,13 +504,20 @@ def _cap_tab_items(component: str, props: dict, video_duration: float | None = N
     # Timeline: scale the cap with duration and sample evenly (span the video).
     if component == "moment_track":
         if video_duration and video_duration > 0:
-            cap = min(_MOMENT_CAP_MAX, max(
-                _MOMENT_CAP_MIN, round((video_duration / 60) / _MOMENT_MINUTES_PER_ITEM),
-            ))
+            cap = min(
+                _MOMENT_CAP_MAX,
+                max(
+                    _MOMENT_CAP_MIN,
+                    round((video_duration / 60) / _MOMENT_MINUTES_PER_ITEM),
+                ),
+            )
         if len(items) > cap:
             logger.info(
                 "Assembly: capping %s.%s from %d → %d (even-sampled)",
-                component, list_key, len(items), cap,
+                component,
+                list_key,
+                len(items),
+                cap,
             )
             props[list_key] = _evenly_sample(items, cap)
         return
@@ -517,7 +525,10 @@ def _cap_tab_items(component: str, props: dict, video_duration: float | None = N
     if len(items) > cap:
         logger.info(
             "Assembly: capping %s.%s from %d → %d",
-            component, list_key, len(items), cap,
+            component,
+            list_key,
+            len(items),
+            cap,
         )
         props[list_key] = items[:cap]
 
@@ -536,7 +547,7 @@ def _post_process_tabs(tabs: list[dict], video_duration: float | None = None) ->
             _cap_tab_items(component, props, video_duration)
 
         if emoji and label.startswith(emoji):
-            label = label[len(emoji):].lstrip()
+            label = label[len(emoji) :].lstrip()
             tab["label"] = label
 
         match = _UNTITLED_RE.search(label)
@@ -555,10 +566,14 @@ def _post_process_tabs(tabs: list[dict], video_duration: float | None = None) ->
                                 if isinstance(val, str):
                                     m = _UNTITLED_RE.search(val)
                                     if m:
-                                        item[field] = "Introduction" if idx_in_list == 0 else f"Part {m.group(1)}"
+                                        item[field] = (
+                                            "Introduction"
+                                            if idx_in_list == 0
+                                            else f"Part {m.group(1)}"
+                                        )
 
         if component not in _NO_COUNT_COMPONENTS and isinstance(props, dict):
-            if not re.match(r'^\d+\s', label):
+            if not re.match(r"^\d+\s", label):
                 count_key = _COUNT_KEYS.get(component)
                 if count_key and count_key in props:
                     data_list = props[count_key]
@@ -592,7 +607,6 @@ _FIELD_EQUIVALENTS: dict[str, list[str]] = {
 }
 
 
-
 def _cross_domain_fallback(
     data_source: str,
     extraction: dict | None,
@@ -619,7 +633,10 @@ def _cross_domain_fallback(
         if not is_empty_data(candidate):
             logger.info(
                 "Cross-domain fallback: %s.%s (empty) → %s.%s (%d items)",
-                primary_domain, field, domain, field,
+                primary_domain,
+                field,
+                domain,
+                field,
                 len(candidate) if isinstance(candidate, (list, dict)) else 1,
             )
             return candidate
@@ -634,7 +651,10 @@ def _cross_domain_fallback(
             if not is_empty_data(candidate):
                 logger.info(
                     "Cross-domain fallback: %s.%s (empty) → %s.%s (%d items)",
-                    primary_domain, field, domain, equiv_field,
+                    primary_domain,
+                    field,
+                    domain,
+                    equiv_field,
                     len(candidate) if isinstance(candidate, (list, dict)) else 1,
                 )
                 return candidate
@@ -668,7 +688,8 @@ def _in_domain_sibling_fallback(
         if not is_empty_data(value):
             logger.info(
                 "In-domain sibling fallback: %s (empty) → %s (%d items)",
-                data_source, candidate,
+                data_source,
+                candidate,
                 len(value) if isinstance(value, (list, dict)) else 1,
             )
             return value
@@ -683,7 +704,9 @@ def _in_domain_sibling_fallback(
         if not is_empty_data(candidate):
             logger.info(
                 "In-domain sibling fallback: %s (empty) → %s.%s (%d items)",
-                data_source, domain, required_key,
+                data_source,
+                domain,
+                required_key,
                 len(candidate) if isinstance(candidate, (list, dict)) else 1,
             )
             return candidate
@@ -710,11 +733,14 @@ def _ensure_overview_first(
     front; if none exists, synthesizes one from synthesis/video_meta/extraction
     via the overview assembler and prepends it. Mutates `tabs` in place.
     """
-    from .assemblers import assemble_overview
+    from .assemblers_learning import assemble_overview
 
     overview_idx = next(
-        (i for i, t in enumerate(tabs)
-         if t.get("id") == "overview" or t.get("component") == "overview"),
+        (
+            i
+            for i, t in enumerate(tabs)
+            if t.get("id") == "overview" or t.get("component") == "overview"
+        ),
         -1,
     )
 
@@ -736,15 +762,18 @@ def _ensure_overview_first(
     props = assemble_overview(tab_stub, None, extraction or {}, enrichment)
     if props is None:
         return
-    tabs.insert(0, {
-        "id": "overview",
-        "label": "Overview",
-        "emoji": "📋",
-        "component": "overview",
-        "props": props,
-        "goal": "Quick summary of what this video covers",
-        "crossTabLinks": [],
-    })
+    tabs.insert(
+        0,
+        {
+            "id": "overview",
+            "label": "Overview",
+            "emoji": "📋",
+            "component": "overview",
+            "props": props,
+            "goal": "Quick summary of what this video covers",
+            "crossTabLinks": [],
+        },
+    )
 
 
 def _annotate_overview_item_count(tabs: list[dict]) -> None:
@@ -800,34 +829,38 @@ def build_fallback_candidates(
         master_summary = synthesis.get("masterSummary", "")
         key_takeaways = synthesis.get("keyTakeaways", [])
         if master_summary or key_takeaways:
-            candidates.append({
-                "id": "overview",
-                "label": "Overview",
-                "emoji": "📋",
-                "component": "overview",
-                "props": {
-                    "summary": master_summary,
-                    "keyTakeaways": key_takeaways,
-                    "tldr": synthesis.get("tldr", ""),
-                },
-                "goal": "Quick summary of what this video covers",
-                "crossTabLinks": [],
-            })
+            candidates.append(
+                {
+                    "id": "overview",
+                    "label": "Overview",
+                    "emoji": "📋",
+                    "component": "overview",
+                    "props": {
+                        "summary": master_summary,
+                        "keyTakeaways": key_takeaways,
+                        "tldr": synthesis.get("tldr", ""),
+                    },
+                    "goal": "Quick summary of what this video covers",
+                    "crossTabLinks": [],
+                }
+            )
 
     # Fallback 2: info_grid from synthesis keyTakeaways
     if "info_grid" not in existing_components and "key_info" not in existing_ids:
         key_takeaways = synthesis.get("keyTakeaways", [])
         if len(key_takeaways) >= 2:
-            items = [{"key": f"Takeaway {i+1}", "value": t} for i, t in enumerate(key_takeaways)]
-            candidates.append({
-                "id": "key_info",
-                "label": "Key Info",
-                "emoji": "📊",
-                "component": "info_grid",
-                "props": {"items": items},
-                "goal": "Key takeaways from this video at a glance",
-                "crossTabLinks": [],
-            })
+            items = [{"key": f"Takeaway {i + 1}", "value": t} for i, t in enumerate(key_takeaways)]
+            candidates.append(
+                {
+                    "id": "key_info",
+                    "label": "Key Info",
+                    "emoji": "📊",
+                    "component": "info_grid",
+                    "props": {"items": items},
+                    "goal": "Key takeaways from this video at a glance",
+                    "crossTabLinks": [],
+                }
+            )
 
     # Fallback 3: moment_track from video chapters
     if "moment_track" not in existing_components and "key_moments" not in existing_ids:
@@ -842,15 +875,17 @@ def build_fallback_candidates(
                     video_duration = None
                 items = _chapters_to_moments(chapter_dicts, video_duration)
                 if len(items) >= 2:
-                    candidates.append({
-                        "id": "key_moments",
-                        "label": "Key Moments",
-                        "emoji": "🎬",
-                        "component": "moment_track",
-                        "props": {"items": items},
-                        "goal": "Jump to the chapters of this video",
-                        "crossTabLinks": [],
-                    })
+                    candidates.append(
+                        {
+                            "id": "key_moments",
+                            "label": "Key Moments",
+                            "emoji": "🎬",
+                            "component": "moment_track",
+                            "props": {"items": items},
+                            "goal": "Jump to the chapters of this video",
+                            "crossTabLinks": [],
+                        }
+                    )
 
     return candidates
 
@@ -903,7 +938,9 @@ def assemble_response(
                     merged.setdefault("sceneType", desc.get("scene_type"))
                 enriched_source.append(merged)
             source = enriched_source
-        normalized = [n for n in (_normalize_filmstrip_frame(item) for item in source) if n is not None]
+        normalized = [
+            n for n in (_normalize_filmstrip_frame(item) for item in source) if n is not None
+        ]
         if normalized:
             extraction["frames"] = normalized
 
@@ -925,7 +962,6 @@ def assemble_response(
 
     primary_tag = meta["primaryTag"]
     raw_tabs = triage.get("tabs", [])
-    all_tab_ids = {t.get("id", "") for t in raw_tabs if isinstance(t, dict)}
 
     assembled_tabs: list[dict] = []
 
@@ -970,7 +1006,11 @@ def assemble_response(
             elif tab_id == "pros_cons":
                 review = extraction.get("review", {})
                 if isinstance(review, dict):
-                    data = {"pros": review.get("pros", []), "cons": review.get("cons", []), "comparisons": review.get("comparisons", [])}
+                    data = {
+                        "pros": review.get("pros", []),
+                        "cons": review.get("cons", []),
+                        "comparisons": review.get("comparisons", []),
+                    }
             elif component == "moment_track":
                 data = (extraction.get("learning") or {}).get("timestamps")
 
@@ -981,7 +1021,9 @@ def assemble_response(
         # spans — strictly richer than the {start_time, title} pairs YouTube
         # exposes. When extraction returns nothing, chapters are still the best
         # navigation aid we have, so we keep the fallback.
-        if component == "moment_track" and (data is None or (isinstance(data, list) and len(data) == 0)):
+        if component == "moment_track" and (
+            data is None or (isinstance(data, list) and len(data) == 0)
+        ):
             yt_chapters = (video_meta or {}).get("chapters", [])
             if isinstance(yt_chapters, list) and len(yt_chapters) > 0:
                 chapter_dicts = [ch for ch in yt_chapters if isinstance(ch, dict)]
@@ -1001,19 +1043,29 @@ def assemble_response(
             logger.warning(
                 "No data for tab id=%r, dataSource=%r — not in extraction/enrichment. "
                 "Available extraction keys: %s",
-                tab_id, data_source, available,
+                tab_id,
+                data_source,
+                available,
             )
 
         assembler = ASSEMBLER_REGISTRY.get(component, assemble_display_section)
-        tab_with_hints = {**raw_tab, "_primary_tag": primary_tag,
-                          "_synthesis": synthesis, "_video_meta": video_meta}
+        tab_with_hints = {
+            **raw_tab,
+            "_primary_tag": primary_tag,
+            "_synthesis": synthesis,
+            "_video_meta": video_meta,
+        }
 
         try:
             props = assembler(tab_with_hints, data, extraction, enrichment)
         except Exception as e:
             logger.warning(
                 "TAB DROPPED: id=%r, component=%r, dataSource=%r — assembler raised %s: %s",
-                tab_id, component, data_source, type(e).__name__, e,
+                tab_id,
+                component,
+                data_source,
+                type(e).__name__,
+                e,
             )
             props = None
 
@@ -1022,20 +1074,32 @@ def assemble_response(
         # Both run before validation so a promoted/trimmed tab is re-checked.
         if props is not None:
             component, props = promote_component(
-                component, props, data, extraction, primary_tag,
+                component,
+                props,
+                data,
+                extraction,
+                primary_tag,
             )
             props = enforce_density(component, props)
 
         if props is not None and not _validate_assembled_props(component, props):
             logger.warning(
                 "TAB DROPPED: id=%r, component=%r — failed validation",
-                tab_id, component,
+                tab_id,
+                component,
             )
             props = None
 
         if props is not None and frames:
-            for key in ("items", "spots", "steps", "images", "snippets",
-                        "comparisons", "exercises"):
+            for key in (
+                "items",
+                "spots",
+                "steps",
+                "images",
+                "snippets",
+                "comparisons",
+                "exercises",
+            ):
                 if key in props and isinstance(props[key], list):
                     inject_frame_thumbnails(
                         props[key],
@@ -1047,38 +1111,59 @@ def assemble_response(
         if props is None:
             if data_resolved or data is not None:
                 data_summary = (
-                    f"list[{len(data)}]" if isinstance(data, list)
-                    else f"dict(keys={list(data.keys())})" if isinstance(data, dict)
-                    else repr(type(data).__name__)
-                ) if data is not None else "None"
+                    (
+                        f"list[{len(data)}]"
+                        if isinstance(data, list)
+                        else f"dict(keys={list(data.keys())})"
+                        if isinstance(data, dict)
+                        else repr(type(data).__name__)
+                    )
+                    if data is not None
+                    else "None"
+                )
                 logger.warning(
                     "TAB DROPPED: id=%r, component=%r, dataSource=%r — "
                     "assembler returned None (data was %s)",
-                    tab_id, component, data_source, data_summary,
+                    tab_id,
+                    component,
+                    data_source,
+                    data_summary,
                 )
             continue
 
-        assembled_tabs.append({
-            "id": tab_id,
-            "label": raw_tab.get("label", tab_id),
-            "emoji": raw_tab.get("emoji", ""),
-            "component": component,
-            "props": props,
-            "goal": raw_tab.get("goal", ""),
-            "crossTabLinks": [],
-        })
+        assembled_tabs.append(
+            {
+                "id": tab_id,
+                "label": raw_tab.get("label", tab_id),
+                "emoji": raw_tab.get("emoji", ""),
+                "component": component,
+                "props": props,
+                "goal": raw_tab.get("goal", ""),
+                "crossTabLinks": [],
+            }
+        )
 
     # Guarantee overview is present and first — must run before cross-tab link
     # resolution so the overview participates in link rules (overview → X).
     _ensure_overview_first(
-        assembled_tabs, synthesis, video_meta, extraction, enrichment, primary_tag,
+        assembled_tabs,
+        synthesis,
+        video_meta,
+        extraction,
+        enrichment,
+        primary_tag,
     )
 
     # Validate domain requirements (may backfill a missing required component from
     # real extraction data). Runs before cross-tab resolution so a backfilled tab
     # participates in link rules.
     _validate_domain_requirements(
-        assembled_tabs, primary_tag, extraction, enrichment, synthesis, video_meta,
+        assembled_tabs,
+        primary_tag,
+        extraction,
+        enrichment,
+        synthesis,
+        video_meta,
     )
 
     # Resolve cross-tab links. ``outboundLinks`` on each source tab carries
@@ -1094,8 +1179,7 @@ def assemble_response(
         links_map = raw_tab.get("outboundLinks")
         if isinstance(tid, str) and tid and isinstance(links_map, dict):
             plan_outbound_by_tab[tid] = {
-                k: v for k, v in links_map.items()
-                if isinstance(k, str) and isinstance(v, str)
+                k: v for k, v in links_map.items() if isinstance(k, str) and isinstance(v, str)
             }
 
     globally_linked: set[str] = set()
@@ -1135,12 +1219,14 @@ def assemble_response(
             if caption.startswith("Moment at") and f.get("ocr_text"):
                 caption = f.get("ocr_text", caption)
 
-            normalized = _normalize_filmstrip_frame({
-                "thumbnailUrl": f.get("s3_url", ""),
-                "caption": caption,
-                "timestamp": ts,
-                **({"ocr": f["ocr_text"]} if f.get("ocr_text") else {}),
-            })
+            normalized = _normalize_filmstrip_frame(
+                {
+                    "thumbnailUrl": f.get("s3_url", ""),
+                    "caption": caption,
+                    "timestamp": ts,
+                    **({"ocr": f["ocr_text"]} if f.get("ocr_text") else {}),
+                }
+            )
             if normalized is not None:
                 if f.get("s3_key"):
                     normalized["s3Key"] = f["s3_key"]
@@ -1159,17 +1245,18 @@ def assemble_response(
         has_good_captions = non_generic_count >= len(filmstrip_frames) * 0.7
         _NO_GALLERY_DOMAINS = {"narrative", "music"}
         _domain_blocked = primary_tag in _NO_GALLERY_DOMAINS
-        if (filmstrip_frames and has_enough_frames and has_good_captions
-                and not _domain_blocked):
-            assembled_tabs.append({
-                "id": "frames-gallery",
-                "label": "Visual Moments",
-                "emoji": "\U0001f5bc\ufe0f",
-                "component": "video_filmstrip",
-                "props": {"frames": filmstrip_frames},
-                "goal": "Browse key visual moments from the video",
-                "crossTabLinks": [],
-            })
+        if filmstrip_frames and has_enough_frames and has_good_captions and not _domain_blocked:
+            assembled_tabs.append(
+                {
+                    "id": "frames-gallery",
+                    "label": "Visual Moments",
+                    "emoji": "\U0001f5bc\ufe0f",
+                    "component": "video_filmstrip",
+                    "props": {"frames": filmstrip_frames},
+                    "goal": "Browse key visual moments from the video",
+                    "crossTabLinks": [],
+                }
+            )
 
     _post_process_tabs(assembled_tabs, (video_meta or {}).get("duration"))
 
@@ -1182,7 +1269,11 @@ def assemble_response(
         if tab.get("component") == "overview":
             continue
         secondaries = attach_secondaries(
-            tab, extraction, enrichment, attach_frames, primary_tag,
+            tab,
+            extraction,
+            enrichment,
+            attach_frames,
+            primary_tag,
         )
         if secondaries:
             tab["attachments"] = secondaries
@@ -1192,7 +1283,10 @@ def assemble_response(
         existing_components = {t.get("component", "") for t in assembled_tabs}
         existing_ids = {t["id"] for t in assembled_tabs}
         fallbacks = build_fallback_candidates(
-            synthesis, video_meta, existing_components, existing_ids,
+            synthesis,
+            video_meta,
+            existing_components,
+            existing_ids,
         )
         for fb in fallbacks:
             if len(assembled_tabs) >= 3:
@@ -1203,7 +1297,8 @@ def assemble_response(
             assembled_tabs.append(fb)
             logger.info(
                 "[assembly] Fallback tab added: id=%r, component=%r",
-                fb["id"], component,
+                fb["id"],
+                component,
             )
 
         if len(assembled_tabs) < 3:
@@ -1224,9 +1319,13 @@ def assemble_response(
     if dropped_ids:
         logger.warning(
             "[assembly] Assembled %d/%d tabs, dropped: %s",
-            len(assembled_tabs), len(planned_ids), dropped_ids,
+            len(assembled_tabs),
+            len(planned_ids),
+            dropped_ids,
         )
     else:
-        logger.info("[assembly] Assembled %d/%d tabs (none dropped)", len(assembled_tabs), len(planned_ids))
+        logger.info(
+            "[assembly] Assembled %d/%d tabs (none dropped)", len(assembled_tabs), len(planned_ids)
+        )
 
     return {"meta": meta, "tabs": assembled_tabs}

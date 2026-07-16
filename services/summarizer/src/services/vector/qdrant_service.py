@@ -33,6 +33,15 @@ VECTOR_SIZE = 384  # all-MiniLM-L6-v2 / bge-small-en-v1.5
 SOURCE_TRANSCRIPT = "transcript"
 SOURCE_DEFAULT_OUTPUT = "default_output"
 
+# Payload schema version stamped on every new point.
+# v2: adds ``timestamp``/``end_timestamp`` (seconds, float) for [MM:SS]
+# citations. v1 points (written before this field existed) carry neither
+# ``schema_version`` nor ``timestamp`` — readers must null-check (the
+# assistant's formatters already do). No eager migration: the collection was
+# flushed before v2 shipped, and any stray v1 points heal lazily on the next
+# re-ingest of their video (store path pre-deletes by video+source).
+PAYLOAD_SCHEMA_VERSION = 2
+
 _INT63_MASK = 0x7FFFFFFFFFFFFFFF
 
 
@@ -72,7 +81,7 @@ class VectorService:
     def _get_client(self) -> QdrantClient:
         """Lazy-initialize Qdrant client."""
         if self._client is None:
-            self._client = QdrantClient(host=self._host, port=self._port, timeout=5.0)
+            self._client = QdrantClient(host=self._host, port=self._port, timeout=5)
         return self._client
 
     def _ensure_collection(self) -> bool:
@@ -135,9 +144,7 @@ class VectorService:
             points = []
             for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
                 prop_path = prop_paths[i] if prop_paths and i < len(prop_paths) else None
-                this_tab_id = (
-                    tab_ids[i] if tab_ids is not None and i < len(tab_ids) else tab_id
-                )
+                this_tab_id = tab_ids[i] if tab_ids is not None and i < len(tab_ids) else tab_id
                 this_tab_component = (
                     tab_components[i]
                     if tab_components is not None and i < len(tab_components)
@@ -164,21 +171,32 @@ class VectorService:
                             "language": language,
                             "start_char": chunk.get("start_char", 0),
                             "end_char": chunk.get("end_char", 0),
+                            # Seconds into the video; None for output chunks
+                            # (no timeline) and for chunkers that could not
+                            # map segments (see assign_chunk_timestamps).
+                            "timestamp": chunk.get("start_time"),
+                            "end_timestamp": chunk.get("end_time"),
+                            "schema_version": PAYLOAD_SCHEMA_VERSION,
                         },
                     )
                 )
             self._get_client().upsert(
-                collection_name=COLLECTION_NAME, points=points,
+                collection_name=COLLECTION_NAME,
+                points=points,
             )
             logger.info(
                 "Stored %d chunks (source=%s) for video %s in Qdrant",
-                len(points), source, video_id,
+                len(points),
+                source,
+                video_id,
             )
             return True
         except Exception as e:
             logger.warning(
                 "Qdrant store_chunks failed for %s (source=%s): %s",
-                video_id, source, e,
+                video_id,
+                source,
+                e,
             )
             return False
 
@@ -250,7 +268,8 @@ class VectorService:
                 points_selector=Filter(
                     must=[
                         FieldCondition(
-                            key="video_id", match=MatchValue(value=video_id),
+                            key="video_id",
+                            match=MatchValue(value=video_id),
                         ),
                     ],
                 ),
@@ -297,7 +316,9 @@ class VectorService:
         except Exception as e:
             logger.warning(
                 "Qdrant count_points failed for %s (source=%s): %s",
-                video_id, source, e,
+                video_id,
+                source,
+                e,
             )
             return 0
 
@@ -318,13 +339,17 @@ class VectorService:
                 ),
             )
             logger.info(
-                "Deleted Qdrant chunks for video %s (source=%s)", video_id, source,
+                "Deleted Qdrant chunks for video %s (source=%s)",
+                video_id,
+                source,
             )
             return True
         except Exception as e:
             logger.warning(
                 "Qdrant delete_by_video_and_source failed for %s (source=%s): %s",
-                video_id, source, e,
+                video_id,
+                source,
+                e,
             )
             return False
 
@@ -339,6 +364,8 @@ def _result_to_dict(r) -> dict:
         "video_id": payload.get("video_id", ""),
         "score": r.score,
         "chunk_index": payload.get("chunk_index", 0),
+        "timestamp": payload.get("timestamp"),
+        "end_timestamp": payload.get("end_timestamp"),
         "source": payload.get("source", SOURCE_TRANSCRIPT),
         "tab_id": payload.get("tab_id"),
         "tab_component": payload.get("tab_component"),

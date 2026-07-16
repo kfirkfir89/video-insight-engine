@@ -15,10 +15,17 @@ import time
 import uuid
 from typing import Any, AsyncGenerator
 
-from litellm.exceptions import APIError as LitellmAPIError, RateLimitError, Timeout as LitellmTimeout
 import redis.exceptions as redis_exceptions
 import structlog
-
+from litellm.exceptions import (
+    APIError as LitellmAPIError,
+)
+from litellm.exceptions import (
+    RateLimitError,
+)
+from litellm.exceptions import (
+    Timeout as LitellmTimeout,
+)
 from llm_common.context import (  # noqa: F401 — llm_feature_var used in phases
     llm_feature_var,
     llm_request_id_var,
@@ -29,7 +36,7 @@ from llm_common.context import (  # noqa: F401 — llm_feature_var used in phase
 
 from src.config import settings
 from src.exceptions import TranscriptError
-from src.models.schemas import ProcessingStatus, ErrorCode
+from src.models.schemas import ErrorCode, ProcessingStatus
 from src.repositories.mongodb_repository import MongoDBVideoRepository
 from src.routes.cached_response import stream_cached_structured as _stream_cached_structured
 from src.services.cache.response_cache import response_cache
@@ -37,11 +44,7 @@ from src.services.llm import LLMService
 from src.services.observability import pipeline_trace, update_trace_metadata
 from src.services.override_state import clear_override
 from src.services.pipeline.context import PipelineContext
-from src.services.pipeline.pipeline_helpers import (
-    PipelineTimer,
-    run_parallel_phases,
-    sse_event,
-)
+from src.services.pipeline.enrichment import _has_meaningful_data
 from src.services.pipeline.phases import (
     run_phase_assembly,
     run_phase_enrichment,
@@ -52,88 +55,23 @@ from src.services.pipeline.phases import (
     run_phase_synthesis,
     run_phase_transcript,
 )
+from src.services.pipeline.pipeline_helpers import (
+    PipelineTimer,
+    run_parallel_phases,
+    sse_event,
+)
+from src.services.pipeline.post_processor import coverage_is_degraded
 
 logger = logging.getLogger(__name__)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Module-level task registries
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-# Strong refs for fire-and-forget faithfulness tasks — the asyncio loop only
-# keeps weak refs to tasks created via ``create_task``, so without a
-# module-level set the GC can cancel the judge mid-call.
-_FAITHFULNESS_TASKS: set[asyncio.Task[None]] = set()
-
-
-# Bounded wait when draining in-flight faithfulness tasks at trace exit. The
-# judge itself caps each LLM call at ``_JUDGE_TIMEOUT_SECONDS = 20`` (parallel
-# fan-out), so 25s leaves a small margin without delaying SSE clients on a
-# stuck judge.
-_FAITHFULNESS_DRAIN_TIMEOUT_S = 25.0
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Faithfulness judge (fire-and-forget)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def _launch_faithfulness_check(ctx: PipelineContext) -> asyncio.Task[None] | None:
-    """Spawn the faithfulness judge in the background — never blocks.
-
-    Returns the spawned task so the caller can await it before flushing the
-    parent Langfuse trace (otherwise the score may be added to the SDK
-    buffer after explicit flush and lost on shutdown).
-    """
-    if not ctx.extraction_data or not ctx.clean_text:
-        return None
-    try:
-        from src.services.pipeline.faithfulness import run_faithfulness_check
-    except ImportError as exc:
-        logger.debug("Faithfulness module unavailable: %s", exc)
-        return None
-
-    async def _run() -> None:
-        # asyncio.create_task snapshots the parent task's ContextVars at spawn
-        # time, which means this task inherits "summarize:extraction" from the
-        # extraction phase that just ran. Without this re-set, every judge LLM
-        # call is attributed to extraction in cost tracking instead of its
-        # own stage. Setting it inside the spawned task is scoped to this task
-        # only — it doesn't leak back to the parent.
-        llm_feature_var.set("summarize:faithfulness")
-        try:
-            await run_faithfulness_check(
-                llm_service=ctx.llm_service,
-                transcript=ctx.clean_text or "",
-                extraction_data=ctx.extraction_data or {},
-                youtube_id=ctx.youtube_id,
-            )
-        except Exception as exc:  # noqa: BLE001 — defensive; check is non-critical
-            logger.debug("Faithfulness task failed: %s", exc)
-
-    task = asyncio.create_task(_run(), name=f"faithfulness:{ctx.youtube_id}")
-    _FAITHFULNESS_TASKS.add(task)
-    task.add_done_callback(_FAITHFULNESS_TASKS.discard)
-    return task
-
-
-async def _drain_faithfulness(tasks: list[asyncio.Task[None]]) -> None:
-    """Wait for in-flight faithfulness tasks before the Langfuse trace flushes.
-
-    Bounded by ``_FAITHFULNESS_DRAIN_TIMEOUT_S`` so a stuck judge can't
-    delay SSE completion. The score is best-effort; any task still running
-    after the timeout is left to complete on its own (and its score will
-    flush on the SDK's next periodic drain).
-    """
-    pending = [t for t in tasks if not t.done()]
-    if not pending:
-        return
-    try:
-        await asyncio.wait(pending, timeout=_FAITHFULNESS_DRAIN_TIMEOUT_S)
-    except Exception as exc:  # noqa: BLE001 — never block trace exit
-        logger.debug("Faithfulness drain failed: %s", exc)
-
+# Re-imported so tests can keep calling/patching these via this module; the
+# implementations (and the strong-ref task registry) live in
+# ``pipeline_faithfulness.py``.
+from src.routes.pipeline_faithfulness import (  # noqa: E402
+    _drain_faithfulness,
+    _launch_faithfulness_check,
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Pipeline phase orchestration
@@ -177,26 +115,28 @@ async def _run_pipeline_phases(
 
             segments = ctx.transcript_data.segments if ctx.transcript_data else None
             ctx.clean_text = inject_visual_context(
-                ctx.clean_text, segments, ctx.frame_descriptions, ctx.scene_frames_all,
+                ctx.clean_text,
+                segments,
+                ctx.frame_descriptions,
+                ctx.scene_frames_all,
             )
-            annotation_count = ctx.clean_text.count("[VISUAL at") + ctx.clean_text.count("[ON-SCREEN TEXT at")
+            annotation_count = ctx.clean_text.count("[VISUAL at") + ctx.clean_text.count(
+                "[ON-SCREEN TEXT at"
+            )
             if annotation_count:
-                logger.info("[pipeline] Injected %d visual annotations into transcript", annotation_count)
+                logger.info(
+                    "[pipeline] Injected %d visual annotations into transcript", annotation_count
+                )
         ctx.phase_times["visual_inject"] = round(time.monotonic() - phase_start, 1)
 
-        # Phase 3-6: Sequential (each depends on the previous).
-        # synthesis depends on extraction_data, so they cannot be parallelized.
-        for phase in [
-            run_phase_plan,
-            run_phase_extraction,
-            run_phase_synthesis,
-            run_phase_enrichment,
-            run_phase_assembly,
-        ]:
+        # Phase 3-4: Plan -> Extraction (sequential — each depends on the previous)
+        for phase in [run_phase_plan, run_phase_extraction]:
             phase_start = time.monotonic()
             async for event in phase(ctx):
                 yield event
-            ctx.phase_times[phase.__name__.replace("run_phase_", "")] = round(time.monotonic() - phase_start, 1)
+            ctx.phase_times[phase.__name__.replace("run_phase_", "")] = round(
+                time.monotonic() - phase_start, 1
+            )
             # Fire-and-forget faithfulness judge once extraction has data. The
             # task copies the current ContextVar state so the Langfuse trace is
             # still attached. We track the task so we can drain it before
@@ -206,22 +146,53 @@ async def _run_pipeline_phases(
                 if spawned is not None:
                     spawned_faithfulness.append(spawned)
 
+        # Phase 5: Synthesis + Enrichment. Both read only the extraction output,
+        # so they run in parallel — EXCEPT when extraction came back empty:
+        # enrichment then falls back to the synthesis output as its context
+        # (see enrich()), which forces the sequential order.
+        phase_start = time.monotonic()
+        if ctx.extraction_data and _has_meaningful_data(ctx.extraction_data):
+            async for event in run_parallel_phases(
+                [run_phase_synthesis, run_phase_enrichment], ctx
+            ):
+                yield event
+        else:
+            for phase in [run_phase_synthesis, run_phase_enrichment]:
+                async for event in phase(ctx):
+                    yield event
+        ctx.phase_times["synthesis_enrichment"] = round(time.monotonic() - phase_start, 1)
+
+        # Phase 6: Assembly (needs synthesis + enrichment results)
+        phase_start = time.monotonic()
+        async for event in run_phase_assembly(ctx):
+            yield event
+        ctx.phase_times["assembly"] = round(time.monotonic() - phase_start, 1)
+
         # Translation step — translate the English output into the source
         # language and attach it as ``sourceLanguage`` for the FE toggle.
         if ctx.source_language_code:
             phase_start = time.monotonic()
             try:
                 from src.services.pipeline.phases.translation import run_phase_translation
+
                 async for event in run_phase_translation(ctx, repository, video_summary_id):
                     yield event
                 # Assembly deferred the terminal event for non-English videos so
                 # `done` fires only after the source-language surface is final.
                 # Reaching here means translation ran to completion (success or a
                 # deliberate English-only no-op) and the doc is now "completed".
-                yield sse_event("done", {
-                    "videoSummaryId": video_summary_id,
-                    "processingTimeMs": int(timer.elapsed() * 1000),
-                })
+                yield sse_event(
+                    "done",
+                    {
+                        "videoSummaryId": video_summary_id,
+                        "processingTimeMs": int(timer.elapsed() * 1000),
+                        # Mirrors the assembly-phase terminal event for the
+                        # non-English path — same partial-result signal.
+                        "degraded": coverage_is_degraded(
+                            getattr(ctx, "extraction_coverage", None),
+                        ),
+                    },
+                )
                 yield "data: [DONE]\n\n"
             except Exception as e:
                 # Translation raised — leave the doc "processing" (retriable) and
@@ -236,15 +207,18 @@ async def _run_pipeline_phases(
         logger.info(
             "[pipeline] DONE youtube_id=%s in %.0fs | "
             "metadata=%.1fs transcript_frames=%.1fs visual_inject=%.1fs "
-            "plan=%.1fs(%s) extraction=%.1fs synthesis=%.1fs enrichment=%.1fs(%s) assembly=%.1fs | tabs=%d",
-            youtube_id, timer.elapsed(),
+            "plan=%.1fs(%s) extraction=%.1fs synthesis_enrichment=%.1fs(%s) "
+            "assembly=%.1fs | tabs=%d",
+            youtube_id,
+            timer.elapsed(),
             pt.get("metadata", 0),
             pt.get("transcript_frames", 0),
             pt.get("visual_inject", 0),
-            pt.get("plan", 0), plan_ok,
+            pt.get("plan", 0),
+            plan_ok,
             pt.get("extraction", 0),
-            pt.get("synthesis", 0),
-            pt.get("enrichment", 0), enrich_ok,
+            pt.get("synthesis_enrichment", 0),
+            enrich_ok,
             pt.get("assembly", 0),
             len(ctx.triage.tabs) if ctx.triage else 0,
         )
@@ -325,7 +299,9 @@ async def stream_summarization(
             trace_tags.append(f"requestId:{request_id}")
             trace_metadata["requestId"] = request_id
         async with pipeline_trace(
-            video_summary_id, tags=trace_tags, metadata=trace_metadata,
+            video_summary_id,
+            tags=trace_tags,
+            metadata=trace_metadata,
             user_id=user_id,
         ):
             # Check Redis cache first (same YouTube video = instant serve)
@@ -349,11 +325,21 @@ async def stream_summarization(
                         # Fire-and-forget DB save — don't block the cache-hit fast path
                         if entry.get("status") != ProcessingStatus.COMPLETED.value:
                             _vid_id = video_summary_id  # capture for lambda
-                            task = asyncio.create_task(asyncio.to_thread(repository.save_structured_result, video_summary_id, cached))
+                            task = asyncio.create_task(
+                                asyncio.to_thread(
+                                    repository.save_structured_result, video_summary_id, cached
+                                )
+                            )
                             task.add_done_callback(
-                                lambda t, vid=_vid_id: logger.error(
-                                    "Cache-hit DB save failed for %s: %s", vid, t.exception(),
-                                ) if t.exception() else None
+                                lambda t, vid=_vid_id: (
+                                    logger.error(
+                                        "Cache-hit DB save failed for %s: %s",
+                                        vid,
+                                        t.exception(),
+                                    )
+                                    if t.exception()
+                                    else None
+                                )
                             )
                         async for event in _stream_cached_structured(video_summary_id, cached):
                             yield event
@@ -363,7 +349,9 @@ async def stream_summarization(
 
             update_trace_metadata({"cacheHit": False})
 
-            await asyncio.to_thread(repository.update_status, video_summary_id, ProcessingStatus.PROCESSING)
+            await asyncio.to_thread(
+                repository.update_status, video_summary_id, ProcessingStatus.PROCESSING
+            )
             logger.info("[pipeline] START video_id=%s youtube_id=%s", video_summary_id, youtube_id)
 
             ctx = PipelineContext(
@@ -379,31 +367,99 @@ async def stream_summarization(
                 yield event
 
     except TranscriptError as e:
-        logger.info("[pipeline] FAILED video_id=%s error=TranscriptError total=%.1fs", video_summary_id, timer.elapsed())
-        await asyncio.to_thread(repository.update_status, video_summary_id, ProcessingStatus.FAILED, str(e), e.code)
+        logger.info(
+            "[pipeline] FAILED video_id=%s error=TranscriptError total=%.1fs",
+            video_summary_id,
+            timer.elapsed(),
+        )
+        await asyncio.to_thread(
+            repository.update_status, video_summary_id, ProcessingStatus.FAILED, str(e), e.code
+        )
         yield sse_event("error", {"message": str(e), "code": e.code.value})
 
     except RateLimitError as e:
-        logger.warning("[pipeline] FAILED video_id=%s error=RateLimitError total=%.1fs", video_summary_id, timer.elapsed())
-        await asyncio.to_thread(repository.update_status, video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.RATE_LIMITED)
-        yield sse_event("error", {"message": "AI service rate limited. Please try again in a moment.", "code": ErrorCode.RATE_LIMITED.value})
+        logger.warning(
+            "[pipeline] FAILED video_id=%s error=RateLimitError total=%.1fs",
+            video_summary_id,
+            timer.elapsed(),
+        )
+        await asyncio.to_thread(
+            repository.update_status,
+            video_summary_id,
+            ProcessingStatus.FAILED,
+            str(e),
+            ErrorCode.RATE_LIMITED,
+        )
+        yield sse_event(
+            "error",
+            {
+                "message": "AI service rate limited. Please try again in a moment.",
+                "code": ErrorCode.RATE_LIMITED.value,
+            },
+        )
 
     except LitellmTimeout as e:
-        logger.warning("[pipeline] FAILED video_id=%s error=Timeout total=%.1fs", video_summary_id, timer.elapsed())
-        await asyncio.to_thread(repository.update_status, video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.LLM_ERROR)
-        yield sse_event("error", {"message": "Request took too long. Please try again.", "code": ErrorCode.LLM_ERROR.value})
+        logger.warning(
+            "[pipeline] FAILED video_id=%s error=Timeout total=%.1fs",
+            video_summary_id,
+            timer.elapsed(),
+        )
+        await asyncio.to_thread(
+            repository.update_status,
+            video_summary_id,
+            ProcessingStatus.FAILED,
+            str(e),
+            ErrorCode.LLM_ERROR,
+        )
+        yield sse_event(
+            "error",
+            {
+                "message": "Request took too long. Please try again.",
+                "code": ErrorCode.LLM_ERROR.value,
+            },
+        )
 
     except LitellmAPIError as e:
-        logger.error("[pipeline] FAILED video_id=%s error=APIError total=%.1fs", video_summary_id, timer.elapsed())
-        await asyncio.to_thread(repository.update_status, video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.LLM_ERROR)
-        yield sse_event("error", {"message": "AI service error. Please try again.", "code": ErrorCode.LLM_ERROR.value})
+        logger.error(
+            "[pipeline] FAILED video_id=%s error=APIError total=%.1fs",
+            video_summary_id,
+            timer.elapsed(),
+        )
+        await asyncio.to_thread(
+            repository.update_status,
+            video_summary_id,
+            ProcessingStatus.FAILED,
+            str(e),
+            ErrorCode.LLM_ERROR,
+        )
+        yield sse_event(
+            "error",
+            {"message": "AI service error. Please try again.", "code": ErrorCode.LLM_ERROR.value},
+        )
 
     except Exception as e:
         error_ref = str(uuid.uuid4())[:8]
-        logger.error("[pipeline] FAILED video_id=%s error=%s ref=%s total=%.1fs", video_summary_id, type(e).__name__, error_ref, timer.elapsed(), exc_info=True)
-        await asyncio.to_thread(repository.update_status, video_summary_id, ProcessingStatus.FAILED, str(e), ErrorCode.UNKNOWN_ERROR)
-        yield sse_event("error", {"message": f"An unexpected error occurred (ref: {error_ref}).", "code": ErrorCode.UNKNOWN_ERROR.value})
+        logger.error(
+            "[pipeline] FAILED video_id=%s error=%s ref=%s total=%.1fs",
+            video_summary_id,
+            type(e).__name__,
+            error_ref,
+            timer.elapsed(),
+            exc_info=True,
+        )
+        await asyncio.to_thread(
+            repository.update_status,
+            video_summary_id,
+            ProcessingStatus.FAILED,
+            str(e),
+            ErrorCode.UNKNOWN_ERROR,
+        )
+        yield sse_event(
+            "error",
+            {
+                "message": f"An unexpected error occurred (ref: {error_ref}).",
+                "code": ErrorCode.UNKNOWN_ERROR.value,
+            },
+        )
     finally:
         await asyncio.to_thread(clear_override, video_summary_id)
-
-

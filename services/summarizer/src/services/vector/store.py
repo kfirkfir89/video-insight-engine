@@ -12,7 +12,7 @@ import asyncio
 import logging
 
 from src.config import settings
-from src.services.vector.chunking import chunk_transcript
+from src.services.vector.chunking import assign_chunk_timestamps, chunk_transcript
 from src.services.vector.embedding import embed_texts
 from src.services.vector.output_chunker import chunk_assembled_tabs
 from src.services.vector.qdrant_service import (
@@ -72,11 +72,19 @@ async def store_transcript_chunks(
     transcript: str,
     language: str = "en",
     transcript_original: str | None = None,
+    segments: list[dict] | None = None,
 ) -> None:
     """Chunk, embed, and store transcript in Qdrant.
 
     For non-English videos, ``transcript`` should be the English translation
     (for embedding) and ``transcript_original`` is the original-language text.
+
+    ``segments`` are the raw transcript segments (with start times, in either
+    ``start``/``duration`` or ``startMs``/``endMs`` shape). When provided,
+    each chunk's payload carries ``timestamp``/``end_timestamp`` (seconds) so
+    the assistant can render [MM:SS] citations. Points written without
+    segments (or before payload schema v2) simply have a null timestamp and
+    render citation-less — they heal on the next re-ingest of the video.
 
     Designed to run as a background task — never raises.
     """
@@ -88,6 +96,9 @@ async def store_transcript_chunks(
         if not chunks:
             logger.debug("No chunks produced for video %s", video_id)
             return
+
+        if segments:
+            assign_chunk_timestamps(chunks, segments)
 
         # Align original text to English chunks by proportional character mapping.
         # Independent chunking fails because sentence boundaries differ across languages.
@@ -102,25 +113,36 @@ async def store_transcript_chunks(
         # Pre-delete prior transcript points to avoid orphans when the new
         # chunk count is smaller than the previous run.
         await asyncio.to_thread(
-            service.delete_by_video_and_source, video_id, SOURCE_TRANSCRIPT,
+            service.delete_by_video_and_source,
+            video_id,
+            SOURCE_TRANSCRIPT,
         )
         success = await asyncio.to_thread(
-            service.store_chunks, video_id, chunks, embeddings,
-            language, original_chunks,
+            service.store_chunks,
+            video_id,
+            chunks,
+            embeddings,
+            language,
+            original_chunks,
             SOURCE_TRANSCRIPT,
         )
 
         if success:
             logger.info(
                 "Stored %d transcript chunks for video %s (language=%s, has_original=%s)",
-                len(chunks), video_id, language, original_chunks is not None,
+                len(chunks),
+                video_id,
+                language,
+                original_chunks is not None,
             )
         else:
             logger.warning("Failed to store chunks for video %s", video_id)
 
     except Exception as e:
         logger.warning(
-            "Background chunk storage failed for %s: %s", video_id, e,
+            "Background chunk storage failed for %s: %s",
+            video_id,
+            e,
         )
 
 
@@ -149,7 +171,9 @@ async def store_default_output_chunks(
     try:
         # Pre-delete first so an exception below cannot strand orphans.
         await asyncio.to_thread(
-            service.delete_by_video_and_source, video_id, SOURCE_DEFAULT_OUTPUT,
+            service.delete_by_video_and_source,
+            video_id,
+            SOURCE_DEFAULT_OUTPUT,
         )
 
         output_chunks = chunk_assembled_tabs(tabs)
@@ -167,22 +191,33 @@ async def store_default_output_chunks(
 
         success = await asyncio.to_thread(
             service.store_chunks,
-            video_id, chunk_dicts, embeddings,
-            language, None,
-            SOURCE_DEFAULT_OUTPUT, None, None, prop_paths,
-            tab_ids, tab_components,
+            video_id,
+            chunk_dicts,
+            embeddings,
+            language,
+            None,
+            SOURCE_DEFAULT_OUTPUT,
+            None,
+            None,
+            prop_paths,
+            tab_ids,
+            tab_components,
         )
 
         if success:
             distinct_tabs = len({(c.tab_id, c.tab_component) for c in output_chunks})
             logger.info(
                 "Stored %d output chunks for video %s across %d tabs",
-                len(output_chunks), video_id, distinct_tabs,
+                len(output_chunks),
+                video_id,
+                distinct_tabs,
             )
         else:
             logger.warning("Failed to store output chunks for video %s", video_id)
 
     except Exception as e:
         logger.warning(
-            "Background output chunk storage failed for %s: %s", video_id, e,
+            "Background output chunk storage failed for %s: %s",
+            video_id,
+            e,
         )

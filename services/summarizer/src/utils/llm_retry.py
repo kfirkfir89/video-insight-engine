@@ -2,7 +2,7 @@
 
 Provides a single function that every pipeline stage uses for LLM calls.
 Handles transient failures (timeout, rate limit, API errors) with
-exponential backoff. Returns raw string or None (never raises).
+linear backoff (1s, 2s, ...). Returns raw string or None (never raises).
 """
 
 from __future__ import annotations
@@ -53,6 +53,7 @@ def _wrap_with_override(model: str) -> LLMService:
     """
     from src.services.llm import LLMService as _LLMService
     from src.services.llm_provider import LLMProvider as _LLMProvider
+
     provider = _LLMProvider(model=model, fast_model=model)
     return _LLMService(provider)
 
@@ -67,7 +68,10 @@ def truncate_prompt_if_needed(prompt: str, model: str) -> str:
     if len(prompt) > limit:
         logger.warning(
             "Prompt truncated from %d to %d chars for model %s (limit=%d)",
-            len(prompt), limit, model, limit,
+            len(prompt),
+            limit,
+            model,
+            limit,
         )
         return prompt[:limit] + "\n\n[TRANSCRIPT TRUNCATED DUE TO LENGTH]"
     return prompt
@@ -133,34 +137,52 @@ async def call_llm_with_retry(
         try:
             if use_fast_model:
                 raw = await llm_service.call_llm_fast(
-                    prompt, max_tokens=max_tokens, timeout=timeout, json_mode=json_mode,
-                    span_name=stage_name, span_metadata=span_metadata,
+                    prompt,
+                    max_tokens=max_tokens,
+                    timeout=timeout,
+                    json_mode=json_mode,
+                    span_name=stage_name,
+                    span_metadata=span_metadata,
                 )
             else:
                 raw = await llm_service.call_llm(
-                    prompt, max_tokens=max_tokens, timeout=timeout,
-                    json_mode=json_mode, cache_static=cache_static,
-                    span_name=stage_name, span_metadata=span_metadata,
+                    prompt,
+                    max_tokens=max_tokens,
+                    timeout=timeout,
+                    json_mode=json_mode,
+                    cache_static=cache_static,
+                    span_name=stage_name,
+                    span_metadata=span_metadata,
                 )
             duration = time.monotonic() - start
 
             if raw and raw.strip():
                 logger.info(
                     "[%s] LLM call succeeded in %.1fs (attempt %d/%d, model=%s)",
-                    stage_name, duration, attempt + 1, max_retries + 1, model_name,
+                    stage_name,
+                    duration,
+                    attempt + 1,
+                    max_retries + 1,
+                    model_name,
                 )
                 return raw
 
             logger.warning(
                 "[%s] Empty LLM response in %.1fs (attempt %d/%d)",
-                stage_name, duration, attempt + 1, max_retries + 1,
+                stage_name,
+                duration,
+                attempt + 1,
+                max_retries + 1,
             )
 
         except asyncio.TimeoutError:
             duration = time.monotonic() - start
             logger.warning(
                 "[%s] Timeout after %.1fs (attempt %d/%d)",
-                stage_name, duration, attempt + 1, max_retries + 1,
+                stage_name,
+                duration,
+                attempt + 1,
+                max_retries + 1,
             )
 
         except (LitellmAPIError, RateLimitError, LitellmTimeout, OSError, ConnectionError) as e:
@@ -169,7 +191,11 @@ async def call_llm_with_retry(
             duration = time.monotonic() - start
             logger.warning(
                 "[%s] LLM error in %.1fs: %s (attempt %d/%d)",
-                stage_name, duration, str(e)[:200], attempt + 1, max_retries + 1,
+                stage_name,
+                duration,
+                str(e)[:200],
+                attempt + 1,
+                max_retries + 1,
             )
             if propagate_rate_limit and isinstance(e, (RateLimitError, ServiceUnavailableError)):
                 last_rate_limit_error = e

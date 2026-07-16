@@ -23,16 +23,36 @@ logger = logging.getLogger(__name__)
 # Travel Domain
 # ─────────────────────────────────────────────────────
 
+
 class TravelSpot(BaseModel):
+    """Mirrors TS ``SpotItem`` (vie-response.ts) — undeclared fields silently
+    drop on ``model_dump``, so every TS-declared field must be listed here
+    (enforced by ``tests/test_ts_pydantic_parity.py``)."""
+
     name: str
     emoji: str = ""
     description: str = ""
     cost: str | None = None
+    currency: str | None = None
     duration: str | None = None
     map_query: str | None = Field(None, alias="mapQuery")
+    booking_search: str | None = Field(None, alias="bookingSearch")
     tips: str | None = None
+    specs: str | None = None
+    rating: float | None = None
+    thumbnail_url: str | None = Field(None, alias="thumbnailUrl")
 
     model_config = {"populate_by_name": True}
+
+    @field_validator("rating", mode="before")
+    @classmethod
+    def coerce_rating(cls, v: Any) -> float | None:
+        if v is None or v == "":
+            return None
+        try:
+            return float(v)
+        except (ValueError, TypeError):
+            return None
 
 
 class TravelDay(BaseModel):
@@ -126,16 +146,18 @@ class TravelData(BaseModel):
 # Food Domain
 # ─────────────────────────────────────────────────────
 
+
 class FoodMeta(BaseModel):
     model_config = {"populate_by_name": True}
 
     prep_time: int | None = Field(None, alias="prepTime")
     cook_time: int | None = Field(None, alias="cookTime")
+    total_time: int | None = Field(None, alias="totalTime")
     servings: int | None = None
     difficulty: str | None = None
     cuisine: str | None = None
 
-    @field_validator("prep_time", "cook_time", mode="before")
+    @field_validator("prep_time", "cook_time", "total_time", mode="before")
     @classmethod
     def coerce_time_minutes(cls, v: Any) -> int | None:
         """Extract first integer from strings like '~12-15 minutes'."""
@@ -147,6 +169,7 @@ class FoodMeta(BaseModel):
             return int(v)
         if isinstance(v, str):
             import re
+
             match = re.search(r"\d+", v)
             return int(match.group()) if match else None
         return None
@@ -183,11 +206,22 @@ class FoodIngredient(BaseModel):
 
 
 class FoodStep(BaseModel):
+    """Mirrors TS ``StepItem`` (vie-response.ts) for ``FoodData.steps``.
+
+    NOTE: TS declares ``duration?: string`` but this mirror deliberately
+    coerces to minutes-as-int (legacy numeric contract for cook timers).
+    """
+
+    model_config = {"populate_by_name": True}
+
     number: int
+    title: str | None = None
     instruction: str
     duration: int | None = None
     tips: str | None = None
+    safety_note: str | None = Field(None, alias="safetyNote")
     timestamp: int | None = None
+    thumbnail_url: str | None = Field(None, alias="thumbnailUrl")
 
     @field_validator("duration", mode="before")
     @classmethod
@@ -201,6 +235,7 @@ class FoodStep(BaseModel):
             return int(v)
         if isinstance(v, str):
             import re
+
             match = re.search(r"\d+", v)
             return int(match.group()) if match else None
         return None
@@ -242,6 +277,7 @@ class FoodData(BaseModel):
 # ─────────────────────────────────────────────────────
 # Learning Domain
 # ─────────────────────────────────────────────────────
+
 
 class LearningKeyPoint(BaseModel):
     emoji: str = ""
@@ -308,6 +344,7 @@ class LearningData(BaseModel):
 # ─────────────────────────────────────────────────────
 # Review Domain
 # ─────────────────────────────────────────────────────
+
 
 class ReviewRating(BaseModel):
     model_config = {"populate_by_name": True}
@@ -383,6 +420,7 @@ class ReviewData(BaseModel):
 # Tech Domain
 # ─────────────────────────────────────────────────────
 
+
 class TechDependency(BaseModel):
     name: str
     version: str | None = None
@@ -441,7 +479,9 @@ class TechData(BaseModel):
     def migrate_concepts_to_topics(cls, data: Any) -> Any:
         """Backward compat: rename cached 'concepts' (string[]) to 'topics'."""
         if isinstance(data, dict) and "concepts" in data and "topics" not in data:
-            if isinstance(data.get("concepts"), list) and all(isinstance(c, str) for c in data["concepts"]):
+            if isinstance(data.get("concepts"), list) and all(
+                isinstance(c, str) for c in data["concepts"]
+            ):
                 data["topics"] = data.pop("concepts")
         return data
 
@@ -466,6 +506,7 @@ class TechData(BaseModel):
 # Fitness Domain
 # ─────────────────────────────────────────────────────
 
+
 class FitnessModification(BaseModel):
     label: str
     description: str = ""
@@ -483,6 +524,7 @@ class FitnessExercise(BaseModel):
     difficulty: str | None = None
     form_cues: list[str] = Field([], alias="formCues")
     modifications: list[FitnessModification] = []
+    superset_with: str | None = Field(None, alias="supersetWith")
     timestamp: int | None = None
 
     @field_validator("difficulty", mode="before")
@@ -565,6 +607,7 @@ class FitnessData(BaseModel):
 # Music Domain
 # ─────────────────────────────────────────────────────
 
+
 class MusicCredit(BaseModel):
     role: str
     name: str
@@ -588,6 +631,7 @@ class MusicSection(BaseModel):
             return int(v)
         if isinstance(v, str):
             import re
+
             match = re.search(r"\d+", v)
             return int(match.group()) if match else None
         return None
@@ -629,6 +673,7 @@ class MusicData(BaseModel):
 # Project Domain
 # ─────────────────────────────────────────────────────
 
+
 class ProjectMaterial(BaseModel):
     name: str
     quantity: str | None = None
@@ -652,6 +697,7 @@ class ProjectStep(BaseModel):
     tips: str | None = None
     safety_note: str | None = Field(None, alias="safetyNote")
     timestamp: int | None = None
+    thumbnail_url: str | None = Field(None, alias="thumbnailUrl")
 
 
 class ProjectData(BaseModel):
@@ -687,6 +733,7 @@ class ProjectData(BaseModel):
 # Modifiers
 # ─────────────────────────────────────────────────────
 
+
 class NarrativeKeyMoment(BaseModel):
     timestamp: int | None = None
     description: str = ""
@@ -707,7 +754,6 @@ class NarrativeData(BaseModel):
     key_moments: list[NarrativeKeyMoment] = Field([], alias="keyMoments")
     quotes: list[NarrativeQuote] = []
     takeaways: list[str] = []
-
 
 
 class FinanceCost(BaseModel):
@@ -734,6 +780,7 @@ class FinanceData(BaseModel):
 # ─────────────────────────────────────────────────────
 # Language Domain
 # ─────────────────────────────────────────────────────
+
 
 class LanguagePhrase(BaseModel):
     phrase: str
@@ -800,6 +847,7 @@ class LanguageData(BaseModel):
 # ─────────────────────────────────────────────────────
 # Science Domain
 # ─────────────────────────────────────────────────────
+
 
 class ScienceConcept(BaseModel):
     model_config = {"populate_by_name": True}
@@ -1044,6 +1092,7 @@ class SportData(BaseModel):
 # VIEResponse Envelope
 # ─────────────────────────────────────────────────────
 
+
 class TabDefinition(BaseModel):
     model_config = {"populate_by_name": True}
 
@@ -1059,6 +1108,10 @@ class SectionDefinition(BaseModel):
 
 
 class VIEResponseMeta(BaseModel):
+    """Mirrors TS ``VIEResponseMeta`` — full field parity enforced by
+    ``tests/test_ts_pydantic_parity.py`` (undeclared fields silently drop
+    on ``model_dump``)."""
+
     model_config = {"populate_by_name": True}
 
     video_id: str = Field("", alias="videoId")
@@ -1068,6 +1121,15 @@ class VIEResponseMeta(BaseModel):
     modifiers: list[str] = []
     primary_tag: str = Field("learning", alias="primaryTag")
     user_goal: str = Field("", alias="userGoal")
+    tldr: str | None = None
+    key_takeaways: list[str] | None = Field(None, alias="keyTakeaways")
+    master_summary: str | None = Field(None, alias="masterSummary")
+    seo_description: str | None = Field(None, alias="seoDescription")
+    language: str | None = None
+    is_rtl: bool | None = Field(None, alias="isRTL")
+    # Partial-result flag (dropped extraction batches / critical coverage) —
+    # set True-only by the assembly phase; drives the FE retry affordance.
+    degraded: bool | None = None
 
 
 class VIEResponse(BaseModel):
@@ -1164,17 +1226,23 @@ def validate_domain_output(content_tags: list[str], modifiers: list[str], data: 
                         instance = model_cls.model_validate(tag_data)
                         validated[tag] = instance.model_dump(by_alias=True)
                     except ValidationError as e:
-                        logger.warning("Validation failed for tag %s, passing data through: %s", tag, e)
+                        logger.warning(
+                            "Validation failed for tag %s, passing data through: %s", tag, e
+                        )
                         validated[tag] = tag_data
                 else:
-                    logger.warning("No domain model for tag: %s — data passed through unvalidated", tag)
+                    logger.warning(
+                        "No domain model for tag: %s — data passed through unvalidated", tag
+                    )
                     validated[tag] = tag_data
 
         # Fallback: for any tags missing a wrapped key, try validating flat data against the model.
         # This handles LLMs that wrap some domains but leave others at the top level.
         missing_tags = [tag for tag in content_tags if tag not in validated]
         if missing_tags:
-            logger.info("Missing wrapped keys for tags %s — trying flat validation fallback", missing_tags)
+            logger.info(
+                "Missing wrapped keys for tags %s — trying flat validation fallback", missing_tags
+            )
             for tag in missing_tags:
                 model_cls = DOMAIN_MODELS.get(tag)
                 if model_cls:
@@ -1202,10 +1270,14 @@ def validate_domain_output(content_tags: list[str], modifiers: list[str], data: 
                     instance = model_cls.model_validate(mod_data)
                     validated[modifier] = instance.model_dump(by_alias=True)
                 except ValidationError as e:
-                    logger.warning("Modifier validation failed for %s, passing through: %s", modifier, e)
+                    logger.warning(
+                        "Modifier validation failed for %s, passing through: %s", modifier, e
+                    )
                     validated[modifier] = mod_data
             else:
-                logger.warning("No modifier model for: %s — data passed through unvalidated", modifier)
+                logger.warning(
+                    "No modifier model for: %s — data passed through unvalidated", modifier
+                )
                 validated[modifier] = mod_data
 
     return validated

@@ -13,9 +13,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Tab IDs that typically contain checklists or quizzes — eligible for celebrations
-_CELEBRATION_TAB_IDS = frozenset({
-    "quizzes", "flashcards", "scenarios", "packing", "ingredients", "materials", "tools",
-})
+_CELEBRATION_TAB_IDS = frozenset(
+    {
+        "quizzes",
+        "flashcards",
+        "scenarios",
+        "packing",
+        "ingredients",
+        "materials",
+        "tools",
+    }
+)
 
 
 def drop_empty_tabs(tabs: list[dict], data: dict) -> list[dict]:
@@ -56,7 +64,12 @@ def drop_empty_tabs(tabs: list[dict], data: dict) -> list[dict]:
         if not resolved or not isinstance(value, list) or len(value) >= 2:
             result.append(tab)
         else:
-            logger.debug("Dropping tab %s — dataSource %s has %d items", tab.get("id"), data_source, len(value))
+            logger.debug(
+                "Dropping tab %s — dataSource %s has %d items",
+                tab.get("id"),
+                data_source,
+                len(value),
+            )
 
     return result
 
@@ -225,7 +238,10 @@ def validate_extraction_counts(
             }
             logger.warning(
                 "Extraction completeness warning: %s — manifest=%d, extracted=%d (%.0f%%)",
-                field, manifest_count, extracted_count, ratio * 100,
+                field,
+                manifest_count,
+                extracted_count,
+                ratio * 100,
             )
 
     return warnings
@@ -274,6 +290,22 @@ def _collect_offsets(data: dict, list_path: str, field: str) -> list[int]:
         if secs is not None:
             offsets.append(secs)
     return offsets
+
+
+def coverage_is_degraded(coverage: dict | None) -> bool:
+    """True when a run's extraction coverage marks the output as degraded.
+
+    Degraded = at least one extraction batch was dropped (a chunk of the video
+    produced no output) OR coverage is critically low (transcript truncated).
+    Consumed by the assembly phase to flag the persisted doc + meta, by the
+    SSE terminal events, and (via the doc) by the admin run badge.
+    """
+    if not coverage:
+        return False
+    if coverage.get("critical"):
+        return True
+    dropped = coverage.get("batchesDropped")
+    return isinstance(dropped, int) and dropped > 0
 
 
 def compute_extraction_coverage(

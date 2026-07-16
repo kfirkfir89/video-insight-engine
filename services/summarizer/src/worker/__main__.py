@@ -10,8 +10,10 @@ followers regardless of which path started the work.
 from __future__ import annotations
 
 import asyncio
+import os
 import signal
 import sys
+from pathlib import Path
 
 import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
@@ -36,6 +38,7 @@ _drive_pipeline = drive_pipeline
 
 # ─── Republish for retry ────────────────────────────────────────────────────
 
+
 class _Republisher:
     """Holds a confirm channel reused across republishes."""
 
@@ -59,7 +62,31 @@ class _Republisher:
             )
 
 
+# ─── Liveness heartbeat ─────────────────────────────────────────────────────
+
+# The worker has no HTTP surface, so the container healthcheck watches this
+# file's mtime (see docker-compose.yml vie-summarizer-worker healthcheck). A
+# wedged event loop stops the touches and the container flips unhealthy even
+# though PID 1 is still alive.
+HEARTBEAT_PATH = Path(os.environ.get("WORKER_HEARTBEAT_FILE", "/tmp/vie-worker-heartbeat"))
+HEARTBEAT_INTERVAL_SECONDS = 30.0
+
+
+async def _heartbeat_loop(shutdown: asyncio.Event) -> None:
+    """Touch the heartbeat file until shutdown; write failures are non-fatal."""
+    while not shutdown.is_set():
+        try:
+            HEARTBEAT_PATH.touch()
+        except OSError as e:
+            logger.warning("worker_heartbeat_write_failed", error=str(e))
+        try:
+            await asyncio.wait_for(shutdown.wait(), timeout=HEARTBEAT_INTERVAL_SECONDS)
+        except asyncio.TimeoutError:
+            continue
+
+
 # ─── Consumer loop ──────────────────────────────────────────────────────────
+
 
 async def _consume(
     runner: WorkerRunner,
@@ -100,13 +127,18 @@ async def _handle_with_logging(runner: WorkerRunner, message: AbstractIncomingMe
 
 # ─── Topology bootstrap ─────────────────────────────────────────────────────
 
+
 async def _declare_topology(channel: aio_pika.abc.AbstractChannel) -> None:
     """Idempotently declare exchanges + queues + DLQ binding."""
     await channel.declare_exchange(
-        QueueTopology.exchange, aio_pika.ExchangeType.DIRECT, durable=True,
+        QueueTopology.exchange,
+        aio_pika.ExchangeType.DIRECT,
+        durable=True,
     )
     dlx = await channel.declare_exchange(
-        QueueTopology.dlx, aio_pika.ExchangeType.DIRECT, durable=True,
+        QueueTopology.dlx,
+        aio_pika.ExchangeType.DIRECT,
+        durable=True,
     )
     dlq = await channel.declare_queue(QueueTopology.dlq, durable=True)
     await dlq.bind(dlx, routing_key=QueueTopology.dlq_routing_key)
@@ -191,6 +223,7 @@ async def main() -> None:
     # client instead of silently dropping.
     try:
         from src.services.observability import init_langfuse
+
         client = init_langfuse()
         logger.info("worker_langfuse_init enabled=%s", client is not None)
     except Exception as e:
@@ -213,7 +246,9 @@ async def main() -> None:
             await _declare_topology(topo_channel)
 
         channel_pool: Pool[aio_pika.abc.AbstractChannel] = Pool(
-            connection.channel, max_size=2, loop=loop,
+            connection.channel,
+            max_size=2,
+            loop=loop,
         )
         republisher = _Republisher(channel_pool)
         runner = WorkerRunner(
@@ -234,11 +269,15 @@ async def main() -> None:
             )
         logger.info("worker_consumers_started count=%d", settings.WORKER_CONCURRENCY)
 
+        heartbeat = asyncio.create_task(_heartbeat_loop(shutdown), name="worker-heartbeat")
+
         await shutdown.wait()
         logger.info("worker_shutdown_signal_received")
         for c in consumers:
             c.cancel()
         await asyncio.gather(*consumers, return_exceptions=True)
+        # Heartbeat loop exits on its own once the shutdown event is set.
+        await heartbeat
         await channel_pool.close()
 
     # Flush any buffered usage records before exit so the final jobs' cost
@@ -248,6 +287,7 @@ async def main() -> None:
     # Drain Langfuse buffer so in-flight spans aren't lost on container stop.
     try:
         from src.services.observability import flush_langfuse
+
         await flush_langfuse()
     except Exception as e:
         logger.warning("worker_langfuse_flush_failed error=%s", e)

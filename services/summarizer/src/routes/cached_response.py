@@ -105,12 +105,16 @@ def resolve_synthesis(entry: dict[str, Any]) -> dict[str, Any]:
     return {
         "tldr": meta.get("tldr") or synthesis.get("tldr") or summary.get("tldr", ""),
         "keyTakeaways": synthesis.get("keyTakeaways") or summary.get("keyTakeaways", []),
-        "masterSummary": meta.get("masterSummary") or synthesis.get("masterSummary") or summary.get("masterSummary", ""),
+        "masterSummary": meta.get("masterSummary")
+        or synthesis.get("masterSummary")
+        or summary.get("masterSummary", ""),
         "seoDescription": meta.get("seoDescription") or synthesis.get("seoDescription", ""),
     }
 
 
-async def stream_cached_structured(video_summary_id: str, entry: dict[str, Any]) -> AsyncGenerator[str, None]:
+async def stream_cached_structured(
+    video_summary_id: str, entry: dict[str, Any]
+) -> AsyncGenerator[str, None]:
     """Stream a cached structured result as SSE events.
 
     Handles three document shapes:
@@ -119,12 +123,15 @@ async def stream_cached_structured(video_summary_id: str, entry: dict[str, Any])
     3. Legacy: triage + output + summary
     """
     yield sse_event("cached", {"videoSummaryId": video_summary_id})
-    yield sse_event("metadata", {
-        "title": entry.get("title"),
-        "channel": entry.get("creator") or entry.get("channel"),
-        "thumbnailUrl": entry.get("thumbnailUrl") or entry.get("thumbnail_url"),
-        "duration": entry.get("duration"),
-    })
+    yield sse_event(
+        "metadata",
+        {
+            "title": entry.get("title"),
+            "channel": entry.get("creator") or entry.get("channel"),
+            "thumbnailUrl": entry.get("thumbnailUrl") or entry.get("thumbnail_url"),
+            "duration": entry.get("duration"),
+        },
+    )
 
     triage_data = resolve_triage_event(entry)
     if triage_data:
@@ -133,15 +140,28 @@ async def stream_cached_structured(video_summary_id: str, entry: dict[str, Any])
     tabs = resolve_tabs(entry)
     if tabs:
         meta = entry.get("meta", {})
-        meta_source = meta if meta.get("contentTags") else entry.get("assembledMeta") or entry.get("triage", {})
-        yield sse_event("meta", {
+        meta_source = (
+            meta
+            if meta.get("contentTags")
+            else entry.get("assembledMeta") or entry.get("triage", {})
+        )
+        meta_event = {
             "title": entry.get("title", ""),
             "contentTags": meta_source.get("contentTags", []),
             "modifiers": meta_source.get("modifiers", []),
             "primaryTag": meta_source.get("primaryTag", "learning"),
             "tabCount": len(tabs),
-            "tabLabels": [{"id": t.get("id", ""), "label": t.get("label", ""), "emoji": t.get("emoji", "")} for t in tabs if isinstance(t, dict)],
-        })
+            "tabLabels": [
+                {"id": t.get("id", ""), "label": t.get("label", ""), "emoji": t.get("emoji", "")}
+                for t in tabs
+                if isinstance(t, dict)
+            ],
+        }
+        # Degraded docs stay degraded on cached serves — forward the flag so
+        # the FE retry affordance shows without a separate doc fetch.
+        if meta_source.get("degraded"):
+            meta_event["degraded"] = True
+        yield sse_event("meta", meta_event)
         for tab in tabs:
             yield sse_event("tab_ready", tab)
 

@@ -15,7 +15,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, AsyncGenerator, Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Callable
 
 if TYPE_CHECKING:
     from .context import PipelineContext
@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 from src.config import settings
 from src.exceptions import TranscriptError
 from src.models.schemas import ErrorCode, TranscriptSegment
+from src.models.sse_events import validate_sse_event
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,10 @@ logger = logging.getLogger(__name__)
 
 
 def sse_event(event: str, data: dict[str, Any]) -> str:
-    """Format data as SSE event."""
+    """Format data as an SSE event, validating it against the Pydantic
+    contract in ``src/models/sse_events.py`` (raises outside production,
+    logs-and-emits in production — see that module's docstring)."""
+    validate_sse_event(event, data)
     return f"data: {json.dumps({'event': event, **data})}\n\n"
 
 
@@ -55,7 +59,8 @@ def truncate_json_safely(data: Any, max_chars: int) -> str:
 
 
 def sse_token(phase: str, token: str, **extra: Any) -> str:
-    """Format token as SSE event."""
+    """Format token as SSE event (validated like sse_event)."""
+    validate_sse_event("token", {"phase": phase, "token": token, **extra})
     return f"data: {json.dumps({'event': 'token', 'phase': phase, 'token': token, **extra})}\n\n"
 
 
@@ -67,7 +72,7 @@ def sse_token(phase: str, token: str, **extra: Any) -> str:
 class PipelineTimer:
     """Lightweight phase timer for pipeline observability."""
 
-    __slots__ = ('_start',)
+    __slots__ = ("_start",)
 
     def __init__(self) -> None:
         self._start = time.monotonic()
@@ -92,6 +97,7 @@ class TranscriptData:
 
     Note: when ``source="metadata"``, ``segments`` is intentionally empty.
     """
+
     segments: list[dict[str, Any]]
     raw_text: str
     transcript_type: str
@@ -131,11 +137,13 @@ def normalize_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
             start_ms = int(start_s * 1000)
             end_ms = int((start_s + duration_s) * 1000)
 
-        normalized.append({
-            "text": seg.get("text", ""),
-            "startMs": start_ms,
-            "endMs": end_ms,
-        })
+        normalized.append(
+            {
+                "text": seg.get("text", ""),
+                "startMs": start_ms,
+                "endMs": end_ms,
+            }
+        )
     return normalized
 
 
@@ -147,15 +155,9 @@ def normalize_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def validate_duration(duration: int) -> None:
     """Validate video duration against limits."""
     if duration > settings.MAX_VIDEO_DURATION_MINUTES * 60:
-        raise TranscriptError(
-            f"Video too long ({duration // 60} min)",
-            ErrorCode.VIDEO_TOO_LONG
-        )
+        raise TranscriptError(f"Video too long ({duration // 60} min)", ErrorCode.VIDEO_TOO_LONG)
     if duration < settings.MIN_VIDEO_DURATION_SECONDS:
-        raise TranscriptError(
-            f"Video too short ({duration} sec)",
-            ErrorCode.VIDEO_TOO_SHORT
-        )
+        raise TranscriptError(f"Video too short ({duration} sec)", ErrorCode.VIDEO_TOO_SHORT)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -248,9 +250,7 @@ async def run_parallel_phases(
             # connection at its 300s bodyTimeout. asyncio.Queue.get is
             # cancellation-safe, so the timed-out get drops no queued item.
             try:
-                item = await asyncio.wait_for(
-                    queue.get(), timeout=settings.SSE_HEARTBEAT_SECONDS
-                )
+                item = await asyncio.wait_for(queue.get(), timeout=settings.SSE_HEARTBEAT_SECONDS)
             except asyncio.TimeoutError:
                 yield sse_event("heartbeat", {"ts": time.monotonic()})
                 continue

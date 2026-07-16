@@ -16,7 +16,14 @@ logger = logging.getLogger(__name__)
 
 # Possible locations for domains.json
 _DOCKER_PATH = Path("/app/shared/domains.json")
-_LOCAL_PATH = Path(__file__).resolve().parent.parent.parent.parent.parent / "packages" / "shared" / "src" / "config" / "domains.json"
+_LOCAL_PATH = (
+    Path(__file__).resolve().parent.parent.parent.parent.parent
+    / "packages"
+    / "shared"
+    / "src"
+    / "config"
+    / "domains.json"
+)
 
 
 @lru_cache(maxsize=1)
@@ -27,9 +34,7 @@ def _load_config() -> dict:
             logger.debug("Loading domain config from %s", path)
             return json.loads(path.read_text())
 
-    raise FileNotFoundError(
-        f"domains.json not found at {_DOCKER_PATH} or {_LOCAL_PATH}"
-    )
+    raise FileNotFoundError(f"domains.json not found at {_DOCKER_PATH} or {_LOCAL_PATH}")
 
 
 def get_config() -> dict:
@@ -40,6 +45,7 @@ def get_config() -> dict:
 # ─────────────────────────────────────────────────────
 # Derived sets (for validation)
 # ─────────────────────────────────────────────────────
+
 
 def valid_content_tags() -> frozenset[str]:
     """All valid content tag names."""
@@ -68,16 +74,12 @@ def component_tier(name: str) -> str:
 
 def secondary_components() -> frozenset[str]:
     """Attachment-only (secondary-tier) component names."""
-    return frozenset(
-        name for name, tier in component_tiers().items() if tier == "secondary"
-    )
+    return frozenset(name for name, tier in component_tiers().items() if tier == "secondary")
 
 
 def primary_components() -> frozenset[str]:
     """Planner-selectable (primary-tier) component names."""
-    return frozenset(
-        name for name, tier in component_tiers().items() if tier == "primary"
-    )
+    return frozenset(name for name, tier in component_tiers().items() if tier == "primary")
 
 
 def ordered_components() -> list[str]:
@@ -95,21 +97,33 @@ def render_valid_component_names() -> str:
 def density_gates() -> dict[str, dict[str, str]]:
     """Per-component density-gate guidance shown to the planner.
 
-    NOTE: this is advisory LLM-steering text only. The assembler's hard limits
-    (``_TAB_ITEM_CAPS`` in assembly/core.py, per-assembler min/max constants,
-    and assembly/density.py) are independent and intentionally NOT derived from
-    this config — editing it changes what the LLM aims for, not the enforced caps.
+    NOTE: this is advisory LLM-steering text only. The assembler's hard caps
+    live in ``assemblerItemCaps`` (see :func:`assembler_item_caps`) — both are
+    in domains.json but intentionally independent: editing this changes what
+    the LLM aims for, not the enforced caps.
     """
     return dict(get_config().get("densityGates", {}))
+
+
+def assembler_item_caps() -> dict[str, int]:
+    """HARD per-component item caps enforced by ``_cap_tab_items``
+    (assembly/core.py). Independent of the advisory ``densityGates`` — see
+    the ``assemblerItemCapsNote`` in domains.json."""
+    return dict(get_config().get("assemblerItemCaps", {}))
+
+
+def domain_requirements() -> dict[str, dict]:
+    """Per-domain assembled-output validation rules consumed by
+    ``_validate_domain_requirements`` (assembly/core.py): ``required``
+    components are backfilled when the planner drops them; ``max`` caps
+    per-component tab counts. See ``domainRequirementsNote`` in domains.json."""
+    return dict(get_config().get("domainRequirements", {}))
 
 
 def render_density_gate_table() -> str:
     """Render the markdown density table injected into component_toolkit.txt's
     ``{density_gates}`` placeholder, single-sourced from domains.json."""
-    header = (
-        "| Component | min items | max items | max chars/cell |\n"
-        "|---|---|---|---|"
-    )
+    header = "| Component | min items | max items | max chars/cell |\n|---|---|---|---|"
     rows = [
         f"| {name} | {gate.get('min', '')} | {gate.get('max', '')} | {gate.get('chars', '')} |"
         for name, gate in density_gates().items()
@@ -121,6 +135,7 @@ def render_density_gate_table() -> str:
 # Category mapping
 # ─────────────────────────────────────────────────────
 
+
 def map_category_to_tag(category: str) -> str:
     """Map a raw category name to a content tag."""
     category_map = get_config()["categoryMap"]
@@ -130,6 +145,7 @@ def map_category_to_tag(category: str) -> str:
 # ─────────────────────────────────────────────────────
 # Tab helpers
 # ─────────────────────────────────────────────────────
+
 
 def get_default_tab_ids(tag: str) -> list[str]:
     """Get the ordered default tab IDs for a domain."""
