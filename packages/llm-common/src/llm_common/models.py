@@ -1,8 +1,8 @@
 """Pydantic models for LLM usage records."""
 
-import structlog
 from datetime import UTC, datetime
 
+import structlog
 from pydantic import BaseModel, Field
 
 logger = structlog.get_logger(__name__)
@@ -119,10 +119,9 @@ def compute_transcription_cost_usd(
         return 0.0
     if "per_minute" in rates:
         return (max(audio_seconds, 0.0) / 60.0) * rates["per_minute"]
-    return (
-        (max(tokens_in, 0) / 1_000_000) * rates.get("input_per_m", 0.0)
-        + (max(tokens_out, 0) / 1_000_000) * rates.get("output_per_m", 0.0)
-    )
+    return (max(tokens_in, 0) / 1_000_000) * rates.get("input_per_m", 0.0) + (
+        max(tokens_out, 0) / 1_000_000
+    ) * rates.get("output_per_m", 0.0)
 
 
 def extract_provider(model: str) -> str:

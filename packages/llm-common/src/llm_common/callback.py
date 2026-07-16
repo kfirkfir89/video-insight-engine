@@ -22,6 +22,7 @@ import litellm
 import structlog
 from litellm.integrations.custom_logger import CustomLogger
 
+from llm_common.alerts import deliver_alert
 from llm_common.buffer import AsyncBuffer, SyncBuffer
 from llm_common.context import (
     llm_feature_var,
@@ -46,6 +47,7 @@ def _safe_int(obj: object, attr: str) -> int:
     if isinstance(val, int):
         return val
     return 0
+
 
 logger = structlog.get_logger(__name__)
 
@@ -83,7 +85,9 @@ def record_manual_usage(record: UsageRecord) -> None:
     buffer = _active_buffer
     if buffer is None:
         logger.warning(
-            "manual_usage_no_buffer", feature=record.feature, model=record.model,
+            "manual_usage_no_buffer",
+            feature=record.feature,
+            model=record.model,
         )
         return
     try:
@@ -166,7 +170,9 @@ class MongoDBUsageCallback(CustomLogger):
                 if isinstance(last_msg, dict):
                     prompt_text = str(last_msg.get("content", ""))[:200]
 
-            prompt_hash = hashlib.sha256(prompt_text.encode()).hexdigest()[:16] if prompt_text else ""
+            prompt_hash = (
+                hashlib.sha256(prompt_text.encode()).hexdigest()[:16] if prompt_text else ""
+            )
 
             # Extract usage from response
             tokens_in = 0
@@ -268,10 +274,14 @@ class MongoDBUsageCallback(CustomLogger):
                 model=record.get("model"),
                 threshold=self._cost_threshold,
             )
+            alert = self._build_alert(record)
             try:
-                self._alerts_col.insert_one(self._build_alert(record))
+                self._alerts_col.insert_one(alert)
             except Exception as e:
                 logger.error("alert_write_failed", error=str(e))
+            # Webhook fires even when the Mongo write fails — the whole point
+            # of an alert channel is surviving degraded infrastructure.
+            deliver_alert(alert)
 
     async def _check_cost_alert_async(self, record: dict) -> None:
         """Write alert if cost exceeds threshold (async/motor)."""
@@ -283,10 +293,13 @@ class MongoDBUsageCallback(CustomLogger):
                 model=record.get("model"),
                 threshold=self._cost_threshold,
             )
+            alert = self._build_alert(record)
             try:
-                await self._alerts_col.insert_one(self._build_alert(record))
+                await self._alerts_col.insert_one(alert)
             except Exception as e:
                 logger.error("alert_write_failed", error=str(e))
+            # deliver_alert is blocking urllib — keep it off the event loop.
+            await asyncio.to_thread(deliver_alert, alert)
 
     # ── Sync callbacks (used by summarizer) ──
 

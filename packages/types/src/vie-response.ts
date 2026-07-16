@@ -913,6 +913,12 @@ export interface VIEResponseMeta {
   language?: string;
   /** Whether the video content is in a right-to-left language. */
   isRTL?: boolean;
+  /**
+   * Partial-result flag: extraction dropped batches or coverage was critical.
+   * Set (true only) by the summarizer assembly phase; the web renders a
+   * "partial result — retry" affordance when present.
+   */
+  degraded?: boolean;
 }
 
 // ─────────────────────────────────────────────────────

@@ -74,6 +74,14 @@ interface DomainsConfig {
    *  (steering text, not enforcement — the assembler's caps are independent).
    *  Single-sources the toolkit density table. */
   densityGates?: Record<string, { min: string; max: string; chars: string }>;
+  /** HARD per-component item caps enforced by the Python assembler
+   *  (`_cap_tab_items` in assembly/core.py). Deliberately independent of the
+   *  advisory densityGates above — see `assemblerItemCapsNote` in the JSON. */
+  assemblerItemCaps?: Record<string, number>;
+  /** Per-domain assembled-output validation (required components backfilled,
+   *  `max` caps per-component tab counts) consumed by the Python assembler —
+   *  see `domainRequirementsNote` in the JSON. */
+  domainRequirements?: Record<string, { required: string[]; max: Record<string, number> }>;
   domains: Record<ContentTag, DomainEntry>;
   modifiers: Record<Modifier, ModifierEntry>;
   enrichment: Record<string, string>;

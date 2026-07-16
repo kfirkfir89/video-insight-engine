@@ -76,6 +76,36 @@
     "formation_diagram": { "min": "3 players", "max": "23", "chars": "player ≤ 40; x/y are 0-100" },
     "lyrics_karaoke": { "min": "—", "max": "—", "chars": "per-line ≤ 120 chars" }
   },
+  "assemblerItemCapsNote": "HARD per-component item caps enforced by the assembler (_cap_tab_items in assembly/core.py). Deliberately INDEPENDENT of densityGates above: densityGates is advisory steering text shown to the planner LLM (what to aim for), these caps are the code backstop (what ships regardless of prompt drift) — e.g. step_player is steered to 10 but capped at 25. moment_track's cap additionally scales with video duration in code (evenly sampled, clamped 20-60).",
+  "assemblerItemCaps": {
+    "comparison": 10,
+    "moment_track": 20,
+    "info_grid": 20,
+    "flash_deck": 15,
+    "spot_explorer": 25,
+    "step_player": 25,
+    "checklist": 30,
+    "claims_tracker": 20,
+    "tier_list": 30,
+    "formation_diagram": 23
+  },
+  "domainRequirementsNote": "Per-domain assembled-output validation (_validate_domain_requirements in assembly/core.py): `required` components are backfilled from defaultTabs when the planner drops them (promotion equivalents count, e.g. comparison_radar satisfies comparison); `max` caps per-component tab counts. Every domain must have an entry — an empty `required` is a deliberate decision (music: lyrics_karaoke optional so videos without per-line timing don't fail; podcast: moment_track segments are the spine; news: claims_tracker is the signature accountability surface; gaming: tier_list; sport: formation_diagram).",
+  "domainRequirements": {
+    "food": { "required": ["step_player", "checklist"], "max": { "flash_deck": 1 } },
+    "project": { "required": ["step_player", "checklist"], "max": { "flash_deck": 1 } },
+    "review": { "required": ["comparison"], "max": { "flash_deck": 1 } },
+    "fitness": { "required": ["workout_room"], "max": { "flash_deck": 1 } },
+    "tech": { "required": ["code_playground"], "max": { "flash_deck": 1, "quiz_arena": 1 } },
+    "travel": { "required": ["spot_explorer"], "max": { "flash_deck": 1 } },
+    "music": { "required": [], "max": { "flash_deck": 1 } },
+    "learning": { "required": [], "max": { "flash_deck": 1, "quiz_arena": 1 } },
+    "language": { "required": ["spot_explorer"], "max": { "flash_deck": 1 } },
+    "science": { "required": ["spot_explorer"], "max": { "flash_deck": 1, "quiz_arena": 1 } },
+    "podcast": { "required": ["moment_track"], "max": { "flash_deck": 1, "quiz_arena": 1 } },
+    "news": { "required": ["claims_tracker"], "max": { "flash_deck": 1 } },
+    "gaming": { "required": ["tier_list"], "max": { "flash_deck": 1, "quiz_arena": 1 } },
+    "sport": { "required": ["formation_diagram"], "max": { "flash_deck": 1 } }
+  },
   "domains": {
     "learning": {
       "emoji": "📚",
