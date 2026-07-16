@@ -91,6 +91,9 @@ export interface StreamState {
   error: string | null;
   isCached: boolean;
   processingTimeMs: number | null;
+  // Partial-result flag from the summarizer terminal events: extraction
+  // dropped batches or coverage was critical. Drives the retry affordance.
+  degraded: boolean;
   // Warning state for partial failures
   warnings: string[];
   // Celebration trigger — increment to fire a new confetti burst
@@ -125,6 +128,7 @@ const initialState: StreamState = {
   error: null,
   isCached: false,
   processingTimeMs: null,
+  degraded: false,
   warnings: [],
   confettiCount: 0,
   // Pipeline output state (triage pipeline)
@@ -171,10 +175,14 @@ export function useSummaryStream({
     onErrorRef.current = onError;
   }, [onComplete, onError]);
 
-  // Save state to localStorage periodically for resumption after refresh
-  // Uses ref + interval to avoid firing on every state change during streaming
+  // Save state to localStorage periodically for resumption after refresh.
+  // Uses ref + interval to avoid firing on every state change during streaming.
+  // Written in an effect, not during render, per the react-hooks refs rule —
+  // the interval only reads it post-commit, so the value is always current.
   const stateRef = useRef(state);
-  stateRef.current = state;
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   const subscribe = useCallback((token: string) => {
     if (!videoSummaryId || !token) return;
@@ -228,6 +236,10 @@ export function useSummaryStream({
   // so it is intentionally omitted from the deps — there is no stale-closure
   // risk and exhaustive-deps does not require it.
   useEffect(() => {
+    // Audited: runs once per video navigation, not per render — no cascade.
+    // The alternative (key-remount at the page level) would tear down the
+    // shared SSE subscription registry, which must survive remounts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setState(initialState);
     cacheRestoredRef.current = false;
   }, [videoSummaryId]);
@@ -241,6 +253,9 @@ export function useSummaryStream({
         cacheRestoredRef.current = true;
         const cachedState = loadStreamCache(videoSummaryId);
         if (cachedState) {
+          // Audited: one-shot cache hydration guarded by cacheRestoredRef —
+          // fires at most once per subscribe cycle, before events stream in.
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setState((prev) => ({ ...prev, ...cachedState }));
         }
       }

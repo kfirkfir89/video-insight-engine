@@ -44,12 +44,23 @@ export const ChecklistInteractive = memo(function ChecklistInteractive({
 }: ChecklistInteractiveProps) {
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [servings, setServings] = useState(baseServings);
+  // Screen-reader announcement for toggle feedback — progress is otherwise
+  // conveyed only by the color-coded bar and strikethrough styling.
+  const [liveMessage, setLiveMessage] = useState('');
   const tabState = useTabState();
   const tabCoord = useTabCoordination();
 
   const multiplier = baseServings > 0 ? servings / baseServings : 1;
 
   const toggle = useCallback((index: number) => {
+    const willCheck = !checked.has(index);
+    const nextCount = checked.size + (willCheck ? 1 : -1);
+    const label = items[index]?.label ?? 'Item';
+    setLiveMessage(
+      willCheck && nextCount === items.length
+        ? `${label} checked. All ${items.length} items complete.`
+        : `${label} ${willCheck ? 'checked' : 'unchecked'}. ${nextCount} of ${items.length} complete.`,
+    );
     setChecked((prev) => {
       const next = new Set(prev);
       if (next.has(index)) {
@@ -65,7 +76,7 @@ export const ChecklistInteractive = memo(function ChecklistInteractive({
       }
       return next;
     });
-  }, [tabState, tabId, items.length, tabCoord]);
+  }, [checked, items, tabState, tabId, tabCoord]);
 
   const progress = useMemo(
     () => (items.length > 0 ? Math.round((checked.size / items.length) * 100) : 0),
@@ -100,6 +111,11 @@ export const ChecklistInteractive = memo(function ChecklistInteractive({
 
   return (
     <GlassCard className="space-y-4">
+      {/* Screen-reader toggle feedback */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {liveMessage}
+      </div>
+
       {/* Progress bar with dynamic color: red → amber → green */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-xs text-muted-foreground">

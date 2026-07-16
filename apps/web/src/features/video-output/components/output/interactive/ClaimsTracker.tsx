@@ -72,7 +72,7 @@ export const ClaimsTracker = memo(function ClaimsTracker({ claims, onSeek }: Cla
               className={cn(
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                 active
-                  ? 'border-primary bg-primary/10 text-primary'
+                  ? 'border-[var(--vie-accent)] bg-[var(--vie-accent)]/10 text-[var(--vie-accent)]'
                   : 'border-border text-muted-foreground hover:bg-muted/40',
               )}
             >
@@ -109,7 +109,7 @@ export const ClaimsTracker = memo(function ClaimsTracker({ claims, onSeek }: Cla
                       <button
                         type="button"
                         onClick={() => onSeek(claim.timestamp as number)}
-                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-primary hover:bg-primary/10"
+                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-[var(--vie-accent)] hover:bg-[var(--vie-accent)]/10"
                         aria-label={`Jump to ${formatTimestamp(claim.timestamp)}`}
                       >
                         <Clock className="size-3 shrink-0" aria-hidden="true" />

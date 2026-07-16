@@ -12,6 +12,7 @@ import {
   validatePhaseEvent,
 } from "@/features/video-output/lib/streaming/sse-validators";
 import { getUserFriendlyError } from "@/features/video-output/lib/streaming/stream-error-messages";
+import { validateTabProps } from "@/features/video-output/lib/tab-prop-schemas";
 import type { StreamState, FrameInfo } from "@/features/video-output/hooks/use-summary-stream";
 import type { ContentTag, TabDefinition, TabEntry, VIEResponseMeta, EnrichmentData, QuizQuestion, Flashcard, CodeCheatSheetItem, ScenarioItem, Modifier } from "@vie/types";
 
@@ -145,11 +146,13 @@ function handleSynthesisComplete(event: Record<string, unknown>, setState: SetSt
 }
 
 function handleDoneEvent(event: Record<string, unknown>, setState: SetState): void {
-  const processingTimeMs = validateDoneEvent(event);
+  const { processingTimeMs, degraded } = validateDoneEvent(event);
   setState((prev) => ({
     ...prev,
     phase: "done",
     processingTimeMs,
+    // Sticky: `complete` may have flagged the run already; done never unflags.
+    degraded: prev.degraded || degraded,
     confettiCount: prev.isCached ? prev.confettiCount : prev.confettiCount + 1,
   }));
 }
@@ -175,6 +178,7 @@ function handleMetaEvent(event: Record<string, unknown>, setState: SetState): vo
     userGoal: typeof event.userGoal === "string" ? event.userGoal : "",
     language: typeof event.language === "string" ? event.language : undefined,
     isRTL: typeof event.isRTL === "boolean" ? event.isRTL : undefined,
+    degraded: event.degraded === true ? true : undefined,
   };
   const tabCount = typeof event.tabCount === "number" ? event.tabCount : 0;
   const tabLabels = Array.isArray(event.tabLabels)
@@ -185,18 +189,27 @@ function handleMetaEvent(event: Record<string, unknown>, setState: SetState): vo
 
 /** Strip React-specific dangerous keys from SSE props to prevent injection. */
 function sanitizeTabProps(raw: Record<string, unknown>): Record<string, unknown> {
-  const { dangerouslySetInnerHTML, __html, ...safe } = raw;
+  const safe = { ...raw };
+  delete safe.dangerouslySetInnerHTML;
+  delete safe.__html;
   return safe;
 }
 
+// Streamed tabs are validated per-event here (project-score-9 4.4); the same
+// shared gate re-runs over the merged tab list in ComposableOutput so cached
+// DB tabs converge on one contract. See validateTabProps in tab-prop-schemas.
 function handleTabReady(event: Record<string, unknown>, setState: SetState): void {
   const rawProps = (typeof event.props === "object" && event.props !== null) ? event.props as Record<string, unknown> : {};
+  const validated = validateTabProps(
+    typeof event.component === "string" ? event.component : "",
+    sanitizeTabProps(rawProps),
+  );
   const tab: TabEntry = {
     id: typeof event.id === "string" ? event.id : "",
     label: typeof event.label === "string" ? event.label : "",
     emoji: typeof event.emoji === "string" ? event.emoji : "",
-    component: typeof event.component === "string" ? event.component : "",
-    props: sanitizeTabProps(rawProps),
+    component: validated.component,
+    props: validated.props,
     crossTabLinks: Array.isArray(event.crossTabLinks)
       ? event.crossTabLinks.filter(isValidCrossTabLink)
       : undefined,
@@ -214,7 +227,8 @@ function handleTabReady(event: Record<string, unknown>, setState: SetState): voi
 
 function handleCompleteEvent(event: Record<string, unknown>, setState: SetState): void {
   const processingTimeMs = typeof event.processingTimeMs === "number" ? event.processingTimeMs : null;
-  setState((prev) => ({ ...prev, processingTimeMs }));
+  const degraded = event.degraded === true;
+  setState((prev) => ({ ...prev, processingTimeMs, degraded: prev.degraded || degraded }));
 }
 
 function handleFramesEvent(event: Record<string, unknown>, setState: SetState): void {

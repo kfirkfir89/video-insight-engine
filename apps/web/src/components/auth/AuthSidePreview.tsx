@@ -85,8 +85,10 @@ export const AuthSidePreview = memo(function AuthSidePreview() {
         })}
       </div>
 
-      {/* Quiet proof strip — tabular-num chips, monospace label. */}
-      <ul className="flex gap-x-5 text-[0.6875rem] font-mono uppercase tracking-[0.14em] text-muted-foreground/70 pt-1">
+      {/* Quiet proof strip — tabular-num chips, monospace label.
+          Full-strength muted-foreground: the /70 alpha variant fails WCAG AA
+          4.5:1 contrast at this 11px size (axe color-contrast). */}
+      <ul className="flex gap-x-5 text-[0.6875rem] font-mono uppercase tracking-[0.14em] text-muted-foreground pt-1">
         <li className="tabular-nums">10 domains</li>
         <li aria-hidden="true" className="opacity-30">·</li>
         <li className="tabular-nums">~40s first tab</li>

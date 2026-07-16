@@ -84,7 +84,7 @@ export const VideoFilmstrip = memo(function VideoFilmstrip({
                 'aspect-video transition-[transform,box-shadow,border-color] duration-200 ease-[var(--ease-out-expo)]',
                 'hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0',
                 isActive
-                  ? 'border-primary ring-2 ring-primary/60 shadow-[0_0_20px_-4px_var(--primary)]'
+                  ? 'border-[var(--vie-accent)] ring-2 ring-[var(--vie-accent)]/60 shadow-[0_0_20px_-4px_var(--vie-accent)]'
                   : 'border-border/40 hover:border-border',
               )}
             >

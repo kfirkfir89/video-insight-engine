@@ -38,7 +38,10 @@ export const Sidebar = memo(function Sidebar() {
   const {
     messages: chatMessages,
     status: chatStatus,
+    pendingConfirmation,
     sendMessage: handleSendMessage,
+    confirmPendingAction: handleConfirmAction,
+    cancelPendingAction: handleCancelAction,
     clearMessages: handleNewChat,
   } = useSidebarChat({ videoSummaryId: activeVideoId ?? undefined });
 
@@ -115,6 +118,10 @@ export const Sidebar = memo(function Sidebar() {
             onSendMessage={handleSendMessage}
             onNewChat={handleNewChat}
             scope={activeVideoId ? "video" : "library"}
+            pendingAction={pendingConfirmation !== null}
+            pendingSummary={pendingConfirmation?.summary}
+            onConfirmAction={handleConfirmAction}
+            onCancelAction={handleCancelAction}
           />
         ) : (
           <DndProvider>

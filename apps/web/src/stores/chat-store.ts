@@ -22,13 +22,24 @@ export interface ChatMessage {
 
 export type ChatStatus = "idle" | "pending" | "streaming" | "error";
 
+/** A destructive/costly assistant action parked server-side until the user
+ * confirms it. `token` is the single-use confirmation token echoed back on
+ * confirm; deliberately NOT persisted — it expires server-side in minutes. */
+export interface PendingConfirmation {
+  token: string;
+  action: string;
+  summary: string;
+}
+
 interface ChatState {
   messages: ChatMessage[];
   status: ChatStatus;
+  pendingConfirmation: PendingConfirmation | null;
   setMessages: (
     updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[]),
   ) => void;
   setStatus: (status: ChatStatus) => void;
+  setPendingConfirmation: (pending: PendingConfirmation | null) => void;
   clearMessages: () => void;
 }
 
@@ -37,6 +48,7 @@ export const useChatStore = create<ChatState>()(
     (set) => ({
       messages: [],
       status: "idle",
+      pendingConfirmation: null,
       setMessages: (updater) => {
         set((state) => ({
           messages:
@@ -46,8 +58,11 @@ export const useChatStore = create<ChatState>()(
       setStatus: (status) => {
         set({ status });
       },
+      setPendingConfirmation: (pending) => {
+        set({ pendingConfirmation: pending });
+      },
       clearMessages: () => {
-        set({ messages: [], status: "idle" });
+        set({ messages: [], status: "idle", pendingConfirmation: null });
       },
     }),
     {

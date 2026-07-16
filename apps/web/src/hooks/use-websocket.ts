@@ -120,7 +120,9 @@ export function useWebSocket() {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     setConnectionState("connecting");
-    const ws = new WebSocket(`${WS_URL}/ws?token=${token}`);
+    // Token travels in the Sec-WebSocket-Protocol header (not the query string,
+    // which leaks into access logs). Server validates it and selects "vie-auth".
+    const ws = new WebSocket(`${WS_URL}/ws`, ["vie-auth", token]);
 
     ws.onopen = () => {
       debugLog("Connected");

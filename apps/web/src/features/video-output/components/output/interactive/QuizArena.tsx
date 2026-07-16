@@ -60,24 +60,20 @@ const DEFAULT_TIMER_SECONDS = 10;
 interface CountdownRingProps {
   seconds: number;
   active: boolean;
-  resetKey: number;
   onExpire: () => void;
 }
 
+// Reset-per-question happens via `key={currentIndex}` at the call site: a new
+// question remounts the ring, re-seeding `remaining` and the expired latch —
+// no reset effect needed (react-hooks: avoid setState-in-effect resets).
 const CountdownRing = memo(function CountdownRing({
   seconds,
   active,
-  resetKey,
   onExpire,
 }: CountdownRingProps) {
   const reducedMotion = usePrefersReducedMotion();
   const [remaining, setRemaining] = useState(seconds);
   const expiredRef = useRef(false);
-
-  useEffect(() => {
-    setRemaining(seconds);
-    expiredRef.current = false;
-  }, [resetKey, seconds]);
 
   useEffect(() => {
     if (!active) return;
@@ -108,7 +104,7 @@ const CountdownRing = memo(function CountdownRing({
       style={{
         background: reducedMotion
           ? 'transparent'
-          : `conic-gradient(${isUrgent ? 'var(--destructive)' : 'var(--primary)'} ${deg}deg, oklch(from var(--muted) l c h / 0.4) 0deg)`,
+          : `conic-gradient(${isUrgent ? 'var(--destructive)' : 'var(--vie-accent)'} ${deg}deg, oklch(from var(--muted) l c h / 0.4) 0deg)`,
       }}
     >
       <span
@@ -130,7 +126,6 @@ const CountdownRing = memo(function CountdownRing({
  */
 export const QuizArena = memo(function QuizArena({
   questions,
-  tabId: _tabId = 'quizzes',
   nextTab,
   onNavigateTab,
   videoId,
@@ -147,6 +142,11 @@ export const QuizArena = memo(function QuizArena({
   const [maxStreak, setMaxStreak] = useState(0);
   const [pulseStreak, setPulseStreak] = useState(false);
   const [bestScore, setBestScore] = useState<number | null>(null);
+  // Screen-reader announcement for answer feedback — the visual feedback
+  // (option colors, shake, streak pulse) is otherwise not perceivable
+  // non-visually. Set only from answer events so revisiting an answered
+  // question never re-announces.
+  const [liveMessage, setLiveMessage] = useState('');
   const shakeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pulseTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -181,7 +181,10 @@ export const QuizArena = memo(function QuizArena({
         next.set(currentIndex, optionIndex);
         return next;
       });
+      const question = questions[currentIndex];
+      const correctText = question?.options[question.correctIndex] ?? '';
       if (isCorrect) {
+        setLiveMessage('Correct!');
         setStreak((prev) => {
           const nextStreak = prev + 1;
           setMaxStreak((m) => Math.max(m, nextStreak));
@@ -191,13 +194,18 @@ export const QuizArena = memo(function QuizArena({
         if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
         pulseTimerRef.current = setTimeout(() => setPulseStreak(false), 400);
       } else {
+        setLiveMessage(
+          optionIndex === -1
+            ? `Time is up. The correct answer is ${correctText}.`
+            : `Incorrect. The correct answer is ${correctText}.`,
+        );
         setStreak(0);
         setShaking(true);
         if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current);
         shakeTimerRef.current = setTimeout(() => setShaking(false), 400);
       }
     },
-    [answers, currentIndex],
+    [answers, currentIndex, questions],
   );
 
   const handleSelect = useCallback(
@@ -262,6 +270,7 @@ export const QuizArena = memo(function QuizArena({
     setMaxStreak(0);
     setShaking(false);
     setPulseStreak(false);
+    setLiveMessage('');
   }, []);
 
   if (questions.length === 0)
@@ -275,6 +284,11 @@ export const QuizArena = memo(function QuizArena({
 
   return (
     <GlassCard variant="elevated" className="space-y-4">
+      {/* Screen-reader answer feedback */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {liveMessage}
+      </div>
+
       {/* Header: progress + streak + timer */}
       <div className="flex items-center justify-between gap-2">
         <div className="inline-flex items-center gap-1.5">
@@ -307,9 +321,9 @@ export const QuizArena = memo(function QuizArena({
           {answers.size > 0 && <InlineScore correct={score} total={answers.size} />}
           {withTimer && (
             <CountdownRing
+              key={currentIndex}
               seconds={timerSeconds}
               active={timerActive}
-              resetKey={currentIndex}
               onExpire={handleTimerExpire}
             />
           )}

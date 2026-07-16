@@ -10,6 +10,7 @@ import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { Loader2, ArrowLeft, RefreshCw, AlertCircle, PauseCircle } from "lucide-react";
 import { OutputRouter } from "@/features/video-output/components/OutputRouter";
 import { LanguageToggle } from "@/features/video-output/components/LanguageToggle";
+import { DegradedNotice } from "@/features/video-output/components/DegradedNotice";
 import { VideoPlayerProvider } from "@/features/video-output/contexts/VideoPlayerContext";
 
 import { Confetti } from "@/components/ui/Confetti";
@@ -88,6 +89,7 @@ export function VideoDetailPage() {
     phase,
     extractionProgress,
     confettiCount,
+    degraded: streamDegraded,
     stop: stopStream,
   } = useSummaryStream({
     videoSummaryId,
@@ -339,6 +341,12 @@ export function VideoDetailPage() {
     phase !== "cancelled" &&
     phase !== "error";
 
+  // Partial result (project-score-9 3.6): the summarizer flags degraded runs
+  // (dropped extraction batches / critical coverage) on the SSE terminal
+  // events and on meta.degraded of persisted docs. Either source shows the
+  // retry affordance once streaming has settled.
+  const isDegraded = streamDegraded || resolvedMeta?.degraded === true;
+
   // User cancelled in this tab but the backend pipeline is still running.
   // Surface an explicit Resume control instead of silently re-attaching to
   // the SSE feed — that would make Cancel feel decorative.
@@ -402,6 +410,12 @@ export function VideoDetailPage() {
     <ErrorBoundary key={id} fallback={errorFallback}>
       <VideoPlayerProvider>
         <Layout>
+          {isDegraded && !isStreaming && (
+            <DegradedNotice
+              onRetry={handleRetry}
+              retrying={retryVideo.isPending}
+            />
+          )}
           <OutputRouter
             title={resolvedMeta?.videoTitle || mergedVideo.title}
             videoSummaryId={videoSummaryId}

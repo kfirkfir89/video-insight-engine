@@ -42,6 +42,10 @@ interface RAGChatPanelProps {
    * confirm prompt itself is rendered as a normal assistant message; this flag
    * surfaces the Confirm/Cancel buttons that resolve it. */
   pendingAction?: boolean;
+  /** Server-provided one-line description of the parked destructive/costly
+   * action (e.g. "Delete this folder AND every video inside it"), shown above
+   * the Confirm/Cancel buttons so the user knows exactly what they approve. */
+  pendingSummary?: string;
   onConfirmAction?: () => void;
   onCancelAction?: () => void;
   /** Clears the conversation and starts a fresh chat. Disabled when empty. */
@@ -212,6 +216,7 @@ export const RAGChatPanel = memo(function RAGChatPanel({
   placeholder,
   className,
   pendingAction = false,
+  pendingSummary,
   onConfirmAction,
   onCancelAction,
   onNewChat,
@@ -356,19 +361,29 @@ export const RAGChatPanel = memo(function RAGChatPanel({
         <div
           role="group"
           aria-label={labels.actionConfirmPrompt.replace('{action}', '')}
-          className="flex gap-2 px-4 py-3 border-t"
+          className="px-4 py-3 border-t space-y-2"
         >
-          <Button type="button" size="sm" onClick={onConfirmAction}>
-            {labels.actionConfirm}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={onCancelAction}
-          >
-            {labels.actionCancel}
-          </Button>
+          {pendingSummary && (
+            <p
+              data-slot="pending-summary"
+              className="text-xs text-muted-foreground"
+            >
+              {pendingSummary}
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Button type="button" size="sm" onClick={onConfirmAction}>
+              {labels.actionConfirm}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={onCancelAction}
+            >
+              {labels.actionCancel}
+            </Button>
+          </div>
         </div>
       )}
 

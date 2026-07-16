@@ -75,7 +75,9 @@ export function DesignSystemPage() {
 
       <div className="container py-8 px-4 sm:px-6 lg:px-8">
         {/* Tab Navigation */}
-        <nav className="mb-8 flex gap-1 rounded-lg border border-border/40 bg-muted/30 p-1 w-fit max-w-full overflow-x-auto" aria-label="Design system sections">
+        {/* role="tablist": the children carry role="tab", which ARIA requires
+            to live inside a tablist (axe aria-required-parent). */}
+        <nav className="mb-8 flex gap-1 rounded-lg border border-border/40 bg-muted/30 p-1 w-fit max-w-full overflow-x-auto" aria-label="Design system sections" role="tablist">
           {sections.map((section) => (
             <button
               key={section.id}

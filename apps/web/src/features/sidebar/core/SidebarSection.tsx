@@ -8,6 +8,7 @@ import { UnassignedVideosList } from "../videos/UnassignedVideosList";
 import { VideoItem } from "../videos/VideoItem";
 import { useFolders } from "@/hooks/use-folders";
 import { useAllVideos } from "@/hooks/use-videos";
+import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore, useSelectionMode, useActiveSection } from "@/stores/ui-store";
 import { buildFolderTree, sortVideos, filterBySearch } from "@/features/sidebar/lib/folder-utils";
 import { SIDEBAR_SELECTION } from "@/features/sidebar/lib/layout-constants";
@@ -29,9 +30,12 @@ export function SidebarSection() {
   const selectionMode = useSelectionMode();
   const exitSelectionMode = useUIStore((s) => s.exitSelectionMode);
 
-  // Data fetching
-  const { data: foldersData, isLoading: foldersLoading } = useFolders();
-  const { data: videosData, isLoading: videosLoading } = useAllVideos();
+  // Data fetching — gated on auth like CommandPalette/GeneratePage. An
+  // unauthenticated mount must not fire /videos + /folders requests that
+  // 401/CORS-error in the console (root cause of the rtl.spec.ts failure).
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { data: foldersData, isLoading: foldersLoading } = useFolders({ enabled: isAuthenticated });
+  const { data: videosData, isLoading: videosLoading } = useAllVideos({ enabled: isAuthenticated });
 
   const folders = foldersData?.folders ?? [];
   const allVideos = videosData?.videos ?? [];

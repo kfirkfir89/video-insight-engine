@@ -15,6 +15,7 @@
 import { refreshToken, getAccessToken } from "@/api/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { sseLogger } from "@/features/video-output/lib/streaming/sse-logger";
+import { incrementTelemetryCounter } from "@/features/video-output/lib/telemetry";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 
@@ -76,6 +77,9 @@ async function readSSE(
         const event = JSON.parse(data) as StreamEvent;
         broadcast(entry, event);
       } catch (err) {
+        // Counter is prod-visible (window.__vieTelemetry) even though the log
+        // line stays dev-only — malformed SSE frames must be observable in prod.
+        incrementTelemetryCounter("sse_parse_failed");
         if (import.meta.env.DEV) {
           sseLogger.warn("Failed to parse SSE event:", err instanceof Error ? err.message : String(err));
         }

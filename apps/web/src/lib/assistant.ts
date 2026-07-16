@@ -9,6 +9,10 @@ export interface AssistantChatMessage {
 export interface AssistantSource {
   text: string;
   timestamp?: string;
+  /** Numeric position in seconds — null on v1-legacy Qdrant points that predate
+   * timestamped payloads (schema_version 2); drives seek/deep-link buttons. */
+  timestamp_seconds?: number | null;
+  end_seconds?: number | null;
   score: number;
   chunk_index: number;
   /** YouTube id of the source video. Present in library (cross-video) mode so
@@ -42,9 +46,11 @@ export async function sendAssistantMessage(
   conversationHistory: AssistantChatMessage[],
   onEvent: (event: AssistantChatEvent) => void,
   signal?: AbortSignal,
+  confirmToken?: string,
 ): Promise<void> {
   await streamAssistantChat(
-    (token) => fetchAssistantStream(videoSummaryId, message, conversationHistory, token, signal),
+    (token) =>
+      fetchAssistantStream(videoSummaryId, message, conversationHistory, token, signal, confirmToken),
     onEvent,
   );
 }
@@ -61,9 +67,10 @@ export async function sendLibraryMessage(
   conversationHistory: AssistantChatMessage[],
   onEvent: (event: AssistantChatEvent) => void,
   signal?: AbortSignal,
+  confirmToken?: string,
 ): Promise<void> {
   await streamAssistantChat(
-    (token) => fetchLibraryStream(message, conversationHistory, token, signal),
+    (token) => fetchLibraryStream(message, conversationHistory, token, signal, confirmToken),
     onEvent,
   );
 }
@@ -109,6 +116,7 @@ function fetchAssistantStream(
   conversationHistory: AssistantChatMessage[],
   token: string | null,
   signal?: AbortSignal,
+  confirmToken?: string,
 ): Promise<Response> {
   return fetch(`${API_URL}/videos/${videoSummaryId}/chat`, {
     method: "POST",
@@ -123,6 +131,9 @@ function fetchAssistantStream(
         role: m.role,
         content: m.content,
       })),
+      // Echoed from a `pending_confirmation` event so the assistant runs the
+      // parked destructive/costly action. Omitted entirely when absent.
+      ...(confirmToken ? { confirmToken } : {}),
     }),
     signal,
   });
@@ -134,6 +145,7 @@ function fetchLibraryStream(
   conversationHistory: AssistantChatMessage[],
   token: string | null,
   signal?: AbortSignal,
+  confirmToken?: string,
 ): Promise<Response> {
   return fetch(`${API_URL}/assistant/library/chat`, {
     method: "POST",
@@ -148,6 +160,9 @@ function fetchLibraryStream(
         role: m.role,
         content: m.content,
       })),
+      // Echoed from a `pending_confirmation` event so the assistant runs the
+      // parked destructive/costly action. Omitted entirely when absent.
+      ...(confirmToken ? { confirmToken } : {}),
     }),
     signal,
   });

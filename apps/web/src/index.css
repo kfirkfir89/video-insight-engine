@@ -1056,6 +1056,32 @@
     transform: translateY(0);
   }
 
+  /* Watch / close control — the VideoHero's single video action, rendered as
+     bare line-art: no tile, no ring, no fill, just the stroked play arrow that
+     morphs into a close mark (see PlayCloseGlyph). The strokes carry all the
+     weight, so they rest in foreground ink and lift into the domain --vie-accent
+     on hover and while the player is open. Output surface, so it tracks the
+     domain accent, never the global cta. The button itself is an oversized
+     invisible hit target; only the glyph is seen. */
+  .play-control {
+    color: oklch(from var(--foreground) l c h / 0.9);
+    transition:
+      color 200ms var(--ease-out-expo),
+      transform 220ms var(--ease-out-expo);
+  }
+  .play-control:hover {
+    color: var(--vie-accent);
+    transform: scale(1.08);
+  }
+  /* Open (player showing) is a held-on state, so the accent stays lit without
+     needing hover — the glyph has already morphed to the close mark. */
+  .play-control[aria-expanded='true'] {
+    color: var(--vie-accent);
+  }
+  .play-control:active {
+    transform: scale(0.94);
+  }
+
   /* Subtle icon float — use on hero icons that invite first action.
      3s cycle, 3px vertical travel, respects reduced-motion. */
   @keyframes icon-hover-float {

@@ -1,26 +1,29 @@
 import type { ReactNode } from 'react';
-import type { TabEntry, StepItem, FitnessExercise, SpotItem, ConceptItem, TechSnippet, FlashcardItem, QuizArenaQuestion } from '@vie/types';
 import { RecipeIngredientPanel } from './RecipeIngredientPanel';
-import { RecipeStepView } from './RecipeStepView';
 import { FlowContextPanel } from './FlowContextPanel';
-import type { FlowStepRenderArgs } from './FlowPlayer';
+import {
+  findComponent,
+  stripCountPrefix,
+  makeStepRenderer,
+  exercisesToSteps,
+  questionsToSteps,
+  spotsToSteps,
+  checklistContext,
+  type FlowContextItem,
+  type FlowStepRenderer,
+} from './flow-mode-helpers';
+import type { TabEntry, StepItem, FitnessExercise, SpotItem, ConceptItem, TechSnippet, FlashcardItem, QuizArenaQuestion } from '@vie/types';
 
-/** A context-panel entry — a checkable orientation item (ingredient, material,
- *  vocabulary word, packing item, …). Mirrors the cooking ingredient shape so
- *  the cooking path stays byte-for-byte identical. */
-export interface FlowContextItem {
-  label: string;
-  note?: string;
-  emoji?: string;
-  amount?: number;
-  displayAmount?: string;
-  unit?: string;
-  essential?: boolean;
-  group?: string;
-}
+// Re-exported so FlowContextPanel / ModesShowcase keep their import path
+// after the helper extraction (4.4 follow-up, 500-line rule).
+export type { FlowContextItem } from './flow-mode-helpers';
 
 /** A fully-resolved enter-mode ready for FlowPlayer. `renderContext` and
- *  `renderStep` are produced per detected mode so FlowPlayer stays generic. */
+ *  `renderStep` are produced per detected mode so FlowPlayer stays generic.
+ *
+ *  Tabs reaching detect/resolve are schema-validated at the ComposableOutput
+ *  boundary (tab-prop-schemas.ts), so prop reads below use typed casts —
+ *  the old private asArray coercion was deleted with the 4.4 follow-up. */
 export interface ResolvedFlowMode {
   id: string;
   label: string;
@@ -31,7 +34,7 @@ export interface ResolvedFlowMode {
   contextCount: number;
   sequenceLength: number;
   renderContext: () => ReactNode;
-  renderStep: (args: FlowStepRenderArgs, onSeek?: (s: number) => void) => ReactNode;
+  renderStep: FlowStepRenderer;
 }
 
 interface FlowModeDef {
@@ -44,87 +47,6 @@ interface FlowModeDef {
   /** True when this mode's required tabs/props are present. */
   detect: (tabs: TabEntry[], primaryTag?: string) => boolean;
   resolve: (tabs: TabEntry[]) => ResolvedFlowMode | null;
-}
-
-// ─── Helpers ───
-
-function findComponent(tabs: TabEntry[], component: string): TabEntry | undefined {
-  return tabs.find((t) => t.component === component);
-}
-
-function asArray<T>(val: unknown): T[] {
-  return Array.isArray(val) ? (val as T[]) : [];
-}
-
-/** Strip an assembler-produced count prefix ("8 Steps" → "Steps"). Mirrors the
- *  helper in ComposableOutput so context labels read cleanly. */
-function stripCountPrefix(label: string): string {
-  return label.replace(/^\d+\s+(?=\p{L})/u, '');
-}
-
-/** Build a RecipeStepView-backed step renderer from a StepItem list. Every
- *  step-based mode (cooking, build, workout, practice, explore) shares this so
- *  the run pane behaves identically across domains. */
-function makeStepRenderer(
-  steps: StepItem[],
-  contextItems?: Array<{ label: string }>,
-): ResolvedFlowMode['renderStep'] {
-  return (args, onSeek) => (
-    <RecipeStepView
-      steps={steps}
-      currentStep={args.currentStep}
-      onStepChange={args.onStepChange}
-      onComplete={args.onComplete}
-      onSeek={onSeek}
-      ingredients={contextItems}
-    />
-  );
-}
-
-/** Normalize an exercise list into ordered StepItems for the run pane. */
-function exercisesToSteps(exercises: FitnessExercise[]): StepItem[] {
-  return exercises.map((ex, i) => {
-    const reps = ex.sets && ex.reps ? `${ex.sets} × ${ex.reps}` : ex.reps;
-    const instruction = [reps, ex.formCues?.join('. ')].filter(Boolean).join(' — ');
-    return {
-      number: i + 1,
-      title: `${ex.emoji ? `${ex.emoji} ` : ''}${ex.name}`,
-      instruction: instruction || ex.name,
-      duration: ex.duration,
-      tips: ex.formCues?.length ? ex.formCues.join(' · ') : undefined,
-      timestamp: ex.timestamp,
-    };
-  });
-}
-
-/** Normalize quiz questions into a study run sequence (reveal-the-answer). */
-function questionsToSteps(questions: QuizArenaQuestion[]): StepItem[] {
-  return questions.map((q, i) => {
-    const answer = q.options?.[q.correctIndex];
-    return {
-      number: i + 1,
-      title: q.question,
-      instruction: answer ? `Answer: ${answer}` : 'Recall the answer, then mark done.',
-      tips: q.explanation || undefined,
-      timestamp: q.timestamp,
-    };
-  });
-}
-
-/** Normalize travel spots into a day-by-day explore sequence. */
-function spotsToSteps(spots: SpotItem[]): StepItem[] {
-  return spots.map((s, i) => ({
-    number: i + 1,
-    title: `${s.emoji ? `${s.emoji} ` : ''}${s.name}`,
-    instruction: s.description,
-    duration: s.duration,
-    tips: s.tips || undefined,
-  }));
-}
-
-/** Pull a checklist tab's items into context items. */
-function checklistContext(tab: TabEntry | undefined): FlowContextItem[] {
-  return asArray<FlowContextItem>(tab?.props?.items);
 }
 
 // ─── Mode definitions ───
@@ -155,7 +77,7 @@ const COOKING: FlowModeDef = {
     const checklistTab = findComponent(tabs, 'checklist');
     const stepTab = findComponent(tabs, 'step_player');
     const ingredients = checklistContext(checklistTab);
-    const steps = asArray<StepItem>(stepTab?.props?.steps);
+    const steps = (stepTab?.props?.steps as StepItem[] | undefined) ?? [];
     if (ingredients.length === 0 || steps.length === 0) return null;
     const tabLabel = stripCountPrefix(checklistTab?.label ?? '') || 'Ingredients';
     const scalable = typeof checklistTab?.props?.scalable === 'boolean' ? checklistTab.props.scalable : undefined;
@@ -200,10 +122,10 @@ const WORKOUT: FlowModeDef = {
   },
   resolve: (tabs) => {
     const room = findComponent(tabs, 'workout_room');
-    const exercises = asArray<FitnessExercise>(room?.props?.exercises);
+    const exercises = (room?.props?.exercises as FitnessExercise[] | undefined) ?? [];
     if (exercises.length === 0) return null;
-    const warmup = asArray<FitnessExercise>(room?.props?.warmup);
-    const cooldown = asArray<FitnessExercise>(room?.props?.cooldown);
+    const warmup = (room?.props?.warmup as FitnessExercise[] | undefined) ?? [];
+    const cooldown = (room?.props?.cooldown as FitnessExercise[] | undefined) ?? [];
     const context: FlowContextItem[] = [
       ...warmup.map((e) => ({ label: e.name, emoji: e.emoji, note: e.duration, group: 'Warmup' })),
       ...cooldown.map((e) => ({ label: e.name, emoji: e.emoji, note: e.duration, group: 'Cooldown' })),
@@ -245,12 +167,12 @@ const BUILD: FlowModeDef = {
   },
   resolve: (tabs) => {
     const stepTab = findComponent(tabs, 'step_player');
-    const steps = asArray<StepItem>(stepTab?.props?.steps);
+    const steps = (stepTab?.props?.steps as StepItem[] | undefined) ?? [];
     if (steps.length === 0) return null;
     const checklistTab = findComponent(tabs, 'checklist');
     const materials = checklistContext(checklistTab);
     const codeTab = findComponent(tabs, 'code_playground');
-    const snippets = asArray<TechSnippet>(codeTab?.props?.snippets);
+    const snippets = (codeTab?.props?.snippets as TechSnippet[] | undefined) ?? [];
     const context: FlowContextItem[] = [
       ...materials,
       ...snippets.map((s) => ({ label: s.filename || `${s.language} snippet`, note: s.explanation, group: 'Code' })),
@@ -294,12 +216,12 @@ const STUDY: FlowModeDef = {
   },
   resolve: (tabs) => {
     const quizTab = findComponent(tabs, 'quiz_arena');
-    const questions = asArray<QuizArenaQuestion>(quizTab?.props?.questions);
+    const questions = (quizTab?.props?.questions as QuizArenaQuestion[] | undefined) ?? [];
     if (questions.length === 0) return null;
     const conceptTab = findComponent(tabs, 'concept_canvas');
     const flashTab = findComponent(tabs, 'flash_deck');
-    const concepts = asArray<ConceptItem>(conceptTab?.props?.concepts);
-    const cards = asArray<FlashcardItem>(flashTab?.props?.cards);
+    const concepts = (conceptTab?.props?.concepts as ConceptItem[] | undefined) ?? [];
+    const cards = (flashTab?.props?.cards as FlashcardItem[] | undefined) ?? [];
     const context: FlowContextItem[] = concepts.length > 0
       ? concepts.map((c) => ({ label: c.name, emoji: c.emoji, note: c.definition }))
       : cards.map((c) => ({ label: c.front, note: c.back }));
@@ -338,12 +260,12 @@ const EXPLORE: FlowModeDef = {
   },
   resolve: (tabs) => {
     const spotTab = findComponent(tabs, 'spot_explorer');
-    const spots = asArray<SpotItem>(spotTab?.props?.spots);
+    const spots = (spotTab?.props?.spots as SpotItem[] | undefined) ?? [];
     if (spots.length === 0) return null;
     const packingTab = findComponent(tabs, 'packing_mission') ?? findComponent(tabs, 'checklist');
     const budgetTab = findComponent(tabs, 'budget');
-    const packing = asArray<{ item?: string; label?: string; emoji?: string }>(packingTab?.props?.items);
-    const breakdown = asArray<{ label?: string; amount?: number }>(budgetTab?.props?.breakdown);
+    const packing = (packingTab?.props?.items as { item?: string; label?: string; emoji?: string }[] | undefined) ?? [];
+    const breakdown = (budgetTab?.props?.breakdown as { label?: string; amount?: number }[] | undefined) ?? [];
     const context: FlowContextItem[] = [
       ...packing.map((p) => ({ label: p.item ?? p.label ?? '', emoji: p.emoji, group: 'Packing' })).filter((p) => p.label),
       ...breakdown.map((b) => ({ label: b.label ?? '', note: b.amount != null ? String(b.amount) : undefined, group: 'Budget' })).filter((b) => b.label),
@@ -385,13 +307,13 @@ const PRACTICE: FlowModeDef = {
   },
   resolve: (tabs) => {
     const drillTab = findComponent(tabs, 'step_player');
-    const steps = asArray<StepItem>(drillTab?.props?.steps);
+    const steps = (drillTab?.props?.steps as StepItem[] | undefined) ?? [];
     if (steps.length === 0) return null;
     // Vocabulary/phrases live in a flash_deck, spot_explorer, or info_grid tab.
     const flashTab = findComponent(tabs, 'flash_deck');
     const gridTab = findComponent(tabs, 'info_grid');
-    const cards = asArray<FlashcardItem>(flashTab?.props?.cards);
-    const gridItems = asArray<{ key?: string; value?: string }>(gridTab?.props?.items);
+    const cards = (flashTab?.props?.cards as FlashcardItem[] | undefined) ?? [];
+    const gridItems = (gridTab?.props?.items as { key?: string; value?: string }[] | undefined) ?? [];
     const context: FlowContextItem[] = cards.length > 0
       ? cards.map((c) => ({ label: c.front, note: c.back }))
       : gridItems.map((g) => ({ label: g.key ?? '', note: g.value })).filter((g) => g.label);
@@ -433,9 +355,8 @@ const LISTEN: FlowModeDef = {
   },
   resolve: (tabs) => {
     const segmentTab = findComponent(tabs, 'moment_track');
-    const items = asArray<{ label?: string; description?: string; seconds?: number; timestamp?: number }>(
-      segmentTab?.props?.items,
-    );
+    const items =
+      (segmentTab?.props?.items as Array<{ label?: string; description?: string; seconds?: number; timestamp?: number }> | undefined) ?? [];
     if (items.length === 0) return null;
     const steps: StepItem[] = items.map((seg, i) => ({
       number: i + 1,
@@ -445,8 +366,8 @@ const LISTEN: FlowModeDef = {
     }));
     const guestTab = findComponent(tabs, 'spot_explorer');
     const topicTab = findComponent(tabs, 'info_grid');
-    const guests = asArray<SpotItem>(guestTab?.props?.spots);
-    const topics = asArray<{ key?: string; value?: string }>(topicTab?.props?.items);
+    const guests = (guestTab?.props?.spots as SpotItem[] | undefined) ?? [];
+    const topics = (topicTab?.props?.items as { key?: string; value?: string }[] | undefined) ?? [];
     const context: FlowContextItem[] = [
       ...guests.map((g) => ({ label: g.name, emoji: g.emoji, note: g.description, group: 'Guests' })),
       ...topics.map((t) => ({ label: t.key ?? '', note: t.value, group: 'Topics' })).filter((t) => t.label),

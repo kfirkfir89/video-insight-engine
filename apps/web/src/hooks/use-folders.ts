@@ -4,10 +4,11 @@ import { queryKeys } from "@/lib/query-keys";
 import type { CreateFolderInput, UpdateFolderInput } from "@/types";
 
 // Fetch folders list
-export function useFolders() {
+export function useFolders(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.folders.list(),
     queryFn: () => foldersApi.list(),
+    enabled: options?.enabled ?? true,
   });
 }
 

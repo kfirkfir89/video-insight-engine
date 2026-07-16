@@ -5,15 +5,23 @@ import {
   sendLibraryMessage,
   type AssistantChatMessage,
   type AssistantChatEvent,
+  type AssistantSource,
 } from "@/lib/assistant";
+import { useLabels } from "@/lib/i18n";
 import { queryKeys } from "@/lib/query-keys";
 import {
   useChatStore,
   type ChatMessage,
   type ChatSource,
+  type PendingConfirmation,
 } from "@/stores/chat-store";
 
-export type { ChatMessage, ChatSource, ChatStatus } from "@/stores/chat-store";
+export type {
+  ChatMessage,
+  ChatSource,
+  ChatStatus,
+  PendingConfirmation,
+} from "@/stores/chat-store";
 
 interface UseSidebarChatOptions {
   /** When provided, chat messages are sent to this video's assistant endpoint. */
@@ -32,6 +40,33 @@ const MUTATING_ACTIONS = new Set([
   "organize_library",
 ]);
 
+/** Map the wire field `timestamp_seconds` (snake_case per the Python
+ * RAGSource model; null on v1-legacy chunks) to ChatSource.timestampSeconds —
+ * whole seconds for YouTube `&t=` deep links and player seeks; undefined
+ * hides the seek UI. */
+function toTimestampSeconds(source: AssistantSource): number | undefined {
+  const seconds = source.timestamp_seconds;
+  return typeof seconds === "number" && seconds >= 0
+    ? Math.floor(seconds)
+    : undefined;
+}
+
+/** Narrow the untyped `confirmation` metadata of a `pending_confirmation`
+ * tool event into the store's shape. Returns null on any malformed payload. */
+function parseConfirmation(
+  metadata: Record<string, unknown> | undefined,
+): PendingConfirmation | null {
+  const raw = metadata?.confirmation;
+  if (!raw || typeof raw !== "object") return null;
+  const { token, action, summary } = raw as Record<string, unknown>;
+  if (typeof token !== "string" || token.length === 0) return null;
+  return {
+    token,
+    action: typeof action === "string" ? action : "",
+    summary: typeof summary === "string" ? summary : "",
+  };
+}
+
 export function useSidebarChat(options: UseSidebarChatOptions = {}) {
   const { videoSummaryId } = options;
 
@@ -41,16 +76,27 @@ export function useSidebarChat(options: UseSidebarChatOptions = {}) {
   // selects the transport (single-video vs library), it never wipes history.
   const messages = useChatStore((s) => s.messages);
   const status = useChatStore((s) => s.status);
+  const pendingConfirmation = useChatStore((s) => s.pendingConfirmation);
   const setMessages = useChatStore((s) => s.setMessages);
   const setStatus = useChatStore((s) => s.setStatus);
+  const setPendingConfirmation = useChatStore((s) => s.setPendingConfirmation);
   const storeClearMessages = useChatStore((s) => s.clearMessages);
+
+  const labels = useLabels();
 
   const queryClient = useQueryClient();
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
+  // Latest-messages ref for event handlers (sendChat builds history from it).
+  // Written in an effect, not during render, per the react-hooks refs rule —
+  // handlers only run post-commit, so the effect-written value is always
+  // current when read. Deliberately trails a same-tick optimistic append: the
+  // history sent to the assistant must exclude the message just added.
   const messagesRef = useRef(messages);
-  messagesRef.current = messages;
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   // Tracks whether the current turn triggered a library-mutating agent action,
   // so we refetch the folder/video trees once at the end (not per tool call).
@@ -69,9 +115,11 @@ export function useSidebarChat(options: UseSidebarChatOptions = {}) {
     };
   }, []);
 
-  // Stream a regular RAG chat turn (single-video or library mode).
+  // Stream a regular RAG chat turn (single-video or library mode). When
+  // `confirmToken` is set, the request also redeems a pending server-side
+  // confirmation (destructive/costly agent action) before the model runs.
   const sendChat = useCallback(
-    (message: string) => {
+    (message: string, confirmToken?: string) => {
       // Build conversation history from current messages (excluding the one we just added)
       const history: AssistantChatMessage[] = messagesRef.current.map((m) => ({
         role: m.role,
@@ -124,6 +172,7 @@ export function useSidebarChat(options: UseSidebarChatOptions = {}) {
                 title: s.title || s.text.slice(0, 60),
                 youtubeId,
                 timestamp: s.timestamp ?? undefined,
+                timestampSeconds: toTimestampSeconds(s),
               });
             }
             setMessages((prev) =>
@@ -135,6 +184,28 @@ export function useSidebarChat(options: UseSidebarChatOptions = {}) {
           }
 
           case "tool": {
+            // A gated (destructive/costly) action parked server-side — surface
+            // the inline Confirm/Cancel affordance carrying its token.
+            if (event.metadata?.status === "pending_confirmation") {
+              const confirmation = parseConfirmation(event.metadata);
+              if (confirmation) setPendingConfirmation(confirmation);
+              break;
+            }
+
+            // An echoed token was invalid/expired — show the outcome as a step.
+            if (event.metadata?.status === "confirmation_failed") {
+              const note = event.content;
+              if (!note) break;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, steps: [...(m.steps ?? []), note] }
+                    : m,
+                ),
+              );
+              break;
+            }
+
             // The agent emits a "start"/"done" pair per tool call. Only the
             // finished step carries a human summary worth showing, so append
             // its content as a ✓ step line on the streaming assistant message.
@@ -201,8 +272,10 @@ export function useSidebarChat(options: UseSidebarChatOptions = {}) {
       // No active video → library mode (cross-video RAG over the user's videos).
       // Otherwise scope the chat to the single open video.
       const request = videoSummaryId
-        ? sendAssistantMessage(videoSummaryId, message, history, handleEvent, controller.signal)
-        : sendLibraryMessage(message, history, handleEvent, controller.signal);
+        ? sendAssistantMessage(
+            videoSummaryId, message, history, handleEvent, controller.signal, confirmToken,
+          )
+        : sendLibraryMessage(message, history, handleEvent, controller.signal, confirmToken);
 
       request.catch((err) => {
         if (!mountedRef.current) return;
@@ -223,7 +296,7 @@ export function useSidebarChat(options: UseSidebarChatOptions = {}) {
         );
       });
     },
-    [videoSummaryId, setMessages, setStatus, queryClient],
+    [videoSummaryId, setMessages, setStatus, setPendingConfirmation, queryClient],
   );
 
   // Every message — single-video or library — now goes through the streaming
@@ -231,6 +304,10 @@ export function useSidebarChat(options: UseSidebarChatOptions = {}) {
   // are handled server-side and surfaced as ✓ step lines via "tool" events.
   const sendMessage = useCallback(
     (message: string) => {
+      // A fresh message abandons any pending confirmation prompt — the parked
+      // action simply expires server-side; its token is never sent.
+      setPendingConfirmation(null);
+
       // Always echo the user's message into the transcript first.
       const userMsg: ChatMessage = {
         id: `msg-${Date.now()}`,
@@ -242,8 +319,42 @@ export function useSidebarChat(options: UseSidebarChatOptions = {}) {
 
       sendChat(message);
     },
-    [setMessages, sendChat],
+    [setMessages, setPendingConfirmation, sendChat],
   );
+
+  // Confirm the pending destructive/costly action: echo the confirmation as a
+  // user turn and resend with the single-use token so the assistant executes
+  // the parked action server-side.
+  const confirmPendingAction = useCallback(() => {
+    const pending = useChatStore.getState().pendingConfirmation;
+    if (!pending) return;
+    setPendingConfirmation(null);
+
+    const userMsg: ChatMessage = {
+      id: `msg-${Date.now()}`,
+      role: "user",
+      content: labels.actionConfirm,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+
+    sendChat(labels.actionConfirm, pending.token);
+  }, [labels.actionConfirm, setMessages, setPendingConfirmation, sendChat]);
+
+  // Decline the pending action. Client-side only — the unused token expires
+  // server-side within its TTL, so nothing can execute later.
+  const cancelPendingAction = useCallback(() => {
+    if (!useChatStore.getState().pendingConfirmation) return;
+    setPendingConfirmation(null);
+
+    const assistantMsg: ChatMessage = {
+      id: `msg-${Date.now()}-cancelled`,
+      role: "assistant",
+      content: labels.actionCancelled,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, assistantMsg]);
+  }, [labels.actionCancelled, setMessages, setPendingConfirmation]);
 
   // Abort any in-flight stream before wiping the transcript (the store's
   // clearMessages only resets state; the abort lives in the hook).
@@ -256,7 +367,10 @@ export function useSidebarChat(options: UseSidebarChatOptions = {}) {
   return {
     messages,
     status,
+    pendingConfirmation,
     sendMessage,
+    confirmPendingAction,
+    cancelPendingAction,
     clearMessages,
   };
 }

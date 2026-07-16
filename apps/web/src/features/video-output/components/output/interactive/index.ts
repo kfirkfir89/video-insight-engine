@@ -4,7 +4,6 @@ export { EmptyTabState } from './EmptyTabState';
 
 // Kept interactives
 export { ChecklistInteractive } from './ChecklistInteractive';
-export { QuizInteractive } from './QuizInteractive';
 export { FlashDeckInteractive } from './FlashDeckInteractive';
 export { SpotExplorer } from './SpotExplorer';
 export { StepByStepInteractive } from './StepByStepInteractive';

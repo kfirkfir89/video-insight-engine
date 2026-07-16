@@ -7,6 +7,7 @@
 
 import { z } from 'zod';
 import { sseLogger } from './sse-logger';
+import { incrementTelemetryCounter } from '@/features/video-output/lib/telemetry';
 import {
   VIDEO_CATEGORY_VALUES,
   type DescriptionLink,
@@ -45,6 +46,13 @@ export const socialLinkSchema = z.object({
 // Validation Functions
 // ─────────────────────────────────────────────────────
 
+/** Log an invalid event AND bump the prod-visible drift counter — the log is
+ *  dev-oriented, the counter is what makes envelope drift observable in prod. */
+function reportInvalidEvent(label: string, message: string): void {
+  incrementTelemetryCounter('sse_event_invalid');
+  sseLogger.warn(label, message);
+}
+
 /**
  * Validate description analysis from SSE event.
  */
@@ -63,7 +71,7 @@ export function validateDescriptionAnalysis(data: unknown): {
 
   const result = schema.safeParse(data);
   if (!result.success) {
-    sseLogger.warn('Invalid description analysis:', result.error.message);
+    reportInvalidEvent('Invalid description analysis:', result.error.message);
     return null;
   }
   return result.data as {
@@ -110,7 +118,7 @@ const metadataEventSchema = z.object({
 export function validateMetadataEvent(data: unknown): VideoMetadata {
   const result = metadataEventSchema.safeParse(data);
   if (!result.success) {
-    sseLogger.warn('Invalid metadata event:', result.error.message);
+    reportInvalidEvent('Invalid metadata event:', result.error.message);
     return {};
   }
   return {
@@ -140,7 +148,7 @@ interface SynthesisResult {
 export function validateSynthesisComplete(data: unknown): SynthesisResult {
   const result = synthesisCompleteEventSchema.safeParse(data);
   if (!result.success) {
-    sseLogger.warn('Invalid synthesis_complete event:', result.error.message);
+    reportInvalidEvent('Invalid synthesis_complete event:', result.error.message);
     return { tldr: '', keyTakeaways: [] };
   }
   return {
@@ -152,19 +160,32 @@ export function validateSynthesisComplete(data: unknown): SynthesisResult {
 const doneEventSchema = z.object({
   event: z.literal('done'),
   processingTimeMs: z.number().nullable().optional(),
+  // Partial-result flag from the summarizer terminal event (dropped
+  // extraction batches / critical coverage). Optional: legacy/cached done
+  // events don't carry it.
+  degraded: z.boolean().optional(),
 });
+
+interface DoneEventResult {
+  processingTimeMs: number | null;
+  degraded: boolean;
+}
 
 /**
  * Validate done event from SSE.
- * Returns processing time or null if validation fails.
+ * Returns processing time (null when absent) and the degraded flag
+ * (false when absent or when validation fails).
  */
-export function validateDoneEvent(data: unknown): number | null {
+export function validateDoneEvent(data: unknown): DoneEventResult {
   const result = doneEventSchema.safeParse(data);
   if (!result.success) {
-    sseLogger.warn('Invalid done event:', result.error.message);
-    return null;
+    reportInvalidEvent('Invalid done event:', result.error.message);
+    return { processingTimeMs: null, degraded: false };
   }
-  return result.data.processingTimeMs ?? null;
+  return {
+    processingTimeMs: result.data.processingTimeMs ?? null,
+    degraded: result.data.degraded ?? false,
+  };
 }
 
 const errorEventSchema = z.object({
@@ -185,7 +206,7 @@ interface ErrorEventResult {
 export function validateErrorEvent(data: unknown): ErrorEventResult {
   const result = errorEventSchema.safeParse(data);
   if (!result.success) {
-    sseLogger.warn('Invalid error event:', result.error.message);
+    reportInvalidEvent('Invalid error event:', result.error.message);
     return { message: 'Unknown error' };
   }
   return {
@@ -225,7 +246,7 @@ const phaseEventSchema = z.object({
 export function validatePhaseEvent(data: unknown): SSEPhase | null {
   const result = phaseEventSchema.safeParse(data);
   if (!result.success) {
-    sseLogger.warn('Invalid phase event:', result.error.message);
+    reportInvalidEvent('Invalid phase event:', result.error.message);
     return null;
   }
   return result.data.phase;

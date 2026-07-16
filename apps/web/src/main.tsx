@@ -1,8 +1,23 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import * as Sentry from "@sentry/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query-client";
 import { App } from "./App";
+
+// Sentry — no-op unless VITE_SENTRY_DSN is baked in at build time. Init runs
+// before the first render so module-eval and mount errors are captured. Only
+// global handlers are wired here (unhandled errors + promise rejections);
+// render errors caught by the app's ErrorBoundary are not re-reported.
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: import.meta.env.MODE,
+    release: (import.meta.env.VITE_SENTRY_RELEASE as string | undefined) || undefined,
+    sendDefaultPii: false,
+  });
+}
 
 // Self-hosted fonts via @fontsource — replaces the Google Fonts <link> in
 // index.html. Reasons: (1) regions that block Google Fonts silently fall
