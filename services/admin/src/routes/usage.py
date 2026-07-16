@@ -81,6 +81,10 @@ class RunSummary(BaseModel):
     call_count: int
     regen_ordinal: int | None  # 1 = first run for this video, 2 = first regen, etc.
     langfuse_url: str | None = None  # Direct link to this run's Langfuse trace, if resolvable.
+    # Partial-result flag from the videoSummaryCache doc (dropped extraction
+    # batches / critical coverage). True = degraded, False = clean doc,
+    # None = no doc resolvable (legacy rows / missing video_summary_id).
+    degraded: bool | None = None
     calls: list[RunCallSummary]
 
 
@@ -121,15 +125,19 @@ async def usage_stats(
         },
     ]
     results = await db.llm_usage.aggregate(pipeline).to_list(1)
-    data = results[0] if results else {
-        "total_calls": 0,
-        "total_tokens_in": 0,
-        "total_tokens_out": 0,
-        "total_cost_usd": 0,
-        "avg_duration_ms": 0,
-        "success_count": 0,
-        "failure_count": 0,
-    }
+    data = (
+        results[0]
+        if results
+        else {
+            "total_calls": 0,
+            "total_tokens_in": 0,
+            "total_tokens_out": 0,
+            "total_cost_usd": 0,
+            "avg_duration_ms": 0,
+            "success_count": 0,
+            "failure_count": 0,
+        }
+    )
     data.pop("_id", None)
     # Add computed total_tokens field
     data["total_tokens"] = (data.get("total_tokens_in") or 0) + (data.get("total_tokens_out") or 0)
@@ -153,7 +161,11 @@ async def usage_by_output_type(days: int = Query(30, ge=1, le=MAX_DAYS)) -> list
                 "_id": "$video_id",
                 "cost_usd": {"$sum": "$cost_usd"},
                 "calls": {"$sum": 1},
-                "tokens": {"$sum": {"$add": [{"$ifNull": ["$tokens_in", 0]}, {"$ifNull": ["$tokens_out", 0]}]}},
+                "tokens": {
+                    "$sum": {
+                        "$add": [{"$ifNull": ["$tokens_in", 0]}, {"$ifNull": ["$tokens_out", 0]}]
+                    }
+                },
             }
         },
         {
@@ -184,8 +196,7 @@ async def usage_by_output_type(days: int = Query(30, ge=1, le=MAX_DAYS)) -> list
     ]
     results = await db.llm_usage.aggregate(pipeline).to_list(50)
     data = [
-        {"output_type": r["_id"], **{k: v for k, v in r.items() if k != "_id"}}
-        for r in results
+        {"output_type": r["_id"], **{k: v for k, v in r.items() if k != "_id"}} for r in results
     ]
     _cache[cache_key] = data
     return data
@@ -395,11 +406,19 @@ async def usage_by_video(
 
 def _format_usage_summary(results: list[dict]) -> dict:
     """Format aggregated usage summary, converting datetimes to ISO strings."""
-    summary = results[0] if results else {
-        "total_calls": 0, "total_cost_usd": 0,
-        "total_tokens_in": 0, "total_tokens_out": 0,
-        "avg_duration_ms": 0, "first_call": None, "last_call": None,
-    }
+    summary = (
+        results[0]
+        if results
+        else {
+            "total_calls": 0,
+            "total_cost_usd": 0,
+            "total_tokens_in": 0,
+            "total_tokens_out": 0,
+            "avg_duration_ms": 0,
+            "first_call": None,
+            "last_call": None,
+        }
+    )
     summary.pop("_id", None)
     if summary.get("first_call"):
         summary["first_call"] = summary["first_call"].isoformat()
@@ -452,9 +471,13 @@ async def usage_for_video(video_id: str = Path(..., min_length=1, max_length=64)
         db.videoSummaryCache.find_one(
             {"youtubeId": video_id},
             {
-                "title": 1, "channel": 1, "duration": 1,
-                "thumbnailUrl": 1, "status": 1,
-                "context.category": 1, "processedAt": 1,
+                "title": 1,
+                "channel": 1,
+                "duration": 1,
+                "thumbnailUrl": 1,
+                "status": 1,
+                "context.category": 1,
+                "processedAt": 1,
             },
         ),
         db.llm_usage.aggregate(summary_pipeline).to_list(1),
@@ -462,12 +485,17 @@ async def usage_for_video(video_id: str = Path(..., min_length=1, max_length=64)
         db.llm_usage.find(
             {"video_id": video_id},
             {"prompt_preview": 0},
-        ).sort("timestamp", -1).limit(50).to_list(50),
+        )
+        .sort("timestamp", -1)
+        .limit(50)
+        .to_list(50),
     )
 
     video = _format_video_metadata(video_doc)
     summary = _format_usage_summary(summary_results)
-    by_feature = [{"feature": r["_id"], **{k: v for k, v in r.items() if k != "_id"}} for r in feature_results]
+    by_feature = [
+        {"feature": r["_id"], **{k: v for k, v in r.items() if k != "_id"}} for r in feature_results
+    ]
 
     result = {
         "video": video,
@@ -486,10 +514,14 @@ async def usage_anomalies(
 ):
     """Expensive calls above threshold."""
     db = get_database()
-    cursor = db.llm_usage.find(
-        {"cost_usd": {"$gt": threshold_usd}, "timestamp": {"$gte": _cutoff(days)}},
-        {"prompt_preview": 0},
-    ).sort("cost_usd", -1).limit(50)
+    cursor = (
+        db.llm_usage.find(
+            {"cost_usd": {"$gt": threshold_usd}, "timestamp": {"$gte": _cutoff(days)}},
+            {"prompt_preview": 0},
+        )
+        .sort("cost_usd", -1)
+        .limit(50)
+    )
     results = await cursor.to_list(50)
     return [_serialize_doc(r) for r in results]
 
@@ -539,7 +571,9 @@ async def usage_duplicates(
         {"$limit": 20},
     ]
     results = await db.llm_usage.aggregate(pipeline).to_list(20)
-    return [{"prompt_hash": r["_id"], **{k: v for k, v in r.items() if k != "_id"}} for r in results]
+    return [
+        {"prompt_hash": r["_id"], **{k: v for k, v in r.items() if k != "_id"}} for r in results
+    ]
 
 
 def _build_run_call(raw: dict) -> RunCallSummary:
@@ -558,6 +592,28 @@ def _build_run_call(raw: dict) -> RunCallSummary:
         unit=raw.get("unit"),
         audio_seconds=raw.get("audio_seconds"),
     )
+
+
+async def _degraded_by_summary_id(db: Any, summary_ids: set[str]) -> dict[str, bool]:
+    """Map video_summary_id → degraded flag from the videoSummaryCache docs.
+
+    Ids that are not valid ObjectIds (or have no doc) are simply absent from
+    the returned map — the caller renders those runs with ``degraded=None``.
+    """
+    oids: dict[ObjectId, str] = {}
+    for sid in summary_ids:
+        try:
+            oids[ObjectId(sid)] = sid
+        except (InvalidId, TypeError):
+            continue
+    if not oids:
+        return {}
+    cursor = db.videoSummaryCache.find(
+        {"_id": {"$in": list(oids)}},
+        {"degraded": 1},
+    )
+    docs = await cursor.to_list(len(oids))
+    return {oids[doc["_id"]]: bool(doc.get("degraded")) for doc in docs}
 
 
 def _build_run_summary(run_group: dict, calls: list[dict], ordinal: int | None) -> RunSummary:
@@ -638,7 +694,12 @@ async def usage_by_run(
 
     if video_ids_on_page:
         rank_pipeline: list[dict] = [
-            {"$match": {"timestamp": {"$gte": _cutoff(days)}, "video_id": {"$in": list(video_ids_on_page)}}},
+            {
+                "$match": {
+                    "timestamp": {"$gte": _cutoff(days)},
+                    "video_id": {"$in": list(video_ids_on_page)},
+                }
+            },
             {
                 "$group": {
                     "_id": {"$ifNull": ["$request_id", None]},
@@ -679,9 +740,7 @@ async def usage_by_run(
         )
         return await cursor.to_list(50)
 
-    call_lists = await asyncio.gather(
-        *[_fetch_calls_for_run(g.get("_id")) for g in run_groups]
-    )
+    call_lists = await asyncio.gather(*[_fetch_calls_for_run(g.get("_id")) for g in run_groups])
 
     # Step 4: assemble response models.
     results: list[RunSummary] = []
@@ -697,6 +756,14 @@ async def usage_by_run(
     for run in results:
         if run.request_id:
             run.langfuse_url = trace_urls.get(run.request_id)
+
+    # Step 6: degraded-run badges — one batched videoSummaryCache lookup for
+    # the page's summary ids. Runs without a resolvable doc stay None.
+    summary_ids = {r.video_summary_id for r in results if r.video_summary_id}
+    degraded_map = await _degraded_by_summary_id(db, summary_ids)
+    for run in results:
+        if run.video_summary_id:
+            run.degraded = degraded_map.get(run.video_summary_id)
 
     _cache[cache_key] = results
     return results

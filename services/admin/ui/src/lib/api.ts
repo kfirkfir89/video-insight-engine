@@ -226,6 +226,12 @@ export interface RunSummary {
   regen_ordinal: number | null;
   /** Direct link to this run's Langfuse trace, resolved server-side. Null when unconfigured/unresolvable. */
   langfuse_url: string | null;
+  /**
+   * Partial-result flag from the run's videoSummaryCache doc (dropped
+   * extraction batches / critical coverage). True = degraded, false = clean,
+   * null/undefined = no doc resolvable (legacy rows).
+   */
+  degraded?: boolean | null;
   calls: RunCallSummary[];
 }
 

@@ -28,6 +28,19 @@ function RegenBadge({ ordinal }: RegenBadgeProps) {
   );
 }
 
+/** Partial-result marker: the run's doc is flagged degraded (dropped
+ *  extraction batches or critical coverage — see summarizer 3.6). */
+function DegradedBadge() {
+  return (
+    <span
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-[var(--color-danger-soft)] text-[var(--color-danger)]"
+      title="Degraded run: extraction dropped batches or coverage was critical — the stored output is a partial result"
+    >
+      degraded
+    </span>
+  );
+}
+
 interface RunCallsTableProps {
   calls: RunCallSummary[];
 }
@@ -153,6 +166,11 @@ function RunRow({ run, isOpen, onToggle }: RunRowProps) {
           {run.regen_ordinal != null && run.regen_ordinal > 1 && (
             <span className="ml-2">
               <RegenBadge ordinal={run.regen_ordinal} />
+            </span>
+          )}
+          {run.degraded === true && (
+            <span className="ml-2">
+              <DegradedBadge />
             </span>
           )}
         </td>

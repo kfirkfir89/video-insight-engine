@@ -405,20 +405,33 @@ async def user_activity(
     since_key = _since_date_key(days)
     db = get_database()
 
-    user_videos_cursor = db.userVideos.find(
-        {"userId": user_oid},
-        {
-            "videoSummaryId": 1, "youtubeId": 1, "title": 1,
-            "channel": 1, "duration": 1, "thumbnailUrl": 1,
-            "status": 1, "addedAt": 1,
-        },
-    ).sort("addedAt", -1).limit(100)
+    user_videos_cursor = (
+        db.userVideos.find(
+            {"userId": user_oid},
+            {
+                "videoSummaryId": 1,
+                "youtubeId": 1,
+                "title": 1,
+                "channel": 1,
+                "duration": 1,
+                "thumbnailUrl": 1,
+                "status": 1,
+                "addedAt": 1,
+            },
+        )
+        .sort("addedAt", -1)
+        .limit(100)
+    )
 
     assistant_since = datetime.now(UTC) - timedelta(days=days)
-    assistant_cursor = db.llm_usage.find(
-        {"user_id": user_id, "timestamp": {"$gte": assistant_since}},
-        {"prompt_preview": 0},
-    ).sort("timestamp", -1).limit(200)
+    assistant_cursor = (
+        db.llm_usage.find(
+            {"user_id": user_id, "timestamp": {"$gte": assistant_since}},
+            {"prompt_preview": 0},
+        )
+        .sort("timestamp", -1)
+        .limit(200)
+    )
 
     cost_cursor = db.userCosts.find(
         {"userId": user_oid, "date": {"$gte": since_key}},
@@ -439,7 +452,8 @@ async def user_activity(
             date=d["date"],
             totalCostUsd=float(d.get("totalCostUsd") or 0),
             creditAdjustmentUsd=float(d.get("creditAdjustmentUsd") or 0),
-            effectiveUsd=float(d.get("totalCostUsd") or 0) + float(d.get("creditAdjustmentUsd") or 0),
+            effectiveUsd=float(d.get("totalCostUsd") or 0)
+            + float(d.get("creditAdjustmentUsd") or 0),
         )
         for d in cost_docs
     ]
