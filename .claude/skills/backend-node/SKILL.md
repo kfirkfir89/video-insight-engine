@@ -16,7 +16,7 @@ You are a principal-level backend engineer specializing in Node.js, Fastify, Typ
 | Technology    | Version | Purpose                   |
 | ------------- | ------- | ------------------------- |
 | Node.js       | 20+     | Runtime                   |
-| Fastify       | 5.x     | HTTP framework            |
+| Fastify       | 4.x     | HTTP framework            |
 | TypeScript    | 5.x     | Type safety               |
 | MongoDB       | 7.x     | Primary database          |
 | Redis         | 7.x     | Caching, sessions, queues |
@@ -68,19 +68,21 @@ Routes (HTTP) → Services (Business Logic) → Repositories (Data)
 
 Each layer only knows the layer below it. Dependencies flow DOWN only. Never skip layers.
 
-**Feature-based organization** — group by domain, not by type:
+**Layer-based organization** (this repo groups by layer, not by feature — see `api/src/`):
 
 ```
-src/users/
-├── user.route.ts       # HTTP interface
-├── user.controller.ts  # Request/response mapping
-├── user.service.ts     # Business logic
-├── user.repository.ts  # Data access
-├── user.schema.ts      # Zod schemas
-├── user.types.ts       # TypeScript interfaces
-├── user.container.ts   # DI wiring
-└── user.test.ts        # Tests
+api/src/
+├── routes/          # HTTP interface (videos.routes.ts, auth.routes.ts, …) — schema attach + reply mapping
+├── services/        # Business logic (video.service.ts, queue-publisher.service.ts, …)
+├── repositories/    # Data access (video.repository.ts, …) — toEntity() mapping
+├── plugins/         # Fastify plugins (mongodb.ts, redis.ts, rabbitmq.ts, auth.ts, …)
+├── schemas/         # Zod schemas
+├── utils/           # Errors, helpers
+├── config.ts        # Zod-validated env config
+└── container.ts     # DI wiring
 ```
+
+There is no separate controller layer — route handlers do the request/response mapping directly and delegate to services. Tests live adjacent to sources (`*.test.ts`).
 
 ---
 
@@ -101,11 +103,11 @@ src/users/
 | Task                        | Read These Resources                             | Key Patterns                                               |
 | --------------------------- | ------------------------------------------------ | ---------------------------------------------------------- |
 | Routes, plugins, middleware | [fastify.md](resources/fastify.md)               | Plugin encapsulation, schema validation, hooks             |
-| Services, repositories, DI  | [services.md](resources/services.md)             | Constructor injection, container pattern, controller layer |
+| Services, repositories, DI  | [services.md](resources/services.md)             | Constructor injection, container pattern, route handlers   |
 | MongoDB queries, schemas    | [mongodb.md](resources/mongodb.md)               | Cursor pagination, compound indexes, embed vs reference    |
 | JWT auth, RBAC, ownership   | [auth.md](resources/auth.md)                     | Token types, role hierarchy, preHandler hooks              |
 | Error classes, logging      | [errors.md](resources/errors.md)                 | AppError hierarchy, pino structured logging, Sentry        |
-| Redis, queues, Docker       | [infrastructure.md](resources/infrastructure.md) | CacheService, BullMQ, health checks, env config            |
+| Redis, queues, Docker       | [infrastructure.md](resources/infrastructure.md) | CacheService, RabbitMQ/amqplib, health checks, env config  |
 | Unit/integration tests      | [testing.md](resources/testing.md)               | AAA pattern, factories, vitest mocking                     |
 | REST design, pagination     | [api-design.md](resources/api-design.md)         | URL structure, response format, versioning                 |
 | Input validation, OWASP     | [security.md](resources/security.md)             | Zod schemas, rate limiting, CORS, helmet                   |

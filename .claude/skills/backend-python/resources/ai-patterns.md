@@ -1,43 +1,38 @@
 # AI Patterns
 
-RAG pipelines, MCP servers, PydanticAI agents, guardrails, and observability.
+RAG pipelines, the assistant's hand-rolled agent loop, guardrails, and observability.
 
 <rules>
-- ALWAYS use PydanticAI for agents with tools — never manual ReAct text parsing (regex-based tool parsing breaks on any LLM format variation)
+- ALWAYS use the LLM provider's NATIVE tool-calling API (via LiteLLM `tools=[...]` + `tool_calls` in the response) — never regex-parse ReAct-style text (text parsing breaks on any format variation)
 - ALWAYS validate and sanitize both input and output of LLM calls in production (LLMs can generate PII, harmful content, or prompt injection responses)
 - ALWAYS chunk documents with overlap for RAG ingestion (non-overlapping chunks lose context at boundaries, degrading retrieval quality)
 - ALWAYS use LiteLLM's `aembedding()` for embeddings with `provider/model` format (consistent with completion API, enables provider switching)
-- NEVER build manual ReAct loops with regex parsing (fragile, breaks on format variations, and PydanticAI handles this correctly)
+- ALWAYS cap agent loops: iterations AND tool calls per iteration AND tool calls per request (unbounded loops burn tokens on runaway tool chains)
 - NEVER skip output validation in production AI pipelines (unvalidated LLM output can contain PII, injection, or hallucinated harmful content)
 </rules>
 
 ---
 
-## MCP Server
+## The Assistant's Agent Loop (hand-rolled, no framework)
 
-Define tools, resources, and handlers with the MCP SDK. Each tool has a name, description, and JSON Schema input.
+There is no agent framework here (no PydanticAI). The assistant implements
+tool use directly on LiteLLM in `services/assistant/src/services/`:
 
-```python
-from mcp.server import Server
-from mcp.types import Tool, TextContent
+- **`agent_loop.py`** — `run_agentic_loop()`: bounded loop
+  (`MAX_TOOL_ITERS = 4`, `MAX_TOOL_CALLS_PER_ITER = 5`,
+  `MAX_TOOL_CALLS_PER_REQUEST = 15`). Each iteration calls the LLM with the
+  tool schemas; if the response has no `tool_calls`, stream the answer and
+  stop. Otherwise execute the calls, append the `assistant` tool-call message
+  plus one `tool` result message per call, and iterate. Events stream to the
+  client as SSE (`format_sse`).
+- **`tool_router.py`** — `ToolRouter` registry (`register()`/`get_tool()`) and
+  `ActionDispatcher` for UI action-channel tools.
+- **`agent_tools.py`** — tool implementations, `execute_tool()` dispatch, and
+  `summarize_tool_result()` to keep tool output compact in context.
 
-server = Server("my-mcp-server")
-
-@server.list_tools()
-async def list_tools() -> list[Tool]:
-    return [Tool(
-        name="search_documents",
-        description="Search internal documents",
-        inputSchema={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
-    )]
-
-@server.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-    match name:
-        case "search_documents":
-            results = await doc_service.search(arguments["query"])
-            return [TextContent(type="text", text=json.dumps(results))]
-```
+When adding a tool: define its JSON schema, register it on the router, handle
+it in `execute_tool()`, and keep results summarized — raw tool dumps blow up
+the context window.
 
 ---
 
@@ -62,31 +57,17 @@ Chunk documents with paragraph-aware splitting and configurable overlap (~50 cha
 
 ---
 
-## PydanticAI Agents
+## Vector Store (Qdrant)
 
-Create typed agents with dependency injection, structured output, and tool calling.
+`services/assistant/src/repositories/qdrant_repository.py` (and the
+summarizer's ingestion side) use `qdrant-client`.
 
-```python
-@dataclass
-class AgentDeps:
-    knowledge: KnowledgeService
-    user_id: str
-
-agent = Agent(
-    "anthropic:claude-sonnet-4-20250514",
-    deps_type=AgentDeps,
-    output_type=AgentOutput,
-    system_prompt="You are a helpful assistant. Cite sources.",
-)
-
-@agent.tool
-async def search(ctx: RunContext[AgentDeps], query: str) -> list[dict]:
-    return await ctx.deps.knowledge.search(query)
-
-result = await agent.run(query, deps=deps)
-```
-
-Use `agent.run_stream()` for streaming. Use `@agent.system_prompt` for dynamic prompts based on user context. PydanticAI model format uses colon (`anthropic:model`), not slash.
+- Use **`query_points()`** — the old `search()` method was REMOVED from the
+  client. Note the client calls are SYNC (mock with `MagicMock`, not
+  `AsyncMock`, in tests).
+- Filter by payload fields (video id, user id, language) and apply a
+  `score_threshold`; cross-language retrieval works because embeddings are
+  multilingual (sentence-transformers).
 
 ---
 
@@ -114,7 +95,7 @@ Summarize old messages when token count exceeds threshold using a fast model. Us
 
 ## Edge Cases
 
-- **PydanticAI vs LiteLLM model format**: PydanticAI uses `anthropic:model` (colon). LiteLLM uses `anthropic/model` (slash). For PydanticAI with LiteLLM backend, use `LiteLLMModel("anthropic/model")` adapter.
+- **LiteLLM model format**: `provider/model` (slash), e.g. `anthropic/claude-sonnet-4-5`. Per-stage overrides come from `LLM_<STAGE>_MODEL` env vars — never hardcode model ids in call sites.
 - **RAG score threshold**: Setting `min_score` too high (>0.85) returns no results for vague queries. Too low (<0.5) returns irrelevant noise. Start at 0.7 and tune per use case.
 - **Token limits in context**: Truncate context to fit within model limits. Use `MODEL_CHAR_LIMITS` per model and `truncate_prompt_if_needed()` as a safety net.
 
@@ -122,4 +103,4 @@ Summarize old messages when token count exceeds threshold using a fast model. Us
 
 ## Rules Summary
 
-Use PydanticAI for agents with typed tools and dependency injection — never manual ReAct parsing. Build RAG pipelines with embed-retrieve-generate flow and overlapping chunks. Implement MCP servers for tool connectivity. Validate both LLM input (injection, moderation) and output (PII, safety) in production. Track costs and tokens via LiteLLM callbacks. Use OpenTelemetry for tracing. Summarize conversation history to manage context windows. Choose the right model format for each framework.
+Agents are hand-rolled on LiteLLM native tool calling with hard caps on iterations and tool calls — extend the existing loop (`agent_loop.py` / `tool_router.py` / `agent_tools.py`), don't introduce a framework. Build RAG pipelines with embed-retrieve-generate flow and overlapping chunks; retrieve from Qdrant with `query_points()`. Validate both LLM input (injection, moderation) and output (PII, safety) in production. Track costs and tokens via LiteLLM callbacks. Summarize conversation history and tool results to manage context windows.

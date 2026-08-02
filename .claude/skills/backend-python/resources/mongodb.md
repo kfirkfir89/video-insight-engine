@@ -1,6 +1,9 @@
-# MongoDB Patterns (Motor/Beanie)
+# MongoDB Patterns (Motor / pymongo)
 
-Async MongoDB with Motor driver and Beanie ODM.
+MongoDB access in this repo is split by service: **Motor** (async) in
+`services/assistant` and `services/admin`; **sync pymongo** in
+`services/summarizer` (its pipeline stages are LLM/CPU-bound, not DB-bound,
+and run in a worker process). There is no ODM — no Beanie anywhere.
 
 <rules>
 - ALWAYS use a shared connection pool via module-level client with `maxPoolSize` (creating connections per request causes pool exhaustion under load)
@@ -92,17 +95,15 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
 
 ---
 
-## Beanie ODM
+## Motor vs pymongo (per service)
 
-Use Beanie when you want Pydantic models as documents. Initialize with `init_beanie()` at startup.
-
-```python
-class User(Document):
-    email: Indexed(EmailStr, unique=True)
-    name: str = Field(..., min_length=2, max_length=100)
-    class Settings:
-        name = "users"
-```
+- **assistant / admin**: `AsyncIOMotorClient`, `await` every call, repositories
+  as shown above.
+- **summarizer**: sync `MongoClient` — same repository/`_to_entity()` shape,
+  just without `await`. Do NOT call sync pymongo from FastAPI async handlers
+  in the other services; keep it inside the summarizer's worker/pipeline code.
+- Pydantic models are used for validation at boundaries, but documents are
+  plain dicts mapped via `_to_entity()` — there is no document ODM layer.
 
 ---
 
@@ -116,4 +117,4 @@ class User(Document):
 
 ## Rules Summary
 
-Use a shared Motor client with connection pooling. Create indexes at startup for every query pattern. Convert documents to domain entities in repositories — never leak raw dicts. Use cursor-based pagination for performance. Use aggregation pipelines for joins and analytics. Always validate ObjectIds before querying. Limit `to_list()` calls with explicit length. Use transactions for multi-document atomicity.
+Use a shared client with connection pooling (Motor in assistant/admin, sync pymongo in summarizer). Create indexes at startup for every query pattern. Convert documents to domain entities in repositories — never leak raw dicts. Use cursor-based pagination for performance. Use aggregation pipelines for joins and analytics. Always validate ObjectIds before querying. Limit `to_list()` calls with explicit length. Use transactions for multi-document atomicity.

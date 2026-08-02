@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 interface HookInput {
     session_id: string;
@@ -25,9 +26,16 @@ interface SkillRule {
     resourceMapping?: Record<string, string>;
 }
 
+interface GlobalSettings {
+    maxSkillsPerPrompt?: number;
+    showResourceHints?: boolean;
+    logActivations?: boolean;
+}
+
 interface SkillRules {
     version: string;
     skills: Record<string, SkillRule>;
+    globalSettings?: GlobalSettings;
 }
 
 interface MatchedSkill {
@@ -38,6 +46,18 @@ interface MatchedSkill {
     relevantResources: string[];
 }
 
+// Word-boundary keyword matching. Prevents substring false positives
+// ("build" ⊅ "ui", "rapid" ⊅ "api", "iconic" ⊅ "icon"). Multi-word
+// keywords are phrase-matched with flexible whitespace.
+function keywordMatches(prompt: string, keyword: string): boolean {
+    const escaped = keyword
+        .trim()
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\s+/g, '\\s+');
+    const re = new RegExp(`(?<![\\w-])${escaped}(?![\\w-])`, 'i');
+    return re.test(prompt);
+}
+
 function findRelevantResources(
     prompt: string,
     resourceMapping?: Record<string, string>
@@ -45,12 +65,10 @@ function findRelevantResources(
     if (!resourceMapping) return [];
 
     const resources = new Set<string>();
-    const promptLower = prompt.toLowerCase();
 
     for (const [pattern, resourceFile] of Object.entries(resourceMapping)) {
         const keywords = pattern.split('|');
-        const matches = keywords.some(kw => promptLower.includes(kw.toLowerCase()));
-        if (matches) {
+        if (keywords.some(kw => keywordMatches(prompt, kw))) {
             resources.add(resourceFile);
         }
     }
@@ -58,17 +76,23 @@ function findRelevantResources(
     return Array.from(resources);
 }
 
+function resolveProjectDir(): string {
+    if (process.env.CLAUDE_PROJECT_DIR) return process.env.CLAUDE_PROJECT_DIR;
+    // This file lives at <project>/.claude/hooks/ — walk up two levels.
+    return join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+}
+
 async function main() {
     try {
         // Read input from stdin
         const input = readFileSync(0, 'utf-8');
         const data: HookInput = JSON.parse(input);
-        const prompt = data.prompt.toLowerCase();
 
         // Load skill rules
-        const projectDir = process.env.CLAUDE_PROJECT_DIR || '$HOME/project';
+        const projectDir = resolveProjectDir();
         const rulesPath = join(projectDir, '.claude', 'skills', 'skill-rules.json');
         const rules: SkillRules = JSON.parse(readFileSync(rulesPath, 'utf-8'));
+        const maxSkills = rules.globalSettings?.maxSkillsPerPrompt ?? 3;
 
         const matchedSkills: MatchedSkill[] = [];
 
@@ -82,9 +106,9 @@ async function main() {
             let matchType: 'keyword' | 'intent' | null = null;
             let matchedOn = '';
 
-            // Keyword matching
+            // Keyword matching (word-boundary)
             if (triggers.keywords) {
-                const matched = triggers.keywords.find(kw => prompt.includes(kw.toLowerCase()));
+                const matched = triggers.keywords.find(kw => keywordMatches(data.prompt, kw));
                 if (matched) {
                     matchType = 'keyword';
                     matchedOn = matched;
@@ -114,8 +138,15 @@ async function main() {
             }
         }
 
+        // Sort by priority, cap at maxSkillsPerPrompt
+        const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+        matchedSkills.sort((a, b) =>
+            priorityOrder[a.config.priority] - priorityOrder[b.config.priority]
+        );
+        const activatedSkills = matchedSkills.slice(0, maxSkills);
+
         // Write skill-state.json for block-enforcement skills
-        const blockedSkills = matchedSkills.filter(s => s.config.enforcement === 'block');
+        const blockedSkills = activatedSkills.filter(s => s.config.enforcement === 'block');
         if (blockedSkills.length > 0) {
             try {
                 const cacheDir = join(projectDir, '.claude', 'tsc-cache', data.session_id);
@@ -163,45 +194,19 @@ async function main() {
             }
         }
 
-        // ALWAYS show skill status - make it prominent
-        let output = '\n';
-
-        if (matchedSkills.length > 0) {
-            // Sort by priority
-            const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-            matchedSkills.sort((a, b) =>
-                priorityOrder[a.config.priority] - priorityOrder[b.config.priority]
-            );
-
-            output += '╔═══════════════════════════════════════════════════════════╗\n';
-            output += '║  ✅ SKILLS LOADED - READ BEFORE CODING                    ║\n';
-            output += '╠═══════════════════════════════════════════════════════════╣\n';
-
-            for (const skill of matchedSkills.slice(0, 3)) {
-                output += `║  ✅ ${skill.name.padEnd(20)} ← "${skill.matchedOn}" (${skill.matchType})\n`;
-
-                if (skill.relevantResources.length > 0) {
-                    skill.relevantResources.forEach(r => {
-                        output += `║     📄 resources/${r}\n`;
-                    });
-                }
+        // Compact match box (≤6 lines). No output at all when nothing matched.
+        if (activatedSkills.length > 0) {
+            let output = '\n━━ SKILLS ACTIVATED — read SKILL.md + resources before coding ━━\n';
+            for (const skill of activatedSkills) {
+                const skillPath = skill.config.skillPath || `.claude/skills/${skill.name}/SKILL.md`;
+                const resources = skill.relevantResources.length > 0
+                    ? ` (+ ${skill.relevantResources.map(r => `resources/${r}`).join(', ')})`
+                    : '';
+                output += `✅ ${skill.name} ← "${skill.matchedOn}" · Read: ${skillPath}${resources}\n`;
             }
-
-            output += '╠═══════════════════════════════════════════════════════════╣\n';
-            output += '║  ⚠️  YOU MUST READ SKILL + RESOURCES BEFORE RESPONDING    ║\n';
-            output += '╚═══════════════════════════════════════════════════════════╝\n';
-        } else {
-            // No skills matched - show prominent warning
-            output += '╔═══════════════════════════════════════════════════════════╗\n';
-            output += '║  ❌ NO SKILLS LOADED                                      ║\n';
-            output += '╠═══════════════════════════════════════════════════════════╣\n';
-            output += '║  No domain keywords detected in your prompt.              ║\n';
-            output += '║  Available: backend-node, backend-python, react-vite      ║\n';
-            output += '║  Triggers: api, route, component, react, python, etc.     ║\n';
-            output += '╚═══════════════════════════════════════════════════════════╝\n';
+            output += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+            console.log(output);
         }
-
-        console.log(output);
 
         // Check transcript size for compaction warning
         if (data.transcript_path) {

@@ -1,6 +1,6 @@
 # Service & Repository Patterns
 
-Business logic organization, dependency injection, controller layer, and data access.
+Business logic organization, dependency injection, route handlers, and data access.
 
 <rules>
 - ALWAYS inject dependencies via constructor — services receive repos, other services, cache (causes untestable code if creating dependencies internally)
@@ -18,7 +18,7 @@ Business logic organization, dependency injection, controller layer, and data ac
 
 | Layer      | Contains                      | Knows About                  | Returns            |
 | ---------- | ----------------------------- | ---------------------------- | ------------------ |
-| Controller | Request/response mapping      | HTTP, calls service          | Formatted response |
+| Route      | Request/response mapping      | HTTP, calls service          | Formatted response |
 | Service    | Business logic, orchestration | Domain rules, other services | Domain objects     |
 | Repository | Data access, queries          | Database driver              | Domain objects     |
 
@@ -54,29 +54,24 @@ export class OrderService {
 
 ---
 
-## Controller Pattern
+## Route Handler Pattern
 
-Controllers handle request/response mapping between HTTP and services:
+There is no separate controller class in this repo — route handlers do the
+request/response mapping directly and delegate to services (see `api/src/routes/`):
 
 ```typescript
-export class UserController {
-  constructor(private readonly userService: UserService) {}
-
-  async create(
-    request: FastifyRequest<{ Body: CreateUserInput }>,
-    reply: FastifyReply,
-  ) {
-    const user = await this.userService.create(request.body);
-    reply.status(201).send({ success: true, data: user });
-  }
-
-  async getById(
-    request: FastifyRequest<{ Params: { id: string } }>,
-    reply: FastifyReply,
-  ) {
-    const user = await this.userService.findById(request.params.id);
-    reply.send({ success: true, data: user });
-  }
+export async function videoRoutes(fastify: FastifyInstance) {
+  fastify.post<{ Body: CreateVideoInput }>(
+    "/videos",
+    { schema: { body: createVideoSchema } },
+    async (request, reply) => {
+      const video = await fastify.container.videoService.create(
+        request.user.id,
+        request.body,
+      );
+      reply.status(201).send({ success: true, data: video });
+    },
+  );
 }
 ```
 
@@ -161,4 +156,4 @@ async update(id: string, data: UpdateData): Promise<Product> {
 
 ## Rules Summary
 
-Services contain all business logic, receive dependencies via constructor injection, throw domain-specific errors, and never touch HTTP concepts. Controllers map between HTTP requests and service calls, formatting the response envelope. Repositories encapsulate database access, convert documents to domain entities via `toEntity()`, and never make business decisions. Cache reads happen before DB lookups with TTL; cache invalidation happens on every mutation. DI wiring lives in container factory functions. Interface segregation splits large contracts into focused Reader/Writer interfaces for minimal coupling.
+Services contain all business logic, receive dependencies via constructor injection, throw domain-specific errors, and never touch HTTP concepts. Route handlers map between HTTP requests and service calls, formatting the response envelope. Repositories encapsulate database access, convert documents to domain entities via `toEntity()`, and never make business decisions. Cache reads happen before DB lookups with TTL; cache invalidation happens on every mutation. DI wiring lives in container factory functions. Interface segregation splits large contracts into focused Reader/Writer interfaces for minimal coupling.

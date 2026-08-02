@@ -18,26 +18,31 @@ Pre-deployment checklist and verification.
 
 ## Checklist
 
-### Code Quality
+### Code Quality (pnpm monorepo — run per package)
 
-- [ ] TypeScript compiles (`npm run typecheck`)
-- [ ] ESLint passes (`npm run lint`)
-- [ ] Prettier formatted (`npm run format:check`)
-- [ ] No console.log statements
+- [ ] api typechecks: `cd api && pnpm typecheck`
+- [ ] web typechecks: `cd apps/web && npx tsc -b` (root `tsc --noEmit` is HOLLOW for web — the root tsconfig is a solution config; only `tsc -b`/build actually checks it)
+- [ ] api lint: `cd api && pnpm lint`
+- [ ] web lint: `cd apps/web && pnpm lint`
+- [ ] Python services: `ruff check` (summarizer/assistant/admin) if ruff available
+- [ ] No console.log/print statements
 - [ ] No TODO without tracking
 
 ### Tests
 
-- [ ] Unit tests pass
-- [ ] Integration tests pass
-- [ ] Coverage acceptable (>80%)
+- [ ] api: `cd api && pnpm test` (Vitest)
+- [ ] web: `cd apps/web && pnpm test` (Vitest + Testing Library)
+- [ ] Python: `python3 -m pytest` in services/summarizer, services/assistant, services/admin
+- [ ] E2E (when frontend changed): `cd apps/web && pnpm test:e2e`
+- [ ] Hooks infra (when .claude/ changed): `cd .claude/hooks && npm test`
+- [ ] Coverage acceptable (>80% for new code)
 
 ### Security
 
-- [ ] No secrets in code
+- [ ] No secrets in code (`grep -rE 'ghp_|figd_|sk-|eyJhbGciOi'` over changed files)
 - [ ] No hardcoded credentials
 - [ ] Dependencies up to date
-- [ ] No known vulnerabilities (`npm audit`)
+- [ ] No known vulnerabilities (`pnpm audit`)
 - [ ] Rate limiting configured (per [docs/SECURITY.md](../../docs/SECURITY.md))
 - [ ] JWT refresh flow correct (per [docs/SECURITY.md](../../docs/SECURITY.md))
 - [ ] CORS configured for specific origins
@@ -84,7 +89,7 @@ Pre-deployment checklist and verification.
 ### Security
 
 ✅ No secrets detected
-✅ npm audit: 0 vulnerabilities
+✅ pnpm audit: 0 vulnerabilities
 
 ### Docker
 

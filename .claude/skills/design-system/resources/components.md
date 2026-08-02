@@ -7,7 +7,7 @@ CVA variants, shadcn/ui conventions, and component architecture for vie-web.
 - ALWAYS use CVA when a component needs 2+ variants (adding variants to raw className is painful to refactor)
 - ALWAYS use `cn()` for class merging, never string concatenation (Tailwind class conflicts if violated)
 - ALWAYS forward ref and accept `className` prop on new components (breaks composition if omitted)
-- ALWAYS wrap block components in `BlockWrapper` with the appropriate variant (inconsistent visual language)
+- ALWAYS compose output blocks from the `components/vie/**` library — check the barrel (`@/components/vie`) before building anything new (inconsistent visual language)
 - NEVER inline-style themeable values like `backgroundColor: "#fff"` (breaks dark mode)
 - NEVER recreate a component shadcn/ui already provides (inconsistency and wasted effort)
 </rules>
@@ -72,36 +72,32 @@ Key elements: base classes (always applied), variants object (mutually exclusive
 
 ---
 
-## Block Components
+## The vie Component Library
 
-All block components use `BlockWrapper` with 5 variants:
+Output/block UI composes the props-first, domain-free library in
+`apps/web/src/components/vie/**` (there is no `BlockWrapper` — that pattern is
+gone). Import from the barrel `@/components/vie`:
 
-| Variant       | Class                  | Use                                          |
-| ------------- | ---------------------- | -------------------------------------------- |
-| `card`        | `block-card`           | Most blocks (rounded-xl, shadow, hover lift) |
-| `accent`      | `block-accent`         | Callouts, definitions (left-border accent)   |
-| `code`        | `block-code-container` | Code/terminal (dark IDE surface)             |
-| `inline`      | `block-inline`         | Bullets, numbered lists (no border)          |
-| `transparent` | none                   | Minimal inline content                       |
+| Category      | Directory      | Examples                                              |
+| ------------- | -------------- | ----------------------------------------------------- |
+| Cards         | `cards/`       | `GlassCard`, `ExpandableCard`, `HeroCard`, `VideoHero` |
+| Content       | `content/`     | `TextBlock`, `CodeSnippet`, `QuoteBlock`, `TableView`, `ListItems`, `DefinitionItem` |
+| Data display  | `data/`        | `ScoreRing`, `StatPill`, `Badge`, `KeyValue`, `Timer`, `Timestamp`, `VisualEvidence` |
+| Interactive   | `interactive/` | Quiz/checklist/canvas interactives                     |
+| Media         | `media/`       | Frame/image components                                 |
+| Navigation    | `navigation/`  | Tabs, section navigation                               |
+| Feedback      | `feedback/`    | Loading, empty, error states                           |
+| Effects       | `effects/`     | Visual effect wrappers                                 |
+| Canvas        | `canvas/`      | React Flow canvas pieces (floating edges need hidden handles — RF error #008 otherwise) |
 
-```tsx
-<BlockWrapper
-  variant="card"
-  headerIcon={<UtensilsCrossed className="h-4 w-4" />}
-  headerLabel="Ingredients"
-  headerAction={<ScaleButton />}
->
-  <div className="space-y-1.5 stagger-children">
-    {items.map((item) => (
-      <div key={item.name} className="hover-lift rounded-lg p-2">
-        {item.name}
-      </div>
-    ))}
-  </div>
-</BlockWrapper>
-```
+Rules for extending the library:
 
-**Accent colors**: `<BlockWrapper variant="accent" accentColor="warning">` sets the left border color. Options: `warning`, `info`, `success`, `destructive`, `primary`.
+- Components are **props-first and domain-free** — they take plain data props,
+  never fetch, and never import feature/domain types.
+- New components are registered in `components/vie/index.ts` and picked up by
+  the output `component-registry`.
+- Output components color with `--vie-accent` ONLY — never primary/cta
+  (Accent-Only-In-Outputs, DESIGN.md §6).
 
 ### Design Scales
 
@@ -165,10 +161,10 @@ Focus ring: `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-
 
 - **CVA vs plain className**: If a component has only one visual style and will never need variants, plain `cn()` is fine. Reach for CVA at the second variant.
 - **Custom shadcn extensions**: Extend shadcn components via `className` prop and `cn()` merge. Do not fork the component file unless modifying internal behavior.
-- **Block component without BlockWrapper**: Only allowed for `transparent` variant where no visual container is needed. All other blocks must use BlockWrapper.
+- **Bespoke block containers**: don't hand-roll card/containers in output components — use `GlassCard`/`ExpandableCard` (or another `vie/cards` surface) so hover, radius, and dark-mode effects stay consistent.
 
 ---
 
 ## Rules Summary
 
-Check shadcn/ui inventory before building anything new — extend via `className` and `cn()`, do not recreate. Use CVA the moment a component needs multiple variants, with `forwardRef`, `className` prop, and `VariantProps` type inference. Block components must wrap in `BlockWrapper` with the correct variant, apply `stagger-children` to lists over 3 items, `hover-lift` on interactive sub-cards, `glass-surface` on control bars, and match callout icon colors to `accentColor`. Use `data-slot` for CSS targeting, `asChild` for element polymorphism, and compound component patterns for complex UI. Notifications use Sonner. Focus rings and roving tabindex are required for keyboard accessibility.
+Check shadcn/ui inventory before building anything new — extend via `className` and `cn()`, do not recreate. Use CVA the moment a component needs multiple variants, with `forwardRef`, `className` prop, and `VariantProps` type inference. Output blocks compose the `components/vie/**` library, apply `stagger-children` to lists over 3 items, `hover-lift` on interactive sub-cards, `glass-surface` on control bars, and match callout icon colors to their accent. Use `data-slot` for CSS targeting, `asChild` for element polymorphism, and compound component patterns for complex UI. Notifications use Sonner. Focus rings and roving tabindex are required for keyboard accessibility.

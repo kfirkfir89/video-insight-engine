@@ -14,8 +14,38 @@ project_dir="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 cache_dir="$project_dir/.claude/tsc-cache/${session_id}"
 repos_file="$cache_dir/affected-repos.txt"
 
+# GC: sweep session cache dirs older than 7 days (best-effort, silent)
+find "$project_dir/.claude/tsc-cache" -mindepth 1 -maxdepth 1 -type d -mtime +7 -exec rm -rf {} + 2>/dev/null
+
+# Closes the continuous-learning loop (insights were previously write-only):
+# 2-line max summary + a gotcha-memory nudge for any file edited >= 5 times.
+print_insights() {
+    local edited_log="$cache_dir/edited-files.log"
+    local insights_file="$cache_dir/insights.json"
+
+    if [[ -f "$edited_log" ]]; then
+        local hot_files
+        hot_files=$(awk -F: '{print $2}' "$edited_log" | sort | uniq -c | sort -rn \
+            | awk '$1 >= 5 {print $1 "× " $2}' | head -2)
+        if [[ -n "$hot_files" ]]; then
+            echo ""
+            echo "💡 High-iteration files this session (≥5 edits) — consider a gotcha memory if a fix was non-obvious:"
+            echo "$hot_files" | sed 's/^/   /' | sed "s|$project_dir/||"
+        fi
+    fi
+
+    if [[ -f "$insights_file" ]]; then
+        local cross
+        cross=$(jq -r '.insights[] | select(.type=="cross_service") | .metadata.repos | join(", ")' "$insights_file" 2>/dev/null | head -1)
+        if [[ -n "$cross" ]]; then
+            echo "💡 Cross-service session ($cross) — check multi-service contracts (docs/CROSS-CUTTING.md) still hold."
+        fi
+    fi
+}
+
 # Skip if no affected repos tracked
 if [[ ! -f "$repos_file" ]] || [[ ! -s "$repos_file" ]]; then
+    print_insights
     exit 0
 fi
 
@@ -90,10 +120,11 @@ for repo in "${ts_repos[@]}"; do
     else
         error_count=$(echo "$tsc_output" | grep -c "error TS")
         output+="  ❌ $repo: $error_count errors\n"
-        # Show first 5 errors
-        echo "$tsc_output" | grep "error TS" | head -5 | while read -r line; do
-            output+="     $line\n"
-        done
+        # Show first 5 errors (no pipe-into-while: subshell would drop the lines)
+        error_detail=$(echo "$tsc_output" | grep "error TS" | head -5 | sed 's/^/     /')
+        if [[ -n "$error_detail" ]]; then
+            output+="$error_detail\n"
+        fi
         ((failed++))
     fi
 done
@@ -113,5 +144,7 @@ else
     echo "All $total services passed ✅"
 fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+print_insights
 
 exit 0

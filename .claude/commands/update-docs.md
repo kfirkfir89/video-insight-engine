@@ -88,6 +88,14 @@ Check if changes affect:
 - May want to update related skill resources
 ```
 
+## Documentation Formats (from doc-generator agent)
+
+- **API endpoints:** Method, path, auth requirements, request/response schemas with examples, error codes table.
+- **Components:** Props table (name, type, required, description), usage example, styling notes.
+- **Services:** Follow the existing `docs/SERVICE-*.md` pattern.
+- ALWAYS analyze the code before documenting — never document from assumptions; note gotchas discovered during analysis.
+- NEVER duplicate what existing docs already say — reference instead.
+
 ## Quality Standards
 
 - Keep documentation consistent with existing style

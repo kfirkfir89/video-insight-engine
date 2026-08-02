@@ -7,7 +7,7 @@ if [ -z "$CLAUDE_PROJECT_DIR" ]; then
     # This works regardless of the current working directory (PWD).
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
     
-    # Go up two levels to find the project root (e.g., /.../price-comparison-app)
+    # Go up two levels to find the project root (e.g., /.../video-insight-engine)
     export CLAUDE_PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
     
     # Optional debug message

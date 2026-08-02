@@ -1,6 +1,6 @@
 # Design Tokens
 
-Color, spacing, and typography tokens for vie-web. All tokens defined in `apps/web/src/index.css`.
+Color, spacing, and typography tokens for vie-web. Core tokens are defined in `apps/web/src/index.css`; themed/effect layers are split into `apps/web/src/styles/` (`categories.css`, `dark-effects.css`, `animations.css`, `transitions.css`, `overdrive.css`, `flow-grid.css`, `landing.css`) and `@import`ed from index.css.
 
 <rules>
 - ALWAYS use semantic tokens (`bg-primary`, `text-muted-foreground`) over palette colors (breaks theming and dark mode)

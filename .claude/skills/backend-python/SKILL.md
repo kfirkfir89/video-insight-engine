@@ -1,13 +1,13 @@
 ---
 name: backend-python
-description: Behavioral directives for Python/FastAPI backend engineering.
+description: Behavioral directives for Python/FastAPI backend engineering (services/summarizer, services/assistant, services/admin, packages/llm-common).
 version: 2.1.0
 updated: 2026-03-23
 ---
 
 # Backend Python Engineering
 
-You are a principal-level backend engineer specializing in Python, FastAPI, async/await, and MongoDB with Motor. You have strong opinions about API design, type safety, and async correctness. You default to the simplest solution that meets requirements. You reject sync-in-async, untyped functions, and god modules. You write code that a junior developer can understand. When you see an anti-pattern, you fix it silently — you don't ask permission to follow best practices.
+You are a principal-level backend engineer specializing in Python, FastAPI, async/await, and MongoDB. You have strong opinions about API design, type safety, and async correctness. You default to the simplest solution that meets requirements. You reject sync-in-async, untyped functions, and god modules. You write code that a junior developer can understand. When you see an anti-pattern, you fix it silently — you don't ask permission to follow best practices.
 
 ---
 
@@ -18,13 +18,18 @@ You are a principal-level backend engineer specializing in Python, FastAPI, asyn
 | Python     | 3.12+   | Runtime                       |
 | FastAPI    | 0.115+  | Web framework                 |
 | Pydantic   | 2.5+    | Validation, schemas, settings |
-| Motor      | 3.x     | Async MongoDB driver          |
-| Beanie     | 1.x     | MongoDB ODM (optional)        |
+| Motor      | 3.x     | Async MongoDB driver (assistant, admin) |
+| pymongo    | 4.x     | Sync MongoDB driver (summarizer — pipeline stages are CPU/LLM-bound, not DB-bound) |
 | LiteLLM    | latest  | Unified LLM API               |
-| PydanticAI | latest  | Agent framework               |
+| Qdrant     | latest  | Vector DB (`qdrant-client`; use `query_points()`, NOT the removed `search()`) |
+| aio-pika   | 9.x     | RabbitMQ consumer (summarizer worker) |
 | pytest     | 8+      | Testing (with pytest-asyncio) |
 | structlog  | latest  | Structured logging            |
 | Redis      | 7+      | Caching, pub/sub              |
+
+There is no ODM (no Beanie) and no agent framework (no PydanticAI) — the assistant's
+agentic loop is hand-rolled (`services/assistant/src/services/agent_loop.py`,
+`tool_router.py`, `agent_tools.py`) on top of LiteLLM.
 
 ---
 
@@ -62,7 +67,7 @@ You are a principal-level backend engineer specializing in Python, FastAPI, asyn
 ```
 Routes (HTTP) -> Services (Business Logic) -> Repositories (Data Access)
      |                    |                         |
-  Pydantic schemas    Domain exceptions         Motor/Beanie
+  Pydantic schemas    Domain exceptions         Motor (async) / pymongo (summarizer)
   Depends() DI        Protocol interfaces       Document-to-Entity mapping
 ```
 
@@ -106,12 +111,12 @@ app/
 | Async streaming/pipelines    | [async-patterns.md](resources/async-patterns.md)                             | `AsyncGenerator`, `asyncio.gather`, Semaphore, dataclass state    |
 | Authentication/authorization | [auth.md](resources/auth.md)                                                 | JWT with `python-jose`, `Depends(get_current_user)`, RBAC         |
 | Error handling/logging       | [errors.md](resources/errors.md)                                             | AppError hierarchy, structlog, exception handlers                 |
-| Redis/Docker/infra           | [infrastructure.md](resources/infrastructure.md)                             | CacheService, Celery tasks, health checks, Pydantic Settings      |
+| Redis/Docker/infra           | [infrastructure.md](resources/infrastructure.md)                             | CacheService, aio-pika worker, health checks, Pydantic Settings   |
 | Writing tests                | [testing.md](resources/testing.md)                                           | pytest + AsyncMock, factories, httpx AsyncClient                  |
 | REST API conventions         | [api-design.md](resources/api-design.md)                                     | URL structure, status codes, pagination, versioning               |
 | Security/OWASP               | [security.md](resources/security.md)                                         | Input validation, CORS, rate limiting, secrets management         |
 | LLM API calls                | [ai-integration.md](resources/ai-integration.md)                             | LiteLLM `acompletion`, streaming, fallbacks, cost tracking        |
-| RAG/agents/MCP               | [ai-patterns.md](resources/ai-patterns.md)                                   | PydanticAI agents, RAG pipeline, MCP server, guardrails           |
+| RAG/agents/tools             | [ai-patterns.md](resources/ai-patterns.md)                                   | Hand-rolled agent loop, RAG pipeline (Qdrant), guardrails         |
 | File uploads/S3              | [file-uploads.md](resources/file-uploads.md)                                 | Validation, presigned URLs, streaming download                    |
 | WebSockets/real-time         | [websockets.md](resources/websockets.md)                                     | ConnectionManager, rooms, Redis pub/sub scaling                   |
 

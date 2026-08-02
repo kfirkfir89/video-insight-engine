@@ -52,7 +52,7 @@ You are a principal-level design systems engineer specializing in Tailwind CSS 4
 
 ## Architecture
 
-All tokens live in `apps/web/src/index.css` (`:root` for light, `.dark` for dark, `@theme inline {}` for Tailwind registration). Components live in `apps/web/src/components/ui/`. The color space is OKLCH for perceptual uniformity. Category theming uses `.category-*` classes on containers, exposing `--category-accent` and `--category-accent-soft` CSS variables to children. Block components use `BlockWrapper` with 5 variants (card, accent, code, inline, transparent) and premium CSS utilities (`stagger-children`, `hover-lift`, `glass-surface`, `text-gradient-*`, `fade-divider`, `*-glow`).
+Core tokens live in `apps/web/src/index.css` (`:root` for light, theme selectors via `@custom-variant dark`, `@theme inline {}` for Tailwind registration), which `@import`s the split style modules in `apps/web/src/styles/`: `animations.css`, `categories.css` (category accent variables), `flow-grid.css`, `dark-effects.css`, `transitions.css`, `overdrive.css` (plus `landing.css` for the landing page). shadcn primitives live in `apps/web/src/components/ui/`; the domain component library is `apps/web/src/components/vie/**` (props-first, domain-free — organized as `cards/`, `content/`, `data/`, `interactive/`, `media/`, `navigation/`, `feedback/`, `effects/`, `canvas/`, exported from `components/vie/index.ts`). The color space is OKLCH for perceptual uniformity. Category theming uses `.category-*` classes on containers, exposing `--category-accent` and `--category-accent-soft` CSS variables to children. Premium CSS utilities: `stagger-children`, `hover-lift`, `glass-surface`, `text-gradient-*`, `fade-divider`, `*-glow`. Output components use `--vie-accent` only — never primary/cta (Accent-Only-In-Outputs rule, DESIGN.md §6).
 
 ---
 
@@ -62,7 +62,7 @@ All tokens live in `apps/web/src/index.css` (`:root` for light, `.dark` for dark
 | ----------------------------------- | ---------------------------------------- | ------------------------------------------------------------ |
 | Choosing/using icons                | [icons.md](resources/icons.md)           | Semantic mappings, sizing by context, `StatusIcon` component |
 | Colors, spacing, theming            | [tokens.md](resources/tokens.md)         | OKLCH tokens, category accents, premium utilities, dark mode |
-| Building components with CVA/shadcn | [components.md](resources/components.md) | CVA structure, BlockWrapper, compound components, `cn()`     |
+| Building components with CVA/shadcn | [components.md](resources/components.md) | CVA structure, vie component library, compound components, `cn()` |
 | Translating Figma designs           | [figma.md](resources/figma.md)           | MCP tools, token mapping, design-to-code workflow            |
 | Component documentation             | [storybook.md](resources/storybook.md)   | Not yet configured; future setup patterns                    |
 
@@ -70,4 +70,4 @@ All tokens live in `apps/web/src/index.css` (`:root` for light, `.dark` for dark
 
 ## Rules Summary
 
-Every design decision must trace to a semantic token defined in `index.css` — never hardcode colors, and always prefer OKLCH values in `:root`/`.dark` with `@theme inline` registration. Use shadcn/ui primitives before building custom components; when variants are needed, reach for CVA immediately. Icons come exclusively from lucide-react with project-specific semantic mappings; they must use Tailwind sizing classes (`h-4 w-4`), semantic color tokens, and `shrink-0` in flex layouts. Block components wrap in `BlockWrapper`, apply `stagger-children` to lists with more than 3 items, use `hover-lift` on interactive sub-cards, and match callout icon colors to `accentColor`. Class merging always goes through `cn()`, never string concatenation.
+Every design decision must trace to a semantic token defined in `index.css` — never hardcode colors, and always prefer OKLCH values in `:root`/`.dark` with `@theme inline` registration. Use shadcn/ui primitives before building custom components; when variants are needed, reach for CVA immediately. Icons come exclusively from lucide-react with project-specific semantic mappings; they must use Tailwind sizing classes (`h-4 w-4`), semantic color tokens, and `shrink-0` in flex layouts. Output blocks compose the `components/vie/**` library (GlassCard, TextBlock, ScoreRing, …) instead of bespoke wrappers, apply `stagger-children` to lists with more than 3 items, use `hover-lift` on interactive sub-cards, and match callout icon colors to their accent. Class merging always goes through `cn()`, never string concatenation.

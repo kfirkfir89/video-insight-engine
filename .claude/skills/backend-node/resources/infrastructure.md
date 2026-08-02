@@ -43,28 +43,38 @@ export class CacheService {
 
 ---
 
-## Message Queues (BullMQ)
+## Message Queues (RabbitMQ / amqplib)
 
-Use queues for async work (email, notifications, processing). Configure retries and backoff:
+This repo publishes async work to RabbitMQ via `amqplib` (see
+`api/src/plugins/rabbitmq.ts` + `api/src/services/queue-publisher.service.ts`;
+the Python worker consumes with aio-pika). Key patterns:
+
+- The `rabbitmq` Fastify plugin owns the connection and exposes
+  `fastify.rabbitmq.getChannel()` (a lazy, reconnecting `ConfirmChannel`).
+  A connect mutex ensures concurrent publishes during a broker blip share
+  one reconnect attempt instead of leaking connections.
+- Topology (exchange, queue, DLX, DLQ, bindings) is asserted once per
+  process from `queue-topology.ts` — durable exchanges/queues, direct routing.
+- `QueuePublisher` validates the payload with Zod before publishing and
+  resolves only after publisher confirms — callers know the broker durably
+  accepted the message. Publish failure throws `QueuePublishError`, which
+  routes map to 503 (retry-safe: the DB row already exists, so a retry is
+  idempotent).
 
 ```typescript
-const emailQueue = new Queue<EmailJob>("email", {
-  connection: { host: "localhost", port: 6379 },
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: { type: "exponential", delay: 1000 },
-    removeOnComplete: 100,
-    removeOnFail: 1000,
-  },
-});
+export class QueuePublisher {
+  constructor(
+    private readonly channelSupplier: ChannelSupplier, // lazy: works during onReady
+    private readonly logger: FastifyBaseLogger,
+  ) {}
 
-const emailWorker = new Worker<EmailJob>(
-  "email",
-  async (job) => {
-    await emailService.send(job.data);
-  },
-  { connection: { host: "localhost", port: 6379 }, concurrency: 5 },
-);
+  async publishVideoJob(input: PublishVideoJobInput): Promise<VideoJobPayload> {
+    const payload = videoJobPayloadSchema.parse({ ...input, requestId: input.requestId ?? randomUUID() });
+    const channel = await this.channelSupplier();
+    // publish with { persistent: true, priority: priorityForTier(input.tier) },
+    // then await the confirm before resolving
+  }
+}
 ```
 
 ---
@@ -75,7 +85,7 @@ const emailWorker = new Worker<EmailJob>(
 app.get("/health", async (request, reply) => {
   const services: Record<string, string> = {};
   try {
-    await mongoose.connection.db.admin().ping();
+    await fastify.mongo.db.admin().ping();
     services.mongodb = "connected";
   } catch {
     services.mongodb = "disconnected";
@@ -153,11 +163,11 @@ CMD ["node", "dist/server.js"]
 ## Edge Cases
 
 - **Redis connection loss**: CacheService should degrade gracefully — catch Redis errors and fall through to DB. Never let cache failures break the request.
-- **Queue job ordering**: BullMQ does not guarantee strict FIFO when using concurrency > 1. If ordering matters, use concurrency: 1 or separate queues.
+- **Queue job ordering**: RabbitMQ priority queues (used here for tier-based priority) do not guarantee strict FIFO. If ordering matters, use a single consumer or separate queues.
 - **Config validation in tests**: Tests may not have all env vars. Create a `loadTestConfig()` that provides defaults for test-only values.
 
 ---
 
 ## Rules Summary
 
-Redis caching always sets TTL and invalidates on mutation; the CacheService wraps ioredis with retry strategy and typed get/set/delete. BullMQ handles async work with exponential backoff retries and configurable concurrency. Health checks verify MongoDB and Redis connectivity, returning 503 when any dependency is down. Environment variables are validated once at startup with Zod — the typed config object is the only way to access configuration. Docker builds use multi-stage with `npm ci`, non-root user, and Alpine base. Queue workers handle failure events with structured logging.
+Redis caching always sets TTL and invalidates on mutation; the CacheService wraps ioredis with retry strategy and typed get/set/delete. RabbitMQ (amqplib publisher confirms + DLX/DLQ topology) handles async work; the Python worker consumes with aio-pika and owns retry/backoff. Health checks verify MongoDB and Redis connectivity, returning 503 when any dependency is down. Environment variables are validated once at startup with Zod — the typed config object is the only way to access configuration. Docker builds use multi-stage with `npm ci`, non-root user, and Alpine base. Queue workers handle failure events with structured logging.

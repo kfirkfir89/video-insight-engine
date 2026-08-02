@@ -1,150 +1,133 @@
 # Form Patterns
 
-React Hook Form + Zod validation, field arrays, multi-step forms, and React 19 form actions.
+Zod schemas over controlled state. **react-hook-form is NOT installed in this
+repo** — do not import it. The canonical implementations are
+`apps/web/src/pages/LoginPage.tsx` / `RegisterPage.tsx` with shared helpers in
+`apps/web/src/lib/validation.ts`.
 
 <rules>
-- ALWAYS use React Hook Form + zodResolver for forms — never manual useState per field (causes validation drift, missing error states, re-render storms)
-- ALWAYS define Zod schemas as the single source of truth — infer TypeScript types with `z.infer<typeof schema>` (causes type/validation mismatch if separate)
-- ALWAYS use `setError('root', ...)` for form-level API errors and `setError('fieldName', ...)` for field-level server errors (causes lost error context if swallowed)
-- ALWAYS use `Controller` for custom components that don't support `{...register()}` (causes uncontrolled form behavior)
-- ALWAYS disable submit button when `isSubmitting || !isDirty` (causes double submissions and no-op saves)
-- NEVER use `onChange` mode unless you need live validation feedback — default `onSubmit` is more performant (causes excessive re-renders on every keystroke)
-- NEVER build multi-field forms with raw useState — even simple 2-field forms benefit from RHF's error handling (causes error state management bugs)
+- ALWAYS define a Zod schema as the single source of truth and infer the value type with `z.infer<typeof schema>` (causes type/validation mismatch if separate)
+- ALWAYS derive field errors during render — `useMemo(() => schema.safeParse(values), [values])` + `fieldErrorsFrom()` — never store errors in their own useState (causes stale-error sync bugs)
+- ALWAYS gate error display on a `touched` map (mark on blur; mark ALL touched on submit) — showing errors on pristine fields punishes the user for not having typed yet
+- ALWAYS wire `aria-invalid` and `aria-describedby` on invalid fields (screen readers announce nothing otherwise)
+- ALWAYS disable submit while loading and translate API failures to user-friendly copy (e.g. `translateAuthError`) — never show raw error codes
+- NEVER import react-hook-form — it is not a dependency (causes build failure)
+- NEVER validate with hand-written per-field `if` chains — the Zod schema is the validator (causes validation drift)
 </rules>
 
 ---
 
-## Basic Form
-
-ALWAYS define schema first, infer types, wire to RHF with zodResolver.
+## Canonical Form (the LoginPage pattern)
 
 ```tsx
-const loginSchema = z.object({
-  email: z.string().email("Invalid email"),
-  password: z.string().min(8, "At least 8 characters"),
-});
-type LoginFormData = z.infer<typeof loginSchema>;
+import { loginSchema, fieldErrorsFrom, translateAuthError,
+  type LoginValues, type FieldErrors } from "@/lib/validation";
 
-function LoginForm({ onSubmit }: { onSubmit: (data: LoginFormData) => void }) {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
-  });
-  return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      <input {...register("email")} />
-      {errors.email && (
-        <p className="text-red-500 text-sm">{errors.email.message}</p>
-      )}
-      <button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? "Signing in..." : "Sign in"}
-      </button>
-    </form>
-  );
-}
-```
+export function LoginPage() {
+  const [values, setValues] = useState<LoginValues>({ email: "", password: "" });
+  const [touched, setTouched] = useState<Partial<Record<keyof LoginValues, boolean>>>({});
+  const [submitError, setSubmitError] = useState("");
+  const [loading, setLoading] = useState(false);
 
----
+  // Errors are DERIVED, never stored
+  const errors: FieldErrors<LoginValues> = useMemo(() => {
+    const result = loginSchema.safeParse(values);
+    return result.success ? {} : fieldErrorsFrom(result.error);
+  }, [values]);
 
-## Server Error Handling
+  const handleBlur = (field: keyof LoginValues) => () =>
+    setTouched((t) => ({ ...t, [field]: true }));
+  const handleChange = (field: keyof LoginValues) =>
+    (e: React.ChangeEvent<HTMLInputElement>) =>
+      setValues((v) => ({ ...v, [field]: e.target.value }));
 
-ALWAYS map API errors to field-level or form-level errors.
-
-```tsx
-const onSubmit = async (data: FormData) => {
-  try {
-    await api.submit(data);
-  } catch (error) {
-    if (error.code === "EMAIL_EXISTS") {
-      setError("email", { message: "Already registered" });
-    } else {
-      setError("root", { message: "Something went wrong" });
+  const handleSubmit = async (e: FormEvent): Promise<void> => {
+    e.preventDefault();
+    setTouched({ email: true, password: true });   // surface all errors
+    if (Object.keys(errors).length > 0) return;
+    setSubmitError("");
+    setLoading(true);
+    try {
+      await login(values.email, values.password);
+      navigate("/board");
+    } catch (err) {
+      setSubmitError(translateAuthError(err, "login"));
+    } finally {
+      setLoading(false);
     }
-  }
-};
-```
-
----
-
-## Reusable Form Components
-
-ALWAYS wire `aria-invalid` and `aria-describedby` for accessibility.
-
-```tsx
-function FormInput({ label, error, id, ...props }: FormInputProps) {
-  return (
-    <div>
-      <label htmlFor={id}>{label}</label>
-      <input
-        id={id}
-        aria-invalid={!!error}
-        aria-describedby={error ? `${id}-error` : undefined}
-        {...props}
-      />
-      {error && (
-        <p id={`${id}-error`} className="text-sm text-red-500">
-          {error}
-        </p>
-      )}
-    </div>
-  );
+  };
+  // <form onSubmit={handleSubmit} noValidate> …
 }
 ```
 
+Key moves: one `values` object (not one useState per field), errors derived via
+`useMemo` + `safeParse`, `touched` gates display, form-level API error in its
+own state rendered as a destructive `<Alert>`.
+
 ---
 
-## Field Arrays
+## Field Rendering
 
-Use `useFieldArray` for dynamic lists. Key by `field.id`, not array index.
+Show a field's error only when touched; wire accessibility attributes:
 
 ```tsx
-const { fields, append, remove } = useFieldArray({ control, name: "todos" });
-// Render: fields.map((field, index) => <div key={field.id}>...)
+<Label htmlFor="email">Email</Label>
+<Input
+  id="email"
+  type="email"
+  value={values.email}
+  onChange={handleChange("email")}
+  onBlur={handleBlur("email")}
+  aria-invalid={touched.email && !!errors.email}
+  aria-describedby={touched.email && errors.email ? "email-error" : undefined}
+/>
+{touched.email && errors.email && (
+  <p id="email-error" className="text-sm text-destructive">{errors.email}</p>
+)}
 ```
 
 ---
 
-## Multi-Step Forms
+## Cross-Field Validation
 
-Use `FormProvider` + `useFormContext` for step components. Validate per-step with `trigger()`.
+Use `.refine()` / `.superRefine()` on the schema and map the error to a field
+via `path` — `fieldErrorsFrom` picks it up like any other field error:
 
 ```tsx
-const nextStep = async () => {
-  const isValid = await methods.trigger(["email", "name"]);
-  if (isValid) setStep(step + 1);
-};
+const registerSchema = z
+  .object({ password: z.string().min(8), confirm: z.string() })
+  .refine((v) => v.password === v.confirm, {
+    message: "Passwords do not match",
+    path: ["confirm"],
+  });
 ```
 
 ---
 
-## React 19 Form Actions
+## Simple One-Field Forms
 
-**useActionState** pairs with RHF for server-action forms. **useFormStatus** gives submit buttons access to pending state (must be a child component inside `<form>`).
-
-```tsx
-function SubmitButton({ children }: { children: React.ReactNode }) {
-  const { pending } = useFormStatus();
-  return (
-    <button type="submit" disabled={pending}>
-      {pending ? "Submitting..." : children}
-    </button>
-  );
-}
-```
+For single-input flows (e.g. `VideoIntakeForm`'s URL box), a lone `useState`
+plus explicit validation on submit is fine — don't force ceremony where the
+schema would be one field. Still keep the error user-friendly and derived.
 
 ---
 
 ## Edge Cases
 
-- **Conditional fields:** Use `watch('fieldName')` to show/hide fields. Conditionally rendered fields still validate — use `shouldUnregister: true` or adjust schema with `.optional()` when hidden.
-- **File uploads:** Use `Controller` with a file input. Zod can validate with `z.instanceof(File)` or custom refinement.
-- **Cross-field validation:** Use `.refine()` or `.superRefine()` on the object schema. Map errors to specific fields via `path: ['fieldName']`.
+- **Conditional fields:** keep them in the schema as `.optional()` and refine
+  when visible; hidden fields must not block submission.
+- **Server field errors:** map API error codes to the matching field in the
+  submit `catch`, falling back to a form-level `submitError`.
+- **RTL:** forms render under `DirectionContext` — use logical CSS properties
+  (`ms-*`/`me-*`, `text-start`) so labels/errors mirror correctly.
 
 ---
 
 ## Rules Summary
 
-Every form uses React Hook Form with Zod schemas as the single source of truth. Types are inferred from schemas, not duplicated. Server errors map to field-level or root-level via setError. Custom inputs use Controller, dynamic lists use useFieldArray, and multi-step forms use FormProvider with per-step trigger validation. Submit buttons are disabled during submission. React 19 useActionState and useFormStatus integrate with RHF for server actions.
+Forms are controlled `useState` objects validated by Zod schemas — errors are
+derived with `useMemo` + `safeParse` + `fieldErrorsFrom`, displayed only for
+touched fields, and submit marks everything touched before bailing. API
+failures translate to friendly copy at form level or map to specific fields.
+Accessibility attributes (`aria-invalid`, `aria-describedby`) are mandatory.
+react-hook-form is not installed; do not add it without a team decision.

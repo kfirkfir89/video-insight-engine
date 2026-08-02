@@ -1,6 +1,6 @@
 {
-  "version": "2.0.0",
-  "description": "Skill activation triggers for Video Insight Engine monorepo.",
+  "version": "2.1.0",
+  "description": "Skill activation triggers for Video Insight Engine monorepo. Keywords are word-boundary matched by skill-activation-prompt.ts; fileTriggers.pathPatterns scope the skill-block check in pre-edit-guard.ts.",
   "skills": {
     "backend-node": {
       "type": "domain",
@@ -10,51 +10,46 @@
       "skillPath": ".claude/skills/backend-node/SKILL.md",
       "promptTriggers": {
         "keywords": [
-          "api", "route", "endpoint", "controller", "service", "fastify",
-          "jwt", "auth", "middleware", "mongodb", "mongoose", "database",
-          "vie-api", "rate limit", "refresh token", "cors", "security",
-          "authentication", "authorization", "error handling", "validation",
-          "retry", "dead letter queue", "openapi", "swagger", "rest api",
-          "pagination", "websocket", "socket.io", "real-time", "file upload",
-          "s3", "multer", "streaming", "llm", "openai", "claude",
-          "ai integration", "rag", "embeddings", "vector", "mcp client",
-          "agents", "shared types", "@vie/types", "packages"
+          "api", "route", "endpoint", "fastify", "jwt", "auth", "middleware",
+          "mongodb", "database", "vie-api", "rate limit", "refresh token",
+          "cors", "authentication", "authorization", "error handling",
+          "dead letter queue", "openapi", "swagger", "rest api", "pagination",
+          "websocket", "socket.io", "file upload", "s3", "multer",
+          "openai", "ai sdk", "vercel ai", "mcp client", "mcp server",
+          "mcp sdk", "shared types", "@vie/types", "@vie/shared"
         ],
         "intentPatterns": [
-          "(create|add|implement|build|fix).*?(route|endpoint|api|controller|service)",
-          "(how to|best practice).*?(backend|api|route|node)",
-          "(fix|debug|handle).*?(error|exception|backend)",
-          "(implement|add|configure).*?(rate limit|jwt|cors|auth|security)",
-          "(handle|implement).*?(error|retry|validation)",
-          "(upload|stream).*?(file|image|video)",
-          "(integrate|use|call).*?(openai|claude|llm|ai)",
-          "(build|create|implement).*?(rag|agent|mcp)",
-          "(create|add|update).*?(shared|types|utils)"
+          "(create|add|implement|build|fix)\\b.*?\\b(route|endpoint|api|service)s?\\b",
+          "(how to|best practice)\\b.*?\\b(backend|api|route|node)\\b",
+          "(implement|add|configure)\\b.*?\\b(rate limit|jwt|cors|auth|security)\\b",
+          "(handle|implement)\\b.*?\\b(error|retry|validation)s?\\b",
+          "(upload|stream)\\b.*?\\b(file|image|video)s?\\b",
+          "(integrate|use|call)\\b.*?\\b(openai|claude|llm)\\b",
+          "(build|create|implement)\\b.*?\\bmcp\\b",
+          "(create|add|update)\\b.*?\\b(shared types|@vie/types|@vie/shared)\\b"
         ]
       },
       "fileTriggers": {
         "pathPatterns": [
           "api/**/*.ts",
           "api/src/**/*",
-          "packages/**/*.ts",
           "packages/types/**/*",
-          "packages/utils/**/*"
+          "packages/shared/**/*"
         ],
         "contentPatterns": [
           "fastify",
           "import.*from.*'@fastify",
-          "router\\.(get|post|put|delete)",
-          "export.*Controller"
+          "router\\.(get|post|put|delete)"
         ]
       },
       "resourceMapping": {
         "fastify|route|endpoint|middleware|plugin": "fastify.md",
         "service|repository|business logic": "services.md",
-        "mongodb|mongoose|schema|model|database": "mongodb.md",
+        "mongodb|schema|model|database": "mongodb.md",
         "jwt|auth|rbac|permission|role": "auth.md",
         "error|exception|logging|sentry": "errors.md",
-        "redis|queue|docker|infrastructure": "infrastructure.md",
-        "test|jest|mock|integration test": "testing.md",
+        "redis|queue|rabbitmq|docker|infrastructure": "infrastructure.md",
+        "test|vitest|mock|integration test": "testing.md",
         "rest|openapi|swagger|pagination|versioning": "api-design.md",
         "security|xss|injection|helmet|validation|owasp": "security.md",
         "llm|openai|claude|streaming|completion|token": "ai-integration.md",
@@ -68,57 +63,49 @@
       "type": "domain",
       "enforcement": "block",
       "priority": "high",
-      "description": "Python/FastAPI backend patterns for worker services",
+      "description": "Python/FastAPI backend patterns for summarizer, assistant, and admin services",
       "skillPath": ".claude/skills/backend-python/SKILL.md",
       "promptTriggers": {
         "keywords": [
           "python", "fastapi", "summarizer", "transcript", "youtube",
-          "rabbitmq", "worker", "pydantic", "async", "vie-summarizer",
-          "vie-assistant", "retry", "backoff", "dead letter", "dlq",
-          "celery", "motor", "beanie", "pytest", "no transcript",
-          "video too long", "edge case", "llm", "openai", "anthropic",
-          "claude api", "ai integration", "rag", "embeddings", "qdrant",
-          "vector search", "mcp server", "mcp tool", "assistant", "vie-admin",
-          "agents"
+          "rabbitmq", "aio-pika", "worker", "pydantic", "vie-summarizer",
+          "vie-assistant", "vie-admin", "backoff", "dead letter", "dlq",
+          "motor", "pymongo", "pytest", "no transcript", "video too long",
+          "litellm", "qdrant", "vector search", "embeddings", "rag",
+          "assistant", "llm-common"
         ],
         "intentPatterns": [
-          "(create|add|implement).*?(python|summarizer|worker|transcript|fastapi|assistant)",
-          "(how to|best practice).*?(python|fastapi|async|pydantic|mcp)",
-          "(fix|debug).*?(python|summarizer|worker|assistant)",
-          "(handle|implement).*?(retry|error|edge case|dlq)",
-          "(integrate|use|call).*?(openai|claude|anthropic|llm)",
-          "(build|create|implement).*?(rag|agent|mcp|embedding|tool)"
+          "(create|add|implement)\\b.*?\\b(python|summarizer|worker|transcript|fastapi|assistant)\\b",
+          "(how to|best practice)\\b.*?\\b(python|fastapi|pydantic)\\b",
+          "(fix|debug)\\b.*?\\b(python|summarizer|worker|assistant)\\b",
+          "(handle|implement)\\b.*?\\b(retry|edge case|dlq)s?\\b",
+          "(build|create|implement)\\b.*?\\b(rag|embedding|agent)s?\\b"
         ]
       },
       "fileTriggers": {
         "pathPatterns": [
-          "services/**/*",
-          "services/summarizer/**/*.py",
-          "services/summarizer/src/**/*",
-          "services/assistant/**/*.py",
-          "services/assistant/src/**/*"
+          "services/**/*.py",
+          "packages/llm-common/**"
         ],
         "contentPatterns": [
           "from fastapi",
           "import fastapi",
           "from pydantic",
-          "async def",
-          "from mcp",
-          "@server.tool"
+          "async def"
         ]
       },
       "resourceMapping": {
         "fastapi|route|endpoint|middleware|router": "fastapi.md",
         "service|repository|business logic": "services.md",
-        "mongodb|motor|beanie|database": "mongodb.md",
+        "mongodb|motor|pymongo|database": "mongodb.md",
         "jwt|auth|oauth|permission": "auth.md",
         "error|exception|logging|structlog": "errors.md",
-        "redis|celery|docker|infrastructure|rabbitmq": "infrastructure.md",
+        "redis|docker|infrastructure|rabbitmq|aio-pika|worker": "infrastructure.md",
         "test|pytest|mock|fixture": "testing.md",
         "rest|openapi|pagination|versioning": "api-design.md",
         "security|validation|injection|cors|owasp": "security.md",
-        "llm|openai|anthropic|claude|streaming|completion": "ai-integration.md",
-        "rag|mcp|agent|embedding|vector|guardrail|tool": "ai-patterns.md",
+        "llm|litellm|anthropic|claude|streaming|completion": "ai-integration.md",
+        "rag|agent|embedding|vector|qdrant|guardrail|tool": "ai-patterns.md",
         "upload|file|image|storage": "file-uploads.md",
         "websocket|socket|real-time|ws": "websockets.md"
       },
@@ -132,23 +119,22 @@
       "skillPath": ".claude/skills/react-vite/SKILL.md",
       "promptTriggers": {
         "keywords": [
-          "component", "react", "frontend", "ui", "ux","page", "hook",
-          "shadcn", "tailwind", "react query", "tanstack", "zustand",
-          "vie-web", "vite", "form", "react hook form", "zod",
-          "validation", "routing", "performance", "lazy load", "suspense",
-          "accessibility", "a11y", "aria", "keyboard", "i18n",
-          "translation", "internationalization", "chat ui", "streaming",
-          "ai sdk", "useChat", "lucide", "icon library", "icon", "icons", "lucide-react"
+          "component", "react", "frontend", "page", "react hook",
+          "custom hook", "useEffect", "useState", "shadcn", "tailwind",
+          "react query", "tanstack", "zustand", "vie-web", "vite", "form",
+          "routing", "lazy load", "suspense", "accessibility", "a11y",
+          "aria", "i18n", "translation", "internationalization", "chat ui",
+          "ai sdk", "useChat", "lucide", "lucide-react", "admin ui"
         ],
         "intentPatterns": [
-          "(create|add|build|update|modify).*?(component|page|ui|modal|dialog|form)",
-          "(how to|best practice).*?(component|react|frontend|hook)",
-          "(style|design|layout).*?(component|ui|page)",
-          "(implement|add).*?(form|validation|routing)",
-          "(optimize|improve).*?(performance|loading|bundle)",
-          "(make|add).*?(accessible|a11y|keyboard)",
-          "(add|implement).*?(translation|i18n|language)",
-          "(build|create).*?(chat|ai|streaming)"
+          "(create|add|build|update|modify)\\b.*?\\b(component|page|ui|modal|dialog|form)s?\\b",
+          "(how to|best practice)\\b.*?\\b(component|react|frontend)s?\\b",
+          "(style|design|layout)\\b.*?\\b(component|ui|page)s?\\b",
+          "(implement|add)\\b.*?\\b(form|routing)s?\\b",
+          "(optimize|improve)\\b.*?\\b(performance|loading|bundle)\\b",
+          "(make|add)\\b.*?\\b(accessible|a11y|keyboard nav\\w*)\\b",
+          "(add|implement)\\b.*?\\b(translation|i18n|language)s?\\b",
+          "(build|create)\\b.*?\\b(chat|streaming) (ui|interface|component)s?\\b"
         ]
       },
       "fileTriggers": {
@@ -173,7 +159,7 @@
         "performance|lazy|suspense|memo|optimization|cls|bundle": "performance.md",
         "route|router|navigation|link": "routing.md",
         "test|vitest|testing library|mock": "testing.md",
-        "form|validation|zod|react hook form": "forms.md",
+        "form|validation|zod": "forms.md",
         "security|xss|token|csrf|sanitize": "security.md",
         "chat|ai|streaming|useChat|completion|vercel": "ai-integration.md",
         "accessible|a11y|aria|keyboard|screen reader|focus|reduced motion": "accessibility.md",
@@ -193,22 +179,23 @@
         "keywords": [
           "icon mapping", "which icon", "design token", "color token",
           "oklch", "category accent", "status color", "semantic color",
-          "design system", "icon for", "cva", "variant", "shadcn pattern",
-          "icon", "color", "theme", "styling", "button", "card", "badge",
-          "modal", "dialog", "toast", "dark mode", "ui", "component"
+          "design system", "icon for", "cva", "shadcn pattern", "dark mode",
+          "vie accent", "two-violet"
         ],
         "intentPatterns": [
-          "(which|what).*?icon.*?(for|should|use)",
-          "(add|create|use).*?(color|token|theme)",
-          "(style|design).*?(component|block|card)",
-          "(extend|add).*?(token|category|variant)",
-          "(create|add|build).*?(button|card|badge|modal|dialog|component)"
+          "(which|what)\\b.*?\\bicon\\b.*?\\b(for|should|use)\\b",
+          "(add|create|use)\\b.*?\\b(color|token|theme)s?\\b",
+          "(style|design)\\b.*?\\b(component|block|card)s?\\b",
+          "(extend|add)\\b.*?\\b(token|category|variant)s?\\b",
+          "(create|add|build)\\b.*?\\b(button|card|badge|modal|dialog|component)s?\\b"
         ]
       },
       "fileTriggers": {
         "pathPatterns": [
           "apps/web/src/index.css",
-          "apps/web/src/components/ui/**/*.tsx"
+          "apps/web/src/styles/**/*.css",
+          "apps/web/src/components/ui/**/*.tsx",
+          "apps/web/src/components/vie/**/*.tsx"
         ],
         "contentPatterns": [
           "from.*lucide-react",

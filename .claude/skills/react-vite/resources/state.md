@@ -21,7 +21,7 @@ Ask in order: (1) Can it be derived? Compute it. (2) One component? `useState`. 
 | Type         | Example                  | Solution           |
 | ------------ | ------------------------ | ------------------ |
 | UI State     | Modal open, tab active   | useState           |
-| Form State   | Input values, validation | React Hook Form    |
+| Form State   | Input values, validation | Controlled useState + Zod (see forms.md) |
 | Server State | User data, posts         | React Query        |
 | URL State    | Filters, pagination      | useSearchParams    |
 | Global UI    | Theme, sidebar toggle    | Context or Zustand |

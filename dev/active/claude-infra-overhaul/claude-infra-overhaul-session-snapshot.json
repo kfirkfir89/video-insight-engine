@@ -1,0 +1,42 @@
+{
+  "session_id": "12a72210-8e4f-4775-b9a9-7f0eb681e7c6",
+  "saved_at": "2026-07-16T14:04:51Z",
+  "affected_repos": [
+    "root"
+  ],
+  "files_edited": [
+    ".claude/README.md",
+    ".claude/agents/debug-investigator.md",
+    ".claude/agents/plan-auditor.md",
+    ".claude/agents/refactor-planner.md",
+    ".claude/commands/audit-infra.md",
+    ".claude/commands/review.md",
+    ".claude/commands/ship.md",
+    ".claude/commands/task-plan.md",
+    ".claude/commands/test.md",
+    ".claude/commands/update-docs.md",
+    ".claude/hooks/README.md",
+    ".claude/skills/backend-node/SKILL.md",
+    ".claude/skills/backend-node/resources/infrastructure.md",
+    ".claude/skills/backend-node/resources/services.md",
+    ".claude/skills/backend-node/resources/testing.md",
+    ".claude/skills/backend-python/SKILL.md",
+    ".claude/skills/backend-python/resources/ai-patterns.md",
+    ".claude/skills/backend-python/resources/infrastructure.md",
+    ".claude/skills/backend-python/resources/mongodb.md",
+    ".claude/skills/design-system/SKILL.md",
+    ".claude/skills/design-system/resources/components.md",
+    ".claude/skills/design-system/resources/tokens.md",
+    ".claude/skills/react-vite/SKILL.md",
+    ".claude/skills/react-vite/resources/forms.md",
+    ".claude/skills/react-vite/resources/state.md",
+    ".mcp.json",
+    "/home/kfir/.claude/projects/-home-kfir-projects-video-insight-engine/memory/MEMORY.md",
+    "/home/kfir/.claude/projects/-home-kfir-projects-video-insight-engine/memory/project_infra_audit_20260705.md",
+    "dev/active/claude-infra-overhaul/claude-infra-overhaul-tasks.md",
+    "package.json"
+  ],
+  "file_count": 30,
+  "edit_count": 69,
+  "resume_hint": "Session edited 30 unique files across root."
+}

@@ -8,10 +8,10 @@ const HOOKS_DIR = join(PROJECT_DIR, '.claude', 'hooks');
 const HOOK = join(HOOKS_DIR, 'git-safety-guard.sh');
 const OVERRIDE_FILE = join(HOOKS_DIR, '.git-safety-override');
 
-function runHook(command: string): { stderr: string; exitCode: number } {
+function runHook(command: string): { stdout: string; stderr: string; exitCode: number } {
   const input = JSON.stringify({ tool_input: { command } });
   try {
-    execSync(`bash ${HOOK}`, {
+    const stdout = execSync(`bash ${HOOK}`, {
       input,
       cwd: HOOKS_DIR,
       encoding: 'utf-8',
@@ -19,10 +19,10 @@ function runHook(command: string): { stderr: string; exitCode: number } {
       timeout: 10000,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
-    return { stderr: '', exitCode: 0 };
+    return { stdout: stdout ?? '', stderr: '', exitCode: 0 };
   } catch (err: unknown) {
-    const e = err as { stderr?: string; status?: number };
-    return { stderr: (e.stderr || '').trim(), exitCode: e.status ?? 1 };
+    const e = err as { stdout?: string; stderr?: string; status?: number };
+    return { stdout: (e.stdout || '').trim(), stderr: (e.stderr || '').trim(), exitCode: e.status ?? 1 };
   }
 }
 
@@ -55,6 +55,12 @@ describe('git-safety-guard', () => {
       'git "stash"',
       "git stas'h' pop",
       'git reset "--hard" HEAD~1',
+      // plan 5.1 adversarial forms: -C, env prefix, compound separators
+      'git -C . stash',
+      'git -C /some/dir stash pop',
+      'GIT_DIR=.git git stash',
+      'true; git stash',
+      'echo hi | tee log && git reset --hard',
     ])('should block: %s', (cmd) => {
       const { exitCode, stderr } = runHook(cmd);
       expect(exitCode).toBe(2);
@@ -83,6 +89,31 @@ describe('git-safety-guard', () => {
       'git commit -m "docs: explain why reset --hard is banned"',
     ])('should allow: %s', (cmd) => {
       expect(runHook(cmd).exitCode).toBe(0);
+    });
+  });
+
+  describe('ask-gated commands (commit/push exit 0 with permissionDecision ask)', () => {
+    it.each([
+      'git commit -m "feat: x"',
+      'git add -A && git commit -m "feat: y"',
+      'git push origin dev-2',
+      'git -C api push',
+    ])('should ask: %s', (cmd) => {
+      const { exitCode, stdout } = runHook(cmd);
+      expect(exitCode).toBe(0);
+      const parsed = JSON.parse(stdout.trim());
+      expect(parsed.hookSpecificOutput.permissionDecision).toBe('ask');
+    });
+
+    it.each([
+      'git status',
+      'git log --oneline',
+      'npm test',
+      'git show HEAD:file.ts',
+    ])('should not ask (plain allow, no JSON): %s', (cmd) => {
+      const { exitCode, stdout } = runHook(cmd);
+      expect(exitCode).toBe(0);
+      expect(stdout.trim()).toBe('');
     });
 
     it('should allow non-Bash input with no command', () => {

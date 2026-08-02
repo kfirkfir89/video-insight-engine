@@ -67,7 +67,31 @@ is_dangerous() {
   return 1
 }
 
-reason=$(is_dangerous "$flat") || exit 0
+ask_gate() {
+  # git commit / git push (non-force) are not destructive but require explicit
+  # current-turn user approval per CLAUDE.md — surface a permission prompt
+  # instead of auto-running under the blanket Bash allow.
+  local c="$1"
+  if echo "$c" | grep -qE '\bgit( -[A-Za-z-]+( [^ ]+)?)* commit\b'; then
+    echo "git commit requires explicit current-turn user approval (CLAUDE.md working-tree safety)"
+    return 0
+  fi
+  if echo "$c" | grep -qE '\bgit( -[A-Za-z-]+( [^ ]+)?)* push\b'; then
+    echo "git push requires explicit current-turn user approval (CLAUDE.md working-tree safety)"
+    return 0
+  fi
+  return 1
+}
+
+if reason=$(is_dangerous "$flat"); then
+  : # fall through to override check / block below
+else
+  if ask_reason=$(ask_gate "$flat"); then
+    jq -cn --arg r "$ask_reason" \
+      '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"ask",permissionDecisionReason:$r}}'
+  fi
+  exit 0
+fi
 
 OVERRIDE_FILE="${CLAUDE_PROJECT_DIR:-$(pwd)}/.claude/hooks/.git-safety-override"
 if [[ -f "$OVERRIDE_FILE" ]]; then

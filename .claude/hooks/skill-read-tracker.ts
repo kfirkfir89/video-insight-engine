@@ -8,6 +8,12 @@
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+function resolveProjectDir(): string {
+  if (process.env.CLAUDE_PROJECT_DIR) return process.env.CLAUDE_PROJECT_DIR;
+  return join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+}
 
 interface PostToolInput {
   session_id: string;
@@ -55,7 +61,7 @@ async function main() {
     process.exit(0);
   }
 
-  const projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const projectDir = resolveProjectDir();
   const cacheDir = join(projectDir, '.claude', 'tsc-cache', data.session_id);
   const statePath = join(cacheDir, 'skill-state.json');
 

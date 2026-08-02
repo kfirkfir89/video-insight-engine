@@ -102,19 +102,25 @@ export function createUser(overrides: Partial<User> = {}): User {
 
 ```typescript
 import { MongoMemoryServer } from "mongodb-memory-server";
+import { MongoClient, type Db } from "mongodb";
+
 let mongod: MongoMemoryServer;
+let client: MongoClient;
+let db: Db;
 
 beforeAll(async () => {
   mongod = await MongoMemoryServer.create();
-  await mongoose.connect(mongod.getUri());
+  client = new MongoClient(mongod.getUri());
+  await client.connect();
+  db = client.db("test");
 });
 afterAll(async () => {
-  await mongoose.disconnect();
+  await client.close();
   await mongod.stop();
 });
 afterEach(async () => {
-  for (const key in mongoose.connection.collections) {
-    await mongoose.connection.collections[key].deleteMany({});
+  for (const coll of await db.collections()) {
+    await coll.deleteMany({});
   }
 });
 ```

@@ -100,6 +100,16 @@ Professional code review with structured output, severity levels, and before/aft
 | Pydantic at Boundaries | API inputs/outputs validated          | Raw dicts at API boundaries           |
 | Specific Exceptions    | Always specify exception type         | Bare `except:` clauses                |
 
+### Project Doc Cross-Checks (from code-reviewer agent)
+
+| Area            | Check Against                                                                                    |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| Auth routes     | [docs/SECURITY.md](../../docs/SECURITY.md) — JWT 15m access/7d refresh, HttpOnly cookies, rate limits |
+| Error handling  | [docs/ERROR-HANDLING.md](../../docs/ERROR-HANDLING.md) — typed errors, consistent error codes     |
+| Video routes    | Rate limit POST /videos (10/day), validation before queuing, correct error codes                  |
+| Summarizer      | Edge cases (NO_TRANSCRIPT, VIDEO_TOO_LONG), retry with backoff, DLQ, token tracking               |
+| Secrets/logging | No hardcoded secrets, no sensitive data (keys, tokens, PII) in logs                               |
+
 ### React/Frontend (apps/web/)
 
 | Check                         | Objective                       | Failure Criteria                             |

@@ -23,12 +23,7 @@
       "Bash(pnpm:*)",
       "Bash(mkdir:*)",
       "Bash(printf:*)",
-      "Bash(pkill:*)",
-      "mcp__filesystem__read_text_file",
-      "mcp__filesystem__write_file",
-      "mcp__filesystem__list_directory",
-      "mcp__filesystem__directory_tree",
-      "mcp__filesystem__read_multiple_files"
+      "Bash(pkill:*)"
     ],
     "deny": [
       "Bash(rm -rf /)*",
@@ -62,11 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx tsx $CLAUDE_PROJECT_DIR/.claude/hooks/tdd-guard.ts"
-          },
-          {
-            "type": "command",
-            "command": "cd $CLAUDE_PROJECT_DIR/.claude/hooks && npx tsx skill-block-guard.ts"
+            "command": "cd $CLAUDE_PROJECT_DIR/.claude/hooks && npx tsx pre-edit-guard.ts"
           }
         ]
       }
@@ -118,11 +109,5 @@
         ]
       }
     ]
-  },
-  "mcpServers": {
-    "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@anthropic-ai/mcp-server-filesystem", "$CLAUDE_PROJECT_DIR"]
-    }
   }
 }

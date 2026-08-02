@@ -1,6 +1,6 @@
 ---
 name: react-vite
-description: Frontend engineering skill for React 19, TypeScript 5, Tailwind CSS 4, shadcn/ui, and Vite 6.
+description: Frontend engineering skill for React 19, TypeScript 5, Tailwind CSS 4, shadcn/ui, and Vite 7.
 version: 3.2.0
 updated: 2026-03-23
 ---
@@ -16,15 +16,14 @@ You are a principal-level frontend engineer specializing in React 19, TypeScript
 | Technology      | Version | Purpose                    |
 | --------------- | ------- | -------------------------- |
 | React           | 19.x    | UI framework               |
-| Vite            | 6.x     | Build tool                 |
+| Vite            | 7.x     | Build tool                 |
 | TypeScript      | 5.x     | Type safety                |
 | Tailwind CSS    | 4.x     | Styling (CSS-first config) |
 | shadcn/ui       | latest  | Component primitives       |
 | React Router    | 7.x     | Routing                    |
 | React Query     | 5.x     | Server state               |
 | Zustand         | 5.x     | Client state               |
-| React Hook Form | 7.x     | Forms                      |
-| Zod             | 3.x     | Validation                 |
+| Zod             | 3.x     | Validation (forms use Zod + controlled state — react-hook-form is NOT installed) |
 
 ---
 
@@ -34,7 +33,7 @@ You are a principal-level frontend engineer specializing in React 19, TypeScript
 - ALWAYS separate UI, logic, data, and styling into distinct layers — pages compose components, components use hooks, hooks call API (causes god components and untestable code if violated)
 - ALWAYS use React Query for server state and Zustand for global client state — never manage server data with useState+useEffect (causes stale data, race conditions, missing cache)
 - ALWAYS derive state during render instead of storing computed values in useState (causes sync bugs and unnecessary re-renders)
-- ALWAYS use React Hook Form + Zod for forms — never manage form state with manual useState (causes validation drift and boilerplate)
+- ALWAYS validate forms with a Zod schema over controlled state (`useMemo` + `safeParse` + `fieldErrorsFrom` from `@/lib/validation`) — see [forms.md](resources/forms.md); react-hook-form is NOT installed, do not import it (causes build failure)
 - ALWAYS use named exports and typed props interfaces — never use anonymous default exports or untyped props (causes poor DX and refactoring hazards)
 - ALWAYS wrap every major section in an ErrorBoundary with a retry fallback — never let one broken component crash the page (causes blank screens)
 - ALWAYS use `cn()` (clsx + twMerge) for conditional Tailwind classes — never use string concatenation (causes class conflicts and unreadable templates)
@@ -68,8 +67,9 @@ src/
 │   └── dashboard/
 ├── components/         # Shared UI (Button, Input, Modal)
 │   └── vie/            # Domain component library
+├── contexts/           # React contexts (DirectionContext — RTL/LTR direction)
 ├── hooks/              # Shared hooks
-├── lib/                # Utilities, API client
+├── lib/                # Utilities, API client, validation helpers
 ├── stores/             # Zustand stores (auth, ui)
 ├── pages/              # Route page components
 └── App.tsx
@@ -128,4 +128,4 @@ Each layer knows only about layers below it.
 
 ## Rules Summary
 
-Every component must have a single responsibility, typed props, and an error boundary wrapping its section. Server state belongs in React Query, form state in React Hook Form + Zod, global client state in Zustand, and derived values are computed during render — never stored. Use composition over configuration, children over render props, and feature-based folder structure where deleting a folder removes a feature cleanly. Do not memoize without measurement, do not abstract before the third duplication, and do not use deprecated patterns (class components, `ai/react` imports, `React.FC`, `any` types, or `isLoading` from AI SDK). All styling flows through Tailwind utilities composed with `cn()`, all internal links use React Router, and all secrets stay out of `VITE_` env vars. When in doubt, choose the simpler solution.
+Every component must have a single responsibility, typed props, and an error boundary wrapping its section. Server state belongs in React Query, form state in controlled useState validated by Zod schemas, global client state in Zustand, and derived values are computed during render — never stored. Use composition over configuration, children over render props, and feature-based folder structure where deleting a folder removes a feature cleanly. Do not memoize without measurement, do not abstract before the third duplication, and do not use deprecated patterns (class components, `ai/react` imports, `React.FC`, `any` types, or `isLoading` from AI SDK). All styling flows through Tailwind utilities composed with `cn()`, all internal links use React Router, and all secrets stay out of `VITE_` env vars. When in doubt, choose the simpler solution.

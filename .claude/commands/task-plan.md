@@ -45,9 +45,9 @@ You are an elite strategic planning specialist. Create a comprehensive, actionab
 
 ## Context References
 
-- Check `PROJECT_KNOWLEDGE.md` for architecture overview (if exists)
-- Consult `BEST_PRACTICES.md` for coding standards (if exists)
-- Reference `TROUBLESHOOTING.md` for common issues to avoid (if exists)
-- Use `dev/README.md` for task management guidelines (if exists)
+- Check `PROJECT-BRIEFING.md` (full) / `PROJECT-BRIEFING-TLDR.md` (quick) for architecture overview
+- Consult `CLAUDE.md` and `.claude/rules/` for coding standards and workflow rules
+- Reference `docs/` (ARCHITECTURE, DATA-MODELS, ERROR-HANDLING, SECURITY, …) for subsystem detail
+- Use `dev/README.md` for task management guidelines
 
 **Note**: This command is ideal to use AFTER exiting plan mode when you have a clear vision of what needs to be done. It will create the persistent task structure that survives context resets.

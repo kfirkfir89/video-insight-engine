@@ -1,169 +1,48 @@
-# Hooks
+# Hooks — Video Insight Engine
 
-Claude Code hooks that enable skill auto-activation, file tracking, and validation.
+Claude Code hooks for this repo: skill auto-activation, guarded edits, git
+working-tree safety, session tracking, and Stop-time verification. All hooks
+are **fail-open**: any parse/read error results in "allow", never a block.
 
----
+Wiring lives in `.claude/settings.json`. State lives per-session under
+`.claude/tsc-cache/<session_id>/` (GC'd after 7 days by the Stop hook).
 
-## What Are Hooks?
+## Inventory
 
-Hooks are scripts that run at specific points in Claude's workflow:
+| Hook | Event (matcher) | What it does |
+| --- | --- | --- |
+| `skill-activation-prompt.sh` → `.ts` | UserPromptSubmit | Word-boundary matches the prompt against `skills/skill-rules.json`; caps at `globalSettings.maxSkillsPerPrompt`; writes `skill-state.json` for block-enforced skills; silent when nothing matches. Also prints context-size warning + active-tasks reminder. |
+| `git-safety-guard.sh` | PreToolUse (Bash) | Denies destructive git (stash/reset --hard/checkout --/clean/force-push/branch -D); asks on commit/push. Enforces the CLAUDE.md working-tree rule mechanically. |
+| `pre-edit-guard.ts` | PreToolUse (Edit\|Write\|MultiEdit) | Single merged guard: (1) **skill block** — blocks edits only when an unconsumed block-skill's `fileTriggers.pathPatterns` match the target file; `.claude/`, `dev/`, `docs/`, and `*.md` are never blocked; (2) **TDD reminder** — warn-only nudge when a source file is edited with no related test modified this session (per-session state). |
+| `post-tool-use-tracker.sh` | PostToolUse (Edit\|MultiEdit\|Write) | Logs edited files + affected repos to the session cache (consumed by Stop hooks and snapshots). |
+| `auto-format.sh` | PostToolUse (Edit\|MultiEdit\|Write) | ESLint --fix for `apps/web` TS(X); ruff format/check for Python. Best-effort. |
+| `continuous-learning.ts` | PostToolUse (Edit\|MultiEdit\|Write) | Accumulates session insights (new files, high-iteration files, cross-service edits) into `insights.json`; surfaced by `tsc-check-stop.sh` at Stop. |
+| `skill-read-tracker.ts` | PostToolUse (Read) | Marks a skill consumed when its SKILL.md/resources are read → unblocks `pre-edit-guard`. |
+| `tsc-check-stop.sh` | Stop | Runs `tsc --noEmit` on affected TS repos (first 5 error lines shown); prints insight summary; GCs session cache dirs older than 7 days. |
+| `auto-save-context.sh` | Stop | Writes a session snapshot ONLY to tasks whose `dev/active/<task>/` files were edited this session; otherwise falls back to `dev/active/.last-session-snapshot.json`. |
 
-- **UserPromptSubmit**: When user submits a prompt
-- **PreToolUse**: Before a tool executes
-- **PostToolUse**: After a tool completes
-- **Stop**: When user requests to stop
-
-**Key insight:** Hooks can modify prompts, block actions, and track state - enabling features Claude can't do alone.
-
----
-
-## Essential Hooks (Start Here)
-
-### skill-activation-prompt (UserPromptSubmit)
-
-**Purpose:** Automatically suggests relevant skills based on user prompts and file context
-
-**How it works:**
-
-1. Reads `skill-rules.json`
-2. Matches user prompt against trigger patterns
-3. Checks which files user is working with
-4. Injects skill suggestions into Claude's context
-
-**Why it's essential:** This is THE hook that makes skills auto-activate.
-
-**Integration:**
+## Testing
 
 ```bash
-# Copy both files
-cp skill-activation-prompt.sh your-project/.claude/hooks/
-cp skill-activation-prompt.ts your-project/.claude/hooks/
-
-# Make executable
-chmod +x your-project/.claude/hooks/skill-activation-prompt.sh
-
-# Install dependencies
-cd your-project/.claude/hooks
-npm install
+cd .claude/hooks && npm test        # vitest: skill enforcement + activation regression set,
+                                    # git-safety-guard (31 cases), continuous-learning
 ```
 
-**Add to settings.json:**
+Run this after ANY change to a hook or to `skill-rules.json`. The activation
+regression set pins 10 historic false-positive prompts (e.g. "build a feature",
+"the rapid fix", bare "retry") to zero activations — if you add keywords, keep
+it green.
 
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/skill-activation-prompt.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-**Customization:** ✅ None needed - reads skill-rules.json automatically
-
----
-
-### post-tool-use-tracker (PostToolUse)
-
-**Purpose:** Tracks file changes to maintain context across sessions
-
-**How it works:**
-
-1. Monitors Edit/Write/MultiEdit tool calls
-2. Records which files were modified
-3. Creates cache for context management
-4. Auto-detects project structure (frontend, backend, packages, etc.)
-
-**Why it's essential:** Helps Claude understand what parts of your codebase are active.
-
-**Integration:**
+## Manual smoke test
 
 ```bash
-# Copy file
-cp post-tool-use-tracker.sh your-project/.claude/hooks/
-
-# Make executable
-chmod +x your-project/.claude/hooks/post-tool-use-tracker.sh
+echo '{"session_id":"smoke","tool_name":"Edit","tool_input":{"file_path":"api/src/x.ts"}}' \
+  | npx tsx pre-edit-guard.ts        # from .claude/hooks/
 ```
 
-**Add to settings.json:**
+## Design rules for new hooks
 
-```json
-{
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|MultiEdit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/post-tool-use-tracker.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-**Customization:** ✅ None needed - auto-detects structure
-
----
-
-## Optional Hooks (Require Customization)
-
-### tsc-check (Stop)
-
-**Purpose:** TypeScript compilation check when user stops
-
-**⚠️ WARNING:** Configured for multi-service monorepo structure
-
-**Integration:**
-
-**First, determine if this is right for you:**
-
-- ✅ Use if: Multi-service TypeScript monorepo
-- ❌ Skip if: Single-service project or different build setup
-
-**If using:**
-
-1. Copy tsc-check.sh
-2. **EDIT the service detection (line ~28):**
-   ```bash
-   # Replace example services with YOUR services:
-   case "$repo" in
-       api|web|auth|payments|...)  # ← Your actual services
-   ```
-3. Test manually before adding to settings.json
-
-**Customization:** ⚠️⚠️⚠️ Heavy
-
----
-
-### trigger-build-resolver (Stop)
-
-**Purpose:** Auto-launches build-error-resolver agent when compilation fails
-
-**Depends on:** tsc-check hook working correctly
-
-**Customization:** ✅ None (but tsc-check must work first)
-
----
-
-## For Claude Code
-
-**When setting up hooks for a user:**
-
-1. **Always start with the two essential hooks**
-2. **Ask before adding Stop hooks** - they can block if misconfigured
-3. **Verify after setup:**
-   ```bash
-   ls -la .claude/hooks/*.sh | grep rwx
-   ```
+1. Fail-open — wrap everything; on error emit `{"decision":"allow"}` (guards) or exit 0.
+2. Per-session state only — write under `.claude/tsc-cache/<session_id>/`, never a global file (concurrent sessions clobber globals).
+3. One process per event where possible — each `npx tsx` spawn costs ~0.5s; extend `pre-edit-guard.ts` rather than adding another PreToolUse command.
+4. Add tests in `__tests__/` in the same PR.

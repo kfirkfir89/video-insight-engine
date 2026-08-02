@@ -22,6 +22,7 @@
     "docker:rebuild:web": "docker-compose build --no-cache vie-web",
     "docker:restart": "docker-compose down && docker-compose up -d",
     "types:build": "pnpm --filter @vie/types build",
+    "check:infra": "cd .claude/hooks && npm test",
     "prepare": "husky"
   },
   "devDependencies": {

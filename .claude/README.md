@@ -103,28 +103,27 @@ This directory contains Claude Code's configuration, commands, skills, rules, an
 │   ├── syntax-typescript.md # Path-scoped: TS/TSX files
 │   └── syntax-python.md  # Path-scoped: Python files
 │
-├── agents/                # Specialized assistants
-│   ├── api-tester.md
-│   ├── code-reviewer.md
-│   ├── debug-investigator.md
-│   ├── doc-generator.md
-│   ├── frontend-error-fixer.md
-│   ├── plan-auditor.md
-│   ├── refactor-planner.md
-│   ├── security-auditor.md
-│   └── test-writer.md
+├── agents/                # Specialized assistants (all have YAML frontmatter → registered)
+│   ├── api-tester.md          # Endpoint testing with curl evidence
+│   ├── debug-investigator.md  # Evidence-first debugging, 3-Fix Rule, gotchas.md
+│   ├── frontend-error-fixer.md # React/TS error diagnosis
+│   ├── plan-auditor.md        # Infra/docs consistency audit (read-only + report)
+│   ├── refactor-planner.md    # Incremental refactor plans (read-only)
+│   └── security-auditor.md    # OWASP/auth review
+│   # (code-reviewer, test-writer, doc-generator were removed — their content
+│   #  lives in commands/review.md, commands/test.md, commands/update-docs.md)
 │
-└── hooks/                 # Automatic triggers
-    ├── __tests__/                  # Hook unit tests
-    ├── skill-activation-prompt.ts  # Suggests skills on prompt (UserPromptSubmit)
-    ├── tdd-guard.ts                # TDD enforcement (PreToolUse)
-    ├── skill-block-guard.ts        # Block writes until skills read (PreToolUse)
+└── hooks/                 # Automatic triggers (see hooks/README.md)
+    ├── __tests__/                  # Hook unit tests (vitest)
+    ├── skill-activation-prompt.ts  # Word-boundary skill matching (UserPromptSubmit)
+    ├── git-safety-guard.sh         # Deny destructive git, ask commit/push (PreToolUse/Bash)
+    ├── pre-edit-guard.ts           # Path-scoped skill block + TDD warn (PreToolUse/Edit)
     ├── post-tool-use-tracker.sh    # Tracks file changes (PostToolUse)
     ├── auto-format.sh              # ESLint/ruff auto-fix (PostToolUse)
-    ├── continuous-learning.ts      # Pattern learning from edits (PostToolUse)
+    ├── continuous-learning.ts      # Session insights (PostToolUse)
     ├── skill-read-tracker.ts       # Tracks skill file reads (PostToolUse/Read)
-    ├── tsc-check-stop.sh           # TypeScript check on stop (Stop)
-    └── auto-save-context.sh        # Save task context on stop (Stop)
+    ├── tsc-check-stop.sh           # tsc on affected repos + cache GC (Stop)
+    └── auto-save-context.sh        # Task-scoped session snapshot (Stop)
 ```
 
 ---
@@ -166,12 +165,21 @@ Claude MUST:
 
 ### Available Skills
 
-| Skill                                              | Triggers                               | Resources                           |
-| -------------------------------------------------- | -------------------------------------- | ----------------------------------- |
-| [backend-node](./skills/backend-node/SKILL.md)     | API, route, fastify, endpoint          | fastify.md, services.md, mongodb.md |
-| [backend-python](./skills/backend-python/SKILL.md) | Python, FastAPI, summarizer, assistant | fastapi.md, services.md             |
-| [design-system](./skills/design-system/SKILL.md)   | Icon, token, design, theme             | components.md, tokens.md, icons.md  |
-| [react-vite](./skills/react-vite/SKILL.md)         | Component, React, frontend, UI         | react.md, state.md, forms.md        |
+**Enforced domain skills** (block-on-unread, triggered via `skill-rules.json`
+word-boundary keyword/intent matching, path-scoped to their own file domains):
+
+| Skill                                              | Example triggers                        | Covers                                             |
+| -------------------------------------------------- | --------------------------------------- | -------------------------------------------------- |
+| [backend-node](./skills/backend-node/SKILL.md)     | api, route, fastify, endpoint, jwt      | `api/**`, `packages/{types,shared}/**`              |
+| [backend-python](./skills/backend-python/SKILL.md) | python, fastapi, summarizer, qdrant     | `services/**/*.py`, `packages/llm-common/**`        |
+| [react-vite](./skills/react-vite/SKILL.md)         | component, react, tailwind, form        | `apps/web/**`, `services/admin/ui/**`               |
+| [design-system](./skills/design-system/SKILL.md)   | design token, oklch, which icon, cva    | `apps/web/src/{index.css,styles,components/{ui,vie}}` |
+
+**Design-workflow skills** (suggest-only, invoked by name or design prompts):
+`impeccable2` (umbrella) plus the focused passes — `shape`, `critique`, `audit`,
+`polish`, `distill`, `harden`, `bolder`, `quieter`, `colorize`, `typeset`,
+`layout`, `animate`, `delight`, `overdrive`, `optimize`, `adapt`, `clarify`.
+(The older `impeccable` skill was removed — `impeccable2` supersedes it.)
 
 ---
 
@@ -383,12 +391,12 @@ All hooks are configured in `settings.json` and run automatically at specific li
 | ------------------------------ | ------------------------------------------------------------------------------------------ |
 | **skill-activation-prompt.ts** | Matches prompt keywords against `skill-rules.json`, suggests relevant skills and resources |
 
-### PreToolUse (Edit\|Write\|MultiEdit)
+### PreToolUse
 
-| Hook                     | Purpose                                                                  |
-| ------------------------ | ------------------------------------------------------------------------ |
-| **tdd-guard.ts**         | Enforces TDD workflow — blocks code writes if tests aren't written first |
-| **skill-block-guard.ts** | Blocks code writes until required skill files have been read             |
+| Hook                    | Matcher                | Purpose                                                                                                                       |
+| ----------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **git-safety-guard.sh** | Bash                   | Denies destructive git (stash/reset --hard/checkout --/clean/force-push/branch -D); asks on commit/push                        |
+| **pre-edit-guard.ts**   | Edit\|Write\|MultiEdit | Merged guard: blocks edits only for files in an unconsumed skill's `pathPatterns` (md/dev/docs exempt) + warn-only TDD reminder |
 
 ### PostToolUse (Edit\|Write\|MultiEdit)
 
@@ -449,8 +457,7 @@ Verify the task exists in [dev/active/](../dev/active/). Use `/list-tasks` to se
 
 ### Hook Not Running
 
-Check [settings.local.json](./settings.local.json) for hook configuration. Hooks must be executable.
-Check [settings.json](./settings.json) for hook configuration. Hooks must be executable.
+Check [settings.json](./settings.json) for hook configuration (settings.local.json holds only personal permission grants). Shell hooks must be executable.
 
 ---
 

@@ -58,7 +58,7 @@ describe('skill-block-guard', () => {
       },
     });
 
-    const result = runHook('skill-block-guard.ts', {
+    const result = runHook('pre-edit-guard.ts', {
       session_id: TEST_SESSION,
       tool_name: 'Edit',
       tool_input: { file_path: join(PROJECT_DIR, 'api/src/routes/foo.ts') },
@@ -84,7 +84,7 @@ describe('skill-block-guard', () => {
       },
     });
 
-    const result = runHook('skill-block-guard.ts', {
+    const result = runHook('pre-edit-guard.ts', {
       session_id: TEST_SESSION,
       tool_name: 'Edit',
       tool_input: { file_path: join(PROJECT_DIR, 'api/src/routes/foo.ts') },
@@ -98,7 +98,7 @@ describe('skill-block-guard', () => {
     // Don't write any state file
     if (existsSync(STATE_PATH)) rmSync(STATE_PATH);
 
-    const result = runHook('skill-block-guard.ts', {
+    const result = runHook('pre-edit-guard.ts', {
       session_id: TEST_SESSION,
       tool_name: 'Edit',
       tool_input: { file_path: join(PROJECT_DIR, 'api/src/routes/foo.ts') },
@@ -122,7 +122,7 @@ describe('skill-block-guard', () => {
       },
     });
 
-    const result = runHook('skill-block-guard.ts', {
+    const result = runHook('pre-edit-guard.ts', {
       session_id: TEST_SESSION,
       tool_name: 'Edit',
       tool_input: { file_path: join(PROJECT_DIR, 'api/src/routes/foo.ts') },
@@ -146,7 +146,7 @@ describe('skill-block-guard', () => {
       },
     });
 
-    const result = runHook('skill-block-guard.ts', {
+    const result = runHook('pre-edit-guard.ts', {
       session_id: TEST_SESSION,
       tool_name: 'Edit',
       tool_input: { file_path: join(PROJECT_DIR, '.claude/hooks/something.ts') },
@@ -157,7 +157,7 @@ describe('skill-block-guard', () => {
   });
 
   it('should allow when no file_path in tool_input', () => {
-    const result = runHook('skill-block-guard.ts', {
+    const result = runHook('pre-edit-guard.ts', {
       session_id: TEST_SESSION,
       tool_name: 'Edit',
       tool_input: {},
@@ -263,5 +263,199 @@ describe('skill-read-tracker', () => {
     });
 
     expect(result.exitCode).toBe(0);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// Path-scoped block guard (skills only block files in their own domain)
+// ────────────────────────────────────────────────────────────────────
+
+function stateWith(skills: Record<string, { consumed?: boolean }>): Record<string, unknown> {
+  const activated: Record<string, unknown> = {};
+  for (const [name, opts] of Object.entries(skills)) {
+    activated[name] = {
+      enforcement: 'block',
+      skillPath: `.claude/skills/${name}/SKILL.md`,
+      skillDir: `.claude/skills/${name}/`,
+      activatedAt: new Date().toISOString(),
+      consumed: opts.consumed ?? false,
+    };
+  }
+  return { session_id: TEST_SESSION, activated };
+}
+
+function guardDecision(filePath: string): string {
+  const result = runHook('pre-edit-guard.ts', {
+    session_id: TEST_SESSION,
+    tool_name: 'Edit',
+    tool_input: { file_path: filePath },
+  });
+  return JSON.parse(result.stdout).decision;
+}
+
+describe('skill-block-guard path scoping', () => {
+  beforeEach(() => {
+    mkdirSync(CACHE_DIR, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (existsSync(CACHE_DIR)) {
+      rmSync(CACHE_DIR, { recursive: true, force: true });
+    }
+  });
+
+  it('should NOT block a python file when only react-vite is unconsumed', () => {
+    writeState(stateWith({ 'react-vite': {} }));
+    expect(guardDecision(join(PROJECT_DIR, 'services/assistant/src/services/rag.py'))).toBe('allow');
+  });
+
+  it('should NOT block an api ts file when only react-vite is unconsumed', () => {
+    writeState(stateWith({ 'react-vite': {} }));
+    expect(guardDecision(join(PROJECT_DIR, 'api/src/routes/videos.routes.ts'))).toBe('allow');
+  });
+
+  it('should block a python file when backend-python is unconsumed', () => {
+    writeState(stateWith({ 'backend-python': {} }));
+    expect(guardDecision(join(PROJECT_DIR, 'services/admin/src/auth.py'))).toBe('block');
+  });
+
+  it('should block an admin UI tsx file when react-vite is unconsumed', () => {
+    writeState(stateWith({ 'react-vite': {} }));
+    expect(guardDecision(join(PROJECT_DIR, 'services/admin/ui/src/App.tsx'))).toBe('block');
+  });
+
+  it('should block a styles css file when design-system is unconsumed', () => {
+    writeState(stateWith({ 'design-system': {} }));
+    expect(guardDecision(join(PROJECT_DIR, 'apps/web/src/styles/categories.css'))).toBe('block');
+  });
+
+  it('should block llm-common python when backend-python is unconsumed', () => {
+    writeState(stateWith({ 'backend-python': {} }));
+    expect(guardDecision(join(PROJECT_DIR, 'packages/llm-common/src/tracing.py'))).toBe('block');
+  });
+
+  it('should never block markdown files (live evidence: plan.md was blocked)', () => {
+    writeState(stateWith({ 'backend-node': {}, 'backend-python': {}, 'design-system': {} }));
+    expect(guardDecision(join(PROJECT_DIR, 'dev/active/some-task/some-task-plan.md'))).toBe('allow');
+    expect(guardDecision(join(PROJECT_DIR, 'docs/API-REFERENCE.md'))).toBe('allow');
+    expect(guardDecision(join(PROJECT_DIR, 'README.md'))).toBe('allow');
+    expect(guardDecision(join(PROJECT_DIR, 'api/src/notes.md'))).toBe('allow');
+  });
+
+  it('should not block root config files outside any skill domain (live evidence: .mcp.json)', () => {
+    writeState(stateWith({ 'backend-node': {} }));
+    expect(guardDecision(join(PROJECT_DIR, '.mcp.json'))).toBe('allow');
+    expect(guardDecision(join(PROJECT_DIR, 'docker-compose.yml'))).toBe('allow');
+  });
+
+  it('should fail open for a skill missing from skill-rules.json', () => {
+    writeState(stateWith({ 'ghost-skill': {} }));
+    expect(guardDecision(join(PROJECT_DIR, 'api/src/routes/foo.ts'))).toBe('allow');
+  });
+
+  it('should still block in-domain files when multiple skills are active but only report matching ones', () => {
+    writeState(stateWith({ 'backend-node': {}, 'react-vite': {} }));
+    const result = runHook('pre-edit-guard.ts', {
+      session_id: TEST_SESSION,
+      tool_name: 'Edit',
+      tool_input: { file_path: join(PROJECT_DIR, 'api/src/routes/foo.ts') },
+    });
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.decision).toBe('block');
+    expect(parsed.reason).toContain('backend-node');
+    expect(parsed.reason).not.toContain('react-vite');
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// Activation regression set — word-boundary matching + keyword pruning
+// ────────────────────────────────────────────────────────────────────
+
+function runActivation(prompt: string): string {
+  const result = runHook('skill-activation-prompt.ts', {
+    session_id: TEST_SESSION,
+    transcript_path: '',
+    cwd: PROJECT_DIR,
+    permission_mode: 'default',
+    prompt,
+  });
+  return result.stdout;
+}
+
+function activatedSkills(stdout: string): string[] {
+  return [...stdout.matchAll(/✅ ([\w-]+) ←/g)].map(m => m[1]);
+}
+
+describe('skill-activation regression set', () => {
+  beforeEach(() => {
+    mkdirSync(CACHE_DIR, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (existsSync(CACHE_DIR)) {
+      rmSync(CACHE_DIR, { recursive: true, force: true });
+    }
+  });
+
+  // ---- historic false positives: must activate NOTHING ----
+  const falsePositives: [string, string][] = [
+    ['infra-analysis prompt (live evidence 1)', 'analyze the .claude infrastructure hooks skill activation system'],
+    ['bare "retry" (live evidence 4)', 'retry'],
+    ['agent task-notification text (live evidence 2)', 'Background task claude-abc123 completed successfully. The agent finished its analysis.'],
+    ['"build" ⊅ "ui" (live evidence 5)', 'build a feature'],
+    ['"rapid" ⊅ "api" (live evidence 5)', 'the rapid fix worked'],
+    ['"iconic" ⊅ "icon" (live evidence 5)', 'iconic branding decisions'],
+    ['generic security discussion', "let's discuss the security implications of this approach"],
+    ['"summarize" ⊅ "summarizer"', 'please summarize our conversation so far'],
+    ['docker-compose edit request', 'update the docker-compose file'],
+    ['"colorful" ⊅ "color"', 'what a colorful explanation, thanks'],
+  ];
+
+  for (const [label, prompt] of falsePositives) {
+    it(`should activate nothing for: ${label}`, () => {
+      const stdout = runActivation(prompt);
+      expect(stdout).not.toContain('SKILLS ACTIVATED');
+      expect(activatedSkills(stdout)).toEqual([]);
+    });
+  }
+
+  // ---- legitimate triggers: correct skill must activate ----
+  const truePositives: [string, string, string][] = [
+    ['fastify route', 'add a new fastify route for playlists', 'backend-node'],
+    ['pydantic summarizer', 'fix the pydantic model in the summarizer', 'backend-python'],
+    ['react component', 'create a react component for the video card', 'react-vite'],
+    ['icon choice', 'which icon should I use for the delete action', 'design-system'],
+    ['auth endpoint', 'add rate limiting to the auth endpoint', 'backend-node'],
+    ['rabbitmq worker', 'debug the rabbitmq worker connection', 'backend-python'],
+    ['tailwind styles', 'update the tailwind styles on the sidebar component', 'react-vite'],
+    ['design token', 'add a design token for the category accent', 'design-system'],
+    ['qdrant search', 'implement qdrant vector search for the assistant', 'backend-python'],
+    ['api validation', 'add input validation to the videos endpoint', 'backend-node'],
+  ];
+
+  for (const [label, prompt, expected] of truePositives) {
+    it(`should activate ${expected} for: ${label}`, () => {
+      const stdout = runActivation(prompt);
+      expect(activatedSkills(stdout)).toContain(expected);
+    });
+  }
+
+  it('should honor globalSettings.maxSkillsPerPrompt (2)', () => {
+    const stdout = runActivation(
+      'create a react component form page with tailwind for the api endpoint using fastify and pydantic in the summarizer'
+    );
+    expect(activatedSkills(stdout).length).toBeLessThanOrEqual(2);
+  });
+
+  it('should emit no skill box at all on no-match (only reminders)', () => {
+    const stdout = runActivation('hello there');
+    expect(stdout).not.toContain('NO SKILLS LOADED');
+    expect(stdout).not.toContain('SKILLS ACTIVATED');
+  });
+
+  it('cross-domain guarantee: prompt-activated react-vite never blocks python edit end-to-end', () => {
+    // Activate react-vite via prompt, then attempt python edit
+    runActivation('create a react component for the dashboard');
+    expect(guardDecision(join(PROJECT_DIR, 'services/summarizer/src/worker/runner.py'))).toBe('allow');
   });
 });

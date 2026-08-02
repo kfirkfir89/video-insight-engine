@@ -1,11 +1,11 @@
 # Infrastructure Patterns
 
-Redis caching, Celery tasks, Docker, health checks, and configuration.
+Redis caching, RabbitMQ worker (aio-pika), Docker, health checks, and configuration.
 
 <rules>
 - ALWAYS set TTL on every cache key (keys without expiry accumulate forever, eventually exhausting Redis memory)
 - ALWAYS invalidate cache on writes — set, then delete related keys (stale cache causes users to see outdated data indefinitely)
-- ALWAYS configure Celery tasks with `max_retries`, `autoretry_for`, and `acks_late` (tasks without retry config are lost on first failure)
+- ALWAYS leave a consumed message in a terminal state — ack, or reject(requeue=False) so it lands in the DLQ (an unhandled exception without reject leaves messages unacked and redelivered forever)
 - ALWAYS use Pydantic `BaseSettings` for configuration with env file support (manual os.environ parsing misses validation and type coercion)
 - ALWAYS run containers as non-root user in Dockerfile (root in containers enables privilege escalation attacks)
 - NEVER cache without an invalidation strategy (cache-only patterns guarantee stale data)
@@ -38,21 +38,32 @@ class CacheService:
 
 ---
 
-## Celery Tasks
+## RabbitMQ Worker (aio-pika)
 
-Configure with JSON serialization, UTC timezone, late acks, and retry policies.
+The summarizer worker (`services/summarizer/src/worker/`) consumes video jobs
+published by vie-api. The real patterns:
+
+- **Topology mirroring** (`topology.py`): queue/exchange/DLX/DLQ arguments
+  mirror `api/src/services/queue-topology.ts` exactly — RabbitMQ rejects
+  assertions that disagree on queue arguments, so any drift between publisher
+  and consumer breaks startup.
+- **Terminal states** (`runner.py`): every message exits acked or rejected:
+  - Validation error → `reject(requeue=False)` → DLX → DLQ
+  - Retriable pipeline error with attempts left → publish a NEW retry message
+    (attempt+1, with backoff), then `ack()` the original
+  - Pipeline error at `attempt >= max_retries` → `reject(requeue=False)` → DLQ
+  - Success → `ack()`
+- **Log correlation**: request/video ids are bound on the structlog contextvar
+  stack so every line in a job is correlated.
 
 ```python
-@celery.task(bind=True, max_retries=3, default_retry_delay=60,
-             autoretry_for=(ConnectionError, TimeoutError))
-def send_email(self, to: str, subject: str, template: str, data: dict) -> None:
-    try:
-        email_service.send(to, subject, template, data)
-    except Exception as exc:
-        self.retry(exc=exc)
+async with message.process(ignore_processed=True):
+    payload = VideoJobPayload.model_validate_json(message.body)  # reject on failure
+    ...
 ```
 
-Use `BackgroundTasks` for simple same-process work. Use Celery for distributed, retriable, schedulable tasks.
+Use FastAPI `BackgroundTasks` for simple same-process work. Use the RabbitMQ
+worker for distributed, retriable jobs (gated by `USE_QUEUE_PIPELINE`).
 
 ---
 
@@ -108,11 +119,11 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ## Edge Cases
 
 - **Redis connection in tests**: Use `fakeredis` for unit tests. For integration tests, use a separate Redis database index (`/1`).
-- **Celery in async context**: Celery tasks are sync. Call `.delay()` from async code (fire-and-forget). Never `await` a Celery result in an async handler — use polling or WebSocket notification instead.
+- **Retry is a new message**: the worker retries by publishing a fresh message with `attempt + 1` and acking the original — never `requeue=True` (which would retry instantly with no backoff and no attempt counter).
 - **Docker healthcheck timing**: Set `interval: 30s` with `retries: 3`. Initial startup may need `start_period: 10s` to avoid premature restarts.
 
 ---
 
 ## Rules Summary
 
-Cache with TTL and explicit invalidation on writes. Configure Celery with retries, late acks, and JSON serialization. Use Pydantic BaseSettings for type-safe configuration from environment. Implement three-tier health checks for orchestration. Build Docker images with multi-stage builds and non-root users. Use BackgroundTasks for simple work, Celery for distributed retryable tasks.
+Cache with TTL and explicit invalidation on writes. Consume RabbitMQ messages with aio-pika, keep topology mirrored with the API publisher, and leave every message in a terminal state (ack or reject-to-DLQ; retries are new messages with attempt+1). Use Pydantic BaseSettings for type-safe configuration from environment. Implement three-tier health checks for orchestration. Build Docker images with multi-stage builds and non-root users. Use BackgroundTasks for simple work, the queue worker for distributed retriable jobs.
