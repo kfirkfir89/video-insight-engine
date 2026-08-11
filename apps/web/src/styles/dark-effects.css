@@ -1,0 +1,60 @@
+/* ═══════════════════════════════════════════════════
+   DARK MODE ENHANCEMENTS
+   Selective glow/containment — not decorative polish
+   ═══════════════════════════════════════════════════ */
+
+/* Subtle inner luminance on semantic callouts — readable, not "glowing". */
+:is([data-theme="dark"], [data-theme="lagoon"]) .callout-gradient-tip,
+:is([data-theme="dark"], [data-theme="lagoon"]) .callout-gradient-note,
+:is([data-theme="dark"], [data-theme="lagoon"]) .callout-gradient-warning,
+:is([data-theme="dark"], [data-theme="lagoon"]) .callout-gradient-security {
+  box-shadow: inset 0 0 20px oklch(from var(--border) l c h / 0.05);
+}
+
+/* Timer digit glow — the only element where the glow carries meaning
+   (focal, attention-demanding countdown). Kept intentionally. */
+:is([data-theme="dark"], [data-theme="lagoon"]) .timer-glow {
+  filter: drop-shadow(0 0 6px oklch(from var(--primary) l c h / 0.25));
+}
+
+/* ═══════════════════════════════════════════════════
+   ACCESSIBILITY — High Contrast & Forced Colors
+   ═══════════════════════════════════════════════════ */
+@media (forced-colors: active) {
+  .text-gradient-warm {
+    color: CanvasText;
+    background: none;
+    -webkit-background-clip: unset;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   PERFORMANCE OPTIMIZATIONS
+   ═══════════════════════════════════════════════════ */
+
+.glass-surface {
+  contain: paint;
+}
+
+.block-card {
+  contain: paint;
+}
+
+[data-slot="article-section"] {
+  contain: layout style;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
+}
+
+[data-slot="sticky-chapter-nav"] {
+  contain: layout style;
+}
+
+[data-sidebar-item] {
+  contain: layout style paint;
+}
+
+.vie-stream-backdrop {
+  contain: paint;
+  content-visibility: auto;
+}

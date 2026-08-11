@@ -1,0 +1,324 @@
+"""Transcript fetching with multi-source fallback chain.
+
+Provides the async generator ``fetch_transcript`` which tries each
+transcript source in priority order:
+  S3 cache -> yt-dlp subtitles -> youtube-transcript-api -> Whisper -> Gemini -> metadata
+
+Extracted from ``src.routes.stream`` for maintainability.
+"""
+
+import asyncio
+import logging
+import time
+from typing import AsyncGenerator
+
+from src.config import settings
+from src.exceptions import TranscriptError
+from src.models.schemas import ErrorCode
+from src.services.transcription.gemini_transcriber import transcribe_with_gemini
+from src.services.pipeline.pipeline_helpers import (
+    TranscriptData,
+    build_metadata_text,
+    normalized_segments_to_pipeline,
+    sse_event,
+)
+from src.services.media.s3_client import S3Client
+from src.services.transcription.transcript import get_transcript
+from src.services.transcription.transcript_store import transcript_store
+from src.services.transcription.whisper_transcriber import transcribe_with_whisper
+from src.services.video.youtube import VideoData
+from src.utils.language_utils import detect_language_from_text, detect_language_by_script, normalize_language_code
+
+logger = logging.getLogger(__name__)
+
+# Caption-fetch errors that must NOT fall back to audio transcription: genuine
+# video-access failures where the audio download would also fail. Every other
+# caption error (rate-limit 429, generic fetch errors) falls back to Whisper,
+# since audio download is a different YouTube endpoint than the caption API.
+_NO_AUDIO_FALLBACK = frozenset(
+    {
+        ErrorCode.VIDEO_UNAVAILABLE,
+        ErrorCode.VIDEO_RESTRICTED,
+        ErrorCode.LIVE_STREAM,
+    }
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public API
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def fetch_transcript(
+    youtube_id: str,
+    video_data: VideoData,
+    duration: int,
+    is_music: bool = False,
+) -> AsyncGenerator[str | TranscriptData, None]:
+    """
+    Fetch transcript using fallback chain: S3 cache -> yt-dlp -> API -> Gemini -> Whisper.
+
+    Yields SSE events for phase changes, then yields TranscriptData as final item.
+
+    Args:
+        youtube_id: YouTube video ID
+        video_data: Extracted video data
+        duration: Video duration in seconds
+        is_music: If True, use music-specific transcription prompts
+    """
+    # Priority 0: S3 cached transcript (avoids all YouTube calls)
+    if S3Client.is_available():
+        try:
+            cached = await transcript_store.get(youtube_id)
+            if cached:
+                logger.info("Using S3 cached transcript: %d segments", len(cached.segments))
+                yield sse_event("phase", {"phase": "transcript_cached"})
+                segments = []
+                for seg in cached.segments:
+                    start_ms = seg.get("startMs", 0)
+                    end_ms = seg.get("endMs", start_ms)
+                    segments.append({
+                        "text": seg.get("text", ""),
+                        "start": start_ms / 1000.0,
+                        "duration": (end_ms - start_ms) / 1000.0,
+                    })
+                raw_text = " ".join(seg["text"] for seg in segments)
+
+                # Detect language from cached transcript if not stored
+                cached_language = cached.language
+                if not cached_language and raw_text:
+                    cached_language = detect_language_from_text(raw_text)
+                    if not cached_language:
+                        cached_language = detect_language_by_script(raw_text)
+                    if cached_language:
+                        logger.info("Detected language from S3 cache text: %s", cached_language)
+
+                yield TranscriptData(
+                    segments=segments,
+                    raw_text=raw_text,
+                    transcript_type=f"cached-{cached.source}",
+                    source="s3",
+                    language=cached_language,
+                )
+                return
+        except Exception as e:
+            logger.warning("S3 transcript retrieval failed, continuing with fallback chain: %s", e)
+
+    # Priority 1: yt-dlp subtitles
+    if video_data.subtitles:
+        segments = [
+            {"text": seg.text, "start": seg.start, "duration": seg.duration}
+            for seg in video_data.subtitles
+        ]
+        logger.info("Using yt-dlp subtitles: %d segments", len(segments))
+
+        # Detect language from yt-dlp video metadata or subtitle text
+        ytdlp_language = normalize_language_code(getattr(video_data, "language", None))
+        if not ytdlp_language and video_data.transcript_text:
+            ytdlp_language = detect_language_from_text(video_data.transcript_text)
+            if not ytdlp_language:
+                ytdlp_language = detect_language_by_script(video_data.transcript_text)
+
+        yield TranscriptData(
+            segments=segments,
+            raw_text=video_data.transcript_text,
+            transcript_type="yt-dlp",
+            source="ytdlp",
+            language=ytdlp_language,
+        )
+        return
+
+    # Priority 3: youtube-transcript-api
+    logger.info("yt-dlp subtitles not available, falling back to youtube-transcript-api")
+    yield sse_event("phase", {"phase": "transcript"})
+
+    try:
+        segments, raw_text, transcript_type, api_language = await asyncio.wait_for(
+            get_transcript(youtube_id),
+            timeout=settings.TRANSCRIPT_FETCH_TIMEOUT,
+        )
+        source = "proxy" if settings.WEBSHARE_PROXY_USERNAME else "api"
+        yield TranscriptData(
+            segments=segments,
+            raw_text=raw_text,
+            transcript_type=transcript_type,
+            source=source,
+            language=normalize_language_code(api_language),
+        )
+        return
+    except asyncio.TimeoutError:
+        logger.warning("get_transcript timed out after %ss for %s", settings.TRANSCRIPT_FETCH_TIMEOUT, youtube_id)
+        if not settings.WHISPER_ENABLED:
+            raise TranscriptError(
+                "Transcript fetch timed out and Whisper is disabled",
+                ErrorCode.NO_TRANSCRIPT,
+            )
+        if duration > settings.WHISPER_MAX_DURATION_MINUTES * 60:
+            logger.warning("Video too long for Whisper (%d min)", duration // 60)
+            raise TranscriptError(
+                "Transcript fetch timed out and video too long for Whisper",
+                ErrorCode.NO_TRANSCRIPT,
+            )
+        # Fall through to Whisper
+    except TranscriptError as e:
+        # Priority 4: audio fallback. Whisper downloads AUDIO — a different
+        # YouTube endpoint than the throttled caption API — so transient caption
+        # failures (rate-limit 429, generic fetch errors) should still fall back
+        # to audio transcription. Only genuine video-access failures, where the
+        # audio download would also fail, abort here.
+        if e.code in _NO_AUDIO_FALLBACK or not settings.WHISPER_ENABLED:
+            raise
+        if duration > settings.WHISPER_MAX_DURATION_MINUTES * 60:
+            logger.warning("Video too long for Whisper (%d min)", duration // 60)
+            raise
+        logger.info("Caption fetch failed (%s); falling back to audio transcription", e.code.value)
+
+    # Audio transcription fallback chain: Whisper (detects language) -> Gemini (fast)
+    # Whisper comes first because it natively returns response.language for detection.
+    duration_min = duration // 60
+    if duration_min > 180:
+        logger.warning(
+            "Audio transcription requested for long video %s (%d min). "
+            "Estimated cost: ~$%.2f Whisper API.",
+            youtube_id, duration_min, duration_min * 0.006,
+        )
+    logger.info("No captions for %s, trying audio transcription", youtube_id)
+    yield sse_event("phase", {"phase": "audio_transcription"})
+
+    # Try Whisper first -- detects language natively via response.language
+    yield sse_event("phase", {"phase": "whisper_transcription"})
+    whisper_data, whisper_error = await _try_whisper_transcription(youtube_id, duration, is_music)
+    if whisper_data is not None:
+        yield whisper_data
+        return
+
+    # Gemini fallback -- faster/cheaper but no language detection
+    gemini_data = await _try_gemini_transcription(youtube_id, duration, is_music)
+    if gemini_data is not None:
+        yield gemini_data
+        return
+
+    # Metadata fallback -- only for music videos when all transcript sources fail.
+    # Yields empty segments intentionally: sponsor filtering and AI chapter detection
+    # are skipped for metadata-only transcripts; only raw_text is used downstream.
+    if is_music:
+        logger.info("All transcript sources failed for music video %s, using metadata fallback", youtube_id)
+        yield sse_event("phase", {"phase": "metadata_fallback"})
+        metadata_text = build_metadata_text(video_data)
+        yield TranscriptData(
+            segments=[],
+            raw_text=metadata_text,
+            transcript_type="metadata",
+            source="metadata",
+        )
+        return
+
+    # Not a music video -- raise the last error from the fallback chain.
+    # whisper_error is None when Whisper is disabled and Gemini was the only audio path.
+    if whisper_error is not None:
+        raise whisper_error
+    raise TranscriptError("All transcript sources failed", ErrorCode.NO_TRANSCRIPT)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Internal helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def _try_gemini_transcription(
+    youtube_id: str,
+    duration: int,
+    is_music: bool,
+) -> TranscriptData | None:
+    """Attempt Gemini audio transcription. Returns TranscriptData on success, None on failure."""
+    if not settings.GEMINI_API_KEY:
+        return None
+
+    gemini_timeout = min(max(120.0, duration * 0.02 + 60), 300.0)
+    logger.info(
+        "Trying Gemini transcription (timeout: %ds) for %ds video",
+        int(gemini_timeout), duration,
+    )
+    try:
+        gemini_result = await asyncio.wait_for(
+            transcribe_with_gemini(youtube_id, is_music=is_music),
+            timeout=gemini_timeout,
+        )
+        segments = normalized_segments_to_pipeline(gemini_result.segments)
+        # The transcriber now detects and carries the source language (it keeps
+        # the transcript in its original script). Honor that first; fall back to
+        # detecting from text as a safety net so a non-English video is never
+        # silently defaulted to "en" — that would skip the translation phase and
+        # hide the FE language toggle.
+        gemini_language = (
+            gemini_result.language
+            or detect_language_from_text(gemini_result.text)
+            or detect_language_by_script(gemini_result.text)
+        )
+        logger.info(
+            "Gemini transcription successful: %d segments (language=%s)",
+            len(segments), gemini_language,
+        )
+        return TranscriptData(
+            segments=segments,
+            raw_text=gemini_result.text,
+            transcript_type="gemini",
+            source="gemini",
+            language=gemini_language,
+        )
+    except (TranscriptError, asyncio.TimeoutError) as e:
+        logger.warning("Gemini transcription failed, falling back to Whisper: %s", e)
+    except Exception as e:
+        logger.error("Unexpected Gemini error: %s", e, exc_info=True)
+    return None
+
+
+async def _try_whisper_transcription(
+    youtube_id: str,
+    duration: int,
+    is_music: bool,
+) -> tuple[TranscriptData | None, TranscriptError | None]:
+    """Attempt Whisper transcription. Returns (data, None) on success or (None, error) on failure."""
+    logger.info("Trying Whisper fallback for %s", youtube_id)
+    # Budget scales with duration so long videos get enough time to transcribe
+    # every chunk. Minimum 5 min, max 15 min. The budget is enforced as an
+    # internal per-chunk *deadline* inside transcribe_with_whisper (it returns
+    # the chunks it finished instead of being hard-cancelled), so a long video
+    # yields a partial-but-real transcript rather than falling through to the
+    # truncating Gemini path. The outer wait_for is only a generous backstop for
+    # a single hung API call; keeping it well above the deadline avoids the
+    # cancel-mid-thread race that deletes chunk files an orphaned worker is
+    # still reading.
+    whisper_timeout = min(max(300.0, duration * 0.12 + 120), 900.0)
+    deadline = time.monotonic() + whisper_timeout
+    backstop = whisper_timeout + 300.0
+    logger.info("Whisper budget set to %ds for %ds video", int(whisper_timeout), duration)
+
+    try:
+        whisper_result = await asyncio.wait_for(
+            transcribe_with_whisper(youtube_id, is_music=is_music, deadline=deadline),
+            timeout=backstop,
+        )
+    except asyncio.TimeoutError:
+        return None, TranscriptError(
+            f"Whisper transcription exceeded backstop of {int(backstop)}s",
+            ErrorCode.UNKNOWN_ERROR,
+        )
+    except TranscriptError as e:
+        return None, e
+    except Exception as e:
+        logger.error("Whisper transcription failed unexpectedly: %s", e, exc_info=True)
+        return None, TranscriptError(
+            f"Whisper transcription failed: {e}",
+            ErrorCode.UNKNOWN_ERROR,
+        )
+
+    segments = normalized_segments_to_pipeline(whisper_result.segments)
+    logger.info("Whisper fallback successful: %d segments, language=%s", len(segments), whisper_result.language)
+    return TranscriptData(
+        segments=segments,
+        raw_text=whisper_result.text,
+        transcript_type="whisper",
+        source="whisper",
+        language=normalize_language_code(whisper_result.language),
+    ), None

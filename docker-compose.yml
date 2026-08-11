@@ -1,0 +1,568 @@
+# ============================================
+# Video Insight Engine - Development
+# ============================================
+
+# ----------------------------------------
+# Shared env (YAML anchors)
+# ----------------------------------------
+# Explicit per-service env preserves least-privilege: api-only secrets
+# (JWT_SECRET, MONGO_ROOT_PASS, ADMIN_API_KEY) do NOT bleed into Python
+# services. When adding a new variable that a Python service needs, add it
+# here — do not switch the service to `env_file: .env`, that re-introduces
+# the secret-leak vector.
+x-summarizer-env: &summarizer-env
+  PYTHONUNBUFFERED: "1"
+  # Multi-provider LLM
+  LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+  LLM_FAST_PROVIDER: ${LLM_FAST_PROVIDER:-}
+  LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
+  LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-4096}
+  LLM_FAST_MAX_TOKENS: ${LLM_FAST_MAX_TOKENS:-2048}
+  LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60.0}
+  LLM_NUM_RETRIES: ${LLM_NUM_RETRIES:-2}
+  # Per-stage model overrides (blank → primary model)
+  LLM_EXTRACTION_MODEL: ${LLM_EXTRACTION_MODEL:-}
+  LLM_ENRICHMENT_MODEL: ${LLM_ENRICHMENT_MODEL:-}
+  LLM_VISION_MODEL: ${LLM_VISION_MODEL:-}
+  LLM_DESCRIPTION_MODEL: ${LLM_DESCRIPTION_MODEL:-}
+  LLM_SYNTHESIS_MODEL: ${LLM_SYNTHESIS_MODEL:-}
+  LLM_TRANSLATION_MODEL: ${LLM_TRANSLATION_MODEL:-}
+  EXTRACTION_USE_FAST_FIRST: ${EXTRACTION_USE_FAST_FIRST:-false}
+  # Provider API keys
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  # Common
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
+  # Transcript / proxy
+  WEBSHARE_PROXY_USERNAME: ${WEBSHARE_PROXY_USERNAME:-}
+  WEBSHARE_PROXY_PASSWORD: ${WEBSHARE_PROXY_PASSWORD:-}
+  TRANSCRIPT_CLEANING_ENABLED: ${TRANSCRIPT_CLEANING_ENABLED:-true}
+  # S3 media storage
+  S3_BUCKET: ${S3_BUCKET:-vie-transcripts}
+  S3_PRESIGNED_URL_EXPIRY: ${S3_PRESIGNED_URL_EXPIRY:-3600}
+  AWS_REGION: ${AWS_REGION:-us-east-1}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+  AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
+  # Frame extraction
+  FRAME_EXTRACTION_ENABLED: ${FRAME_EXTRACTION_ENABLED:-true}
+  SCENE_EXTRACTION_ENABLED: ${SCENE_EXTRACTION_ENABLED:-true}
+  # Langfuse — keys blank → SDK no-ops
+  LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+  LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+  LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+  LANGFUSE_FAITHFULNESS_SAMPLE_RATE: ${LANGFUSE_FAITHFULNESS_SAMPLE_RATE:-0.2}
+  LANGFUSE_USER_ID_MODE: ${LANGFUSE_USER_ID_MODE:-identity}
+  LANGFUSE_USER_ID_HASH_SALT: ${LANGFUSE_USER_ID_HASH_SALT:-}
+  # Sentry — empty DSN = SDK no-ops (consumed by vie-summarizer AND vie-summarizer-worker)
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
+  SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+  SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+  # LLM alert webhook — empty URL = alerts stay Mongo-only (llm_common/alerts.py)
+  ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+
+x-assistant-env: &assistant-env
+  PYTHONUNBUFFERED: "1"
+  # Multi-provider LLM
+  LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+  LLM_FAST_PROVIDER: ${LLM_FAST_PROVIDER:-}
+  LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
+  # Chat + agentic-loop model (assistant only). Blank → primary provider's fast tier (Haiku).
+  LLM_CHAT_MODEL: ${LLM_CHAT_MODEL:-}
+  LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60.0}
+  LLM_NUM_RETRIES: ${LLM_NUM_RETRIES:-2}
+  # Provider API keys
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
+  # Langfuse — keys blank → SDK no-ops
+  LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+  LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+  LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+  LANGFUSE_USER_ID_MODE: ${LANGFUSE_USER_ID_MODE:-identity}
+  LANGFUSE_USER_ID_HASH_SALT: ${LANGFUSE_USER_ID_HASH_SALT:-}
+  # Sentry — empty DSN = SDK no-ops
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
+  SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+  SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+  # LLM alert webhook — empty URL = alerts stay Mongo-only (llm_common/alerts.py)
+  ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+
+# ----------------------------------------
+# Container log rotation (YAML anchor)
+# ----------------------------------------
+# Without this the json-file driver grows unbounded and can fill the host
+# disk. Applied to every service: ~30 MB cap per container (3 x 10 MB).
+# Keep in sync with docker-compose.prod.yml.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # ----------------------------------------
+  # Infrastructure
+  # ----------------------------------------
+
+  vie-mongodb:
+    image: mongo:7
+    container_name: vie-mongodb
+    restart: unless-stopped
+    logging: *default-logging
+    # Dev resource caps (all services) protect the WSL2 host from a runaway
+    # container eating the whole VM. Generous vs. observed usage; bump before
+    # removing if a service legitimately outgrows its cap.
+    mem_limit: 1g
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - vie_mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: video-insight-engine
+    networks:
+      - vie-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  vie-qdrant:
+    # Pinned (was :latest) — silent major bumps can change the on-disk storage
+    # format. Match this tag when bumping docker-compose.prod.yml.
+    image: qdrant/qdrant:v1.18.2
+    container_name: vie-qdrant
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 2g
+    ports:
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+    volumes:
+      - vie_qdrant_data:/qdrant/storage
+    networks:
+      - vie-network
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/6333"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  vie-redis:
+    image: redis:7-alpine
+    container_name: vie-redis
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 512m
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - vie_redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - vie-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  vie-rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: vie-rabbitmq
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 1g
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - vie_rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-vie}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-vie-dev}
+      RABBITMQ_DEFAULT_VHOST: /
+    networks:
+      - vie-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ----------------------------------------
+  # Application Services
+  # ----------------------------------------
+
+  vie-api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    image: vie-api:latest
+    container_name: vie-api
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 1g
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./api/src:/app/src:ro
+      - /app/node_modules
+      # Canonical pipeline version — same file the summarizer mounts, so the
+      # two services can never disagree (config.ts prefers this docker path).
+      - ./packages/shared/src/config/pipeline-version.json:/app/shared/pipeline-version.json:ro
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
+      SUMMARIZER_URL: http://vie-summarizer:8000
+      ASSISTANT_URL: http://vie-assistant:8001
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-change-in-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      # Extra allowed origins (e.g. the :5273 Playwright e2e webServer) — without
+      # the passthrough, browser e2e API calls are CORS-blocked at login.
+      CORS_ADDITIONAL_ORIGINS: ${CORS_ADDITIONAL_ORIGINS:-}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-dev-internal-secret-change-me}
+      # RabbitMQ — see docs/INFRASTRUCTURE.md
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-vie}:${RABBITMQ_DEFAULT_PASS:-vie-dev}@vie-rabbitmq:5672/
+      USE_QUEUE_PIPELINE: ${USE_QUEUE_PIPELINE:-false}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key-change-me}
+      # Redis — backs the dispatch guard (api/src/services/dispatch-guard.service.ts).
+      # MUST point at the same instance the summarizer uses for the per-video
+      # pipeline lock so the two services share a coherent operational view.
+      REDIS_URL: ${REDIS_URL:-redis://vie-redis:6379}
+      DISPATCH_GUARD_TTL_SECONDS: ${DISPATCH_GUARD_TTL_SECONDS:-900}
+      # Sentry — empty DSN = SDK no-ops
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+      # S3 — read-path frame URL re-signer (api/src/utils/refresh-frame-urls.ts).
+      # Blank S3_BUCKET → re-signer is a no-op. Must mirror the summarizer's
+      # bucket/credentials so re-signed URLs point at the same objects.
+      S3_BUCKET: ${S3_BUCKET:-vie-transcripts}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
+      FRAME_URL_TTL_SECONDS: ${FRAME_URL_TTL_SECONDS:-21600}
+    networks:
+      - vie-network
+    depends_on:
+      vie-mongodb:
+        condition: service_healthy
+      vie-rabbitmq:
+        condition: service_healthy
+      vie-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ----------------------------------------
+  # Langfuse Prompt Sync (one-shot init)
+  # ----------------------------------------
+  # Runs once at stack start, registers every local prompt template under
+  # label="production" in the configured Langfuse project, then exits.
+  #
+  # Downstream services do NOT depend on this completing — that would make
+  # every `docker compose up` block on Langfuse connectivity. The summarizer
+  # runtime falls back to local .txt prompts on any 404, so racing here is
+  # safe: late uploads just take effect on subsequent video runs.
+  #
+  # Failure modes are all non-fatal (script exits 0):
+  #   - Langfuse keys blank → "not configured, skipping" log, exit 0.
+  #   - Network/auth error → individual prompt errors logged, exit 0.
+  #
+  # To force a resync mid-session (e.g. after editing a prompt file):
+  #   docker compose run --rm vie-langfuse-init
+  vie-langfuse-init:
+    image: vie-summarizer:latest
+    container_name: vie-langfuse-init
+    build:
+      context: .
+      dockerfile: services/summarizer/Dockerfile
+    restart: "no"
+    logging: *default-logging
+    command: ["python", "/repo/scripts/register_prompts.py", "--commit"]
+    working_dir: /repo
+    environment:
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+    volumes:
+      - ./scripts:/repo/scripts:ro
+      - ./services/summarizer/src/prompts:/repo/services/summarizer/src/prompts:ro
+      - ./services/assistant/src/utils/prompt_templates.py:/repo/services/assistant/src/utils/prompt_templates.py:ro
+    networks:
+      - vie-network
+
+  vie-summarizer:
+    build:
+      context: .
+      dockerfile: services/summarizer/Dockerfile
+    image: vie-summarizer:latest
+    container_name: vie-summarizer
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 4g
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./services/summarizer/src:/app/src:ro
+      # Repo-root scripts/ — register_prompts, build_golden_dataset, run_eval, etc.
+      # Mounted at /app/scripts so `docker compose exec vie-summarizer python scripts/X.py`
+      # resolves to repo-root scripts.
+      - ./scripts:/app/scripts:ro
+      # Service-internal maintenance scripts (backfill, benchmark, verify_rag).
+      # Live at /app/services-scripts because they collide with the repo-root mount
+      # above; they still import from `src.services.vector.*` correctly because the
+      # `src/` mount is unchanged and WORKDIR=/app.
+      - ./services/summarizer/scripts:/app/services-scripts:ro
+      # Golden dataset + dev fixtures consumed by scripts/build_golden_dataset.py
+      # and scripts/run_eval.py (both compute REPO_ROOT=/app and read dev/...).
+      - ./dev:/app/dev:ro
+      - ./packages/shared/src/config/domains.json:/app/shared/domains.json:ro
+      - ./packages/shared/src/config/pipeline-version.json:/app/shared/pipeline-version.json:ro
+    environment:
+      <<: *summarizer-env
+      MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
+      QDRANT_HOST: vie-qdrant
+      QDRANT_PORT: "6333"
+      REDIS_URL: redis://vie-redis:6379
+    networks:
+      - vie-network
+    depends_on:
+      vie-mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ----------------------------------------
+  # Summarizer Worker (RabbitMQ consumer)
+  # ----------------------------------------
+  # Shares the summarizer image but runs `python -m src.worker` (executes
+  # src/worker/__main__.py) to consume video processing jobs from RabbitMQ.
+  # Same code path as the SSE pipeline — acquires the same Redis lock so SSE
+  # clients attach as consumers naturally.
+  vie-summarizer-worker:
+    build:
+      context: .
+      dockerfile: services/summarizer/Dockerfile
+    image: vie-summarizer:latest
+    container_name: vie-summarizer-worker
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 4g
+    command: ["python", "-m", "src.worker"]
+    volumes:
+      - ./services/summarizer/src:/app/src:ro
+      # Repo-root scripts/ — register_prompts, build_golden_dataset, run_eval, etc.
+      # Mounted at /app/scripts so `docker compose exec vie-summarizer python scripts/X.py`
+      # resolves to repo-root scripts.
+      - ./scripts:/app/scripts:ro
+      # Service-internal maintenance scripts (backfill, benchmark, verify_rag).
+      # Live at /app/services-scripts because they collide with the repo-root mount
+      # above; they still import from `src.services.vector.*` correctly because the
+      # `src/` mount is unchanged and WORKDIR=/app.
+      - ./services/summarizer/scripts:/app/services-scripts:ro
+      # Golden dataset + dev fixtures consumed by scripts/build_golden_dataset.py
+      # and scripts/run_eval.py (both compute REPO_ROOT=/app and read dev/...).
+      - ./dev:/app/dev:ro
+      - ./packages/shared/src/config/domains.json:/app/shared/domains.json:ro
+      - ./packages/shared/src/config/pipeline-version.json:/app/shared/pipeline-version.json:ro
+    environment:
+      <<: *summarizer-env
+      MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
+      QDRANT_HOST: vie-qdrant
+      QDRANT_PORT: "6333"
+      REDIS_URL: redis://vie-redis:6379
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-vie}:${RABBITMQ_DEFAULT_PASS:-vie-dev}@vie-rabbitmq:5672/
+      # Worker-specific
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      WORKER_MAX_RETRIES: ${WORKER_MAX_RETRIES:-3}
+    networks:
+      - vie-network
+    depends_on:
+      vie-mongodb:
+        condition: service_healthy
+      vie-redis:
+        condition: service_healthy
+      vie-rabbitmq:
+        condition: service_healthy
+    # No HTTP surface — liveness = heartbeat file mtime, touched every 30s by
+    # the worker loop (src/worker/__main__.py). Stale >90s → unhealthy.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys,time; st=os.stat('/tmp/vie-worker-heartbeat'); sys.exit(0 if time.time()-st.st_mtime < 90 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  vie-assistant:
+    build:
+      context: .
+      dockerfile: services/assistant/Dockerfile
+    image: vie-assistant:latest
+    container_name: vie-assistant
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 3g
+    # No host port: internal-only service (reachable on vie-network as vie-assistant:8001)
+    volumes:
+      - ./services/assistant/src:/app/src:ro
+    environment:
+      <<: *assistant-env
+      ASSISTANT_PORT: "8001"
+      MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
+      QDRANT_URL: http://vie-qdrant:6333
+      QDRANT_COLLECTION: transcript_chunks
+      MAX_CONTEXT_CHUNKS: "8"
+      MAX_CONVERSATION_TURNS: "20"
+    networks:
+      - vie-network
+    depends_on:
+      vie-mongodb:
+        condition: service_healthy
+      vie-qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  vie-admin:
+    build:
+      context: .
+      dockerfile: services/admin/Dockerfile
+    image: vie-admin:latest
+    container_name: vie-admin
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 512m
+    ports:
+      - "127.0.0.1:8002:8002"
+    volumes:
+      - ./services/admin/src:/app/src:ro
+      # Host backups dir (read-only) — the evaluator's backup-stale dead-man's
+      # switch reads the newest manifest.json timestamp from here.
+      - ./backups:/backups:ro
+    environment:
+      PYTHONUNBUFFERED: 1
+      MONGODB_URI: mongodb://vie-mongodb:27017/video-insight-engine
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key-change-me}
+      VIE_API_URL: http://vie-api:3000
+      VIE_SUMMARIZER_URL: http://vie-summarizer:8000
+      VIE_ASSISTANT_URL: http://vie-assistant:8001
+      ALERT_COST_THRESHOLD_USD: ${ALERT_COST_THRESHOLD_USD:-0.50}
+      # LLM alert webhook — the admin evaluator (daily spike / failure rate)
+      # POSTs tripped alerts here; empty URL = alerts stay Mongo-only
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      # Backup dead-man's switch — newest manifest under BACKUP_DIR older than
+      # BACKUP_MAX_AGE_HOURS trips a backup_stale alert (alert_evaluator.py).
+      BACKUP_DIR: /backups
+      BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-26}
+      # Langfuse — read-only, only to build "Open in Langfuse" deep-links.
+      # Project id is auto-resolved from the keys when LANGFUSE_PROJECT_ID is blank.
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_PROJECT_ID: ${LANGFUSE_PROJECT_ID:-}
+      # Sentry — empty DSN = SDK no-ops
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+    networks:
+      - vie-network
+    depends_on:
+      vie-mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  vie-web:
+    build:
+      context: .
+      dockerfile: ./apps/web/Dockerfile
+      args:
+        # Vite bakes these into the bundle at BUILD time — runtime env on this
+        # container has no effect (the image serves static files via nginx).
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
+        VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3000/ws}
+        # Dev login is opt-in per environment; the Dockerfile default is false
+        VITE_ENABLE_DEV_LOGIN: ${VITE_ENABLE_DEV_LOGIN:-true}
+        # Sentry — empty DSN = SDK not initialized (apps/web/src/main.tsx)
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+        VITE_SENTRY_RELEASE: ${VITE_SENTRY_RELEASE:-}
+    image: vie-web:latest
+    container_name: vie-web
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 256m
+    ports:
+      - "5173:5173"
+    networks:
+      - vie-network
+    depends_on:
+      - vie-api
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5173/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+# ----------------------------------------
+# Networks
+# ----------------------------------------
+
+networks:
+  vie-network:
+    driver: bridge
+    name: vie-network
+
+# ----------------------------------------
+# Volumes
+# ----------------------------------------
+
+volumes:
+  vie_mongodb_data:
+    name: vie_mongodb_data
+  vie_qdrant_data:
+    name: vie_qdrant_data
+  vie_redis_data:
+    name: vie_redis_data
+  vie_rabbitmq_data:
+    name: vie_rabbitmq_data

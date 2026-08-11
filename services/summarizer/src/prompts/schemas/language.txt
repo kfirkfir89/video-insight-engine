@@ -1,0 +1,81 @@
+<domain_schema name="language">
+LANGUAGE DATA — LanguageData schema
+
+Extract structured language learning content.
+
+{
+  "targetLanguage": "Language being taught (e.g., English, Spanish, Japanese)",
+  "nativeLanguage": "Source/comparison language or null",
+  "level": "beginner | intermediate | advanced",
+  "phrases": [
+    {
+      "phrase": "Exact phrase/sentence as spoken",
+      "translation": "Translation or meaning",
+      "pronunciation": "Phonetic guide or IPA if provided",
+      "context": "When/where to use this phrase",
+      "timestamp": null
+    }
+  ],
+> UI: Phrases → SpotExplorer cards. Fill pronunciation for expandable detail, context for usage tips.
+  "rules": [
+    {
+      "name": "Grammar rule or pattern name",
+      "emoji": "relevant emoji",
+      "explanation": "How the rule works with examples from the video",
+      "examples": ["Example sentence 1", "Example sentence 2"],
+      "exceptions": ["Exception if mentioned"]
+    }
+  ],
+> UI: Rules → InfoGrid cards. Fill examples for expandable detail.
+  "drills": [
+    {
+      "number": 1,
+      "instruction": "What to practice — repeat after me, fill in the blank, etc.",
+      "prompt": "The drill prompt or question",
+      "answer": "Expected answer or pronunciation",
+      "tips": "Speaker's coaching notes",
+      "timestamp": null
+    }
+  ],
+> UI: Drills → StepPlayer. Fill instruction and prompt for guided practice.
+  "vocabulary": [
+    {
+      "word": "Target language word or phrase",
+      "definition": "Meaning in native language",
+      "pronunciation": "Phonetic guide",
+      "partOfSpeech": "noun | verb | adjective | etc.",
+      "example": "Example sentence using the word"
+    }
+  ]
+> UI: Vocabulary → FlashDeck (word=front, definition=back). Fill pronunciation and example for rich card backs.
+}
+
+// Example for a language lesson:
+{
+  "targetLanguage": "Japanese",
+  "nativeLanguage": "English",
+  "level": "beginner",
+  "phrases": [
+    {"phrase": "すみません", "translation": "Excuse me / I'm sorry", "pronunciation": "su-mi-ma-sen", "context": "Getting attention or apologizing", "timestamp": 45}
+  ],
+  "rules": [
+    {"name": "Particle は (wa)", "emoji": "📝", "explanation": "Marks the topic of the sentence. 'わたしは' means 'As for me...'", "examples": ["わたしはアメリカじんです (I am American)"], "exceptions": ["Written as は but pronounced 'wa' when used as a particle"]}
+  ],
+  "vocabulary": [
+    {"word": "ありがとう", "definition": "Thank you", "pronunciation": "a-ri-ga-to-u", "partOfSpeech": "expression", "example": "ありがとうございます (polite form)"}
+  ]
+}
+
+SCALING (video is {duration_minutes} minutes):
+- Under 15 min: 5-10 phrases, 2-3 rules, 3-5 drills, 8-15 vocabulary
+- 15-30 min: 10-20 phrases, 3-6 rules, 5-10 drills, 15-25 vocabulary
+- Over 30 min: 20-40 phrases, 5-10 rules, 10-20 drills, 25-50 vocabulary
+
+RULES:
+- Preserve exact target language text — no paraphrasing
+- Include pronunciation guides whenever provided
+- Drills must be actionable — clear prompt and expected answer
+- Vocabulary items need part of speech for language learners
+- Group phrases by topic/situation when possible
+- Include timestamps for key pronunciation demonstrations
+</domain_schema>

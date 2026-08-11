@@ -1,0 +1,1334 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./styles/animations.css";
+@import "./styles/categories.css";
+@import "./styles/flow-grid.css";
+@import "./styles/dark-effects.css";
+@import "./styles/transitions.css";
+@import "./styles/overdrive.css";
+@plugin "@tailwindcss/typography";
+
+/* Lagoon is a dark-family theme: it must receive every `dark:` Tailwind utility,
+   so the variant matches both [data-theme="dark"] and [data-theme="lagoon"]. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="lagoon"], [data-theme="lagoon"] *));
+@custom-variant rtl (&:where([dir="rtl"], [dir="rtl"] *));
+
+/* ═══════════════════════════════════════════════════
+   CSS Custom Properties for theming
+   ═══════════════════════════════════════════════════ */
+:root {
+  /* Layout tokens */
+  --app-header-height: 3.25rem;
+  --app-chrome-gap: 0.5rem;
+  --app-chrome-radius: 1rem;
+
+  /* Canvas — recessed surface behind floating panels */
+  --app-canvas: oklch(96% 0.008 285);
+
+  /* Light mode — Vibrant, colorful, modern (violet-indigo primary, hue ~290) */
+  --background: oklch(98.5% 0.006 285);
+  --foreground: oklch(16% 0.03 280);
+  --card: oklch(99% 0.004 285);
+  --card-foreground: oklch(16% 0.03 280);
+  --popover: oklch(99% 0.004 285);
+  --popover-foreground: oklch(16% 0.03 280);
+  --primary: oklch(58% 0.24 292);
+  --primary-foreground: oklch(99% 0 0);
+  /* CTA — plum/berry for primary actions.
+     Separates identity (violet --primary, hue 292) from action (plum --cta, hue 340)
+     while staying in the violet family. Hue 340 sits between pure violet and rose —
+     warmer than --primary without drifting into red/coral territory. */
+  --cta: oklch(55% 0.17 340);
+  --cta-foreground: oklch(99% 0 0);
+  --secondary: oklch(94% 0.012 290);
+  --secondary-foreground: oklch(25% 0.03 285);
+  --muted: oklch(95% 0.008 285);
+  /* Darkened from 38% to 32% to reach WCAG AA ≥4.5:1 on --background (98.5%). */
+  --muted-foreground: oklch(32% 0.025 280);
+  --accent: oklch(95% 0.02 310);
+  --accent-foreground: oklch(25% 0.03 285);
+  --destructive: oklch(55% 0.22 18);
+  --destructive-foreground: oklch(99% 0 0);
+  --border: oklch(89% 0.012 285);
+  --input: oklch(89% 0.012 285);
+  --ring: oklch(58% 0.24 292);
+  --radius: 0.75rem;
+  --border-width: 1px;
+
+  /* Premium effect tokens */
+  --glow-strength: 0.15;
+  --glow-spread: 14px;
+
+  /* Status colors (semantic) */
+  --status-pending: oklch(79.5% 0.18 86);
+  --status-processing: oklch(62% 0.21 250);
+  --status-success: oklch(60% 0.15 155);
+  --status-error: var(--destructive);
+
+  /* Z-index scale */
+  --z-tooltip: 50;
+  --z-dropdown: 100;
+  --z-modal: 200;
+  --z-toast: 300;
+  --z-confetti: 400;
+
+  /* Chart palette */
+  --chart-1: oklch(70% 0.18 250);
+  --chart-2: oklch(70% 0.18 150);
+  --chart-3: oklch(70% 0.18 50);
+  --chart-4: oklch(70% 0.18 330);
+  --chart-5: oklch(70% 0.18 200);
+  --chart-6: oklch(60% 0.15 280);
+  --chart-7: oklch(70% 0.15 90);
+  --chart-8: oklch(65% 0.15 20);
+
+  /* Feedback colors (semantic) */
+  --success: oklch(55% 0.16 155);
+  --success-foreground: oklch(98% 0.01 155);
+  --success-soft: oklch(96% 0.04 155);
+  --warning: oklch(78% 0.15 80);
+  --warning-foreground: oklch(25% 0.06 80);
+  --warning-soft: oklch(96% 0.04 80);
+  --info: oklch(62% 0.16 255);
+  --info-foreground: oklch(98% 0.01 255);
+  --info-soft: oklch(96% 0.04 255);
+
+  /* Code/terminal surface (semantic) */
+  --code-bg: oklch(12% 0 0);
+  --code-chrome: oklch(15% 0 0);
+  --code-border: oklch(20% 0 0);
+  --code-text: oklch(90% 0 0);
+  --code-text-muted: oklch(60% 0 0);
+  --code-text-dim: oklch(50% 0 0);
+  --code-text-bright: oklch(75% 0 0);
+  --code-focus: oklch(25% 0 0);
+}
+
+[data-theme="dark"] {
+  /* Dark mode — Deep indigo-purple, electric accents, luminous */
+  --background: oklch(12% 0.03 280);
+  --foreground: oklch(94% 0.008 285);
+  --card: oklch(16% 0.025 280);
+  --card-foreground: oklch(94% 0.008 285);
+  --popover: oklch(16% 0.025 280);
+  --popover-foreground: oklch(94% 0.008 285);
+  --primary: oklch(68% 0.26 292);
+  --primary-foreground: oklch(99% 0 0);
+  /* CTA — brighter plum/berry in dark for luminous warmth on deep canvas. */
+  --cta: oklch(66% 0.18 340);
+  --cta-foreground: oklch(99% 0 0);
+  --secondary: oklch(22% 0.025 280);
+  --secondary-foreground: oklch(90% 0.008 285);
+  --muted: oklch(20% 0.02 280);
+  --muted-foreground: oklch(72% 0.015 280);
+  --accent: oklch(22% 0.03 310);
+  --accent-foreground: oklch(90% 0.008 285);
+  --destructive: oklch(65% 0.22 18);
+  --destructive-foreground: oklch(99% 0 0);
+  --border: oklch(25% 0.02 280);
+  --input: oklch(20% 0.02 280);
+  --ring: oklch(68% 0.26 292);
+
+  /* Canvas (dark) */
+  --app-canvas: oklch(8.5% 0.02 280);
+
+  /* Premium effect tokens (dark mode - stronger glow) */
+  --glow-strength: 0.35;
+  --glow-spread: 22px;
+
+  /* Status colors (dark mode - slightly brighter for visibility) */
+  --status-pending: oklch(82% 0.16 86);
+  --status-processing: oklch(68% 0.19 250);
+  --status-success: oklch(65% 0.14 155);
+  --status-error: var(--destructive);
+
+  /* Z-index scale (same in dark) */
+  --z-tooltip: 50;
+  --z-dropdown: 100;
+  --z-modal: 200;
+  --z-toast: 300;
+  --z-confetti: 400;
+
+  /* Chart palette (dark mode — boosted lightness) */
+  --chart-1: oklch(75% 0.16 250);
+  --chart-2: oklch(75% 0.16 150);
+  --chart-3: oklch(75% 0.16 50);
+  --chart-4: oklch(75% 0.16 330);
+  --chart-5: oklch(75% 0.16 200);
+  --chart-6: oklch(65% 0.14 280);
+  --chart-7: oklch(75% 0.14 90);
+  --chart-8: oklch(70% 0.14 20);
+
+  /* Feedback colors (dark mode) */
+  --success: oklch(68% 0.16 155);
+  --success-foreground: oklch(15% 0.05 155);
+  --success-soft: oklch(20% 0.05 155);
+  --warning: oklch(78% 0.13 80);
+  --warning-foreground: oklch(15% 0.05 80);
+  --warning-soft: oklch(20% 0.04 80);
+  --info: oklch(68% 0.14 255);
+  --info-foreground: oklch(15% 0.05 255);
+  --info-soft: oklch(20% 0.04 255);
+
+  /* Code/terminal surface (dark mode — slightly lifted) */
+  --code-bg: oklch(14% 0 0);
+  --code-chrome: oklch(17% 0 0);
+  --code-border: oklch(22% 0 0);
+  --code-text: oklch(93% 0 0);
+  --code-text-muted: oklch(64% 0 0);
+  --code-text-dim: oklch(54% 0 0);
+  --code-text-bright: oklch(80% 0 0);
+  --code-focus: oklch(28% 0 0);
+}
+
+/* ═══════════════════════════════════════════════════
+   LAGOON — colorful 4th theme (dark-family).
+   Deep teal canvas (hue ~200), bright-teal identity, warm coral action.
+   A distinct hue world from the violet light/dark, so it reads as a true
+   third register rather than "dark, louder". Opts into the dark contract
+   via @custom-variant dark + the :is() selectors in the imported CSS.
+   ═══════════════════════════════════════════════════ */
+[data-theme="lagoon"] {
+  --background: oklch(21% 0.045 200);
+  --foreground: oklch(93% 0.02 185);
+  --card: oklch(25% 0.05 199);
+  --card-foreground: oklch(93% 0.02 185);
+  --popover: oklch(25% 0.05 199);
+  --popover-foreground: oklch(93% 0.02 185);
+  /* Identity shifts violet → bright teal for this theme. Dark ink foreground
+     keeps AA contrast on the luminous teal fill. */
+  --primary: oklch(68% 0.13 195);
+  --primary-foreground: oklch(16% 0.04 200);
+  /* CTA stays warm (coral, hue 35) — heat against the cool canvas. The
+     cta-magnetic gradient then runs coral → teal, purpose-built for Lagoon. */
+  --cta: oklch(70% 0.17 35);
+  --cta-foreground: oklch(18% 0.05 35);
+  --secondary: oklch(29% 0.05 200);
+  --secondary-foreground: oklch(90% 0.02 185);
+  --muted: oklch(27% 0.045 200);
+  --muted-foreground: oklch(75% 0.03 192);
+  --accent: oklch(31% 0.06 196);
+  --accent-foreground: oklch(92% 0.02 185);
+  --destructive: oklch(66% 0.21 22);
+  --destructive-foreground: oklch(99% 0 0);
+  --border: oklch(33% 0.04 199);
+  --input: oklch(29% 0.045 200);
+  --ring: oklch(68% 0.13 195);
+
+  /* Canvas — recessed surface behind floating panels */
+  --app-canvas: oklch(16% 0.04 202);
+
+  /* Premium effect tokens (dark-family — stronger glow) */
+  --glow-strength: 0.35;
+  --glow-spread: 22px;
+
+  /* Status colors (tuned to harmonize with teal) */
+  --status-pending: oklch(82% 0.16 86);
+  --status-processing: oklch(74% 0.13 205);
+  --status-success: oklch(74% 0.14 165);
+  --status-error: var(--destructive);
+
+  /* Chart palette (boosted lightness, like dark) */
+  --chart-1: oklch(75% 0.16 250);
+  --chart-2: oklch(75% 0.16 150);
+  --chart-3: oklch(75% 0.16 50);
+  --chart-4: oklch(75% 0.16 330);
+  --chart-5: oklch(75% 0.16 200);
+  --chart-6: oklch(65% 0.14 280);
+  --chart-7: oklch(75% 0.14 90);
+  --chart-8: oklch(70% 0.14 20);
+
+  /* Feedback colors */
+  --success: oklch(72% 0.15 160);
+  --success-foreground: oklch(16% 0.05 160);
+  --success-soft: oklch(28% 0.06 165);
+  --warning: oklch(81% 0.13 82);
+  --warning-foreground: oklch(20% 0.05 80);
+  --warning-soft: oklch(30% 0.05 80);
+  --info: oklch(74% 0.12 210);
+  --info-foreground: oklch(16% 0.05 210);
+  --info-soft: oklch(28% 0.05 210);
+
+  /* Code/terminal surface — teal-tinted dark */
+  --code-bg: oklch(15% 0.02 200);
+  --code-chrome: oklch(18% 0.02 200);
+  --code-border: oklch(24% 0.02 200);
+  --code-text: oklch(92% 0.01 190);
+  --code-text-muted: oklch(64% 0.01 195);
+  --code-text-dim: oklch(54% 0.01 195);
+  --code-text-bright: oklch(80% 0.01 190);
+  --code-focus: oklch(28% 0.02 200);
+}
+
+/* System mode: Not needed — both index.html inline script and theme-provider.tsx
+   always set data-theme before first paint, so :root never lacks [data-theme]. */
+
+/* ═══════════════════════════════════════════════════
+   VIE ACCENT TOKENS — Tiered Palette
+   ─────────────────────────────────────────────────
+   Primary (use freely): --vie-coral, --vie-plum, --vie-mint
+   Rare (semantic only):  --vie-sky, --vie-honey, --vie-rose, --vie-forest, --vie-peach
+   Rule: max 4 accent colors on any single screen
+   ═══════════════════════════════════════════════════ */
+:root {
+  --vie-coral: oklch(72% 0.18 25);
+  --vie-plum: oklch(52% 0.2 310);
+  --vie-sky: oklch(72% 0.14 230);
+  --vie-mint: oklch(78% 0.14 165);
+  --vie-honey: oklch(82% 0.15 80);
+  --vie-rose: oklch(68% 0.16 350);
+  --vie-forest: oklch(55% 0.12 145);
+  --vie-peach: oklch(82% 0.1 55);
+
+  /* Overlay tokens — for lightbox, modals, hover overlays */
+  --overlay-bg: oklch(10% 0.01 280 / 0.85);
+  --overlay-text: oklch(94% 0.008 285);
+  --overlay-text-muted: oklch(78% 0.01 280);
+  --overlay-surface: oklch(30% 0.015 280 / 0.3);
+
+  /* Glass surface tokens */
+  --vie-glass: oklch(from var(--card) l c h / 0.6);
+  --vie-glass-border: oklch(from var(--border) l c h / 0.3);
+  --vie-glass-border-strong: oklch(from var(--border) l c h / 0.6);
+  --vie-nav-bg: oklch(from var(--card) l c h / 0.85);
+
+  /* Easing tokens. Bounce/elastic reads as AI-generated motion — VIE
+     decelerates without overshoot. ease-out-quint is the workhorse; expo and
+     quart are sharper variants for specific cases. */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Hero background gradient (landing/marketing) */
+  --gradient-hero-bg: radial-gradient(
+    ellipse at center top,
+    oklch(from var(--primary) l c h / 0.04),
+    transparent 60%
+  );
+
+  /* Ambient auth/generate background — dual-blob: primary halo + coral warmth.
+     Keeps the page from feeling like a blank neutral void without shouting. */
+  --gradient-auth-bg:
+    radial-gradient(ellipse 60rem 40rem at 15% -10%, oklch(from var(--primary) l c h / 0.08), transparent 55%),
+    radial-gradient(ellipse 50rem 35rem at 110% 110%, oklch(from var(--vie-coral) l c h / 0.06), transparent 55%);
+
+  /* Ambient empty-state glow — soft primary radiance behind a hero icon */
+  --gradient-empty-glow: radial-gradient(
+    circle at center,
+    oklch(from var(--primary) l c h / 0.18),
+    transparent 70%
+  );
+
+  /* ── Rule gradients — three named chromatic signals ──
+     These are different intents, not stylistic variations. Components MUST
+     reference the token whose *signal* matches their purpose, not the one
+     whose color happens to look right.
+
+       --rule-identity  brand signature (primary → coral blend).
+                        Used on popover/modal top-edges. Declares "this
+                        surface belongs to VIE." Most elaborate; rarest.
+       --rule-active    single-primary fade at full strength.
+                        Used on active nav state (MobileBottomNav).
+                        Declares "this is the current route."
+       --rule-domain    single-primary fade at 0.4 opacity.
+                        Used as a quiet underline under app chrome
+                        (AppHeader) or domain section dividers.
+                        Declares "this is our territory," quietly.
+     --gradient-accent-rule is kept as a legacy alias of --rule-identity. */
+  --rule-identity: linear-gradient(
+    90deg,
+    oklch(from var(--primary) l c h / 0) 0%,
+    oklch(from var(--primary) l c h / 0.4) 30%,
+    oklch(from var(--vie-coral) l c h / 0.4) 70%,
+    oklch(from var(--vie-coral) l c h / 0) 100%
+  );
+  --rule-active: linear-gradient(
+    90deg,
+    transparent,
+    var(--primary),
+    transparent
+  );
+  --rule-domain: linear-gradient(
+    90deg,
+    transparent,
+    oklch(from var(--primary) l c h / 0.4),
+    transparent
+  );
+  --gradient-accent-rule: var(--rule-identity);
+
+  /* ── Output Type Gradients ── */
+  --gradient-smart-summary: linear-gradient(
+    135deg,
+    oklch(70% 0.15 250),
+    oklch(65% 0.18 280)
+  );
+  --gradient-recipe: linear-gradient(
+    135deg,
+    oklch(70% 0.18 25),
+    oklch(65% 0.15 40)
+  );
+  --gradient-code: linear-gradient(
+    135deg,
+    oklch(65% 0.15 165),
+    oklch(60% 0.18 200)
+  );
+  --gradient-study: linear-gradient(
+    135deg,
+    oklch(68% 0.15 275),
+    oklch(63% 0.18 310)
+  );
+  --gradient-trip: linear-gradient(
+    135deg,
+    oklch(70% 0.15 190),
+    oklch(65% 0.12 160)
+  );
+  --gradient-workout: linear-gradient(
+    135deg,
+    oklch(65% 0.18 25),
+    oklch(60% 0.15 350)
+  );
+  --gradient-verdict: linear-gradient(
+    135deg,
+    oklch(68% 0.15 50),
+    oklch(63% 0.18 30)
+  );
+  --gradient-highlights: linear-gradient(
+    135deg,
+    oklch(70% 0.15 320),
+    oklch(65% 0.12 290)
+  );
+  --gradient-music: linear-gradient(
+    135deg,
+    oklch(65% 0.15 300),
+    oklch(60% 0.18 330)
+  );
+  --gradient-project: linear-gradient(
+    135deg,
+    oklch(68% 0.12 140),
+    oklch(63% 0.15 120)
+  );
+
+  /* ── Glass Card Tokens ── */
+  --glass-bg: oklch(99% 0.003 285 / 0.7);
+  --glass-border: oklch(90% 0.01 285 / 0.3);
+  --glass-border-strong: oklch(80% 0.015 285 / 0.55);
+  --glass-shadow: 0 8px 32px oklch(20% 0.02 285 / 0.08);
+  --glass-shadow-elevated: inset 0 1px 0 oklch(100% 0 0 / 0.4), 0 12px 40px -12px oklch(20% 0.02 285 / 0.15);
+  /* 20px is the desktop baseline; mobile reduces via the override below. */
+  --glass-blur: 20px;
+
+  /* ── VIE domain accent fallbacks ──
+     Components use `var(--vie-accent)` and expect a parent wrapper to set
+     a domain-specific value (see output/lib/content-accent.ts). Without a
+     parent, resolve to primary so borders/icons still render visibly. */
+  --vie-accent: var(--primary);
+  --vie-accent-muted: oklch(from var(--primary) l c h / 0.1);
+  --vie-accent-border: oklch(from var(--primary) l c h / 0.25);
+  /* Contrast-safe text color for solid accent fills: light domains (honey/mint/
+     sky, l>0.62) get tinted ink, dark domains (plum/primary, l<0.62) get tinted
+     frost. accentStyle() re-emits this per wrapper so it tracks domain overrides;
+     this :root value is the no-wrapper default (primary l≈0.58 → frost). */
+  --vie-accent-foreground: oklch(
+    from var(--vie-accent) calc(0.18 + 0.8 * clamp(0, (0.62 - l) * 100, 1)) 0.015 280
+  );
+
+  /* ─────────────────────────────────────────────
+     TYPOGRAPHY SYSTEM
+     Families:
+       --font-display  Bricolage Grotesque — H1, hero, marketing
+       --font-sans     Hanken Grotesk     — H2-H4, body, UI
+       --font-mono     JetBrains Mono     — code, numerics
+     Hanken Grotesk pairs with Bricolage's organic curves while staying
+     outside the AI-trained-default reflex set (Inter/DM/Plus Jakarta).
+     Scale ratio: 1.25 (major third) — steps at 0.6875 / 0.8125 / 0.875 / 0.9375 / 1 / 1.125 / 1.25 / 1.5 / 1.875 / 2.25rem
+     ───────────────────────────────────────────── */
+  --font-display: "Bricolage Grotesque", "Hanken Grotesk", system-ui, sans-serif;
+  --font-sans: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-body: var(--font-sans); /* alias for backwards compat */
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", "Fira Code", monospace;
+
+  /* Tracking tokens — tighter as size grows */
+  --tracking-display: -0.025em;
+  --tracking-heading: -0.015em;
+  --tracking-title: -0.01em;
+  --tracking-body: 0;
+  --tracking-eyebrow: 0.08em;
+
+  /* Leading tokens */
+  --leading-display: 0.98;
+  --leading-heading: 1.15;
+  --leading-title: 1.35;
+  --leading-body: 1.6;
+  --leading-prose: 1.7;
+
+  /* Size tokens (rem-based for accessibility zoom) */
+  --text-xs: 0.6875rem;   /* 11 — micro labels, kbd */
+  --text-sm: 0.8125rem;   /* 13 — captions, metadata */
+  --text-base: 0.9375rem; /* 15 — body default (UI-dense) */
+  --text-md: 1rem;        /* 16 — card titles, prose body */
+  --text-lg: 1.125rem;    /* 18 — H4 / subtle lead */
+  --text-xl: 1.25rem;     /* 20 — H3 */
+  --text-2xl: 1.5rem;     /* 24 — H2 */
+  --text-3xl: 1.875rem;   /* 30 — page title */
+  --text-4xl: 2.25rem;    /* 36 — H1 */
+  --text-5xl: clamp(2.5rem, 5.5vw, 3.75rem);    /* marketing hero (fluid) */
+  --text-6xl: clamp(3rem, 6.5vw, 4.5rem);        /* display billboard */
+  --text-7xl: clamp(3.25rem, 8vw, 5.5rem);       /* landing headline drama */
+
+  /* ─────────────────────────────────────────────
+     SPATIAL SYSTEM
+     Base unit: 0.25rem (4px). Most scales are multiples of this.
+     Semantic tokens carry intent; Tailwind `spacing.*` stays the
+     primitive scale for ad-hoc needs.
+     ───────────────────────────────────────────── */
+  --space-3xs: 0.125rem;   /* 2  — hairline, icon offset */
+  --space-2xs: 0.25rem;    /* 4  — tight cluster (inside a chip) */
+  --space-xs: 0.5rem;      /* 8  — sibling inline gap */
+  --space-sm: 0.75rem;     /* 12 — form row, list item */
+  --space-md: 1rem;        /* 16 — standard block gap */
+  --space-lg: 1.5rem;      /* 24 — between related groups */
+  --space-xl: 2rem;        /* 32 — between distinct groups */
+  --space-2xl: 3rem;       /* 48 — section boundaries */
+  --space-3xl: 4rem;       /* 64 — page sections */
+  --space-4xl: 6rem;       /* 96 — marketing breathing */
+
+  /* Fluid page-level rhythm (clamps to viewport width) */
+  --space-section: clamp(2rem, 5vw, 4rem);
+  --space-page-gutter: clamp(1rem, 3vw, 2rem);
+  --space-hero: clamp(3rem, 8vw, 6rem);
+
+  /* Content width tokens */
+  --width-prose: 65ch;
+  --width-narrow: 32rem;
+  --width-content: 48rem;
+  --width-page: 80rem;
+
+  /* ─────────────────────────────────────────────
+     ELEVATION — subtle OKLCH-tinted shadow scale
+     Use for hierarchy reinforcement, not decoration.
+     ───────────────────────────────────────────── */
+  --shadow-xs: 0 1px 2px oklch(20% 0.02 285 / 0.06);
+  --shadow-sm: 0 2px 4px oklch(20% 0.02 285 / 0.06), 0 1px 2px oklch(20% 0.02 285 / 0.04);
+  --shadow-md: 0 4px 8px -2px oklch(20% 0.02 285 / 0.08), 0 2px 4px -1px oklch(20% 0.02 285 / 0.04);
+  --shadow-lg: 0 12px 24px -6px oklch(20% 0.02 285 / 0.12), 0 4px 8px -2px oklch(20% 0.02 285 / 0.06);
+  --shadow-xl: 0 24px 48px -12px oklch(20% 0.02 285 / 0.18);
+  --shadow-popover: 0 8px 24px -6px oklch(20% 0.02 285 / 0.14), 0 2px 6px -1px oklch(20% 0.02 285 / 0.06);
+}
+
+[data-theme="dark"] {
+  --vie-coral: oklch(75% 0.16 25);
+  --vie-plum: oklch(62% 0.18 310);
+  --vie-sky: oklch(75% 0.12 230);
+  --vie-mint: oklch(80% 0.12 165);
+  --vie-honey: oklch(84% 0.13 80);
+  --vie-rose: oklch(72% 0.14 350);
+  --vie-forest: oklch(62% 0.1 145);
+  --vie-peach: oklch(84% 0.08 55);
+
+  --vie-glass: oklch(from var(--card) l c h / 0.3);
+  --vie-glass-border: oklch(100% 0 0 / 0.06);
+  --vie-nav-bg: oklch(from var(--card) l c h / 0.9);
+
+  /* ── Output Type Gradients — same in dark ── */
+  --gradient-smart-summary: linear-gradient(
+    135deg,
+    oklch(70% 0.15 250),
+    oklch(65% 0.18 280)
+  );
+  --gradient-recipe: linear-gradient(
+    135deg,
+    oklch(70% 0.18 25),
+    oklch(65% 0.15 40)
+  );
+  --gradient-code: linear-gradient(
+    135deg,
+    oklch(65% 0.15 165),
+    oklch(60% 0.18 200)
+  );
+  --gradient-study: linear-gradient(
+    135deg,
+    oklch(68% 0.15 275),
+    oklch(63% 0.18 310)
+  );
+  --gradient-trip: linear-gradient(
+    135deg,
+    oklch(70% 0.15 190),
+    oklch(65% 0.12 160)
+  );
+  --gradient-workout: linear-gradient(
+    135deg,
+    oklch(65% 0.18 25),
+    oklch(60% 0.15 350)
+  );
+  --gradient-verdict: linear-gradient(
+    135deg,
+    oklch(68% 0.15 50),
+    oklch(63% 0.18 30)
+  );
+  --gradient-highlights: linear-gradient(
+    135deg,
+    oklch(70% 0.15 320),
+    oklch(65% 0.12 290)
+  );
+  --gradient-music: linear-gradient(
+    135deg,
+    oklch(65% 0.15 300),
+    oklch(60% 0.18 330)
+  );
+  --gradient-project: linear-gradient(
+    135deg,
+    oklch(68% 0.12 140),
+    oklch(63% 0.15 120)
+  );
+
+  /* ── Glass Card Tokens — dark overrides ── */
+  --glass-bg: oklch(16% 0.02 280 / 0.6);
+  --glass-border: oklch(30% 0.02 280 / 0.2);
+  --glass-border-strong: oklch(45% 0.04 280 / 0.5);
+  --glass-shadow: 0 8px 32px oklch(0% 0 0 / 0.3);
+  --glass-shadow-elevated: inset 0 1px 0 oklch(100% 0 0 / 0.06), 0 12px 40px -12px oklch(0% 0 0 / 0.5);
+  --glass-blur: 20px;
+
+  /* Typography is theme-agnostic — see :root */
+
+  /* Elevation in dark mode — deeper, no tint (pure black for contrast) */
+  --shadow-xs: 0 1px 2px oklch(0% 0 0 / 0.3);
+  --shadow-sm: 0 2px 4px oklch(0% 0 0 / 0.3), 0 1px 2px oklch(0% 0 0 / 0.2);
+  --shadow-md: 0 4px 8px -2px oklch(0% 0 0 / 0.35), 0 2px 4px -1px oklch(0% 0 0 / 0.2);
+  --shadow-lg: 0 12px 24px -6px oklch(0% 0 0 / 0.45), 0 4px 8px -2px oklch(0% 0 0 / 0.25);
+  --shadow-xl: 0 24px 48px -12px oklch(0% 0 0 / 0.55);
+  --shadow-popover: 0 8px 24px -6px oklch(0% 0 0 / 0.5), 0 2px 6px -1px oklch(0% 0 0 / 0.3);
+}
+
+[data-theme="lagoon"] {
+  /* Warm accents stay vivid — they are the "pops" against the cool canvas */
+  --vie-coral: oklch(74% 0.17 30);
+  --vie-plum: oklch(64% 0.17 310);
+  --vie-sky: oklch(76% 0.12 215);
+  --vie-mint: oklch(80% 0.13 165);
+  --vie-honey: oklch(84% 0.14 82);
+  --vie-rose: oklch(73% 0.15 350);
+  --vie-forest: oklch(64% 0.11 150);
+  --vie-peach: oklch(84% 0.09 55);
+
+  --vie-glass: oklch(from var(--card) l c h / 0.3);
+  --vie-glass-border: oklch(100% 0 0 / 0.06);
+  --vie-nav-bg: oklch(from var(--card) l c h / 0.9);
+
+  /* Glass cards — teal-tinted translucency */
+  --glass-bg: oklch(23% 0.05 200 / 0.6);
+  --glass-border: oklch(40% 0.04 200 / 0.2);
+  --glass-border-strong: oklch(52% 0.05 200 / 0.5);
+  --glass-shadow: 0 8px 32px oklch(6% 0.03 200 / 0.4);
+  --glass-shadow-elevated: inset 0 1px 0 oklch(100% 0 0 / 0.06), 0 12px 40px -12px oklch(6% 0.03 200 / 0.55);
+  --glass-blur: 20px;
+
+  /* Elevation — deep, teal-tinted (vs dark's pure-black) to sit on the canvas */
+  --shadow-xs: 0 1px 2px oklch(8% 0.04 200 / 0.4);
+  --shadow-sm: 0 2px 4px oklch(8% 0.04 200 / 0.4), 0 1px 2px oklch(8% 0.04 200 / 0.3);
+  --shadow-md: 0 4px 8px -2px oklch(8% 0.04 200 / 0.45), 0 2px 4px -1px oklch(8% 0.04 200 / 0.3);
+  --shadow-lg: 0 12px 24px -6px oklch(6% 0.04 200 / 0.5), 0 4px 8px -2px oklch(6% 0.04 200 / 0.3);
+  --shadow-xl: 0 24px 48px -12px oklch(6% 0.04 200 / 0.6);
+  --shadow-popover: 0 8px 24px -6px oklch(6% 0.04 200 / 0.55), 0 2px 6px -1px oklch(6% 0.04 200 / 0.3);
+}
+
+/* ── Mobile perf tuning ──────────────────────────────
+   Backdrop-filter with 20px blur is expensive on low-end mobile GPUs.
+   Halving to 10px still reads as glass but cuts composite cost in half.
+   Applies to both light and dark themes. */
+@media (max-width: 768px) {
+  :root,
+  [data-theme="dark"],
+  [data-theme="lagoon"] {
+    --glass-blur: 10px;
+  }
+}
+
+@theme inline {
+  /* Reference CSS custom properties */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-cta: var(--cta);
+  --color-cta-foreground: var(--cta-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius: var(--radius);
+
+  /* Status colors (for text-status-*, bg-status-*) */
+  --color-status-pending: var(--status-pending);
+  --color-status-processing: var(--status-processing);
+  --color-status-success: var(--status-success);
+  --color-status-error: var(--status-error);
+
+  /* Feedback colors (for text-success, bg-warning-soft, etc.) */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-soft: var(--info-soft);
+
+  /* Typography — families (for Tailwind `font-*` utilities) */
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+
+  /* Typography — sizes (for Tailwind `text-*` utilities; keeps numeric scale intact) */
+  --text-xs: var(--text-xs);
+  --text-sm: var(--text-sm);
+  --text-base: var(--text-base);
+  --text-md: var(--text-md);
+  --text-lg: var(--text-lg);
+  --text-xl: var(--text-xl);
+  --text-2xl: var(--text-2xl);
+  --text-3xl: var(--text-3xl);
+  --text-4xl: var(--text-4xl);
+  --text-5xl: var(--text-5xl);
+  --text-6xl: var(--text-6xl);
+  --text-7xl: var(--text-7xl);
+
+  /* Typography — tracking (for Tailwind `tracking-*` utilities) */
+  --tracking-display: var(--tracking-display);
+  --tracking-heading: var(--tracking-heading);
+  --tracking-title: var(--tracking-title);
+  --tracking-body: var(--tracking-body);
+  --tracking-eyebrow: var(--tracking-eyebrow);
+
+  /* Typography — leading (for Tailwind `leading-*` utilities) */
+  --leading-display: var(--leading-display);
+  --leading-heading: var(--leading-heading);
+  --leading-title: var(--leading-title);
+  --leading-body: var(--leading-body);
+  --leading-prose: var(--leading-prose);
+
+  /* Semantic spacing — access via `var(--space-*)` directly in custom CSS.
+     Intentionally NOT registered as `--spacing-{xs,sm,md,...}` in @theme, because
+     those names collide with Tailwind v4's size scale and silently override
+     `max-w-{xs..4xl}`, `min-w-*`, `w-*`, and `h-*` utilities, producing
+     catastrophic card-width regressions. Keep them on :root only. */
+
+  /* Content widths — semantic */
+  --container-prose: var(--width-prose);
+  --container-narrow: var(--width-narrow);
+  --container-content: var(--width-content);
+  --container-page: var(--width-page);
+
+  /* Content widths — Tailwind v4 size scale.
+     Declared explicitly because the custom --spacing-{xs..4xl} scale above
+     would otherwise hijack max-w-{xs..4xl} via Tailwind v4's fallback chain. */
+  --container-3xs: 16rem;
+  --container-2xs: 18rem;
+  --container-xs: 20rem;
+  --container-sm: 24rem;
+  --container-md: 28rem;
+  --container-lg: 32rem;
+  --container-xl: 36rem;
+  --container-2xl: 42rem;
+  --container-3xl: 48rem;
+  --container-4xl: 56rem;
+  --container-5xl: 64rem;
+  --container-6xl: 72rem;
+  --container-7xl: 80rem;
+
+  /* Elevation — Tailwind `shadow-*` utilities */
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-popover: var(--shadow-popover);
+
+  /* Code/terminal surface tokens */
+  --color-code-bg: var(--code-bg);
+  --color-code-chrome: var(--code-chrome);
+  --color-code-border: var(--code-border);
+  --color-code-text: var(--code-text);
+  --color-code-text-muted: var(--code-text-muted);
+  --color-code-text-dim: var(--code-text-dim);
+  --color-code-text-bright: var(--code-text-bright);
+  --color-code-focus: var(--code-focus);
+
+  /* VIE accent colors */
+  --color-vie-coral: var(--vie-coral);
+  --color-vie-plum: var(--vie-plum);
+  --color-vie-sky: var(--vie-sky);
+  --color-vie-mint: var(--vie-mint);
+  --color-vie-honey: var(--vie-honey);
+  --color-vie-rose: var(--vie-rose);
+  --color-vie-forest: var(--vie-forest);
+  --color-vie-peach: var(--vie-peach);
+
+  /* Z-index scale */
+  --z-index-tooltip: var(--z-tooltip);
+  --z-index-dropdown: var(--z-dropdown);
+  --z-index-modal: var(--z-modal);
+  --z-index-toast: var(--z-toast);
+  --z-index-confetti: var(--z-confetti);
+
+  /* Chart palette */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+
+  /* Animation tokens */
+  --animate-fade-slide-up: fade-slide-up 0.4s
+    cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  --animate-scale-in: scale-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-counter-pop: counter-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-line-grow: line-grow 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade-up: fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-heart-pop: heart-pop 0.4s var(--ease-out-quint) both;
+  --animate-float: float 3s ease-in-out infinite;
+  --animate-fade-up-spring: fadeUp 0.4s var(--ease-out-quint) both;
+  --animate-pop-in: popIn 0.35s var(--ease-out-quint) both;
+  --animate-pulse-slow: pulse 2s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════════════════
+   BASE STYLES
+   ═══════════════════════════════════════════════════ */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    /* Respect user zoom + OS font-size preferences */
+    font-size: 100%;
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--leading-body);
+    letter-spacing: var(--tracking-body);
+    font-synthesis-weight: none;
+    /* Crisper glyph rendering — matches the refined aesthetic */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /* OpenType: required ligatures, contextual alternates, kerning */
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1,
+      "kern" 1;
+    font-kerning: normal;
+  }
+
+  /* Default heading styles — component-level overrides welcome */
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: var(--text-4xl);
+    line-height: var(--leading-heading);
+    letter-spacing: var(--tracking-display);
+  }
+
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: var(--text-2xl);
+    line-height: var(--leading-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
+  h3 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: var(--text-xl);
+    line-height: var(--leading-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  h4 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: var(--text-lg);
+    line-height: var(--leading-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  small {
+    font-size: var(--text-sm);
+    line-height: var(--leading-title);
+  }
+
+  kbd {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+  }
+
+  .code-font,
+  code,
+  pre {
+    font-family: var(--font-mono);
+    font-feature-settings: "calt" 0; /* disable contextual alts in code */
+  }
+
+  /* Numbers in tables/data — tabular figures align vertically */
+  .tabular-nums,
+  [data-tabular] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─── Motion safety net ───
+     Universal override for users who prefer reduced motion.
+     Per-component `motion-reduce:*` classes remain as the fine-grained escape.
+     This catches library-provided animations we don't control. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Smooth theme switching via View Transitions API.
+     Single GPU-composited crossfade instead of per-element transitions. */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 200ms;
+  }
+
+  /* Ensure focus-visible rings on all interactive elements */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Override: don't apply focus outline on elements that define their own */
+  [data-slot="button"]:focus-visible,
+  [data-slot="badge"]:focus-visible {
+    outline: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   UTILITY CLASSES
+   ═══════════════════════════════════════════════════ */
+@layer utilities {
+  /* ─── Typography utility classes ───
+     Semantic names that bundle size + weight + family + leading + tracking.
+     Prefer these over individual `text-*` + `font-*` combos for consistency. */
+
+  .type-hero {
+    font: 800 var(--text-5xl)/var(--leading-heading) var(--font-display);
+    letter-spacing: var(--tracking-display);
+  }
+  /* Landing headline — deliberately dramatic. Use once per surface. */
+  .type-hero-xl {
+    font: 800 var(--text-7xl)/0.94 var(--font-display);
+    letter-spacing: -0.025em;
+  }
+  .type-page-title {
+    font: 700 var(--text-3xl)/var(--leading-heading) var(--font-display);
+    letter-spacing: var(--tracking-heading);
+  }
+  .type-h3 {
+    font: 600 var(--text-xl)/var(--leading-title) var(--font-sans);
+    letter-spacing: var(--tracking-title);
+  }
+  .type-lead {
+    font: 400 var(--text-lg)/var(--leading-body) var(--font-sans);
+    color: var(--muted-foreground);
+  }
+  .type-caption {
+    font: 400 var(--text-sm)/var(--leading-title) var(--font-sans);
+    color: var(--muted-foreground);
+  }
+  .type-eyebrow {
+    font: 600 var(--text-xs)/1 var(--font-sans);
+    letter-spacing: var(--tracking-eyebrow);
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  /* Balanced wrapping for headings (Chromium + recent Safari/Firefox) */
+  .text-balance { text-wrap: balance; }
+  .text-pretty  { text-wrap: pretty; }
+
+  /* ─── Layout primitives ───
+     `.stack-*` for 1D vertical flow with a semantic gap token. */
+
+  .stack-xs  { display: flex; flex-direction: column; gap: var(--space-xs); }
+  .stack-sm  { display: flex; flex-direction: column; gap: var(--space-sm); }
+  .stack-md  { display: flex; flex-direction: column; gap: var(--space-md); }
+  .stack-lg  { display: flex; flex-direction: column; gap: var(--space-lg); }
+  .stack-xl  { display: flex; flex-direction: column; gap: var(--space-xl); }
+  .stack-2xl { display: flex; flex-direction: column; gap: var(--space-2xl); }
+
+  /* Marketing / landing page vertical rhythm — fluid */
+  .hero-rhythm > * + * { margin-top: var(--space-hero); }
+
+  /* Page gutter — horizontal + vertical inset that breathes on wider viewports */
+  .page-gutter   { padding-inline: var(--space-page-gutter); }
+  .page-gutter-y { padding-block:  var(--space-section); }
+
+  /* Chromatic top-rule — adds subtle primary→coral identity to popovers/modals */
+  .accent-rule {
+    position: relative;
+  }
+  .accent-rule::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 2px;
+    background: var(--gradient-accent-rule);
+    pointer-events: none;
+  }
+
+  /* Ambient page background for auth/generate */
+  .surface-ambient {
+    background:
+      var(--gradient-auth-bg),
+      var(--background);
+  }
+
+  /* Radial glow behind a centered hero icon */
+  .icon-glow {
+    position: relative;
+    isolation: isolate;
+  }
+  .icon-glow::before {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background: var(--gradient-empty-glow);
+    z-index: -1;
+    filter: blur(8px);
+  }
+
+  /* Magnetic CTA — plum → violet brand gradient with restrained hover.
+     Runs from --cta (plum, hue 340) into --primary (violet, hue 292) so the
+     motion reads as purpose-built for the VIE identity, not generic.
+     RESERVED for the single hero submit per surface (landing Summarize,
+     sidebar "New summary", VideoHero primary action). Default buttons
+     should NOT use this class — they use the Button component default. */
+  .cta-magnetic {
+    background: linear-gradient(
+      135deg,
+      var(--cta) 0%,
+      var(--primary) 100%
+    );
+    color: var(--cta-foreground);
+    box-shadow:
+      0 1px 0 oklch(100% 0 0 / 0.15) inset,
+      var(--shadow-sm);
+    transition: box-shadow 180ms var(--ease-out-expo), transform 180ms var(--ease-out-expo);
+  }
+  .cta-magnetic:hover {
+    box-shadow:
+      0 1px 0 oklch(100% 0 0 / 0.16) inset,
+      var(--shadow-md);
+    transform: translateY(-1px);
+  }
+  .cta-magnetic:active {
+    transform: translateY(0);
+  }
+
+  /* Watch / close control — the VideoHero's single video action, rendered as
+     bare line-art: no tile, no ring, no fill, just the stroked play arrow that
+     morphs into a close mark (see PlayCloseGlyph). The strokes carry all the
+     weight, so they rest in foreground ink and lift into the domain --vie-accent
+     on hover and while the player is open. Output surface, so it tracks the
+     domain accent, never the global cta. The button itself is an oversized
+     invisible hit target; only the glyph is seen. */
+  .play-control {
+    color: oklch(from var(--foreground) l c h / 0.9);
+    transition:
+      color 200ms var(--ease-out-expo),
+      transform 220ms var(--ease-out-expo);
+  }
+  .play-control:hover {
+    color: var(--vie-accent);
+    transform: scale(1.08);
+  }
+  /* Open (player showing) is a held-on state, so the accent stays lit without
+     needing hover — the glyph has already morphed to the close mark. */
+  .play-control[aria-expanded='true'] {
+    color: var(--vie-accent);
+  }
+  .play-control:active {
+    transform: scale(0.94);
+  }
+
+  /* Subtle icon float — use on hero icons that invite first action.
+     3s cycle, 3px vertical travel, respects reduced-motion. */
+  @keyframes icon-hover-float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-3px); }
+  }
+  .icon-float {
+    animation: icon-hover-float 5s var(--ease-out-expo) infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .icon-float { animation: none; }
+  }
+
+  /* Scale-pulse on success — brief attention-grab for completion moments.
+     One-shot, reduced-motion safe. */
+  @keyframes scale-pulse-once {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.08); }
+    100% { transform: scale(1); }
+  }
+  .scale-pulse-once {
+    animation: scale-pulse-once 0.5s var(--ease-out-expo) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .scale-pulse-once { animation: none; }
+  }
+
+  /* Multi-domain ambient orbs — hints at the chromatic range the product produces.
+     Place behind landing-page decorative surfaces; pointer-events disabled. */
+  .orbs-ambient {
+    position: relative;
+    isolation: isolate;
+  }
+  .orbs-ambient::before,
+  .orbs-ambient::after {
+    content: "";
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(56px);
+    opacity: 0.22;
+    z-index: -1;
+    pointer-events: none;
+  }
+  .orbs-ambient::before {
+    /* Coral/honey warm orb — upper-right */
+    inset: -20% -10% auto auto;
+    width: 12rem;
+    height: 12rem;
+    background: radial-gradient(circle, var(--vie-coral), transparent 70%);
+  }
+  .orbs-ambient::after {
+    /* Mint/sky cool orb — lower-left */
+    inset: auto auto -20% -10%;
+    width: 14rem;
+    height: 14rem;
+    background: radial-gradient(circle, var(--vie-mint), transparent 70%);
+  }
+
+  /* Auto-fill responsive grid — no breakpoints, content-aware.
+     auto-fill (not auto-fit) keeps empty tracks, so a single card stays
+     at its min width instead of stretching to fill the viewport. */
+  .auto-grid {
+    display: grid;
+    gap: var(--space-md);
+    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 360px));
+    justify-content: start;
+  }
+
+  /* Hide scrollbar while keeping scroll functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Scroll fade — horizontal scroll indicator for hidden scrollbar areas */
+  .scroll-fade-x {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 24px,
+      black calc(100% - 24px),
+      transparent
+    );
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 24px,
+      black calc(100% - 24px),
+      transparent
+    );
+  }
+
+  /* Thin scrollbar — native hidden, custom overlay via JS */
+  .scrollbar-thin {
+    scrollbar-width: none;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Safe area padding for mobile devices with notches */
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   OUTPUT ANIMATION KEYFRAMES
+   ═══════════════════════════════════════════════════ */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   BRAND MARK — distillate reveal
+   The top face falls in first, the flanks rotate open
+   from the inflection vertex, the coral vertex lights up
+   last. The sequence echoes the product: wide video input
+   distilling down to a single coral insight.
+   Disabled under reduced motion.
+   ═══════════════════════════════════════════════════ */
+@keyframes vie-mark-face-top {
+  from {
+    opacity: 0;
+    transform: translateY(-8%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes vie-mark-face-flank {
+  from {
+    opacity: 0;
+    transform: scaleY(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+@keyframes vie-mark-vertex {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.vie-mark--animated .vie-mark__face,
+.vie-mark--animated .vie-mark__vertex {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.vie-mark--animated .vie-mark__face--top {
+  animation: vie-mark-face-top 520ms cubic-bezier(0.22, 1, 0.36, 1) 0ms both;
+}
+.vie-mark--animated .vie-mark__face--left {
+  transform-origin: top;
+  animation: vie-mark-face-flank 560ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+}
+.vie-mark--animated .vie-mark__face--right {
+  transform-origin: top;
+  animation: vie-mark-face-flank 560ms cubic-bezier(0.22, 1, 0.36, 1) 200ms both;
+}
+.vie-mark--animated .vie-mark__vertex {
+  animation: vie-mark-vertex 400ms var(--ease-out-quint) 360ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vie-mark--animated .vie-mark__face,
+  .vie-mark--animated .vie-mark__vertex {
+    animation: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   BORDER WIDTH TOKEN OVERRIDES
+   Tailwind v4 doesn't map --border-width via @theme,
+   so we override outside @layer (beats utilities layer).
+   ═══════════════════════════════════════════════════ */
+.border {
+  border-width: var(--border-width);
+}
+.border-2 {
+  border-width: calc(var(--border-width) * 2);
+}
+.border-t {
+  border-top-width: var(--border-width);
+}
+.border-r {
+  border-right-width: var(--border-width);
+}
+.border-b {
+  border-bottom-width: var(--border-width);
+}
+.border-l {
+  border-left-width: var(--border-width);
+}
+.border-x {
+  border-inline-width: var(--border-width);
+}
+.border-y {
+  border-block-width: var(--border-width);
+}

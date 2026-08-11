@@ -1,0 +1,70 @@
+<domain_schema name="music">
+MUSIC DATA — MusicData schema
+
+Extract structured music analysis content.
+
+{
+  "title": "Exact song/piece title",
+  "artist": "Artist or composer name",
+  "genre": ["Specific genres — 'melodic trap' not just 'hip-hop'"],
+  "credits": [
+    {
+      "role": "Producer | Songwriter | Featured Artist | etc.",
+      "name": "Person's name"
+    }
+  ],
+  "analysis": [
+    {
+      "aspect": "Production | Vocals | Influences | Lyrics | Instrumentation | Arrangement | Mixing | etc.",
+      "emoji": "single emoji matching the aspect",
+      "detail": "Specific observation — use the speaker's terminology and examples"
+    }
+  ],
+> UI: Analysis aspects → SpotExplorer-style expandable cards (emoji + aspect=title, detail=expanded content).
+  "structure": [
+    {
+      "name": "Intro | Verse 1 | Chorus | Bridge | Outro | etc.",
+      "timestamp": null,
+      "endTimestamp": null,
+      "duration": null,
+      "description": "What happens in this section — instrumentation, mood, key changes"
+    }
+  ],
+> UI: Structure sections → MomentTrack items or LyricsPlayer section nav. Fill timestamp for playback. Song sections are spans — set endTimestamp to the next section's start minus 1.
+  "lyrics": [
+    {
+      "timestamp": null,
+      "line": "Exact lyric line from the video — quote accurately or don't include"
+    }
+  ],
+> UI: Lyrics → LyricsPlayer with synced display. Fill timestamp for highlight-current-line feature.
+  "themes": ["Thematic elements discussed"]
+}
+
+// Example for a music analysis video:
+{
+  "title": "Runaway", "artist": "Kanye West",
+  "genre": ["art pop", "maximalist hip-hop"],
+  "credits": [{"role": "Producer", "name": "Kanye West"}, {"role": "Featured Artist", "name": "Pusha T"}],
+  "analysis": [
+    {"aspect": "Production", "emoji": "🎹", "detail": "Opens with a single repeated piano note for 30 seconds — the speaker calls it 'the most vulnerable intro in hip-hop'. Layers build with Bon Iver-style Auto-Tune choir."}
+  ],
+  "structure": [
+    {"name": "Intro", "timestamp": 0, "duration": "30s", "description": "Solo piano — single E note repeated, gradually joined by strings"}
+  ]
+}
+
+SCALING (video is {duration_minutes} minutes):
+- Under 15 min: core analysis (2-3 aspects), basic structure, key credits
+- 15-30 min: detailed analysis (4-6 aspects), full structure, all credits, themes
+- Over 30 min: comprehensive analysis (6-10 aspects), full structure with timestamps, all lyrics, all credits
+
+RULES:
+- Lyrics must be exact — quote accurately or omit
+- All credits: featured artists, producers, songwriters when mentioned
+- Genre must be specific: "melodic trap" not just "hip-hop"
+- Production details when discussed: "808 bass", "auto-tune", "live drums"
+- Album/EP name and release info when mentioned
+- Samples and interpolations when identified
+- Chart positions and streaming numbers when cited
+</domain_schema>

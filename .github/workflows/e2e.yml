@@ -1,0 +1,93 @@
+name: E2E Smoke
+
+# Runs ONLY the smoke subset (apps/web/e2e/smoke.spec.ts) against a real
+# api + MongoDB booted from docker-compose. The smoke suite seeds a completed
+# video document straight into MongoDB (apps/web/e2e/helpers/smoke-seed.ts)
+# and never calls POST /api/videos, so no summarizer pipeline — and no LLM
+# spend — can be triggered from CI.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Playwright Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      # Compose interpolates optional vars from .env; the example file's
+      # placeholder values are fine because the smoke stack never talks to
+      # an LLM provider (only api + mongo + redis + rabbitmq are booted).
+      # CORS_ADDITIONAL_ORIGINS: the Playwright webServer serves the app on
+      # :5273 while the app calls the api on :3000 (absolute VITE_API_URL
+      # default) — without this origin in the allowlist every browser API
+      # call is CORS-blocked at login (see the passthrough comment on
+      # vie-api in docker-compose.yml).
+      - name: Prepare compose environment
+        run: |
+          cp .env.example .env
+          echo "CORS_ADDITIONAL_ORIGINS=http://localhost:5273" >> .env
+
+      # vie-api's depends_on pulls in vie-mongodb, vie-redis and vie-rabbitmq.
+      # --wait blocks until every started service reports healthy, so no
+      # hand-rolled curl polling is needed.
+      - name: Boot api stack (api + mongo + redis + rabbitmq)
+        run: docker compose up -d --build --wait vie-api
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages
+        run: pnpm --filter @vie/types --filter @vie/shared build
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/web/package.json') }}
+
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+
+      # CI=true makes the Playwright webServer boot its own `vite dev` on
+      # :5273 (see E2E_PORT in playwright.config.ts — kept off :5173 so a
+      # vie-web nginx build can never be silently reused).
+      # --project=smoke pulls in its smoke-setup dependency project, which
+      # registers/logs in the e2e user via the real auth API and upserts the
+      # fixture video into MongoDB on :27017 (see e2e/smoke.setup.ts).
+      - name: Run smoke suite
+        run: npx playwright test --project=smoke
+        working-directory: apps/web
+
+      - name: Dump api logs on failure
+        if: failure()
+        run: docker compose logs vie-api --tail 200
+
+      # playwright-report bundles traces/screenshots from retried failures
+      # (trace: on-first-retry); test-results holds the raw per-test artifacts.
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7

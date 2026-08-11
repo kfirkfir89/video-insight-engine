@@ -1,0 +1,127 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { foldersApi } from "@/api/folders";
+import { queryKeys } from "@/lib/query-keys";
+import type { CreateFolderInput, UpdateFolderInput } from "@/types";
+
+// Fetch folders list
+export function useFolders(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.folders.list(),
+    queryFn: () => foldersApi.list(),
+    enabled: options?.enabled ?? true,
+  });
+}
+
+// Fetch single folder
+export function useFolder(id: string) {
+  return useQuery({
+    queryKey: queryKeys.folders.detail(id),
+    queryFn: () => foldersApi.get(id),
+    enabled: !!id,
+  });
+}
+
+// Create folder mutation
+export function useCreateFolder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateFolderInput) => foldersApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.folders.lists() });
+    },
+  });
+}
+
+// Update folder mutation
+export function useUpdateFolder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateFolderInput }) =>
+      foldersApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.folders.lists() });
+    },
+  });
+}
+
+// Delete folder mutation
+export function useDeleteFolder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, deleteContent }: { id: string; deleteContent?: boolean }) =>
+      foldersApi.delete(id, deleteContent),
+    onSuccess: () => {
+      // Invalidate folder queries
+      queryClient.invalidateQueries({ queryKey: queryKeys.folders.lists() });
+      // CRITICAL: Also invalidate video queries since videos are moved/deleted
+      queryClient.invalidateQueries({ queryKey: queryKeys.videos.lists() });
+    },
+  });
+}
+
+// Move folder to a new parent
+export function useMoveFolder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, parentId }: { id: string; parentId: string | null }) =>
+      foldersApi.update(id, { parentId }),
+    onSuccess: () => {
+      // Invalidate folder queries (paths and levels change)
+      queryClient.invalidateQueries({ queryKey: queryKeys.folders.lists() });
+      // Also invalidate video queries to refresh UI
+      queryClient.invalidateQueries({ queryKey: queryKeys.videos.lists() });
+    },
+  });
+}
+
+// Bulk delete folders mutation
+export function useBulkDeleteFolders() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      folderIds,
+      deleteContent,
+    }: {
+      folderIds: string[];
+      deleteContent: boolean;
+    }) => {
+      // Delete folders in parallel
+      await Promise.all(
+        folderIds.map((id) => foldersApi.delete(id, deleteContent))
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.folders.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.videos.lists() });
+    },
+  });
+}
+
+// Bulk move folders to a new parent
+export function useBulkMoveFolders() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      folderIds,
+      parentId,
+    }: {
+      folderIds: string[];
+      parentId: string | null;
+    }) => {
+      // Move folders in parallel
+      await Promise.all(
+        folderIds.map((id) => foldersApi.update(id, { parentId }))
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.folders.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.videos.lists() });
+    },
+  });
+}

@@ -1,0 +1,166 @@
+{
+  "_comment": "Golden LLM response fixture for the review domain. Hand-built against PlanResult, ReviewData, EnrichmentData, SynthesisResult — a valid per-stage output set for a product comparison review. Drift canary consumed by tests/test_llm_response_fixtures.py.",
+  "domain": "review",
+  "video_meta": {
+    "videoId": "fixture-review-001",
+    "title": "Nimbus X2 vs Strider Pro: The Only Standing Desk Review You Need",
+    "channel": "Desk Setup Lab",
+    "duration": 1140,
+    "chapters": []
+  },
+  "plan_response": {
+    "reasoning": "Head-to-head product review with measured specs, a pros/cons rundown, and a clear verdict.",
+    "identity": {
+      "creatorType": "product reviewer",
+      "tone": "measured, data-driven",
+      "audience": "home-office buyers"
+    },
+    "corePromise": "Know which desk to buy for your budget and height",
+    "uniqueAngle": "Wobble tested with a dial gauge at three heights instead of a shake test",
+    "extractionGuidance": {
+      "primaryFocus": "Comparison rows with measured numbers; verdict verbatim",
+      "watchOutFor": "Sponsored segment at 12:40 — exclude promo claims from specs"
+    },
+    "itemCounts": {
+      "products": 2
+    },
+    "contentTags": ["review"],
+    "modifiers": [],
+    "primaryTag": "review",
+    "userGoal": "Decide between the two desks before the sale ends",
+    "confidence": 0.91,
+    "tabs": [
+      {
+        "id": "comparison",
+        "label": "Head to Head",
+        "emoji": "⚔️",
+        "component": "comparison",
+        "dataSource": "review.comparisons",
+        "goal": "Feature-by-feature winner calls with measured numbers."
+      },
+      {
+        "id": "specs",
+        "label": "Specs",
+        "emoji": "📋",
+        "component": "info_grid",
+        "dataSource": "review.specs",
+        "goal": "Measured specs at a glance."
+      },
+      {
+        "id": "pros_cons",
+        "label": "Pros & Cons",
+        "emoji": "⚖️",
+        "component": "comparison",
+        "dataSource": "review",
+        "goal": "Strengths and weaknesses side by side."
+      }
+    ]
+  },
+  "extraction_response": {
+    "product": "Nimbus X2 standing desk",
+    "price": "$549 (sale price $479)",
+    "rating": {"score": 8.5, "maxScore": 10, "label": "Excellent"},
+    "pros": [
+      "Fastest motor tested this year at 38mm per second",
+      "Dial-gauge wobble of 0.8mm at 120cm height — best in class",
+      "Anti-collision sensor works with soft obstacles like a chair arm",
+      "Cable tray and two grommets included at no extra cost"
+    ],
+    "cons": [
+      "Crossbar design limits under-desk drawer options",
+      "Controller memory buttons feel mushy",
+      "Only a 5-year warranty versus 10 on the Strider Pro"
+    ],
+    "specs": [
+      {"key": "Height range", "value": "62–128 cm"},
+      {"key": "Lift capacity", "value": "120 kg"},
+      {"key": "Motor speed", "value": "38 mm/s measured"},
+      {"key": "Noise", "value": "48 dB at full load"},
+      {"key": "Warranty", "value": "5 years frame and motor"}
+    ],
+    "comparisons": [
+      {
+        "feature": "Wobble at 120cm",
+        "thisProduct": "0.8mm dial-gauge",
+        "competitor": "1.9mm dial-gauge",
+        "competitorName": "Strider Pro",
+        "winner": "left"
+      },
+      {
+        "feature": "Motor speed",
+        "thisProduct": "38 mm/s",
+        "competitor": "31 mm/s",
+        "competitorName": "Strider Pro",
+        "winner": "left"
+      },
+      {
+        "feature": "Warranty",
+        "thisProduct": "5 years",
+        "competitor": "10 years",
+        "competitorName": "Strider Pro",
+        "winner": "right"
+      },
+      {
+        "feature": "Noise under load",
+        "thisProduct": "48 dB",
+        "competitor": "44 dB",
+        "competitorName": "Strider Pro",
+        "winner": "right"
+      },
+      {
+        "feature": "Included accessories",
+        "thisProduct": "Cable tray + 2 grommets",
+        "competitor": "None included",
+        "competitorName": "Strider Pro",
+        "winner": "left"
+      }
+    ],
+    "verdict": {
+      "badge": "recommended",
+      "bestFor": ["Buyers under 185cm who prioritize stability", "Anyone standing more than half the day"],
+      "notFor": ["Very tall users who need the 133cm top end", "Buyers who want a drawer under the desktop"],
+      "bottomLine": "The Nimbus X2 wins on the things you feel every day — stability and speed — and loses only on paper.",
+      "subScores": [
+        {"label": "Stability", "score": 9.5},
+        {"label": "Build quality", "score": 8.0},
+        {"label": "Value", "score": 8.5}
+      ]
+    }
+  },
+  "enrichment_response": {
+    "quiz": [
+      {
+        "question": "How was desk wobble measured in this review?",
+        "options": [
+          "A subjective shake test",
+          "A dial gauge at three heights",
+          "A phone accelerometer app",
+          "Slow-motion video"
+        ],
+        "correctIndex": 1,
+        "explanation": "The reviewer uses a dial gauge at three heights instead of the usual shake test."
+      },
+      {
+        "question": "Which desk wins on warranty?",
+        "options": [
+          "Nimbus X2",
+          "Strider Pro",
+          "Both equal",
+          "Neither offers a warranty"
+        ],
+        "correctIndex": 1,
+        "explanation": "The Strider Pro carries a 10-year warranty versus 5 years on the Nimbus X2."
+      }
+    ]
+  },
+  "synthesis_response": {
+    "tldr": "The Nimbus X2 beats the Strider Pro on measured stability and speed; the Strider wins warranty and height range.",
+    "keyTakeaways": [
+      "Nimbus X2 wobble measured 0.8mm vs 1.9mm on the Strider Pro",
+      "Strider Pro's 10-year warranty doubles the Nimbus coverage",
+      "Very tall users need the Strider's 133cm top end"
+    ],
+    "masterSummary": "A dial-gauge-instrumented head-to-head between the Nimbus X2 and Strider Pro standing desks covering stability, motor speed, noise, warranty, and accessories, ending in a conditional recommendation: Nimbus X2 for most buyers, Strider Pro for the very tall or warranty-minded.",
+    "seoDescription": "Nimbus X2 vs Strider Pro standing desk review with measured wobble, speed, and noise data plus a clear verdict."
+  }
+}

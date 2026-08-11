@@ -1,0 +1,225 @@
+"""Domain configuration — reads from the shared domains.json.
+
+Resolves path via:
+  1. Docker mount: /app/shared/domains.json
+  2. Local dev: ../../packages/shared/src/config/domains.json (relative to repo root)
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from functools import lru_cache
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# Possible locations for domains.json
+_DOCKER_PATH = Path("/app/shared/domains.json")
+_LOCAL_PATH = (
+    Path(__file__).resolve().parent.parent.parent.parent.parent
+    / "packages"
+    / "shared"
+    / "src"
+    / "config"
+    / "domains.json"
+)
+
+
+@lru_cache(maxsize=1)
+def _load_config() -> dict:
+    """Load and cache the domain configuration."""
+    for path in (_DOCKER_PATH, _LOCAL_PATH):
+        if path.exists():
+            logger.debug("Loading domain config from %s", path)
+            return json.loads(path.read_text())
+
+    raise FileNotFoundError(f"domains.json not found at {_DOCKER_PATH} or {_LOCAL_PATH}")
+
+
+def get_config() -> dict:
+    """Get the full domain configuration dict."""
+    return _load_config()
+
+
+# ─────────────────────────────────────────────────────
+# Derived sets (for validation)
+# ─────────────────────────────────────────────────────
+
+
+def valid_content_tags() -> frozenset[str]:
+    """All valid content tag names."""
+    return frozenset(get_config()["domains"].keys())
+
+
+def valid_modifiers() -> frozenset[str]:
+    """All valid modifier names."""
+    return frozenset(get_config()["modifiers"].keys())
+
+
+def valid_components() -> frozenset[str]:
+    """All valid component names from domains.json top-level components array."""
+    return frozenset(get_config()["components"])
+
+
+def component_tiers() -> dict[str, str]:
+    """Component name → tier ('primary' | 'secondary' | 'display')."""
+    return dict(get_config().get("componentTiers", {}))
+
+
+def component_tier(name: str) -> str:
+    """Tier for a component, defaulting to 'primary' for unmapped names."""
+    return component_tiers().get(name, "primary")
+
+
+def secondary_components() -> frozenset[str]:
+    """Attachment-only (secondary-tier) component names."""
+    return frozenset(name for name, tier in component_tiers().items() if tier == "secondary")
+
+
+def primary_components() -> frozenset[str]:
+    """Planner-selectable (primary-tier) component names."""
+    return frozenset(name for name, tier in component_tiers().items() if tier == "primary")
+
+
+def ordered_components() -> list[str]:
+    """Planner-selectable components in their canonical (config) order."""
+    return list(get_config().get("components", []))
+
+
+def render_valid_component_names() -> str:
+    """Render the backtick-comma component list injected into plan.txt's
+    ``{valid_components}`` placeholder. Single-sourced from domains.json so the
+    planner's selectable surface follows config — no hardcoded prompt list."""
+    return ", ".join(f"`{name}`" for name in ordered_components())
+
+
+def density_gates() -> dict[str, dict[str, str]]:
+    """Per-component density-gate guidance shown to the planner.
+
+    NOTE: this is advisory LLM-steering text only. The assembler's hard caps
+    live in ``assemblerItemCaps`` (see :func:`assembler_item_caps`) — both are
+    in domains.json but intentionally independent: editing this changes what
+    the LLM aims for, not the enforced caps.
+    """
+    return dict(get_config().get("densityGates", {}))
+
+
+def assembler_item_caps() -> dict[str, int]:
+    """HARD per-component item caps enforced by ``_cap_tab_items``
+    (assembly/core.py). Independent of the advisory ``densityGates`` — see
+    the ``assemblerItemCapsNote`` in domains.json."""
+    return dict(get_config().get("assemblerItemCaps", {}))
+
+
+def domain_requirements() -> dict[str, dict]:
+    """Per-domain assembled-output validation rules consumed by
+    ``_validate_domain_requirements`` (assembly/core.py): ``required``
+    components are backfilled when the planner drops them; ``max`` caps
+    per-component tab counts. See ``domainRequirementsNote`` in domains.json."""
+    return dict(get_config().get("domainRequirements", {}))
+
+
+def render_density_gate_table() -> str:
+    """Render the markdown density table injected into component_toolkit.txt's
+    ``{density_gates}`` placeholder, single-sourced from domains.json."""
+    header = "| Component | min items | max items | max chars/cell |\n|---|---|---|---|"
+    rows = [
+        f"| {name} | {gate.get('min', '')} | {gate.get('max', '')} | {gate.get('chars', '')} |"
+        for name, gate in density_gates().items()
+    ]
+    return "\n".join([header, *rows])
+
+
+# ─────────────────────────────────────────────────────
+# Category mapping
+# ─────────────────────────────────────────────────────
+
+
+def map_category_to_tag(category: str) -> str:
+    """Map a raw category name to a content tag."""
+    category_map = get_config()["categoryMap"]
+    return category_map.get(category.lower(), "learning")
+
+
+# ─────────────────────────────────────────────────────
+# Tab helpers
+# ─────────────────────────────────────────────────────
+
+
+def get_default_tab_ids(tag: str) -> list[str]:
+    """Get the ordered default tab IDs for a domain."""
+    domains = get_config()["domains"]
+    domain = domains.get(tag, domains.get("learning", {}))
+    return [t["id"] for t in domain.get("defaultTabs", []) if isinstance(t, dict) and "id" in t]
+
+
+def get_tab_meta(tab_id: str) -> tuple[str, str] | None:
+    """Get (label, emoji) for a tab ID. Searches defaultTabs across all domains."""
+    cfg = get_config()
+    for domain in cfg["domains"].values():
+        for tab in domain.get("defaultTabs", []):
+            if isinstance(tab, dict) and tab.get("id") == tab_id:
+                return (tab.get("label", tab_id), tab.get("emoji", ""))
+    return None
+
+
+def get_enrichment_map() -> dict[str, str]:
+    """Map of content tag → enrichment prompt filename.
+
+    Only tags listed here trigger the enrichment stage.
+    """
+    return dict(get_config().get("enrichment", {}))
+
+
+def build_fallback_tabs(tag: str) -> list[dict]:
+    """Build default TabDefinition dicts for a domain.
+
+    Returns complete objects directly from domains.json defaultTabs.
+    """
+    cfg = get_config()
+    domain = cfg["domains"].get(tag, cfg["domains"].get("learning", {}))
+    return list(domain.get("defaultTabs", []))
+
+
+def datasources_for_component(tag: str, component: str) -> list[str]:
+    """Default-tab dataSources in `tag` that back `component`, in priority order.
+
+    The defaultTabs order in domains.json IS the priority (e.g. tech lists `code`
+    → ``tech.snippets`` before `patterns` → ``tech.patterns``, both backing
+    ``code_playground``). Used by assembly to recover an empty planned field by
+    swapping in a populated sibling field that renders with the same component.
+    """
+    cfg = get_config()
+    domain = cfg["domains"].get(tag, {})
+    sources: list[str] = []
+    for tab in domain.get("defaultTabs", []):
+        if not isinstance(tab, dict):
+            continue
+        if tab.get("component") == component and tab.get("dataSource"):
+            ds = tab["dataSource"]
+            if ds not in sources:
+                sources.append(ds)
+    return sources
+
+
+def sibling_datasources(tag: str, data_source: str) -> list[str]:
+    """Other dataSources in `tag` sharing `data_source`'s component, priority-ordered.
+
+    Resolves `data_source` to its registered defaultTab component, then returns the
+    other dataSources backing that same component (excluding `data_source` itself).
+    Returns [] when `data_source` is not a registered defaultTab for `tag`.
+    """
+    cfg = get_config()
+    domain = cfg["domains"].get(tag, {})
+    component = next(
+        (
+            tab.get("component")
+            for tab in domain.get("defaultTabs", [])
+            if isinstance(tab, dict) and tab.get("dataSource") == data_source
+        ),
+        None,
+    )
+    if not component:
+        return []
+    return [ds for ds in datasources_for_component(tag, component) if ds != data_source]

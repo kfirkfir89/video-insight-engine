@@ -1,0 +1,39 @@
+<domain_schema name="finance">
+FINANCE MODIFIER — FinanceData schema
+
+Additional extraction for content with financial details.
+This is a MODIFIER — it adds financial data alongside the primary domain.
+
+{
+  "costs": [
+    {
+      "item": "What the cost is for",
+      "amount": 0,
+      "currency": "USD",
+      "category": "Category"
+    }
+  ],
+  "savingTips": [
+    "Specific money-saving tip from the video"
+  ]
+}
+
+// Example for a travel video with finance modifier:
+{
+  "costs": [
+    {"item": "Shinkansen Tokyo to Kyoto", "amount": 13320, "currency": "JPY", "category": "Transport"},
+    {"item": "Capsule hotel per night", "amount": 3500, "currency": "JPY", "category": "Accommodation"}
+  ],
+  "savingTips": [
+    "Buy a 7-day JR Pass for ¥29,650 — saves ¥18,000 vs individual tickets if you visit 3+ cities",
+    "Eat at convenience stores for breakfast — onigiri + coffee for under ¥400"
+  ]
+}
+
+RULES:
+- All amounts with exact currency: "$12.50" not "cheap"
+- Only include costs explicitly mentioned in the video
+- Saving tips must come from the video content
+- Do NOT include a "budget" object — the primary domain schema (e.g., travel) already has its own budget structure. Finance modifier adds granular cost items only.
+- If the primary domain already captures a cost (e.g., a travel spot's entry fee), do NOT duplicate it here — only add costs not covered by the primary schema.
+</domain_schema>

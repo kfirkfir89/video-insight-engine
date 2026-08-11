@@ -1,0 +1,215 @@
+{
+  "_comment": "Golden LLM response fixture for the science domain. Hand-built against PlanResult, ScienceData, EnrichmentData, SynthesisResult — a valid per-stage output set for a physics explainer. Drift canary consumed by tests/test_llm_response_fixtures.py.",
+  "domain": "science",
+  "video_meta": {
+    "videoId": "fixture-science-001",
+    "title": "Why the Sky Is Blue (and Sunsets Are Red)",
+    "channel": "Photon Notebook",
+    "duration": 960,
+    "chapters": []
+  },
+  "plan_response": {
+    "reasoning": "Concept-driven physics explainer with a home experiment segment and linked concepts.",
+    "identity": {
+      "creatorType": "science communicator",
+      "tone": "curious, visual",
+      "audience": "high-school and up"
+    },
+    "corePromise": "Understand Rayleigh scattering well enough to explain it to someone else",
+    "uniqueAngle": "Recreates the sky in a fish tank with milk and a flashlight",
+    "extractionGuidance": {
+      "primaryFocus": "Concept definitions with connections; the experiment steps exactly",
+      "watchOutFor": "The λ⁻⁴ relation is stated twice with different phrasing — keep the formula"
+    },
+    "itemCounts": {
+      "concepts": 5
+    },
+    "contentTags": ["science"],
+    "modifiers": [],
+    "primaryTag": "science",
+    "userGoal": "Learn the physics behind sky color",
+    "confidence": 0.94,
+    "tabs": [
+      {
+        "id": "concepts",
+        "label": "Concepts",
+        "emoji": "🧠",
+        "component": "concept_canvas",
+        "dataSource": "science.concepts",
+        "goal": "Explore how scattering, wavelength, and color perception connect."
+      },
+      {
+        "id": "key_facts",
+        "label": "Key Facts",
+        "emoji": "📌",
+        "component": "info_grid",
+        "dataSource": "science.keyFacts",
+        "goal": "The numbers worth remembering."
+      },
+      {
+        "id": "experiments",
+        "label": "Try It",
+        "emoji": "🧪",
+        "component": "step_player",
+        "dataSource": "science.experiments",
+        "goal": "Recreate the tank-sky experiment at home."
+      },
+      {
+        "id": "quiz",
+        "label": "Quiz",
+        "emoji": "❓",
+        "component": "quiz_arena",
+        "dataSource": "enrichment.quiz",
+        "goal": "Check you can predict what scatters and why."
+      }
+    ]
+  },
+  "extraction_response": {
+    "field": "Optics / atmospheric physics",
+    "level": "beginner",
+    "concepts": [
+      {
+        "name": "Rayleigh scattering",
+        "emoji": "🌈",
+        "definition": "Scattering of light by particles much smaller than its wavelength; intensity scales as 1/λ⁴.",
+        "formula": "I ∝ 1/λ⁴",
+        "realWorldExample": "Air molecules scatter blue (~450nm) about 5.5x more than red (~700nm).",
+        "group": "Scattering",
+        "timestamp": 120,
+        "connections": [{"to": "Wavelength", "type": "dependsOn"}, {"to": "Sunset reddening", "type": "causes"}]
+      },
+      {
+        "name": "Wavelength",
+        "emoji": "📏",
+        "definition": "The distance between successive wave crests; visible light spans roughly 380–750 nanometers.",
+        "group": "Foundations",
+        "timestamp": 60,
+        "connections": [{"to": "Rayleigh scattering", "type": "partOf"}]
+      },
+      {
+        "name": "Sunset reddening",
+        "emoji": "🌇",
+        "definition": "At low sun angles light crosses ~40x more atmosphere, so most blue is scattered away before reaching your eye.",
+        "group": "Scattering",
+        "timestamp": 430,
+        "connections": [{"to": "Rayleigh scattering", "type": "causedBy"}, {"to": "Optical path length", "type": "dependsOn"}]
+      },
+      {
+        "name": "Optical path length",
+        "emoji": "🛣️",
+        "definition": "The distance light travels through a medium; longer paths mean more scattering events.",
+        "group": "Foundations",
+        "timestamp": 380,
+        "connections": [{"to": "Sunset reddening", "type": "enables"}]
+      },
+      {
+        "name": "Mie scattering",
+        "emoji": "☁️",
+        "definition": "Scattering by particles comparable to the wavelength (droplets, dust); nearly wavelength-independent, which is why clouds are white.",
+        "group": "Scattering",
+        "timestamp": 610,
+        "connections": [{"to": "Rayleigh scattering", "type": "contrastsWith"}]
+      }
+    ],
+    "keyFacts": [
+      {"emoji": "🔢", "title": "Blue scatters ~5.5x more than red", "detail": "Follows directly from the 1/λ⁴ law with 450nm vs 700nm light."},
+      {"emoji": "🌅", "title": "Sunset light crosses ~40x more air", "detail": "Low-angle geometry multiplies the optical path through the atmosphere."},
+      {"emoji": "👁️", "title": "The sky isn't violet because of your eyes", "detail": "Violet scatters even more than blue, but solar output and cone sensitivity favor blue."},
+      {"emoji": "☁️", "title": "Clouds are white due to Mie scattering", "detail": "Droplets scatter all visible wavelengths nearly equally."}
+    ],
+    "experiments": [
+      {
+        "number": 1,
+        "title": "Build the tank sky",
+        "instruction": "Fill a clear rectangular tank with water and stir in a few drops of milk until faintly cloudy.",
+        "materials": ["Clear tank or large glass", "Water", "Milk", "White flashlight"],
+        "expectedResult": "The water looks faintly bluish from the side.",
+        "timestamp": 700
+      },
+      {
+        "number": 2,
+        "title": "Make a sunset",
+        "instruction": "Shine the flashlight through the long axis and view the beam end-on from the far side.",
+        "materials": ["The prepared tank", "White flashlight"],
+        "expectedResult": "The transmitted beam looks orange — the milk particles scattered the blue away.",
+        "timestamp": 760
+      },
+      {
+        "number": 3,
+        "title": "Overdo it",
+        "instruction": "Keep adding milk and watch the beam whiten as particle sizes push into the Mie regime.",
+        "materials": ["More milk"],
+        "expectedResult": "The blue tint disappears; scattering becomes wavelength-independent.",
+        "safetyNote": "None — but the milk-water does not keep; pour it out after.",
+        "timestamp": 840
+      }
+    ]
+  },
+  "enrichment_response": {
+    "quiz": [
+      {
+        "question": "How does Rayleigh scattering intensity depend on wavelength?",
+        "options": ["∝ λ", "∝ 1/λ", "∝ 1/λ²", "∝ 1/λ⁴"],
+        "correctIndex": 3,
+        "explanation": "The inverse fourth-power law is why short (blue) wavelengths dominate the scattered sky."
+      },
+      {
+        "question": "Why are clouds white rather than blue?",
+        "options": [
+          "Water absorbs blue light",
+          "Droplets are large enough for Mie scattering, which is wavelength-independent",
+          "Clouds reflect the sun's surface color",
+          "Ice crystals polarize the light"
+        ],
+        "correctIndex": 1,
+        "explanation": "Droplets are comparable to or larger than visible wavelengths, so all colors scatter equally."
+      },
+      {
+        "question": "Why isn't the sky violet, even though violet scatters most?",
+        "options": [
+          "There is no violet in sunlight",
+          "The ozone layer absorbs violet",
+          "Solar output and human cone sensitivity both favor blue",
+          "Violet light is too fast to scatter"
+        ],
+        "correctIndex": 2,
+        "explanation": "Less violet arrives from the sun and our eyes respond to it weakly."
+      }
+    ],
+    "flashcards": [
+      {"front": "Rayleigh scattering law", "back": "Intensity ∝ 1/λ⁴ for particles much smaller than the wavelength"},
+      {"front": "Why sunsets are red", "back": "~40x longer optical path scatters the blue away before it reaches you"},
+      {"front": "Rayleigh vs Mie", "back": "Tiny particles → strong wavelength dependence; droplet-sized → white light"}
+    ],
+    "scenarios": [
+      {
+        "question": "You're on Mars, where the thin atmosphere is full of larger dust particles. What color is the daytime sky likely to be?",
+        "emoji": "🔴",
+        "options": [
+          {"text": "Blue, like Earth", "correct": false, "explanation": "Too little gas for strong Rayleigh scattering to dominate."},
+          {"text": "Butterscotch — dust scattering dominates", "correct": true, "explanation": "Larger dust particles scatter in the Mie regime, tinted by iron oxide."},
+          {"text": "Black even at noon", "correct": false, "explanation": "There is still enough atmosphere to scatter some light."}
+        ]
+      },
+      {
+        "question": "A photographer wants the deepest blue sky in shots. When and where should they point the camera?",
+        "emoji": "📷",
+        "options": [
+          {"text": "Near the sun at noon", "correct": false, "explanation": "Forward scattering washes out the blue near the sun."},
+          {"text": "90 degrees away from the sun", "correct": true, "explanation": "Rayleigh scattering (and polarization) peaks at right angles to the light."},
+          {"text": "At the horizon at noon", "correct": false, "explanation": "The long horizontal path adds white multiple-scattered light."}
+        ]
+      }
+    ]
+  },
+  "synthesis_response": {
+    "tldr": "Air molecules scatter short wavelengths ~5.5x more than red (1/λ⁴), painting the sky blue by day and red at sunset — and you can recreate both in a fish tank.",
+    "keyTakeaways": [
+      "Rayleigh scattering scales as 1/λ⁴ — blue dominates the scattered light",
+      "Sunsets are red because low-angle light crosses ~40x more atmosphere",
+      "Clouds are white because droplet-sized particles scatter all colors equally (Mie)"
+    ],
+    "masterSummary": "An explainer building from wavelength basics to Rayleigh's 1/λ⁴ law, using it to explain the blue sky, red sunsets via optical path length, and white clouds via Mie scattering — capped by a three-step milk-and-flashlight tank experiment that recreates each regime.",
+    "seoDescription": "The physics of why the sky is blue and sunsets are red: Rayleigh scattering explained with a home experiment."
+  }
+}

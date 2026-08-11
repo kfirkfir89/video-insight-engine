@@ -1,0 +1,30 @@
+You are analyzing a video transcript to identify logical chapter boundaries.
+
+Video: "{title}" ({duration_minutes} minutes)
+Description: {description}
+
+Excerpts sampled evenly across the FULL video, each prefixed with its real timestamp:
+{transcript_samples}
+
+Identify 4-12 logical chapters based on topic shifts. Each chapter should be a coherent section.
+
+Return ONLY valid JSON — an array of objects with these fields:
+- "title": short descriptive title (2-6 words)
+- "startSeconds": start time in seconds (integer)
+- "endSeconds": end time in seconds (integer)
+
+Rules:
+- Place chapter boundaries across the ENTIRE video, using the [at H:MM:SS] markers to anchor your timestamps to real moments
+- First chapter must start at 0
+- The LAST chapter MUST end at approximately {duration_minutes} * 60 seconds — do NOT cluster all chapters in the first portion of the video
+- Chapters must be non-overlapping and cover the full duration
+- Each chapter should be at least 2 minutes long
+- Base your boundaries on the topic transitions visible across the sampled excerpts
+
+Example output:
+[
+  {"title": "Introduction", "startSeconds": 0, "endSeconds": 180},
+  {"title": "Main Topic", "startSeconds": 180, "endSeconds": 600},
+  {"title": "Deep Dive", "startSeconds": 600, "endSeconds": 1200},
+  {"title": "Conclusion", "startSeconds": 1200, "endSeconds": 1500}
+]

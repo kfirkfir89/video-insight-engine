@@ -1,0 +1,94 @@
+<domain_schema name="news">
+NEWS DATA — NewsData schema
+
+Extract structured news / journalism / current-events reporting content.
+
+THINKING GUIDE:
+- News content reports on EVENTS and CLAIMS. The value is understanding what
+  happened, who is involved, and which assertions can be trusted.
+- The story timeline is the chronological backbone — how the story developed.
+- Entities are the people, organizations, and places at the center.
+- Claims are the heart of the artifact: every factual assertion, who made it,
+  and whether it is verified, disputed, or just context. This is what separates
+  a news artifact from a glossary — surface accountability.
+- Context items are background facts a viewer needs to understand the story.
+
+{
+  "headline": "The core story in one line, or null",
+  "storyTimeline": [
+    {
+      "label": "What happened at this point",
+      "description": "1 sentence of detail",
+      "timestamp": 0
+    }
+  ],
+> UI: storyTimeline → MomentTrack. Set timestamp (seconds) so viewers jump to each development.
+  "entities": [
+    {
+      "name": "Person, organization, or place",
+      "role": "Their role in the story",
+      "description": "One-line context",
+      "emoji": "relevant emoji"
+    }
+  ],
+> UI: entities → SpotExplorer cards.
+  "claims": [
+    {
+      "claim": "The factual assertion, stated plainly",
+      "source": "Who made the claim (speaker, official, outlet)",
+      "status": "verified | disputed | context",
+      "sourceCitation": "Where verification comes from (study, record, outlet), or null",
+      "timestamp": 0
+    }
+  ],
+> UI: claims → ClaimsTracker. status drives a colored badge: verified (confirmed), disputed (contested), context (background, not a truth-claim). source = who said it; sourceCitation = the backing evidence.
+  "context": [
+    {
+      "key": "Background fact label",
+      "value": "The fact / figure, short"
+    }
+  ]
+> UI: context → InfoGrid. Keep value short (≤120 chars).
+}
+
+// Example for a politics explainer:
+{
+  "headline": "City council approves the new transit budget",
+  "storyTimeline": [
+    {"label": "Budget proposed", "description": "Mayor's office submits a $200M transit plan.", "timestamp": 0},
+    {"label": "Public hearing", "description": "Residents split over the fare increase.", "timestamp": 320},
+    {"label": "Council vote", "description": "Approved 6-3 after amendments.", "timestamp": 740}
+  ],
+  "entities": [
+    {"name": "Mayor Diaz", "role": "Plan sponsor", "description": "Pushed the transit expansion as a campaign promise", "emoji": "🏛️"},
+    {"name": "Transit Authority", "role": "Implementing body", "description": "Runs the city bus and rail network", "emoji": "🚇"}
+  ],
+  "claims": [
+    {"claim": "The plan creates 1,200 jobs", "source": "Mayor Diaz", "status": "disputed", "sourceCitation": "Independent analysts put the figure near 700", "timestamp": 210},
+    {"claim": "Fares will rise 15% in 2026", "source": "Transit Authority", "status": "verified", "sourceCitation": "Approved fare schedule, council record", "timestamp": 540},
+    {"claim": "The city faces a structural deficit", "source": "Reporter", "status": "context", "sourceCitation": null, "timestamp": 60}
+  ],
+  "context": [
+    {"key": "Current annual budget", "value": "$3.4B"},
+    {"key": "Last fare increase", "value": "2021"}
+  ]
+}
+
+SCALING (video is {duration_minutes} minutes):
+- Under 10 min: 3-5 timeline events, 2-5 entities, 3-6 claims, 3-6 context items
+- 10-30 min: 5-10 timeline events, 4-10 entities, 5-12 claims, 5-12 context items
+- Over 30 min: 8-20 timeline events, 6-20 entities, 8-20 claims, 8-20 context items
+
+RULES:
+- A claim's status MUST be one of: verified, disputed, context. When the report
+  does not establish truth, use "context" — never guess "verified".
+- Attribute every claim to a source — an unattributed claim is "Reporter".
+- Preserve numbers and quotes exactly; do not round or paraphrase figures.
+- storyTimeline timestamps must be ascending, in seconds.
+- Do NOT editorialize — report the status the source material supports.
+
+COMMON MISTAKES:
+- Marking every claim "verified" — most reporting weighs competing claims.
+- Treating opinion as a verifiable claim — opinions are "context".
+- Collapsing distinct claims into one row — one assertion per claim.
+</domain_schema>

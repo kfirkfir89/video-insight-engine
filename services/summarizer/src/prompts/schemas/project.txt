@@ -1,0 +1,74 @@
+<domain_schema name="project">
+PROJECT DATA — ProjectData schema
+
+Extract a complete, actionable project guide.
+
+{
+  "projectName": "Exact project name or description",
+  "difficulty": "beginner | intermediate | advanced",
+  "estimatedTime": "Total time estimate (e.g., '4-6 hours')",
+  "estimatedCost": "Total cost estimate with currency or null",
+  "materials": [
+    {
+      "name": "Exact material name and specification",
+      "quantity": "Amount needed (e.g., '8 feet', '2 sheets')",
+      "cost": "Cost with currency or null",
+      "notes": "Grade, type, or where to buy"
+    }
+  ],
+> UI: Materials → ChecklistInteractive. Fill cost for price display, notes for source info.
+  "tools": [
+    {
+      "name": "Exact tool name (e.g., '#2 Phillips screwdriver')",
+      "required": true,
+      "alternative": "Alternative tool or null"
+    }
+  ],
+  "steps": [
+    {
+      "number": 1,
+      "title": "Step title",
+      "instruction": "Detailed instruction with specific measurements and techniques",
+      "duration": "Time for this step or null",
+      "tips": "Pro tip for this step or null",
+      "safetyNote": "Safety warning for this step or null",
+      "timestamp": null
+    }
+  ],
+> UI: Steps → StepByStepInteractive. Fill tips, safetyNote, duration for full step cards.
+  "safetyWarnings": [
+    "Safety warnings that apply to the whole project"
+  ]
+}
+
+// Example for a woodworking video:
+{
+  "projectName": "Outdoor Cedar Bench", "difficulty": "intermediate", "estimatedTime": "4-6 hours", "estimatedCost": "$85",
+  "materials": [
+    {"name": "2x4 cedar lumber", "quantity": "4 x 8 feet", "cost": "$12 each", "notes": "Select grade, kiln-dried"},
+    {"name": "#8 x 2.5 inch deck screws", "quantity": "1 box (100ct)", "cost": "$8", "notes": "Stainless steel for outdoor use"}
+  ],
+  "tools": [
+    {"name": "Miter saw", "required": true, "alternative": "Circular saw with speed square"},
+    {"name": "#2 Phillips driver bit", "required": true, "alternative": null}
+  ],
+  "steps": [
+    {"number": 1, "title": "Cut the legs", "instruction": "Cut four 17-inch pieces from the 2x4 at exactly 90 degrees. Sand ends with 120-grit.", "duration": "15 min", "tips": "Mark all four pieces before cutting — batch cuts are more accurate", "safetyNote": "Use push stick for short pieces on the miter saw", "timestamp": 120}
+  ],
+  "safetyWarnings": ["Always wear safety glasses when cutting", "Work in a ventilated area when sanding cedar"]
+}
+
+SCALING (video is {duration_minutes} minutes):
+- Under 15 min: core materials, essential tools, key steps
+- 15-30 min: full materials list, all tools, detailed steps with tips
+- Over 30 min: complete materials with costs, all tools with alternatives, all steps with safety notes
+
+RULES:
+- Include all materials, tools, and safety warnings
+- Measurements must be exact: "2x4 lumber, 8 feet" not "some wood"
+- All steps in correct order with specific details
+- Tool specs when given: "#2 Phillips screwdriver" not "a screwdriver"
+- Safety warnings preserved verbatim
+- Time estimates for each step when mentioned
+- Cost estimates with currency when available
+</domain_schema>

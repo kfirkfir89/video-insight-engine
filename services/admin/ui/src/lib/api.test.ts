@@ -1,0 +1,179 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// Tests for API client module
+describe('api client', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe('setApiKey / hasApiKey / clearApiKey', () => {
+    it('should store and detect API key', async () => {
+      const { setApiKey, hasApiKey } = await import('./api');
+      expect(hasApiKey()).toBe(false);
+      setApiKey('test-key');
+      expect(hasApiKey()).toBe(true);
+    });
+
+    it('should clear API key', async () => {
+      const { setApiKey, hasApiKey, clearApiKey } = await import('./api');
+      setApiKey('test-key');
+      clearApiKey();
+      expect(hasApiKey()).toBe(false);
+    });
+  });
+
+  describe('api.usage.stats', () => {
+    it('should call /usage/stats with days param', async () => {
+      const { api, setApiKey } = await import('./api');
+      setApiKey('my-key');
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ total_calls: 10, total_cost_usd: 1.5 }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const result = await api.usage.stats(7);
+      expect(mockFetch).toHaveBeenCalledWith('/usage/stats?days=7', expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer my-key' }),
+      }));
+      expect(result).toEqual({ total_calls: 10, total_cost_usd: 1.5 });
+    });
+
+    it('should throw ApiError on 401 and clear key', async () => {
+      const { api, setApiKey, hasApiKey, ApiError } = await import('./api');
+      setApiKey('bad-key');
+      const reloadMock = vi.fn();
+      Object.defineProperty(window, 'location', { value: { reload: reloadMock }, writable: true });
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, statusText: 'Unauthorized' }));
+
+      await expect(api.usage.stats()).rejects.toBeInstanceOf(ApiError);
+      expect(hasApiKey()).toBe(false);
+    });
+
+    it('should throw ApiError with status on non-401 failure', async () => {
+      const { api, setApiKey, ApiError } = await import('./api');
+      setApiKey('k');
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500, statusText: 'Server Error' }));
+
+      try {
+        await api.usage.stats();
+        throw new Error('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ApiError);
+        expect((err as InstanceType<typeof ApiError>).status).toBe(500);
+      }
+    });
+  });
+
+  describe('logout', () => {
+    it('should clear key and reload', async () => {
+      const { setApiKey, hasApiKey, logout } = await import('./api');
+      setApiKey('k');
+      const reloadMock = vi.fn();
+      Object.defineProperty(window, 'location', { value: { reload: reloadMock }, writable: true });
+
+      logout();
+      expect(hasApiKey()).toBe(false);
+      expect(reloadMock).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('ApiError', () => {
+    it('should have name ApiError and status field', async () => {
+      const { ApiError } = await import('./api');
+      const err = new ApiError(404, 'not found');
+      expect(err.name).toBe('ApiError');
+      expect(err.status).toBe(404);
+      expect(err.message).toBe('not found');
+      expect(err).toBeInstanceOf(Error);
+    });
+  });
+
+  describe('api.health.services', () => {
+    it('should call /health/services', async () => {
+      const { api, setApiKey } = await import('./api');
+      setApiKey('key');
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true, status: 200,
+        json: () => Promise.resolve({ 'vie-api': { status: 'healthy' } }),
+      }));
+
+      const result = await api.health.services();
+      expect(result).toHaveProperty('vie-api');
+    });
+  });
+
+  describe('api.usage.byRun', () => {
+    it('should call /usage/by-run with days, limit, offset params', async () => {
+      const { api, setApiKey } = await import('./api');
+      setApiKey('key');
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve([]),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      await api.usage.byRun(7, 10, 0);
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/usage/by-run?days=7&limit=10&offset=0',
+        expect.anything(),
+      );
+    });
+  });
+
+  describe('api.users.activity', () => {
+    it('should call /users/{id}/activity', async () => {
+      const { api, setApiKey } = await import('./api');
+      setApiKey('key');
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ userId: 'u1', videos: [], assistantCalls: [], costTimeline: [] }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const result = await api.users.activity('user-123');
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/users/user-123/activity',
+        expect.anything(),
+      );
+      expect(result).toHaveProperty('userId', 'u1');
+    });
+  });
+
+  describe('api.alerts.updateConfig', () => {
+    it('should POST config as JSON body, not query string', async () => {
+      const { api, setApiKey } = await import('./api');
+      setApiKey('key');
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ updated: true }),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const config = {
+        cost_threshold_usd: 1.23,
+        daily_spike_multiplier: 2.5,
+        failure_rate_threshold: 0.3,
+      };
+      await api.alerts.updateConfig(config);
+
+      expect(fetchMock).toHaveBeenCalledOnce();
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      // URL must have no query string
+      expect(url).toBe('/alerts/config');
+      expect(init.method).toBe('POST');
+      const headers = init.headers as Record<string, string>;
+      expect(headers['Content-Type']).toBe('application/json');
+      expect(init.body).toBe(JSON.stringify(config));
+    });
+  });
+});

@@ -1,0 +1,185 @@
+{
+  "_comment": "Golden LLM response fixture for the tech domain. Hand-built against the Pydantic schemas (PlanResult, TechData, EnrichmentData, SynthesisResult) — represents a valid set of per-stage LLM outputs for a Python/FastAPI tutorial video. Drift canary: if a schema or assembler change breaks parsing of this previously-valid payload, tests/test_llm_response_fixtures.py fails.",
+  "domain": "tech",
+  "video_meta": {
+    "videoId": "fixture-tech-001",
+    "title": "FastAPI Crash Course: Build a REST API in 40 Minutes",
+    "channel": "CodeCraft",
+    "duration": 2400,
+    "chapters": []
+  },
+  "plan_response": {
+    "reasoning": "Screen-heavy coding tutorial with reproducible commands and full code snippets shown on screen.",
+    "identity": {
+      "creatorType": "software educator",
+      "tone": "practical, fast-paced",
+      "audience": "intermediate Python developers"
+    },
+    "corePromise": "Build and run a working FastAPI REST API from scratch",
+    "uniqueAngle": "Every endpoint is tested live with httpx as it is written",
+    "extractionGuidance": {
+      "primaryFocus": "Exact code snippets and setup commands, in order",
+      "watchOutFor": "Snippets edited mid-video — capture the final version"
+    },
+    "itemCounts": {
+      "steps": 4,
+      "codeSnippets": 3,
+      "concepts": 3
+    },
+    "contentTags": ["tech"],
+    "modifiers": [],
+    "primaryTag": "tech",
+    "userGoal": "Follow along and build the same API locally",
+    "confidence": 0.93,
+    "tabs": [
+      {
+        "id": "code",
+        "label": "Code",
+        "emoji": "💻",
+        "component": "code_playground",
+        "dataSource": "tech.snippets",
+        "goal": "Copy-paste every snippet exactly as written on screen."
+      },
+      {
+        "id": "quiz",
+        "label": "Quiz",
+        "emoji": "❓",
+        "component": "quiz_arena",
+        "dataSource": "enrichment.quiz",
+        "goal": "Check you understood validation and DI before building."
+      },
+      {
+        "id": "flashcards",
+        "label": "Recall",
+        "emoji": "🃏",
+        "component": "flash_deck",
+        "dataSource": "enrichment.flashcards",
+        "goal": "Memorize the commands and status codes."
+      }
+    ]
+  },
+  "extraction_response": {
+    "languages": ["Python"],
+    "frameworks": ["FastAPI", "Pydantic", "Uvicorn"],
+    "topics": ["REST API design", "dependency injection", "request validation"],
+    "setup": {
+      "commands": [
+        "python -m venv .venv && source .venv/bin/activate",
+        "pip install fastapi uvicorn[standard] pydantic",
+        "uvicorn main:app --reload --port 8000"
+      ],
+      "dependencies": [
+        {"name": "fastapi", "version": "0.115"},
+        {"name": "uvicorn", "version": "0.30"},
+        {"name": "pydantic", "version": "2.7"}
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "description": "SQLAlchemy connection string for the demo database",
+          "example": "sqlite:///./demo.db"
+        }
+      ]
+    },
+    "snippets": [
+      {
+        "filename": "main.py",
+        "language": "python",
+        "code": "from fastapi import FastAPI\n\napp = FastAPI(title=\"Bookshelf API\")\n\n@app.get(\"/health\")\nasync def health() -> dict[str, str]:\n    return {\"status\": \"ok\"}",
+        "explanation": "Minimal app factory with a health endpoint used throughout the video.",
+        "timestamp": 210
+      },
+      {
+        "filename": "schemas.py",
+        "language": "python",
+        "code": "from pydantic import BaseModel, Field\n\nclass BookCreate(BaseModel):\n    title: str = Field(min_length=1, max_length=200)\n    author: str\n    year: int | None = None",
+        "explanation": "Request schema — validation happens before the route body runs.",
+        "timestamp": 640
+      },
+      {
+        "filename": "routes.py",
+        "language": "python",
+        "code": "@app.post(\"/books\", status_code=201)\nasync def create_book(book: BookCreate) -> Book:\n    return await repository.create(book)",
+        "explanation": "POST route delegating to the repository layer; returns 201 on success.",
+        "timestamp": 1150
+      }
+    ],
+    "patterns": [
+      {
+        "title": "Validate at the boundary",
+        "doExample": "Accept a Pydantic model in the route signature",
+        "dontExample": "Accept a raw dict and validate manually inside the handler",
+        "explanation": "FastAPI rejects malformed payloads before your code runs."
+      },
+      {
+        "title": "Inject dependencies",
+        "doExample": "db: Session = Depends(get_db)",
+        "dontExample": "Import a global session object at module level",
+        "explanation": "Depends() makes routes testable and swappable."
+      }
+    ],
+    "cheatSheet": [
+      {"title": "Run dev server", "code": "uvicorn main:app --reload", "description": "Hot-reloading dev server on port 8000"},
+      {"title": "Interactive docs", "code": "http://localhost:8000/docs", "description": "Swagger UI generated from your routes"},
+      {"title": "Typed query param", "code": "q: str | None = None", "description": "Optional query parameter with validation"}
+    ]
+  },
+  "enrichment_response": {
+    "quiz": [
+      {
+        "question": "What does FastAPI do when a request body fails Pydantic validation?",
+        "options": [
+          "Passes the raw dict to the route",
+          "Returns a 422 error before the route runs",
+          "Silently drops invalid fields",
+          "Retries the request"
+        ],
+        "correctIndex": 1,
+        "explanation": "Validation runs at the boundary; invalid payloads never reach handler code."
+      },
+      {
+        "question": "Which command starts the hot-reloading dev server?",
+        "options": [
+          "python main.py",
+          "fastapi serve",
+          "uvicorn main:app --reload",
+          "pip run server"
+        ],
+        "correctIndex": 2,
+        "explanation": "Uvicorn is the ASGI server; --reload watches for file changes."
+      },
+      {
+        "question": "Why use Depends() instead of a module-level global?",
+        "options": [
+          "It is faster at runtime",
+          "It makes dependencies visible and swappable in tests",
+          "It is required by Pydantic",
+          "It enables HTTP/2"
+        ],
+        "correctIndex": 1,
+        "explanation": "Dependency injection keeps routes testable without patching globals."
+      }
+    ],
+    "flashcards": [
+      {"front": "ASGI server used in the video", "back": "Uvicorn"},
+      {"front": "Status code for successful creation", "back": "201 Created"},
+      {"front": "Where request validation happens", "back": "At the boundary, via Pydantic models in the route signature"},
+      {"front": "URL of the generated API docs", "back": "http://localhost:8000/docs"}
+    ],
+    "cheatSheet": [
+      {"title": "Create venv", "code": "python -m venv .venv", "description": "Isolated environment per project"},
+      {"title": "Optional field", "code": "year: int | None = None", "description": "Pydantic optional with default"},
+      {"title": "POST route", "code": "@app.post(\"/books\", status_code=201)", "description": "Explicit success status code"}
+    ]
+  },
+  "synthesis_response": {
+    "tldr": "Build a working FastAPI REST API with validation, DI, and live-tested endpoints in 40 minutes.",
+    "keyTakeaways": [
+      "Pydantic models in route signatures validate requests before your code runs",
+      "Depends() keeps routes testable — never import global sessions",
+      "uvicorn --reload gives a hot-reloading dev loop with auto-generated docs"
+    ],
+    "masterSummary": "A hands-on crash course that builds a Bookshelf REST API from an empty folder: environment setup, a minimal app with a health check, Pydantic request schemas, a repository layer wired through dependency injection, and live testing of each endpoint via the generated Swagger UI.",
+    "seoDescription": "FastAPI crash course: build a validated, dependency-injected REST API in Python in 40 minutes."
+  }
+}

@@ -1,0 +1,64 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Build outputs
+dist
+**/dist
+build
+**/build
+*.log
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Test files
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+**/__tests__
+coverage
+
+# Dev files
+.env.local
+.env.*.local
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Documentation
+*.md
+!README.md
+docs
+
+# Dev tooling
+dev/
+.claude/
+.cursor/
+
+# Python
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.coverage
+**/*.pyc
+**/*.pyo
+
+# Service tests (Dockerfiles only COPY src/, not tests/)
+services/summarizer/tests
+services/admin/tests
+services/assistant/tests
+
+# Playwright / test outputs
+.playwright-mcp
+**/test-results
+**/playwright-report

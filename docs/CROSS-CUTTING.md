@@ -1,0 +1,411 @@
+# Cross-Cutting Concerns
+
+Guidelines for work that spans multiple services.
+
+---
+
+## When Does This Apply?
+
+Use this guide when your task involves:
+
+- Frontend + Backend changes (new API endpoint + UI)
+- vie-api + vie-summarizer (HTTP calls, status updates)
+- vie-api + vie-assistant (HTTP + SSE)
+- Any change affecting multiple services
+
+---
+
+## The Golden Rule
+
+**Define the contract first, build in dependency order.**
+
+```
+1. CONTRACT   →   2. BACKEND   →   3. FRONTEND
+   (API spec)      (Provider)       (Consumer)
+```
+
+Why this order?
+- Backend defines what's possible
+- Frontend consumes what exists
+- Contract prevents miscommunication
+
+---
+
+## Cross-Service Development Flow
+
+### Step 1: Define the Contract
+
+Before writing any code, document the interface:
+
+```markdown
+## New Feature: Retry Failed Video
+
+### API Endpoint
+POST /api/videos/:id/retry
+
+### Request
+None (empty body)
+
+### Response (200)
+{
+  "video": {
+    "id": "...",
+    "status": "pending",
+    "retryCount": 1
+  }
+}
+
+### Errors
+- 404: VIDEO_NOT_FOUND
+- 400: INVALID_STATE (not in failed state)
+- 400: NOT_RETRYABLE (permanent error like NO_TRANSCRIPT)
+
+### WebSocket Event
+{
+  "type": "video.status",
+  "payload": { "videoSummaryId": "...", "status": "pending" }
+}
+```
+
+**Where to document:**
+- All API contracts → `docs/API-REFERENCE.md` (REST, WebSocket, SSE)
+
+### Step 2: Build Backend First
+
+```
+vie-api                    vie-summarizer/assistant
+  │                              │
+  ├── Add route                  │
+  ├── Add service method         │
+  ├── Add validation             ├── Add handler (if needed)
+  ├── Add tests                  ├── Add tests
+  └── Verify with curl           └── Verify integration
+```
+
+**Verification before frontend:**
+```bash
+# Test the endpoint directly
+curl -X POST http://localhost:3000/api/videos/123/retry \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Step 3: Build Frontend Last
+
+Only after backend is working:
+
+```
+vie-web
+  │
+  ├── Add API client method
+  ├── Add React Query hook
+  ├── Add UI component
+  ├── Handle loading/error states
+  └── Test full flow
+```
+
+---
+
+## Service Communication Patterns
+
+### vie-api ↔ vie-summarizer (Async via HTTP)
+
+```
+┌─────────┐    POST /summarize    ┌──────────────┐
+│ vie-api │──────────────────────▶│vie-summarizer│
+└─────────┘                       └──────┬───────┘
+     │                                   │
+     │ Returns to user                   │
+     │ immediately                       │ Background
+     ▼                                   │ task runs
+  User sees                              │
+  "processing"                           │
+                                         │ Updates DB
+     Frontend polls ◀────────────────────┘
+```
+
+**Pattern:**
+1. vie-api sends POST request to vie-summarizer with job details
+2. vie-summarizer immediately returns 202 Accepted
+3. vie-summarizer processes in background (FastAPI BackgroundTasks)
+4. vie-summarizer updates MongoDB status directly
+5. Frontend polls for status or receives WebSocket update
+
+**Key files:**
+- `api/src/services/summarizer-client.ts`
+- `services/summarizer/src/main.py`
+- `docs/API-REFERENCE.md`
+
+### vie-api ↔ vie-assistant (HTTP + SSE)
+
+```
+┌─────────┐   HTTP POST    ┌──────────────┐
+│ vie-api │───────────────▶│ vie-assistant │
+└─────────┘◀───────────────└──────────────┘
+            SSE stream
+```
+
+**Pattern:**
+1. vie-api proxies chat requests to vie-assistant via HTTP
+2. vie-assistant streams responses back via SSE
+3. Chat history is passed per-request (no server-side session)
+4. Results may be cached in MongoDB
+
+**Key files:**
+- `api/src/services/assistant-client.ts`
+- `services/assistant/src/main.py`
+- `docs/API-REFERENCE.md`
+
+---
+
+### Vector store: shared collection, source-filtered access
+
+Both `vie-summarizer` (writer) and `vie-assistant` (reader) speak to the
+same `transcript_chunks` Qdrant collection. The `source` payload field
+splits content within that collection, so callers can scope retrieval
+without splitting infrastructure.
+
+```
+                  ┌─────────────────────────────────────┐
+                  │ Qdrant: transcript_chunks (384-dim) │
+                  └─────────────────────────────────────┘
+                     ▲                              │
+   writer            │                              │  reader (filter by source)
+   ┌────────────────────────────┐         ┌──────────────────────────────┐
+   │ vie-summarizer assembly    │         │ vie-assistant RAGService     │
+   │  ├─ store_transcript_chunks│         │  ├─ search(video_id, sources)│
+   │  │   source="transcript"   │         │  └─ search_library(video_ids)│
+   │  └─ store_default_output_  │         └──────────────────────────────┘
+   │      chunks                │
+   │      source="default_output"│
+   └────────────────────────────┘
+```
+
+**Single contract:**
+- Payload: `source`, `video_id`, `user_id` (reserved, currently `null`),
+  `tab_id`, `tab_component`, `prop_path`, `chunk_index`, `text`,
+  `text_original`, `language`
+- Point ID: `sha256(f"{source}:{video_id}:{tab_id or ''}:{prop_path or ''}:{chunk_idx}")` (transcript path keeps the legacy `f"{video_id}_{idx}"` for backward compat)
+- Both writers pre-delete by `(video_id, source)` before upsert — orphan-free reprocess
+- `EMBEDDING_MODEL_NAME` (summarizer) MUST match the model the assistant's `RAGService` loads (defaults to `all-MiniLM-L6-v2` in both); changing it requires re-ingesting fixtures
+
+**When adding a new content source** (e.g. `user_notes`):
+1. Add the source name to the writer's `source` literal
+2. Pre-delete by the new `(video_id, source)` pair before upsert
+3. Update the assistant's `RAGService.search` / `search_library` to accept it in `sources`
+4. Update `output_chunker.py` if the new source has its own chunking rules
+
+---
+
+## Shared Types Strategy
+
+### TypeScript (vie-api, vie-web)
+
+Use `packages/types` for shared interfaces:
+
+```typescript
+// packages/types/src/video.ts
+export interface VideoSummary {
+  id: string;
+  youtubeId: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  // ...
+}
+
+// Import in both vie-api and vie-web
+import { VideoSummary } from '@vie/types';
+```
+
+### Python (vie-summarizer, vie-assistant)
+
+Define Pydantic models, generate JSON schema if needed:
+
+```python
+# services/summarizer/src/models/schemas.py
+class SummarizeRequest(BaseModel):
+    videoSummaryId: str
+    youtubeId: str
+    url: str
+    userId: str | None = None
+```
+
+### VIEResponse Contract (v2)
+
+The pipeline produces two output formats stored side-by-side for backward compatibility:
+
+| Field            | Format | Description                              |
+| ---------------- | ------ | ---------------------------------------- |
+| `triage`         | v1     | Content tags + tab layout (legacy)       |
+| `output`         | v1     | Extraction + synthesis + enrichment      |
+| `assembledMeta`  | v2     | VIEResponseMeta (domain, title, etc.)    |
+| `assembledTabs`  | v2     | TabEntry[] (component-addressed tabs)    |
+
+The frontend checks for `assembledTabs` first (v2 path). If absent, it falls back to building a VIEResponse from `triage` + `output` (v1 path).
+
+### Assembly Stage as Cross-Cutting Concern
+
+The assembly stage (`services/summarizer/src/services/pipeline/assembly.py`) produces `TabEntry[]` that must be understood by both:
+
+- **Python (summarizer)**: Produces and stores the assembled tabs
+- **TypeScript (web)**: Renders tabs via `COMPONENT_REGISTRY` in `ComposableOutput.tsx`
+
+Each `TabEntry` has: `{ id, label, emoji, component, props, crossTabLinks? }`
+
+The `component` field maps to a React renderer. Adding a new component requires updates in both the Python assembler registry and the TypeScript component registry.
+
+### Type Sync Checklist
+
+When adding a new type:
+- [ ] Define in `packages/types` (TypeScript)
+- [ ] Define in Python service schemas
+- [ ] Update API docs with examples
+- [ ] Verify JSON serialization matches
+- [ ] If TabEntry-related: update both assembly.py and ComposableOutput.tsx
+
+---
+
+## Error Handling Across Services
+
+### Error Flow
+
+```
+vie-web          vie-api           vie-summarizer
+   │                │                    │
+   │   request      │                    │
+   ├───────────────▶│    HTTP POST       │
+   │                ├───────────────────▶│
+   │                │                    │ error occurs
+   │                │    (updates DB)    │
+   │                │◀───────────────────┤
+   │   websocket    │                    │
+   │◀───────────────┤                    │
+   │                │                    │
+   show error       │                    │
+```
+
+### Error Code Consistency
+
+All services must use the same error codes (from `docs/ERROR-HANDLING.md`):
+
+| Code | HTTP | Service |
+|------|------|---------|
+| `NO_TRANSCRIPT` | 422 | vie-summarizer detects, vie-api returns |
+| `VIDEO_TOO_LONG` | 422 | vie-summarizer detects, vie-api returns |
+| `LLM_ERROR` | 500 | vie-summarizer/assistant detects |
+
+### Error Translation
+
+Each service translates errors at its boundary:
+
+```typescript
+// vie-api: Translate assistant errors to HTTP
+try {
+  const result = await assistantClient.chat(...);
+  return result;
+} catch (error) {
+  if (error.code === 'NOT_FOUND') {
+    throw new HttpError(404, 'VIDEO_NOT_FOUND', 'Video not found');
+  }
+  throw new HttpError(500, 'INTERNAL_ERROR', 'Something went wrong');
+}
+```
+
+---
+
+## Testing Cross-Service Features
+
+### Integration Test Strategy
+
+```
+Unit Tests           Integration Tests           E2E Tests
+(per service)        (service pairs)             (full flow)
+     │                     │                         │
+     │                     │                         │
+vie-api tests        vie-api + MongoDB         vie-web + vie-api +
+vie-web tests        vie-api + Summarizer      vie-summarizer +
+vie-summarizer                                 MongoDB
+tests
+```
+
+### What to Test Where
+
+| Test Type | What to Test | Tools |
+|-----------|--------------|-------|
+| Unit | Service logic in isolation | Jest, pytest |
+| Integration | API + Database | Supertest, TestClient |
+| Contract | API response shapes | Zod, Pydantic |
+| E2E | Full user flow | Playwright, Cypress |
+
+### Integration Test Example
+
+```typescript
+// Test vie-api with mocked assistant client
+describe('POST /api/videos/:id/chat', () => {
+  it('returns streamed response from assistant', async () => {
+    // Mock assistant client
+    mockAssistant.chat.mockResolvedValue('The main ingredients are...');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/videos/123/chat',
+      headers: { Authorization: `Bearer ${token}` },
+      payload: { message: 'What are the ingredients?' },
+    });
+
+    expect(response.statusCode).toBe(200);
+  });
+});
+```
+
+---
+
+## Deployment Considerations
+
+### Service Dependencies
+
+```yaml
+# Startup order matters!
+1. vie-mongodb      # Database first
+2. vie-summarizer   # Service can start
+3. vie-assistant    # Assistant service ready
+4. vie-api          # API connects to all
+5. vie-web          # Frontend last
+```
+
+### Health Checks
+
+Each service should verify its dependencies:
+
+```typescript
+// vie-api health check
+fastify.get('/health', async () => {
+  const mongoOk = await checkMongo();
+  const assistantOk = await checkAssistant();
+
+  if (!mongoOk || !assistantOk) {
+    return reply.code(503).send({ status: 'unhealthy', mongo: mongoOk, assistant: assistantOk });
+  }
+
+  return { status: 'healthy' };
+});
+```
+
+---
+
+## Quick Reference
+
+### Which Skill to Load?
+
+| Working on... | Primary Skill | Also Consider |
+|---------------|---------------|---------------|
+| vie-api route + vie-web component | backend-node, react-vite | This doc |
+| vie-api + vie-summarizer | backend-node, backend-python | This doc |
+| vie-api + vie-assistant | backend-node, backend-python | This doc |
+| Full feature (all services) | All three + This doc | - |
+
+### Key Documentation
+
+| Need | Document |
+|------|----------|
+| API contracts (REST, WebSocket, SSE) | [docs/API-REFERENCE.md](./API-REFERENCE.md) |
+| Error codes | [docs/ERROR-HANDLING.md](./ERROR-HANDLING.md) |
+| Data models | [docs/DATA-MODELS.md](./DATA-MODELS.md) |

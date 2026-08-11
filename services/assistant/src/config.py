@@ -1,0 +1,179 @@
+"""Configuration settings for vie-assistant service."""
+
+from __future__ import annotations
+
+import logging
+
+from pydantic import Field
+from pydantic_settings import BaseSettings
+
+_DEFAULT_INTERNAL_SECRET = "dev-internal-secret-change-me"
+
+# Model mapping for each provider
+MODEL_MAP = {
+    "anthropic": {
+        "default": "anthropic/claude-sonnet-4-6",
+        "fast": "anthropic/claude-haiku-4-5-20251001",
+    },
+    "openai": {
+        "default": "openai/gpt-4o",
+        "fast": "openai/gpt-4o-mini",
+    },
+    "gemini": {
+        "default": "gemini/gemini-2.5-flash",
+        "fast": "gemini/gemini-2.5-flash-lite",
+    },
+}
+
+
+def get_model(provider: str = "anthropic", tier: str = "default") -> str:
+    """Get model name for provider and tier."""
+    provider_models = MODEL_MAP.get(provider, MODEL_MAP["anthropic"])
+    return provider_models.get(tier, provider_models["default"])
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables."""
+
+    # Server
+    ASSISTANT_PORT: int = 8001
+    ENVIRONMENT: str = ""  # development, test, staging, production
+
+    # MongoDB
+    MONGODB_URI: str = "mongodb://vie-mongodb:27017/video-insight-engine"
+
+    # Qdrant
+    QDRANT_URL: str = "http://vie-qdrant:6333"
+    QDRANT_COLLECTION: str = "transcript_chunks"
+
+    # ─── RAG retrieval ──────────────────────────────────────────────────
+    # Query-side encoder. MUST match the summarizer's index-side
+    # EMBEDDING_MODEL_NAME (same env var, same default) — mixed encoders make
+    # cosine scores meaningless. Guarded by tests/test_embedding_model_parity.py.
+    EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
+    # Minimum cosine similarity for a retrieved chunk to enter chat context.
+    # The collection uses Distance.COSINE, so scores are true cosine
+    # similarity in [-1, 1]: unrelated text pairs land ~0.0-0.2 with
+    # all-MiniLM, on-topic hits >= ~0.4. 0.25 is a conservative noise floor
+    # that keeps current on-topic behavior intact; 0 disables the floor.
+    RAG_MIN_SCORE: float = Field(default=0.25, ge=-1.0, le=1.0)
+
+    # Internal auth
+    INTERNAL_SECRET: str = Field(default=_DEFAULT_INTERNAL_SECRET, repr=False)
+
+    # vie-api gateway (outbound internal calls — reuses INTERNAL_SECRET)
+    VIE_API_URL: str = "http://vie-api:3000"
+
+    # LLM Provider Configuration
+    LLM_PROVIDER: str = "anthropic"
+    LLM_FAST_PROVIDER: str | None = None
+    LLM_FALLBACK_PROVIDER: str | None = None
+    LLM_MODEL: str | None = None
+    LLM_FAST_MODEL: str | None = None
+    # Model for the RAG chat + agentic loop specifically. Unset → primary
+    # provider's fast tier (Haiku) — chat is high-volume/latency-sensitive.
+    LLM_CHAT_MODEL: str | None = None
+
+    # Provider API Keys
+    ANTHROPIC_API_KEY: str | None = None
+    OPENAI_API_KEY: str | None = None
+    GEMINI_API_KEY: str | None = None
+
+    # LLM limits
+    LLM_TIMEOUT_SECONDS: float = 60.0
+    LLM_NUM_RETRIES: int = 2
+
+    # Assistant limits
+    MAX_CONTEXT_CHUNKS: int = 8
+    MAX_CONVERSATION_TURNS: int = 20
+
+    # Logging
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "console"
+
+    # ─── Langfuse observability ─────────────────────────────────────────
+    # Leave keys blank to disable — every Langfuse helper is no-op when
+    # init returns None, so tests and offline dev never hit the network.
+    LANGFUSE_PUBLIC_KEY: str | None = None
+    LANGFUSE_SECRET_KEY: str | None = None
+    LANGFUSE_BASE_URL: str = "https://cloud.langfuse.com"
+    # User-id propagation policy. See summarizer/src/config.py for semantics.
+    LANGFUSE_USER_ID_MODE: str = "identity"
+    LANGFUSE_USER_ID_HASH_SALT: str = ""
+
+    # ─── Sentry error tracking ──────────────────────────────────────────
+    # Empty DSN -> SDK no-ops. Lets dev/CI run without a live project.
+    SENTRY_DSN: str = ""
+    SENTRY_ENVIRONMENT: str | None = None
+    SENTRY_RELEASE: str | None = None
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.0
+
+    @property
+    def llm_model(self) -> str:
+        """Get the configured LLM model with provider prefix."""
+        if self.LLM_MODEL:
+            return self.LLM_MODEL
+        return get_model(self.LLM_PROVIDER, "default")
+
+    @property
+    def llm_fast_model(self) -> str:
+        """Get the configured fast LLM model with provider prefix."""
+        if self.LLM_FAST_MODEL:
+            return self.LLM_FAST_MODEL
+        provider = self.LLM_FAST_PROVIDER or self.LLM_PROVIDER
+        return get_model(provider, "fast")
+
+    @property
+    def llm_chat_model(self) -> str:
+        """Model for the RAG chat + agentic loop.
+
+        Defaults to the PRIMARY provider's fast tier (Haiku for anthropic) —
+        chat is high-volume and latency-sensitive. Deliberately resolves via
+        ``get_model(LLM_PROVIDER, "fast")`` rather than ``llm_fast_model`` so
+        chat stays on the same provider family regardless of
+        ``LLM_FAST_PROVIDER``. Pin a specific model with ``LLM_CHAT_MODEL``.
+        """
+        if self.LLM_CHAT_MODEL:
+            return self.LLM_CHAT_MODEL
+        return get_model(self.LLM_PROVIDER, "fast")
+
+    @property
+    def llm_fallback_models(self) -> list[str] | None:
+        """Get fallback model chain if configured."""
+        if self.LLM_FALLBACK_PROVIDER:
+            return [get_model(self.LLM_FALLBACK_PROVIDER, "default")]
+        return None
+
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
+
+settings = Settings()
+
+
+# Environments where the dev-default secret is tolerated (warn only). Any
+# other value — production, staging, or an unrecognized name — fails startup.
+_DEV_ENVS = frozenset({"", "development", "dev", "test", "local"})
+
+
+def validate_internal_secret() -> None:
+    """Fail startup if INTERNAL_SECRET is the dev default outside development.
+
+    Called from application lifespan (not import time) to avoid breaking test
+    imports. Mirrors the summarizer's ``validate_secrets`` but is stricter:
+    unknown ENVIRONMENT names are treated as production, not dev.
+
+    Raises:
+        ValueError: Default secret with a non-development ``ENVIRONMENT``.
+    """
+    if settings.INTERNAL_SECRET != _DEFAULT_INTERNAL_SECRET:
+        return
+
+    env_name = settings.ENVIRONMENT.lower()
+    if env_name not in _DEV_ENVS:
+        raise ValueError(
+            f"INTERNAL_SECRET must be set via environment variable in "
+            f"ENVIRONMENT={env_name!r}! Using the default value is a security risk."
+        )
+    logging.getLogger(__name__).warning(
+        "INTERNAL_SECRET is using the default value — set it via environment variable in production!"
+    )

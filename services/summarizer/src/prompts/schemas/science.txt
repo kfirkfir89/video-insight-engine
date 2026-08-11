@@ -1,0 +1,71 @@
+<domain_schema name="science">
+SCIENCE DATA — ScienceData schema
+
+Extract structured science/STEM educational content.
+
+{
+  "field": "Physics | Chemistry | Biology | Mathematics | Engineering | etc.",
+  "level": "beginner | intermediate | advanced",
+  "concepts": [
+    {
+      "name": "Scientific concept or principle name",
+      "emoji": "relevant emoji",
+      "definition": "Clear explanation as the speaker describes it",
+      "formula": "Mathematical formula or equation if applicable, or null",
+      "realWorldExample": "Practical example from the video",
+      "group": "Short thematic group (e.g. Fundamentals / Mechanisms / Applications)",
+      "connections": [
+        {"to": "EXACT name of a related concept", "type": "causes | requires | contrasts | partOf | relatesTo"}
+      ]
+    }
+  ],
+> UI: Concepts → SpotExplorer cards, or ConceptCanvas tiered graph when connections are populated. Fill formula for expandable detail, realWorldExample for practical context.
+> GROUPING: give every concept a short `group` label (aim for 2-5 groups total). `connections` are typed objects — `to` is the EXACT concept name, `type` is the relationship (`causes`/`requires`/`contrasts`/`partOf`/`relatesTo`). Keep ≤16 concepts on the canvas; group tightly rather than listing more.
+  "keyFacts": [
+    {
+      "emoji": "relevant emoji",
+      "title": "Specific factual claim or finding",
+      "detail": "Supporting evidence, numbers, or context from the video",
+      "source": "Study, paper, or authority cited (if any)"
+    }
+  ],
+> UI: KeyFacts → InfoGrid cards. Fill source for credibility badges.
+  "experiments": [
+    {
+      "number": 1,
+      "title": "Experiment or demonstration name",
+      "instruction": "What is done step by step",
+      "materials": ["Material 1", "Material 2"],
+      "expectedResult": "What should happen and why",
+      "safetyNote": "Safety warning if mentioned",
+      "timestamp": null
+    }
+  ]
+> UI: Experiments → StepPlayer. Fill materials for prep checklist, expectedResult for outcome context.
+}
+
+// Example for a physics explainer:
+{
+  "field": "Physics",
+  "level": "intermediate",
+  "concepts": [
+    {"name": "Wave-Particle Duality", "emoji": "🌊", "definition": "Light behaves as both a wave and a particle depending on how you observe it", "formula": "E = hf", "realWorldExample": "The double-slit experiment shows interference patterns (wave) but photon detectors register individual hits (particle)", "group": "Fundamentals", "connections": [{"to": "Quantum mechanics", "type": "partOf"}, {"to": "Photon", "type": "relatesTo"}]}
+  ],
+  "keyFacts": [
+    {"emoji": "🔬", "title": "Double-slit experiment proves wave nature", "detail": "When no detector is placed, photons create an interference pattern on the screen — proving wave behavior", "source": "Thomas Young's 1801 experiment"}
+  ]
+}
+
+SCALING (video is {duration_minutes} minutes):
+- Under 15 min: 3-5 concepts, 3-5 keyFacts, 0-2 experiments
+- 15-30 min: 5-8 concepts, 5-10 keyFacts, 1-3 experiments
+- Over 30 min: 8-15 concepts, 10-20 keyFacts, 2-5 experiments
+
+RULES:
+- Preserve scientific terminology exactly as used
+- Include formulas/equations when presented
+- Cite sources when the speaker references studies or papers
+- Experiments must be reproducible — list all materials and steps
+- Safety notes are mandatory for any potentially dangerous demos
+- Connect concepts to each other — science is about relationships
+</domain_schema>

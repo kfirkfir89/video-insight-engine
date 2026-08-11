@@ -1,0 +1,42 @@
+Here is one high-quality example of fitness extraction output. Match this density, specificity, and field completeness in your response.
+
+Video: "20-Minute Full Body HIIT — No Equipment Needed" (20 minutes)
+
+{
+  "meta": {
+    "type": "HIIT",
+    "difficulty": "intermediate",
+    "duration": 20,
+    "muscleGroups": ["chest", "core", "legs", "shoulders", "back"],
+    "equipment": ["none"],
+    "caloriesBurned": null
+  },
+  "warmup": [
+    {"name": "Arm circles", "emoji": "🔄", "sets": null, "reps": "15 each direction", "duration": "30 seconds", "rest": null, "difficulty": null, "formCues": ["Keep arms fully extended", "Start small circles, gradually increase"], "modifications": []},
+    {"name": "Leg swings", "emoji": "🦵", "sets": null, "reps": "10 each leg", "duration": "30 seconds", "rest": null, "difficulty": null, "formCues": ["Hold wall for balance", "Keep standing leg slightly bent"], "modifications": []},
+    {"name": "Inchworms", "emoji": "🐛", "sets": null, "reps": "5", "duration": "45 seconds", "rest": null, "difficulty": null, "formCues": ["Walk hands out to plank, pause 2 seconds, walk back", "Keep legs as straight as possible"], "modifications": [{"label": "Beginner", "description": "Bend knees slightly when walking hands out"}]}
+  ],
+  "exercises": [
+    {"name": "Burpees", "emoji": "💥", "sets": 3, "reps": "10", "duration": null, "rest": "30 seconds", "difficulty": "intermediate", "formCues": ["Chest touches the floor at the bottom", "Jump with arms fully overhead", "Land softly on the balls of your feet"], "modifications": [{"label": "Beginner", "description": "Step back instead of jumping, skip the push-up"}, {"label": "Advanced", "description": "Add a tuck jump at the top"}], "timestamp": 180},
+    {"name": "Mountain climbers", "emoji": "⛰️", "sets": 3, "reps": "20 each side", "duration": null, "rest": "20 seconds", "difficulty": "intermediate", "formCues": ["Keep hips level with shoulders — no piking up", "Drive knees to chest, not to elbows", "Maintain a straight plank spine throughout"], "modifications": [{"label": "Beginner", "description": "Slow the pace — step instead of hop"}], "timestamp": 320},
+    {"name": "Jump squats", "emoji": "🦘", "sets": 3, "reps": "12", "duration": null, "rest": "30 seconds", "difficulty": "intermediate", "formCues": ["Squat until thighs parallel to floor", "Explode up driving through heels", "Land softly, absorbing with bent knees"], "modifications": [{"label": "Beginner", "description": "Regular bodyweight squats without the jump"}, {"label": "Advanced", "description": "Hold a 10-15lb dumbbell at chest"}], "timestamp": 480},
+    {"name": "Push-up to shoulder tap", "emoji": "💪", "sets": 3, "reps": "8 each side", "duration": null, "rest": "30 seconds", "difficulty": "intermediate", "formCues": ["Full push-up, then tap opposite shoulder at the top", "Widen feet for more stability during the tap", "Keep core tight — no hip rotation"], "modifications": [{"label": "Beginner", "description": "Do push-ups from knees, then stand to do shoulder taps"}], "timestamp": 620},
+    {"name": "Plank hold", "emoji": "🧘", "sets": 3, "reps": null, "duration": "30 seconds", "rest": "15 seconds", "difficulty": "intermediate", "formCues": ["Forearms flat, elbows under shoulders", "Squeeze glutes and brace core — imagine someone is about to punch your stomach", "Look at a spot between your hands, not forward"], "modifications": [{"label": "Beginner", "description": "Drop to knees, keep hips in line"}, {"label": "Advanced", "description": "Extend to 45-60 seconds"}], "timestamp": 780}
+  ],
+  "cooldown": [
+    {"name": "Standing quad stretch", "emoji": "🦵", "sets": null, "reps": null, "duration": "30 seconds each leg", "rest": null, "difficulty": null, "formCues": ["Pull heel to glute, keep knees together", "Push hips slightly forward for deeper stretch"], "modifications": []},
+    {"name": "Child's pose", "emoji": "🙏", "sets": null, "reps": null, "duration": "45 seconds", "rest": null, "difficulty": null, "formCues": ["Walk hands forward as far as possible", "Breathe deeply — 4 seconds in, 6 seconds out"], "modifications": []}
+  ],
+  "timer": {
+    "intervals": [
+      {"name": "Work", "duration": 40, "type": "work"},
+      {"name": "Rest", "duration": 20, "type": "rest"}
+    ],
+    "rounds": 3
+  },
+  "tips": [
+    {"type": "form", "text": "Quality over speed — 8 perfect burpees beat 15 sloppy ones. The instructor demonstrates the difference at 4:20."},
+    {"type": "safety", "text": "If your lower back starts hurting during mountain climbers, your hips are too high. Drop them to shoulder level."},
+    {"type": "progression", "text": "Once you can complete all 3 rounds without stopping, increase to 4 rounds before adding weight."}
+  ]
+}

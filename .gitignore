@@ -1,0 +1,78 @@
+# ================================================
+# Video Insight Engine
+# ================================================
+dev/research/*
+dev/completed/*
+# golden-dataset: eval CI reads baseline.json + videos.yaml — keep those in git
+dev/golden-dataset/*
+!dev/golden-dataset/baseline.json
+!dev/golden-dataset/videos.yaml
+.claude/skills/impeccable2
+
+# Skill / audit workspaces (generated artifacts, not source-of-truth)
+.impeccable/
+audit/
+reports/
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.Python
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+.coverage
+vitest-report.json
+htmlcov/
+.pytest_cache/
+playwright-report/
+test-results/
+perf-*.png
+.playwright-mcp/
+
+# Local screenshots / scratch images at repo root
+/landing-light.png
+/login.png
+
+# Local Docker BuildKit config
+/buildkitd.toml
+
+# Docker
+docker-compose.override.yml
+
+# Misc
+*.tmp
+*.temp
+.cache/
+.mcp.json
+
+# Claude Code
+.claude/tdd-state.json
+.claude/tsc-cache/
+
+# Data backups (scripts/backup.sh output)
+backups/

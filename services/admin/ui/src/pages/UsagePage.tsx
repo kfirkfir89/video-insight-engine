@@ -1,0 +1,23 @@
+import { CostChart } from '../components/CostChart';
+import { FeatureBreakdown } from '../components/FeatureBreakdown';
+import { ModelBreakdown } from '../components/ModelBreakdown';
+import { RecentCalls } from '../components/RecentCalls';
+import { PipelineRunsPanel } from '../components/PipelineRunsPanel';
+
+interface UsagePageProps {
+  days?: number;
+}
+
+export function UsagePage({ days = 30 }: UsagePageProps = {}) {
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <CostChart days={days} />
+        <ModelBreakdown days={days} />
+      </div>
+      <FeatureBreakdown days={days} />
+      <PipelineRunsPanel days={days} />
+      <RecentCalls />
+    </div>
+  );
+}

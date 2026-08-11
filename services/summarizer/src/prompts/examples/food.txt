@@ -1,0 +1,38 @@
+Here is one high-quality example of food extraction output. Match this density, specificity, and field completeness in your response.
+
+Video: "Perfect Scrambled Eggs — 3 Methods Compared" (12 minutes)
+
+{
+  "meta": {
+    "prepTime": "5 min",
+    "cookTime": "8 min",
+    "servings": "2",
+    "difficulty": "easy",
+    "cuisine": "French"
+  },
+  "ingredients": [
+    {"name": "large eggs", "amount": 6.0, "displayAmount": "6", "unit": "whole", "group": "Main", "notes": "room temperature"},
+    {"name": "unsalted butter", "amount": 2.0, "displayAmount": "2", "unit": "tablespoons", "group": "Main", "notes": "cold, cubed into 1cm pieces"},
+    {"name": "heavy cream", "amount": 1.0, "displayAmount": "1", "unit": "tablespoon", "group": "Main", "notes": "cold — stops cooking instantly"},
+    {"name": "flaky sea salt", "amount": 0, "displayAmount": "to taste", "unit": "", "group": "Finishing", "notes": "Maldon or similar"},
+    {"name": "fresh chives", "amount": 1.0, "displayAmount": "1", "unit": "tablespoon", "group": "Finishing", "notes": "finely snipped"}
+  ],
+  "steps": [
+    {"number": 1, "instruction": "Crack 6 eggs into a cold non-stick pan. Add cubed butter. Do NOT whisk beforehand — this is the French method.", "duration": "1 min", "tips": "Cold start is the key — the eggs and butter emulsify as they warm together", "timestamp": 95},
+    {"number": 2, "instruction": "Place pan over medium-low heat. Stir continuously with a silicone spatula, scraping the bottom in figure-eight motions.", "duration": "3 min", "tips": "Pull the pan off heat every 20 seconds to prevent overcooking — the residual heat keeps cooking", "timestamp": 145},
+    {"number": 3, "instruction": "When eggs form soft, creamy curds with some liquid still visible, remove from heat completely. Stir in cold cream to stop cooking.", "duration": "30 sec", "tips": "They should look slightly underdone when you pull them — they'll set for another 30 seconds off heat", "timestamp": 310},
+    {"number": 4, "instruction": "Season with flaky salt and chives. Serve immediately on warm toast.", "duration": null, "tips": "Never salt before cooking — salt breaks down the egg proteins and makes them watery", "timestamp": 380}
+  ],
+  "tips": [
+    {"type": "chef_tip", "text": "The French method produces the creamiest texture because the eggs emulsify with butter from a cold start — no pre-whisking needed"},
+    {"type": "warning", "text": "High heat = rubbery eggs. Keep at medium-low and be patient — the whole process takes only 4 minutes"},
+    {"type": "substitution", "text": "Crème fraîche works instead of heavy cream and adds a slight tang"},
+    {"type": "storage", "text": "Scrambled eggs don't reheat well — cook fresh each time for best results"}
+  ],
+  "equipment": ["10-inch non-stick pan", "silicone spatula", "cutting board"],
+  "substitutions": [
+    {"original": "heavy cream", "substitute": "crème fraîche", "notes": "Adds slight tang, same stopping effect"},
+    {"original": "unsalted butter", "substitute": "olive oil", "notes": "Different flavor profile, less creamy result"}
+  ],
+  "nutrition": []
+}

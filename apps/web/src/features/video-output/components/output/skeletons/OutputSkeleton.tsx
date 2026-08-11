@@ -1,0 +1,63 @@
+import type { StreamState } from '@/features/video-output/hooks/use-summary-stream';
+import { GlassCard } from '../GlassCard';
+import { cn } from '@/lib/utils';
+
+interface SkeletonSection {
+  id: string;
+  emoji: string;
+  label: string;
+}
+
+interface OutputSkeletonProps {
+  sections: SkeletonSection[];
+  streamingState?: StreamState;
+}
+
+export function OutputSkeleton({ sections, streamingState }: OutputSkeletonProps) {
+  return (
+    <div className="flex flex-col gap-4 animate-[fadeUp_0.3s_ease_both]">
+      {/* Tab bar skeleton */}
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {sections.map((s) => (
+          <div
+            key={s.id}
+            className="flex shrink-0 items-center gap-1.5 rounded-full bg-muted/50 px-4 py-2"
+          >
+            <span className="text-sm">{s.emoji}</span>
+            <span className="text-sm text-muted-foreground">{s.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Content skeleton */}
+      <div className="flex flex-col gap-3">
+        {[1, 2, 3, 4].map((i) => (
+          <GlassCard
+            key={i}
+            className={cn(
+              'skeleton-breathe motion-reduce:animate-none',
+              // Stagger the breath so the four cards don't pulse in lockstep —
+              // reads as activity instead of a single global heartbeat.
+              i === 2 && '[animation-delay:200ms]',
+              i === 3 && '[animation-delay:400ms]',
+              i === 4 && '[animation-delay:600ms]',
+            )}
+          >
+            <div className="flex flex-col gap-2">
+              <div className="h-4 w-1/3 rounded bg-muted" />
+              <div className="h-3 w-full rounded bg-muted/60" />
+              <div className="h-3 w-4/5 rounded bg-muted/40" />
+            </div>
+          </GlassCard>
+        ))}
+      </div>
+
+      {/* Progress indicator */}
+      {streamingState?.phase && streamingState.phase !== 'done' && (
+        <p className="text-center text-xs text-muted-foreground animate-pulse">
+          Processing... {streamingState.phase.replace('_', ' ')}
+        </p>
+      )}
+    </div>
+  );
+}

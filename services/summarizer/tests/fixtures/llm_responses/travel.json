@@ -1,0 +1,222 @@
+{
+  "_comment": "Golden LLM response fixture for the travel domain. Hand-built against PlanResult, TravelData, EnrichmentData, SynthesisResult — a valid per-stage output set for a 3-day Kyoto itinerary video. Drift canary consumed by tests/test_llm_response_fixtures.py.",
+  "domain": "travel",
+  "video_meta": {
+    "videoId": "fixture-travel-001",
+    "title": "3 Perfect Days in Kyoto on a Budget",
+    "channel": "Wander Notes",
+    "duration": 1560,
+    "chapters": []
+  },
+  "plan_response": {
+    "reasoning": "Classic itinerary video with day-by-day structure, explicit costs, and a packing segment.",
+    "identity": {
+      "creatorType": "budget travel vlogger",
+      "tone": "warm, detail-oriented",
+      "audience": "first-time visitors to Japan"
+    },
+    "corePromise": "A complete, costed 3-day Kyoto plan you can copy",
+    "uniqueAngle": "Every spot includes the exact bus line and fare to reach it",
+    "extractionGuidance": {
+      "primaryFocus": "Map-searchable spot names, costs with currency, transport details",
+      "watchOutFor": "Prices mentioned in both yen and dollars — keep the original yen figure"
+    },
+    "itemCounts": {
+      "spots": 7,
+      "tips": 4
+    },
+    "contentTags": ["travel"],
+    "modifiers": [],
+    "primaryTag": "travel",
+    "userGoal": "Plan the same trip with a working budget",
+    "confidence": 0.95,
+    "tabs": [
+      {
+        "id": "itinerary",
+        "label": "Itinerary",
+        "emoji": "📅",
+        "component": "spot_explorer",
+        "dataSource": "travel.itinerary",
+        "goal": "Day-by-day plan with spots, costs, and map links."
+      },
+      {
+        "id": "budget",
+        "label": "Budget",
+        "emoji": "💰",
+        "component": "budget",
+        "dataSource": "travel.budget",
+        "goal": "Adjust the category bars to match your trip style."
+      },
+      {
+        "id": "packing",
+        "label": "Pack List",
+        "emoji": "🎒",
+        "component": "packing_mission",
+        "dataSource": "travel.packingList",
+        "goal": "Drag items into the suitcase — weight tally + essential warnings."
+      },
+      {
+        "id": "flashcards",
+        "label": "Trip Cards",
+        "emoji": "🗂️",
+        "component": "flash_deck",
+        "dataSource": "enrichment.flashcards",
+        "goal": "Memorize the key fares and etiquette rules before landing."
+      }
+    ]
+  },
+  "extraction_response": {
+    "itinerary": [
+      {
+        "day": 1,
+        "city": "Kyoto",
+        "theme": "Eastern temples",
+        "spots": [
+          {
+            "name": "Fushimi Inari Taisha",
+            "emoji": "⛩️",
+            "description": "Arrive before 7am to walk the torii gates without crowds; the full loop takes about two hours.",
+            "cost": "Free",
+            "duration": "2h",
+            "mapQuery": "Fushimi Inari Taisha Kyoto",
+            "tips": "JR Nara line to Inari station, 150 yen from Kyoto station"
+          },
+          {
+            "name": "Kiyomizu-dera",
+            "emoji": "🏯",
+            "description": "Hillside temple with the wooden stage view over the city; the approach streets are good for lunch.",
+            "cost": "400 yen",
+            "duration": "1.5h",
+            "mapQuery": "Kiyomizu-dera Kyoto",
+            "tips": "Bus 206 from Inari area, 230 yen flat fare"
+          },
+          {
+            "name": "Gion at dusk",
+            "emoji": "🏮",
+            "description": "Walk Hanamikoji street around 5pm when lanterns come on; keep cameras down near private teahouses.",
+            "cost": "Free",
+            "duration": "1h",
+            "mapQuery": "Hanamikoji Street Gion Kyoto"
+          }
+        ],
+        "tips": ["Buy a 700 yen one-day bus pass at the station kiosk — it pays off after three rides"]
+      },
+      {
+        "day": 2,
+        "city": "Kyoto",
+        "theme": "Arashiyama and the west",
+        "spots": [
+          {
+            "name": "Arashiyama Bamboo Grove",
+            "emoji": "🎋",
+            "description": "Short but iconic path; pair it with the riverside walk to make the trip out worthwhile.",
+            "cost": "Free",
+            "duration": "45m",
+            "mapQuery": "Arashiyama Bamboo Grove Kyoto",
+            "tips": "JR Sagano line to Saga-Arashiyama, 240 yen"
+          },
+          {
+            "name": "Tenryu-ji",
+            "emoji": "🪷",
+            "description": "Zen garden that predates the buildings around it; the garden-only ticket is enough.",
+            "cost": "500 yen",
+            "duration": "1h",
+            "mapQuery": "Tenryu-ji Temple Kyoto"
+          }
+        ],
+        "tips": ["The monkey park climb is steep — skip it in summer heat"]
+      },
+      {
+        "day": 3,
+        "city": "Kyoto",
+        "theme": "Markets and the north",
+        "spots": [
+          {
+            "name": "Nishiki Market",
+            "emoji": "🍢",
+            "description": "Breakfast crawl: tamagoyaki, soy milk doughnuts, and pickles — most stalls open by 9:30.",
+            "cost": "1500 yen for a full crawl",
+            "duration": "1.5h",
+            "mapQuery": "Nishiki Market Kyoto"
+          },
+          {
+            "name": "Kinkaku-ji",
+            "emoji": "✨",
+            "description": "The golden pavilion — a fixed one-way route, so photos are easy even when busy.",
+            "cost": "500 yen",
+            "duration": "1h",
+            "mapQuery": "Kinkaku-ji Kyoto",
+            "tips": "Bus 205 from the market area, 230 yen"
+          }
+        ],
+        "tips": ["Ship luggage ahead to the airport with takkyubin (~2000 yen) and ride the train unencumbered"]
+      }
+    ],
+    "budget": {
+      "total": 21500,
+      "currency": "JPY",
+      "breakdown": [
+        {"category": "Accommodation", "amount": 9000, "currency": "JPY", "notes": "3 nights hostel dorm, Higashiyama area"},
+        {"category": "Food", "amount": 6000, "currency": "JPY", "notes": "Market breakfasts, convenience-store dinners, one sit-down ramen"},
+        {"category": "Transport", "amount": 2500, "currency": "JPY", "notes": "Two bus day-passes plus JR hops"},
+        {"category": "Entrance fees", "amount": 1900, "currency": "JPY", "notes": "Kiyomizu, Tenryu-ji, Kinkaku-ji"},
+        {"category": "Buffer", "amount": 2100, "currency": "JPY", "notes": "Souvenirs and the inevitable vending machines"}
+      ]
+    },
+    "packingList": [
+      {"item": "Slip-on shoes", "category": "Clothing", "essential": true},
+      {"item": "Coin purse for bus fares", "category": "Essentials", "essential": true},
+      {"item": "Compact umbrella", "category": "Essentials", "essential": false},
+      {"item": "Reusable water bottle", "category": "Essentials", "essential": false},
+      {"item": "Portable battery", "category": "Electronics", "essential": true},
+      {"item": "Small day pack", "category": "Bags", "essential": true}
+    ],
+    "accommodationTips": [
+      {"text": "Stay east of the river in Higashiyama — you can walk to day-one temples and skip two bus rides", "type": "tip"},
+      {"text": "Hostel curfews still exist in Kyoto; check before booking if you plan late Gion walks", "type": "warning"}
+    ],
+    "transportationTips": [
+      {"text": "Buses take IC cards but the one-day paper pass is cheaper at 3+ rides", "type": "tip"},
+      {"text": "Taxis from the station after midnight run 2000+ yen — time your last bus", "type": "warning"}
+    ],
+    "bestSeason": "Late November for autumn color, or the last week of March for early blossoms"
+  },
+  "enrichment_response": {
+    "quiz": [
+      {
+        "question": "What is the flat fare on Kyoto city buses?",
+        "options": ["150 yen", "200 yen", "230 yen", "300 yen"],
+        "correctIndex": 2,
+        "explanation": "City buses charge a 230 yen flat fare; the 700 yen day pass pays off after three rides."
+      },
+      {
+        "question": "When should you arrive at Fushimi Inari to avoid crowds?",
+        "options": ["Before 7am", "Around noon", "At sunset", "After 9pm"],
+        "correctIndex": 0,
+        "explanation": "The creator recommends walking the torii gates before 7am."
+      },
+      {
+        "question": "Which entrance ticket does the video call sufficient at Tenryu-ji?",
+        "options": ["Full temple + garden", "Garden only", "Special exhibition", "Night illumination"],
+        "correctIndex": 1,
+        "explanation": "The 500 yen garden-only ticket covers the highlight."
+      }
+    ],
+    "flashcards": [
+      {"front": "One-day Kyoto bus pass price", "back": "700 yen — breaks even at three rides"},
+      {"front": "JR fare Kyoto station → Inari", "back": "150 yen on the JR Nara line"},
+      {"front": "Etiquette rule in Gion", "back": "Keep cameras down near private teahouses on Hanamikoji"},
+      {"front": "Luggage trick for departure day", "back": "Takkyubin shipping to the airport (~2000 yen)"}
+    ]
+  },
+  "synthesis_response": {
+    "tldr": "A costed 3-day Kyoto plan — eastern temples, Arashiyama, and markets — for about 21,500 yen all-in.",
+    "keyTakeaways": [
+      "Base yourself in Higashiyama and walk to day-one temples",
+      "The 700 yen bus day-pass beats IC fares after three rides",
+      "Go to Fushimi Inari before 7am and Gion at dusk"
+    ],
+    "masterSummary": "Three themed days in Kyoto: temples of the east with an early Fushimi Inari start, Arashiyama's bamboo grove and Tenryu-ji garden, then Nishiki Market and Kinkaku-ji — with a full 21,500 yen budget breakdown, bus-line details for every spot, a packing list, and season advice.",
+    "seoDescription": "Budget 3-day Kyoto itinerary with exact costs, bus routes, packing list, and the best times to visit each spot."
+  }
+}

@@ -1,0 +1,30 @@
+# Root Ruff config — mirrors services/summarizer/pyproject.toml [tool.ruff].
+# Applies to services/assistant, services/admin, packages/llm-common and any
+# other Python not covered by a closer per-package config (summarizer keeps
+# its own identical [tool.ruff] section, which Ruff prefers for its tree).
+line-length = 100
+target-version = "py311"
+
+extend-exclude = [
+    "node_modules",
+    ".venv",
+    "dist",
+    "build",
+    "static",
+]
+
+[lint]
+select = ["E", "F", "I"]
+
+[lint.isort]
+# Service code imports its own package as `src.*`; llm-common is a shared
+# workspace package. Both are first-party for import grouping.
+known-first-party = ["src", "llm_common"]
+
+# Pre-existing violations in trees owned by other workstreams (summarizer,
+# assistant). Scoped ignores keep the CI gate green for everything else while
+# those trees get cleaned up by their owners. Remove entries as they're fixed.
+# Counts at introduction (2026-07-06): summarizer 792, assistant 92.
+[lint.per-file-ignores]
+"services/summarizer/**" = ["E402", "E501", "E741", "F401", "F541", "F841", "I001"]
+"services/assistant/**" = ["E501", "F401", "F841", "I001"]

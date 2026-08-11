@@ -1,0 +1,337 @@
+{
+  "components": [
+    "spot_explorer",
+    "moment_track",
+    "comparison",
+    "checklist",
+    "step_player",
+    "flash_deck",
+    "budget",
+    "overview",
+    "info_grid",
+    "concept_canvas",
+    "connect_canvas",
+    "step_flow_canvas",
+    "comparison_radar",
+    "code_playground",
+    "quiz_arena",
+    "packing_mission",
+    "workout_room",
+    "lyrics_karaoke",
+    "video_filmstrip",
+    "claims_tracker",
+    "tier_list",
+    "formation_diagram"
+  ],
+  "componentTiers": {
+    "spot_explorer": "primary",
+    "moment_track": "primary",
+    "comparison": "primary",
+    "checklist": "primary",
+    "step_player": "primary",
+    "flash_deck": "primary",
+    "budget": "primary",
+    "overview": "primary",
+    "info_grid": "primary",
+    "concept_canvas": "primary",
+    "connect_canvas": "primary",
+    "step_flow_canvas": "primary",
+    "comparison_radar": "primary",
+    "code_playground": "primary",
+    "quiz_arena": "primary",
+    "packing_mission": "primary",
+    "workout_room": "primary",
+    "lyrics_karaoke": "primary",
+    "video_filmstrip": "primary",
+    "claims_tracker": "primary",
+    "tier_list": "primary",
+    "formation_diagram": "primary",
+    "stat_banner": "secondary",
+    "tip_callout": "secondary",
+    "summary_header": "secondary",
+    "diagram_card": "secondary",
+    "frame_strip": "secondary",
+    "quick_quiz": "secondary",
+    "display_section": "display"
+  },
+  "densityGates": {
+    "info_grid": { "min": "3", "max": "20", "chars": "120 chars per value (≈ 20 words)" },
+    "flash_deck": { "min": "3", "max": "15", "chars": "front ≤ 40, back ≤ 180" },
+    "comparison": { "min": "3 rows", "max": "10", "chars": "each side ≤ 80 chars" },
+    "comparison_radar": { "min": "4 axes", "max": "8", "chars": "weighted by user via sliders" },
+    "spot_explorer": { "min": "2", "max": "25", "chars": "description ≤ 200" },
+    "step_player": { "min": "3", "max": "10", "chars": "instruction ≤ 200" },
+    "step_flow_canvas": { "min": "6", "max": "25", "chars": "drives the canvas graph layout" },
+    "moment_track": { "min": "3", "max": "20", "chars": "label ≤ 60" },
+    "quiz_arena": { "min": "2", "max": "8", "chars": "question ≤ 140, context ≤ 180" },
+    "workout_room": { "min": "2", "max": "25", "chars": "name ≤ 40" },
+    "checklist": { "min": "3", "max": "30", "chars": "label ≤ 80" },
+    "packing_mission": { "min": "4", "max": "40", "chars": "item ≤ 40, weight optional" },
+    "code_playground": { "min": "1", "max": "12", "chars": "explanation ≤ 200" },
+    "concept_canvas": { "min": "2", "max": "30", "chars": "definition ≤ 200, connections[]" },
+    "connect_canvas": { "min": "2 pairs", "max": "8", "chars": "graded; answer key from connections[]" },
+    "video_filmstrip": { "min": "3 frames", "max": "24", "chars": "caption ≤ 80" },
+    "claims_tracker": { "min": "2 claims", "max": "20", "chars": "claim ≤ 200, source ≤ 80" },
+    "tier_list": { "min": "3 items", "max": "30", "chars": "item ≤ 60, reason ≤ 120" },
+    "formation_diagram": { "min": "3 players", "max": "23", "chars": "player ≤ 40; x/y are 0-100" },
+    "lyrics_karaoke": { "min": "—", "max": "—", "chars": "per-line ≤ 120 chars" }
+  },
+  "assemblerItemCapsNote": "HARD per-component item caps enforced by the assembler (_cap_tab_items in assembly/core.py). Deliberately INDEPENDENT of densityGates above: densityGates is advisory steering text shown to the planner LLM (what to aim for), these caps are the code backstop (what ships regardless of prompt drift) — e.g. step_player is steered to 10 but capped at 25. moment_track's cap additionally scales with video duration in code (evenly sampled, clamped 20-60).",
+  "assemblerItemCaps": {
+    "comparison": 10,
+    "moment_track": 20,
+    "info_grid": 20,
+    "flash_deck": 15,
+    "spot_explorer": 25,
+    "step_player": 25,
+    "checklist": 30,
+    "claims_tracker": 20,
+    "tier_list": 30,
+    "formation_diagram": 23
+  },
+  "domainRequirementsNote": "Per-domain assembled-output validation (_validate_domain_requirements in assembly/core.py): `required` components are backfilled from defaultTabs when the planner drops them (promotion equivalents count, e.g. comparison_radar satisfies comparison); `max` caps per-component tab counts. Every domain must have an entry — an empty `required` is a deliberate decision (music: lyrics_karaoke optional so videos without per-line timing don't fail; podcast: moment_track segments are the spine; news: claims_tracker is the signature accountability surface; gaming: tier_list; sport: formation_diagram).",
+  "domainRequirements": {
+    "food": { "required": ["step_player", "checklist"], "max": { "flash_deck": 1 } },
+    "project": { "required": ["step_player", "checklist"], "max": { "flash_deck": 1 } },
+    "review": { "required": ["comparison"], "max": { "flash_deck": 1 } },
+    "fitness": { "required": ["workout_room"], "max": { "flash_deck": 1 } },
+    "tech": { "required": ["code_playground"], "max": { "flash_deck": 1, "quiz_arena": 1 } },
+    "travel": { "required": ["spot_explorer"], "max": { "flash_deck": 1 } },
+    "music": { "required": [], "max": { "flash_deck": 1 } },
+    "learning": { "required": [], "max": { "flash_deck": 1, "quiz_arena": 1 } },
+    "language": { "required": ["spot_explorer"], "max": { "flash_deck": 1 } },
+    "science": { "required": ["spot_explorer"], "max": { "flash_deck": 1, "quiz_arena": 1 } },
+    "podcast": { "required": ["moment_track"], "max": { "flash_deck": 1, "quiz_arena": 1 } },
+    "news": { "required": ["claims_tracker"], "max": { "flash_deck": 1 } },
+    "gaming": { "required": ["tier_list"], "max": { "flash_deck": 1, "quiz_arena": 1 } },
+    "sport": { "required": ["formation_diagram"], "max": { "flash_deck": 1 } }
+  },
+  "domains": {
+    "learning": {
+      "emoji": "📚",
+      "label": "Learning",
+      "gradient": "linear-gradient(135deg, var(--vie-plum), var(--vie-sky))",
+      "defaultTabs": [
+        { "id": "key_points", "component": "overview", "dataSource": "learning.keyPoints", "label": "Key Points", "emoji": "💡", "goal": "The core ideas the video teaches — read these first." },
+        { "id": "concepts", "component": "concept_canvas", "dataSource": "learning.concepts", "label": "Concepts", "emoji": "📚", "goal": "Drag concepts to see how they connect. Tap any node for definition + example." },
+        { "id": "takeaways", "component": "checklist", "dataSource": "learning.takeaways", "label": "Takeaways", "emoji": "🎯", "goal": "Tick off each takeaway as you internalize it." },
+        { "id": "timestamps", "component": "moment_track", "dataSource": "learning.timestamps", "label": "Timestamps", "emoji": "🕐", "goal": "Jump to any moment in the source video." }
+      ]
+    },
+    "tech": {
+      "emoji": "💻",
+      "label": "Tech",
+      "gradient": "linear-gradient(135deg, var(--vie-sky), var(--vie-mint))",
+      "defaultTabs": [
+        { "id": "code", "component": "code_playground", "dataSource": "tech.snippets", "label": "Code", "emoji": "💻", "goal": "Every code snippet from the video — copy, run, and adapt." },
+        { "id": "setup", "component": "step_player", "dataSource": "tech.setup", "label": "Setup", "emoji": "⚙️", "goal": "Follow the setup steps in order — get the dev environment ready." },
+        { "id": "patterns", "component": "code_playground", "dataSource": "tech.patterns", "label": "Patterns", "emoji": "🧩", "goal": "The patterns and do/don'ts demonstrated in the video." }
+      ]
+    },
+    "fitness": {
+      "emoji": "💪",
+      "label": "Fitness",
+      "gradient": "linear-gradient(135deg, var(--vie-rose), var(--vie-coral))",
+      "defaultTabs": [
+        { "id": "exercises", "component": "workout_room", "dataSource": "fitness.exercises", "label": "Exercises", "emoji": "🏋️", "goal": "Full-bleed exercise card — sets, reps, rest, audio cue." },
+        { "id": "timer", "component": "workout_room", "dataSource": "fitness.timer", "label": "Timer", "emoji": "⏱️", "goal": "Round-by-round timer that drives the workout pace." },
+        { "id": "tips", "component": "overview", "dataSource": "fitness.tips", "label": "Tips", "emoji": "💡", "goal": "Form tips and scaling cues the coach calls out." }
+      ]
+    },
+    "food": {
+      "emoji": "🍳",
+      "label": "Food",
+      "gradient": "linear-gradient(135deg, var(--vie-coral), var(--vie-peach))",
+      "defaultTabs": [
+        { "id": "ingredients", "component": "checklist", "dataSource": "food.ingredients", "label": "Ingredients", "emoji": "🛒", "goal": "Check items off as you shop or set up your mise en place." },
+        { "id": "steps", "component": "step_player", "dataSource": "food.steps", "label": "Steps", "emoji": "👨‍🍳", "goal": "Follow each step with timers. Optional cooking mode pairs steps with ingredients." },
+        { "id": "tips", "component": "overview", "dataSource": "food.tips", "label": "Tips", "emoji": "💡", "goal": "Chef tips and substitutions called out in the video." }
+      ]
+    },
+    "music": {
+      "emoji": "🎵",
+      "label": "Music",
+      "gradient": "linear-gradient(135deg, var(--vie-rose), var(--vie-plum))",
+      "defaultTabs": [
+        { "id": "analysis", "component": "overview", "dataSource": "music.analysis", "label": "Analysis", "emoji": "🎼", "goal": "What makes this song work — production, arrangement, and lyrical intent." },
+        { "id": "structure", "component": "moment_track", "dataSource": "music.structure", "label": "Structure", "emoji": "🎵", "goal": "Jump to any section — intro, verses, chorus, bridge, outro." },
+        { "id": "lyrics", "component": "lyrics_karaoke", "dataSource": "music.lyrics", "label": "Lyrics", "emoji": "🎤", "goal": "Lyrics sync with playback — active line scales, trailing lines fade." },
+        { "id": "credits", "component": "info_grid", "dataSource": "music.credits", "label": "Credits", "emoji": "🎤", "goal": "Writers, producers, and featured artists." }
+      ]
+    },
+    "travel": {
+      "emoji": "✈️",
+      "label": "Travel",
+      "gradient": "linear-gradient(135deg, var(--vie-forest), var(--vie-mint))",
+      "defaultTabs": [
+        { "id": "itinerary", "component": "spot_explorer", "dataSource": "travel.itinerary", "label": "Itinerary", "emoji": "📅", "goal": "Day-by-day plan with spots, costs, and map links." },
+        { "id": "budget", "component": "budget", "dataSource": "travel.budget", "label": "Budget", "emoji": "💰", "goal": "Adjust the category bars to match your trip style." },
+        { "id": "packing", "component": "packing_mission", "dataSource": "travel.packingList", "label": "Pack List", "emoji": "🎒", "goal": "Drag items into the suitcase — weight tally + essential warnings." },
+        { "id": "filmstrip", "component": "video_filmstrip", "dataSource": "frames", "label": "Scenes", "emoji": "🎞️", "goal": "Scrub through the trip — hover a frame for the caption, click to seek." }
+      ]
+    },
+    "review": {
+      "emoji": "⭐",
+      "label": "Review",
+      "gradient": "linear-gradient(135deg, var(--vie-honey), var(--vie-peach))",
+      "defaultTabs": [
+        { "id": "pros_cons", "component": "comparison", "dataSource": "review.pros", "label": "Pros & Cons", "emoji": "⚖️", "goal": "The reviewer's verdict — best-for, not-for, score." },
+        { "id": "comparison", "component": "comparison_radar", "dataSource": "review.comparisons", "label": "Comparison", "emoji": "📊", "goal": "Weight each axis to find your personal winner." },
+        { "id": "specs", "component": "info_grid", "dataSource": "review.specs", "label": "Specs", "emoji": "📊", "goal": "Searchable spec table — every number from the review." }
+      ]
+    },
+    "project": {
+      "emoji": "🔨",
+      "label": "Project",
+      "gradient": "linear-gradient(135deg, var(--vie-honey), var(--vie-forest))",
+      "defaultTabs": [
+        { "id": "steps", "component": "step_player", "dataSource": "project.steps", "label": "Steps", "emoji": "📝", "goal": "Build it step by step — frame thumbnails per step." },
+        { "id": "materials", "component": "checklist", "dataSource": "project.materials", "label": "Materials", "emoji": "🛒", "goal": "Check items off as you gather them." },
+        { "id": "safety", "component": "overview", "dataSource": "project.safetyWarnings", "label": "Safety", "emoji": "⚠️", "goal": "Safety warnings called out by the maker." }
+      ]
+    },
+    "language": {
+      "emoji": "🗣️",
+      "label": "Language",
+      "gradient": "linear-gradient(135deg, var(--vie-plum), var(--vie-coral))",
+      "defaultTabs": [
+        { "id": "phrases", "component": "spot_explorer", "dataSource": "language.phrases", "label": "Phrases", "emoji": "💬", "goal": "Useful phrases with pronunciation and context." },
+        { "id": "rules", "component": "info_grid", "dataSource": "language.rules", "label": "Grammar Rules", "emoji": "📝", "goal": "Grammar rules the lesson covers — searchable, with examples." },
+        { "id": "drills", "component": "step_player", "dataSource": "language.drills", "label": "Practice Drills", "emoji": "🎯", "goal": "Drill through the practice exercises the teacher walks." },
+        { "id": "vocabulary", "component": "concept_canvas", "dataSource": "language.vocabulary", "label": "Vocabulary", "emoji": "📖", "goal": "Drag vocabulary nodes — connected by meaning and root." }
+      ]
+    },
+    "science": {
+      "emoji": "🔬",
+      "label": "Science",
+      "gradient": "linear-gradient(135deg, var(--vie-sky), var(--vie-forest))",
+      "defaultTabs": [
+        { "id": "concepts", "component": "concept_canvas", "dataSource": "science.concepts", "label": "Concepts", "emoji": "🧪", "goal": "Concepts wired into a graph — drag to explore the relationships." },
+        { "id": "key_facts", "component": "info_grid", "dataSource": "science.keyFacts", "label": "Key Facts", "emoji": "📊", "goal": "Numbers, units, and facts you'll cite — searchable." },
+        { "id": "experiments", "component": "step_player", "dataSource": "science.experiments", "label": "Experiments", "emoji": "⚗️", "goal": "Reproduce the experiment step by step." }
+      ]
+    },
+    "podcast": {
+      "emoji": "🎙️",
+      "label": "Podcast",
+      "gradient": "linear-gradient(135deg, var(--vie-plum), var(--vie-rose))",
+      "defaultTabs": [
+        { "id": "segments", "component": "moment_track", "dataSource": "podcast.segments", "label": "Segments", "emoji": "🎙️", "goal": "Jump to any segment of the conversation — topics, tangents, and big moments." },
+        { "id": "guests", "component": "spot_explorer", "dataSource": "podcast.guests", "label": "Guests", "emoji": "🧑‍🤝‍🧑", "goal": "Who's on the mic — bios, roles, and what they came to talk about." },
+        { "id": "quotes", "component": "flash_deck", "dataSource": "podcast.quotes", "label": "Key Quotes", "emoji": "💬", "goal": "The lines worth remembering — flip through the standout quotes." },
+        { "id": "topics", "component": "info_grid", "dataSource": "podcast.topics", "label": "Topics", "emoji": "🗂️", "goal": "Every topic covered — searchable, with the gist of each." }
+      ]
+    },
+    "news": {
+      "emoji": "📰",
+      "label": "News",
+      "gradient": "linear-gradient(135deg, var(--vie-sky), var(--vie-honey))",
+      "defaultTabs": [
+        { "id": "timeline", "component": "moment_track", "dataSource": "news.storyTimeline", "label": "Story Timeline", "emoji": "🕐", "goal": "How the story unfolded — jump to each development in order." },
+        { "id": "entities", "component": "spot_explorer", "dataSource": "news.entities", "label": "People & Orgs", "emoji": "👤", "goal": "The people, organizations, and places at the center of the story." },
+        { "id": "claims", "component": "claims_tracker", "dataSource": "news.claims", "label": "Claims", "emoji": "🔎", "goal": "Each claim, who said it, and whether it's verified, disputed, or context." },
+        { "id": "context", "component": "info_grid", "dataSource": "news.context", "label": "Context", "emoji": "🗂️", "goal": "Background facts and figures to understand the story — searchable." }
+      ]
+    },
+    "gaming": {
+      "emoji": "🎮",
+      "label": "Gaming",
+      "gradient": "linear-gradient(135deg, var(--vie-plum), var(--vie-mint))",
+      "defaultTabs": [
+        { "id": "highlights", "component": "moment_track", "dataSource": "gaming.highlights", "label": "Highlights", "emoji": "🎬", "goal": "Jump to the big plays — clutch moments, fails, and turning points." },
+        { "id": "loadout", "component": "checklist", "dataSource": "gaming.loadout", "label": "Build / Loadout", "emoji": "🎒", "goal": "The gear, perks, and setup the video runs — tick off what you've copied." },
+        { "id": "walkthrough", "component": "step_flow_canvas", "dataSource": "gaming.walkthrough", "label": "Walkthrough", "emoji": "🗺️", "goal": "Follow the route stage by stage — a visual map of the playthrough." },
+        { "id": "tier_list", "component": "tier_list", "dataSource": "gaming.rankings", "label": "Tier List", "emoji": "🏆", "goal": "Drag items into S/A/B/C/D tiers — your ranking saves automatically." }
+      ]
+    },
+    "sport": {
+      "emoji": "⚽",
+      "label": "Sport",
+      "gradient": "linear-gradient(135deg, var(--vie-forest), var(--vie-honey))",
+      "defaultTabs": [
+        { "id": "match_events", "component": "moment_track", "dataSource": "sport.matchEvents", "label": "Match Events", "emoji": "⏱️", "goal": "Jump to every goal, card, and turning point in order." },
+        { "id": "formation", "component": "formation_diagram", "dataSource": "sport.formation", "label": "Formation", "emoji": "📋", "goal": "See the lineup laid out on the pitch — players positioned by role." },
+        { "id": "stats", "component": "comparison", "dataSource": "sport.statComparison", "label": "Stat Comparison", "emoji": "📊", "goal": "Side-by-side team or player stats — weigh the numbers that matter." }
+      ]
+    }
+  },
+  "modifiers": {
+    "narrative": {
+      "emoji": "📖",
+      "label": "Narrative"
+    },
+    "finance": {
+      "emoji": "💰",
+      "label": "Finance"
+    }
+  },
+  "enrichment": {
+    "default": "enrich/enrich_study.txt",
+    "learning": "enrich/enrich_study.txt",
+    "tech": "enrich/enrich_tech.txt",
+    "fitness": "enrich/enrich_fitness.txt",
+    "food": "enrich/enrich_food.txt",
+    "music": "enrich/enrich_music.txt",
+    "travel": "enrich/enrich_travel.txt",
+    "review": "enrich/enrich_review.txt",
+    "project": "enrich/enrich_project.txt",
+    "language": "enrich/enrich_language.txt",
+    "science": "enrich/enrich_science.txt",
+    "podcast": "enrich/enrich_study.txt",
+    "gaming": "enrich/enrich_study.txt"
+  },
+  "categoryMap": {
+    "cooking": "food",
+    "coding": "tech",
+    "education": "learning",
+    "podcast": "podcast",
+    "interview": "podcast",
+    "talk_show": "podcast",
+    "news": "news",
+    "news_commentary": "news",
+    "journalism": "news",
+    "current_events": "news",
+    "politics": "news",
+    "reviews": "review",
+    "gaming": "gaming",
+    "gameplay": "gaming",
+    "esports": "gaming",
+    "lets_play": "gaming",
+    "speedrun": "gaming",
+    "sport": "sport",
+    "sports": "sport",
+    "match_analysis": "sport",
+    "highlights": "sport",
+    "diy": "project",
+    "fitness": "fitness",
+    "travel": "travel",
+    "music": "music",
+    "default": "learning",
+    "standard": "learning",
+    "recipe": "food",
+    "code": "tech",
+    "programming": "tech",
+    "tutorial": "tech",
+    "study": "learning",
+    "lecture": "learning",
+    "workout": "fitness",
+    "exercise": "fitness",
+    "review": "review",
+    "craft": "project",
+    "tech": "tech",
+    "food": "food",
+    "learning": "learning",
+    "project": "project",
+    "language": "language",
+    "languages": "language",
+    "pronunciation": "language",
+    "grammar": "language",
+    "vocabulary": "language",
+    "science": "science",
+    "physics": "science",
+    "chemistry": "science",
+    "biology": "science",
+    "math": "science",
+    "mathematics": "science"
+  }
+}

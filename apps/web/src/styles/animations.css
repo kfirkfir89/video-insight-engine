@@ -1,0 +1,317 @@
+/* ═══════════════════════════════════════════════════
+   KEYFRAME ANIMATIONS
+   Minimal, intentional motion — never flashy
+   Wrapped in prefers-reduced-motion for accessibility
+   ═══════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes fade-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes counter-pop {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes progress-fill {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  @keyframes line-grow {
+    from {
+      transform: scaleY(0);
+    }
+    to {
+      transform: scaleY(1);
+    }
+  }
+
+  @keyframes pulse-ring {
+    0% {
+      transform: scale(1);
+      opacity: 0.4;
+    }
+    100% {
+      transform: scale(2.5);
+      opacity: 0;
+    }
+  }
+
+  @keyframes breathe {
+    0%,
+    100% {
+      opacity: 0.5;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  /* fade-up: slightly more dramatic than fade-slide-up (12px vs 8px), used by StepThroughView */
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes heart-pop {
+    0% {
+      transform: scale(1);
+    }
+    30% {
+      transform: scale(1.3);
+    }
+    60% {
+      transform: scale(0.95);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-6px);
+    }
+  }
+
+  @keyframes confetti-fall {
+    0% {
+      transform: translateY(0) rotate(0deg) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(100vh) rotate(720deg) scale(0.3);
+      opacity: 0;
+    }
+  }
+
+  @keyframes emoji-breathe {
+    0%,
+    100% {
+      opacity: 0.3;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.5;
+      transform: scale(1.06);
+    }
+  }
+
+  @keyframes stagger-rise {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* ─── Streaming skeleton breath ──────────────────────────
+     Subtle opacity pulse on tab placeholders so the SSE wait
+     reads as activity, not stall. Distinct from `breathe`
+     (slower, narrower amplitude — 0.55→0.85 vs 0.5→1) so it
+     can sit alongside content without competing. */
+  @keyframes skeleton-breathe {
+    0%, 100% { opacity: 0.55; }
+    50%      { opacity: 0.85; }
+  }
+
+  .skeleton-breathe {
+    animation: skeleton-breathe 1.6s ease-in-out infinite;
+  }
+
+  /* ─── Streaming progress shimmer ─────────────────────────
+     Travelling highlight across a width-based progress bar.
+     Pure transform on a 100%-wide gradient child — no layout
+     reflow of siblings. */
+  @keyframes progress-shimmer-travel {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(200%); }
+  }
+
+  .progress-shimmer {
+    animation: progress-shimmer-travel 1.4s linear infinite;
+  }
+
+  /* ─── VIE brand mark — signal prism entrance ───────────────
+     Body prism planes unfold from the left, then the coral
+     signal tip sparks in. Opt-in via `animated` prop, gated
+     here on prefers-reduced-motion. */
+  @keyframes vie-mark-plane-in {
+    from {
+      opacity: 0;
+      transform: translateX(-14%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes vie-mark-tip-spark {
+    from {
+      opacity: 0;
+      transform: translateX(35%) scale(0.35);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
+  }
+
+  .vie-mark--animated .vie-mark__top,
+  .vie-mark--animated .vie-mark__bottom,
+  .vie-mark--animated .vie-mark__tip {
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .vie-mark--animated .vie-mark__top {
+    animation: vie-mark-plane-in 640ms
+      var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)) backwards;
+  }
+  .vie-mark--animated .vie-mark__bottom {
+    animation: vie-mark-plane-in 640ms
+      var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)) 90ms backwards;
+  }
+  .vie-mark--animated .vie-mark__tip {
+    animation: vie-mark-tip-spark 520ms
+      var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)) 280ms backwards;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   VIGNETTE: infinite landing-page demo loop
+   Loops every 4s to show paste URL → tabs → content
+   ═══════════════════════════════════════════════════ */
+
+@keyframes vignette-typing-cycle {
+  0% { content: ""; }
+  5% { content: "h"; }
+  10% { content: "ht"; }
+  15% { content: "htt"; }
+  20% { content: "https"; }
+  25% { content: "https://"; }
+  30% { content: "https://yo"; }
+  35% { content: "https://yout"; }
+  40% { content: "https://youtu.be/dQw..."; }
+  95% { content: "https://youtu.be/dQw..."; }
+  100% { content: ""; }
+}
+
+.vignette-typing::after {
+  content: "";
+  animation: vignette-typing-cycle 4s infinite;
+}
+
+@keyframes vignette-tab-cascade {
+  0%, 40% { opacity: 0; transform: translateY(8px) scale(0.9); }
+  50%, 90% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(4px) scale(0.95); }
+}
+
+.vignette-tab {
+  animation: vignette-tab-cascade 4s infinite var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1));
+  opacity: 0;
+}
+
+@keyframes vignette-line-fill {
+  0%, 65% { opacity: 0; transform: scaleX(0); transform-origin: left; }
+  75%, 95% { opacity: 1; transform: scaleX(1); }
+  100% { opacity: 0; transform: scaleX(0.95); }
+}
+
+.vignette-line {
+  animation: vignette-line-fill 4s infinite ease-out;
+  opacity: 0;
+  transform-origin: left;
+}
+
+/* Reduced motion: kill animation duration so elements appear instantly */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .vignette-typing::after,
+  .vignette-tab,
+  .vignette-line {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .vignette-typing::after {
+    content: "https://youtu.be/dQw...";
+  }
+
+  /* Explicit override for gentle infinite glow */
+  .animate-\[emoji-breathe_3s_ease-in-out_infinite\],
+  [style*="emoji-breathe"] {
+    animation: none !important;
+  }
+
+  /* Streaming skeleton + shimmer: drop the loops, hold a
+     legible resting opacity / position. */
+  .skeleton-breathe {
+    animation: none !important;
+    opacity: 0.7;
+  }
+  .progress-shimmer {
+    animation: none !important;
+    opacity: 0;
+  }
+
+  /* VIE mark: snap straight to the resting state */
+  .vie-mark--animated .vie-mark__top,
+  .vie-mark--animated .vie-mark__bottom,
+  .vie-mark--animated .vie-mark__tip {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+}
