@@ -61,6 +61,7 @@ from src.services.pipeline.pipeline_helpers import (
     sse_event,
 )
 from src.services.pipeline.post_processor import coverage_is_degraded
+from src.services.status_callback import send_video_status
 
 logger = logging.getLogger(__name__)
 
@@ -247,9 +248,13 @@ async def stream_summarization(
     ``force_refresh=True`` skips the response_cache fast path so a fresh run
     always executes — used by the dev-tools override flow that wants to
     test alternate provider configs against a video that was previously
-    cached under the default provider.
+    cached under the default provider, and by bypassCache version bumps
+    (via the worker payload OR the ``forceRefresh`` flag the API stamps on
+    the fresh cache row — the row flag covers the case where an SSE client
+    wins the producer lock before the worker).
     """
     timer = PipelineTimer()
+    force_refresh = force_refresh or bool(entry.get("forceRefresh"))
 
     try:
         youtube_id = entry.get("youtubeId") or entry.get("youtube_id")
@@ -352,6 +357,9 @@ async def stream_summarization(
             await asyncio.to_thread(
                 repository.update_status, video_summary_id, ProcessingStatus.PROCESSING
             )
+            # Mirror the cache-doc status onto userVideos via the API's
+            # /internal/status endpoint (best-effort; also fans out over WS).
+            await send_video_status(video_summary_id, None, "processing")
             logger.info("[pipeline] START video_id=%s youtube_id=%s", video_summary_id, youtube_id)
 
             ctx = PipelineContext(
@@ -375,6 +383,7 @@ async def stream_summarization(
         await asyncio.to_thread(
             repository.update_status, video_summary_id, ProcessingStatus.FAILED, str(e), e.code
         )
+        await send_video_status(video_summary_id, None, "failed", error=str(e))
         yield sse_event("error", {"message": str(e), "code": e.code.value})
 
     except RateLimitError as e:
@@ -390,12 +399,13 @@ async def stream_summarization(
             str(e),
             ErrorCode.RATE_LIMITED,
         )
+        # User-facing channels (WS status + SSE) get the same sanitized text;
+        # raw LiteLLM strings leak provider/model/endpoint internals.
+        safe_msg = "AI service rate limited. Please try again in a moment."
+        await send_video_status(video_summary_id, None, "failed", error=safe_msg)
         yield sse_event(
             "error",
-            {
-                "message": "AI service rate limited. Please try again in a moment.",
-                "code": ErrorCode.RATE_LIMITED.value,
-            },
+            {"message": safe_msg, "code": ErrorCode.RATE_LIMITED.value},
         )
 
     except LitellmTimeout as e:
@@ -411,12 +421,11 @@ async def stream_summarization(
             str(e),
             ErrorCode.LLM_ERROR,
         )
+        safe_msg = "Request took too long. Please try again."
+        await send_video_status(video_summary_id, None, "failed", error=safe_msg)
         yield sse_event(
             "error",
-            {
-                "message": "Request took too long. Please try again.",
-                "code": ErrorCode.LLM_ERROR.value,
-            },
+            {"message": safe_msg, "code": ErrorCode.LLM_ERROR.value},
         )
 
     except LitellmAPIError as e:
@@ -432,9 +441,11 @@ async def stream_summarization(
             str(e),
             ErrorCode.LLM_ERROR,
         )
+        safe_msg = "AI service error. Please try again."
+        await send_video_status(video_summary_id, None, "failed", error=safe_msg)
         yield sse_event(
             "error",
-            {"message": "AI service error. Please try again.", "code": ErrorCode.LLM_ERROR.value},
+            {"message": safe_msg, "code": ErrorCode.LLM_ERROR.value},
         )
 
     except Exception as e:
@@ -454,10 +465,12 @@ async def stream_summarization(
             str(e),
             ErrorCode.UNKNOWN_ERROR,
         )
+        safe_msg = f"An unexpected error occurred (ref: {error_ref})."
+        await send_video_status(video_summary_id, None, "failed", error=safe_msg)
         yield sse_event(
             "error",
             {
-                "message": f"An unexpected error occurred (ref: {error_ref}).",
+                "message": safe_msg,
                 "code": ErrorCode.UNKNOWN_ERROR.value,
             },
         )

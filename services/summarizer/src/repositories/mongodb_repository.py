@@ -99,7 +99,12 @@ class MongoDBVideoRepository:
         """
         filtered = {k: v for k, v in result.items() if k in self._ALLOWED_RESULT_KEYS}
         filtered["updatedAt"] = _utc_now()
-        self._collection.update_one({"_id": ObjectId(video_summary_id)}, {"$set": filtered})
+        # A completed run consumes the API's bypassCache marker — clearing it
+        # keeps future serves of this row on the normal cache path.
+        self._collection.update_one(
+            {"_id": ObjectId(video_summary_id)},
+            {"$set": filtered, "$unset": {"forceRefresh": ""}},
+        )
 
     def increment_retry(self, video_summary_id: str) -> int:
         """Increment retry count and return new value."""

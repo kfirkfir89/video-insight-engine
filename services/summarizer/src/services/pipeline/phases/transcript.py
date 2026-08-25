@@ -12,13 +12,13 @@ from src.config import settings
 from src.exceptions import TranscriptError
 from src.models.schemas import ErrorCode
 from src.services.pipeline.pipeline_helpers import (
-    sse_event,
     normalize_segments,
+    sse_event,
 )
+from src.services.transcript.cleaner import clean_transcript_advanced
 from src.services.transcription.transcript import clean_transcript
 from src.services.transcription.transcript_fetcher import fetch_transcript
-from src.services.transcript.cleaner import clean_transcript_advanced
-from src.services.video.sponsorblock import get_sponsor_segments, filter_transcript_segments
+from src.services.video.sponsorblock import filter_transcript_segments, get_sponsor_segments
 from src.utils.worker_pool import run_in_pool
 
 if TYPE_CHECKING:
@@ -37,7 +37,9 @@ async def run_phase_transcript(ctx: PipelineContext) -> AsyncGenerator[str, None
 
     # Fetch transcript
     transcript_data = None
-    async for item in fetch_transcript(ctx.youtube_id, video_data, video_data.duration, is_music=is_music):
+    async for item in fetch_transcript(
+        ctx.youtube_id, video_data, video_data.duration, is_music=is_music
+    ):
         if isinstance(item, str):
             yield item
         else:
@@ -58,12 +60,12 @@ async def run_phase_transcript(ctx: PipelineContext) -> AsyncGenerator[str, None
         detect_language_by_script,
         detect_language_from_text,
     )
+
     raw_text = transcript_data.raw_text or ""
     detected_language = transcript_data.language
     if not detected_language and raw_text:
-        detected_language = (
-            detect_language_from_text(raw_text)
-            or detect_language_by_script(raw_text)
+        detected_language = detect_language_from_text(raw_text) or detect_language_by_script(
+            raw_text
         )
     source_code = detected_language if detected_language and detected_language != "en" else None
 
@@ -71,6 +73,7 @@ async def run_phase_transcript(ctx: PipelineContext) -> AsyncGenerator[str, None
     # hallucinated foreign-language fragments. Drop the source language so no
     # translation runs and the FE renders no language toggle — the right UX.
     from src.utils.language_utils import is_sound_only_video
+
     if source_code and is_sound_only_video(
         is_music=is_music,
         language=source_code,
@@ -81,7 +84,9 @@ async def run_phase_transcript(ctx: PipelineContext) -> AsyncGenerator[str, None
         logger.warning(
             "Sound-only music video detected; dropping source language %r "
             "(word_count=%d, duration=%ds)",
-            source_code, len(raw_text.split()), video_data.duration or 0,
+            source_code,
+            len(raw_text.split()),
+            video_data.duration or 0,
         )
         source_code = None
 
@@ -96,10 +101,13 @@ async def run_phase_transcript(ctx: PipelineContext) -> AsyncGenerator[str, None
         try:
             ctx.clean_text = await asyncio.wait_for(
                 run_in_pool(clean_transcript_advanced, ctx.clean_text),
-                timeout=30.0,
+                timeout=settings.TRANSCRIPT_CLEANING_TIMEOUT,
             )
         except asyncio.TimeoutError:
-            logger.warning("Advanced transcript cleaning timed out (30s), using basic cleaning")
+            logger.warning(
+                "Advanced transcript cleaning timed out (%.0fs), using basic cleaning",
+                settings.TRANSCRIPT_CLEANING_TIMEOUT,
+            )
         except Exception as e:
             logger.warning("Advanced transcript cleaning failed (non-critical): %s", e)
 
@@ -109,14 +117,16 @@ async def run_phase_transcript(ctx: PipelineContext) -> AsyncGenerator[str, None
         if sponsor_segments and transcript_data.segments:
             normalized = normalize_segments(transcript_data.segments)
             sb_segments = [
-                {"text": s["text"], "start": s["startMs"] / 1000.0, "duration": (s["endMs"] - s["startMs"]) / 1000.0}
+                {
+                    "text": s["text"],
+                    "start": s["startMs"] / 1000.0,
+                    "duration": (s["endMs"] - s["startMs"]) / 1000.0,
+                }
                 for s in normalized
             ]
             filtered = filter_transcript_segments(sb_segments, sponsor_segments)
             if filtered:
-                ctx.clean_text = clean_transcript(
-                    " ".join(s["text"] for s in filtered)
-                )
+                ctx.clean_text = clean_transcript(" ".join(s["text"] for s in filtered))
                 logger.info("SponsorBlock: filtered %d sponsor segments", len(sponsor_segments))
     except (TypeError, ValueError, KeyError) as e:
         logger.warning("SponsorBlock filtering failed (non-critical): %s - %s", type(e).__name__, e)

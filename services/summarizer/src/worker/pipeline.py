@@ -57,7 +57,8 @@ async def drive_pipeline(payload: VideoJobPayload) -> None:
     llm_service = LLMService(provider)
 
     entry = await asyncio.to_thread(
-        repository.get_video_summary, payload.video_summary_id,
+        repository.get_video_summary,
+        payload.video_summary_id,
     )
     if entry is None:
         # Mongo row vanished after publish — surface to DLQ rather than spin
@@ -82,6 +83,7 @@ async def drive_pipeline(payload: VideoJobPayload) -> None:
             repository,
             llm_service,
             owner,
+            force_refresh=payload.bypass_cache,
         )
     finally:
         await asyncio.to_thread(clear_override, payload.video_summary_id)

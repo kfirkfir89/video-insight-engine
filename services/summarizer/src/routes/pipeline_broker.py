@@ -78,6 +78,7 @@ async def produce_to_broker(
     repository: MongoDBVideoRepository,
     llm_service: LLMService,
     owner: str,
+    force_refresh: bool = False,
 ) -> None:
     """Run the pipeline and republish each SSE chunk through the broker.
 
@@ -85,6 +86,11 @@ async def produce_to_broker(
     abort and reconnect without killing the pipeline. The finally block
     always sends DONE and releases the lock so consumers exit cleanly
     even on producer failure.
+
+    ``force_refresh=True`` (a bypassCache submission) skips the response_cache
+    fast path — the whole point of a version bump is a fresh pipeline run, and
+    the Redis cache is keyed by youtubeId, not version, so without this the
+    new run is instantly re-fed the stale payload.
 
     ``stream_summarization`` already catches every pipeline-level error and
     yields a structured error event, so the only exception classes that
@@ -103,30 +109,41 @@ async def produce_to_broker(
         except OSError as e:
             logger.exception(
                 "MongoDB fetch failed for %s during producer startup: %s",
-                video_summary_id, e,
+                video_summary_id,
+                e,
             )
             fresh = None
         current_entry = fresh if fresh is not None else entry
 
         async for chunk in stream_summarization(
-            video_summary_id, current_entry, repository, llm_service,
+            video_summary_id,
+            current_entry,
+            repository,
+            llm_service,
+            force_refresh=force_refresh,
         ):
             try:
                 await pipeline_event_stream.publish(video_summary_id, chunk)
             except (OSError, redis_exceptions.RedisError) as e:
                 logger.warning(
                     "Broker publish failed for %s (event dropped): %s",
-                    video_summary_id, e,
+                    video_summary_id,
+                    e,
                 )
     except (OSError, redis_exceptions.RedisError) as e:
         logger.exception(
-            "Pipeline producer infra failure for %s: %s", video_summary_id, e,
+            "Pipeline producer infra failure for %s: %s",
+            video_summary_id,
+            e,
         )
         try:
-            err_chunk = sse_event("error", {
-                "message": "An unexpected error occurred during processing.",
-                "code": ErrorCode.UNKNOWN_ERROR.value,
-            })
+            err_chunk = sse_event(
+                "error",
+                {
+                    "message": "An unexpected error occurred during processing.",
+                    "code": ErrorCode.UNKNOWN_ERROR.value,
+                },
+            )
             await pipeline_event_stream.publish(video_summary_id, err_chunk)
         except (OSError, redis_exceptions.RedisError):
             pass
@@ -169,7 +186,11 @@ async def direct_stream_fallback(
         video_summary_id,
     )
     async for chunk in stream_summarization(
-        video_summary_id, entry, repository, llm_service, force_refresh=True,
+        video_summary_id,
+        entry,
+        repository,
+        llm_service,
+        force_refresh=True,
     ):
         yield chunk
     yield "data: [DONE]\n\n"
@@ -204,9 +225,14 @@ def spawn_producer_task(
     producer_task.add_done_callback(_PRODUCER_TASKS.discard)
     producer_task.add_done_callback(
         lambda t, vid=video_summary_id: (
-            logger.error("Producer task for %s ended with exception: %s",
-                         vid, t.exception(), exc_info=t.exception())
-            if not t.cancelled() and t.exception() is not None else None
+            logger.error(
+                "Producer task for %s ended with exception: %s",
+                vid,
+                t.exception(),
+                exc_info=t.exception(),
+            )
+            if not t.cancelled() and t.exception() is not None
+            else None
         )
     )
     return producer_task

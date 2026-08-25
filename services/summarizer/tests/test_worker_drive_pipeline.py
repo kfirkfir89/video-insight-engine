@@ -56,7 +56,9 @@ async def test_drive_pipeline_constructs_repository_without_di():
 
     with (
         patch.object(worker_pipeline, "get_mongo_client", return_value=mock_client),
-        patch.object(worker_pipeline, "MongoDBVideoRepository", return_value=mock_repo) as repo_ctor,
+        patch.object(
+            worker_pipeline, "MongoDBVideoRepository", return_value=mock_repo
+        ) as repo_ctor,
         patch.object(worker_pipeline, "get_llm_provider", return_value=MagicMock()),
         patch.object(worker_pipeline, "LLMService", return_value=MagicMock()),
         patch.object(
@@ -151,3 +153,30 @@ async def test_drive_pipeline_raises_when_mongo_row_missing():
     ):
         with pytest.raises(RuntimeError, match="video_summary not found"):
             await worker_pipeline.drive_pipeline(VALID_PAYLOAD)
+
+
+@pytest.mark.asyncio
+async def test_drive_pipeline_forwards_bypass_cache_as_force_refresh():
+    """bypassCache submissions must skip the youtubeId-keyed response cache —
+    otherwise the fresh version row is instantly re-fed the stale payload."""
+    mock_client, _mock_db, mock_repo = _patch_common()
+    payload = VALID_PAYLOAD.model_copy(update={"bypass_cache": True})
+
+    produce = AsyncMock()
+    with (
+        patch.object(worker_pipeline, "get_mongo_client", return_value=mock_client),
+        patch.object(worker_pipeline, "MongoDBVideoRepository", return_value=mock_repo),
+        patch.object(worker_pipeline, "get_llm_provider", return_value=MagicMock()),
+        patch.object(worker_pipeline, "LLMService", return_value=MagicMock()),
+        patch.object(
+            worker_pipeline.pipeline_event_stream,
+            "acquire_lock",
+            new=AsyncMock(return_value=True),
+        ),
+        patch("src.routes.pipeline_broker.produce_to_broker", new=produce),
+        patch.object(worker_pipeline, "clear_override"),
+    ):
+        await worker_pipeline.drive_pipeline(payload)
+
+    produce.assert_awaited_once()
+    assert produce.await_args.kwargs["force_refresh"] is True
