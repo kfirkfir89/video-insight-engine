@@ -71,6 +71,17 @@ def _build_ctx(source_language_code: str | None = None) -> SimpleNamespace:
     )
 
 
+@pytest.fixture(autouse=True)
+def _stub_status_callback():
+    """Phase code mirrors status to the API via the fire-and-forget
+    send_video_status_background (sync, spawns a tracked task) — stub it so
+    unit tests never attempt real HTTP (and stay fast)."""
+    from src.services.pipeline.phases import assembly as phase
+
+    with patch.object(phase, "send_video_status_background", new=MagicMock()) as mock_send:
+        yield mock_send
+
+
 @pytest.mark.asyncio
 async def test_redis_cache_set_for_english_videos() -> None:
     from src.services.pipeline.phases import assembly as phase
@@ -178,3 +189,43 @@ async def test_redis_disabled_skips_cache_write_regardless_of_language() -> None
         mock_cache.set_response = AsyncMock(return_value=True)
         await _drain(phase.run_phase_assembly(ctx))  # type: ignore[arg-type]
         mock_cache.set_response.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_status_callback_completed_for_english(_stub_status_callback) -> None:
+    """Assembly must mirror the terminal status onto userVideos via the API
+    callback — English videos report "completed" here."""
+    from src.services.pipeline.phases import assembly as phase
+
+    ctx = _build_ctx()
+    with (
+        patch.object(phase, "assemble_response", return_value={"tabs": [], "meta": {}}),
+        patch.object(
+            phase,
+            "settings",
+            SimpleNamespace(REDIS_ENABLED=False, QDRANT_ENABLED=False, PIPELINE_VERSION="vtest"),
+        ),
+    ):
+        await _drain(phase.run_phase_assembly(ctx))  # type: ignore[arg-type]
+
+    _stub_status_callback.assert_called_once_with("vsid", None, "completed")
+
+
+@pytest.mark.asyncio
+async def test_status_callback_processing_for_non_english(_stub_status_callback) -> None:
+    """Non-English videos stay "processing" at assembly — the translation
+    phase owns their "completed" transition."""
+    from src.services.pipeline.phases import assembly as phase
+
+    ctx = _build_ctx(source_language_code="he")
+    with (
+        patch.object(phase, "assemble_response", return_value={"tabs": [], "meta": {}}),
+        patch.object(
+            phase,
+            "settings",
+            SimpleNamespace(REDIS_ENABLED=False, QDRANT_ENABLED=False, PIPELINE_VERSION="vtest"),
+        ),
+    ):
+        await _drain(phase.run_phase_assembly(ctx))  # type: ignore[arg-type]
+
+    _stub_status_callback.assert_called_once_with("vsid", None, "processing")

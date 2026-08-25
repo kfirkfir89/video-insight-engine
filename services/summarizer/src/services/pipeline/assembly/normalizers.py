@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .text_utils import truncate_words
+
 # Category-like front values that indicate flash_deck front corruption
 _CATEGORY_FRONTS = frozenset(
     {
@@ -97,6 +99,7 @@ def _normalize_to_spot(item: dict) -> dict | None:
         or item.get("word")
         or item.get("aspect")
         or item.get("label")
+        or item.get("key")  # ReviewSpec {key, value} — mirror promotion.py
         or ""
     )
     name = str(name_raw).strip()
@@ -110,6 +113,7 @@ def _normalize_to_spot(item: dict) -> dict | None:
         or item.get("explanation")
         or item.get("translation")
         or item.get("context")
+        or item.get("value")  # ReviewSpec {key, value}
         or ""
     )
     description = str(desc_raw).strip()
@@ -272,7 +276,15 @@ def _normalize_code_snippet(item: Any) -> dict | None:
         return {"code": stripped, "language": "text", "explanation": ""} if stripped else None
     if not isinstance(item, dict):
         return None
-    code = item.get("code") or item.get("snippet") or item.get("example") or ""
+    code = (
+        item.get("code")
+        or item.get("snippet")
+        or item.get("example")
+        or item.get("command")
+        or item.get("cmd")
+        or item.get("content")
+        or ""
+    )
     if not code:
         return None
     return {
@@ -324,7 +336,11 @@ def _normalize_moment_item(item: Any, index: int) -> dict | None:
         item.get("label")
         or item.get("title")
         or item.get("name")
-        or (description[:60] if isinstance(description, str) and description else None)
+        or (
+            truncate_words(description, 60)
+            if isinstance(description, str) and description
+            else None
+        )
         or f"Moment {index + 1}"
     )
 

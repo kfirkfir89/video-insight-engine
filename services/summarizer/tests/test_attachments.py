@@ -101,14 +101,22 @@ class TestNoStandaloneAndEdges:
         tab = _tab("video_filmstrip", "frames", 3)
         tab["props"] = {"frames": _frames(3)}
         out = attach_secondaries(
-            tab, {"travel": {"tips": ["Pack light."]}}, None, _frames(6), "travel",
+            tab,
+            {"travel": {"tips": ["Pack light."]}},
+            None,
+            _frames(6),
+            "travel",
         )
         assert all(a["component"] != "frame_strip" for a in out)
 
     def test_music_domain_skips_frame_strip(self):
         tab = _tab("info_grid", "items", 2)
         out = attach_secondaries(
-            tab, {"music": {"tips": ["Mind the bridge."]}}, None, _frames(6), "music",
+            tab,
+            {"music": {"tips": ["Mind the bridge."]}},
+            None,
+            _frames(6),
+            "music",
         )
         # frame_strip is suppressed for music; tip is used instead.
         assert all(a["component"] != "frame_strip" for a in out)
@@ -116,9 +124,64 @@ class TestNoStandaloneAndEdges:
     def test_every_attachment_carries_slot_and_known_component(self):
         tab = _tab("info_grid", "items", 2)
         out = attach_secondaries(
-            tab, {"food": {"tips": ["t"]}}, None, _frames(6), "food",
+            tab,
+            {"food": {"tips": ["t"]}},
+            None,
+            _frames(6),
+            "food",
         )
         for att in out:
             assert att["slot"] in ("top", "bottom")
             assert att["component"]
             assert isinstance(att["props"], dict)
+
+
+class TestOncePerResponseBudget:
+    """frame_strip/quick_quiz/tip_callout carry response-global payloads —
+    excluded_kinds lets the caller budget each to one appearance."""
+
+    def test_excluded_frame_strip_falls_through_to_quick_quiz(self):
+        tab = _tab("info_grid", "items", 2)
+        enrichment = {
+            "quiz": [
+                {
+                    "question": "Q?",
+                    "options": ["a", "b", "c"],
+                    "correctIndex": 0,
+                    "explanation": "because",
+                }
+            ]
+        }
+        out = attach_secondaries(
+            tab, {}, enrichment, _frames(6), "learning", excluded_kinds={"frame_strip"}
+        )
+        assert [a["component"] for a in out] == ["quick_quiz"]
+
+    def test_all_kinds_excluded_yields_nothing(self):
+        tab = _tab("info_grid", "items", 2)
+        out = attach_secondaries(
+            tab,
+            {"food": {"tips": ["t"]}},
+            {"quiz": [{"question": "Q?", "options": ["a", "b"], "correctIndex": 0}]},
+            _frames(6),
+            "food",
+            excluded_kinds={"frame_strip", "quick_quiz", "tip_callout"},
+        )
+        assert out == []
+
+    def test_summary_header_is_not_budgeted(self):
+        tab = _tab("info_grid", "items", _DENSE_THRESHOLD)
+        out = attach_secondaries(
+            tab,
+            {},
+            None,
+            None,
+            "review",
+            excluded_kinds={"frame_strip", "quick_quiz", "tip_callout"},
+        )
+        assert [a["component"] for a in out] == ["summary_header"]
+
+    def test_default_excluded_kinds_keeps_prior_behavior(self):
+        tab = _tab("info_grid", "items", 2)
+        out = attach_secondaries(tab, {}, None, _frames(6), "review")
+        assert [a["component"] for a in out] == ["frame_strip"]

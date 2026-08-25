@@ -54,6 +54,9 @@ class TabEntry(BaseModel):
     goal: str = ""
     cross_tab_links: list[CrossTabLink] = Field([], alias="crossTabLinks")
     attachments: list[TabAttachment] | None = None
+    # Set by the degrade-never-drop ladder when a richer component's assembler
+    # couldn't build from the data. Telemetry/debug only.
+    degraded_from: str | None = Field(None, alias="degradedFrom")
 
 
 class VIEResponseMeta(BaseModel):

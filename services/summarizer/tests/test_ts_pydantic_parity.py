@@ -55,6 +55,10 @@ _FRAME_EVIDENCE_FIELDS = frozenset(
         "frameEvidence",
         "frameOcr",
         "frameSceneType",
+        # Durable S3 key for the attached frame — written by
+        # _attach_frame_metadata alongside thumbnailUrl, same post-validation
+        # injection path as the caption fields.
+        "s3Key",
     }
 )
 

@@ -11,8 +11,14 @@ from src.config import settings
 from src.services.cache.response_cache import response_cache
 from src.services.media.s3_client import S3Client
 from src.services.pipeline.assembly import assemble_response
-from src.services.pipeline.pipeline_helpers import normalize_segments, sse_event
+from src.services.pipeline.assembly.moment_frame_fill import fill_moment_frames
+from src.services.pipeline.pipeline_helpers import (
+    normalize_segments,
+    run_task_with_heartbeat,
+    sse_event,
+)
 from src.services.pipeline.post_processor import coverage_is_degraded
+from src.services.status_callback import send_video_status_background
 from src.services.transcription.whisper_transcriber import translate_audio_to_english
 from src.services.vector.store import store_default_output_chunks, store_transcript_chunks
 from src.services.video.description_analyzer import DescriptionAnalysis
@@ -76,17 +82,45 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
     if degraded and ctx.assembled_meta is not None:
         ctx.assembled_meta["degraded"] = True
 
-    # Emit tab_ready events (progressive rendering)
-    for tab in assembled.get("tabs", []):
-        yield sse_event("tab_ready", tab)
+    # Emit tab_ready events (progressive rendering). moment_track tabs are
+    # held back until the exact-timestamp frame fill completes so they stream
+    # WITH their guaranteed images — every other tab renders immediately. Each
+    # event carries its index in the persisted order (`position`) so the
+    # client can slot a late tab where the DB doc will have it, instead of
+    # appending it last and reshuffling once the doc becomes authoritative.
+    # The payload is a copy — the persisted tab dict never gains `position`.
+    all_tabs = assembled.get("tabs", [])
+    moment_positions = [i for i, t in enumerate(all_tabs) if t.get("component") == "moment_track"]
+    for position, tab in enumerate(all_tabs):
+        if position in moment_positions:
+            continue
+        yield sse_event("tab_ready", {**tab, "position": position})
 
+    if moment_positions:
+        # Best-effort image guarantee for the value-moment gallery: extract a
+        # frame at each still-frameless moment's own timestamp (never raises).
+        # Heartbeats keep the SSE hop alive — the fill can run for minutes
+        # (stream-URL pass + local-download fallback) and this phase is not
+        # under run_parallel_phases' keepalive.
+        fill_task = asyncio.ensure_future(fill_moment_frames(all_tabs, ctx.youtube_id))
+        async for keepalive in run_task_with_heartbeat(fill_task):
+            yield keepalive
+        await fill_task
+        for position in moment_positions:
+            yield sse_event("tab_ready", {**all_tabs[position], "position": position})
+
+    # Drop count comes from the assembler's per-tab accounting — assembly also
+    # ADDS tabs (overview, backfill, filmstrip, fallbacks), so the old
+    # designed-minus-assembled subtraction masked drops and could go negative.
+    dropped_tabs = assembled.get("dropped", [])
     logger.info(
         "pipeline.assembly",
         extra={
             "video_id": ctx.video_summary_id,
             "tabs_designed": len(ctx.triage.tabs),
             "tabs_assembled": len(assembled.get("tabs", [])),
-            "tabs_dropped": len(ctx.triage.tabs) - len(assembled.get("tabs", [])),
+            "tabs_dropped": len(dropped_tabs),
+            "dropped_detail": dropped_tabs,
             "components_used": [t["component"] for t in assembled.get("tabs", [])],
         },
     )
@@ -129,7 +163,8 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
             "assembly": {
                 "tabsDesigned": len(ctx.triage.tabs),
                 "tabsAssembled": len(assembled.get("tabs", [])),
-                "tabsDropped": len(ctx.triage.tabs) - len(assembled.get("tabs", [])),
+                "tabsDropped": len(dropped_tabs),
+                "droppedTabs": dropped_tabs,
             },
         },
         "processedAt": datetime.now(timezone.utc),
@@ -142,6 +177,10 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
         result["degraded"] = True
 
     await asyncio.to_thread(ctx.repository.save_structured_result, ctx.video_summary_id, result)
+    # Mirror onto userVideos + WS fan-out (best-effort). Non-English videos
+    # stay "processing" here — the translation phase owns their "completed".
+    # Fire-and-forget: a slow API gateway must not stall the SSE stream.
+    send_video_status_background(ctx.video_summary_id, None, result["status"])
 
     # Cache in Redis (non-blocking, best-effort).
     # English-source videos: cache the assembled (English) payload now — there

@@ -283,3 +283,52 @@ class TestSportAssembly:
         formation_tab = next(t for t in out["tabs"] if t["component"] == "formation_diagram")
         assert len(formation_tab["props"]["positions"]) == 3
         assert formation_tab["props"]["name"] == "4-3-3"
+
+
+class TestForbiddenBackstop:
+    """Assembly-level forbidden pop — the backstop behind plan-time policy."""
+
+    def test_forbidden_component_popped_with_reason(self):
+        from src.services.pipeline.assembly.core import _validate_domain_requirements
+
+        tabs = [
+            {
+                "id": "pulls",
+                "component": "tier_list",
+                "label": "Pulls",
+                "goal": "g",
+                "props": {"items": [{"item": "x"}]},
+            },
+            {
+                "id": "quiz",
+                "component": "quiz_arena",
+                "label": "Quiz",
+                "goal": "g",
+                "props": {"questions": [{"q": "?"}]},
+            },
+        ]
+        dropped: list[dict] = []
+        _validate_domain_requirements(
+            tabs, "gaming", dropped_sink=dropped, content_format="unboxing"
+        )
+
+        assert [t["id"] for t in tabs if t["component"] == "quiz_arena"] == []
+        assert any(d["reason"] == "domain_forbidden" and d["id"] == "quiz" for d in dropped)
+
+    def test_educational_domain_keeps_quiz_tab(self):
+        from src.services.pipeline.assembly.core import _validate_domain_requirements
+
+        tabs = [
+            {
+                "id": "quiz",
+                "component": "quiz_arena",
+                "label": "Quiz",
+                "goal": "g",
+                "props": {"questions": [{"q": "?"}]},
+            },
+        ]
+        dropped: list[dict] = []
+        _validate_domain_requirements(tabs, "learning", dropped_sink=dropped, content_format=None)
+
+        assert [t["id"] for t in tabs] == ["quiz"]
+        assert dropped == []

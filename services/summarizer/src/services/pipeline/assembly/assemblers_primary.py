@@ -287,6 +287,13 @@ _INFO_KEY_FIELDS: tuple[str, ...] = (
     "fact",
     "concept",
     "topic",
+    "item",
+    "place",
+    "spot",
+    "feature",
+    "claim",
+    "step",
+    "question",
 )
 _INFO_VALUE_FIELDS: tuple[str, ...] = (
     "value",
@@ -298,6 +305,12 @@ _INFO_VALUE_FIELDS: tuple[str, ...] = (
     "translation",
     "answer",
     "meaning",
+    "summary",
+    "reason",
+    "why",
+    "note",
+    "tip",
+    "instruction",
 )
 _INFO_EVIDENCE_FIELDS: tuple[str, ...] = (
     "example",
@@ -363,7 +376,11 @@ def _normalize_info_grid_item(item: Any) -> dict | None:
     if "key" in item and "value" in item:
         key_clean = str(item["key"]).strip()
         value_clean = str(item.get("value") or "").strip()
-        if not key_clean or not value_clean:
+        if not key_clean:
+            return None
+        # Key-only items survive as headline chips (terms-only glossaries) —
+        # the frontend renders them; only a paragraph-length key is dropped.
+        if not value_clean and len(key_clean) > _INFO_STRING_MAX:
             return None
         result: dict[str, Any] = {"key": key_clean, "value": value_clean}
         if item.get("emoji"):
@@ -387,10 +404,12 @@ def _normalize_info_grid_item(item: Any) -> dict | None:
     value_raw = ""
     for field in _INFO_VALUE_FIELDS:
         candidate = item.get(field)
-        if isinstance(candidate, str) and candidate.strip():
+        if isinstance(candidate, str) and candidate.strip() and candidate.strip() != key_raw:
             value_raw = candidate.strip()
             break
-    if not value_raw:
+    # No value field → key-only headline chip (frontend renders these);
+    # paragraph-length keys are still dropped as not-a-reference-pair.
+    if not value_raw and len(key_raw) > _INFO_STRING_MAX:
         return None
 
     result = {"key": key_raw, "value": value_raw}
@@ -497,7 +516,14 @@ def assemble_step_player(
 ) -> dict | None:
     if not isinstance(data, list) or len(data) < 1:
         return None
-    steps = [_normalize_step(item, i) for i, item in enumerate(data) if isinstance(item, dict)]
+    # Bare-string steps are legitimate (e.g. tech.setup.commands is list[str])
+    # — coerce instead of silently filtering them into an empty tab.
+    steps = []
+    for i, item in enumerate(data):
+        if isinstance(item, dict):
+            steps.append(_normalize_step(item, i))
+        elif isinstance(item, str) and item.strip():
+            steps.append(_normalize_step({"instruction": item.strip()}, i))
     if not steps:
         return None
     return {"steps": steps}

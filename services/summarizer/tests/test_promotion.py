@@ -10,8 +10,7 @@ from src.services.pipeline.assembly import (
 
 def _comparison_rows(n: int) -> list[dict]:
     return [
-        {"feature": f"Spec {i}", "thisProduct": f"A{i}", "competitor": f"B{i}"}
-        for i in range(n)
+        {"feature": f"Spec {i}", "thisProduct": f"A{i}", "competitor": f"B{i}"} for i in range(n)
     ]
 
 
@@ -96,28 +95,34 @@ class TestPromoteFlashDeck:
 class TestPromoteInfoGrid:
     def test_promotes_description_heavy_grid(self):
         long_value = "x" * 150
-        props = {"items": [
-            {"key": "First", "value": long_value},
-            {"key": "Second", "value": long_value},
-        ]}
+        props = {
+            "items": [
+                {"key": "First", "value": long_value},
+                {"key": "Second", "value": long_value},
+            ]
+        }
         component, out = promote_component("info_grid", props, None, {}, "review")
         assert component == "spot_explorer"
         assert out["spots"][0]["name"] == "First"
         assert out["spots"][0]["description"] == long_value
 
     def test_no_promotion_for_short_pairs(self):
-        props = {"items": [
-            {"key": "Display", "value": "6.7 inch"},
-            {"key": "Battery", "value": "5000mAh"},
-        ]}
+        props = {
+            "items": [
+                {"key": "Display", "value": "6.7 inch"},
+                {"key": "Battery", "value": "5000mAh"},
+            ]
+        }
         component, _ = promote_component("info_grid", props, None, {}, "review")
         assert component == "info_grid"
 
     def test_no_promotion_with_single_long_value(self):
-        props = {"items": [
-            {"key": "Long", "value": "x" * 150},
-            {"key": "Short", "value": "tiny"},
-        ]}
+        props = {
+            "items": [
+                {"key": "Long", "value": "x" * 150},
+                {"key": "Short", "value": "tiny"},
+            ]
+        }
         component, _ = promote_component("info_grid", props, None, {}, "review")
         assert component == "info_grid"
 
@@ -127,3 +132,52 @@ def test_unknown_component_passes_through():
     component, out = promote_component("moment_track", props, None, {}, "learning")
     assert component == "moment_track"
     assert out is props
+
+
+class TestDemoteLadder:
+    """Degrade-never-drop: failing rich assemblers walk down to simpler ones."""
+
+    def test_string_commands_no_longer_need_demotion(self):
+        # Regression target: tech.setup.commands is list[str]; step_player now
+        # coerces strings directly (7a) so the ladder is a backstop, not the fix.
+        from src.services.pipeline.assembly.assemblers_primary import assemble_step_player
+
+        props = assemble_step_player({}, ["docker build .", "docker run app"], {}, None)
+
+        assert props is not None
+        assert [s["instruction"] for s in props["steps"]] == ["docker build .", "docker run app"]
+
+    def test_demote_reaches_display_section_terminal(self):
+        from src.services.pipeline.assembly.promotion import demote_component
+
+        # A dict payload no rich list assembler can use — terminal rung catches it.
+        result = demote_component("code_playground", {}, {"prose": "just text"}, {}, None)
+
+        assert result is not None
+        component, props = result
+        assert component == "display_section"
+        assert props is not None
+
+    def test_tier_list_demotes_to_info_grid(self):
+        from src.services.pipeline.assembly.promotion import demote_component
+
+        # Two items — below tier_list's min of 3, but info_grid renders pairs.
+        data = [
+            {"item": "Card A", "reason": "chase pull"},
+            {"item": "Card B", "reason": "playable"},
+        ]
+        result = demote_component("tier_list", {}, data, {}, None)
+
+        assert result is not None
+        component, props = result
+        assert component == "info_grid"
+        assert len(props["items"]) == 2
+
+    def test_quiz_arena_never_demotes(self):
+        from src.services.pipeline.assembly.promotion import demote_component
+
+        result = demote_component(
+            "quiz_arena", {}, [{"question": "", "options": ["A", "B"]}], {}, None
+        )
+
+        assert result is None

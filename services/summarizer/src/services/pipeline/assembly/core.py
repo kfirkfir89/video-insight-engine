@@ -14,6 +14,7 @@ from src.shared_config.domain_config import (
     assembler_item_caps,
     build_fallback_tabs,
     domain_requirements,
+    effective_requirements,
     sibling_datasources,
 )
 from src.utils.data_helpers import is_empty_data
@@ -24,7 +25,7 @@ from .attachments import attach_secondaries
 from .cross_tab import resolve_cross_tab_links
 from .density import enforce_density
 from .normalizers import _chapters_to_moments
-from .promotion import promote_component
+from .promotion import demote_component, promote_component
 from .registry import ASSEMBLER_REGISTRY, infer_component
 
 logger = logging.getLogger(__name__)
@@ -81,17 +82,73 @@ def resolve_data_source(
 # ─────────────────────────────────────────────────────
 
 
+# With only ~25 frames per video, duplication is caused by frame REUSE, not
+# match distance — keep the window wide enough for long videos (~72s frame
+# spacing at 30min) and enforce exclusivity instead.
+_FRAME_MATCH_MAX_DISTANCE = 30.0
+
+# A frame may serve two items only when they reference (nearly) the same
+# moment — e.g. the same pull in spot_explorer and moment_track.
+_FRAME_REUSE_EPS = 2.0
+
+# How many next-nearest candidates the injector tries past filler refusals
+# before an item goes without a thumbnail.
+_MAX_FRAME_ATTEMPTS = 4
+
+
+def _frame_identity(frame: dict) -> str | None:
+    """Durable identity for reuse tracking; None when nothing to collide on."""
+    return frame.get("s3_key") or frame.get("s3_url") or None
+
+
+def _item_timestamp(item: dict) -> float | None:
+    """Resolve an item's numeric timestamp in seconds, or None.
+
+    Explicit None-checks per key — the old `a or b or c` chain made a
+    legitimate `seconds: 0` fall through to the display string ("0:00"),
+    so second-zero moments were structurally never frame-matched.
+    """
+    for key in ("timestamp", "startTime", "seconds", "time"):
+        value = item.get(key)
+        if value is None or isinstance(value, str):
+            continue
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
 def find_nearest_frame(
     timestamp_seconds: float,
     frames: list[dict],
-    max_distance: float = 30.0,
+    max_distance: float = _FRAME_MATCH_MAX_DISTANCE,
+    used: dict[str, float] | None = None,
+    tab_used: set[str] | None = None,
+    reuse_eps: float = _FRAME_REUSE_EPS,
+    exclude: set[str] | None = None,
 ) -> dict | None:
-    """Find the frame closest to a given timestamp."""
-    if not frames:
-        return None
-    nearest = min(frames, key=lambda f: abs(f.get("timestamp", 0) - timestamp_seconds))
-    if abs(nearest.get("timestamp", 0) - timestamp_seconds) <= max_distance:
-        return nearest
+    """Find the closest eligible frame to a timestamp.
+
+    A frame already attached elsewhere (tracked by `used`/`tab_used`) is
+    skipped unless the requesting timestamp is within `reuse_eps` of its
+    prior use — same-moment reuse across tabs is intended, everything else
+    is visual duplication. Within one tab (`tab_used`) reuse is never OK.
+    `exclude` skips specific frames outright — the injector uses it to retry
+    the next-nearest candidate after a filler (talking-head) refusal.
+    """
+    for frame in sorted(frames, key=lambda f: abs(f.get("timestamp", 0) - timestamp_seconds)):
+        if abs(frame.get("timestamp", 0) - timestamp_seconds) > max_distance:
+            return None
+        key = _frame_identity(frame)
+        if key is not None:
+            if exclude is not None and key in exclude:
+                continue
+            if tab_used is not None and key in tab_used:
+                continue
+            if used is not None and key in used and abs(used[key] - timestamp_seconds) > reuse_eps:
+                continue
+        return frame
     return None
 
 
@@ -115,7 +172,7 @@ def _attach_frame_metadata(
     item: dict,
     source_frame: dict,
     frame_descriptions: list[dict] | None,
-) -> None:
+) -> bool:
     """Enrich an item with frame thumb + (when available) vision metadata.
 
     Vision descriptions carry the actual semantic payload — scene_type,
@@ -123,26 +180,35 @@ def _attach_frame_metadata(
     to look up and the audit showed they're computed and thrown away. Here we
     fuse them onto the item so MomentTrack/StepPlayer/CodeExplorer/Comparison
     can render evidence captions alongside the thumbnail.
+
+    Returns True when the thumbnail was attached; False when the frame was
+    declined as filler (so it stays available for other items).
     """
+    desc: dict | None = None
+    scene_type = ""
+    educational = ""
+    if frame_descriptions:
+        desc = find_description_for_frame(source_frame, frame_descriptions)
+        if desc:
+            scene_type = str(desc.get("scene_type") or "").strip().lower()
+            educational = str(desc.get("educational_value") or "").strip()
+            visual_subject = str(desc.get("visual_subject") or "").strip().lower()
+            # Skip filler scenes — and frames vision says are presenter-
+            # dominated — unless the LLM explicitly flagged educational
+            # signal. Protects against pasting random presenter crops next
+            # to substantive content rows. "content"/"mixed" always pass.
+            is_filler = scene_type in _NON_EVIDENCE_SCENE_TYPES or visual_subject == "presenter"
+            if is_filler and not educational:
+                return False
+
     item["thumbnailUrl"] = source_frame.get("s3_url", "")
     if source_frame.get("s3_key"):
         item["s3Key"] = source_frame["s3_key"]
     if source_frame.get("ocr_text") and not item.get("frameOcr"):
         item["frameOcr"] = source_frame["ocr_text"]
 
-    if not frame_descriptions:
-        return
-    desc = find_description_for_frame(source_frame, frame_descriptions)
     if not desc:
-        return
-
-    scene_type = str(desc.get("scene_type") or "").strip().lower()
-    educational = str(desc.get("educational_value") or "").strip()
-    # Skip filler scenes unless the vision LLM explicitly flagged them as
-    # carrying educational signal — protects against pasting random presenter
-    # crops next to substantive content rows.
-    if scene_type in _NON_EVIDENCE_SCENE_TYPES and not educational:
-        return
+        return True
 
     caption = str(desc.get("content") or "").strip()
     if caption:
@@ -154,6 +220,7 @@ def _attach_frame_metadata(
     text_visible = str(desc.get("text_visible") or "").strip()
     if text_visible and not item.get("frameOcr"):
         item["frameOcr"] = text_visible
+    return True
 
 
 def inject_frame_thumbnails(
@@ -161,6 +228,9 @@ def inject_frame_thumbnails(
     frames: list[dict],
     all_frames: list[dict] | None = None,
     frame_descriptions: list[dict] | None = None,
+    used: dict[str, float] | None = None,
+    tab_used: set[str] | None = None,
+    max_distance: float = _FRAME_MATCH_MAX_DISTANCE,
 ) -> list[dict]:
     """Add thumbnailUrl + optional vision metadata to items with timestamps.
 
@@ -169,6 +239,10 @@ def inject_frame_thumbnails(
     used by the SSE stream for immediate display. When frame_descriptions is
     provided, also attaches frameCaption / frameSceneType / frameEvidence /
     frameOcr so downstream components can render evidence inline.
+
+    `used` (response-wide) and `tab_used` (per tab) track frames already
+    attached so different moments never share a thumbnail — an item with no
+    eligible frame gets none rather than a wrong duplicate.
     """
     if not frames:
         return items
@@ -177,29 +251,192 @@ def inject_frame_thumbnails(
     match_pool = all_frames if all_frames else s3_frames
 
     for item in items:
-        ts = (
-            item.get("timestamp")
-            or item.get("startTime")
-            or item.get("seconds")
-            or item.get("time")
-        )
-        if ts is None:
-            continue
-        try:
-            ts_float = float(ts) if not isinstance(ts, str) else None
-        except (ValueError, TypeError):
-            ts_float = None
+        ts_float = _item_timestamp(item)
         if ts_float is None:
             continue
-        nearest = find_nearest_frame(ts_float, match_pool)
-        source: dict | None = None
-        if nearest and nearest.get("s3_url"):
-            source = nearest
-        elif nearest and s3_frames:
-            source = find_nearest_frame(ts_float, s3_frames)
-        if source:
-            _attach_frame_metadata(item, source, frame_descriptions)
+        # Retry past filler refusals: a talking-head frame declined by
+        # _attach_frame_metadata should not cost the item its thumbnail when
+        # the next-nearest frame in range is real content. Refused frames are
+        # NOT marked used — a different item may still legitimately claim one
+        # (e.g. when vision flagged it educationally valuable for its moment).
+        refused: set[str] = set()
+        for _ in range(_MAX_FRAME_ATTEMPTS):
+            nearest = find_nearest_frame(
+                ts_float,
+                match_pool,
+                max_distance=max_distance,
+                used=used,
+                tab_used=tab_used,
+                exclude=refused,
+            )
+            source: dict | None = None
+            if nearest and nearest.get("s3_url"):
+                source = nearest
+            elif nearest and s3_frames:
+                source = find_nearest_frame(
+                    ts_float,
+                    s3_frames,
+                    max_distance=max_distance,
+                    used=used,
+                    tab_used=tab_used,
+                    exclude=refused,
+                )
+            if source is None:
+                break
+            if _attach_frame_metadata(item, source, frame_descriptions):
+                key = _frame_identity(source)
+                if key is not None:
+                    if used is not None:
+                        used.setdefault(key, ts_float)
+                    if tab_used is not None:
+                        tab_used.add(key)
+                break
+            key = _frame_identity(source)
+            if key is None:
+                break
+            refused.add(key)
     return items
+
+
+# Relaxed second-pass window for the moment grid — tighter than the strict
+# pass's 30s so backfilled thumbs stay relevant to their moment.
+_BACKFILL_MAX_DISTANCE = 15.0
+
+# Grace beyond the reported duration before a timestamp counts as impossible —
+# metadata durations round and live streams trim, so a few seconds of overhang
+# is legitimate.
+_TIMESTAMP_OVER_DURATION_TOLERANCE = 10.0
+
+
+def _drop_impossible_timestamps(tabs: list[dict], video_duration: float | int | None) -> int:
+    """Drop moment_track items whose timestamp lies beyond the video's end.
+
+    Extraction occasionally hallucinates timestamps past the video duration
+    (observed live: a 7:50 video carrying moments at 8:00-12:00). Such items
+    can neither seek nor ever receive a real frame — dropping them beats
+    shipping broken affordances. Returns the number of dropped items.
+    """
+    try:
+        limit = float(video_duration) if video_duration else 0.0
+    except (TypeError, ValueError):
+        limit = 0.0
+    if limit <= 0:
+        return 0
+    limit += _TIMESTAMP_OVER_DURATION_TOLERANCE
+
+    dropped = 0
+    for tab in tabs:
+        if tab.get("component") != "moment_track":
+            continue
+        props = tab.get("props")
+        if not isinstance(props, dict) or not isinstance(props.get("items"), list):
+            continue
+        items = props["items"]
+        kept = [
+            it
+            for it in items
+            if not (isinstance(it, dict) and (_item_timestamp(it) or 0.0) > limit)
+        ]
+        dropped += len(items) - len(kept)
+        if len(kept) != len(items):
+            props["items"] = kept
+    if dropped:
+        logger.warning(
+            "Assembly: dropped %d moment(s) with timestamps beyond video duration (%.0fs)",
+            dropped,
+            limit - _TIMESTAMP_OVER_DURATION_TOLERANCE,
+        )
+    return dropped
+
+
+def _drop_emptied_moment_tabs(tabs: list[dict], dropped_sink: list[dict]) -> None:
+    """Remove moment_track tabs whose item list the timestamp hygiene emptied.
+
+    _validate_assembled_props ran before the drop pass, so without this an
+    all-hallucinated moment tab would ship as an empty surface (persisted and
+    cached until the next PIPELINE_VERSION bump).
+    """
+    for idx in reversed(range(len(tabs))):
+        tab = tabs[idx]
+        if tab.get("component") != "moment_track":
+            continue
+        props = tab.get("props")
+        if isinstance(props, dict) and props.get("items"):
+            continue
+        popped = tabs.pop(idx)
+        logger.warning(
+            "TAB DROPPED: id=%r, component='moment_track' — every moment was beyond duration",
+            popped.get("id"),
+        )
+        dropped_sink.append(
+            {
+                "id": popped.get("id", ""),
+                "component": "moment_track",
+                "dataSource": "",
+                "reason": "all_timestamps_impossible",
+            }
+        )
+
+
+def _backfill_moment_thumbnails(
+    tabs: list[dict],
+    frames: list[dict],
+    all_frames: list[dict] | None,
+    frame_descriptions: list[dict] | None,
+) -> None:
+    """Second-pass thumbnail fill for moment_track items left frameless.
+
+    The strict pass enforces response-wide exclusivity, which can leave
+    25-50% of moment cards as empty plates in the grid view. This pass
+    relaxes ONLY the cross-tab ledger (a moment card sharing a frame with a
+    tier item is fine for gallery coverage) while still forbidding duplicate
+    frames within the tab, and uses a tighter ±15s window. moment_track only
+    by design — positional components keep strict semantics.
+    """
+    if not frames:
+        return
+    for tab in tabs:
+        if tab.get("component") != "moment_track":
+            continue
+        props = tab.get("props")
+        if not isinstance(props, dict):
+            continue
+        items = props.get("items")
+        if not isinstance(items, list):
+            continue
+        frameless = [it for it in items if isinstance(it, dict) and not it.get("thumbnailUrl")]
+        if not frameless:
+            continue
+        # Mirror _frame_identity (s3_key or s3_url): a frame attached without
+        # an s3_key carries only its URL on the item, and rebuilding the
+        # ledger from s3Key alone would let the relaxed pass re-attach that
+        # same frame to a frameless sibling — the exact within-tab duplicate
+        # this pass forbids.
+        tab_used = {
+            key
+            for it in items
+            if isinstance(it, dict)
+            for key in (it.get("s3Key") or it.get("thumbnailUrl"),)
+            if isinstance(key, str) and key
+        }
+        filled_before = len(items) - len(frameless)
+        inject_frame_thumbnails(
+            frameless,
+            frames,
+            all_frames=all_frames,
+            frame_descriptions=frame_descriptions,
+            used=None,
+            tab_used=tab_used,
+            max_distance=_BACKFILL_MAX_DISTANCE,
+        )
+        gained = sum(1 for it in frameless if it.get("thumbnailUrl"))
+        if gained:
+            logger.info(
+                "Assembly: moment thumbnail backfill +%d (had %d/%d)",
+                gained,
+                filled_before,
+                len(items),
+            )
 
 
 def find_description_for_frame(
@@ -225,9 +462,9 @@ def find_description_for_frame(
 # Domain Requirement Validation
 # ─────────────────────────────────────────────────────
 
-# Single-sourced from domains.json `domainRequirements` (project-score-9 4.5d)
-# — per-domain rationale (music optional lyrics, podcast moment_track spine,
-# news claims_tracker, etc.) documented in `domainRequirementsNote` there.
+# Single-sourced from domains.json `domainRequirements` (project-score-9 4.5d).
+# Raw config mirror kept for config-parity tests; runtime policy goes through
+# effective_requirements() which also merges (domain, format) playbooks.
 _DOMAIN_REQUIREMENTS: dict[str, dict] = domain_requirements()
 
 
@@ -314,14 +551,43 @@ def _validate_domain_requirements(
     enrichment: dict | None = None,
     synthesis: dict | None = None,
     video_meta: dict | None = None,
+    dropped_sink: list[dict] | None = None,
+    content_format: str | None = None,
 ) -> None:
     """Validate assembled tabs against domain requirements in-place.
 
     When a required component is missing, attempt to backfill it from the registry
     defaults using real extraction data before falling back to a warning.
+    Forbidden components (domain policy + playbook union) are popped — this is
+    the backstop behind the plan-time enforcement, covering cached plans,
+    backfill paths, and promotion outputs.
     """
-    reqs = _DOMAIN_REQUIREMENTS.get(primary_tag, {})
+    reqs = effective_requirements(primary_tag, content_format)
     tab_components = [t.get("component", "") for t in tabs]
+
+    forbidden = reqs.get("forbidden") or frozenset()
+    if forbidden:
+        for idx in reversed(range(len(tabs))):
+            component = tabs[idx].get("component", "")
+            if component in forbidden:
+                popped = tabs.pop(idx)
+                logger.warning(
+                    "TAB DROPPED: id=%r component=%r — forbidden for domain=%s format=%s",
+                    popped.get("id"),
+                    component,
+                    primary_tag,
+                    content_format,
+                )
+                if dropped_sink is not None:
+                    dropped_sink.append(
+                        {
+                            "id": popped.get("id", ""),
+                            "component": component,
+                            "dataSource": "",
+                            "reason": "domain_forbidden",
+                        }
+                    )
+        tab_components = [t.get("component", "") for t in tabs]
 
     for req in reqs.get("required", []):
         accepted = _REQUIREMENT_EQUIVALENTS.get(req, frozenset({req}))
@@ -356,7 +622,16 @@ def _validate_domain_requirements(
                 limit,
             )
             for idx in reversed(indices[limit:]):
-                tabs.pop(idx)
+                popped = tabs.pop(idx)
+                if dropped_sink is not None:
+                    dropped_sink.append(
+                        {
+                            "id": popped.get("id", ""),
+                            "component": comp,
+                            "dataSource": "",
+                            "reason": "domain_max_cap",
+                        }
+                    )
 
     for tab in tabs:
         if not tab.get("goal"):
@@ -373,7 +648,6 @@ def _validate_domain_requirements(
 # ─────────────────────────────────────────────────────
 
 _UNTITLED_RE = re.compile(r"<?\s*Untitled\s+Chapter\s+(\d+)\s*>?", re.IGNORECASE)
-_NO_COUNT_COMPONENTS = frozenset({"overview", "verdict", "budget"})
 
 # Maps component → required list key. If the list is empty after assembly, drop the tab.
 # Live (v2 registry) components only — legacy v1 names were dropped alongside
@@ -523,6 +797,21 @@ def _cap_tab_items(component: str, props: dict, video_duration: float | None = N
         return
 
     if len(items) > cap:
+        # spot_explorer groups spots by day via sections[].spotIndices. A plain
+        # head-truncation would silently amputate the later days (a 10-day
+        # itinerary rendering only days 1-4) AND leave sections pointing at
+        # indices past the cap (empty days in the UI). Even-sample across the
+        # whole list and remap the section indices instead.
+        if list_key == "spots" and isinstance(props.get("sections"), list):
+            logger.info(
+                "Assembly: capping %s.%s from %d → %d (even-sampled, sections remapped)",
+                component,
+                list_key,
+                len(items),
+                cap,
+            )
+            _cap_spots_with_sections(props, items, cap)
+            return
         logger.info(
             "Assembly: capping %s.%s from %d → %d",
             component,
@@ -533,6 +822,83 @@ def _cap_tab_items(component: str, props: dict, video_duration: float | None = N
         props[list_key] = items[:cap]
 
 
+def _cap_spots_with_sections(props: dict, spots: list, cap: int) -> None:
+    """Cap spots while guaranteeing every day/section keeps at least one spot.
+
+    Global even-sampling can empty a small section entirely (a "Day 4"
+    sub-tab silently vanishing from an itinerary), so quotas are allocated
+    per section — largest remainder with a floor of 1 — and sampled evenly
+    WITHIN each section. Sections' spotIndices are remapped to the rebuilt
+    spots list; only when the section count itself exceeds the cap are
+    trailing sections dropped.
+    """
+    valid: list[dict] = []
+    for section in props["sections"]:
+        if not isinstance(section, dict):
+            continue
+        indices = [
+            i for i in section.get("spotIndices", []) if isinstance(i, int) and 0 <= i < len(spots)
+        ]
+        if indices:
+            valid.append({**section, "spotIndices": indices})
+
+    if not valid:
+        props["spots"] = _evenly_sample(spots, cap)
+        props["sections"] = []
+        return
+
+    if len(valid) >= cap:
+        valid = valid[:cap]
+        quotas = [1] * len(valid)
+    else:
+        total = sum(len(s["spotIndices"]) for s in valid)
+        budget = min(cap, total)
+        quotas = [max(1, (budget * len(s["spotIndices"])) // total) for s in valid]
+        overshoot = sum(quotas) - budget
+        while overshoot > 0:
+            largest = max(range(len(quotas)), key=lambda j: quotas[j])
+            if quotas[largest] <= 1:
+                break
+            quotas[largest] -= 1
+            overshoot -= 1
+        shortfall = budget - sum(quotas)
+        if shortfall > 0:
+            by_remainder = sorted(
+                range(len(valid)),
+                key=lambda j: -((budget * len(valid[j]["spotIndices"])) % total),
+            )
+            for j in by_remainder:
+                if shortfall == 0:
+                    break
+                if quotas[j] < len(valid[j]["spotIndices"]):
+                    quotas[j] += 1
+                    shortfall -= 1
+
+    kept_old: set[int] = set()
+    for section, quota in zip(valid, quotas):
+        kept_old.update(_evenly_sample(section["spotIndices"], quota))
+
+    # Spots not referenced by any section fill whatever room remains.
+    if len(kept_old) < cap:
+        referenced = {i for s in valid for i in s["spotIndices"]}
+        unreferenced = [i for i in range(len(spots)) if i not in referenced]
+        kept_old.update(_evenly_sample(unreferenced, cap - len(kept_old)))
+
+    kept_sorted = sorted(kept_old)[:cap]
+    old_to_new = {old: new for new, old in enumerate(kept_sorted)}
+    props["spots"] = [spots[i] for i in kept_sorted]
+
+    rebuilt: list[dict] = []
+    for section in valid:
+        mapped = [old_to_new[i] for i in section["spotIndices"] if i in old_to_new]
+        if mapped:
+            rebuilt.append({**section, "spotIndices": mapped})
+    dropped = len(props["sections"]) - len(rebuilt)
+    if dropped:
+        logger.info("Assembly: %d spot section(s) dropped by cap", dropped)
+    props["sections"] = rebuilt
+
+
 def _post_process_tabs(tabs: list[dict], video_duration: float | None = None) -> None:
     """Apply post-processing rules to assembled tabs in-place."""
     for i, tab in enumerate(tabs):
@@ -540,8 +906,6 @@ def _post_process_tabs(tabs: list[dict], video_duration: float | None = None) ->
         props = tab.get("props", {})
         emoji = tab.get("emoji", "")
 
-        # Enforce per-component item caps before any count-derived labels
-        # are computed, so e.g. "29 Comparisons" gets relabeled to "10".
         component = tab.get("component", "")
         if isinstance(props, dict) and component:
             _cap_tab_items(component, props, video_duration)
@@ -572,15 +936,6 @@ def _post_process_tabs(tabs: list[dict], video_duration: float | None = None) ->
                                             else f"Part {m.group(1)}"
                                         )
 
-        if component not in _NO_COUNT_COMPONENTS and isinstance(props, dict):
-            if not re.match(r"^\d+\s", label):
-                count_key = _COUNT_KEYS.get(component)
-                if count_key and count_key in props:
-                    data_list = props[count_key]
-                    if isinstance(data_list, list) and len(data_list) > 0:
-                        count = len(data_list)
-                        tab["label"] = f"{count} {label}"
-
 
 # ─────────────────────────────────────────────────────
 # Empty Data Detection + Cross-Domain Fallback
@@ -602,6 +957,8 @@ _FIELD_EQUIVALENTS: dict[str, list[str]] = {
     "vocabulary": ["concepts", "phrases"],
     "drills": ["steps", "exercises"],
     "keyFacts": ["keyPoints", "concepts", "takeaways"],
+    "hotels": ["accommodations", "spots", "itinerary"],
+    "specs": ["keyFacts", "keyPoints", "items"],
     "experiments": ["steps"],
     "rules": ["concepts", "keyPoints", "tips"],
 }
@@ -662,6 +1019,11 @@ def _cross_domain_fallback(
     return None
 
 
+# Components whose assemblers normalize arbitrary dict/str lists into key/value
+# items — safe targets for the generic longest-list fallback below.
+_GENERIC_LIST_FALLBACK_COMPONENTS = frozenset({"info_grid", "checklist"})
+
+
 def _in_domain_sibling_fallback(
     data_source: str,
     component: str,
@@ -710,6 +1072,37 @@ def _in_domain_sibling_fallback(
                 len(candidate) if isinstance(candidate, (list, dict)) else 1,
             )
             return candidate
+
+    # Generic last resort, gated to key/value-style components whose assembler
+    # normalizes arbitrary list shapes (worst case it returns None and the tab
+    # drops exactly as it would have): use the longest populated list field in
+    # the planned domain. Positional components (spot_explorer etc.) are
+    # deliberately excluded — a random list would corrupt their semantics.
+    if component in _GENERIC_LIST_FALLBACK_COMPONENTS and isinstance(domain_data, dict):
+        best_field: str | None = None
+        best_value: list | None = None
+        for field_name, value in domain_data.items():
+            if not isinstance(value, list) or is_empty_data(value):
+                continue
+            if not all(isinstance(v, (dict, str)) for v in value):
+                continue
+            # Timeline-shaped lists (highlights, moments, chapters — items that
+            # carry a timestamp) are a jump index, not reference facts; keyed
+            # off "step"/"claim"/"topic" they would masquerade as a grid.
+            if any(isinstance(v, dict) and _item_timestamp(v) is not None for v in value):
+                continue
+            if best_value is None or len(value) > len(best_value):
+                best_field = field_name
+                best_value = value
+        if best_value is not None:
+            logger.info(
+                "Generic in-domain fallback: %s (empty) → %s.%s (%d items)",
+                data_source,
+                domain,
+                best_field,
+                len(best_value),
+            )
+            return best_value
 
     return None
 
@@ -933,8 +1326,8 @@ def assemble_response(
                 desc = find_description_for_frame(f, frame_descriptions)
                 merged = dict(f)
                 if desc:
-                    merged.setdefault("caption", desc.get("caption"))
-                    merged.setdefault("ocr", desc.get("ocr"))
+                    merged.setdefault("caption", desc.get("content"))
+                    merged.setdefault("ocr", desc.get("text_visible"))
                     merged.setdefault("sceneType", desc.get("scene_type"))
                 enriched_source.append(merged)
             source = enriched_source
@@ -964,6 +1357,10 @@ def assemble_response(
     raw_tabs = triage.get("tabs", [])
 
     assembled_tabs: list[dict] = []
+    # Response-wide reuse ledger: s3 key -> timestamp of first attachment.
+    frame_used: dict[str, float] = {}
+    # Honest drop accounting: every planned tab that dies records why.
+    dropped_tabs: list[dict] = []
 
     for raw_tab in raw_tabs:
         if not isinstance(raw_tab, dict):
@@ -1056,6 +1453,8 @@ def assemble_response(
             "_video_meta": video_meta,
         }
 
+        drop_reason: str | None = None
+        drop_detail: str | None = None
         try:
             props = assembler(tab_with_hints, data, extraction, enrichment)
         except Exception as e:
@@ -1068,6 +1467,8 @@ def assemble_response(
                 e,
             )
             props = None
+            drop_reason = "assembler_raised"
+            drop_detail = f"{type(e).__name__}: {e}"
 
         # Post-extraction promotion (the planner couldn't see the item counts /
         # connection graph that gate the richer components) then density caps.
@@ -1089,8 +1490,25 @@ def assemble_response(
                 component,
             )
             props = None
+            drop_reason = "validation_empty_list"
+
+        # Degrade, never drop: a rich assembler failing on NON-EMPTY data
+        # (shape mismatch, min-item gate, exception) walks the demote ladder
+        # to a simpler component instead of losing the tab. Runs before frame
+        # injection so degraded props get thumbnails like any other tab.
+        # Policy drops (domain_forbidden/max_cap) are handled later and are
+        # never demoted.
+        degraded_from: str | None = None
+        if props is None and not is_empty_data(data):
+            demoted = demote_component(component, tab_with_hints, data, extraction, enrichment)
+            if demoted is not None:
+                degraded_from = component
+                component, props = demoted
+                drop_reason = None
+                drop_detail = None
 
         if props is not None and frames:
+            tab_used: set[str] = set()
             for key in (
                 "items",
                 "spots",
@@ -1106,29 +1524,43 @@ def assemble_response(
                         frames,
                         all_frames=all_frames,
                         frame_descriptions=frame_descriptions,
+                        used=frame_used,
+                        tab_used=tab_used,
                     )
 
         if props is None:
-            if data_resolved or data is not None:
-                data_summary = (
-                    (
-                        f"list[{len(data)}]"
-                        if isinstance(data, list)
-                        else f"dict(keys={list(data.keys())})"
-                        if isinstance(data, dict)
-                        else repr(type(data).__name__)
+            data_summary = (
+                (
+                    f"list[{len(data)}]"
+                    if isinstance(data, list)
+                    else f"dict(keys={list(data.keys())})"
+                    if isinstance(data, dict)
+                    else repr(type(data).__name__)
+                )
+                if data is not None
+                else "None"
+            )
+            if drop_reason is None:
+                drop_reason = "assembler_returned_none"
+                drop_detail = f"data was {data_summary}"
+                if data_resolved or data is not None:
+                    logger.warning(
+                        "TAB DROPPED: id=%r, component=%r, dataSource=%r — "
+                        "assembler returned None (data was %s)",
+                        tab_id,
+                        component,
+                        data_source,
+                        data_summary,
                     )
-                    if data is not None
-                    else "None"
-                )
-                logger.warning(
-                    "TAB DROPPED: id=%r, component=%r, dataSource=%r — "
-                    "assembler returned None (data was %s)",
-                    tab_id,
-                    component,
-                    data_source,
-                    data_summary,
-                )
+            dropped_tabs.append(
+                {
+                    "id": tab_id,
+                    "component": component,
+                    "dataSource": data_source,
+                    "reason": drop_reason,
+                    **({"detail": drop_detail} if drop_detail else {}),
+                }
+            )
             continue
 
         assembled_tabs.append(
@@ -1140,8 +1572,19 @@ def assemble_response(
                 "props": props,
                 "goal": raw_tab.get("goal", ""),
                 "crossTabLinks": [],
+                **({"degradedFrom": degraded_from} if degraded_from else {}),
             }
         )
+
+    # Hallucinated timestamps (beyond the video's end) can never seek or
+    # match a frame — drop them before the backfill and post-assembly
+    # extraction passes spend effort on them.
+    if _drop_impossible_timestamps(assembled_tabs, (video_meta or {}).get("duration")):
+        _drop_emptied_moment_tabs(assembled_tabs, dropped_tabs)
+
+    # Relaxed second-pass thumbnail fill for the moment grid — runs after the
+    # strict per-tab injection so exclusivity had first pick.
+    _backfill_moment_thumbnails(assembled_tabs, frames or [], all_frames, frame_descriptions)
 
     # Guarantee overview is present and first — must run before cross-tab link
     # resolution so the overview participates in link rules (overview → X).
@@ -1164,6 +1607,8 @@ def assemble_response(
         enrichment,
         synthesis,
         video_meta,
+        dropped_sink=dropped_tabs,
+        content_format=triage.get("contentFormat"),
     )
 
     # Resolve cross-tab links. ``outboundLinks`` on each source tab carries
@@ -1245,7 +1690,36 @@ def assemble_response(
         has_good_captions = non_generic_count >= len(filmstrip_frames) * 0.7
         _NO_GALLERY_DOMAINS = {"narrative", "music"}
         _domain_blocked = primary_tag in _NO_GALLERY_DOMAINS
-        if filmstrip_frames and has_enough_frames and has_good_captions and not _domain_blocked:
+        # A planner-designed filmstrip tab already shows these frames — a
+        # second auto-appended gallery is pure duplication.
+        _has_filmstrip_tab = any(t.get("component") == "video_filmstrip" for t in assembled_tabs)
+        # A moment_track with a rich thumbnail gallery IS the visual-moments
+        # surface now (grid view) — an extra filmstrip duplicates it. Keep the
+        # filmstrip only when it shows substantially unique material (moment
+        # thumbs cover < 50% of the filmstrip-eligible frames).
+        _moment_thumb_count = max(
+            (
+                sum(
+                    1
+                    for it in t.get("props", {}).get("items", [])
+                    if isinstance(it, dict) and it.get("thumbnailUrl")
+                )
+                for t in assembled_tabs
+                if t.get("component") == "moment_track"
+            ),
+            default=0,
+        )
+        _rich_moment_gallery = _moment_thumb_count >= 8 and _moment_thumb_count >= 0.5 * max(
+            len(filmstrip_frames), 1
+        )
+        if (
+            filmstrip_frames
+            and has_enough_frames
+            and has_good_captions
+            and not _domain_blocked
+            and not _has_filmstrip_tab
+            and not _rich_moment_gallery
+        ):
             assembled_tabs.append(
                 {
                     "id": "frames-gallery",
@@ -1265,6 +1739,16 @@ def assemble_response(
     # are finalized so item counts reflect the user-visible list. The overview
     # tab is its own hero — never decorate it.
     attach_frames = extraction.get("frames") if isinstance(extraction, dict) else None
+    # frame_strip/quick_quiz/tip_callout are built from response-global data —
+    # budget ONE of each per response so tabs don't repeat identical payloads.
+    # A filmstrip tab (planned or auto-appended) already shows the gallery, so
+    # it pre-consumes the frame_strip budget.
+    _once_per_response = frozenset({"frame_strip", "quick_quiz", "tip_callout"})
+    used_kinds: set[str] = (
+        {"frame_strip"}
+        if any(t.get("component") == "video_filmstrip" for t in assembled_tabs)
+        else set()
+    )
     for tab in assembled_tabs:
         if tab.get("component") == "overview":
             continue
@@ -1274,9 +1758,13 @@ def assemble_response(
             enrichment,
             attach_frames,
             primary_tag,
+            excluded_kinds=used_kinds,
         )
         if secondaries:
             tab["attachments"] = secondaries
+            used_kinds |= {
+                a["component"] for a in secondaries if a.get("component") in _once_per_response
+            }
 
     # Minimum 3-tab guarantee: add fallback tabs if needed
     if len(assembled_tabs) < 3:
@@ -1328,4 +1816,4 @@ def assemble_response(
             "[assembly] Assembled %d/%d tabs (none dropped)", len(assembled_tabs), len(planned_ids)
         )
 
-    return {"meta": meta, "tabs": assembled_tabs}
+    return {"meta": meta, "tabs": assembled_tabs, "dropped": dropped_tabs}
