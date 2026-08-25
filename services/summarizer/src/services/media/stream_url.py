@@ -26,19 +26,41 @@ _STREAM_URL_CACHE_MAX = 50
 _STREAM_URL_TTL = 300  # 5 minutes
 _stream_url_cache: dict[str, tuple[str, float]] = {}  # {youtube_id: (url, timestamp)}
 
-_SSRF_BLOCKED_HOSTS = frozenset({
-    "localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]",
-    "::ffff:127.0.0.1", "::ffff:169.254.169.254",  # IPv6-mapped loopback/metadata
-    "169.254.169.254",  # AWS EC2 metadata endpoint
-    "metadata.google.internal",  # GCP metadata endpoint
-})
+_SSRF_BLOCKED_HOSTS = frozenset(
+    {
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0",
+        "::1",
+        "[::1]",
+        "::ffff:127.0.0.1",
+        "::ffff:169.254.169.254",  # IPv6-mapped loopback/metadata
+        "169.254.169.254",  # AWS EC2 metadata endpoint
+        "metadata.google.internal",  # GCP metadata endpoint
+    }
+)
 
 _SSRF_BLOCKED_PREFIXES = (
-    "10.", "172.16.", "172.17.", "172.18.", "172.19.",
-    "172.20.", "172.21.", "172.22.", "172.23.", "172.24.",
-    "172.25.", "172.26.", "172.27.", "172.28.", "172.29.",
-    "172.30.", "172.31.", "192.168.",
-    "0177.", "0x7f",  # Octal/hex loopback notation
+    "10.",
+    "172.16.",
+    "172.17.",
+    "172.18.",
+    "172.19.",
+    "172.20.",
+    "172.21.",
+    "172.22.",
+    "172.23.",
+    "172.24.",
+    "172.25.",
+    "172.26.",
+    "172.27.",
+    "172.28.",
+    "172.29.",
+    "172.30.",
+    "172.31.",
+    "192.168.",
+    "0177.",
+    "0x7f",  # Octal/hex loopback notation
 )
 
 
@@ -99,12 +121,16 @@ async def get_video_stream_url(youtube_id: str) -> str | None:
 
     async def _try_format(fmt: str) -> str | None:
         try:
+            from src.services.media.download_utils import ytdlp_client_cli_args
+
             proc = await asyncio.create_subprocess_exec(
                 "yt-dlp",
                 "--get-url",
-                "--format", fmt,
+                "--format",
+                fmt,
                 "--no-playlist",
                 "--no-warnings",
+                *ytdlp_client_cli_args(),
                 url,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,

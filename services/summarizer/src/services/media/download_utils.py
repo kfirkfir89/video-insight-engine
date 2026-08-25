@@ -11,12 +11,41 @@ from typing import Any
 
 import yt_dlp
 
-from src.models.schemas import ErrorCode
+from src.config import settings
 from src.exceptions import TranscriptError
+from src.models.schemas import ErrorCode
 
-__all__ = ["classify_download_error", "download_youtube_audio", "MAX_DOWNLOAD_ATTEMPTS"]
+__all__ = [
+    "classify_download_error",
+    "download_youtube_audio",
+    "ytdlp_client_api_opts",
+    "ytdlp_client_cli_args",
+    "MAX_DOWNLOAD_ATTEMPTS",
+]
 
 logger = logging.getLogger(__name__)
+
+
+def ytdlp_client_cli_args() -> list[str]:
+    """--extractor-args flags for subprocess yt-dlp DOWNLOAD invocations.
+
+    YouTube 403s some player clients' download URLs per environment
+    (2026-08: web blocked here, android fine) — YTDLP_PLAYER_CLIENTS picks
+    the client order without a code change when YouTube shifts again.
+    """
+    clients = settings.YTDLP_PLAYER_CLIENTS.strip()
+    if not clients:
+        return []
+    return ["--extractor-args", f"youtube:player_client={clients}"]
+
+
+def ytdlp_client_api_opts() -> dict[str, Any]:
+    """Python-API form of ytdlp_client_cli_args for YoutubeDL opts dicts."""
+    clients = [c.strip() for c in settings.YTDLP_PLAYER_CLIENTS.split(",") if c.strip()]
+    if not clients:
+        return {}
+    return {"extractor_args": {"youtube": {"player_client": clients}}}
+
 
 _UNAVAILABLE_PATTERNS = (
     "private video",
@@ -64,6 +93,10 @@ def download_youtube_audio(
         TranscriptError: If download fails after all retries
     """
     url = f"https://www.youtube.com/watch?v={video_id}"
+    # Route the download through the configured player clients unless the
+    # caller already chose its own.
+    if "extractor_args" not in ydl_opts:
+        ydl_opts = {**ydl_opts, **ytdlp_client_api_opts()}
     last_error: Exception | None = None
 
     for attempt in range(1, max_attempts + 1):
@@ -82,9 +115,12 @@ def download_youtube_audio(
             if attempt < max_attempts:
                 logger.warning(
                     "Download attempt %s/%s failed for %s: %s",
-                    attempt, max_attempts, video_id, e,
+                    attempt,
+                    max_attempts,
+                    video_id,
+                    e,
                 )
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
 
     if last_error is not None:
         error_msg = str(last_error)

@@ -1,10 +1,16 @@
-"""Scene-based keyframe extraction with smart frame selection.
+"""Scene-based keyframe extraction with smart frame selection (two-pass).
 
-Downloads lowest-quality video via yt-dlp to a temp file, runs FFmpeg
-scene detection, scores frames locally, selects ~25 best with even time
-distribution, and uploads only selected frames to S3.
+Pass 1 (detection): downloads lowest-quality video via yt-dlp to a temp
+file — 144p is plenty for FFmpeg scene detection and local scoring, and
+keeps the download small/fast. Selects ~25 best frames with even time
+distribution.
 
-Key principle: score locally, upload selectively.
+Pass 2 (refinement): re-extracts only the SELECTED frames at 720p by
+seeking into a direct stream URL (hires_refiner), so the JPEGs uploaded
+to S3 and sent to the vision LLM are sharp. Falls back to the low-res
+detection frames per-frame on any failure.
+
+Key principle: detect cheap, refine selectively, upload selectively.
 """
 
 import asyncio
@@ -12,9 +18,12 @@ import logging
 import re
 import shutil
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Awaitable, Callable
 
 from src.config import settings
+from src.services.media.image_dedup import compute_ahash, is_duplicate
 from src.services.media.s3_client import s3_client
 from src.utils.constants import YOUTUBE_ID_RE
 
@@ -27,54 +36,160 @@ _extraction_locks: dict[str, asyncio.Lock] = {}
 # S3 handles thousands of concurrent PUTs; no need to chunk.
 UPLOAD_BATCH_SIZE = 50
 
+# Sidecar manifest preserving per-frame timestamps across S3 cache hits.
+# Frames reused from S3 without timestamps are useless to the assembler
+# (frame->item matching is timestamp-based), so a scenes dir without a
+# valid manifest is treated as a cache miss and re-extracted.
+_MANIFEST_FILENAME = "manifest.json"
+# v2: adds hiresCount. The bump deliberately invalidates every v1 manifest —
+# the 2026-08 CDN-403 era uploaded low-res detection frames under v1, and a
+# cache hit would serve them forever (bypassCache does not bypass this cache).
+_MANIFEST_VERSION = 2
+_MANIFEST_MIN_FRAMES = 10
 
-async def _check_existing_frames(video_id: str) -> list[dict] | None:
-    """Check if frames already exist in S3 for this video.
+# Imported from the writer so the dedup revert can never drift from the
+# filename the refiner actually produces.
+from src.services.media.hires_refiner import HIRES_SUFFIX as _HIRES_SUFFIX
 
-    Returns frame dicts built from existing S3 objects if >10 exist,
-    or None if extraction is needed.
+# Below this many scene-detect hits, supplement with interval sampling —
+# static-camera videos (unboxings on a table) barely trigger scene cuts.
+_MIN_DETECTED_FRAMES = 12
+# Interval-sampled frames target: roughly one every 30-60s, capped.
+_INTERVAL_SAMPLE_COUNT = 30
+
+
+def _manifest_key(video_id: str) -> str:
+    return f"videos/{video_id}/{settings.SCENE_S3_PREFIX}/{_MANIFEST_FILENAME}"
+
+
+def _validate_manifest(manifest: dict | None) -> list[dict] | None:
+    """Return the manifest's frame entries if usable, else None."""
+    if not isinstance(manifest, dict) or manifest.get("version") != _MANIFEST_VERSION:
+        return None
+    # A run where zero frames were hi-res upgraded is a degraded artifact
+    # (CDN 403s) — treat as a miss so the next run re-extracts; the local-
+    # download fallback makes that retry succeed rather than loop.
+    if settings.SCENE_HIRES_ENABLED and manifest.get("hiresCount") == 0:
+        return None
+    entries = manifest.get("frames")
+    if not isinstance(entries, list) or len(entries) < _MANIFEST_MIN_FRAMES:
+        return None
+    for entry in entries:
+        if not isinstance(entry, dict):
+            return None
+        if not isinstance(entry.get("s3Key"), str) or not entry["s3Key"]:
+            return None
+        if not isinstance(entry.get("timestamp"), (int, float)):
+            return None
+    # An all-zero manifest is as useless as no manifest (corrupt writer)
+    if not any(entry["timestamp"] > 0 for entry in entries):
+        return None
+    return entries
+
+
+async def _check_existing_frames(video_id: str) -> dict | None:
+    """Reuse S3-cached frames when a valid manifest preserves timestamps.
+
+    Returns the full 3-tier frames dict on a cache hit, or None when
+    extraction is needed (no/invalid manifest — deterministic scene_%04d
+    keys make re-extraction overwrite safely).
     """
     try:
-        session = s3_client._ensure_session()
-        config = s3_client._get_client_config()
-        prefix = f"videos/{video_id}/scenes/"
-
-        async with session.client("s3", **config) as s3:
-            response = await s3.list_objects_v2(
-                Bucket=s3_client._bucket,
-                Prefix=prefix,
-                MaxKeys=50,
-            )
-
-        objects = response.get("Contents", [])
-        if len(objects) < 10:
+        manifest = await s3_client.get_json(_manifest_key(video_id))
+        if not isinstance(manifest, dict):
+            return None
+        entries = _validate_manifest(manifest)
+        if entries is None:
             return None
 
-        # Build frame dicts from existing S3 objects
         frames: list[dict] = []
-        for i, obj in enumerate(sorted(objects, key=lambda o: o["Key"])):
-            key = obj["Key"]
-            if not key.endswith(".jpg"):
-                continue
-            url = s3_client.generate_presigned_url(key)
-            frames.append({
-                "index": i,
-                "filename": key.split("/")[-1],
-                "s3_key": key,
-                "s3_url": url,
-                "timestamp": 0.0,  # Unknown for existing frames
-            })
-
-        if frames:
-            logger.info(
-                "Frames already exist in S3 for %s (%d frames), skipping extraction",
-                video_id, len(frames),
+        for entry in sorted(entries, key=lambda e: e.get("index", 0)):
+            key = entry["s3Key"]
+            frames.append(
+                {
+                    "index": entry.get("index", len(frames)),
+                    "filename": entry.get("filename") or key.split("/")[-1],
+                    "s3_key": key,
+                    "s3_url": s3_client.generate_presigned_url(key),
+                    "timestamp": float(entry["timestamp"]),
+                }
             )
-        return frames if frames else None
+
+        gallery_indices = set(manifest.get("galleryIndices") or [])
+        gallery = [f for f in frames if f["index"] in gallery_indices] or frames[:12]
+
+        logger.info(
+            "Frames already exist in S3 for %s (%d frames, manifest hit), skipping extraction",
+            video_id,
+            len(frames),
+        )
+        vision = manifest.get("visionDescriptions")
+        return {
+            "all_frames": frames,
+            "selected_frames": frames,
+            "gallery_frames": gallery,
+            # Cached frames have no local path, so vision can't re-run on a
+            # hit — the descriptions persisted after the fresh run stand in.
+            "vision_descriptions": vision if isinstance(vision, list) else [],
+        }
 
     except Exception as e:
-        logger.debug("S3 frame check failed (will extract): %s", e)
+        logger.debug("S3 frame manifest check failed (will extract): %s", e)
         return None
+
+
+async def persist_vision_descriptions(video_id: str, descriptions: list[dict]) -> None:
+    """Attach the vision pass's descriptions to the frame manifest. Best-effort.
+
+    Cache hits return frames without local paths, so vision cannot run again;
+    without this, every reprocess that hits the manifest silently loses the
+    visual-context annotations, extraction hints, and assembly captions a
+    fresh run had. Read-modify-write keeps the manifest the single artifact
+    (no sidecar that could outlive a re-extraction and mismatch its frames).
+    """
+    if not descriptions:
+        return
+    key = _manifest_key(video_id)
+    try:
+        manifest = await s3_client.get_json(key)
+        if not isinstance(manifest, dict):
+            return
+        manifest["visionDescriptions"] = descriptions
+        await s3_client.put_json(key, manifest)
+    except Exception as e:
+        logger.warning("Failed to persist vision descriptions for %s: %s", video_id, e)
+
+
+async def _write_manifest(
+    video_id: str,
+    uploaded: list[dict],
+    gallery_frames: list[dict],
+    hires_count: int = 0,
+) -> None:
+    """Persist per-frame timestamps so future cache hits stay usable. Best-effort."""
+    manifest = {
+        "version": _MANIFEST_VERSION,
+        "videoId": video_id,
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+        # 0 = degraded run (every hi-res seek failed) — _validate_manifest
+        # treats that as a cache miss so quality self-heals on the next run.
+        "hiresCount": hires_count,
+        "frames": [
+            {
+                "index": f["index"],
+                "filename": f.get("filename", ""),
+                "s3Key": f["s3_key"],
+                "timestamp": f.get("timestamp", 0.0),
+                "totalScore": f.get("total_score"),
+            }
+            for f in uploaded
+        ],
+        "galleryIndices": [f["index"] for f in gallery_frames if f.get("s3_key")],
+    }
+    try:
+        await s3_client.put_json(_manifest_key(video_id), manifest)
+    except Exception as e:
+        logger.warning("Failed to write frame manifest for %s: %s", video_id, e)
 
 
 async def _upload_frames_batch(frames: list[dict]) -> list[dict]:
@@ -86,7 +201,7 @@ async def _upload_frames_batch(frames: list[dict]) -> list[dict]:
     results: list[dict] = []
 
     for batch_start in range(0, len(frames), UPLOAD_BATCH_SIZE):
-        batch = frames[batch_start:batch_start + UPLOAD_BATCH_SIZE]
+        batch = frames[batch_start : batch_start + UPLOAD_BATCH_SIZE]
 
         async def _upload_one(frame: dict) -> dict | None:
             path = frame.get("path")
@@ -114,11 +229,164 @@ async def _upload_frames_batch(frames: list[dict]) -> list[dict]:
     return results
 
 
+def _sample_by_time(frames: list[dict], count: int) -> list[dict]:
+    """Pick up to `count` frames spread evenly across the timestamp span.
+
+    Fallback selector for when scoring produced no usable ranking — divides
+    the time range into `count` slots and takes the first frame in each, so
+    coverage spans the whole video instead of clustering at the start.
+    """
+    if len(frames) <= count:
+        return list(frames)
+
+    ordered = sorted(frames, key=lambda f: f.get("timestamp", 0))
+    span_start = ordered[0].get("timestamp", 0)
+    span_end = ordered[-1].get("timestamp", 0)
+    if span_end <= span_start:
+        step = max(1, len(ordered) // count)
+        return ordered[::step][:count]
+
+    slot_width = (span_end - span_start) / count
+    sampled: list[dict] = []
+    cursor = 0
+    for slot_idx in range(count):
+        slot_end = span_start + (slot_idx + 1) * slot_width
+        while cursor < len(ordered) and ordered[cursor].get("timestamp", 0) <= slot_end:
+            if len(sampled) <= slot_idx:
+                sampled.append(ordered[cursor])
+            cursor += 1
+    return sampled
+
+
+async def _sample_interval_frames(
+    temp_video: Path,
+    frames_dir: Path,
+    duration_seconds: int,
+    temp_dir: str,
+    index_offset: int,
+) -> list[dict]:
+    """Extract frames at fixed intervals — the static-camera supplement.
+
+    Returns frame dicts shaped like the scene-detect ones (index continues
+    after the detected set so S3 keys stay unique). Best-effort: any failure
+    returns [] and the caller proceeds with whatever scene detection found.
+    """
+    step = max(15, duration_seconds // _INTERVAL_SAMPLE_COUNT)
+    pattern = str(frames_dir / "interval_%04d.jpg")
+    cmd = [
+        "ffmpeg",
+        "-i",
+        str(temp_video),
+        "-vf",
+        f"fps=1/{step},scale={settings.SCENE_DETECT_SCALE_WIDTH}:-2",
+        "-q:v",
+        str(settings.SCENE_JPEG_QUALITY),
+        pattern,
+        "-loglevel",
+        "error",
+        "-y",
+    ]
+    proc = None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.wait_for(proc.communicate(), timeout=120)
+    except (asyncio.TimeoutError, FileNotFoundError, OSError) as e:
+        logger.warning("Interval sampling failed (non-critical): %s", e)
+        if proc:
+            try:
+                proc.kill()
+                await proc.wait()
+            except ProcessLookupError:
+                pass
+        return []
+
+    frames: list[dict] = []
+    for i, path in enumerate(sorted(frames_dir.glob("interval_*.jpg"))[:_INTERVAL_SAMPLE_COUNT]):
+        frames.append(
+            {
+                "index": index_offset + i,
+                "filename": path.name,
+                "path": str(path),
+                # fps=1/step (round=near) emits the input frame nearest each
+                # sample instant i*step — NOT step/2 into the window. Offset
+                # timestamps here would make the hires refiner seek different
+                # content than what was scored, and skew vision labels +
+                # frame→item matching by up to step/2 (30s at the 60s cap).
+                "timestamp": float(i * step),
+                "temp_dir": temp_dir,
+            }
+        )
+    return frames
+
+
+def _dedupe_refined_frames(frames: list[dict]) -> list[dict]:
+    """Drop perceptually-duplicate frames after the hires second pass.
+
+    The refiner seeks a remote stream by int(timestamp), so two picks under
+    a second apart (or snapped to the same keyframe) can produce identical
+    720p images even though their low-res detection frames were distinct.
+    On collision, a refined frame is reverted to its original low-res JPEG
+    (which passed uniqueness scoring); if still duplicate — or the original
+    is gone — the frame is dropped. Unreadable frames are kept (fail-open).
+    """
+    kept: list[dict] = []
+    kept_hashes: list[int] = []
+    reverted = 0
+    dropped = 0
+
+    for frame in sorted(frames, key=lambda f: f.get("timestamp", 0.0)):
+        path = frame.get("path")
+        if not path:
+            kept.append(frame)
+            continue
+        try:
+            frame_hash = compute_ahash(Path(path).read_bytes())
+        except Exception:
+            kept.append(frame)
+            continue
+
+        if any(is_duplicate(frame_hash, h) for h in kept_hashes):
+            original = path[: -len(_HIRES_SUFFIX)] if path.endswith(_HIRES_SUFFIX) else None
+            if original:
+                try:
+                    frame_hash = compute_ahash(Path(original).read_bytes())
+                except Exception:
+                    dropped += 1
+                    continue
+                if any(is_duplicate(frame_hash, h) for h in kept_hashes):
+                    dropped += 1
+                    continue
+                frame["path"] = original
+                reverted += 1
+            else:
+                dropped += 1
+                continue
+
+        kept.append(frame)
+        kept_hashes.append(frame_hash)
+
+    if reverted or dropped:
+        logger.info(
+            "Post-hires dedup: %d -> %d frames (%d reverted, %d dropped)",
+            len(frames),
+            len(kept),
+            reverted,
+            dropped,
+        )
+    return kept
+
+
 async def extract_scene_keyframes(
     video_id: str,
     scene_threshold: float | None = None,
     max_frames: int | None = None,
     duration_seconds: int | None = None,
+    overselect_count: int | None = None,
+    reselect_hook: Callable[[list[dict]], Awaitable[list[dict]]] | None = None,
 ) -> dict:
     """Extract keyframes at scene change boundaries with smart selection.
 
@@ -152,13 +420,16 @@ async def extract_scene_keyframes(
             # Check S3 first — skip extraction if frames already exist
             existing = await _check_existing_frames(video_id)
             if existing:
-                return {
-                    "all_frames": existing,
-                    "selected_frames": existing,
-                    "gallery_frames": existing[:12],
-                }
+                return existing
 
-            return await _do_extraction(video_id, scene_threshold, max_frames, duration_seconds)
+            return await _do_extraction(
+                video_id,
+                scene_threshold,
+                max_frames,
+                duration_seconds,
+                overselect_count=overselect_count,
+                reselect_hook=reselect_hook,
+            )
         finally:
             # Prune lock after use to prevent unbounded dict growth
             _extraction_locks.pop(video_id, None)
@@ -169,6 +440,8 @@ async def _do_extraction(
     scene_threshold: float | None,
     max_frames: int | None,
     duration_seconds: int | None,
+    overselect_count: int | None = None,
+    reselect_hook: Callable[[list[dict]], Awaitable[list[dict]]] | None = None,
 ) -> dict:
     """Core extraction logic — FFmpeg + scoring + selective upload."""
     empty_result: dict = {"all_frames": [], "selected_frames": [], "gallery_frames": []}
@@ -188,12 +461,17 @@ async def _do_extraction(
         # Step 1: Download lowest quality video via yt-dlp
         dl_proc = None
         try:
+            from src.services.media.download_utils import ytdlp_client_cli_args
+
             dl_proc = await asyncio.create_subprocess_exec(
                 "yt-dlp",
-                "-f", "worstvideo[ext=mp4]/worst[ext=mp4]/worst",
+                "-f",
+                "worstvideo[ext=mp4]/worst[ext=mp4]/worst",
                 "--no-playlist",
                 "--no-warnings",
-                "-o", str(temp_video),
+                *ytdlp_client_cli_args(),
+                "-o",
+                str(temp_video),
                 youtube_url,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -216,7 +494,9 @@ async def _do_extraction(
             stderr_text = dl_stderr.decode("utf-8", errors="replace")[:300] if dl_stderr else ""
             logger.warning(
                 "yt-dlp download failed for %s (rc=%d): %s",
-                video_id, dl_proc.returncode if dl_proc else -1, stderr_text,
+                video_id,
+                dl_proc.returncode if dl_proc else -1,
+                stderr_text,
             )
             return empty_result
 
@@ -227,12 +507,18 @@ async def _do_extraction(
         output_pattern = str(frames_dir / "scene_%04d.jpg")
         ffmpeg_cmd = [
             "ffmpeg",
-            "-i", str(temp_video),
-            "-vf", f"select='gt(scene,{threshold:.4f})',showinfo,scale=1024:-1",
-            "-vsync", "vfr",
-            "-q:v", "5",
+            "-i",
+            str(temp_video),
+            "-vf",
+            # -2 (not -1) keeps the auto height even, which mjpeg requires
+            f"select='gt(scene,{threshold:.4f})',showinfo,scale={settings.SCENE_DETECT_SCALE_WIDTH}:-2",
+            "-vsync",
+            "vfr",
+            "-q:v",
+            str(settings.SCENE_JPEG_QUALITY),
             output_pattern,
-            "-loglevel", "info",
+            "-loglevel",
+            "info",
             "-y",
         ]
 
@@ -248,7 +534,9 @@ async def _do_extraction(
             _, stderr_bytes = await asyncio.wait_for(ff_proc.communicate(), timeout=ffmpeg_timeout)
         except asyncio.TimeoutError:
             ffmpeg_timeout = min(300, max(60, int((duration_seconds or 300) * 0.3) + 30))
-            logger.warning("FFmpeg scene detection timed out for %s (%ds)", video_id, ffmpeg_timeout)
+            logger.warning(
+                "FFmpeg scene detection timed out for %s (%ds)", video_id, ffmpeg_timeout
+            )
             if ff_proc:
                 try:
                     ff_proc.kill()
@@ -278,18 +566,41 @@ async def _do_extraction(
 
         all_frames: list[dict] = []
         for i, path in enumerate(frame_paths):
-            all_frames.append({
-                "index": i,
-                "filename": path.name,
-                "path": str(path),
-                "timestamp": timestamps[i] if i < len(timestamps) else 0.0,
-                "temp_dir": temp_dir,
-            })
+            all_frames.append(
+                {
+                    "index": i,
+                    "filename": path.name,
+                    "path": str(path),
+                    "timestamp": timestamps[i] if i < len(timestamps) else 0.0,
+                    "temp_dir": temp_dir,
+                }
+            )
 
         logger.info(
             "FFmpeg detected %d scene frames for %s (%d timestamps parsed)",
-            len(all_frames), video_id, len(timestamps),
+            len(all_frames),
+            video_id,
+            len(timestamps),
         )
+
+        # Step 4b: static-camera fallback. Scene detection needs CUTS; a
+        # fixed-camera video (box openings on a table, lectures) can yield a
+        # handful of frames for 20+ minutes, starving every downstream
+        # consumer. Supplement with interval-sampled frames so selection has
+        # real coverage to choose from.
+        if len(all_frames) < _MIN_DETECTED_FRAMES and (duration_seconds or 0) > 120:
+            interval_frames = await _sample_interval_frames(
+                temp_video, frames_dir, duration_seconds or 300, temp_dir, len(all_frames)
+            )
+            if interval_frames:
+                logger.info(
+                    "Static-camera fallback for %s: +%d interval frames (had %d)",
+                    video_id,
+                    len(interval_frames),
+                    len(all_frames),
+                )
+                all_frames.extend(interval_frames)
+                all_frames.sort(key=lambda f: f.get("timestamp", 0.0))
 
         # Step 5: Score all frames locally (CPU only, ~2-3s)
         from src.services.media.frame_scorer import score_all_frames, select_frames
@@ -302,20 +613,72 @@ async def _do_extraction(
 
         # Step 6: Select ~25 best + classify ~12 for gallery
         selected_frames, gallery_frames = await asyncio.to_thread(
-            select_frames, scored_frames, duration_seconds,
+            select_frames,
+            scored_frames,
+            duration_seconds,
         )
 
         if not selected_frames:
-            # Fallback: take evenly spaced frames
-            step = max(1, len(scored_frames) // 25)
-            selected_frames = scored_frames[::step][:25]
-            gallery_frames = selected_frames[:12]
+            # Fallback (all scores zero / scorer degraded): sample by TIME so
+            # coverage spans the whole video, and spread the gallery across the
+            # selection. Index-stride + [:12] here previously biased both to
+            # the first half of long videos.
+            selected_frames = _sample_by_time(scored_frames, 25)
+            gallery_frames = _sample_by_time(selected_frames, 12)
 
-        # Step 7: Upload ONLY selected frames to S3 (batch parallel)
+        # Step 6b (HIGH visual tier): over-select candidates and let the
+        # injected hook (vision-informed, lives in phases/frames.py — this
+        # module stays LLM-free) drop presenter-dominated frames BEFORE the
+        # expensive hires refinement and upload. Hook failure or an
+        # over-aggressive cull falls back to the local-score selection.
+        if overselect_count and reselect_hook is not None:
+            keep_count = len(selected_frames) or 25
+            # Same zero-score exclusion the normal selection path applies —
+            # black/unreadable frames would otherwise be base64'd into the
+            # vision batch and could survive into hires refinement + upload.
+            usable = [f for f in scored_frames if f.get("total_score", 0) > 0] or scored_frames
+            candidates = _sample_by_time(usable, overselect_count)
+            try:
+                kept = await reselect_hook(candidates)
+            except Exception as e:
+                logger.warning("Frame reselect hook failed (using local selection): %s", e)
+                kept = None
+            if kept:
+                selected_frames = _sample_by_time(kept, keep_count)
+                gallery_frames = _sample_by_time(selected_frames, 12)
+                logger.info(
+                    "Vision reselect: %d candidates -> %d kept -> %d selected",
+                    len(candidates),
+                    len(kept),
+                    len(selected_frames),
+                )
+
+        # Step 7: Re-extract selected frames at 720p (in-place path swap;
+        # per-frame fallback to the low-res detection JPEG on failure)
+        from src.services.media.hires_refiner import refine_selected_frames
+
+        hires_count = await refine_selected_frames(video_id, selected_frames)
+
+        # Step 7b: Dedup AFTER refinement — CDN seeks by int(timestamp) can
+        # collapse distinct low-res picks into near-identical 720p frames.
+        selected_frames = await asyncio.to_thread(_dedupe_refined_frames, selected_frames)
+        selected_ids = {id(f) for f in selected_frames}
+        gallery_frames = [f for f in gallery_frames if id(f) in selected_ids]
+
+        # Step 8: Upload ONLY selected frames to S3 (batch parallel)
         for f in selected_frames:
-            f["s3_key"] = f"videos/{video_id}/scenes/scene_{f['index']:04d}.jpg"
+            f["s3_key"] = f"videos/{video_id}/{settings.SCENE_S3_PREFIX}/scene_{f['index']:04d}.jpg"
 
         uploaded = await _upload_frames_batch(selected_frames)
+
+        # Gallery membership requires a SUCCESSFUL upload — s3_key was stamped
+        # on every selected frame before the batch, so filtering on it alone
+        # would keep entries whose PUT failed (dead URLs in this run's gallery
+        # and dead galleryIndices in the manifest).
+        uploaded_ids = {id(f) for f in uploaded}
+        gallery_frames = [f for f in gallery_frames if id(f) in uploaded_ids]
+
+        await _write_manifest(video_id, uploaded, gallery_frames, hires_count=hires_count)
 
         # Log top 5 scored frames for debugging
         top_5 = sorted(scored_frames, key=lambda f: f.get("total_score", 0), reverse=True)[:5]
@@ -323,21 +686,28 @@ async def _do_extraction(
             logger.info(
                 "Top frame #%d: index=%d ts=%.1fs total=%.3f "
                 "(visual=%.3f face=%.3f text=%.3f unique=%.3f)",
-                rank, f.get("index", -1), f.get("timestamp", 0),
+                rank,
+                f.get("index", -1),
+                f.get("timestamp", 0),
                 f.get("total_score", 0),
-                f.get("visual_score", 0), f.get("face_score", 0),
-                f.get("text_score", 0), f.get("uniqueness_score", 0),
+                f.get("visual_score", 0),
+                f.get("face_score", 0),
+                f.get("text_score", 0),
+                f.get("uniqueness_score", 0),
             )
 
         logger.info(
             "Scene extraction for %s: %d frames scored, %d uploaded to S3, %d gallery",
-            video_id, len(scored_frames), len(uploaded), len(gallery_frames),
+            video_id,
+            len(scored_frames),
+            len(uploaded),
+            len(gallery_frames),
         )
 
         return {
             "all_frames": scored_frames,
             "selected_frames": uploaded,
-            "gallery_frames": [f for f in gallery_frames if f.get("s3_key")],
+            "gallery_frames": gallery_frames,
         }
 
     except Exception as e:

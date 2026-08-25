@@ -122,6 +122,12 @@ def configure_structlog(json_format: bool = False, service_name: str = "vie-summ
     logging.getLogger("google").setLevel(logging.WARNING)
     logging.getLogger("google.auth").setLevel(logging.WARNING)
     logging.getLogger("google.auth.transport").setLevel(logging.WARNING)
+    # HF model loading (SentenceTransformer): filelock logs every lock
+    # acquire/release at DEBUG — dozens of lines per model load.
+    logging.getLogger("filelock").setLevel(logging.WARNING)
+    logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+    logging.getLogger("transformers").setLevel(logging.WARNING)
+    logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
 
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
