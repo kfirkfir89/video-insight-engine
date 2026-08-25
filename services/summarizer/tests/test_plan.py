@@ -107,8 +107,14 @@ class TestVerdictNeverStandalone:
         assert "verdict" not in valid_components()
 
     def test_explicit_verdict_component_coerced_to_comparison(self):
-        tabs = [{"id": "verdict", "label": "Verdict", "component": "verdict",
-                 "dataSource": "review.verdict"}]
+        tabs = [
+            {
+                "id": "verdict",
+                "label": "Verdict",
+                "component": "verdict",
+                "dataSource": "review.verdict",
+            }
+        ]
         result = _validate_tabs(tabs)
         assert result[0]["component"] == "comparison"
 
@@ -116,3 +122,65 @@ class TestVerdictNeverStandalone:
         tabs = [{"id": "verdict", "label": "Verdict", "dataSource": "review.verdict"}]
         result = _validate_tabs(tabs)
         assert result[0]["component"] == "comparison"
+
+
+class TestEnforceDomainPolicy:
+    """Forbidden components are stripped at plan time — before extraction."""
+
+    def test_quiz_removed_for_gaming(self):
+        from src.services.pipeline.plan import _enforce_domain_policy
+
+        tabs = [
+            {"id": "pulls", "component": "tier_list"},
+            {"id": "quiz", "component": "quiz_arena"},
+        ]
+        kept = _enforce_domain_policy(tabs, "gaming", None)
+
+        assert [t["id"] for t in kept] == ["pulls"]
+
+    def test_playbook_forbidden_union_applies(self):
+        from src.services.pipeline.plan import _enforce_domain_policy
+
+        tabs = [
+            {"id": "pulls", "component": "tier_list"},
+            {"id": "code", "component": "code_playground"},
+        ]
+        kept = _enforce_domain_policy(tabs, "gaming", "unboxing")
+
+        # code_playground is forbidden by the gaming:unboxing playbook only
+        assert [t["id"] for t in kept] == ["pulls"]
+
+    def test_educational_domain_keeps_quiz(self):
+        from src.services.pipeline.plan import _enforce_domain_policy
+
+        tabs = [{"id": "quiz", "component": "quiz_arena"}]
+        kept = _enforce_domain_policy(tabs, "learning", None)
+
+        assert kept == tabs
+
+    def test_component_inferred_from_id_when_missing(self):
+        from src.services.pipeline.plan import _enforce_domain_policy
+
+        tabs = [{"id": "quiz"}]  # infer_component("quiz") -> quiz_arena family
+        kept = _enforce_domain_policy(tabs, "gaming", None)
+
+        assert kept == [] or kept[0].get("component") not in ("quiz_arena",)
+
+
+class TestRenderPlaybook:
+    def test_gaming_unboxing_renders_full_block(self):
+        from src.services.pipeline.plan import _render_playbook
+
+        block = _render_playbook("gaming", "unboxing")
+
+        assert '<playbook for="gaming:unboxing">' in block
+        assert "tier_list" in block
+        assert "quiz_arena" in block  # listed as forbidden
+        assert "Never quiz the viewer" in block
+
+    def test_no_playbook_renders_empty(self):
+        from src.services.pipeline.plan import _render_playbook
+
+        assert _render_playbook("cooking", "tutorial") == ""
+        assert _render_playbook(None, "unboxing") == ""
+        assert _render_playbook("gaming", None) == ""

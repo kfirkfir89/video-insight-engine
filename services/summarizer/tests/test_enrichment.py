@@ -1,9 +1,11 @@
 """Tests for enrichment service."""
+
 import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from src.services.pipeline.enrichment import enrich, ENRICHMENT_MAP, _has_meaningful_data
+import pytest
+
+from src.services.pipeline.enrichment import ENRICHMENT_MAP, _has_meaningful_data, enrich
 
 
 @pytest.fixture
@@ -32,38 +34,52 @@ class TestEnrich:
 
     @pytest.mark.asyncio
     async def test_food_tag_gets_enrichment(self, mock_llm):
-        _set_llm_return(mock_llm, json.dumps({
-            "quiz": [
+        _set_llm_return(
+            mock_llm,
+            json.dumps(
                 {
-                    "question": "What temperature for pasta water?",
-                    "options": ["Boiling", "Warm", "Cold", "Room temp"],
-                    "correctIndex": 0,
-                    "explanation": "Pasta needs a rolling boil",
+                    "quiz": [
+                        {
+                            "question": "What temperature for pasta water?",
+                            "options": ["Boiling", "Warm", "Cold", "Room temp"],
+                            "correctIndex": 0,
+                            "explanation": "Pasta needs a rolling boil",
+                        }
+                    ],
+                    "flashcards": [{"front": "Al dente", "back": "Firm to the bite"}],
                 }
-            ],
-            "flashcards": [{"front": "Al dente", "back": "Firm to the bite"}],
-        }))
-        result = await enrich(mock_llm, "food", {"ingredients": [{"name": "pasta"}]}, "Recipe Video")
+            ),
+        )
+        result = await enrich(
+            mock_llm, "food", {"ingredients": [{"name": "pasta"}]}, "Recipe Video"
+        )
         assert result is not None
-        assert len(result.quiz) == 1
+        # food forbids quiz_arena — quiz is stripped by the code guardrail
+        assert not result.quiz
+        assert result.flashcards and len(result.flashcards) == 1
         mock_llm.call_llm_fast.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_tech_primary_with_learning_content_tag_runs_enrichment(self, mock_llm):
         """primary_tag='tech' has no mapping, but 'learning' in content_tags should trigger enrichment."""
-        _set_llm_return(mock_llm, json.dumps({
-            "quiz": [
+        _set_llm_return(
+            mock_llm,
+            json.dumps(
                 {
-                    "question": "What is MCP?",
-                    "options": ["Protocol", "Language", "Framework", "Database"],
-                    "correctIndex": 0,
-                    "explanation": "Model Context Protocol",
+                    "quiz": [
+                        {
+                            "question": "What is MCP?",
+                            "options": ["Protocol", "Language", "Framework", "Database"],
+                            "correctIndex": 0,
+                            "explanation": "Model Context Protocol",
+                        }
+                    ],
+                    "flashcards": [
+                        {"front": "MCP", "back": "Model Context Protocol"},
+                    ],
                 }
-            ],
-            "flashcards": [
-                {"front": "MCP", "back": "Model Context Protocol"},
-            ],
-        }))
+            ),
+        )
 
         result = await enrich(
             mock_llm,
@@ -80,17 +96,22 @@ class TestEnrich:
     @pytest.mark.asyncio
     async def test_tech_primary_no_content_tags_gets_enrichment(self, mock_llm):
         """primary_tag='tech' with no content_tags — now gets enrichment via direct mapping."""
-        _set_llm_return(mock_llm, json.dumps({
-            "quiz": [
+        _set_llm_return(
+            mock_llm,
+            json.dumps(
                 {
-                    "question": "What is Docker?",
-                    "options": ["Container runtime", "Language", "Database", "OS"],
-                    "correctIndex": 0,
-                    "explanation": "Docker is a container runtime",
+                    "quiz": [
+                        {
+                            "question": "What is Docker?",
+                            "options": ["Container runtime", "Language", "Database", "OS"],
+                            "correctIndex": 0,
+                            "explanation": "Docker is a container runtime",
+                        }
+                    ],
+                    "flashcards": [{"front": "Docker", "back": "Container platform"}],
                 }
-            ],
-            "flashcards": [{"front": "Docker", "back": "Container platform"}],
-        }))
+            ),
+        )
         result = await enrich(mock_llm, "tech", {"concepts": [{"name": "Docker"}]}, "Tech Video")
         assert result is not None
         assert len(result.quiz) == 1
@@ -99,19 +120,27 @@ class TestEnrich:
     @pytest.mark.asyncio
     async def test_tech_primary_content_tags_no_learning_gets_enrichment(self, mock_llm):
         """primary_tag='tech', content_tags without 'learning' — now gets enrichment via direct mapping."""
-        _set_llm_return(mock_llm, json.dumps({
-            "quiz": [
+        _set_llm_return(
+            mock_llm,
+            json.dumps(
                 {
-                    "question": "What is a REST API?",
-                    "options": ["Interface", "Database", "Language", "OS"],
-                    "correctIndex": 0,
-                    "explanation": "REST is an API architecture",
+                    "quiz": [
+                        {
+                            "question": "What is a REST API?",
+                            "options": ["Interface", "Database", "Language", "OS"],
+                            "correctIndex": 0,
+                            "explanation": "REST is an API architecture",
+                        }
+                    ],
+                    "flashcards": [{"front": "REST", "back": "Representational State Transfer"}],
                 }
-            ],
-            "flashcards": [{"front": "REST", "back": "Representational State Transfer"}],
-        }))
+            ),
+        )
         result = await enrich(
-            mock_llm, "tech", {"concepts": [{"name": "REST"}]}, "Tech Video",
+            mock_llm,
+            "tech",
+            {"concepts": [{"name": "REST"}]},
+            "Tech Video",
             content_tags=["tech", "review"],
         )
         assert result is not None
@@ -120,37 +149,51 @@ class TestEnrich:
 
     @pytest.mark.asyncio
     async def test_fitness_tag_gets_enrichment(self, mock_llm):
-        _set_llm_return(mock_llm, json.dumps({
-            "quiz": [
+        _set_llm_return(
+            mock_llm,
+            json.dumps(
                 {
-                    "question": "What muscle does a squat target?",
-                    "options": ["Quads", "Biceps", "Abs", "Chest"],
-                    "correctIndex": 0,
-                    "explanation": "Squats primarily target quadriceps",
+                    "quiz": [
+                        {
+                            "question": "What muscle does a squat target?",
+                            "options": ["Quads", "Biceps", "Abs", "Chest"],
+                            "correctIndex": 0,
+                            "explanation": "Squats primarily target quadriceps",
+                        }
+                    ],
+                    "flashcards": [{"front": "Squat", "back": "Compound lower body exercise"}],
                 }
-            ],
-            "flashcards": [{"front": "Squat", "back": "Compound lower body exercise"}],
-        }))
-        result = await enrich(mock_llm, "fitness", {"exercises": [{"name": "Squat"}]}, "Workout Video")
+            ),
+        )
+        result = await enrich(
+            mock_llm, "fitness", {"exercises": [{"name": "Squat"}]}, "Workout Video"
+        )
         assert result is not None
-        assert len(result.quiz) == 1
+        # fitness forbids quiz_arena — quiz is stripped by the code guardrail
+        assert not result.quiz
+        assert result.flashcards and len(result.flashcards) == 1
         mock_llm.call_llm_fast.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_enriches_learning_with_quiz(self, mock_llm):
-        _set_llm_return(mock_llm, json.dumps({
-            "quiz": [
+        _set_llm_return(
+            mock_llm,
+            json.dumps(
                 {
-                    "question": "What is Python?",
-                    "options": ["Language", "Snake", "Framework", "OS"],
-                    "correctIndex": 0,
-                    "explanation": "Python is a programming language",
+                    "quiz": [
+                        {
+                            "question": "What is Python?",
+                            "options": ["Language", "Snake", "Framework", "OS"],
+                            "correctIndex": 0,
+                            "explanation": "Python is a programming language",
+                        }
+                    ],
+                    "flashcards": [
+                        {"front": "What is a variable?", "back": "A named storage location"},
+                    ],
                 }
-            ],
-            "flashcards": [
-                {"front": "What is a variable?", "back": "A named storage location"},
-            ],
-        }))
+            ),
+        )
 
         result = await enrich(
             mock_llm,
@@ -165,29 +208,42 @@ class TestEnrich:
 
     @pytest.mark.asyncio
     async def test_enriches_learning_with_scenarios(self, mock_llm):
-        _set_llm_return(mock_llm, json.dumps({
-            "quiz": [
+        _set_llm_return(
+            mock_llm,
+            json.dumps(
                 {
-                    "question": "What is Python?",
-                    "options": ["Language", "Snake", "Framework", "OS"],
-                    "correctIndex": 0,
-                    "explanation": "Python is a programming language",
-                }
-            ],
-            "flashcards": [
-                {"front": "What is a variable?", "back": "A named storage location"},
-            ],
-            "scenarios": [
-                {
-                    "question": "You need to store user data. Which approach?",
-                    "emoji": "🤔",
-                    "options": [
-                        {"text": "Use a dictionary", "correct": True, "explanation": "Dict is key-value"},
-                        {"text": "Use a list", "correct": False, "explanation": "List is ordered"},
+                    "quiz": [
+                        {
+                            "question": "What is Python?",
+                            "options": ["Language", "Snake", "Framework", "OS"],
+                            "correctIndex": 0,
+                            "explanation": "Python is a programming language",
+                        }
+                    ],
+                    "flashcards": [
+                        {"front": "What is a variable?", "back": "A named storage location"},
+                    ],
+                    "scenarios": [
+                        {
+                            "question": "You need to store user data. Which approach?",
+                            "emoji": "🤔",
+                            "options": [
+                                {
+                                    "text": "Use a dictionary",
+                                    "correct": True,
+                                    "explanation": "Dict is key-value",
+                                },
+                                {
+                                    "text": "Use a list",
+                                    "correct": False,
+                                    "explanation": "List is ordered",
+                                },
+                            ],
+                        }
                     ],
                 }
-            ],
-        }))
+            ),
+        )
 
         result = await enrich(
             mock_llm,
@@ -204,17 +260,24 @@ class TestEnrich:
     @pytest.mark.asyncio
     async def test_review_gets_enrichment(self, mock_llm):
         """review tag now gets enrichment."""
-        _set_llm_return(mock_llm, json.dumps({
-            "quiz": [
+        _set_llm_return(
+            mock_llm,
+            json.dumps(
                 {
-                    "question": "What was the main pro?",
-                    "options": ["Battery life", "Weight", "Price", "Screen"],
-                    "correctIndex": 0,
-                    "explanation": "Battery life was highlighted as the top feature",
+                    "quiz": [
+                        {
+                            "question": "What was the main pro?",
+                            "options": ["Battery life", "Weight", "Price", "Screen"],
+                            "correctIndex": 0,
+                            "explanation": "Battery life was highlighted as the top feature",
+                        }
+                    ],
+                    "flashcards": [
+                        {"front": "Main verdict", "back": "Recommended for battery life"}
+                    ],
                 }
-            ],
-            "flashcards": [{"front": "Main verdict", "back": "Recommended for battery life"}],
-        }))
+            ),
+        )
         result = await enrich(
             mock_llm,
             "review",
@@ -223,7 +286,9 @@ class TestEnrich:
         )
 
         assert result is not None
-        assert len(result.quiz) == 1
+        # review forbids quiz_arena — quiz is stripped by the code guardrail
+        assert not result.quiz
+        assert result.flashcards and len(result.flashcards) == 1
         mock_llm.call_llm_fast.assert_called_once()
 
     @pytest.mark.asyncio
@@ -328,17 +393,22 @@ class TestEnrichSynthesisFallback:
     @pytest.mark.asyncio
     async def test_uses_synthesis_when_extraction_empty(self, mock_llm):
         """When extraction is empty, synthesis data should be used as context."""
-        _set_llm_return(mock_llm, json.dumps({
-            "quiz": [
+        _set_llm_return(
+            mock_llm,
+            json.dumps(
                 {
-                    "question": "What was the main topic?",
-                    "options": ["AI", "Cooking", "Sports", "Music"],
-                    "correctIndex": 0,
-                    "explanation": "The video was about AI",
+                    "quiz": [
+                        {
+                            "question": "What was the main topic?",
+                            "options": ["AI", "Cooking", "Sports", "Music"],
+                            "correctIndex": 0,
+                            "explanation": "The video was about AI",
+                        }
+                    ],
+                    "flashcards": [{"front": "Key point", "back": "AI is transformative"}],
                 }
-            ],
-            "flashcards": [{"front": "Key point", "back": "AI is transformative"}],
-        }))
+            ),
+        )
 
         result = await enrich(
             mock_llm,
@@ -360,17 +430,22 @@ class TestEnrichSynthesisFallback:
     @pytest.mark.asyncio
     async def test_uses_extraction_when_available(self, mock_llm):
         """When extraction has data, it should be used instead of synthesis."""
-        _set_llm_return(mock_llm, json.dumps({
-            "quiz": [
+        _set_llm_return(
+            mock_llm,
+            json.dumps(
                 {
-                    "question": "What is Python?",
-                    "options": ["Language", "Snake", "Framework", "OS"],
-                    "correctIndex": 0,
-                    "explanation": "Python is a programming language",
+                    "quiz": [
+                        {
+                            "question": "What is Python?",
+                            "options": ["Language", "Snake", "Framework", "OS"],
+                            "correctIndex": 0,
+                            "explanation": "Python is a programming language",
+                        }
+                    ],
+                    "flashcards": [{"front": "Python", "back": "A programming language"}],
                 }
-            ],
-            "flashcards": [{"front": "Python", "back": "A programming language"}],
-        }))
+            ),
+        )
 
         result = await enrich(
             mock_llm,
@@ -396,7 +471,12 @@ class TestOutputCaps:
         """An over-generous LLM that returns 20 quiz questions must be capped at 12."""
         oversized = {
             "quiz": [
-                {"question": f"Q{i}", "options": ["a", "b", "c", "d"], "correctIndex": 0, "explanation": "e"}
+                {
+                    "question": f"Q{i}",
+                    "options": ["a", "b", "c", "d"],
+                    "correctIndex": 0,
+                    "explanation": "e",
+                }
                 for i in range(20)
             ],
             "flashcards": [{"front": f"F{i}", "back": "b"} for i in range(5)],
@@ -411,7 +491,14 @@ class TestOutputCaps:
     async def test_flashcards_are_truncated_to_max(self, mock_llm):
         """LLM returning 25 flashcards (e.g. legacy language prompt) must be capped at 15."""
         oversized = {
-            "quiz": [{"question": "q", "options": ["a", "b", "c", "d"], "correctIndex": 0, "explanation": "e"}],
+            "quiz": [
+                {
+                    "question": "q",
+                    "options": ["a", "b", "c", "d"],
+                    "correctIndex": 0,
+                    "explanation": "e",
+                }
+            ],
             "flashcards": [{"front": f"F{i}", "back": "b"} for i in range(25)],
         }
         _set_llm_return(mock_llm, json.dumps(oversized))
@@ -424,7 +511,15 @@ class TestOutputCaps:
     async def test_within_cap_passes_unchanged(self, mock_llm):
         """Output already within caps must not be touched."""
         compliant = {
-            "quiz": [{"question": f"Q{i}", "options": ["a", "b", "c", "d"], "correctIndex": 0, "explanation": "e"} for i in range(5)],
+            "quiz": [
+                {
+                    "question": f"Q{i}",
+                    "options": ["a", "b", "c", "d"],
+                    "correctIndex": 0,
+                    "explanation": "e",
+                }
+                for i in range(5)
+            ],
             "flashcards": [{"front": f"F{i}", "back": "b"} for i in range(8)],
         }
         _set_llm_return(mock_llm, json.dumps(compliant))
@@ -441,10 +536,105 @@ class TestOutputCaps:
 
         Bumped to 16384 so dense enrichment output isn't truncated mid-JSON.
         """
-        _set_llm_return(mock_llm, json.dumps({
-            "quiz": [{"question": "q", "options": ["a", "b", "c", "d"], "correctIndex": 0, "explanation": "e"}],
-            "flashcards": [{"front": "F", "back": "b"}],
-        }))
+        _set_llm_return(
+            mock_llm,
+            json.dumps(
+                {
+                    "quiz": [
+                        {
+                            "question": "q",
+                            "options": ["a", "b", "c", "d"],
+                            "correctIndex": 0,
+                            "explanation": "e",
+                        }
+                    ],
+                    "flashcards": [{"front": "F", "back": "b"}],
+                }
+            ),
+        )
         await enrich(mock_llm, "tech", {"concepts": [{"name": "x"}]}, "T")
         call_kwargs = mock_llm.call_llm_fast.call_args.kwargs
         assert call_kwargs.get("max_tokens") == 16384
+
+
+class TestQuizGuardrail:
+    """Domains where quiz_arena is forbidden must never carry quiz/scenarios."""
+
+    async def test_gaming_quiz_stripped_even_when_llm_returns_it(self):
+        from unittest.mock import AsyncMock, patch
+
+        from src.services.pipeline.enrichment import enrich
+
+        raw = (
+            '{"quiz": [{"question": "Q?", "options": ["a", "b", "c", "d"], "correctIndex": 0, "explanation": "e"}],'
+            ' "flashcards": [{"front": "F", "back": "B"}],'
+            ' "scenarios": []}'
+        )
+        with patch(
+            "src.services.pipeline.enrichment.call_llm_with_retry",
+            new=AsyncMock(return_value=raw),
+        ):
+            result = await enrich(
+                AsyncMock(),
+                "gaming",
+                {"gaming": {"highlights": [{"title": "t"}]}},
+                "Box opening",
+                content_format="unboxing",
+            )
+
+        assert result is not None
+        assert not result.quiz
+        assert not result.scenarios
+        assert result.flashcards and result.flashcards[0].front == "F"
+
+    async def test_learning_quiz_preserved(self):
+        from unittest.mock import AsyncMock, patch
+
+        from src.services.pipeline.enrichment import enrich
+
+        raw = (
+            '{"quiz": [{"question": "Q?", "options": ["a", "b", "c", "d"], "correctIndex": 0, "explanation": "e"}],'
+            ' "flashcards": []}'
+        )
+        with patch(
+            "src.services.pipeline.enrichment.call_llm_with_retry",
+            new=AsyncMock(return_value=raw),
+        ):
+            result = await enrich(
+                AsyncMock(),
+                "learning",
+                {"learning": {"keyPoints": [{"title": "t"}]}},
+                "Lecture",
+            )
+
+        assert result is not None
+        assert result.quiz and len(result.quiz) == 1
+
+
+class TestQuizStripShape:
+    """Stripped quiz/scenarios must stay list-shaped — the phase logger calls
+    len() on model_dump output (regression: None crashed the whole pipeline)."""
+
+    async def test_stripped_result_model_dump_is_len_safe(self):
+        from unittest.mock import AsyncMock, patch
+
+        from src.services.pipeline.enrichment import enrich
+
+        raw = (
+            '{"quiz": [{"question": "Q?", "options": ["a", "b", "c", "d"], '
+            '"correctIndex": 0, "explanation": "e"}], "flashcards": []}'
+        )
+        with patch(
+            "src.services.pipeline.enrichment.call_llm_with_retry",
+            new=AsyncMock(return_value=raw),
+        ):
+            result = await enrich(
+                AsyncMock(), "gaming", {"gaming": {"highlights": [{"t": 1}]}}, "Box"
+            )
+
+        assert result is not None
+        dumped = result.model_dump(by_alias=True)
+        # The exact expressions the phase logger runs:
+        assert len(dumped.get("quiz") or []) == 0
+        assert len(dumped.get("scenarios") or []) == 0
+        assert dumped.get("quiz") == []

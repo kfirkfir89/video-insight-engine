@@ -203,6 +203,7 @@ def _count_items_at_path(data: dict, path: str) -> int:
 def validate_extraction_counts(
     manifest: PlanResult | None,
     extraction_data: dict | None,
+    content_tags: list[str] | None = None,
 ) -> dict[str, dict]:
     """Compare plan item counts against extraction results.
 
@@ -212,6 +213,12 @@ def validate_extraction_counts(
     Args:
         manifest: PlanResult from the plan stage (or None). Accepts any object with item_counts.
         extraction_data: Validated extraction data dict (or None).
+        content_tags: Active content tags. When provided, fields owned by
+            domains outside the active set are skipped — the plan prompt fills
+            a flat, domain-agnostic itemCounts block, so a gaming/review video
+            can carry manifest counts for "spots"/"tips" that no active schema
+            could ever populate. Warning on those is a guaranteed false
+            positive (and feeds the retry-trigger score for nothing).
 
     Returns:
         Dict of {field: {"plan": N, "extracted": M, "ratio": float}} for warnings.
@@ -221,10 +228,15 @@ def validate_extraction_counts(
 
     warnings: dict[str, dict] = {}
     counts = manifest.item_counts
+    active = set(content_tags) if content_tags else None
 
     for field, paths in _COUNT_EXTRACTORS.items():
         manifest_count = getattr(counts, field, 0)
         if manifest_count == 0:
+            continue
+
+        field_domains = FIELD_TO_DOMAINS.get(field)
+        if active is not None and field_domains and not (field_domains & active):
             continue
 
         extracted_count = sum(_count_items_at_path(extraction_data, p) for p in paths)

@@ -214,6 +214,31 @@ Video: "20-Minute HIIT — Full Body" (22 min, fitness)
   ]
 }}
 </example>
+
+<example>
+Video: "OP-29 Booster Box Opening — Chasing the Alt Art!" (26 min, gaming, unboxing)
+{{
+  "reasoning": "TCG box break: the pulls ARE the content. Viewers want a ranked record of what came out of the box (rarity/value as tiers, WHY each pull matters as the reason), the pull moments with timestamps to relive the big hits, and the set facts. This is entertainment — a quiz would be absurd here, and there is no code, workout, or claims content. Rankings = the pulled cards; highlights = the pull moments.",
+  "identity": {{"creatorType": "TCG content creator", "tone": "hype-casual", "audience": "collectors and players"}},
+  "corePromise": "See every notable pull from the box, ranked by rarity and value, with jump-to moments",
+  "uniqueAngle": "Real-time pull reactions with card closeups — the frames show the actual cards revealed",
+  "extractionGuidance": {{
+    "primaryFocus": "Every notable pulled card into rankings (name as item, rarity/value bracket as tier, why it matters as reason) AND highlights (pull moments with timestamps)",
+    "watchOutFor": "Market-value and playability comments made mid-reaction — they are the tier reasons"
+  }},
+  "itemCounts": {{"exercises": 0, "tips": 0, "concepts": 0, "codeSnippets": 0, "ingredients": 0, "spots": 0, "songs": 0, "products": 25, "steps": 0}},
+  "contentTags": ["gaming"],
+  "modifiers": [],
+  "primaryTag": "gaming",
+  "userGoal": "Relive the box break and know exactly which pulls matter",
+  "confidence": 0.95,
+  "tabs": [
+    {{"id": "pulls", "label": "🃏 The Pulls", "emoji": "🃏", "component": "tier_list", "dataSource": "gaming.rankings", "goal": "Every notable card ranked by rarity/value — the reason field says why each pull matters."}},
+    {{"id": "highlights", "label": "🎬 Pull Moments", "emoji": "🎬", "component": "moment_track", "dataSource": "gaming.highlights", "goal": "Jump to each big reveal — the frame shows the card held up to camera."}},
+    {{"id": "set_facts", "label": "📋 Set Facts", "emoji": "📋", "component": "info_grid", "dataSource": "gaming.loadout", "goal": "Box odds, set details, and chase-card checklist at a glance."}}
+  ]
+}}
+</example>
 </examples>
 
 <domain_requirements>
@@ -271,7 +296,10 @@ flash_deck restrictions:
   info_grid (browse) or moment_track (jump).
 
 quiz_arena restrictions:
-- quiz_arena tabs are only for learning, language, and tech domains.
+- quiz_arena tabs are ONLY for learning, language, tech, and science domains — content the
+  viewer studies. It is FORBIDDEN everywhere else (gaming, review, travel, food, fitness,
+  music, podcast, news, project, sport) and validation removes it, so planning one there
+  wastes a tab slot. Never quiz the viewer on entertainment (unboxings, vlogs, reviews).
 - Pulls from enrichment.quiz AND enrichment.scenarios (scenarios surface as quiz items with
   optional `context` field).
 - Scenario data is absorbed by quiz_arena — there is no separate scenario tab anymore.
@@ -481,6 +509,8 @@ Format: {content_format}
 Content Traits: {content_traits}
 Description: {description}
 </video>
+
+{domain_playbook}
 
 <transcript_preview>
 {transcript_preview}

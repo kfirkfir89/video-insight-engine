@@ -49,6 +49,7 @@ THINKING GUIDE:
     }
   ]
 > UI: rankings → TierList. tier is the creator's SUGGESTED placement (the viewer can override + reorder). Use only S/A/B/C/D. When the creator gives no tier, omit it — the viewer places it.
+> UNBOXING / box-break videos: rankings = the PULLED items — card/product name as item, rarity or market-value bracket as tier (chase/alt-art = S, SR/strong = A, playable = B, filler = C/D), and WHY it matters (rarity, price, playability, the creator's reaction) as reason. highlights = the pull MOMENTS with timestamps so viewers can jump to each reveal.
 }
 
 // Example for a shooter loadout / tier video:

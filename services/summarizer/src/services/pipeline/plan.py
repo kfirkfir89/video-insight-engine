@@ -3,6 +3,7 @@
 Replaces the old 2-call flow (manifest → triage) with a single Sonnet call
 that produces both video analysis and tab layout design.
 """
+
 from __future__ import annotations
 
 import logging
@@ -13,6 +14,8 @@ from typing import TYPE_CHECKING
 from ...models.pipeline_types import PlanResult
 from ...shared_config.domain_config import (
     build_fallback_tabs,
+    effective_requirements,
+    get_playbook,
     map_category_to_tag,
     render_density_gate_table,
     render_valid_component_names,
@@ -54,14 +57,77 @@ def _build_fallback_plan(category_hint: str | None = None) -> PlanResult:
     primary = map_category_to_tag(category_hint) if category_hint else "learning"
     tags = [primary]
 
-    return PlanResult.model_validate({
-        "contentTags": tags,
-        "modifiers": [],
-        "primaryTag": primary,
-        "userGoal": "General summary of the video content",
-        "tabs": build_fallback_tabs(primary),
-        "confidence": 0.0,
-    })
+    return PlanResult.model_validate(
+        {
+            "contentTags": tags,
+            "modifiers": [],
+            "primaryTag": primary,
+            "userGoal": "General summary of the video content",
+            "tabs": build_fallback_tabs(primary),
+            "confidence": 0.0,
+        }
+    )
+
+
+def _render_playbook(category_hint: str | None, content_format: str | None) -> str:
+    """Render the {domain_playbook} block for the plan prompt's dynamic part.
+
+    Empty string when no playbook matches — the placeholder simply vanishes.
+    Uses the CATEGORY-derived domain (the classifier's domain isn't final until
+    the plan itself runs); the code-level policy in _enforce_domain_policy uses
+    the plan's own primaryTag, so a category/plan disagreement is still safe.
+    """
+    domain = map_category_to_tag(category_hint) if category_hint else None
+    if not domain or not content_format:
+        return ""
+    # Gate on the PLAYBOOK existing, not on the merged policy (which unions
+    # domain-level forbidden and would render for nearly every video). A
+    # forbidden/required-only playbook must still steer the planner — its
+    # tabs would otherwise only be stripped post-hoc, silently losing slots.
+    if not get_playbook(domain, content_format):
+        return ""
+    policy = effective_requirements(domain, content_format)
+    lines = [f'<playbook for="{domain}:{content_format}">']
+    if policy["required"]:
+        lines.append(f"Required components: {', '.join(policy['required'])}")
+    if policy["preferred"]:
+        lines.append(f"Preferred components: {', '.join(policy['preferred'])}")
+    if policy["forbidden"]:
+        lines.append(
+            f"Forbidden components (validation removes them): {', '.join(sorted(policy['forbidden']))}"
+        )
+    if policy["planGuidance"]:
+        lines.append(policy["planGuidance"])
+    lines.append("</playbook>")
+    return "\n".join(lines)
+
+
+def _enforce_domain_policy(
+    tabs: list[dict], primary_tag: str, content_format: str | None
+) -> list[dict]:
+    """Remove tabs whose component is forbidden for this (domain, format).
+
+    Runs after primaryTag normalization so the policy lookup is correct, and
+    before extraction so forbidden tabs never consume downstream tokens.
+    """
+    forbidden = effective_requirements(primary_tag, content_format)["forbidden"]
+    if not forbidden:
+        return tabs
+
+    kept: list[dict] = []
+    for tab in tabs:
+        component = tab.get("component") or infer_component(tab.get("id", ""))
+        if component in forbidden:
+            logger.warning(
+                "Plan tab removed: id=%r component=%r — forbidden for domain=%s format=%s",
+                tab.get("id"),
+                component,
+                primary_tag,
+                content_format,
+            )
+            continue
+        kept.append(tab)
+    return kept
 
 
 def _validate_tabs(tabs: list[dict]) -> list[dict]:
@@ -79,7 +145,7 @@ def _validate_tabs(tabs: list[dict]) -> list[dict]:
             continue
 
         tid = tab["id"]
-        if not re.match(r'^[a-z][a-z0-9_]*$', tid):
+        if not re.match(r"^[a-z][a-z0-9_]*$", tid):
             logger.info("Invalid tab ID format '%s', skipping", tid)
             continue
         if tid in seen_ids:
@@ -89,7 +155,9 @@ def _validate_tabs(tabs: list[dict]) -> list[dict]:
 
         component = tab.get("component", "")
         if component and component not in valid_component_names:
-            logger.info("Invalid component '%s' for tab '%s', inferring from tab ID", component, tid)
+            logger.info(
+                "Invalid component '%s' for tab '%s', inferring from tab ID", component, tid
+            )
             component = ""
         if not component:
             component = infer_component(tid)
@@ -105,15 +173,17 @@ def _validate_tabs(tabs: list[dict]) -> list[dict]:
                 if isinstance(target_id, str) and isinstance(lbl, str) and lbl.strip():
                     outbound_links[target_id] = lbl.strip()
 
-        valid_tabs.append({
-            "id": tid,
-            "label": tab["label"],
-            "emoji": tab.get("emoji", ""),
-            "dataSource": tab.get("dataSource", ""),
-            "component": component,
-            "goal": tab.get("goal", ""),
-            "outboundLinks": outbound_links,
-        })
+        valid_tabs.append(
+            {
+                "id": tid,
+                "label": tab["label"],
+                "emoji": tab.get("emoji", ""),
+                "dataSource": tab.get("dataSource", ""),
+                "component": component,
+                "goal": tab.get("goal", ""),
+                "outboundLinks": outbound_links,
+            }
+        )
 
     return valid_tabs
 
@@ -161,11 +231,14 @@ async def run_plan(
     # All three are config-derived static content (no video data) and single-
     # sourced from domains.json. {density_gates} lives inside the toolkit text,
     # so it must be replaced AFTER {component_toolkit} is injected.
-    static_template = ENGLISH_OUTPUT_DIRECTIVE + "\n\n" + (
-        prompt_template
-        .replace("{component_toolkit}", component_toolkit)
-        .replace("{density_gates}", render_density_gate_table())
-        .replace("{valid_components}", render_valid_component_names())
+    static_template = (
+        ENGLISH_OUTPUT_DIRECTIVE
+        + "\n\n"
+        + (
+            prompt_template.replace("{component_toolkit}", component_toolkit)
+            .replace("{density_gates}", render_density_gate_table())
+            .replace("{valid_components}", render_valid_component_names())
+        )
     )
 
     # Split at the <video> tag for Anthropic prompt caching: the per-video
@@ -185,27 +258,37 @@ async def run_plan(
         dynamic_part = static_template
 
     prompt = (
-        dynamic_part
-        .replace("{title}", sanitize_for_prompt(title[:200]))
+        dynamic_part.replace("{title}", sanitize_for_prompt(title[:200]))
         .replace("{channel}", sanitize_for_prompt(channel[:100] if channel else "Unknown"))
         .replace("{duration_minutes}", duration_minutes)
         .replace("{category_hint}", category_hint or "unknown")
         .replace("{content_format}", content_format or "unknown")
-        .replace("{description}", sanitize_for_prompt(description[:1000] if description else "N/A", max_len=1000))
-        .replace("{transcript_preview}", sanitize_for_prompt(transcript_preview[:3000], max_len=3000))
+        .replace("{domain_playbook}", _render_playbook(category_hint, content_format))
+        .replace(
+            "{description}",
+            sanitize_for_prompt(description[:1000] if description else "N/A", max_len=1000),
+        )
+        .replace(
+            "{transcript_preview}", sanitize_for_prompt(transcript_preview[:3000], max_len=3000)
+        )
         .replace("{content_traits}", content_traits or "Not available")
     )
 
     try:
         raw = await call_llm_with_retry(
-            llm_service, prompt,
+            llm_service,
+            prompt,
             # Plan timeout bumped 30→60s after observing fresh-video failures:
             # KuXjwB4LzSA (3B1B Convolution) timed out 3× at 30s while Sonnet
             # processed Arabic auto-translated transcripts + the longer plan
             # prompt (post-overhaul). 60s gives realistic headroom; the assembler
             # fallback path still kicks in if all 3 attempts fail.
-            max_tokens=2048, timeout=60.0, max_retries=2, stage_name="plan",
-            json_mode=True, cache_static=cache_static,
+            max_tokens=2048,
+            timeout=60.0,
+            max_retries=2,
+            stage_name="plan",
+            json_mode=True,
+            cache_static=cache_static,
         )
         if not raw:
             logger.warning("Plan LLM call failed after retries, using fallback")
@@ -236,6 +319,13 @@ async def run_plan(
         if primary_tag not in content_tags:
             primary_tag = content_tags[0]
         data["primaryTag"] = primary_tag
+
+        # Domain policy: strip forbidden components BEFORE extraction burns
+        # tokens on them. The prompt asks the planner to avoid these, but a
+        # prompt is a request — this is the guarantee. Assembly enforces the
+        # same policy again as a backstop for cached/backfilled plans.
+        validated_tabs = _enforce_domain_policy(validated_tabs, primary_tag, content_format)
+        data["tabs"] = validated_tabs
 
         # Fallback tabs if none valid
         if not validated_tabs:

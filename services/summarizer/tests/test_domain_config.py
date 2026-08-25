@@ -6,7 +6,14 @@ from pathlib import Path
 import pytest
 
 # Load domains.json directly for testing
-DOMAINS_JSON_PATH = Path(__file__).resolve().parent.parent.parent.parent / "packages" / "shared" / "src" / "config" / "domains.json"
+DOMAINS_JSON_PATH = (
+    Path(__file__).resolve().parent.parent.parent.parent
+    / "packages"
+    / "shared"
+    / "src"
+    / "config"
+    / "domains.json"
+)
 
 
 @pytest.fixture
@@ -26,7 +33,22 @@ class TestDomainsJsonStructure:
         assert "enrichment" in config
 
     def test_has_expected_domains(self, config):
-        expected = {"learning", "tech", "fitness", "food", "music", "travel", "review", "project", "language", "science", "podcast", "news", "gaming", "sport"}
+        expected = {
+            "learning",
+            "tech",
+            "fitness",
+            "food",
+            "music",
+            "travel",
+            "review",
+            "project",
+            "language",
+            "science",
+            "podcast",
+            "news",
+            "gaming",
+            "sport",
+        }
         assert set(config["domains"].keys()) == expected
 
     def test_has_expected_modifiers(self, config):
@@ -71,8 +93,7 @@ class TestDomainsJsonConsistency:
         valid_domains = set(config["domains"].keys())
         for category, tag in config["categoryMap"].items():
             assert tag in valid_domains, (
-                f"categoryMap['{category}'] = '{tag}' is not a valid domain. "
-                f"Valid: {valid_domains}"
+                f"categoryMap['{category}'] = '{tag}' is not a valid domain. Valid: {valid_domains}"
             )
 
     def test_gradients_are_css_gradients(self, config):
@@ -83,9 +104,7 @@ class TestDomainsJsonConsistency:
 
     def test_at_least_one_default_tab(self, config):
         for name, domain in config["domains"].items():
-            assert len(domain["defaultTabs"]) >= 1, (
-                f"{name} has no default tabs"
-            )
+            assert len(domain["defaultTabs"]) >= 1, f"{name} has no default tabs"
 
     def test_default_tab_components_in_components_array(self, config):
         """Each defaultTab component should be in the top-level components array."""
@@ -94,8 +113,7 @@ class TestDomainsJsonConsistency:
             for tab in domain["defaultTabs"]:
                 component = tab.get("component", "")
                 assert component in valid_components, (
-                    f"{domain_name}.{tab['id']} component '{component}' "
-                    f"not in components array"
+                    f"{domain_name}.{tab['id']} component '{component}' not in components array"
                 )
 
 
@@ -104,14 +122,17 @@ class TestDomainConfigModule:
 
     def test_valid_content_tags_matches_json(self, config):
         from src.shared_config.domain_config import valid_content_tags
+
         assert valid_content_tags() == frozenset(config["domains"].keys())
 
     def test_valid_modifiers_matches_json(self, config):
         from src.shared_config.domain_config import valid_modifiers
+
         assert valid_modifiers() == frozenset(config["modifiers"].keys())
 
     def test_valid_components(self, config):
         from src.shared_config.domain_config import valid_components
+
         result = valid_components()
         assert isinstance(result, frozenset)
         assert result == frozenset(config["components"])
@@ -120,18 +141,21 @@ class TestDomainConfigModule:
 
     def test_map_category_to_tag(self):
         from src.shared_config.domain_config import map_category_to_tag
+
         assert map_category_to_tag("cooking") == "food"
         assert map_category_to_tag("coding") == "tech"
         assert map_category_to_tag("unknown_category") == "learning"
 
     def test_get_default_tab_ids(self):
         from src.shared_config.domain_config import get_default_tab_ids
+
         ids = get_default_tab_ids("learning")
         assert "key_points" in ids
         assert "concepts" in ids
 
     def test_get_tab_meta(self):
         from src.shared_config.domain_config import get_tab_meta
+
         meta = get_tab_meta("key_points")
         assert meta is not None
         label, emoji = meta
@@ -140,16 +164,19 @@ class TestDomainConfigModule:
 
     def test_get_tab_meta_unknown(self):
         from src.shared_config.domain_config import get_tab_meta
+
         assert get_tab_meta("nonexistent_tab") is None
 
     def test_build_fallback_tabs(self):
         from src.shared_config.domain_config import build_fallback_tabs
+
         tabs = build_fallback_tabs("tech")
         assert len(tabs) > 0
         assert all("id" in t and "label" in t and "emoji" in t and "component" in t for t in tabs)
 
     def test_build_fallback_tabs_have_component(self):
         from src.shared_config.domain_config import build_fallback_tabs
+
         tabs = build_fallback_tabs("travel")
         assert len(tabs) > 0
         for tab in tabs:
@@ -158,6 +185,7 @@ class TestDomainConfigModule:
 
     def test_get_enrichment_map(self, config):
         from src.shared_config.domain_config import get_enrichment_map
+
         result = get_enrichment_map()
         assert isinstance(result, dict)
         assert result == config["enrichment"]
@@ -165,7 +193,18 @@ class TestDomainConfigModule:
         # 10 enriched domains + podcast + gaming + "default" entry
         # (news + sport have no enrichment)
         assert len(result) == 13
-        for domain in ["learning", "tech", "fitness", "food", "music", "travel", "review", "project", "language", "science"]:
+        for domain in [
+            "learning",
+            "tech",
+            "fitness",
+            "food",
+            "music",
+            "travel",
+            "review",
+            "project",
+            "language",
+            "science",
+        ]:
             assert domain in result
 
     def test_enrichment_tags_are_valid_domains(self, config):
@@ -181,7 +220,9 @@ class TestDomainConfigModule:
         prompts_dir = Path(__file__).resolve().parent.parent / "src" / "prompts"
         for tag, filename in config["enrichment"].items():
             prompt_path = prompts_dir / filename
-            assert prompt_path.exists(), f"Enrichment prompt '{filename}' for tag '{tag}' not found at {prompt_path}"
+            assert prompt_path.exists(), (
+                f"Enrichment prompt '{filename}' for tag '{tag}' not found at {prompt_path}"
+            )
 
 
 class TestSiblingDataSources:
@@ -189,23 +230,116 @@ class TestSiblingDataSources:
 
     def test_datasources_for_component_priority_order(self):
         from src.shared_config.domain_config import datasources_for_component
+
         # tech lists `code` (tech.snippets) before `patterns` (tech.patterns),
         # both backing code_playground — defaultTabs order IS the priority.
         assert datasources_for_component("tech", "code_playground") == [
-            "tech.snippets", "tech.patterns",
+            "tech.snippets",
+            "tech.patterns",
         ]
 
     def test_datasources_for_component_unknown_returns_empty(self):
         from src.shared_config.domain_config import datasources_for_component
+
         assert datasources_for_component("tech", "no_such_component") == []
         assert datasources_for_component("no_such_domain", "code_playground") == []
 
     def test_sibling_datasources_excludes_self(self):
         from src.shared_config.domain_config import sibling_datasources
+
         assert sibling_datasources("tech", "tech.patterns") == ["tech.snippets"]
         assert sibling_datasources("tech", "tech.snippets") == ["tech.patterns"]
 
     def test_sibling_datasources_unregistered_field_returns_empty(self):
         from src.shared_config.domain_config import sibling_datasources
+
         # tech.topics is a valid extraction field but NOT a registered defaultTab.
         assert sibling_datasources("tech", "tech.topics") == []
+
+
+class TestEffectiveRequirements:
+    """Merged layout policy: domain requirements + (domain, format) playbook."""
+
+    def test_forbidden_is_union_of_domain_and_playbook(self):
+        from src.shared_config.domain_config import effective_requirements
+
+        merged = effective_requirements("gaming", "unboxing")
+        assert "quiz_arena" in merged["forbidden"]
+        assert "code_playground" in merged["forbidden"]  # playbook-only entry
+
+    def test_playbook_required_overrides_domain(self):
+        from src.shared_config.domain_config import effective_requirements
+
+        merged = effective_requirements("review", "unboxing")
+        # review domain requires comparison; the unboxing playbook overrides to []
+        assert merged["required"] == []
+
+    def test_missing_playbook_falls_back_to_domain_values(self):
+        from src.shared_config.domain_config import effective_requirements
+
+        merged = effective_requirements("gaming", "commentary")
+        assert merged["required"] == ["tier_list"]
+        assert merged["forbidden"] == frozenset({"quiz_arena"})
+        assert merged["planGuidance"] == ""
+
+    def test_none_format_falls_back_to_domain_values(self):
+        from src.shared_config.domain_config import effective_requirements
+
+        merged = effective_requirements("travel", None)
+        assert merged["required"] == ["spot_explorer"]
+        assert "quiz_arena" in merged["forbidden"]
+
+    def test_educational_domains_allow_quiz(self):
+        from src.shared_config.domain_config import effective_requirements
+
+        for domain in ("learning", "language", "tech", "science"):
+            merged = effective_requirements(domain, None)
+            assert "quiz_arena" not in merged["forbidden"], domain
+            assert merged["max"].get("quiz_arena") == 1, domain
+
+    def test_non_educational_domains_forbid_quiz(self, config):
+        from src.shared_config.domain_config import effective_requirements
+
+        educational = {"learning", "language", "tech", "science"}
+        for domain in config["domainRequirements"]:
+            if domain in educational:
+                continue
+            merged = effective_requirements(domain, None)
+            assert "quiz_arena" in merged["forbidden"], domain
+            assert "quiz_arena" not in merged["max"], domain
+
+    def test_playbook_components_are_known(self, config):
+        valid = set(config["components"])
+        for key, playbook in config.get("playbooks", {}).items():
+            for field in ("required", "preferred", "forbidden"):
+                for comp in playbook.get(field, []):
+                    assert comp in valid, f"{key}.{field}: unknown component {comp}"
+
+    def test_playbook_keys_reference_valid_domains(self, config):
+        for key in config.get("playbooks", {}):
+            domain = key.split(":", 1)[0]
+            assert domain in config["domains"], key
+
+
+class TestVisualCriticalityConfig:
+    def test_config_shape(self):
+        from src.shared_config.domain_config import visual_criticality_config
+
+        cfg = visual_criticality_config()
+        assert set(cfg["tiers"].keys()) == {"high", "standard", "low"}
+        assert cfg["tiers"]["high"]["overselect"] > cfg["tiers"]["high"]["keep"]
+        assert cfg["tiers"]["low"]["visionMax"] == 0
+
+    def test_high_low_domains_are_valid(self, config):
+        domains = set(config["domains"].keys())
+        vc = config["visualCriticality"]
+        assert set(vc["highDomains"]) <= domains
+        assert set(vc["lowDomains"]) <= domains
+        assert not set(vc["highDomains"]) & set(vc["lowDomains"])
+
+
+class TestEnrichmentPromptsExist:
+    def test_all_enrichment_prompts_exist_on_disk(self, config):
+        prompts_dir = Path(__file__).resolve().parent.parent / "src" / "prompts"
+        for domain, rel in config["enrichment"].items():
+            assert (prompts_dir / rel).exists(), f"{domain} -> {rel} missing"

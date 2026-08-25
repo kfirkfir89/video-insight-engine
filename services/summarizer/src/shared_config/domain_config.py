@@ -120,6 +120,44 @@ def domain_requirements() -> dict[str, dict]:
     return dict(get_config().get("domainRequirements", {}))
 
 
+def get_playbook(domain: str, content_format: str | None) -> dict:
+    """Layout playbook for a ``<domain>:<format>`` pair, or {} when none exists.
+
+    Playbooks refine domain requirements for a video subtype (e.g.
+    ``gaming:unboxing``) — see ``playbooksNote`` in domains.json.
+    """
+    if not content_format:
+        return {}
+    playbooks = get_config().get("playbooks", {})
+    return dict(playbooks.get(f"{domain}:{content_format}", {}))
+
+
+def effective_requirements(domain: str, content_format: str | None = None) -> dict:
+    """Merged layout policy for a video: domain requirements + playbook.
+
+    The single merge point for ALL enforcement (plan post-validation, assembly
+    backstop, enrichment gating). Semantics: ``forbidden`` is the UNION of
+    domain and playbook lists; ``required`` is the playbook's when present,
+    else the domain's; ``max`` always comes from the domain.
+    """
+    base = domain_requirements().get(domain, {})
+    playbook = get_playbook(domain, content_format)
+    forbidden = frozenset(base.get("forbidden", [])) | frozenset(playbook.get("forbidden", []))
+    required = playbook["required"] if "required" in playbook else base.get("required", [])
+    return {
+        "required": list(required),
+        "max": dict(base.get("max", {})),
+        "forbidden": forbidden,
+        "preferred": list(playbook.get("preferred", [])),
+        "planGuidance": playbook.get("planGuidance", ""),
+    }
+
+
+def visual_criticality_config() -> dict:
+    """Adaptive frame-pipeline effort config — see ``visualCriticalityNote``."""
+    return dict(get_config().get("visualCriticality", {}))
+
+
 def render_density_gate_table() -> str:
     """Render the markdown density table injected into component_toolkit.txt's
     ``{density_gates}`` placeholder, single-sourced from domains.json."""
