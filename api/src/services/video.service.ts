@@ -111,13 +111,13 @@ export class VideoService {
     try {
       if (config.USE_QUEUE_PIPELINE) {
         try {
-          // `bypassCache` is carried on the queue payload for wire-format
-          // mirroring but is NOT consumed by the summarizer pipeline — the
-          // cache-bypass semantic is fully implemented here at the API layer
-          // (a fresh version row → fresh `videoSummaryId` → fresh pipeline
-          // run). The summarizer simply processes whatever id it's given.
-          // The HTTP-fallback path below intentionally omits the field for
-          // the same reason; both paths are correct as-is.
+          // `bypassCache` IS consumed downstream: the worker maps it to
+          // force_refresh (worker/pipeline.py), telling the summarizer to
+          // skip its youtubeId-keyed Redis response cache. The HTTP/SSE
+          // fallback path can't carry the flag, so the same semantic is
+          // also stamped on the cache row as `forceRefresh` (see
+          // createVideo's bypassCache branch) — pipeline_runner reads
+          // whichever signal arrives. Keep BOTH channels in sync.
           await this.queuePublisher.publishVideoJob({
             videoSummaryId: payload.videoSummaryId,
             youtubeId: payload.youtubeId,
@@ -266,6 +266,7 @@ export class VideoService {
             isLatest: true,
             retryCount: 0,
             dedupKey,
+            forceRefresh: true,
             ...(expiresAt && { expiresAt }),
           });
 
@@ -410,6 +411,11 @@ export class VideoService {
       isLatest: true,
       retryCount: 0,
       dedupKey,
+      // bypassCache reaches here only when no Mongo versions survived (the
+      // fall-through at the end of the bypass branch). The summarizer's Redis
+      // response cache is keyed by youtubeId and can outlive the Mongo rows,
+      // so the bypass intent must still ride on the fresh row.
+      ...(bypassCache && { forceRefresh: true }),
       ...(expiresAtForNew && { expiresAt: expiresAtForNew }),
     });
 
@@ -433,6 +439,7 @@ export class VideoService {
         userId,
         tier,
         providers,
+        bypassCache,
         requestId,
       });
 
