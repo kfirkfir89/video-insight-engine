@@ -1,37 +1,29 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronUp, Clock, Play, Share2 } from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Clock, LayoutGrid, List } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import { Badge, FadeIn, GlassCard, VisualEvidence } from '@/components/vie';
+import { Lightbox } from '@/components/vie';
 import { useTabState } from '@/features/video-output/contexts/TabStateContext';
+import { useFocusBand } from '@/features/video-output/hooks/use-focus-band';
 import { cn } from '@/lib/utils';
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
 
 import { getMoodColor } from '../../../lib/moodColors';
 import { EmptyTabState } from './EmptyTabState';
+import { MomentGalleryCard } from './MomentGalleryCard';
+import { MomentTimelineRow } from './MomentTimelineRow';
+import { isClip, resolveLabel } from './moment-utils';
+import type { MomentItem } from './moment-utils';
 
 type TypeFilter = 'all' | 'clips' | 'moments';
+type MomentView = 'grid' | 'timeline';
 
-export interface MomentItem {
-  time: string;
-  seconds: number;
-  endSeconds?: number;
-  label: string;
-  description?: string;
-  mood?: string;
-  emoji?: string;
-  speaker?: string;
-  tags?: string[];
-  thumbnailUrl?: string;
-  /** One-line vision caption for the frame at this timestamp. */
-  frameCaption?: string;
-  /** Vision LLM rationale for why this frame is educationally valuable. */
-  frameEvidence?: string;
-  /** On-screen text (OCR or LLM-read) visible in the frame. */
-  frameOcr?: string;
-  /** "slide", "code", "diagram", "demo", etc. — used to badge the moment. */
-  frameSceneType?: string;
-}
+const VIEW_STORAGE_KEY = 'vie-moment-view';
+
+// Re-exported for existing consumers (tests, interactive/index.ts); the
+// canonical home is the leaf module so the row/card children never import
+// back into this orchestrator.
+export { formatDuration, isClip, resolveLabel } from './moment-utils';
+export type { MomentItem };
 
 interface MomentTrackProps {
   items: MomentItem[];
@@ -42,25 +34,13 @@ interface MomentTrackProps {
   onNavigateTab?: (id: string) => void;
 }
 
-function isClip(item: MomentItem): boolean {
-  return typeof item.endSeconds === 'number' && item.endSeconds > item.seconds + 1;
-}
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const rem = seconds % 60;
-  return rem === 0 ? `${minutes}m` : `${minutes}m ${rem}s`;
-}
-
-function resolveLabel(item: MomentItem): string {
-  const label = item.label?.trim();
-  if (label && label.toLowerCase() !== 'clip' && label.toLowerCase() !== 'moment') return label;
-  if (item.description) {
-    const trimmed = item.description.slice(0, 60);
-    return trimmed + (item.description.length > 60 ? '…' : '');
+function readStoredView(): MomentView {
+  try {
+    return window.localStorage.getItem(VIEW_STORAGE_KEY) === 'timeline' ? 'timeline' : 'grid';
+  } catch {
+    // Storage unavailable (private mode / blocked) — fall back to the default.
+    return 'grid';
   }
-  return `Moment at ${item.time}`;
 }
 
 export const MomentTrack = memo(function MomentTrack({
@@ -71,22 +51,20 @@ export const MomentTrack = memo(function MomentTrack({
   nextTab: _nextTab,
   onNavigateTab: _onNavigateTab,
 }: MomentTrackProps) {
-  // Per-item explicit expand/collapse choice. When an entry exists, it overrides
-  // the auto-expand-active-clip default — that lets users dismiss an active clip
-  // (and re-expand a non-active one) without the auto rule fighting them.
-  const [explicit, setExplicit] = useState<Map<number, boolean>>(new Map());
+  const [view, setView] = useState<MomentView>(readStoredView);
   const [moodFilter, setMoodFilter] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [pulseKey, setPulseKey] = useState<number>(-1);
+  // Index of the row whose share link was just copied — drives the ~1.5s
+  // "Link copied" confirmation (mirrors InfoGridInteractive's bulk-copy).
+  const [copiedIndex, setCopiedIndex] = useState<number>(-1);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }, []);
   const reducedMotion = usePrefersReducedMotion();
   const tabState = useTabState();
   const completedStepCount = tabState.completedSteps.size;
 
   const prevActiveRef = useRef<number>(-1);
-
-  // Note: explicit choices intentionally persist across filter toggles. Map
-  // keys are integer indices into `items` — entries for currently-hidden items
-  // are inert, and naturally restore their state when the filter is cleared.
 
   const hasClips = useMemo(() => items.some(isClip), [items]);
   const hasMoments = useMemo(() => items.some((i) => !isClip(i)), [items]);
@@ -154,330 +132,250 @@ export const MomentTrack = memo(function MomentTrack({
     return max || 1;
   }, [items]);
 
-  const toggleExpand = (index: number, currentlyExpanded: boolean): void => {
-    setExplicit((prev) => {
-      const next = new Map(prev);
-      next.set(index, !currentlyExpanded);
-      return next;
-    });
+  // Scroll focus band (timeline only). Playback position OVERRIDES scroll
+  // focus: while an active row exists the observer is torn down and the
+  // active row holds the grown state instead.
+  const focusBandEnabled =
+    view === 'timeline' && !reducedMotion && activeIndex < 0 && filtered.length >= 3;
+  const { setRef } = useFocusBand({ enabled: focusBandEnabled, count: filtered.length });
+
+  const handleViewChange = (next: MomentView): void => {
+    setView(next);
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, next);
+    } catch {
+      // Storage unavailable — the toggle still works for this session.
+    }
   };
 
-  const handleSeek = (seconds: number): void => {
-    onSeek?.(seconds);
-  };
+  // Lightbox over the image-backed moments (viewing order = filtered order).
+  // Indexed into `lightboxFrames`, not `items` — frameless moments are
+  // skipped so arrow navigation never lands on an empty slide.
+  const [lightboxIndex, setLightboxIndex] = useState(-1);
+  const lightboxable = useMemo(
+    () => filtered.filter(({ item }) => Boolean(item.thumbnailUrl)),
+    [filtered],
+  );
+  const lightboxFrames = useMemo(
+    () =>
+      lightboxable.map(({ item }) => ({
+        imageUrl: item.thumbnailUrl as string,
+        caption: `${resolveLabel(item)} · ${item.time}`,
+      })),
+    [lightboxable],
+  );
+  // Stable callbacks: rows are memo()-ed and the player polls currentTime at
+  // 1 Hz while open — fresh closures each tick would re-render every row.
+  const handleExpand = useCallback(
+    (originalIndex: number): void => {
+      const idx = lightboxable.findIndex((entry) => entry.originalIndex === originalIndex);
+      if (idx >= 0) setLightboxIndex(idx);
+    },
+    [lightboxable],
+  );
 
-  const handleShare = (item: MomentItem): void => {
+  const handleShare = useCallback((item: MomentItem, index: number): void => {
+    // Insecure origins (plain-http LAN/dev hosts) have no clipboard API — the
+    // access itself throws synchronously, which a .catch() can't intercept.
+    if (!navigator.clipboard?.writeText) return;
     const url = new URL(window.location.href);
     const hash = isClip(item) ? `t=${item.seconds},${item.endSeconds}` : `t=${item.seconds}`;
     url.hash = hash;
-    navigator.clipboard.writeText(url.toString()).catch(() => {});
-  };
+    navigator.clipboard
+      .writeText(url.toString())
+      .then(() => {
+        setCopiedIndex(index);
+        if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = setTimeout(() => setCopiedIndex(-1), 1500);
+      })
+      .catch(() => {
+        // Clipboard denied — the row simply doesn't flash "Link copied".
+      });
+  }, []);
 
   if (items.length === 0)
     return <EmptyTabState message="No moments were extracted for this video." icon={Clock} />;
 
   return (
-    <div className="space-y-4" data-testid="moment-track">
-      {/* Filter row */}
-      {filters !== false && (showTypeFilter || uniqueMoods.length > 1 || completedStepCount > 0) && (
-        <div className="flex flex-wrap items-center gap-2">
-          {showTypeFilter && (
-            <div
-              role="group"
-              aria-label="Filter by type"
-              className="inline-flex items-center rounded-full border border-border/50 bg-muted/20 p-0.5 text-xs font-medium"
-            >
-              {([
-                { id: 'all', label: 'All' },
-                { id: 'clips', label: 'Clips' },
-                { id: 'moments', label: 'Moments' },
-              ] as const).map((opt) => {
-                const active = typeFilter === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setTypeFilter(opt.id)}
-                    aria-pressed={active}
-                    data-testid={`type-filter-${opt.id}`}
-                    className={cn(
-                      'rounded-full px-3 py-1 transition-colors',
-                      active ? 'bg-[var(--vie-accent)] text-[var(--vie-accent-foreground)] shadow-sm' : 'text-muted-foreground hover:text-foreground',
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {uniqueMoods.length > 1 && (
-            <div className="flex flex-wrap gap-1.5">
+    <div className="space-y-4" data-testid="moment-track" data-view={view}>
+      {/* View toggle + filter row */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          role="group"
+          aria-label="View"
+          className="inline-flex items-center rounded-full border border-border/50 bg-muted/20 p-0.5 text-xs font-medium"
+        >
+          {([
+            { id: 'grid', label: 'Grid', Icon: LayoutGrid },
+            { id: 'timeline', label: 'Timeline', Icon: List },
+          ] as const).map(({ id, label, Icon }) => {
+            const active = view === id;
+            return (
               <button
+                key={id}
                 type="button"
-                onClick={() => setMoodFilter(null)}
+                onClick={() => handleViewChange(id)}
+                aria-pressed={active}
+                data-testid={`view-${id}`}
                 className={cn(
-                  'rounded-full px-2.5 py-1 text-xs font-medium border transition-colors',
-                  moodFilter === null
-                    ? 'bg-[var(--vie-accent)] text-[var(--vie-accent-foreground)] border-[var(--vie-accent)]'
-                    : 'bg-muted/20 text-muted-foreground border-border/50 hover:bg-muted/40',
+                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1 transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vie-accent)]/60',
+                  active
+                    ? 'bg-[var(--vie-accent)] text-[var(--vie-accent-foreground)] shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                All moods
+                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                {label}
               </button>
-              {uniqueMoods.map((mood) => {
-                const active = moodFilter === mood;
-                return (
-                  <button
-                    key={mood}
-                    type="button"
-                    onClick={() => setMoodFilter(active ? null : mood)}
-                    className={cn(
-                      'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border transition-colors capitalize',
-                      active
-                        ? 'bg-[var(--vie-accent)] text-[var(--vie-accent-foreground)] border-[var(--vie-accent)]'
-                        : 'bg-muted/20 text-muted-foreground border-border/50 hover:bg-muted/40',
-                    )}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className="inline-block size-1.5 rounded-full shrink-0"
-                      style={{ background: active ? 'currentColor' : getMoodColor(mood) }}
-                    />
-                    {mood}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {completedStepCount > 0 && (
-            <div className="ms-auto flex items-center gap-1.5 px-1 text-xs font-medium text-success">
-              <Check className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>
-                <span className="tabular-nums font-semibold">{completedStepCount}</span> step
-                {completedStepCount !== 1 ? 's' : ''} completed
-              </span>
-            </div>
-          )}
+            );
+          })}
         </div>
+
+        {filters !== false && showTypeFilter && (
+          <div
+            role="group"
+            aria-label="Filter by type"
+            className="inline-flex items-center rounded-full border border-border/50 bg-muted/20 p-0.5 text-xs font-medium"
+          >
+            {([
+              { id: 'all', label: 'All' },
+              { id: 'clips', label: 'Clips' },
+              { id: 'moments', label: 'Moments' },
+            ] as const).map((opt) => {
+              const active = typeFilter === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setTypeFilter(opt.id)}
+                  aria-pressed={active}
+                  data-testid={`type-filter-${opt.id}`}
+                  className={cn(
+                    'rounded-full px-3 py-1 transition-colors',
+                    active ? 'bg-[var(--vie-accent)] text-[var(--vie-accent-foreground)] shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {filters !== false && uniqueMoods.length > 1 && (
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setMoodFilter(null)}
+              className={cn(
+                'rounded-full px-2.5 py-1 text-xs font-medium border transition-colors',
+                moodFilter === null
+                  ? 'bg-[var(--vie-accent)] text-[var(--vie-accent-foreground)] border-[var(--vie-accent)]'
+                  : 'bg-muted/20 text-muted-foreground border-border/50 hover:bg-muted/40',
+              )}
+            >
+              All moods
+            </button>
+            {uniqueMoods.map((mood) => {
+              const active = moodFilter === mood;
+              return (
+                <button
+                  key={mood}
+                  type="button"
+                  onClick={() => setMoodFilter(active ? null : mood)}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border transition-colors capitalize',
+                    active
+                      ? 'bg-[var(--vie-accent)] text-[var(--vie-accent-foreground)] border-[var(--vie-accent)]'
+                      : 'bg-muted/20 text-muted-foreground border-border/50 hover:bg-muted/40',
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="inline-block size-1.5 rounded-full shrink-0"
+                    style={{ background: active ? 'currentColor' : getMoodColor(mood) }}
+                  />
+                  {mood}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {filters !== false && completedStepCount > 0 && (
+          <div className="ms-auto flex items-center gap-1.5 px-1 text-xs font-medium text-success">
+            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>
+              <span className="tabular-nums font-semibold">{completedStepCount}</span> step
+              {completedStepCount !== 1 ? 's' : ''} completed
+            </span>
+          </div>
+        )}
+      </div>
+
+      {view === 'grid' ? (
+        <div
+          data-testid="moment-grid"
+          className="grid grid-cols-2 gap-3 sm:[grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]"
+        >
+          {filtered.map(({ item, originalIndex }, index) => (
+            <MomentGalleryCard
+              key={originalIndex}
+              item={item}
+              originalIndex={originalIndex}
+              index={index}
+              isActive={activeIndex === originalIndex}
+              copied={copiedIndex === originalIndex}
+              currentTime={activeIndex === originalIndex ? currentTime : undefined}
+              onSeek={onSeek}
+              onExpand={handleExpand}
+              onShare={handleShare}
+            />
+          ))}
+        </div>
+      ) : (
+        <>
+          {/* Track — the decorative spine sits OUTSIDE the <ol> so every <li>
+              stays a direct child of the list (valid <ol> content model). */}
+          <div className="relative">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute start-[14px] top-1 bottom-1 w-px bg-gradient-to-b from-[var(--vie-accent)]/50 via-[var(--vie-accent)]/25 to-transparent"
+            />
+            <ol className="space-y-2 [overflow-anchor:auto]" aria-label="Moment track">
+              {filtered.map(({ item, originalIndex }, index) => (
+                <MomentTimelineRow
+                  key={originalIndex}
+                  item={item}
+                  originalIndex={originalIndex}
+                  index={index}
+                  isActive={activeIndex === originalIndex}
+                  pulsing={pulseKey === originalIndex && !reducedMotion}
+                  copied={copiedIndex === originalIndex}
+                  totalDuration={totalDuration}
+                  currentTime={activeIndex === originalIndex ? currentTime : undefined}
+                  onSeek={onSeek}
+                  onExpand={handleExpand}
+                  onShare={handleShare}
+                  setFocusRef={focusBandEnabled ? setRef : undefined}
+                />
+              ))}
+            </ol>
+          </div>
+          {/* Trailing room so the last rows can still reach the focus band. */}
+          {focusBandEnabled && <div aria-hidden="true" className="h-[30vh]" />}
+        </>
       )}
 
-      {/* Track */}
-      <ol className="relative space-y-2" aria-label="Moment track">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute start-[14px] top-1 bottom-1 w-px bg-gradient-to-b from-[var(--vie-accent)]/50 via-[var(--vie-accent)]/25 to-transparent"
+      {lightboxIndex >= 0 && lightboxFrames[lightboxIndex] && (
+        <Lightbox
+          frames={lightboxFrames}
+          activeIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(-1)}
+          onNavigate={setLightboxIndex}
         />
-
-        {filtered.map(({ item, originalIndex }, index) => {
-          const clip = isClip(item);
-          const isActive = activeIndex === originalIndex;
-          // Active clips auto-expand, but an explicit user choice always wins
-          // — this is what lets the user collapse an active clip's body.
-          const autoExpand = isActive && clip;
-          const explicitChoice = explicit.get(originalIndex);
-          const isExpanded = explicitChoice ?? autoExpand;
-          const moodColor = getMoodColor(item.mood);
-          const duration = clip ? (item.endSeconds as number) - item.seconds : 0;
-          const capsuleHeight = clip
-            ? Math.max(32, Math.min(120, Math.round((duration / totalDuration) * 240)))
-            : 0;
-          const liveProgress = clip && isActive && currentTime != null
-            ? Math.max(0, Math.min(duration, currentTime - item.seconds))
-            : null;
-          const chipContent = (
-            <>
-              <Clock className="h-3 w-3" aria-hidden="true" />
-              {item.time}
-              {clip && liveProgress != null && (
-                <span className="text-muted-foreground/80"> / {formatDuration(Math.round(liveProgress))}</span>
-              )}
-            </>
-          );
-
-          return (
-            <FadeIn key={originalIndex} index={index}>
-              <li
-                data-kind={clip ? 'clip' : 'moment'}
-                data-active={isActive ? 'true' : undefined}
-                className="relative"
-              >
-                <div className="flex items-stretch gap-3 ps-10">
-                  {/* Spine marker */}
-                  <div
-                    aria-hidden="true"
-                    className={cn(
-                      'absolute start-[8px] flex flex-col items-center',
-                      clip ? 'top-3 bottom-3' : 'top-3',
-                    )}
-                  >
-                    {clip ? (
-                      <div
-                        data-testid={`capsule-${originalIndex}`}
-                        style={{ height: `${capsuleHeight}px` }}
-                        className={cn(
-                          'relative w-[14px] rounded-full border border-[var(--vie-accent)]/40 bg-[var(--vie-accent)]/15',
-                          'shadow-[inset_0_0_12px_oklch(from_var(--vie-accent)_l_c_h/0.25)]',
-                          isActive && 'ring-1 ring-[var(--vie-accent)]/60 bg-[var(--vie-accent)]/30',
-                        )}
-                      >
-                        <span className="absolute -top-1 start-1/2 -translate-x-1/2 size-2 rounded-full bg-[var(--vie-accent)]" aria-hidden="true" />
-                        <span className="absolute -bottom-1 start-1/2 -translate-x-1/2 size-2 rounded-full bg-[var(--vie-accent)]/70" aria-hidden="true" />
-                      </div>
-                    ) : (
-                      <div
-                        className={cn(
-                          'size-[14px] rounded-full border-2 bg-background',
-                          isActive
-                            ? 'border-[var(--vie-accent)] ring-2 ring-[var(--vie-accent)]/30'
-                            : 'border-[var(--vie-accent)]/45',
-                          pulseKey === originalIndex && !reducedMotion && 'animate-pulse-once',
-                        )}
-                      />
-                    )}
-                  </div>
-
-                  {/* Card body — chip and toggle are sibling buttons (HTML
-                      forbids interactive content nested inside a <button>). */}
-                  <GlassCard
-                    variant={isActive ? 'default' : 'outlined'}
-                    className={cn(
-                      'flex-1 overflow-hidden p-0',
-                      isActive && 'ring-1 ring-[var(--vie-accent)]/40',
-                    )}
-                  >
-                    <div className="px-3 py-2 flex items-start gap-3">
-                      {item.thumbnailUrl && (
-                        <img
-                          src={item.thumbnailUrl}
-                          alt=""
-                          loading="lazy"
-                          className={cn(
-                            'rounded object-cover shrink-0 border border-border/30',
-                            clip ? 'w-24 h-[54px]' : 'w-14 h-9',
-                          )}
-                        />
-                      )}
-
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {onSeek ? (
-                            <button
-                              type="button"
-                              onClick={() => handleSeek(item.seconds)}
-                              dir="ltr"
-                              className="inline-flex items-center gap-1 text-xs font-bold tabular-nums text-[var(--vie-accent)] bg-[var(--vie-accent)]/10 px-2 py-0.5 rounded-md shrink-0 cursor-pointer hover:bg-[var(--vie-accent)]/20 transition-colors"
-                              aria-label={`Jump to ${item.time}`}
-                            >
-                              {chipContent}
-                            </button>
-                          ) : (
-                            <span dir="ltr" className="inline-flex items-center gap-1 text-xs font-bold tabular-nums text-[var(--vie-accent)] bg-[var(--vie-accent)]/10 px-2 py-0.5 rounded-md shrink-0">
-                              {chipContent}
-                            </span>
-                          )}
-                          {clip && (
-                            <span dir="ltr" className="text-[11px] font-medium tabular-nums text-muted-foreground">
-                              {formatDuration(duration)}
-                            </span>
-                          )}
-                          {item.emoji && <span aria-hidden="true" className="text-base">{item.emoji}</span>}
-                          {item.mood && (
-                            <span
-                              className="inline-flex items-center gap-1.5"
-                              aria-label={`Mood: ${item.mood}`}
-                            >
-                              <span
-                                aria-hidden="true"
-                                className="inline-block size-1.5 rounded-full"
-                                style={{ background: moodColor }}
-                              />
-                              <Badge variant="muted" className="text-xs font-medium capitalize">
-                                {item.mood}
-                              </Badge>
-                            </span>
-                          )}
-                          {item.speaker && (
-                            <span className="text-xs font-medium text-muted-foreground/70 italic">
-                              {item.speaker}
-                            </span>
-                          )}
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => toggleExpand(originalIndex, isExpanded)}
-                          aria-expanded={isExpanded}
-                          className="-mx-1 flex w-full items-start gap-2 rounded px-1 py-0.5 text-start transition-colors hover:bg-muted/30"
-                        >
-                          <span className="text-sm font-semibold leading-snug flex-1 truncate">
-                            {resolveLabel(item)}
-                          </span>
-                          {isExpanded ? (
-                            <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    {isExpanded && (
-                      <FadeIn>
-                        <div className="px-3 pb-3 space-y-2">
-                          {item.description && (
-                            <p className="text-sm leading-relaxed text-muted-foreground">
-                              {item.description}
-                            </p>
-                          )}
-                          <VisualEvidence
-                            caption={item.frameCaption}
-                            ocr={item.frameOcr}
-                            sceneType={item.frameSceneType}
-                            evidence={item.frameEvidence}
-                          />
-                          {item.tags && item.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {item.tags.map((tag, i) => (
-                                <Badge key={i} variant="muted" className="text-xs">{tag}</Badge>
-                              ))}
-                            </div>
-                          )}
-                          <div className="flex flex-wrap items-center gap-2 pt-1">
-                            {onSeek && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleSeek(item.seconds)}
-                                className="text-xs gap-1.5"
-                              >
-                                <Play className="h-3 w-3" aria-hidden="true" />
-                                {clip ? 'Play range' : 'Jump to'}
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleShare(item)}
-                              className="text-xs gap-1.5 text-muted-foreground"
-                              data-testid={`share-${originalIndex}`}
-                            >
-                              <Share2 className="h-3 w-3" aria-hidden="true" />
-                              Share {clip ? 'clip' : 'moment'}
-                            </Button>
-                          </div>
-                        </div>
-                      </FadeIn>
-                    )}
-                  </GlassCard>
-                </div>
-              </li>
-            </FadeIn>
-          );
-        })}
-      </ol>
+      )}
     </div>
   );
 });

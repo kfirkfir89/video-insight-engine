@@ -69,4 +69,18 @@ describe('VideoFilmstrip', () => {
     expect(container.querySelector('[data-mode="tab"]')).toBeTruthy();
     expect(container.querySelector('.text-center')).not.toBeNull();
   });
+
+  it("mode='tab' should show a visible caption under each captioned cell", () => {
+    render(<VideoFilmstrip frames={frames} mode="tab" />);
+    // Captions are always-visible info in the scrubber (not hover-only):
+    // each appears twice — visible line + hover tooltip copy.
+    expect(screen.getAllByText('Opening scene').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Demo screen').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("mode='overlay' keeps captions hover-only (no visible caption line)", () => {
+    render(<VideoFilmstrip frames={frames} mode="overlay" />);
+    // Only the tooltip copy exists in overlay mode.
+    expect(screen.getAllByText('Opening scene')).toHaveLength(1);
+  });
 });

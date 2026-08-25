@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight, ImageOff } from 'lucide-react';
 
-interface LightboxFrame {
+export interface LightboxFrame {
   imageUrl: string;
   caption?: string;
 }
@@ -46,6 +46,13 @@ export const Lightbox = memo(function Lightbox({
     function handleKey(e: KeyboardEvent) {
       switch (e.key) {
         case 'Escape':
+          // Consume the key: document-level Escape handlers (the video
+          // player's close) check defaultPrevented and must not also fire.
+          // Registered in the CAPTURE phase below — same-target bubble
+          // listeners run in registration order, and the player's (attached
+          // when it opened, before this lightbox mounted) would otherwise
+          // see the key first and close underneath us.
+          e.preventDefault();
           onClose();
           break;
         case 'ArrowLeft':
@@ -56,8 +63,8 @@ export const Lightbox = memo(function Lightbox({
           break;
       }
     }
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
+    document.addEventListener('keydown', handleKey, true);
+    return () => document.removeEventListener('keydown', handleKey, true);
   }, [onClose, handlePrev, handleNext]);
 
   // Focus trap — keep focus inside lightbox
@@ -91,7 +98,7 @@ export const Lightbox = memo(function Lightbox({
         type="button"
         onClick={onClose}
         aria-label="Close lightbox"
-        className="absolute top-4 right-4 z-10 rounded-full bg-[var(--overlay-surface)] p-2 text-[var(--overlay-text-muted)] hover:bg-[var(--overlay-surface)] hover:text-[var(--overlay-text)] transition-colors"
+        className="absolute top-4 end-4 z-10 rounded-full bg-[var(--overlay-surface)] p-2 text-[var(--overlay-text-muted)] hover:bg-[var(--overlay-surface)] hover:text-[var(--overlay-text)] transition-colors"
       >
         <X className="h-5 w-5" />
       </button>
@@ -99,7 +106,7 @@ export const Lightbox = memo(function Lightbox({
       {/* Counter badge */}
       {hasMultiple && (
         <div
-          className="absolute top-4 left-4 z-10 rounded-full bg-[var(--overlay-surface)] px-3 py-1 text-sm text-[var(--overlay-text-muted)]"
+          className="absolute top-4 start-4 z-10 rounded-full bg-[var(--overlay-surface)] px-3 py-1 text-sm text-[var(--overlay-text-muted)]"
           aria-live="polite"
           aria-atomic="true"
         >
@@ -108,7 +115,9 @@ export const Lightbox = memo(function Lightbox({
         </div>
       )}
 
-      {/* Navigation arrows */}
+      {/* Navigation arrows — deliberately physical (left/right, not
+          start/end): spatial prev/next must match the visual axis and the
+          ArrowLeft/ArrowRight keys in both text directions. */}
       {hasMultiple && activeIndex > 0 && (
         <button
           type="button"

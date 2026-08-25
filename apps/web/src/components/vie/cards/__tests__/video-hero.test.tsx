@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { VideoHero } from '../VideoHero';
-import { VideoPlayerProvider } from '@/features/video-output/contexts/VideoPlayerContext';
+import { VideoPlayerProvider, useVideoPlayer } from '@/features/video-output/contexts/VideoPlayerContext';
 
 const DEFAULT_PROPS = {
   title: 'Test Video Title',
@@ -23,6 +23,17 @@ const SAMPLE_TABS = [
 
 function renderWithPlayer(ui: ReactNode): ReturnType<typeof render> {
   return render(<VideoPlayerProvider>{ui}</VideoPlayerProvider>);
+}
+
+/** Test-only sibling that exposes seekTo so tests can simulate a timestamp
+ *  click from elsewhere in the output (MomentTrack, VisualEvidence, …). */
+function SeekProbe() {
+  const { seekTo } = useVideoPlayer();
+  return (
+    <button type="button" onClick={() => seekTo(42)}>
+      seek-probe
+    </button>
+  );
 }
 
 describe('VideoHero', () => {
@@ -196,51 +207,136 @@ describe('VideoHero', () => {
     });
   });
 
-  describe('Collapsible Key takeaways', () => {
-    beforeEach(() => {
-      // Each test starts with no persisted preference so the default-collapsed
-      // behavior is exercised explicitly.
-      localStorage.clear();
-    });
-
-    afterEach(() => {
-      localStorage.clear();
-    });
-
-    it('should default to collapsed when no localStorage preference is set', () => {
+  describe('Key takeaways watch flow', () => {
+    it('should default to open on mount', () => {
       renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
 
       const takeawaysBtn = screen.getByRole('button', { name: /key takeaways/i });
-      expect(takeawaysBtn).toHaveAttribute('aria-expanded', 'false');
+      expect(takeawaysBtn).toHaveAttribute('aria-expanded', 'true');
     });
 
-    it('should expand the Key takeaways when its toggle is clicked', async () => {
+    it('should collapse and reopen when its toggle is clicked', async () => {
       const user = userEvent.setup();
       renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
 
       const takeawaysBtn = screen.getByRole('button', { name: /key takeaways/i });
+      await user.click(takeawaysBtn);
       expect(takeawaysBtn).toHaveAttribute('aria-expanded', 'false');
 
       await user.click(takeawaysBtn);
-
       expect(takeawaysBtn).toHaveAttribute('aria-expanded', 'true');
     });
 
-    it('should persist the expanded state to localStorage', async () => {
+    it('should not read or write localStorage for the takeaways state', async () => {
       const user = userEvent.setup();
       renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
 
       await user.click(screen.getByRole('button', { name: /key takeaways/i }));
 
-      expect(localStorage.getItem('vie-hero-takeaways-open')).toBe('true');
+      expect(localStorage.getItem).not.toHaveBeenCalledWith('vie-hero-takeaways-open');
+      expect(localStorage.setItem).not.toHaveBeenCalledWith('vie-hero-takeaways-open', expect.anything());
     });
 
-    it('should restore the expanded state from localStorage on mount', () => {
-      localStorage.setItem('vie-hero-takeaways-open', 'true');
-
+    it('should auto-collapse the first time the player is opened', async () => {
+      const user = userEvent.setup();
       renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
 
+      const takeawaysBtn = screen.getByRole('button', { name: /key takeaways/i });
+      expect(takeawaysBtn).toHaveAttribute('aria-expanded', 'true');
+
+      await user.click(screen.getByRole('button', { name: /watch/i }));
+
+      expect(takeawaysBtn).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('should auto-collapse the first time a seek fires', async () => {
+      const user = userEvent.setup();
+      renderWithPlayer(
+        <>
+          <VideoHero {...DEFAULT_PROPS} />
+          <SeekProbe />
+        </>,
+      );
+
+      await user.click(screen.getByRole('button', { name: /seek-probe/i }));
+
+      expect(screen.getByRole('button', { name: /key takeaways/i })).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('should never re-collapse after the user manually reopens', async () => {
+      const user = userEvent.setup();
+      renderWithPlayer(
+        <>
+          <VideoHero {...DEFAULT_PROPS} />
+          <SeekProbe />
+        </>,
+      );
+
+      // First engage auto-collapses.
+      await user.click(screen.getByRole('button', { name: /watch/i }));
+      const takeawaysBtn = screen.getByRole('button', { name: /key takeaways/i });
+      expect(takeawaysBtn).toHaveAttribute('aria-expanded', 'false');
+
+      // User reopens by hand — later seeks must leave it alone.
+      await user.click(takeawaysBtn);
+      expect(takeawaysBtn).toHaveAttribute('aria-expanded', 'true');
+
+      await user.click(screen.getByRole('button', { name: /seek-probe/i }));
+      expect(takeawaysBtn).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('should not auto-collapse when the user toggled before engaging', async () => {
+      const user = userEvent.setup();
+      renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
+
+      const takeawaysBtn = screen.getByRole('button', { name: /key takeaways/i });
+      // Manual close + reopen marks user ownership before any engagement.
+      await user.click(takeawaysBtn);
+      await user.click(takeawaysBtn);
+      expect(takeawaysBtn).toHaveAttribute('aria-expanded', 'true');
+
+      await user.click(screen.getByRole('button', { name: /watch/i }));
+
+      expect(takeawaysBtn).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('should not auto-collapse while streaming', async () => {
+      const user = userEvent.setup();
+      renderWithPlayer(<VideoHero {...DEFAULT_PROPS} isStreaming />);
+
+      await user.click(screen.getByRole('button', { name: /watch/i }));
+
       expect(screen.getByRole('button', { name: /key takeaways/i })).toHaveAttribute('aria-expanded', 'true');
+    });
+  });
+
+  describe('Escape closes the player', () => {
+    it('should close the open player on Escape', async () => {
+      const user = userEvent.setup();
+      renderWithPlayer(<VideoHero {...DEFAULT_PROPS} />);
+
+      await user.click(screen.getByRole('button', { name: /watch/i }));
+      expect(screen.getByRole('button', { name: /hide/i })).toHaveAttribute('aria-expanded', 'true');
+
+      await user.keyboard('{Escape}');
+
+      expect(screen.getByRole('button', { name: /watch/i })).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('should not close the player when Escape is pressed inside an input', async () => {
+      const user = userEvent.setup();
+      renderWithPlayer(
+        <>
+          <VideoHero {...DEFAULT_PROPS} />
+          <input aria-label="note" />
+        </>,
+      );
+
+      await user.click(screen.getByRole('button', { name: /watch/i }));
+      await user.click(screen.getByRole('textbox', { name: /note/i }));
+      await user.keyboard('{Escape}');
+
+      expect(screen.getByRole('button', { name: /hide/i })).toHaveAttribute('aria-expanded', 'true');
     });
   });
 });

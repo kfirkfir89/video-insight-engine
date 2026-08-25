@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { FadeIn } from '@/components/vie';
 import { CollapsibleSection } from './CollapsibleSection';
 import { PlayCloseGlyph } from './PlayCloseGlyph';
+import { DOMAIN_META } from './domain-meta';
 import type { TabDefinition, ContentTag } from '@vie/types';
 
 interface VideoHeroTab extends TabDefinition {
@@ -36,22 +37,17 @@ interface VideoHeroProps {
   /** Optional difficulty / depth label shown in the identity strip ("Beginner",
    *  "Advanced", etc). */
   level?: string;
+  /** Explicit streaming flag. When omitted, falls back to inferring from a
+   *  missing tldr (legacy behavior) — pass it wherever the caller knows the
+   *  real stream state so a completed video with an empty brief doesn't
+   *  render skeletons forever. */
+  isStreaming?: boolean;
+  /** Planned tabs announced by the stream before any content lands. Rendered
+   *  as inert pills in the exact position of the final tab strip so the
+   *  placeholder mirrors the finished layout. Ignored when `tabs` exist. */
+  pendingTabs?: { id: string; label: string; emoji: string }[];
   className?: string;
 }
-
-const DOMAIN_META: Record<string, { emoji: string; label: string }> = {
-  learning: { emoji: '📚', label: 'Learning' },
-  tech: { emoji: '💻', label: 'Tech' },
-  food: { emoji: '🍳', label: 'Cooking' },
-  travel: { emoji: '✈️', label: 'Travel' },
-  fitness: { emoji: '💪', label: 'Fitness' },
-  music: { emoji: '🎵', label: 'Music' },
-  review: { emoji: '⭐', label: 'Review' },
-  project: { emoji: '🛠️', label: 'Project' },
-  language: { emoji: '🗣️', label: 'Language' },
-  science: { emoji: '🔬', label: 'Science' },
-  narrative: { emoji: '📖', label: 'Narrative' },
-};
 
 function formatDuration(seconds: number | null | undefined): string {
   if (!seconds || seconds <= 0) return '';
@@ -61,35 +57,6 @@ function formatDuration(seconds: number | null | undefined): string {
   if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
-
-// Takeaways collapse state is a global UI *preference* (visual density), not
-// per-video *content interaction* — so the key is global, matching how chrome
-// density toggles behave elsewhere. Per-video bookmarks (e.g. starred Overview
-// highlights) use a different `${prefix}-${videoId}` convention because they
-// belong to the content, not the chrome. The Brief no longer collapses — it
-// rides beside the action cluster as the always-visible headline distillate.
-const TAKEAWAYS_KEY = 'vie-hero-takeaways-open';
-
-function readPersistedOpen(key: string, defaultOpen: boolean): boolean {
-  if (typeof window === 'undefined') return defaultOpen;
-  try {
-    const saved = window.localStorage.getItem(key);
-    if (saved === null) return defaultOpen;
-    return saved === 'true';
-  } catch {
-    return defaultOpen;
-  }
-}
-
-function writePersistedOpen(key: string, value: boolean): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(key, String(value));
-  } catch {
-    /* ignore */
-  }
-}
-
 
 export const VideoHero = memo(function VideoHero({
   title,
@@ -105,29 +72,45 @@ export const VideoHero = memo(function VideoHero({
   domainGradient,
   primaryTag,
   level,
+  isStreaming: isStreamingProp,
+  pendingTabs,
   className,
 }: VideoHeroProps) {
   const t = useLabels();
-  const { togglePlayer, isPlayerOpen, playerRef } = useVideoPlayer();
+  const { togglePlayer, isPlayerOpen, playerRef, hasEngaged, registerPlayerAnchor } = useVideoPlayer();
   const durationStr = formatDuration(duration);
   const safeTabs: VideoHeroTab[] = tabs ?? [];
   const hasTabs = safeTabs.length > 0;
   const domainMeta = primaryTag ? DOMAIN_META[primaryTag] : undefined;
+  const isStreaming = isStreamingProp ?? !tldr;
+  // Pending strip renders only while streaming and before real tabs exist —
+  // same geometry as the live strip so the arrival is a fill-in, not a jump.
+  // Requires the explicit prop: legacy callers that omit it get the skeleton
+  // treatment from `isStreaming`'s tldr heuristic but never the strip.
+  const showPendingStrip = !hasTabs && isStreaming && isStreamingProp !== undefined;
 
-  // Key takeaways collapse default-closed so the hero stays short: the title +
-  // brief + action cluster land above the fold and the tab strip is reachable
-  // without scrolling. The count rides in the disclosure label, so the value is
-  // advertised even while collapsed. Persisted globally — a user who prefers
-  // them open lands open next time.
-  const [takeawaysOpen, setTakeawaysOpen] = useState<boolean>(() => readPersistedOpen(TAKEAWAYS_KEY, false));
+  // Key takeaways open on load — they ARE the landing summary. They step aside
+  // (auto-collapse, once) the first time the user engages the player, because
+  // watching displaces reading as the primary activity. No persistence: every
+  // load is a fresh read-first arrival.
+  const [takeawaysOpen, setTakeawaysOpen] = useState(true);
+  const userToggledRef = useRef(false);
+  const autoCollapsedRef = useRef(false);
 
   const toggleTakeaways = useCallback(() => {
-    setTakeawaysOpen((prev) => {
-      const next = !prev;
-      writePersistedOpen(TAKEAWAYS_KEY, next);
-      return next;
-    });
+    userToggledRef.current = true;
+    setTakeawaysOpen((prev) => !prev);
   }, []);
+
+  // One-shot auto-collapse on first engagement (seek or player open). A manual
+  // toggle at any point takes permanent ownership; while streaming the collapse
+  // waits until the stream settles so content isn't yanked mid-arrival.
+  useEffect(() => {
+    if (!hasEngaged || isStreaming) return;
+    if (autoCollapsedRef.current || userToggledRef.current) return;
+    autoCollapsedRef.current = true;
+    setTakeawaysOpen(false);
+  }, [hasEngaged, isStreaming]);
 
   // Identity strip pieces — laid out as a single row, separated by dots so the
   // metadata reads as one cohesive line instead of a stack of chips.
@@ -148,12 +131,11 @@ export const VideoHero = memo(function VideoHero({
   if (creator) identityChips.push({ key: 'creator', node: <span className="truncate max-w-[24ch]">{creator}</span> });
 
   const visibleTakeaways = keyTakeaways?.slice(0, 6);
-  const isStreaming = !tldr;
   const showTakeaways = (visibleTakeaways && visibleTakeaways.length > 0) || isStreaming;
   // When nothing renders below the header (no takeaways, no tab strip, player
   // closed), the header must carry its own bottom padding so the card doesn't
   // look clipped. Every other block supplies its own trailing space.
-  const headerNeedsBottomPad = !showTakeaways && !hasTabs && !isPlayerOpen;
+  const headerNeedsBottomPad = !showTakeaways && !hasTabs && !showPendingStrip && !isPlayerOpen;
 
   return (
     <motion.section
@@ -161,6 +143,11 @@ export const VideoHero = memo(function VideoHero({
         'relative w-full rounded-2xl border border-border bg-card',
         className,
       )}
+      // While streaming, the hero is the landing element of the
+      // "stream-input-spine" view transition — the URL input morphs into
+      // this card on navigate. Scoped to streaming so the name can't
+      // collide with a sidebar intake form on an already-finished page.
+      style={isStreaming ? ({ viewTransitionName: 'vie-input-spine' } as React.CSSProperties) : undefined}
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ ...springs.soft, delay: 0.04 }}
@@ -188,7 +175,7 @@ export const VideoHero = memo(function VideoHero({
             <h2
               id="vie-hero-title"
               className={cn(
-                'font-semibold tracking-tight leading-[1.15] text-balance line-clamp-2 text-xl md:text-2xl',
+                'font-semibold tracking-tight leading-[1.15] text-balance break-words line-clamp-2 text-xl md:text-2xl',
                 identityChips.length > 0 && 'mt-2.5',
               )}
             >
@@ -208,21 +195,24 @@ export const VideoHero = memo(function VideoHero({
           )}
         </div>
 
-        {isStreaming ? (
+        {isStreaming && !tldr ? (
           <div className="mt-3 space-y-1.5" aria-hidden="true">
             <div className="h-3.5 w-full rounded bg-muted/30 animate-pulse" />
             <div className="h-3.5 w-4/5 rounded bg-muted/30 animate-pulse" />
             <div className="h-3.5 w-3/5 rounded bg-muted/30 animate-pulse" />
           </div>
-        ) : (
+        ) : tldr ? (
           <p className="mt-3 max-w-[68ch] text-[0.95rem] leading-relaxed text-foreground/85 text-pretty">
             {tldr}
           </p>
-        )}
+        ) : null}
       </div>
 
       {youtubeId && (
         <div
+          // Registered as the seek scroll anchor: a timestamp click far down
+          // the page scrolls this wrapper back into view before the seek runs.
+          ref={registerPlayerAnchor}
           className={cn(
             'grid transition-[grid-template-rows,opacity] duration-300 ease-[var(--ease-out-expo)]',
             isPlayerOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
@@ -240,14 +230,14 @@ export const VideoHero = memo(function VideoHero({
         </div>
       )}
 
-      {/* Key takeaways — collapsed by default into a slim "Key takeaways · N"
-          disclosure. Expanded, they render as a dense two-column grid so even
-          the open state stays roughly half the height of the old single-column
-          list. While streaming the count is unknown, so the eyebrow shows a
-          static skeleton grid instead of a toggle. */}
+      {/* Key takeaways — open on load as a dense two-column grid; after the
+          user engages the player they auto-collapse (once) into the slim
+          "Key takeaways · N" disclosure, which stays as the reopen affordance.
+          While streaming the count is unknown, so the eyebrow shows a static
+          skeleton grid instead of a toggle. */}
       {showTakeaways ? (
         <div className="px-6 pb-5 md:px-7 md:pb-6 pt-4">
-          {isStreaming ? (
+          {!visibleTakeaways || visibleTakeaways.length === 0 ? (
             <div className="space-y-3" aria-hidden="true">
               <div className="flex items-center gap-2.5">
                 <span className="h-px w-5 bg-border" />
@@ -295,6 +285,46 @@ export const VideoHero = memo(function VideoHero({
           )}
         </div>
       ) : null}
+
+      {/* Streaming strip: the tab plan (or skeleton pills before it's known)
+          rendered in the exact geometry of the live strip below, so real tabs
+          arriving reads as a fill-in rather than a layout swap. Inert and
+          hidden from AT — the StreamingPlaceholder timeline carries progress
+          semantics. */}
+      {showPendingStrip && (
+        <div
+          aria-hidden="true"
+          className={cn(
+            'flex items-center gap-1.5 overflow-x-hidden',
+            'border-t border-border/60 rounded-b-2xl px-3 py-2.5 md:px-4',
+            '[mask-image:linear-gradient(to_right,transparent,black_16px,black_calc(100%-16px),transparent)]',
+          )}
+        >
+          {pendingTabs && pendingTabs.length > 0
+            ? pendingTabs.map((tab, i) => (
+                <div
+                  key={tab.id}
+                  data-stream-tab-pill
+                  style={{ '--stagger-i': i } as React.CSSProperties}
+                  className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-border/50 bg-muted/20 px-3.5 py-2 text-sm font-medium text-muted-foreground/80"
+                >
+                  {tab.emoji && (
+                    <span aria-hidden="true" className="text-[0.95rem] leading-none">
+                      {tab.emoji}
+                    </span>
+                  )}
+                  <span>{stripLeadingEmoji(tab.label)}</span>
+                </div>
+              ))
+            : [88, 104, 72, 96].map((width, i) => (
+                <div
+                  key={i}
+                  className="h-9 shrink-0 rounded-xl bg-muted/25 skeleton-breathe"
+                  style={{ width }}
+                />
+              ))}
+        </div>
+      )}
 
       {hasTabs && (
         <TooltipProvider delayDuration={300}>

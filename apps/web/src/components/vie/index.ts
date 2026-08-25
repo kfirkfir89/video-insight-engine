@@ -27,7 +27,7 @@ export { KeyValue } from './data/KeyValue';
 export { CostDisplay } from './data/CostDisplay';
 export { Timer } from './data/Timer';
 export { Timestamp } from './data/Timestamp';
-export { VisualEvidence, type VisualEvidenceProps } from './data/VisualEvidence';
+export { VisualEvidence, EvidenceImage, type VisualEvidenceProps } from './data/VisualEvidence';
 
 // Feedback & Animation
 export { Callout } from './feedback/Callout';
@@ -46,6 +46,8 @@ export { MapLink } from './interactive/MapLink';
 
 // Media
 export { ImageGallery } from './media/ImageGallery';
+export { Lightbox } from '../ui/Lightbox';
+export type { LightboxFrame } from '../ui/Lightbox';
 
 // Navigation
 export { ProgressBar } from './navigation/ProgressBar';
