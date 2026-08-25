@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import { isContentTag } from '@vie/types';
-import type { TabEntry, SynthesisResult, ContentTag, VIEResponseMeta } from '@vie/types';
+import type { TabEntry, SynthesisResult, ContentTag, VIEResponseMeta, TriageResult } from '@vie/types';
 import { getDomainGradient } from '@vie/shared/config';
 import { TabLayout, type TabLayoutHandle } from './output/TabLayout';
 import {
@@ -11,13 +11,18 @@ import { TabStateProvider } from '@/features/video-output/contexts/TabStateConte
 import { GlassCard } from './output/GlassCard';
 import { ComposableOutput } from './output/ComposableOutput';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
-import { VideoHero, EmojiMarker } from '@/components/vie';
+import { VideoHero } from '@/components/vie';
+import { StreamingPlaceholder, StreamErrorCard } from './StreamingPlaceholder';
 import { stripLeadingEmoji } from '@/lib/string-utils';
 import { DirectionProvider } from '@/contexts/DirectionContext';
 import { getLabels } from '@/lib/i18n';
 import { isRTL as isRTLLanguage } from '@/lib/rtl';
-import { cn } from '@/lib/utils';
-import type { StreamPhase, ExtractionProgressInfo } from '@/features/video-output/hooks/use-summary-stream';
+import type {
+  StreamPhase,
+  StreamPhaseDetail,
+  ExtractionProgressInfo,
+  FrameInfo,
+} from '@/features/video-output/hooks/use-summary-stream';
 import { STREAM_PHASE_LABELS } from '@/features/video-output/hooks/use-summary-stream';
 
 interface OutputRouterProps {
@@ -35,7 +40,24 @@ interface OutputRouterProps {
   language?: string;
   isRTL?: boolean;
   streamPhase?: StreamPhase;
+  phaseDetail?: StreamPhaseDetail | null;
   extractionProgress?: ExtractionProgressInfo | null;
+  /** Triage result from the stream — drives the early domain-accent bind and
+   *  the "Detected: …" moment in the streaming timeline. */
+  triage?: TriageResult | null;
+  /** Vision-analyzed frames streamed mid-pipeline; shown as work evidence. */
+  frames?: FrameInfo[];
+  /** Video poster from the metadata event — the earliest visual proof that
+   *  the pipeline is working on the right video. */
+  thumbnailUrl?: string;
+  /** Non-fatal pipeline warnings streamed so far. */
+  warnings?: string[];
+  /** User-friendly stream error. When set (and not streaming), the content
+   *  area renders an error card with a retry affordance instead of the
+   *  generic "extraction incomplete" message. */
+  streamError?: string | null;
+  onRetryStream?: () => void;
+  retryingStream?: boolean;
   /** Abort the in-flight stream. When provided, the streaming placeholder
    *  surfaces a Cancel control after a brief delay (so it doesn't compete
    *  with the peak moment). */
@@ -43,6 +65,23 @@ interface OutputRouterProps {
   /** Optional toggle for switching between original-language and English
    *  content. Rendered at the top of the content area when present. */
   languageToggle?: React.ReactNode;
+}
+
+/** Count moment_track items that carry a usable frame thumbnail. */
+function countFrameBackedItems(props: Record<string, unknown> | undefined): number {
+  const items = props && Array.isArray(props.items) ? props.items : [];
+  let count = 0;
+  for (const entry of items) {
+    if (
+      entry != null &&
+      typeof entry === 'object' &&
+      typeof (entry as { thumbnailUrl?: unknown }).thumbnailUrl === 'string' &&
+      (entry as { thumbnailUrl: string }).thumbnailUrl.length > 0
+    ) {
+      count++;
+    }
+  }
+  return count;
 }
 
 export function OutputRouter({
@@ -60,21 +99,32 @@ export function OutputRouter({
   language,
   isRTL: isRTLProp,
   streamPhase,
+  phaseDetail,
   extractionProgress,
+  triage,
+  frames,
+  thumbnailUrl,
+  warnings,
+  streamError,
+  onRetryStream,
+  retryingStream,
   onCancelStream,
   languageToggle,
 }: OutputRouterProps) {
+  // meta wins, but triage arrives much earlier in the stream — falling back
+  // to it binds the domain accent within seconds instead of waiting for
+  // assembly to start.
   const primaryTag = useMemo((): ContentTag => {
-    const raw = typeof meta?.primaryTag === 'string' ? meta.primaryTag : '';
+    const raw = typeof meta?.primaryTag === 'string' && meta.primaryTag
+      ? meta.primaryTag
+      : (typeof triage?.primaryTag === 'string' ? triage.primaryTag : '');
     if (isContentTag(raw)) return raw;
     if (raw && import.meta.env.DEV) {
       console.warn(`[OutputRouter] Invalid primaryTag "${raw}", defaulting to learning`);
     }
     return 'learning';
-  }, [meta]);
+  }, [meta, triage]);
 
-  // All tabs visible in the deck. Overview is no longer hidden — it's the
-  // default first tab and behaves like any other section.
   // Tab-preview tooltips come from the i18n bundle so non-English sessions
   // don't regress to hardcoded strings. getLabels() is pure, safe to call
   // here above DirectionProvider (it takes the language prop directly).
@@ -84,9 +134,19 @@ export function OutputRouter({
   // owns the briefing (title, brief, key takeaways), so a dedicated Overview
   // tab would just repeat content. The backend still emits it (cache-friendly),
   // we just drop it before rendering.
+  // The filmstrip tab is likewise suppressed when a moment_track tab carries
+  // rich frame coverage (≥8 frame-backed items) — its grid view already IS a
+  // filmstrip with context, so a second frame strip would just repeat frames.
   const orderedTabs = useMemo(() => {
     if (!tabs || tabs.length === 0) return tabs;
-    return tabs.filter((t) => t.id !== 'overview' && t.component !== 'overview');
+    const hasRichMomentTrack = tabs.some(
+      (t) => t.component === 'moment_track' && countFrameBackedItems(t.props) >= 8,
+    );
+    return tabs.filter((t) => {
+      if (t.id === 'overview' || t.component === 'overview') return false;
+      if (t.component === 'video_filmstrip' && hasRichMomentTrack) return false;
+      return true;
+    });
   }, [tabs]);
 
   const tabDefs = useMemo(() => {
@@ -104,7 +164,13 @@ export function OutputRouter({
   const domainGradient = useMemo(() => getDomainGradient(primaryTag), [primaryTag]);
   const initialTab = tabDefs[0]?.id ?? '';
 
-  if (!hasData && !isStreaming) return null;
+  // Suppressed tabs (overview, redundant filmstrip) are filtered out of the
+  // strip above, but tabCount (from meta/complete) includes them — subtract
+  // them so "N of M" can actually reach M.
+  const suppressedTabCount = (tabs?.length ?? 0) - (orderedTabs?.length ?? 0);
+  const adjustedTabCount = Math.max(0, tabCount - suppressedTabCount);
+
+  if (!hasData && !isStreaming && !streamError) return null;
 
   return (
     <DirectionProvider language={language} isRTL={isRTLProp ?? isRTLLanguage(language)}>
@@ -130,13 +196,14 @@ export function OutputRouter({
                 tabDefs={tabDefs}
                 domainGradient={domainGradient}
                 primaryTag={primaryTag}
+                isStreaming={isStreaming}
               />
               <TabPanel
                 tabDefs={tabDefs}
                 tabs={orderedTabs}
                 primaryTag={primaryTag}
                 isStreaming={isStreaming}
-                tabCount={tabCount}
+                tabCount={adjustedTabCount}
                 streamPhase={streamPhase}
                 videoSummaryId={videoSummaryId}
               />
@@ -154,13 +221,28 @@ export function OutputRouter({
               youtubeId={youtubeId}
               primaryTag={primaryTag}
               domainGradient={domainGradient}
+              isStreaming={isStreaming}
+              pendingTabs={tabLabels}
             />
             {isStreaming ? (
               <StreamingPlaceholder
-                tabLabels={tabLabels}
                 streamPhase={streamPhase}
+                phaseDetail={phaseDetail}
                 extractionProgress={extractionProgress ?? null}
+                triage={triage}
+                frames={frames}
+                thumbnailUrl={thumbnailUrl}
+                tabCount={tabCount}
+                tabLabels={tabLabels}
+                language={language}
+                warnings={warnings}
                 onCancel={onCancelStream}
+              />
+            ) : streamError ? (
+              <StreamErrorCard
+                message={streamError}
+                onRetry={onRetryStream}
+                retrying={retryingStream}
               />
             ) : (
               <GlassCard>
@@ -191,6 +273,7 @@ interface CommandDeckProps {
   tabDefs: Array<{ id: string; label: string; emoji: string; preview?: string; dataSource: string }>;
   domainGradient: string;
   primaryTag: ContentTag;
+  isStreaming?: boolean;
 }
 
 /** Reads active-tab state from coordination context and renders the hero with
@@ -207,6 +290,7 @@ function CommandDeck({
   tabDefs,
   domainGradient,
   primaryTag,
+  isStreaming,
 }: CommandDeckProps) {
   // CommandDeck is only rendered inside <TabCoordinationProvider> (see parent
   // render). Context must be present — fail loud if a future refactor breaks
@@ -232,6 +316,7 @@ function CommandDeck({
       completedTabs={completedTabs}
       domainGradient={domainGradient}
       primaryTag={primaryTag}
+      isStreaming={isStreaming}
     />
   );
 }
@@ -281,208 +366,3 @@ function TabPanel({ tabDefs, tabs, primaryTag, isStreaming, tabCount, streamPhas
   );
 }
 
-interface StreamingPlaceholderProps {
-  tabLabels: { id: string; label: string; emoji: string }[];
-  streamPhase?: StreamPhase;
-  extractionProgress?: ExtractionProgressInfo | null;
-  onCancel?: () => void;
-}
-
-/** Delay (ms) before the Cancel control fades in. The peak moment of the
- *  product is the first ~5s of streaming — phase emoji breathing, tab pills
- *  materializing. A Cancel button competing for attention during that beat
- *  would dilute it; surface it once the user has settled into "waiting". */
-const CANCEL_REVEAL_MS = 5000;
-
-const PHASE_EMOJI: Partial<Record<StreamPhase, string>> = {
-  connecting: '⚡',
-  metadata: '📡',
-  triage: '🧠',
-  extraction: '🔍',
-  enrichment: '✨',
-  synthesis: '📝',
-};
-
-const PHASE_HUE: Partial<Record<StreamPhase, number>> = {
-  connecting: 290,
-  metadata: 290,
-  triage: 260,
-  extraction: 60,
-  enrichment: 180,
-  synthesis: 330,
-};
-
-function StreamingPlaceholder({ tabLabels, streamPhase, extractionProgress, onCancel }: StreamingPlaceholderProps) {
-  const phaseEmoji = streamPhase ? PHASE_EMOJI[streamPhase] : '⚡';
-  const hue = streamPhase ? (PHASE_HUE[streamPhase] ?? 290) : 290;
-
-  // Cancel control is hidden for the first ~5s so the streaming peak moment
-  // (phase emoji breathing, tab pills materializing) doesn't have to share
-  // attention with an abort affordance.
-  const [showCancel, setShowCancel] = useState(false);
-  useEffect(() => {
-    if (!onCancel) return;
-    const t = setTimeout(() => setShowCancel(true), CANCEL_REVEAL_MS);
-    return () => clearTimeout(t);
-  }, [onCancel]);
-
-  // Per-batch extraction label only renders when chunked extraction is the
-  // active strategy (`of` is sent only by that path). Single/overflow
-  // extractions keep the current generic phase label.
-  const showBatchLabel =
-    streamPhase === 'extraction' &&
-    !!extractionProgress &&
-    typeof extractionProgress.of === 'number' &&
-    extractionProgress.of > 1;
-  const batchPercent = extractionProgress?.percent ?? 0;
-  const isSequentialFallback = extractionProgress?.section === 'chunked-sequential';
-
-  return (
-    <div className="relative flex flex-col gap-6">
-      <div
-        className="vie-stream-backdrop pointer-events-none absolute -inset-x-4 -top-8 -bottom-4 rounded-3xl"
-        aria-hidden="true"
-        style={{ '--vie-stream-hue': hue } as React.CSSProperties}
-      />
-
-      {tabLabels.length > 0 ? (
-        <div className="relative flex gap-2 overflow-x-auto px-1 py-2">
-          {tabLabels.map((t, i) => (
-            <div
-              key={t.id}
-              data-stream-tab-pill
-              style={{ '--stagger-i': i } as React.CSSProperties}
-              className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border/40 bg-muted/20 px-3.5 py-1.5 text-sm text-muted-foreground/80"
-            >
-              <EmojiMarker emoji={t.emoji} size="sm" animated={false} />
-              <span>{t.label}</span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="relative h-10 rounded-xl bg-muted/30 animate-pulse" />
-      )}
-
-      <div
-        className="relative flex flex-col items-center justify-center gap-5 rounded-2xl border border-border/60 bg-card/60 backdrop-blur-sm py-16"
-        role="status"
-        aria-live="polite"
-      >
-        {phaseEmoji && (
-          <EmojiMarker
-            emoji={phaseEmoji}
-            size="lg"
-            animated={false}
-            className="animate-[emoji-breathe_3s_ease-in-out_infinite] motion-reduce:animate-none select-none"
-          />
-        )}
-        <p className="text-base md:text-lg font-medium text-foreground">
-          {showBatchLabel
-            ? `Extracting batch ${extractionProgress?.batch}/${extractionProgress?.of}…`
-            : streamPhase ? STREAM_PHASE_LABELS[streamPhase] : 'Getting ready…'}
-        </p>
-        {showBatchLabel && (
-          <div className="w-full max-w-xs flex flex-col items-center gap-2">
-            <div
-              className="h-1.5 w-full overflow-hidden rounded-full bg-muted/40"
-              role="progressbar"
-              aria-valuenow={batchPercent}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
-              <div
-                className="h-full rounded-full bg-foreground/70 transition-[width] duration-500 ease-out"
-                style={{ width: `${Math.min(100, Math.max(0, batchPercent))}%` }}
-              />
-            </div>
-            {isSequentialFallback && (
-              <p className="text-xs text-muted-foreground/80">
-                (running sequentially due to upstream load)
-              </p>
-            )}
-          </div>
-        )}
-        <StreamProgressSteps phase={streamPhase} />
-        {onCancel && showCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className={cn(
-              'mt-1 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium',
-              'text-muted-foreground/80 hover:text-foreground transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              'animate-in fade-in duration-300 motion-reduce:animate-none',
-            )}
-          >
-            Cancel
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-const PIPELINE_STEPS: readonly StreamPhase[] = [
-  'connecting',
-  'metadata',
-  'triage',
-  'extraction',
-  'enrichment',
-  'synthesis',
-] as const;
-
-const STEP_LABEL: Partial<Record<StreamPhase, string>> = {
-  connecting: 'Connect',
-  metadata: 'Read',
-  triage: 'Understand',
-  extraction: 'Highlight',
-  enrichment: 'Build',
-  synthesis: 'Summarize',
-};
-
-interface StreamProgressStepsProps {
-  phase?: StreamPhase;
-}
-
-function StreamProgressSteps({ phase }: StreamProgressStepsProps) {
-  const activeIndex = phase ? PIPELINE_STEPS.indexOf(phase) : -1;
-  const currentStep = activeIndex >= 0 ? activeIndex + 1 : 0;
-  const totalSteps = PIPELINE_STEPS.length;
-
-  return (
-    <div className="relative flex flex-col items-center gap-2">
-      <div
-        className="flex items-center gap-1.5"
-        role="progressbar"
-        aria-valuenow={currentStep}
-        aria-valuemin={0}
-        aria-valuemax={totalSteps}
-      >
-        {PIPELINE_STEPS.map((step, idx) => {
-          const isComplete = activeIndex >= 0 && idx < activeIndex;
-          const isActive = idx === activeIndex;
-          return (
-            <span
-              key={step}
-              aria-hidden="true"
-              className={cn(
-                'h-1.5 rounded-full transition-all duration-500',
-                isActive
-                  ? 'w-6 bg-primary'
-                  : isComplete
-                    ? 'w-2.5 bg-primary/70'
-                    : 'w-2.5 bg-muted',
-              )}
-            />
-          );
-        })}
-      </div>
-      {currentStep > 0 && (
-        <p className="text-xs text-muted-foreground/70 tabular-nums">
-          Step {currentStep} of {totalSteps}
-          {phase && STEP_LABEL[phase] ? ` · ${STEP_LABEL[phase]}` : ''}
-        </p>
-      )}
-    </div>
-  );
-}

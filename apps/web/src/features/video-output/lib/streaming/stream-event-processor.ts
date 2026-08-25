@@ -11,9 +11,10 @@ import {
   validateErrorEvent,
   validatePhaseEvent,
 } from "@/features/video-output/lib/streaming/sse-validators";
+import type { SSEPhase } from "@/features/video-output/lib/streaming/sse-validators";
 import { getUserFriendlyError } from "@/features/video-output/lib/streaming/stream-error-messages";
 import { validateTabProps } from "@/features/video-output/lib/tab-prop-schemas";
-import type { StreamState, FrameInfo } from "@/features/video-output/hooks/use-summary-stream";
+import type { StreamState, FrameInfo, StreamPhase, StreamPhaseDetail } from "@/features/video-output/hooks/use-summary-stream";
 import type { ContentTag, TabDefinition, TabEntry, VIEResponseMeta, EnrichmentData, QuizQuestion, Flashcard, CodeCheatSheetItem, ScenarioItem, Modifier } from "@vie/types";
 
 type SetState = Dispatch<SetStateAction<StreamState>>;
@@ -48,11 +49,33 @@ function isValidCrossTabLink(v: unknown): v is { targetTab: string; label: strin
 
 // ─── Event Handlers (grouped by domain) ───
 
+/** Raw SSE phase → UI phase (+ flavor detail). The summarizer's transcription
+ *  layer emits finer-grained phases than the UI timeline shows; collapse them
+ *  here so every emitted value maps to a visible stage instead of freezing
+ *  the display on whatever phase came before.
+ *  Typed total over SSEPhase so the compiler enforces the invariant: a phase
+ *  added to VALID_SSE_PHASES without a mapping here (or vice versa) is a
+ *  build error, never a silent UI freeze. */
+const SSE_PHASE_MAP: Record<SSEPhase, { phase: StreamPhase; detail: StreamPhaseDetail | null }> = {
+  metadata: { phase: "metadata", detail: null },
+  transcript: { phase: "transcript", detail: null },
+  transcript_cached: { phase: "transcript", detail: "captions-cached" },
+  audio_transcription: { phase: "transcript", detail: "audio-transcription" },
+  whisper_transcription: { phase: "transcript", detail: "audio-transcription" },
+  metadata_fallback: { phase: "transcript", detail: "metadata-only" },
+  triage: { phase: "extraction", detail: null },
+  extraction: { phase: "extraction", detail: null },
+  enrichment: { phase: "building", detail: null },
+  synthesis: { phase: "building", detail: null },
+  translation: { phase: "translation", detail: null },
+};
+
 function handlePhaseEvent(event: Record<string, unknown>, setState: SetState): void {
-  const phase = validatePhaseEvent(event);
-  if (phase) {
-    setState((prev) => ({ ...prev, phase: phase as StreamState["phase"] }));
-  }
+  const raw = validatePhaseEvent(event);
+  if (!raw) return;
+  const mapped = SSE_PHASE_MAP[raw];
+  if (!mapped) return;
+  setState((prev) => ({ ...prev, phase: mapped.phase, phaseDetail: mapped.detail }));
 }
 
 function handleMetadataEvent(event: Record<string, unknown>, setState: SetState): void {
@@ -60,9 +83,18 @@ function handleMetadataEvent(event: Record<string, unknown>, setState: SetState)
   setState((prev) => ({
     ...prev,
     phase: "metadata",
+    phaseDetail: null,
     metadata,
     duration: metadata.duration ?? null,
   }));
+}
+
+/** Transcript finished — carries the authoritative duration (yt metadata can
+ *  be absent for some sources). Phase advancement comes from triage_complete. */
+function handleTranscriptReady(event: Record<string, unknown>, setState: SetState): void {
+  const duration = typeof event.duration === "number" ? event.duration : null;
+  if (duration == null) return;
+  setState((prev) => ({ ...prev, duration }));
 }
 
 function handleTriageEvent(event: Record<string, unknown>, setState: SetState): void {
@@ -82,6 +114,7 @@ function handleTriageEvent(event: Record<string, unknown>, setState: SetState): 
   setState((prev) => ({
     ...prev,
     phase: "extraction",
+    phaseDetail: null,
     triage: { contentTags, modifiers, primaryTag, userGoal, tabs, confidence },
   }));
 }
@@ -96,6 +129,7 @@ function handleExtractionProgress(event: Record<string, unknown>, setState: SetS
   setState((prev) => ({
     ...prev,
     phase: "extraction",
+    phaseDetail: null,
     extractionProgress: { section, percent, batch, of },
   }));
 }
@@ -184,6 +218,11 @@ function handleMetaEvent(event: Record<string, unknown>, setState: SetState): vo
   const tabLabels = Array.isArray(event.tabLabels)
     ? event.tabLabels.filter(isValidTabLabel)
     : [];
+  // meta fires at PLAN time (triage phase), not assembly — setting phase
+  // "building" here made the UI jump ahead and then regress on the first
+  // extraction_progress. Leave the phase alone; triage_complete already set
+  // "extraction" and the real enrichment/synthesis phase events advance it.
+  // Keep the tabs reset — it protects reconnects and cached replay.
   setState((prev) => ({ ...prev, meta, tabs: [], tabCount, tabLabels }));
 }
 
@@ -204,9 +243,14 @@ function handleTabReady(event: Record<string, unknown>, setState: SetState): voi
     typeof event.component === "string" ? event.component : "",
     sanitizeTabProps(rawProps),
   );
-  const tab: TabEntry = {
-    id: typeof event.id === "string" ? event.id : "",
-    label: typeof event.label === "string" ? event.label : "",
+  // An id-less tab must not collapse into the previous id-less tab via the
+  // replace-by-id dedupe below — synthesize a per-position id and always
+  // append. The position suffix keeps two id-less tabs with the same
+  // component+label from sharing a React key / DOM id / selection target.
+  const rawId = typeof event.id === "string" && event.id ? event.id : null;
+  const label = typeof event.label === "string" ? event.label : "";
+  const base: Omit<TabEntry, "id"> = {
+    label,
     emoji: typeof event.emoji === "string" ? event.emoji : "",
     component: validated.component,
     props: validated.props,
@@ -214,21 +258,41 @@ function handleTabReady(event: Record<string, unknown>, setState: SetState): voi
       ? event.crossTabLinks.filter(isValidCrossTabLink)
       : undefined,
   };
+  // Index in the persisted tab order. moment_track tabs are held back by the
+  // backend (they stream last, after their frame fill); splicing by position
+  // keeps the streamed order equal to the DB doc's, so nothing reshuffles once
+  // the doc becomes authoritative on completion.
+  const position =
+    typeof event.position === "number" && Number.isInteger(event.position) && event.position >= 0
+      ? event.position
+      : null;
   setState((prev) => {
-    const existingIdx = prev.tabs.findIndex(t => t.id === tab.id);
+    const id = rawId ?? `${validated.component || "tab"}-${label}-${prev.tabs.length}`.trim();
+    const tab: TabEntry = { id, ...base };
+    const existingIdx = rawId !== null ? prev.tabs.findIndex(t => t.id === tab.id) : -1;
     if (existingIdx >= 0) {
       const updated = [...prev.tabs];
       updated[existingIdx] = tab;
       return { ...prev, tabs: updated };
     }
-    return { ...prev, tabs: [...prev.tabs, tab] };
+    const tabs = [...prev.tabs];
+    tabs.splice(position === null ? tabs.length : Math.min(position, tabs.length), 0, tab);
+    return { ...prev, tabs };
   });
 }
 
 function handleCompleteEvent(event: Record<string, unknown>, setState: SetState): void {
   const processingTimeMs = typeof event.processingTimeMs === "number" ? event.processingTimeMs : null;
   const degraded = event.degraded === true;
-  setState((prev) => ({ ...prev, processingTimeMs, degraded: prev.degraded || degraded }));
+  // The complete event carries the ASSEMBLED tab count — replace the plan-time
+  // count from meta so the "N of M" denominator stops promising dropped tabs.
+  const tabCount = typeof event.tabCount === "number" ? event.tabCount : null;
+  setState((prev) => ({
+    ...prev,
+    processingTimeMs,
+    degraded: prev.degraded || degraded,
+    ...(tabCount !== null ? { tabCount } : {}),
+  }));
 }
 
 function handleFramesEvent(event: Record<string, unknown>, setState: SetState): void {
@@ -269,6 +333,7 @@ const EVENT_HANDLERS: Record<string, (event: Record<string, unknown>, setState: 
   cached: (_, setState) => setState((prev) => ({ ...prev, isCached: true })),
   phase: handlePhaseEvent,
   metadata: handleMetadataEvent,
+  transcript_ready: handleTranscriptReady,
   triage_complete: handleTriageEvent,
   intent_detected: handleTriageEvent,
   extraction_progress: handleExtractionProgress,

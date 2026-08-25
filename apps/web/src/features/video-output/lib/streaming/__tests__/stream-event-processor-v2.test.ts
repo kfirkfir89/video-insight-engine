@@ -40,6 +40,7 @@ vi.mock('@/features/video-output/lib/streaming/stream-error-messages', () => ({
 
 const initialState: StreamState = {
   phase: 'idle',
+  phaseDetail: null,
   metadata: null,
   duration: null,
   error: null,
@@ -669,6 +670,38 @@ describe('stream-event-processor — Pipeline events', () => {
 
       expect(mockSetState.getState().tabs[0].props).toEqual({});
     });
+
+    it('should splice a late tab into its persisted position', () => {
+      // The backend holds moment_track back until its frame fill completes and
+      // streams it last with position = its index in the persisted order.
+      const base = { event: 'tab_ready', emoji: '•', component: 'display_section', props: {} };
+      processEvent({ ...base, id: 'overview', label: 'Overview', position: 0 }, mockSetState.setState);
+      processEvent({ ...base, id: 'facts', label: 'Facts', position: 2 }, mockSetState.setState);
+      processEvent({ ...base, id: 'moments', label: 'Moments', position: 1 }, mockSetState.setState);
+
+      expect(mockSetState.getState().tabs.map((t) => t.id)).toEqual(['overview', 'moments', 'facts']);
+    });
+
+    it('should append when position is missing or invalid', () => {
+      const base = { event: 'tab_ready', emoji: '•', component: 'display_section', props: {} };
+      processEvent({ ...base, id: 'a', label: 'A' }, mockSetState.setState);
+      processEvent({ ...base, id: 'b', label: 'B', position: -1 }, mockSetState.setState);
+      processEvent({ ...base, id: 'c', label: 'C', position: 'first' }, mockSetState.setState);
+      processEvent({ ...base, id: 'd', label: 'D', position: 99 }, mockSetState.setState);
+
+      expect(mockSetState.getState().tabs.map((t) => t.id)).toEqual(['a', 'b', 'c', 'd']);
+    });
+
+    it('should replace in place (not move) when a positioned tab re-arrives', () => {
+      const base = { event: 'tab_ready', emoji: '•', component: 'display_section', props: {} };
+      processEvent({ ...base, id: 'a', label: 'A', position: 0 }, mockSetState.setState);
+      processEvent({ ...base, id: 'b', label: 'B', position: 1 }, mockSetState.setState);
+      processEvent({ ...base, id: 'a', label: 'A2', position: 1 }, mockSetState.setState);
+
+      const tabs = mockSetState.getState().tabs;
+      expect(tabs.map((t) => t.id)).toEqual(['a', 'b']);
+      expect(tabs[0].label).toBe('A2');
+    });
   });
 
   // ─────────────────────────────────────────────────────
@@ -803,6 +836,127 @@ describe('stream-event-processor — Pipeline events', () => {
       );
 
       expect(mockSetState.getState().degraded).toBe(false);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────
+  // phase mapping (raw SSE phase → UI phase + detail)
+  // ─────────────────────────────────────────────────────
+
+  describe('phase mapping', () => {
+    it.each([
+      ['metadata', 'metadata', null],
+      ['transcript', 'transcript', null],
+      ['transcript_cached', 'transcript', 'captions-cached'],
+      ['audio_transcription', 'transcript', 'audio-transcription'],
+      ['whisper_transcription', 'transcript', 'audio-transcription'],
+      ['metadata_fallback', 'transcript', 'metadata-only'],
+      ['triage', 'extraction', null],
+      ['extraction', 'extraction', null],
+      ['enrichment', 'building', null],
+      ['synthesis', 'building', null],
+      ['translation', 'translation', null],
+    ])('should map raw phase "%s" to UI phase "%s"', (raw, expectedPhase, expectedDetail) => {
+      processEvent({ event: 'phase', phase: raw }, mockSetState.setState);
+
+      const state = mockSetState.getState();
+      expect(state.phase).toBe(expectedPhase);
+      expect(state.phaseDetail).toBe(expectedDetail);
+    });
+
+    it('should ignore unknown raw phases without changing state', () => {
+      processEvent({ event: 'phase', phase: 'metadata' }, mockSetState.setState);
+      processEvent({ event: 'phase', phase: 'not_a_phase' }, mockSetState.setState);
+
+      expect(mockSetState.getState().phase).toBe('metadata');
+    });
+
+    it('should clear phaseDetail when a later stage begins', () => {
+      processEvent({ event: 'phase', phase: 'whisper_transcription' }, mockSetState.setState);
+      processEvent(
+        { event: 'triage_complete', contentTags: ['tech'], primaryTag: 'tech', confidence: 0.9 },
+        mockSetState.setState,
+      );
+
+      const state = mockSetState.getState();
+      expect(state.phase).toBe('extraction');
+      expect(state.phaseDetail).toBeNull();
+    });
+  });
+
+  describe('meta leaves the phase alone', () => {
+    it('should NOT advance the phase (meta fires at plan time, not assembly)', () => {
+      processEvent({ event: 'phase', phase: 'extraction' }, mockSetState.setState);
+      processEvent({ event: 'meta', tabCount: 4, tabLabels: [] }, mockSetState.setState);
+
+      expect(mockSetState.getState().phase).toBe('extraction');
+    });
+  });
+
+  describe('complete updates tabCount to the assembled count', () => {
+    it('should replace the plan-time tabCount with the assembled count', () => {
+      processEvent({ event: 'meta', tabCount: 6, tabLabels: [] }, mockSetState.setState);
+      processEvent(
+        { event: 'complete', tabCount: 4, processingTimeMs: 100 },
+        mockSetState.setState,
+      );
+
+      expect(mockSetState.getState().tabCount).toBe(4);
+    });
+
+    it('should keep the prior tabCount when complete omits it', () => {
+      processEvent({ event: 'meta', tabCount: 6, tabLabels: [] }, mockSetState.setState);
+      processEvent({ event: 'complete', processingTimeMs: 100 }, mockSetState.setState);
+
+      expect(mockSetState.getState().tabCount).toBe(6);
+    });
+  });
+
+  describe('id-less tabs do not collapse', () => {
+    it('should append two id-less tab_ready events as two tabs', () => {
+      processEvent(
+        { event: 'tab_ready', label: 'First', component: 'display_section', props: {} },
+        mockSetState.setState,
+      );
+      processEvent(
+        { event: 'tab_ready', label: 'Second', component: 'display_section', props: {} },
+        mockSetState.setState,
+      );
+
+      expect(mockSetState.getState().tabs).toHaveLength(2);
+    });
+
+    it('should still replace a re-sent tab with the same real id', () => {
+      processEvent(
+        { event: 'tab_ready', id: 'a', label: 'v1', component: 'display_section', props: {} },
+        mockSetState.setState,
+      );
+      processEvent(
+        { event: 'tab_ready', id: 'a', label: 'v2', component: 'display_section', props: {} },
+        mockSetState.setState,
+      );
+
+      const tabs = mockSetState.getState().tabs;
+      expect(tabs).toHaveLength(1);
+      expect(tabs[0].label).toBe('v2');
+    });
+  });
+
+  describe('transcript_ready', () => {
+    it('should store the duration from the event', () => {
+      processEvent({ event: 'transcript_ready', duration: 5400 }, mockSetState.setState);
+
+      expect(mockSetState.getState().duration).toBe(5400);
+    });
+
+    it('should keep the existing duration when the event omits it', () => {
+      processEvent(
+        { event: 'metadata', title: 'T', duration: 600 },
+        mockSetState.setState,
+      );
+      processEvent({ event: 'transcript_ready' }, mockSetState.setState);
+
+      expect(mockSetState.getState().duration).toBe(600);
     });
   });
 });

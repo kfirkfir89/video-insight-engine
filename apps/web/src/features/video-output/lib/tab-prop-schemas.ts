@@ -118,7 +118,20 @@ const overviewSchema = looseObject;
 const infoGridSchema = z
   .object({
     items: z.array(
-      z.object({ key: z.string(), value: z.union([z.string(), z.number()]) }).passthrough(),
+      z
+        .object({
+          key: z.string(),
+          // Optional — the assembler legitimately emits `""` (or omits the
+          // field) for key-only "headline chips". Requiring it downgraded the
+          // WHOLE tab to display_section over one value-less row; the renderer
+          // already guards `item.value &&` per item. Transform (not .default —
+          // that only covers undefined) so null normalizes to '' too.
+          value: z
+            .union([z.string(), z.number()])
+            .nullish()
+            .transform((v) => v ?? ''),
+        })
+        .passthrough(),
     ),
     sections: z
       .array(z.object({ label: z.string(), indices: z.array(nonNegativeInt) }).passthrough())

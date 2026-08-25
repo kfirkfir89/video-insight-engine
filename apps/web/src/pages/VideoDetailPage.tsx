@@ -16,6 +16,7 @@ import { VideoPlayerProvider } from "@/features/video-output/contexts/VideoPlaye
 import { Confetti } from "@/components/ui/Confetti";
 import { buildSynthesisFromMeta } from "@/features/video-output/lib/synthesis-utils";
 import { shouldOpenStreamForStatus } from "@/features/video-output/lib/streaming/should-open-stream";
+import { resolveDisplayTabs } from "@/features/video-output/lib/streaming/resolve-display-tabs";
 import type { TabEntry } from "@vie/types";
 
 // localStorage key for the cross-video language preference. Scoped under
@@ -59,8 +60,11 @@ export function VideoDetailPage() {
     };
   }, [videoSummaryId, setViewingVideo]);
 
-  // Stable callback to avoid recreating on every render
-  const handleStreamComplete = useCallback(() => {
+  // One settled handler for both outcomes (stable to avoid re-creation):
+  // on complete, refetch swaps in the persisted doc; on error, refetch lets
+  // the record's status flip to "failed" swap in the full-page failure UI
+  // (until then OutputRouter shows the inline stream-error card).
+  const handleStreamSettled = useCallback(() => {
     refetch();
   }, [refetch]);
 
@@ -87,7 +91,12 @@ export function VideoDetailPage() {
     tabCount,
     tabLabels,
     phase,
+    phaseDetail,
     extractionProgress,
+    triage: streamTriage,
+    frames: streamFrames,
+    warnings: streamWarnings,
+    error: streamError,
     confettiCount,
     degraded: streamDegraded,
     stop: stopStream,
@@ -98,7 +107,8 @@ export function VideoDetailPage() {
     // re-entering a video the user just cancelled would auto-resubscribe and
     // make the Cancel button feel decorative.
     enabled: isProcessing && !!videoSummaryId && !isCancelled,
-    onComplete: handleStreamComplete,
+    onComplete: handleStreamSettled,
+    onError: handleStreamSettled,
   });
 
   // Cancel handler — flags the id as user-cancelled (so revisits show Resume
@@ -170,20 +180,33 @@ export function VideoDetailPage() {
   // direction wrapping LTR-English streamed content.
   const useOriginal = !isProcessing && showOriginal && canToggleLanguage;
 
+  // Completed DB doc beats a (possibly partial) streamed set — a dropped SSE
+  // connection must not pin a subset of tabs after the pipeline finished.
   const resolvedTabs = useMemo((): TabEntry[] | null => {
-    if (streamTabs.length > 0) return streamTabs;
-    if (useOriginal && sourceLanguage) return sourceLanguage.tabs;
     const englishTabs = video?.tabs;
-    return Array.isArray(englishTabs) && englishTabs.length > 0
-      ? (englishTabs as TabEntry[])
-      : null;
-  }, [streamTabs, useOriginal, sourceLanguage, video?.tabs]);
+    const dbTabs = useOriginal && sourceLanguage
+      ? sourceLanguage.tabs
+      : Array.isArray(englishTabs) && englishTabs.length > 0
+        ? (englishTabs as TabEntry[])
+        : null;
+    // Streamed tabs are always English-shape; when the user is viewing the
+    // original-language doc, the defensive stream-wins count comparison would
+    // be cross-language — drop the stream side entirely in that mode.
+    return resolveDisplayTabs({
+      streamTabs: useOriginal ? [] : streamTabs,
+      dbTabs,
+      videoStatus: video?.status,
+    });
+  }, [streamTabs, useOriginal, sourceLanguage, video?.tabs, video?.status]);
 
   const resolvedMeta = useMemo(() => {
+    const dbMeta = useOriginal && sourceLanguage ? sourceLanguage.meta : (video?.meta ?? null);
+    // Same precedence as tabs: a completed doc's meta is richer than the
+    // plan-time stream meta.
+    if (video?.status === "completed" && dbMeta) return dbMeta;
     if (streamMeta) return streamMeta;
-    if (useOriginal && sourceLanguage) return sourceLanguage.meta;
-    return video?.meta ?? null;
-  }, [streamMeta, useOriginal, sourceLanguage, video?.meta]);
+    return dbMeta;
+  }, [streamMeta, useOriginal, sourceLanguage, video?.meta, video?.status]);
 
   // Synthesis is always derived from meta — meta is the superset (carries
   // tldr / masterSummary / keyTakeaways / seoDescription). `resolvedMeta`
@@ -431,7 +454,15 @@ export function VideoDetailPage() {
             language={displayLanguage}
             isRTL={displayIsRTL}
             streamPhase={phase}
+            phaseDetail={phaseDetail}
             extractionProgress={extractionProgress}
+            triage={streamTriage}
+            frames={streamFrames}
+            thumbnailUrl={mergedVideo.thumbnailUrl ?? undefined}
+            warnings={streamWarnings}
+            streamError={phase === "error" ? streamError : null}
+            onRetryStream={handleRetry}
+            retryingStream={retryVideo.isPending}
             onCancelStream={isStreaming ? handleCancelStream : undefined}
             languageToggle={
               canToggleLanguage && sourceLanguage ? (
