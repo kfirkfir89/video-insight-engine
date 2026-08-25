@@ -121,6 +121,10 @@ export interface SSETabReadyEvent {
   component: string;
   props: Record<string, unknown>;
   crossTabLinks?: { targetTab: string; label: string }[];
+  /** Index in the persisted tab order. Held-back tabs (moment_track streams
+   *  last, after its frame fill) are spliced in by it so streamed order
+   *  matches the DB doc. */
+  position?: number;
 }
 
 export interface SSECompleteEvent {
