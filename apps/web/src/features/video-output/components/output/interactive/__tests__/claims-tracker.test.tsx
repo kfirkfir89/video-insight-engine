@@ -50,13 +50,24 @@ describe('ClaimsTracker', () => {
     ).toBeInTheDocument();
   });
 
-  it('filters claims to a single status when a filter tab is clicked', async () => {
+  it('filters claims to a single status when a filter toggle is clicked', async () => {
     const user = userEvent.setup();
     render(<ClaimsTracker claims={claims} />);
-    await user.click(screen.getByRole('tab', { name: /disputed/i }));
+    // Filters are toggle buttons in a group (no tabpanels → not a tablist).
+    const group = screen.getByRole('group', { name: /filter claims by status/i });
+    const disputed = within(group).getByRole('button', { name: /disputed/i });
+    expect(disputed).toHaveAttribute('aria-pressed', 'false');
+    await user.click(disputed);
+    expect(disputed).toHaveAttribute('aria-pressed', 'true');
     const list = screen.getByRole('list', { name: /tracked claims/i });
     expect(within(list).getByText('The plan creates 1,200 jobs')).toBeInTheDocument();
     expect(within(list).queryByText('Fares will rise 15% in 2026')).not.toBeInTheDocument();
+  });
+
+  it('promotes the source citation into a labeled evidence block', () => {
+    render(<ClaimsTracker claims={claims} />);
+    // Exactly one claim carries a citation → one "Evidence" eyebrow.
+    expect(screen.getAllByText('Evidence')).toHaveLength(1);
   });
 
   it('seeks to the claim timestamp when the timestamp button is clicked', async () => {

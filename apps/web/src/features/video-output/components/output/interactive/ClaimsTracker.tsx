@@ -1,5 +1,5 @@
 import { memo, useMemo, useState } from 'react';
-import { CheckCircle2, AlertTriangle, Info, Clock, BadgeCheck } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Info, Clock, BadgeCheck, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ClaimItem, ClaimStatus } from '@vie/types';
 import { GlassCard, FadeIn, Badge } from '@/components/vie';
@@ -56,7 +56,8 @@ export const ClaimsTracker = memo(function ClaimsTracker({ claims, onSeek }: Cla
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter claims by status">
+      {/* Toggle buttons, not a tablist — there are no tabpanels to control. */}
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter claims by status">
         {FILTER_ORDER.map((option) => {
           const active = filter === option;
           const count = option === 'all' ? claims.length : counts[option];
@@ -66,8 +67,7 @@ export const ClaimsTracker = memo(function ClaimsTracker({ claims, onSeek }: Cla
             <button
               key={option}
               type="button"
-              role="tab"
-              aria-selected={active}
+              aria-pressed={active}
               onClick={() => setFilter(option)}
               className={cn(
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
@@ -89,14 +89,26 @@ export const ClaimsTracker = memo(function ClaimsTracker({ claims, onSeek }: Cla
           return (
             <FadeIn key={`${claim.claim}-${i}`} index={i}>
               <li>
-                <GlassCard className="flex flex-col gap-2 p-4">
+                <GlassCard className="flex flex-col gap-2.5 p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-medium leading-snug text-foreground">{claim.claim}</p>
+                    <p className="text-base font-medium leading-snug text-foreground">{claim.claim}</p>
                     <Badge variant={meta.variant} className="shrink-0">
                       <Icon className="size-3 shrink-0" aria-hidden="true" />
                       {meta.label}
                     </Badge>
                   </div>
+
+                  {/* The verification evidence carries the accountability value
+                      of this surface — promoted above the attribution line. */}
+                  {claim.sourceCitation ? (
+                    <div className="bg-muted/20 rounded-md p-2.5">
+                      <span className="type-eyebrow flex items-center gap-1.5">
+                        <BookOpen className="size-3 shrink-0" aria-hidden="true" />
+                        Evidence
+                      </span>
+                      <p className="mt-1 text-sm text-foreground/80">{claim.sourceCitation}</p>
+                    </div>
+                  ) : null}
 
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     {claim.source ? (
@@ -113,16 +125,10 @@ export const ClaimsTracker = memo(function ClaimsTracker({ claims, onSeek }: Cla
                         aria-label={`Jump to ${formatTimestamp(claim.timestamp)}`}
                       >
                         <Clock className="size-3 shrink-0" aria-hidden="true" />
-                        {formatTimestamp(claim.timestamp)}
+                        <span dir="ltr">{formatTimestamp(claim.timestamp)}</span>
                       </button>
                     ) : null}
                   </div>
-
-                  {claim.sourceCitation ? (
-                    <p className="border-t border-border/60 pt-2 text-xs italic text-muted-foreground">
-                      {claim.sourceCitation}
-                    </p>
-                  ) : null}
                 </GlassCard>
               </li>
             </FadeIn>

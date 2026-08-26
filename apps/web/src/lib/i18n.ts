@@ -30,6 +30,9 @@ export interface Labels {
   // Code explorer
   showAll: string;
   stepThrough: string;
+  // Spot explorer
+  all: string;
+  tip: string;
   // Exercise
   formCue: string;
   hideFormCue: string;
@@ -44,8 +47,6 @@ export interface Labels {
   soundOff: string;
   muteAudioCues: string;
   enableAudioCues: string;
-  // Disclosure
-  showMore: string;
   // Comparison
   description: string;
   example: string;
@@ -107,6 +108,8 @@ const EN: Labels = {
   cardsReviewed: 'Cards reviewed',
   showAll: 'Show all',
   stepThrough: 'Step through',
+  all: 'All',
+  tip: 'Tip',
   formCue: 'Form cue',
   hideFormCue: 'Hide form cue',
   duration: 'Duration',
@@ -120,7 +123,6 @@ const EN: Labels = {
   soundOff: 'Sound off',
   muteAudioCues: 'Mute audio cues',
   enableAudioCues: 'Enable audio cues',
-  showMore: 'Show more',
   description: 'Description',
   example: 'Example',
   goForIt: 'Go for it if...',
@@ -214,6 +216,8 @@ const TRANSLATIONS: Record<string, Labels> = {
     cardsReviewed: 'כרטיסים שנסקרו',
     showAll: 'הצג הכל',
     stepThrough: 'צעד אחר צעד',
+    all: 'הכל',
+    tip: 'טיפ',
     formCue: 'טיפ לביצוע',
     hideFormCue: 'הסתר טיפ',
     duration: 'משך',
@@ -227,7 +231,6 @@ const TRANSLATIONS: Record<string, Labels> = {
     soundOff: 'צליל כבוי',
     muteAudioCues: 'השתק רמזי שמע',
     enableAudioCues: 'הפעל רמזי שמע',
-    showMore: 'הצג עוד',
     description: 'תיאור',
     example: 'דוגמה',
     goForIt: 'שווה את זה אם...',
@@ -318,6 +321,8 @@ const TRANSLATIONS: Record<string, Labels> = {
     cardsReviewed: 'بطاقات تمت مراجعتها',
     showAll: 'عرض الكل',
     stepThrough: 'خطوة بخطوة',
+    all: 'الكل',
+    tip: 'نصيحة',
     formCue: 'نصيحة للأداء',
     hideFormCue: 'إخفاء النصيحة',
     duration: 'المدة',
@@ -331,7 +336,6 @@ const TRANSLATIONS: Record<string, Labels> = {
     soundOff: 'الصوت متوقف',
     muteAudioCues: 'كتم التنبيهات الصوتية',
     enableAudioCues: 'تفعيل التنبيهات الصوتية',
-    showMore: 'عرض المزيد',
     description: 'الوصف',
     example: 'مثال',
     goForIt: 'اختره إذا...',

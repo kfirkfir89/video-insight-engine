@@ -87,6 +87,28 @@ describe('InfoGridInteractive', () => {
     expect(screen.getByText('⚡')).toBeInTheDocument();
   });
 
+  it('renders per-item frame evidence as a figure and widens the grid', () => {
+    const { container } = render(
+      <InfoGridInteractive
+        items={[
+          {
+            key: 'Attention',
+            value: 'Weighs token relevance',
+            thumbnailUrl: 'https://example.com/frame.jpg',
+            frameCaption: 'The attention matrix on screen',
+          },
+          { key: 'Plain', value: 'No frame' },
+        ]}
+      />,
+    );
+    const figure = container.querySelector('[data-slot="visual-evidence"][data-variant="figure"]');
+    expect(figure).not.toBeNull();
+    expect(figure?.querySelector('img')?.getAttribute('src')).toBe('https://example.com/frame.jpg');
+    // Any visible frame forces the wide grid track so figures have room.
+    const grid = container.querySelector('div[style*="grid-template-columns"]') as HTMLElement | null;
+    expect(grid?.style.gridTemplateColumns).toContain('280px');
+  });
+
   it('widens grid columns for long values to avoid wall-of-text', () => {
     // A 130-char value should bump the grid to the wider track so the cell
     // doesn't squeeze into 5+ wrapped lines on mobile.

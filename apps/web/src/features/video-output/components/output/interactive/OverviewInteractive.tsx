@@ -217,7 +217,7 @@ export const OverviewInteractive = memo(function OverviewInteractive({
 
       {collapsibleItems.length > 0 && (
         <ExpandableCard
-          defaultExpanded={false}
+          defaultExpanded
           header={
             <div className="flex items-center gap-2 w-full">
               <span className="type-eyebrow">{collapsibleLabel}</span>
@@ -289,7 +289,7 @@ export const OverviewInteractive = memo(function OverviewInteractive({
 
       {tips && tips.length > 0 && (
         <ExpandableCard
-          defaultExpanded={false}
+          defaultExpanded
           header={
             <div className="flex items-center gap-2">
               <span className="type-eyebrow text-info">{t.tips}</span>

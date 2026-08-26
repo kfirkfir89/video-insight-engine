@@ -8,7 +8,6 @@ import {
 } from 'react';
 import {
   Check,
-  ChevronDown,
   Circle,
   CircleCheck,
   Dumbbell,
@@ -135,8 +134,6 @@ function SetIndicator({ done, total }: SetIndicatorProps) {
 
 export const WorkoutRoom = memo(function WorkoutRoom({
   exercises,
-  warmup: _warmup,
-  cooldown: _cooldown,
   onSeek,
   nextTab,
   onNavigateTab,
@@ -150,26 +147,24 @@ export const WorkoutRoom = memo(function WorkoutRoom({
   const [restRemaining, setRestRemaining] = useState<number | null>(null);
   const [reps, setReps] = useState<number>(0);
   const [soundEnabled, setSoundEnabled] = useState(false);
-  const [modsOpen, setModsOpen] = useState(false);
   const [framePulse, setFramePulse] = useState(false);
 
   const restTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const restAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pulseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Re-shape state when the exercise list itself changes (e.g. data reload).
-  useEffect(() => {
-    setCompletedSets((prev) => {
-      if (prev.length === exercises.length) return prev;
-      return exercises.map((_, i) => prev[i] ?? 0);
-    });
-  }, [exercises.length, exercises]);
-
-  // Reset per-exercise UI when switching to a new exercise.
-  useEffect(() => {
+  // Derived-state resets done during render (React "adjusting state on prop
+  // change" pattern) instead of effects, so no cascading post-commit render.
+  const [prevExerciseCount, setPrevExerciseCount] = useState(exercises.length);
+  if (prevExerciseCount !== exercises.length) {
+    setPrevExerciseCount(exercises.length);
+    setCompletedSets((prev) => exercises.map((_, i) => prev[i] ?? 0));
+  }
+  const [prevActiveIndex, setPrevActiveIndex] = useState(activeIndex);
+  if (prevActiveIndex !== activeIndex) {
+    setPrevActiveIndex(activeIndex);
     setReps(0);
-    setModsOpen(false);
-  }, [activeIndex]);
+  }
 
   const clearRestTimers = useCallback(() => {
     if (restTimerRef.current) {
@@ -183,11 +178,9 @@ export const WorkoutRoom = memo(function WorkoutRoom({
   }, []);
 
   // Form-cue frame loop: pulse opacity 1.5s when not under reduced motion.
+  // Render already gates the pulse class on !reducedMotion, so no reset needed.
   useEffect(() => {
-    if (reducedMotion) {
-      setFramePulse(false);
-      return;
-    }
+    if (reducedMotion) return;
     pulseTimerRef.current = setInterval(() => {
       setFramePulse((p) => !p);
     }, 1500);
@@ -469,36 +462,20 @@ export const WorkoutRoom = memo(function WorkoutRoom({
 
       {/* Modifications */}
       {exercise.modifications && exercise.modifications.length > 0 && (
-        <div className="rounded-xl border border-border/40 bg-card/40">
-          <button
-            type="button"
-            onClick={() => setModsOpen((o) => !o)}
-            aria-expanded={modsOpen}
-            className="flex w-full items-center justify-between gap-2 px-4 py-3 text-start"
-          >
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Modifications ({exercise.modifications.length})
-            </span>
-            <ChevronDown
-              className={cn(
-                'h-4 w-4 text-muted-foreground transition-transform',
-                modsOpen && 'rotate-180',
-              )}
-              aria-hidden="true"
-            />
-          </button>
-          {modsOpen && (
-            <ul className="space-y-2 px-4 pb-3" role="list">
-              {exercise.modifications.map((mod, i) => (
-                <li key={i} className="text-xs">
-                  <p className="font-medium text-foreground">{mod.label}</p>
-                  <p className="text-muted-foreground mt-0.5">
-                    {mod.description}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className="rounded-xl border border-border/40 bg-card/40 px-4 py-3 space-y-2">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            Modifications ({exercise.modifications.length})
+          </p>
+          <ul className="space-y-2" role="list">
+            {exercise.modifications.map((mod, i) => (
+              <li key={i} className="text-xs">
+                <p className="font-medium text-foreground">{mod.label}</p>
+                <p className="text-muted-foreground mt-0.5">
+                  {mod.description}
+                </p>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
