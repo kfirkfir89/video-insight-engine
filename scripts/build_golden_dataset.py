@@ -4,7 +4,7 @@
 Each YAML entry becomes one Langfuse dataset item with::
 
     input:           {url, domain, format, language}
-    expectedOutput:  {expectedTabs, requiredComponents, keyContent}
+    expectedOutput:  {expectedTabs, requiredComponents, forbiddenComponents, keyContent}
     metadata:        {id}
 
 Idempotent: re-running rewrites existing items if their content drifted,
@@ -89,6 +89,7 @@ def upload(records: list[dict[str, Any]], dataset_name: str) -> dict[str, int]:
         expected = {
             "expectedTabs": rec.get("expectedTabs", []),
             "requiredComponents": rec.get("requiredComponents", []),
+            "forbiddenComponents": rec.get("forbiddenComponents", []),
             "keyContent": rec.get("keyContent", []),
         }
         try:

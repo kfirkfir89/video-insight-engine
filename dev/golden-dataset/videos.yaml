@@ -1,28 +1,100 @@
-# Golden dataset — 20 hand-curated YouTube videos used to track pipeline
+# Golden dataset — hand-curated YouTube videos used to track pipeline
 # quality regressions over time.
 #
-# Distribution (matches dev/active/langfuse-observability/plan):
-#   - 3 food          - 3 tech         - 2 learning
-#   - 2 language      - 2 science      - 2 travel
-#   - 2 fitness       - 2 review       - 1 music   - 1 narrative
+# Distribution:
+#   - 3 gaming/TCG (unboxing consistency anchors)  - 3 tech
+#   - 3 food       - 2 learning    - 2 language    - 2 science
+#   - 3 travel     - 2 fitness     - 2 review      - 1 music  - 1 documentary
 #
 # Each entry is a contract:
-#   id                — stable slug used as the Langfuse dataset item ID
-#   url               — YouTube URL the pipeline will fetch
-#   domain            — primary contentTag the pipeline must produce
-#   format            — one of the 17 content formats (see classifier.py)
-#   language          — ISO-639-1 (en, es, fr, ja, …) — drives translation
-#   expectedTabs      — tabs the pipeline SHOULD emit (count target ±1)
-#   requiredComponents— components every successful run must include
-#   keyContent        — terms the extraction should mention (80%+ overlap target)
+#   id                 — stable slug used as the Langfuse dataset item ID
+#   url                — YouTube URL the pipeline will fetch
+#   domain             — primary contentTag the pipeline must produce
+#   format             — one of the VALID_FORMATS in classifier.py (tutorial,
+#                        commentary, reaction, opinion_rant, motivational,
+#                        interview, lecture, vlog, documentary, walkthrough,
+#                        podcast, news, news_commentary, entertainment,
+#                        performance, comparison, story, unboxing)
+#   language           — ISO-639-1 (en, es, fr, ja, …) — drives translation
+#   expectedTabs       — tabs the pipeline SHOULD emit (count target ±1)
+#   requiredComponents — components every successful run must include
+#   forbiddenComponents— components that must NEVER appear for this video
+#                        (hard product bugs — scored at weight 0.15, any hit
+#                        zeroes the forbidden_ok term)
+#   keyContent         — terms the extraction should mention (80%+ overlap target)
 #
 # Curation rules:
-#   - All videos are <30 minutes (so eval runs in ~2 hours, not days).
+#   - All videos are <35 minutes (so eval runs in ~2 hours, not days).
 #   - All videos have working captions on YouTube.
-#   - At least 5 entries are non-English to exercise translation.
+#   - Component names must be CURRENT registry names (no retired: verdict,
+#     quiz, code_explorer, gallery, lyrics_player, exercise_tracker, scenario).
+#   - The 5 "admin-*" anchors are real videos processed in production runs —
+#     their expectations were curated from actual known-good outputs.
 #   - No celebrity / news content — those drift quickly.
 
 videos:
+
+  # ─── Gaming / TCG unboxing anchors (3) ────────────────────────────
+  # The consistency contract: all three are the same genre and MUST get the
+  # same layout shape (tier_list pulls + moment_track highlights) and never
+  # a quiz. Curated 2026-08-11 from real admin-account runs.
+  - id: gaming-op17-unboxing
+    url: https://www.youtube.com/watch?v=5VOUleaZ63E
+    domain: gaming
+    format: unboxing
+    language: en
+    expectedTabs: [overview, pulls, highlights, set_facts]
+    requiredComponents: [overview, tier_list, moment_track]
+    forbiddenComponents: [quiz_arena, code_playground, workout_room, claims_tracker]
+    keyContent: [booster box, whitebeard, rocks d. xebec, shanks, pull]
+
+  - id: gaming-op13-box-opening
+    url: https://www.youtube.com/watch?v=L9aIxRBYJtg
+    domain: gaming
+    format: unboxing
+    language: en
+    expectedTabs: [overview, pulls, highlights, set_facts]
+    requiredComponents: [overview, tier_list, moment_track]
+    forbiddenComponents: [quiz_arena, code_playground, workout_room, claims_tracker]
+    keyContent: [op-13, box, pull, rare, card]
+
+  - id: gaming-op17-set-verdict
+    url: https://www.youtube.com/watch?v=hqikBT2Ea8M
+    domain: gaming
+    format: commentary
+    language: en
+    expectedTabs: [overview, rankings, key_moments, set_facts]
+    requiredComponents: [overview, tier_list]
+    forbiddenComponents: [quiz_arena, code_playground, workout_room]
+    keyContent: [bandai, set, card, rare, value]
+
+  # ─── Tech (3) ─────────────────────────────────────────────────────
+  - id: tech-agentic-engineering
+    url: https://www.youtube.com/watch?v=kPN564Kol14
+    domain: tech
+    format: walkthrough
+    language: en
+    expectedTabs: [overview, concepts, moments, tool_stack]
+    requiredComponents: [overview]
+    keyContent: [agent, claude, full stack, prompt, workflow]
+
+  - id: tech-react-hooks
+    url: https://www.youtube.com/watch?v=TNhaISOUy6Q
+    domain: tech
+    format: tutorial
+    language: en
+    expectedTabs: [overview, code, patterns, cheat_sheet]
+    requiredComponents: [overview, code_playground]
+    keyContent: [useState, useEffect, dependency array, custom hook, render]
+
+  - id: tech-docker-basics
+    url: https://www.youtube.com/watch?v=fqMOX6JJhGo
+    domain: tech
+    format: tutorial
+    language: en
+    expectedTabs: [overview, setup, code, cheat_sheet]
+    requiredComponents: [overview, step_player, code_playground]
+    keyContent: [Dockerfile, container, image, layer, volume]
 
   # ─── Food (3) ─────────────────────────────────────────────────────
   - id: food-knife-skills
@@ -32,64 +104,39 @@ videos:
     language: en
     expectedTabs: [overview, ingredients, steps, tips]
     requiredComponents: [overview, info_grid, step_player]
+    forbiddenComponents: [quiz_arena]
     keyContent: [knife, technique, julienne, chef, grip]
 
   - id: food-sourdough-bread
     url: https://www.youtube.com/watch?v=A2INwc4OZAo
     disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
     domain: food
-    format: recipe
+    format: tutorial
     language: en
     expectedTabs: [overview, ingredients, steps, tips]
     requiredComponents: [overview, info_grid, step_player]
+    forbiddenComponents: [quiz_arena]
     keyContent: [sourdough, hydration, autolyse, bulk fermentation, scoring]
 
   - id: food-ramen-broth
     url: https://www.youtube.com/watch?v=DnzpW1cdJeg
     disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
     domain: food
-    format: recipe
+    format: tutorial
     language: en
     expectedTabs: [overview, ingredients, steps]
     requiredComponents: [overview, step_player]
+    forbiddenComponents: [quiz_arena]
     keyContent: [tonkotsu, broth, simmer, aromatic, pork bones]
 
-  # ─── Tech (3) ─────────────────────────────────────────────────────
-  - id: tech-react-hooks
-    url: https://www.youtube.com/watch?v=TNhaISOUy6Q
-    domain: tech
-    format: tutorial
-    language: en
-    expectedTabs: [overview, code, patterns, cheat_sheet]
-    requiredComponents: [overview, code_explorer]
-    keyContent: [useState, useEffect, dependency array, custom hook, render]
-
-  - id: tech-rust-ownership
-    url: https://www.youtube.com/watch?v=VFIOSWy93H0
-    domain: tech
-    format: explainer
-    language: en
-    expectedTabs: [overview, concepts, code, cheat_sheet]
-    requiredComponents: [overview, code_explorer, info_grid]
-    keyContent: [ownership, borrow, lifetime, move, reference]
-
-  - id: tech-docker-basics
-    url: https://www.youtube.com/watch?v=fqMOX6JJhGo
-    domain: tech
-    format: tutorial
-    language: en
-    expectedTabs: [overview, setup, code, cheat_sheet]
-    requiredComponents: [overview, step_player, code_explorer]
-    keyContent: [Dockerfile, container, image, layer, volume]
-
-  # ─── Learning (2) ─────────────────────────────────────────────────
+  # ─── Learning (2) — quiz allowed here ─────────────────────────────
   - id: learning-photosynthesis
     url: https://www.youtube.com/watch?v=eo5XndJaz-Y
     domain: learning
     format: lecture
     language: en
     expectedTabs: [key_points, concepts, takeaways, quizzes]
-    requiredComponents: [overview, spot_explorer, quiz]
+    requiredComponents: [overview, quiz_arena]
     keyContent: [chlorophyll, light reaction, calvin cycle, ATP, glucose]
 
   - id: learning-double-slit
@@ -98,7 +145,7 @@ videos:
     format: lecture
     language: en
     expectedTabs: [key_points, concepts, takeaways, quizzes, flashcards]
-    requiredComponents: [overview, spot_explorer, quiz, flash_deck]
+    requiredComponents: [overview, quiz_arena, flash_deck]
     keyContent: [interference, wave function, observer, quantum, particle]
 
   # ─── Language (2) ─────────────────────────────────────────────────
@@ -116,17 +163,17 @@ videos:
     url: https://www.youtube.com/watch?v=ZbeagFy2cQU
     disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
     domain: language
-    format: explainer
+    format: lecture
     language: en
     expectedTabs: [phrases, rules, drills, vocabulary]
     requiredComponents: [spot_explorer, info_grid, flash_deck]
     keyContent: [wa, ga, ni, particle, topic marker]
 
-  # ─── Science (2) ──────────────────────────────────────────────────
+  # ─── Science (2) — quiz allowed here ──────────────────────────────
   - id: science-crispr-intro
     url: https://www.youtube.com/watch?v=2pp17E4E-O8
     domain: science
-    format: explainer
+    format: lecture
     language: en
     expectedTabs: [concepts, key_facts, experiments]
     requiredComponents: [overview, spot_explorer, info_grid]
@@ -135,13 +182,23 @@ videos:
   - id: science-black-holes
     url: https://www.youtube.com/watch?v=e-P5IFTqB98
     domain: science
-    format: explainer
+    format: lecture
     language: en
     expectedTabs: [concepts, key_facts, takeaways]
     requiredComponents: [overview, spot_explorer]
     keyContent: [event horizon, singularity, schwarzschild, gravity, time]
 
-  # ─── Travel (2) ───────────────────────────────────────────────────
+  # ─── Travel (3) ───────────────────────────────────────────────────
+  - id: travel-vietnam-10day
+    url: https://www.youtube.com/watch?v=vOkkWuEwUmc
+    domain: travel
+    format: documentary
+    language: en
+    expectedTabs: [overview, itinerary, highlights, filmstrip, must_dos]
+    requiredComponents: [overview, spot_explorer]
+    forbiddenComponents: [quiz_arena]
+    keyContent: [hanoi, ha long bay, da nang, hoi an, itinerary]
+
   - id: travel-tokyo-3day
     url: https://www.youtube.com/watch?v=35jjzCRX7Lk
     disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
@@ -149,17 +206,19 @@ videos:
     format: vlog
     language: en
     expectedTabs: [overview, itinerary, packing, budget]
-    requiredComponents: [overview, step_player, info_grid, budget]
+    requiredComponents: [overview, spot_explorer, info_grid]
+    forbiddenComponents: [quiz_arena]
     keyContent: [shibuya, shinjuku, jr pass, tsukiji, asakusa]
 
   - id: travel-iceland-ring-road
     url: https://www.youtube.com/watch?v=KsCgEHFI23M
     disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
     domain: travel
-    format: guide
+    format: walkthrough
     language: en
     expectedTabs: [overview, itinerary, packing, budget]
-    requiredComponents: [overview, step_player, info_grid, budget]
+    requiredComponents: [overview, spot_explorer, info_grid]
+    forbiddenComponents: [quiz_arena]
     keyContent: [ring road, vik, jokulsarlon, reykjavik, waterfall]
 
   # ─── Fitness (2) ──────────────────────────────────────────────────
@@ -169,37 +228,41 @@ videos:
     format: tutorial
     language: en
     expectedTabs: [overview, exercises, tips]
-    requiredComponents: [overview, step_player]
+    requiredComponents: [overview, workout_room]
+    forbiddenComponents: [quiz_arena]
     keyContent: [scapula, elbow, plank, descent, lockout]
 
   - id: fitness-mobility-routine
     url: https://www.youtube.com/watch?v=PEMSL0BAYjs
     disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
     domain: fitness
-    format: routine
+    format: tutorial
     language: en
     expectedTabs: [overview, exercises, timer]
-    requiredComponents: [overview, step_player]
+    requiredComponents: [overview, workout_room]
+    forbiddenComponents: [quiz_arena]
     keyContent: [hip flexor, thoracic, ankle, mobility, range of motion]
 
   # ─── Review (2) ───────────────────────────────────────────────────
   - id: review-airpods-pro
     url: https://www.youtube.com/watch?v=nMfPqeZjc2c
     domain: review
-    format: review
+    format: commentary
     language: en
-    expectedTabs: [overview, verdict, pros_cons, specs]
-    requiredComponents: [overview, verdict, comparison, info_grid]
+    expectedTabs: [overview, pros_cons, specs, comparison]
+    requiredComponents: [overview, comparison, info_grid]
+    forbiddenComponents: [quiz_arena]
     keyContent: [transparency, anc, battery, fit, sound stage]
 
   - id: review-iphone-16
     url: https://www.youtube.com/watch?v=tZv2KsdwWZk
     disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
     domain: review
-    format: review
+    format: commentary
     language: en
-    expectedTabs: [overview, verdict, pros_cons, specs]
-    requiredComponents: [overview, verdict, comparison, info_grid]
+    expectedTabs: [overview, pros_cons, specs, comparison]
+    requiredComponents: [overview, comparison, info_grid]
+    forbiddenComponents: [quiz_arena]
     keyContent: [camera, a18, battery life, display, button]
 
   # ─── Music (1) ────────────────────────────────────────────────────
@@ -207,19 +270,20 @@ videos:
     url: https://www.youtube.com/watch?v=Em9aCJaImqM
     disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
     domain: music
-    format: analysis
+    format: commentary
     language: en
     expectedTabs: [overview, analysis, structure]
     requiredComponents: [overview, spot_explorer]
+    forbiddenComponents: [quiz_arena]
     keyContent: [opera, ballad, key change, freddie mercury, harmony]
 
-  # ─── Narrative (1) ────────────────────────────────────────────────
+  # ─── Documentary / narrative-modifier (1) ─────────────────────────
   - id: narrative-mt-everest-1996
     url: https://www.youtube.com/watch?v=83uxytFIGCM
     disabled: true  # dead link — YouTube 404 verified via oembed 2026-07-14; needs replacement video + re-curated expectations
-    domain: narrative
+    domain: learning
     format: documentary
     language: en
     expectedTabs: [key_moments, quotes, takeaways]
-    requiredComponents: [overview, spot_explorer]
+    requiredComponents: [overview, moment_track]
     keyContent: [hillary step, krakauer, scott fischer, hall, summit fever]
