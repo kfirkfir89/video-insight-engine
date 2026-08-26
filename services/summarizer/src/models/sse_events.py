@@ -100,6 +100,10 @@ class TabReadyEvent(_SSEEvent):
     id: str
     component: str | None = None
     props: dict[str, Any] = {}
+    # Index in the persisted tab order — lets the client slot a held-back
+    # tab (moment_track streams last, after its frame fill) where the DB
+    # doc will have it instead of appending it.
+    position: int | None = Field(default=None, ge=0)
 
 
 class CompleteEvent(_SSEEvent):

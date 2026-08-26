@@ -147,6 +147,7 @@ def attach_secondaries(
     enrichment: dict | None,
     frames: list[dict] | None,
     domain: str,
+    excluded_kinds: set[str] | frozenset[str] = frozenset(),
 ) -> list[dict]:
     """Decide and build secondary attachments for a single assembled tab.
 
@@ -154,6 +155,11 @@ def attach_secondaries(
     trying frame_strip → quick_quiz → tip_callout in priority order. Dense tab
     (≥ _DENSE_THRESHOLD items): add a top summary_header. Tabs in between get
     nothing. Returns a (possibly empty) list of attachment dicts.
+
+    frame_strip/quick_quiz/tip_callout are built from response-global data, so
+    repeating one across tabs shows the identical payload N times — the caller
+    passes already-used kinds via `excluded_kinds` and each is skipped in favor
+    of the next in the chain.
     """
     component = tab.get("component", "")
     props = tab.get("props")
@@ -168,11 +174,19 @@ def attach_secondaries(
 
     if count <= _SPARSE_THRESHOLD:
         attachment = None
-        if component not in _NO_FRAME_STRIP_COMPONENTS and domain not in _NO_FRAME_STRIP_DOMAINS:
+        if (
+            "frame_strip" not in excluded_kinds
+            and component not in _NO_FRAME_STRIP_COMPONENTS
+            and domain not in _NO_FRAME_STRIP_DOMAINS
+        ):
             attachment = _frame_strip_attachment(frames)
-        if attachment is None and component not in _NO_QUICK_QUIZ_COMPONENTS:
+        if (
+            attachment is None
+            and "quick_quiz" not in excluded_kinds
+            and component not in _NO_QUICK_QUIZ_COMPONENTS
+        ):
             attachment = _quick_quiz_attachment(enrichment)
-        if attachment is None:
+        if attachment is None and "tip_callout" not in excluded_kinds:
             attachment = _tip_callout_attachment(extraction, domain)
         if attachment is not None:
             attachments.append(attachment)

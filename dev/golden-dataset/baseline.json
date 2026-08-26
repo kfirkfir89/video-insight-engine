@@ -7,7 +7,10 @@
     "queries": 21,
     "recallAt3": 1.0,
     "mrr": 0.865,
-    "floors": { "recallAt3": 0.85, "mrr": 0.7 },
+    "floors": {
+      "recallAt3": 0.85,
+      "mrr": 0.7
+    },
     "notes": "Real chunk_transcript + SentenceTransformer embeddings + Qdrant query_points over an ephemeral collection. Zero LLM spend. Regression proof 2026-07-12: chunker broken to 120-char/0-overlap chunks -> recall@3 0.524, MRR 0.500, floor test FAILED as designed; reverted.",
     "rerun": "cd services/summarizer && .venv/bin/python -m pytest -q tests/eval/test_retrieval_eval.py -s  (needs Qdrant reachable at QDRANT_HOST:QDRANT_PORT)"
   },
@@ -23,13 +26,18 @@
     "rerun": "cd services/summarizer && LIVE_EVAL=1 .venv/bin/python -m pytest -q tests/test_faithfulness_live_eval.py -s"
   },
   "goldenEval": {
-    "measuredAt": "2026-07-14",
-    "averageOverall": 0.71,
-    "liveEntries": 10,
-    "failUnder": 0.65,
+    "measuredAt": "2026-08-11",
+    "averageOverall": 0.824,
+    "liveEntries": 14,
+    "failUnder": 0.75,
+    "layoutStability": {
+      "avg": 0.65,
+      "n": 2,
+      "gated": false
+    },
     "status": "measured",
-    "report": "reports/eval-20260714-150332.md",
-    "notes": "Live baseline over the 10 entries still alive on YouTube (avg 0.710; range 0.460 review-airpods-pro to 0.890 science-black-holes). 10/20 dataset entries were found DEAD-LINKED (YouTube 404, verified via oembed 2026-07-14) and are marked disabled: true in videos.yaml — run_eval.py skips disabled entries so the weekly gate measures pipeline quality, not dataset rot. FOLLOW-UP: curate 10 replacement videos (fresh URLs + re-derived expectedTabs/requiredComponents/keyContent), re-baseline, and tighten failUnder. Runner fixes landed same day: the pipeline only runs while the SSE stream is consumed (poll-only clients hung forever), 401 -> re-auth retry, failed-status short-circuit.",
+    "report": "reports/eval-20260811-142602.md",
+    "notes": "Fresh v7 baseline after the 2026-08-11 consistency overhaul (playbooks + forbidden enforcement, adaptive vision tiers, degrade-never-drop). 14 live entries incl. 5 real admin-video anchors (3 TCG unboxings with forbiddenComponents). Zero forbidden hits; gaming anchors 0.962/0.962/1.000; weakest entries (learning-double-slit 0.579, review-airpods 0.617) are expectation drift on legacy entries, not regressions \u2014 re-curate their expectedTabs/requiredComponents. forbidden_ok scoring term (weight 0.15) and --stability probe added this round; stability is REPORTED not gated until trend data accumulates. Pre-fix red baseline on the gaming anchors was 0.890 with component coverage 0.50/0.67.",
     "produce": "1) docker compose up -d (healthy stack, EVAL_USER_PASSWORD set in .env)  2) python3 scripts/run_eval.py --output reports/ --publish-run golden-baseline-$(date +%Y%m%d)  3) copy the report's average into averageOverall + set measuredAt, set failUnder slightly below it (e.g. baseline - 0.05), and commit."
   }
 }

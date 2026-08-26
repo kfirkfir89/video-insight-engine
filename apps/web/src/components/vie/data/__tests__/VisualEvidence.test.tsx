@@ -85,7 +85,23 @@ describe('VisualEvidence', () => {
     expect(container.querySelector('[data-slot="skeleton"]')).not.toBeInTheDocument();
   });
 
-  it('hides the image and skeleton when the thumbnail fails to load', () => {
+  it('retries the image once after a load error before giving up', () => {
+    render(
+      <VisualEvidence
+        variant="figure"
+        thumbnailUrl="https://cdn.example.com/broken.jpg"
+        caption="Fallback caption"
+      />,
+    );
+    fireEvent.error(screen.getByRole('img'));
+    // First error remounts the img for one retry — still in the document
+    const retryImg = screen.getByRole('img');
+    expect(retryImg).toHaveAttribute('src', 'https://cdn.example.com/broken.jpg');
+    fireEvent.load(retryImg);
+    expect(screen.getByRole('img')).toBeInTheDocument();
+  });
+
+  it('shows a visible "Frame unavailable" placeholder when the retry also fails', () => {
     const { container } = render(
       <VisualEvidence
         variant="figure"
@@ -94,9 +110,26 @@ describe('VisualEvidence', () => {
       />,
     );
     fireEvent.error(screen.getByRole('img'));
+    fireEvent.error(screen.getByRole('img'));
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
     expect(container.querySelector('[data-slot="skeleton"]')).not.toBeInTheDocument();
+    expect(screen.getByText('Frame unavailable')).toBeInTheDocument();
     expect(screen.getByText('Fallback caption')).toBeInTheDocument();
+  });
+
+  it('clears the failed state when the src changes to a new frame', () => {
+    const { rerender } = render(
+      <VisualEvidence variant="figure" thumbnailUrl="https://cdn.example.com/broken.jpg" />,
+    );
+    fireEvent.error(screen.getByRole('img'));
+    fireEvent.error(screen.getByRole('img'));
+    expect(screen.getByText('Frame unavailable')).toBeInTheDocument();
+
+    rerender(
+      <VisualEvidence variant="figure" thumbnailUrl="https://cdn.example.com/next.jpg" />,
+    );
+    expect(screen.queryByText('Frame unavailable')).not.toBeInTheDocument();
+    expect(screen.getByRole('img')).toHaveAttribute('src', 'https://cdn.example.com/next.jpg');
   });
 
   it('renders timestamp button with LTR direction even inside an RTL container', () => {

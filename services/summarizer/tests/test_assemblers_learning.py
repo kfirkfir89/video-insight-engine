@@ -1,19 +1,18 @@
 """Assembler unit tests — learning/media family (exercise, quiz, flash_deck, scenario, verdict, overview, gallery, lyrics)."""
 
 from src.services.pipeline.assembly import (
-    assemble_exercise_tracker,
-    assemble_flash_deck,
-    assemble_verdict,
-    assemble_overview,
-    assemble_gallery,
-    assemble_lyrics_player,
-    assemble_quiz,
-    assemble_scenario,
     _normalize_exercise,
     _normalize_quiz_question,
     _normalize_scenario_item,
+    assemble_exercise_tracker,
+    assemble_flash_deck,
+    assemble_gallery,
+    assemble_lyrics_player,
+    assemble_overview,
+    assemble_quiz,
+    assemble_scenario,
+    assemble_verdict,
 )
-
 
 # ─── resolve_data_source ───
 
@@ -143,6 +142,11 @@ class TestAssembleLyricsPlayer:
         assert result is not None
         assert result["artist"] == "Queen"
         assert len(result["sections"]) >= 1
+        # Frontend contract (lyricsKaraokeSchema) keys lines on "text", not the
+        # extraction-side "line" — a "line" key silently degrades every music tab.
+        first_line = result["sections"][0]["lines"][0]
+        assert first_line["text"] == "Is this the real life?"
+        assert "line" not in first_line
 
     def test_structure_only(self):
         extraction = {

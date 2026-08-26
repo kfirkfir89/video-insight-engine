@@ -1,16 +1,15 @@
 """Assembler unit tests — primary family (spots, moments, comparison, info_grid, checklist, steps, code)."""
 
 from src.services.pipeline.assembly import (
-    assemble_spot_explorer,
+    _normalize_code_snippet,
+    _normalize_moment_item,
     assemble_checklist,
+    assemble_code_explorer,
     assemble_comparison,
     assemble_info_grid,
     assemble_moment_track,
-    assemble_code_explorer,
-    _normalize_code_snippet,
-    _normalize_moment_item,
+    assemble_spot_explorer,
 )
-
 
 # ─── resolve_data_source ───
 
@@ -603,19 +602,19 @@ class TestFlexInfoGrid:
         assert result is not None
         assert result["items"][0]["key"] == "DNA stores genetic information"
 
-    def test_drops_items_with_no_value(self):
-        # Headline-only items with no body text produce empty cards — these
-        # were the visible failure mode. Drop them silently so the surviving
-        # items still render cleanly.
+    def test_keeps_key_only_items_as_headline_chips(self):
+        # Key-only items survive as headline chips — the frontend explicitly
+        # renders them (terms-only glossaries); only keyless items drop.
         data = [
             {"name": "Real concept", "definition": "Has substance"},
-            {"name": "Empty"},  # ← dropped
-            {"name": "", "definition": "no key"},  # ← dropped
+            {"name": "Headline only"},  # ← kept as key-only chip
+            {"name": "", "definition": "no key"},  # ← dropped (no key)
         ]
         result = assemble_info_grid({}, data, {}, None)
         assert result is not None
-        assert len(result["items"]) == 1
+        assert len(result["items"]) == 2
         assert result["items"][0]["key"] == "Real concept"
+        assert result["items"][1] == {"key": "Headline only", "value": ""}
 
     def test_returns_none_when_nothing_normalizes(self):
         # Every item fails normalization → no items → drop the tab so the
@@ -623,21 +622,20 @@ class TestFlexInfoGrid:
         data = [{"only": "garbage"}, {"more": "garbage"}]
         assert assemble_info_grid({}, data, {}, None) is None
 
-    def test_drops_items_with_empty_value_in_key_value_shape(self):
-        # Regression: the {key, value} early-return branch previously let
-        # items with empty `value` pass through, producing the very
-        # empty-card grid this normalizer was meant to prevent. The fallback
-        # path correctly required non-empty value; the early branch must do
-        # the same so both paths are symmetric.
+    def test_key_value_shape_keeps_key_only_drops_keyless(self):
+        # {key, value} items with an empty value survive as headline chips
+        # (the frontend renders them); keyless items still drop. Symmetric
+        # with the fallback path's key-only policy.
         data = [
             {"key": "Real", "value": "Has body"},
-            {"key": "Empty value", "value": ""},  # ← must be dropped
-            {"key": "Whitespace", "value": "   "},  # ← must be dropped
-            {"key": "", "value": "no key"},  # ← already covered
+            {"key": "Empty value", "value": ""},  # ← kept as key-only chip
+            {"key": "Whitespace", "value": "   "},  # ← kept as key-only chip
+            {"key": "", "value": "no key"},  # ← dropped (no key)
         ]
         result = assemble_info_grid({}, data, {}, None)
         assert result is not None
-        assert len(result["items"]) == 1
+        assert len(result["items"]) == 3
+        assert [i["value"] for i in result["items"]] == ["Has body", "", ""]
         assert result["items"][0]["key"] == "Real"
 
     def test_drops_comparison_single_sided_rows_per_row(self):

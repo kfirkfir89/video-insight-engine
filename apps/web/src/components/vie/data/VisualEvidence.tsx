@@ -1,5 +1,5 @@
 import { memo, useState } from 'react';
-import { Play } from 'lucide-react';
+import { ImageOff, Play } from 'lucide-react';
 
 import { Badge } from './Badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,7 +32,7 @@ function formatTimestamp(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-interface EvidenceImageProps {
+export interface EvidenceImageProps {
   src: string;
   alt: string;
   /** Extra classes for the `<img>` element. */
@@ -46,12 +46,15 @@ interface EvidenceImageProps {
 /**
  * Lazy thumbnail with a 16:9 skeleton placeholder that mirrors the final
  * layout (no CLS) and resolves on load OR error so a broken signed-S3 URL
- * never skeletons forever. A failed load hides the broken-image chrome and
- * leaves the caller's caption block to carry the slot.
+ * never skeletons forever. A failed load retries once (remounting the img —
+ * presigned S3 URLs reject extra query params, so no cache-bust suffix),
+ * then renders a slim "Frame unavailable" chip so the failure stays visible
+ * instead of the slot silently vanishing.
  */
-function EvidenceImage({ src, alt, imgClassName, className, children }: EvidenceImageProps) {
+export function EvidenceImage({ src, alt, imgClassName, className, children }: EvidenceImageProps) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [retried, setRetried] = useState(false);
 
   // Reset load/error state when the source changes. Carousels (QuizArena,
   // CodePlayground) reuse the same EvidenceImage instance and swap `src` per
@@ -63,9 +66,31 @@ function EvidenceImage({ src, alt, imgClassName, className, children }: Evidence
     setPrevSrc(src);
     setLoaded(false);
     setFailed(false);
+    setRetried(false);
   }
 
-  if (failed) return null;
+  const handleError = () => {
+    if (retried) {
+      setFailed(true);
+    } else {
+      setRetried(true);
+    }
+  };
+
+  if (failed) {
+    return (
+      <div
+        className={cn(
+          'flex items-center gap-2 rounded-lg border border-dashed border-border/40',
+          'bg-muted/10 px-3 py-2 text-xs text-muted-foreground',
+          className,
+        )}
+      >
+        <ImageOff className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <span>Frame unavailable</span>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -78,11 +103,12 @@ function EvidenceImage({ src, alt, imgClassName, className, children }: Evidence
         <Skeleton className="absolute inset-0 h-full w-full rounded-none motion-reduce:animate-none" />
       )}
       <img
+        key={retried ? 'retry' : 'first'}
         src={src}
         alt={alt}
         loading="lazy"
         onLoad={() => setLoaded(true)}
-        onError={() => setFailed(true)}
+        onError={handleError}
         className={cn(
           'h-full w-full object-cover transition-opacity duration-300 motion-reduce:transition-none',
           loaded ? 'opacity-100' : 'opacity-0',

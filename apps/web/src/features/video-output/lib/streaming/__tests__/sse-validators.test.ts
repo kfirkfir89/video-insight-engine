@@ -275,13 +275,20 @@ describe('sse-validators', () => {
 
   describe('validatePhaseEvent', () => {
     it('should validate all valid phases', () => {
+      // Mirror of every phase the summarizer emits (transcript_fetcher.py +
+      // translation.py) plus the legacy pipeline names.
       const validPhases = [
         'metadata',
+        'metadata_fallback',
         'transcript',
+        'transcript_cached',
+        'audio_transcription',
+        'whisper_transcription',
         'triage',
         'extraction',
         'enrichment',
         'synthesis',
+        'translation',
       ];
 
       for (const phase of validPhases) {

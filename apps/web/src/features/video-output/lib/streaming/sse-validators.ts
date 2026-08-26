@@ -221,18 +221,26 @@ export function validateErrorEvent(data: unknown): ErrorEventResult {
 
 /**
  * Valid stream phases for SSE streaming.
- * These come from the backend and represent processing stages.
+ * Must cover every value the summarizer actually emits — see
+ * services/summarizer/src/services/transcription/transcript_fetcher.py and
+ * services/pipeline/phases/translation.py. Rejected values are silently
+ * dropped (plus a telemetry bump), which freezes the UI on a stale phase.
  */
-const VALID_SSE_PHASES = [
+export const VALID_SSE_PHASES = [
   'metadata',
+  'metadata_fallback',
   'transcript',
+  'transcript_cached',
+  'audio_transcription',
+  'whisper_transcription',
   'triage',
   'extraction',
   'enrichment',
   'synthesis',
+  'translation',
 ] as const;
 
-type SSEPhase = typeof VALID_SSE_PHASES[number];
+export type SSEPhase = typeof VALID_SSE_PHASES[number];
 
 const phaseEventSchema = z.object({
   event: z.literal('phase'),

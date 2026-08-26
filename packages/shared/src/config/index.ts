@@ -79,9 +79,20 @@ interface DomainsConfig {
    *  advisory densityGates above — see `assemblerItemCapsNote` in the JSON. */
   assemblerItemCaps?: Record<string, number>;
   /** Per-domain assembled-output validation (required components backfilled,
-   *  `max` caps per-component tab counts) consumed by the Python assembler —
-   *  see `domainRequirementsNote` in the JSON. */
-  domainRequirements?: Record<string, { required: string[]; max: Record<string, number> }>;
+   *  `max` caps per-component tab counts, `forbidden` components stripped at
+   *  plan post-validation + assembly backstop) consumed by the Python
+   *  assembler — see `domainRequirementsNote` in the JSON. */
+  domainRequirements?: Record<string, { required: string[]; max: Record<string, number>; forbidden?: string[] }>;
+  /** Video-subtype layout playbooks keyed '<domain>:<format>' — see
+   *  `playbooksNote` in the JSON for merge semantics. */
+  playbooks?: Record<string, { required?: string[]; preferred?: string[]; forbidden?: string[]; planGuidance?: string }>;
+  /** Adaptive frame-pipeline effort tiers — see `visualCriticalityNote`. */
+  visualCriticality?: {
+    tiers: Record<string, { overselect?: number; visionMax: number; keep?: number }>;
+    highDomains: string[];
+    lowDomains: string[];
+    highTitleKeywords: string[];
+  };
   domains: Record<ContentTag, DomainEntry>;
   modifiers: Record<Modifier, ModifierEntry>;
   enrichment: Record<string, string>;

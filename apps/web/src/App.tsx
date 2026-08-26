@@ -47,6 +47,13 @@ const DesignSystemPage = import.meta.env.DEV
       }))
     )
   : null;
+const StreamingPreviewPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/pages/dev/StreamingPreviewPage").then((m) => ({
+        default: m.StreamingPreviewPage,
+      }))
+    )
+  : null;
 
 // Loading fallback for lazy-loaded routes with ARIA live region
 function RouteLoadingFallback() {
@@ -175,6 +182,12 @@ function AppRoutes() {
             <Route
               path="/dev/design-system"
               element={<DesignSystemPage />}
+            />
+          )}
+          {import.meta.env.DEV && StreamingPreviewPage && (
+            <Route
+              path="/dev/streaming-preview"
+              element={<StreamingPreviewPage />}
             />
           )}
           {/* Catch-all */}

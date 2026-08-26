@@ -113,13 +113,9 @@ class TestPostProcessing:
         assert tabs[0]["label"] == "Introduction"
         assert tabs[1]["label"] == "Part 2"
 
-    def test_tab_label_count_injection(self):
-        """Sprint 0.8: list-based tabs get item count prepended.
-
-        Uses a current registry component — the v1-legacy `exercise_tracker`
-        entry was removed from `_COUNT_KEYS` (project-score-9 4.5d; the
-        registry no longer emits legacy names, so they can't reach assembly).
-        """
+    def test_tab_labels_never_get_count_prefixes(self):
+        """Labels stay as the planner wrote them — count-prefixing produced
+        garbage like "25 Notable Card Pulls" / "10 Tier List: Best Pulls"."""
         from src.services.pipeline.assembly import _post_process_tabs
 
         tabs = [
@@ -139,8 +135,8 @@ class TestPostProcessing:
             },
         ]
         _post_process_tabs(tabs)
-        assert "2" in tabs[0]["label"]
-        assert tabs[1]["label"] == "Overview"  # overview exempt from count
+        assert tabs[0]["label"] == "Gear"
+        assert tabs[1]["label"] == "Overview"
 
     def test_double_emoji_strip(self):
         """Sprint 0.9: leading emoji stripped when emoji field exists."""
@@ -177,8 +173,7 @@ class TestPostProcessing:
         ]
         _post_process_tabs(tabs)
         assert len(tabs[0]["props"]["comparisons"]) == 10
-        # Count-derived label uses the capped count, not the original 29
-        assert tabs[0]["label"].startswith("10 ")
+        assert tabs[0]["label"] == "Concepts"
 
     def test_caps_oversized_moment_track_to_20(self):
         """Regression: 55-item timelines must be capped to 20."""
@@ -649,3 +644,132 @@ class TestOverviewFirst:
         assert result["tabs"][0]["component"] == "overview"
         data = result["tabs"][0]["props"]["data"]
         assert data["itemCount"] == len(result["tabs"]) - 1
+
+
+class TestSpotCapSectionsRemap:
+    """Regression: the Vietnam-itinerary bug — capping spots to 25 while
+    sections still referenced indices up to 50 rendered Days 5-10 empty."""
+
+    @staticmethod
+    def _build_tab(n_spots: int, spots_per_day: int) -> dict:
+        spots = [{"name": f"Spot {i}", "description": f"Desc {i}"} for i in range(n_spots)]
+        sections = []
+        for day, start in enumerate(range(0, n_spots, spots_per_day), 1):
+            indices = list(range(start, min(start + spots_per_day, n_spots)))
+            sections.append({"label": f"Day {day}", "spotIndices": indices})
+        return {
+            "id": "itinerary",
+            "label": "Itinerary",
+            "emoji": "🧭",
+            "component": "spot_explorer",
+            "props": {"spots": spots, "sections": sections},
+        }
+
+    def test_no_dangling_indices_after_cap(self):
+        from src.services.pipeline.assembly.core import _post_process_tabs
+
+        tab = self._build_tab(n_spots=51, spots_per_day=5)
+        tabs = [tab]
+        _post_process_tabs(tabs)
+
+        spots = tabs[0]["props"]["spots"]
+        sections = tabs[0]["props"]["sections"]
+        assert len(spots) <= 25
+        for section in sections:
+            for idx in section["spotIndices"]:
+                assert 0 <= idx < len(spots), f"dangling index {idx} in {section['label']}"
+
+    def test_even_sampling_preserves_late_days(self):
+        from src.services.pipeline.assembly.core import _post_process_tabs
+
+        tab = self._build_tab(n_spots=51, spots_per_day=5)
+        tabs = [tab]
+        _post_process_tabs(tabs)
+
+        labels = [s["label"] for s in tabs[0]["props"]["sections"]]
+        # 11 days of 5 spots — even-sampling must keep spots from the LAST day,
+        # not amputate the tail like a head-truncation would.
+        assert labels[-1] == "Day 11"
+        # Every remaining section still points at at least one live spot.
+        assert all(s["spotIndices"] for s in tabs[0]["props"]["sections"])
+
+    def test_under_cap_untouched(self):
+        from src.services.pipeline.assembly.core import _post_process_tabs
+
+        tab = self._build_tab(n_spots=10, spots_per_day=5)
+        tabs = [tab]
+        _post_process_tabs(tabs)
+
+        assert len(tabs[0]["props"]["spots"]) == 10
+        assert [s["spotIndices"] for s in tabs[0]["props"]["sections"]] == [
+            [0, 1, 2, 3, 4],
+            [5, 6, 7, 8, 9],
+        ]
+
+    def test_flat_spots_without_sections_head_truncated(self):
+        from src.services.pipeline.assembly.core import _post_process_tabs
+
+        tabs = [
+            {
+                "id": "spots",
+                "label": "Spots",
+                "emoji": "📍",
+                "component": "spot_explorer",
+                "props": {"spots": [{"name": f"S{i}", "description": "d"} for i in range(30)]},
+            }
+        ]
+        _post_process_tabs(tabs)
+        assert len(tabs[0]["props"]["spots"]) == 25
+        assert tabs[0]["props"]["spots"][0]["name"] == "S0"
+
+    def test_every_section_keeps_at_least_one_spot(self):
+        """Per-section quotas: no day sub-tab may vanish while sections <= cap."""
+        from src.services.pipeline.assembly.core import _post_process_tabs
+
+        # 10 days x 5 spots = 50 spots -> capped to 25 but ALL 10 days survive.
+        tab = self._build_tab(n_spots=50, spots_per_day=5)
+        tabs = [tab]
+        _post_process_tabs(tabs)
+
+        sections = tabs[0]["props"]["sections"]
+        assert [s["label"] for s in sections] == [f"Day {d}" for d in range(1, 11)]
+        assert all(len(s["spotIndices"]) >= 1 for s in sections)
+        assert len(tabs[0]["props"]["spots"]) <= 25
+
+    def test_more_sections_than_cap_keeps_one_each_for_first_cap(self):
+        from src.services.pipeline.assembly.core import _post_process_tabs
+
+        # 30 days x 2 spots = 60 spots -> first 25 days keep one spot each.
+        tab = self._build_tab(n_spots=60, spots_per_day=2)
+        tabs = [tab]
+        _post_process_tabs(tabs)
+
+        sections = tabs[0]["props"]["sections"]
+        assert len(sections) == 25
+        assert [s["label"] for s in sections] == [f"Day {d}" for d in range(1, 26)]
+        assert all(len(s["spotIndices"]) == 1 for s in sections)
+        assert len(tabs[0]["props"]["spots"]) == 25
+
+    def test_small_section_survives_next_to_giant_section(self):
+        """Largest-remainder floor-1: a 1-spot day is not sampled away by a
+        40-spot day hogging the whole budget."""
+        from src.services.pipeline.assembly.core import _cap_spots_with_sections
+
+        spots = [{"name": f"S{i}", "description": "d"} for i in range(41)]
+        props = {
+            "spots": spots,
+            "sections": [
+                {"label": "Big day", "spotIndices": list(range(40))},
+                {"label": "Small day", "spotIndices": [40]},
+            ],
+        }
+        _cap_spots_with_sections(props, spots, 25)
+
+        labels = [s["label"] for s in props["sections"]]
+        assert "Small day" in labels
+        small = next(s for s in props["sections"] if s["label"] == "Small day")
+        assert len(small["spotIndices"]) == 1
+        assert len(props["spots"]) <= 25
+        for section in props["sections"]:
+            for idx in section["spotIndices"]:
+                assert 0 <= idx < len(props["spots"])

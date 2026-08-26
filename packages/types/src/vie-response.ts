@@ -68,6 +68,10 @@ export interface TabEntry {
   /** Optional secondary-tier attachments rendered around the primary. Absent
    *  on flat tabs, which render exactly as before. */
   attachments?: TabAttachment[];
+  /** Set when the assembler degraded this tab from a richer component whose
+   *  assembler couldn't build from the data (degrade-never-drop ladder).
+   *  Telemetry/debug only — rendering keys off `component` as usual. */
+  degradedFrom?: string;
 }
 
 // ─────────────────────────────────────────────────────
@@ -101,6 +105,9 @@ export interface FrameEvidence {
   frameOcr?: string;
   /** Scene type — "slide", "code", "diagram", "demo", "whiteboard", etc. */
   frameSceneType?: string;
+  /** Durable S3 object key for the attached frame — the API re-signs a fresh
+   *  presigned URL from it on read (thumbnailUrl expires with the presign). */
+  s3Key?: string;
 }
 
 export interface SpotItem extends FrameEvidence {
@@ -114,6 +121,8 @@ export interface SpotItem extends FrameEvidence {
   bookingSearch?: string;
   tips?: string;
   specs?: string;
+  /** Phonetic guide for language-learning phrase cards (e.g. "su-mi-ma-sen"). */
+  pronunciation?: string;
   rating?: number;
   thumbnailUrl?: string;
 }

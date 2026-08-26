@@ -33,20 +33,26 @@ The block-based content system was replaced by the composable output system (v2)
 
 The triage pipeline determines content tags from video metadata and transcript manifest. Tags drive schema selection, tab layout, and enrichment.
 
-### 10 Primary Content Tags + 2 Modifiers
+### 14 Primary Content Tags + 2 Modifiers
 
-| ContentTag | Domain Schema | Enrichment |
-|------------|---------------|------------|
-| `learning` | `schemas/learning.txt` | quiz, flashcards, scenarios |
-| `tech` | `schemas/tech.txt` | quiz, flashcards, scenarios |
-| `fitness` | `schemas/fitness.txt` | - |
-| `food` | `schemas/food.txt` | - |
-| `music` | `schemas/music.txt` | - |
-| `travel` | `schemas/travel.txt` | - |
-| `review` | `schemas/review.txt` | - |
-| `project` | `schemas/project.txt` | - |
-| `language` | `schemas/language.txt` | - |
-| `science` | `schemas/science.txt` | - |
+Enrichment prompts come from the `domains.json` `enrichment` map (every domain has one; `enrich_recall.txt` domains get flashcards only — no quiz/scenarios).
+
+| ContentTag | Domain Schema | Enrichment prompt |
+|------------|---------------|-------------------|
+| `learning` | `schemas/learning.txt` | `enrich_study.txt` |
+| `tech` | `schemas/tech.txt` | `enrich_tech.txt` |
+| `fitness` | `schemas/fitness.txt` | `enrich_fitness.txt` |
+| `food` | `schemas/food.txt` | `enrich_food.txt` |
+| `music` | `schemas/music.txt` | `enrich_music.txt` |
+| `travel` | `schemas/travel.txt` | `enrich_travel.txt` |
+| `review` | `schemas/review.txt` | `enrich_review.txt` |
+| `project` | `schemas/project.txt` | `enrich_project.txt` |
+| `language` | `schemas/language.txt` | `enrich_language.txt` |
+| `science` | `schemas/science.txt` | `enrich_science.txt` |
+| `gaming` | `schemas/gaming.txt` | `enrich_recall.txt` (flashcards only) |
+| `news` | `schemas/news.txt` | default (`enrich_study.txt`) |
+| `podcast` | `schemas/podcast.txt` | `enrich_recall.txt` (flashcards only) |
+| `sport` | `schemas/sport.txt` | default (`enrich_study.txt`) |
 | `narrative` | `schemas/narrative.txt` | Modifier only |
 | `finance` | `schemas/finance.txt` | Modifier only |
 
@@ -88,7 +94,20 @@ export interface ConceptCanvasProps {
 }
 ```
 
-#### Component density gates (`densityGates`)
+#### Notable TabEntry / item fields (2026-08 additions)
+
+Mirrored in `packages/types/src/vie-response.ts` and the summarizer's Pydantic
+models (`domain_types.py` — keep them in sync, undeclared fields silently drop
+on `model_dump`):
+
+- `TabEntry.attachments?: TabAttachment[]` — secondary components rendered around the primary (`stat_banner`, `tip_callout`, `summary_header`, `diagram_card`, `frame_strip`, `quick_quiz`).
+- `TabEntry.degradedFrom?: string` — original component name when the assembly demote ladder downgraded the tab.
+- `FrameEvidence.s3Key?: string` — stable S3 key per frame; lets the api re-sign expired presigned URLs on serve (`refresh-frame-urls.ts`).
+- `SpotItem.pronunciation?: string` — travel spots.
+- `MomentItem` carries frame fields (`frameCaption`, `frameEvidence`, `frameOcr`, `frameSceneType`, `s3Key`) filled by assembly frame injection + `moment_frame_fill`.
+- `SSETabReadyEvent.position?: number` — index in the persisted tab order (client splices, never appends).
+
+#### Component density gates (`densityGates`) and domain policy
 
 `packages/shared/src/config/domains.json` carries a `densityGates` map
 (`Record<string, { min; max; chars }>`, typed in
@@ -97,6 +116,13 @@ rendered into the plan prompt as `{density_gates}` to steer how many items the
 LLM emits per component. It is **not** an enforcement layer: the summarizer's
 per-assembler hard caps are independent. Edit `domains.json` to change either the
 planner-selectable `components` list or these gates.
+
+The same file also carries **enforced** policy blocks (helpers in
+`services/summarizer/src/shared_config/domain_config.py`):
+
+- `domainRequirements` — per-domain `required` / `max` / **`forbidden`** component lists (e.g. `quiz_arena` is forbidden outside learning/language/tech/science). Enforced at plan post-validation AND at assembly.
+- `playbooks` — keyed `"<domain>:<format>"` (currently `gaming:unboxing`, `review:unboxing`): `required`/`preferred`/`forbidden`/`planGuidance`. Merge via `effective_requirements()`: forbidden = union, required = playbook overrides domain, max always from domain.
+- `visualCriticality` — adaptive frame-pipeline tiers (`high`/`standard`/`low` with per-tier vision budgets, `highDomains`/`lowDomains`/`highTitleKeywords`).
 
 ### Legacy: VideoContext
 

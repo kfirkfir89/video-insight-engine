@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import logging
 
+from .text_utils import truncate_words
+
 logger = logging.getLogger(__name__)
 
 # component -> (list_key, text_fields_to_cap, char_cap, min_items)
@@ -22,11 +24,8 @@ _DENSITY_RULES: dict[str, tuple[str, tuple[str, ...], int, int]] = {
 
 
 def _truncate(text: str, cap: int) -> str:
-    """Trim text to `cap` chars, appending an ellipsis when it overflows."""
-    text = text.strip()
-    if len(text) <= cap:
-        return text
-    return text[: cap - 1].rstrip() + "…"
+    """Trim text to `cap` chars on a word boundary (shared helper)."""
+    return truncate_words(text.strip(), cap)
 
 
 def enforce_density(component: str, props: dict) -> dict | None:
@@ -52,7 +51,9 @@ def enforce_density(component: str, props: dict) -> dict | None:
     if len(kept) < min_items:
         logger.info(
             "[assembly] density folded %s (%d < %d items)",
-            component, len(kept), min_items,
+            component,
+            len(kept),
+            min_items,
         )
         return None
     props[list_key] = kept

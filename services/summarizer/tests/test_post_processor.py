@@ -192,7 +192,15 @@ class TestResolveCelebrations:
         assert result[1]["celebration"] is False
 
     def test_celebration_tab_ids(self):
-        celebration_ids = ["quizzes", "flashcards", "scenarios", "packing", "ingredients", "materials", "tools"]
+        celebration_ids = [
+            "quizzes",
+            "flashcards",
+            "scenarios",
+            "packing",
+            "ingredients",
+            "materials",
+            "tools",
+        ]
         for tab_id in celebration_ids:
             tabs = [{"id": tab_id, "label": "Test"}]
             result = resolve_celebrations(tabs)
@@ -334,10 +342,14 @@ class TestComputeExtractionCoverage:
 
     def test_truncated_coverage_trips_gate(self):
         # The regression: 4.5h video whose timeline stops at 1:34:56 (5696s).
-        data = {"learning": {"timestamps": [
-            {"time": "0:00", "seconds": 0},
-            {"time": "1:34:56", "seconds": 5696},
-        ]}}
+        data = {
+            "learning": {
+                "timestamps": [
+                    {"time": "0:00", "seconds": 0},
+                    {"time": "1:34:56", "seconds": 5696},
+                ]
+            }
+        }
 
         coverage = compute_extraction_coverage(data, 16789)
 
@@ -346,9 +358,14 @@ class TestComputeExtractionCoverage:
         assert coverage["tailMissingSeconds"] == 16789 - 5696
 
     def test_parses_string_offsets_in_narrative(self):
-        data = {"narrative": {"keyMoments": [
-            {"timestamp": "2:00"}, {"timestamp": "1:20:00"},
-        ]}}
+        data = {
+            "narrative": {
+                "keyMoments": [
+                    {"timestamp": "2:00"},
+                    {"timestamp": "1:20:00"},
+                ]
+            }
+        }
 
         coverage = compute_extraction_coverage(data, 5000)
 
@@ -358,4 +375,35 @@ class TestComputeExtractionCoverage:
     def test_returns_none_without_timestamps_or_duration(self):
         assert compute_extraction_coverage({"learning": {}}, 1000) is None
         assert compute_extraction_coverage(None, 1000) is None
-        assert compute_extraction_coverage({"learning": {"timestamps": [{"seconds": 5}]}}, 0) is None
+        assert (
+            compute_extraction_coverage({"learning": {"timestamps": [{"seconds": 5}]}}, 0) is None
+        )
+
+
+class TestValidateExtractionCountsDomainFilter:
+    """Regression: the plan prompt fills a flat, domain-agnostic itemCounts —
+    a gaming/review video can carry manifest counts for spots/tips that no
+    active schema could populate. Those must not warn (guaranteed 0% false
+    positives that also fed the retry trigger)."""
+
+    def test_skips_fields_outside_active_domains(self):
+        manifest = PlanResult.model_validate({"itemCounts": {"spots": 6, "tips": 3}})
+        data = {"review": {"comparisons": []}, "gaming": {}}
+
+        warnings = validate_extraction_counts(manifest, data, content_tags=["review", "gaming"])
+        assert warnings == {}
+
+    def test_still_warns_for_fields_in_active_domains(self):
+        manifest = PlanResult.model_validate({"itemCounts": {"spots": 6}})
+        data = {"travel": {"itinerary": [{"spots": []}]}}
+
+        warnings = validate_extraction_counts(manifest, data, content_tags=["travel"])
+        assert "spots" in warnings
+        assert warnings["spots"]["extracted"] == 0
+
+    def test_no_filter_when_content_tags_absent(self):
+        manifest = PlanResult.model_validate({"itemCounts": {"spots": 6}})
+        data = {"review": {}}
+
+        warnings = validate_extraction_counts(manifest, data)
+        assert "spots" in warnings

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .text_utils import truncate_words
 from .normalizers import (
     _coerce_float,
     _coerce_int,
@@ -182,7 +183,7 @@ def assemble_diagram_card(
         node: dict[str, Any] = {"label": label}
         detail = item.get("detail") or item.get("definition") or item.get("description")
         if detail:
-            node["detail"] = str(detail)[:120]
+            node["detail"] = truncate_words(str(detail), 120)
         if item.get("emoji"):
             node["emoji"] = str(item["emoji"])
         nodes.append(node)
@@ -295,13 +296,13 @@ def _normalize_tier_item(item: Any) -> dict | None:
     label = str(item.get("item") or item.get("name") or item.get("label") or "").strip()
     if not label:
         return None
-    result: dict[str, Any] = {"item": label[:60]}
+    result: dict[str, Any] = {"item": truncate_words(label, 60)}
     tier = str(item.get("tier") or "").strip().upper()
     if tier in _TIER_VALUES:
         result["tier"] = tier
     reason = item.get("reason") or item.get("note") or item.get("description")
     if reason:
-        result["reason"] = str(reason)[:120]
+        result["reason"] = truncate_words(str(reason), 120)
     if item.get("emoji"):
         result["emoji"] = str(item["emoji"])
     return result
@@ -352,13 +353,13 @@ def _normalize_position(item: Any) -> dict | None:
     if x is None or y is None:
         return None
     result: dict[str, Any] = {
-        "player": player[:40],
+        "player": truncate_words(player, 40),
         "x": max(0.0, min(100.0, x)),
         "y": max(0.0, min(100.0, y)),
     }
     role = item.get("role") or item.get("position")
     if role:
-        result["role"] = str(role)[:24]
+        result["role"] = truncate_words(str(role), 24)
     number = _coerce_int(item.get("number"))
     if number is not None:
         result["number"] = number

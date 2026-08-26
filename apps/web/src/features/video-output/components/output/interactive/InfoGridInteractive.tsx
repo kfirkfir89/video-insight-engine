@@ -1,7 +1,7 @@
 import { memo, useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Search, ArrowUpDown, Copy, Check, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { GlassCard, FadeIn, Badge, ExpandableCard } from '@/components/vie';
+import { GlassCard, FadeIn, Badge, ExpandableCard, VisualEvidence } from '@/components/vie';
 import { Button } from '@/components/ui/button';
 import { EmptyTabState } from './EmptyTabState';
 
@@ -10,10 +10,19 @@ type InfoGridMode = 'key_value' | 'table' | 'tag_cloud';
 
 interface InfoGridItem {
   key: string;
-  value: string;
+  /** Optional — the backend legitimately emits `""` for headline chips. */
+  value?: string | number;
   /** Optional supporting example, source, or context — shown in muted italic below the value. */
   evidence?: string;
   emoji?: string;
+  /** Frame-evidence fields injected per item by the pipeline when the item's
+   *  timestamp matches a vision-analyzed frame (Frame-Evidence Rule). */
+  thumbnailUrl?: string;
+  frameCaption?: string;
+  frameOcr?: string;
+  frameSceneType?: string;
+  frameEvidence?: string;
+  timestamp?: number;
 }
 
 interface InfoGridSection {
@@ -26,12 +35,14 @@ interface InfoGridInteractiveProps {
   mode?: InfoGridMode;
   sections?: InfoGridSection[];
   nextTab?: string;
+  onSeek?: (seconds: number) => void;
   onNavigateTab?: (id: string) => void;
 }
 
 type SortDir = 'asc' | 'desc' | null;
 
-interface NormalizedItem extends InfoGridItem {
+interface NormalizedItem extends Omit<InfoGridItem, 'value'> {
+  value: string;
   originalIndex: number;
 }
 
@@ -39,7 +50,9 @@ function normalizeItems(raw: InfoGridItem[]): NormalizedItem[] {
   return raw
     .map((item, i) => {
       const key = (item?.key ?? '').trim();
-      const value = (item?.value ?? '').trim();
+      // `value` may be absent, null, or numeric — normalize to a string so the
+      // renderers never touch a non-string.
+      const value = item?.value == null ? '' : String(item.value).trim();
       // Cards without a key are empty rectangles — drop them. A key with no
       // value is a degenerate "headline tile"; we keep those so terms-only
       // glossaries still surface.
@@ -49,6 +62,12 @@ function normalizeItems(raw: InfoGridItem[]): NormalizedItem[] {
         value,
         evidence: item.evidence?.trim() || undefined,
         emoji: item.emoji,
+        thumbnailUrl: item.thumbnailUrl,
+        frameCaption: item.frameCaption,
+        frameOcr: item.frameOcr,
+        frameSceneType: item.frameSceneType,
+        frameEvidence: item.frameEvidence,
+        timestamp: item.timestamp,
         originalIndex: i,
       } as NormalizedItem;
     })
@@ -59,8 +78,7 @@ export const InfoGridInteractive = memo(function InfoGridInteractive({
   items,
   mode = 'key_value',
   sections,
-  nextTab: _nextTab,
-  onNavigateTab: _onNavigateTab,
+  onSeek,
 }: InfoGridInteractiveProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDir, setSortDir] = useState<SortDir>(null);
@@ -95,7 +113,16 @@ export const InfoGridInteractive = memo(function InfoGridInteractive({
     () => sorted.reduce((max, i) => Math.max(max, i.value.length), 0),
     [sorted],
   );
-  const gridMinWidth = longestValue > 120 ? 280 : longestValue > 60 ? 220 : 160;
+  // Any visible frame forces the wide track — a 16:9 figure squeezed into a
+  // 160px cell reads as a thumbnail sidekick, not evidence (Frame-as-Hero).
+  const hasVisibleFrame = useMemo(() => sorted.some((i) => Boolean(i.thumbnailUrl)), [sorted]);
+  const gridMinWidth = hasVisibleFrame
+    ? 280
+    : longestValue > 120
+      ? 280
+      : longestValue > 60
+        ? 220
+        : 160;
 
   const toggleSort = useCallback(() => {
     setSortDir((prev) => (prev === null ? 'asc' : prev === 'asc' ? 'desc' : null));
@@ -116,6 +143,18 @@ export const InfoGridInteractive = memo(function InfoGridInteractive({
   const renderGridCell = (item: NormalizedItem, displayIndex: number) => (
     <FadeIn key={item.originalIndex} index={displayIndex}>
       <GlassCard variant="outlined" className="h-full p-3 space-y-1.5">
+        {item.thumbnailUrl && (
+          <VisualEvidence
+            variant="figure"
+            thumbnailUrl={item.thumbnailUrl}
+            caption={item.frameCaption}
+            ocr={item.frameOcr}
+            sceneType={item.frameSceneType}
+            evidence={item.frameEvidence}
+            timestamp={item.timestamp}
+            onSeek={onSeek}
+          />
+        )}
         <span className="flex items-baseline gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground/70">
           {item.emoji ? <span aria-hidden="true">{item.emoji}</span> : null}
           <span className="break-words">{item.key}</span>

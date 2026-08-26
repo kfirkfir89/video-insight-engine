@@ -187,7 +187,9 @@ class Settings(BaseSettings):
 
     # S3 — uses existing vie-transcripts bucket for all media (frames, transcripts, audio)
     S3_BUCKET: str = "vie-transcripts"
-    S3_PRESIGNED_URL_EXPIRY: int = 3600  # Presigned URL validity in seconds (1 hour)
+    # Must cover the api gateway's re-sign window (FRAME_URL_TTL_SECONDS=21600);
+    # a shorter expiry here means SSE-delivered URLs 403 mid-session.
+    S3_PRESIGNED_URL_EXPIRY: int = 21600  # Presigned URL validity in seconds (6 hours)
     AWS_REGION: str = "us-east-1"
     AWS_ENDPOINT_URL: str | None = None  # Optional: custom endpoint for CI/CD testing (LocalStack)
     AWS_ACCESS_KEY_ID: str | None = None
@@ -219,6 +221,10 @@ class Settings(BaseSettings):
 
     # Advanced transcript cleaning (spaCy + TF-IDF)
     TRANSCRIPT_CLEANING_ENABLED: bool = True
+    # Budget for the advanced-cleaning pass. The first call per worker process
+    # pays a spaCy cold-start inside this window; raise if cold-start timeouts
+    # show up in logs ("Advanced transcript cleaning timed out").
+    TRANSCRIPT_CLEANING_TIMEOUT: float = 30.0
 
     # Sound-only force-English: when a music-category video has words-per-second
     # below this threshold, override the detected language to English. Whisper
@@ -230,14 +236,52 @@ class Settings(BaseSettings):
     SCENE_EXTRACTION_ENABLED: bool = True
     SCENE_THRESHOLD: float = 0.3
     SCENE_MAX_FRAMES: int = 100
+    # Detection pass renders from the worst-quality download; these only shape
+    # the low-res JPEGs used for scoring/OCR (and the fallback if hi-res fails).
+    SCENE_DETECT_SCALE_WIDTH: int = 1024
+    SCENE_JPEG_QUALITY: int = 4  # ffmpeg -q:v (2 = near-lossless, 31 = worst)
+
+    # Hi-res refinement: re-extract the ~25 SELECTED frames at 720p via a
+    # stream-URL seek (no full download) before S3 upload + vision analysis.
+    # Disable to fall back to single-pass low-res frames.
+    SCENE_HIRES_ENABLED: bool = True
+    SCENE_HIRES_CONCURRENCY: int = 4  # parallel ffmpeg seeks against the CDN
+    SCENE_HIRES_TIMEOUT: float = 90.0  # total budget; on expiry keep low-res
+    # Budget for the local-download fallback (one yt-dlp 720p download + local
+    # seeks) used when the CDN 403s every direct stream-URL extraction.
+    SCENE_HIRES_FALLBACK_TIMEOUT: float = 180.0
+    # yt-dlp player clients for VIDEO/AUDIO downloads (comma-separated).
+    # 2026-08-19: YouTube 403s the web client's download URLs from this
+    # environment while the android client works. android ONLY — mixing in
+    # "default" merges the web client's format list, and `bestvideo` selectors
+    # then pick a web DASH format whose URL 403s (verified live). Empty string
+    # = yt-dlp defaults. Metadata/subtitle extraction deliberately does NOT
+    # use this (android clients can lack subtitle/chapter data).
+    YTDLP_PLAYER_CLIENTS: str = "android"
+    # Versioned S3 prefix — bumping it defeats the frames-already-exist cache
+    # so quality changes take effect for reprocessed videos ("scenes" = pre-hires).
+    # v3: subject-aware scoring (skin/center-detail) + adaptive vision tiers.
+    SCENE_S3_PREFIX: str = "scenes-v3"
 
     # Vision LLM analysis on top-scored frames.
     # Sending 8 base64 frames to Sonnet legitimately takes 30-50s under load;
-    # a 60s budget is the right line between "catches real stalls" and "loses
-    # context to premature timeout."
+    # HIGH-tier batches (~40 low-res frames) need the larger 90s budget.
     FRAME_VISION_ENABLED: bool = True
     FRAME_VISION_MAX_FRAMES: int = 8
-    FRAME_VISION_TIMEOUT: float = 60.0
+    FRAME_VISION_TIMEOUT: float = 90.0
+
+    # Adaptive frame-effort tiers (media/visual_tier.py, config-driven from
+    # domains.json visualCriticality). HIGH tier over-selects candidates and
+    # vision-describes them all BEFORE hires refinement so subject-matter
+    # frames (cards, dishes, places) win over presenter shots.
+    FRAME_TIER_ENABLED: bool = True
+    FRAME_OVERSELECT_COUNT: int = 40
+    # Reserved: refine the metadata-derived tier with an early classifier call
+    # launched at frames-phase start (classification normally runs later).
+    FRAME_TIER_EARLY_CLASSIFIER: bool = False
+    # HIGH-tier floor: vision-informed reselection never keeps fewer than this
+    # many frames (backfilled by local score when vision over-refuses).
+    FRAME_RESELECT_FLOOR: int = 20
 
     # Frame extraction (visual blocks)
     # Default False for local dev (yt-dlp/ffmpeg may not be installed).

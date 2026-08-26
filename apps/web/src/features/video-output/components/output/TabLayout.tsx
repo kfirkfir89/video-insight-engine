@@ -80,8 +80,8 @@ const TabLayoutInner = forwardRef<TabLayoutHandle, TabLayoutProps>(
         {showProgress && (
           <div className="flex flex-col gap-1.5 px-1 pt-1 animate-[fadeUp_0.35s_var(--ease-out-expo)_both]">
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-baseline gap-2.5">
-                <span className="text-xs font-bold uppercase tracking-[0.22em] text-primary">
+              <div className="flex shrink-0 items-baseline gap-2.5">
+                <span className="type-eyebrow text-[var(--vie-accent)]">
                   {isStreaming ? 'Generating' : 'Ready'}
                 </span>
                 <span className="text-xs font-medium tabular-nums text-muted-foreground">
@@ -91,15 +91,16 @@ const TabLayoutInner = forwardRef<TabLayoutHandle, TabLayoutProps>(
               {phaseLabel && (
                 <span
                   key={phaseLabel}
-                  className="hidden sm:block truncate text-xs text-muted-foreground/80 animate-[fadeUp_0.2s_var(--ease-out-quint)_both] motion-reduce:animate-none"
+                  className="hidden min-w-0 truncate text-xs text-muted-foreground/80 sm:block animate-[fadeUp_0.2s_var(--ease-out-quint)_both] motion-reduce:animate-none"
                 >
                   {phaseLabel}
                 </span>
               )}
             </div>
-            {/* Progress arc: width transitions on tab arrival; a travelling
-                shimmer reads the wait as ambient activity. Reduced-motion
-                strips the shimmer and keeps the width transition. */}
+            {/* Progress arc: fill scales on tab arrival (transform, never
+                width — compositor-only); a travelling shimmer reads the wait
+                as ambient activity. Reduced-motion strips the shimmer and
+                keeps the scale transition. */}
             <div
               className="relative h-0.5 w-full overflow-hidden rounded-full bg-muted/40"
               role="progressbar"
@@ -109,11 +110,11 @@ const TabLayoutInner = forwardRef<TabLayoutHandle, TabLayoutProps>(
               aria-label="Tabs generated"
             >
               <div
-                className="relative h-full overflow-hidden rounded-full"
+                className="relative h-full w-full origin-left overflow-hidden rounded-full rtl:origin-right"
                 style={{
-                  width: `${progressPercent}%`,
+                  transform: `scaleX(${progressPercent / 100})`,
                   background: 'var(--vie-accent, var(--primary))',
-                  transition: 'width 600ms var(--ease-out-quint)',
+                  transition: 'transform 600ms var(--ease-out-quint)',
                 }}
               >
                 {isStreaming && (

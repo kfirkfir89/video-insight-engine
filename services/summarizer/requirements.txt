@@ -76,7 +76,9 @@ scikit-learn>=1.3.0
 langdetect>=1.0.9
 
 # OCR (frame text extraction)
-opencv-python-headless>=4.8.0
+# <5 pin: OpenCV 5 removed cv2.CascadeClassifier (Haar face detection),
+# which frame_scorer.py depends on. Revisit when scoring migrates off Haar.
+opencv-python-headless>=4.8.0,<5
 pytesseract>=0.3.10
 
 # Testing

@@ -1,26 +1,20 @@
 """Tests for smart frame scoring, selection, and classification."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from src.services.media.frame_scorer import (
-    score_visual_interest,
+    _hamming_distance,
+    classify_for_gallery,
+    compute_target_count,
+    score_all_frames,
     score_face_detection,
+    score_frame,
     score_text_density,
     score_uniqueness,
-    score_frame,
-    score_all_frames,
-    compute_target_count,
+    score_visual_interest,
     select_by_time_slots,
-    classify_for_gallery,
     select_frames,
-    _hamming_distance,
-    WEIGHT_VISUAL,
-    WEIGHT_FACE,
-    WEIGHT_TEXT,
-    WEIGHT_UNIQUENESS,
 )
-
 
 # ─────────────────────────────────────────────────────
 # Helper: create mock frame dicts
@@ -271,6 +265,7 @@ class TestScoreVisualInterest:
     @patch("src.services.media.frame_scorer._get_cv2")
     def test_returns_float_in_range(self, mock_get_cv2):
         import numpy as np
+
         mock_cv2 = MagicMock()
         mock_get_cv2.return_value = mock_cv2
 
@@ -298,6 +293,7 @@ class TestScoreFaceDetection:
     @patch("src.services.media.frame_scorer._get_cv2")
     def test_no_face(self, mock_cv2, mock_cascade):
         import numpy as np
+
         mock_cv2.return_value.imread.return_value = np.zeros((100, 100), dtype=np.uint8)
         mock_cv2.return_value.IMREAD_GRAYSCALE = 0
         mock_cascade.return_value.detectMultiScale.return_value = []
@@ -308,6 +304,7 @@ class TestScoreFaceDetection:
     @patch("src.services.media.frame_scorer._get_cv2")
     def test_one_face(self, mock_cv2, mock_cascade):
         import numpy as np
+
         mock_cv2.return_value.imread.return_value = np.zeros((100, 100), dtype=np.uint8)
         mock_cv2.return_value.IMREAD_GRAYSCALE = 0
         mock_cascade.return_value.detectMultiScale.return_value = [(10, 10, 50, 50)]
@@ -318,6 +315,7 @@ class TestScoreFaceDetection:
     @patch("src.services.media.frame_scorer._get_cv2")
     def test_two_faces_cap_at_one(self, mock_cv2, mock_cascade):
         import numpy as np
+
         mock_cv2.return_value.imread.return_value = np.zeros((100, 100), dtype=np.uint8)
         mock_cv2.return_value.IMREAD_GRAYSCALE = 0
         mock_cascade.return_value.detectMultiScale.return_value = [
@@ -333,3 +331,127 @@ class TestScoreTextDensity:
     def test_delegates_to_frame_ocr(self, mock_density):
         assert score_text_density("/tmp/test.jpg") == 0.25
         mock_density.assert_called_once_with("/tmp/test.jpg")
+
+
+class TestCascadeUnavailable:
+    """Regression: OpenCV 5 removed cv2.CascadeClassifier. The scorer must
+    degrade to a neutral face score (one warning, no per-frame raise) so the
+    other three components still produce a real ranking."""
+
+    def _reset_cascade_cache(self):
+        import src.services.media.frame_scorer as fs
+
+        fs._face_cascade = None
+
+    @patch("src.services.media.frame_scorer._get_cv2")
+    def test_missing_cascade_class_returns_neutral_score(self, mock_get_cv2):
+        self._reset_cascade_cache()
+        mock_cv2 = MagicMock()
+        # Simulate OpenCV 5: attribute access raises AttributeError.
+        del mock_cv2.CascadeClassifier
+        mock_get_cv2.return_value = mock_cv2
+
+        try:
+            # 0.5 is the true neutral: the score is INVERTED into the total,
+            # so 0.0 would grant every frame the maximum anti-face bonus.
+            assert score_face_detection("/tmp/test.jpg") == 0.5
+        finally:
+            self._reset_cascade_cache()
+
+    @patch("src.services.media.frame_scorer._get_cv2")
+    def test_failure_is_cached_not_retried(self, mock_get_cv2):
+        self._reset_cascade_cache()
+        mock_cv2 = MagicMock()
+        del mock_cv2.CascadeClassifier
+        mock_get_cv2.return_value = mock_cv2
+
+        from src.services.media.frame_scorer import _get_face_cascade
+
+        try:
+            assert _get_face_cascade() is None
+            assert _get_face_cascade() is None
+            # Construction attempted exactly once — the sentinel prevents
+            # 500 retries (and 500 log lines) per video.
+            assert mock_get_cv2.call_count == 1
+            import src.services.media.frame_scorer as fs
+
+            assert fs._face_cascade is False
+        finally:
+            self._reset_cascade_cache()
+
+    @patch("src.services.media.frame_scorer.score_uniqueness", return_value=0.5)
+    @patch("src.services.media.frame_scorer.score_text_density", return_value=0.4)
+    @patch("src.services.media.frame_scorer.score_face_detection", return_value=0.0)
+    @patch("src.services.media.frame_scorer.score_visual_interest", return_value=0.6)
+    def test_other_components_still_rank_without_faces(self, *_mocks):
+        scores = score_frame("/tmp/test.jpg", 0b1010, None, None)
+        # face=0.0 contributes its full inverted weight; total is non-zero so
+        # selection doesn't collapse to the all-zeros fallback path.
+        assert scores["total_score"] > 0
+        assert scores["face_score"] == 0.0
+
+
+class TestNewSubjectSignals:
+    """skin-fraction + center-detail — the anti-presenter / pro-subject pair."""
+
+    @staticmethod
+    def _write_img(path, build):
+        import numpy as np
+
+        from PIL import Image
+
+        arr = build(np)
+        Image.fromarray(arr).save(path, "JPEG")
+
+    def test_skin_fraction_high_for_skin_toned_frame(self, tmp_path):
+        p = str(tmp_path / "skin.jpg")
+        self._write_img(
+            p,
+            lambda np: np.full((64, 64, 3), (200, 140, 110), dtype=np.uint8),
+        )
+        from src.services.media.frame_scorer import score_skin_fraction
+
+        assert score_skin_fraction(p) > 0.5
+
+    def test_skin_fraction_low_for_neutral_frame(self, tmp_path):
+        p = str(tmp_path / "card.jpg")
+        self._write_img(
+            p,
+            lambda np: np.full((64, 64, 3), (30, 60, 200), dtype=np.uint8),
+        )
+        from src.services.media.frame_scorer import score_skin_fraction
+
+        assert score_skin_fraction(p) < 0.1
+
+    def test_center_detail_high_for_sharp_center(self, tmp_path):
+        p = str(tmp_path / "detail.jpg")
+
+        def build(np):
+            arr = np.zeros((128, 128), dtype=np.uint8)
+            arr[32:96, 32:96] = (np.indices((64, 64)).sum(axis=0) % 2) * 255
+            return np.stack([arr] * 3, axis=-1)
+
+        self._write_img(p, build)
+        from src.services.media.frame_scorer import score_center_detail
+
+        assert score_center_detail(p) > 0.5
+
+    def test_center_detail_low_for_flat_frame(self, tmp_path):
+        p = str(tmp_path / "flat.jpg")
+        self._write_img(p, lambda np: np.full((128, 128, 3), 128, dtype=np.uint8))
+        from src.services.media.frame_scorer import score_center_detail
+
+        assert score_center_detail(p) < 0.1
+
+    def test_weights_sum_to_one(self):
+        from src.services.media import frame_scorer as fs
+
+        total = (
+            fs.WEIGHT_VISUAL
+            + fs.WEIGHT_FACE
+            + fs.WEIGHT_SKIN
+            + fs.WEIGHT_CENTER_DETAIL
+            + fs.WEIGHT_TEXT
+            + fs.WEIGHT_UNIQUENESS
+        )
+        assert abs(total - 1.0) < 1e-9

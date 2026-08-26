@@ -25,7 +25,9 @@ async def _drain(gen) -> None:
 
 def _build_ctx() -> SimpleNamespace:
     """Minimal PipelineContext stand-in for run_phase_translation (non-English)."""
-    video_data = SimpleNamespace(title="כותרת", channel="c", duration=10, thumbnail_url="https://x/t.jpg")
+    video_data = SimpleNamespace(
+        title="כותרת", channel="c", duration=10, thumbnail_url="https://x/t.jpg"
+    )
     return SimpleNamespace(
         source_language_code="he",
         source_language=None,
@@ -35,6 +37,17 @@ def _build_ctx() -> SimpleNamespace:
         video_data=video_data,
         youtube_id="ytid",
     )
+
+
+@pytest.fixture(autouse=True)
+def _stub_status_callback():
+    """Translation mirrors "completed" to the API via the fire-and-forget
+    send_video_status_background (sync, spawns a tracked task) — stub it so
+    unit tests never attempt real HTTP."""
+    from src.services.pipeline.phases import translation as phase
+
+    with patch.object(phase, "send_video_status_background", new=MagicMock()) as mock_send:
+        yield mock_send
 
 
 @pytest.mark.asyncio
@@ -48,9 +61,11 @@ async def test_success_persists_sourcelanguage_and_status_completed() -> None:
         "meta": {},
         "sourceLanguage": {"code": "he", "name": "עברית", "isRTL": True, "tabs": [], "meta": {}},
     }
-    with patch.object(phase, "translate_to_source", AsyncMock(return_value=translated)), \
-         patch.object(phase, "translate_text", AsyncMock(return_value="English title")), \
-         patch.object(phase, "settings", SimpleNamespace(REDIS_ENABLED=False)):
+    with (
+        patch.object(phase, "translate_to_source", AsyncMock(return_value=translated)),
+        patch.object(phase, "translate_text", AsyncMock(return_value="English title")),
+        patch.object(phase, "settings", SimpleNamespace(REDIS_ENABLED=False)),
+    ):
         await _drain(phase.run_phase_translation(ctx, repo, "vsid"))  # type: ignore[arg-type]
 
     saved = repo.save_structured_result.call_args.args[1]
@@ -69,11 +84,34 @@ async def test_noop_finalizes_status_completed_without_sourcelanguage() -> None:
     repo = MagicMock()
     # translate_to_source returns the input unchanged (no sourceLanguage key).
     unchanged = {"tabs": [{"id": "overview"}], "meta": {"contentTags": ["podcast"]}}
-    with patch.object(phase, "translate_to_source", AsyncMock(return_value=unchanged)), \
-         patch.object(phase, "translate_text", AsyncMock(return_value="x")), \
-         patch.object(phase, "settings", SimpleNamespace(REDIS_ENABLED=False)):
+    with (
+        patch.object(phase, "translate_to_source", AsyncMock(return_value=unchanged)),
+        patch.object(phase, "translate_text", AsyncMock(return_value="x")),
+        patch.object(phase, "settings", SimpleNamespace(REDIS_ENABLED=False)),
+    ):
         await _drain(phase.run_phase_translation(ctx, repo, "vsid"))  # type: ignore[arg-type]
 
     repo.update_status.assert_called_once()
     assert repo.update_status.call_args.args[1] is ProcessingStatus.COMPLETED
     repo.save_structured_result.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_status_callback_completed_on_both_paths(_stub_status_callback) -> None:
+    """Both translation outcomes (sourceLanguage persisted / English-only
+    finalize) must mirror "completed" onto userVideos via the API callback."""
+    from src.services.pipeline.phases import translation as phase
+
+    ctx = _build_ctx()
+    repo = MagicMock()
+    with (
+        patch.object(
+            phase, "translate_to_source", AsyncMock(return_value={"tabs": [], "meta": {}})
+        ),
+        patch.object(phase, "translate_text", AsyncMock(return_value="x")),
+        patch.object(phase, "settings", SimpleNamespace(REDIS_ENABLED=False)),
+    ):
+        await _drain(phase.run_phase_translation(ctx, repo, "vsid"))  # type: ignore[arg-type]
+
+    _stub_status_callback.assert_called_once()
+    assert _stub_status_callback.call_args.args[2] == "completed"

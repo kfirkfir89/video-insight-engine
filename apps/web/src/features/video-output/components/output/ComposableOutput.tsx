@@ -156,8 +156,14 @@ export const ComposableOutput = memo(function ComposableOutput({
   primaryTag,
   videoSummaryId,
 }: ComposableOutputProps) {
-  const { seekTo, currentTime } = useVideoPlayer();
+  const { seekTo, currentTime, isPlayerOpen } = useVideoPlayer();
   const [flowModeActive, setFlowModeActive] = useState(false);
+
+  // `currentTime` keeps its last polled value after the player closes; passing
+  // it through would leave playback-driven active states (and the moment
+  // timeline's activeIndex-over-scroll-focus override) stuck on a stale
+  // position forever. No open player → no playback position.
+  const playbackTime = isPlayerOpen ? currentTime : undefined;
 
   // Single validated boundary for EVERY tab source (4.4 follow-up): SSE tabs
   // arrive pre-gated by handleTabReady (re-validation is an idempotent pass),
@@ -214,7 +220,7 @@ export const ComposableOutput = memo(function ComposableOutput({
       onSeek: seekTo,
       tabId: tab.id,
       tabLabel: tab.label,
-      currentTime,
+      currentTime: playbackTime,
       allTabs: validatedTabs,
       videoId: videoSummaryId,
       derivedOverviewLinks,

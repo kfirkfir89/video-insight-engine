@@ -226,7 +226,12 @@ openai==2.44.0
     # via
     #   -r services/summarizer/requirements.txt
     #   litellm
-opencv-python-headless==5.0.0.93
+# Hand-pinned to 4.x (matches requirements.txt `<5`): OpenCV 5 removed
+# cv2.CascadeClassifier, which frame_scorer.py needs. A full `uv pip compile`
+# re-resolve would also bump torch off the +cpu build — rerun the header
+# command WITH `--extra-index-url https://download.pytorch.org/whl/cpu` when
+# regenerating this file for real.
+opencv-python-headless==4.14.0.94
     # via -r services/summarizer/requirements.txt
 packaging==24.2
     # via

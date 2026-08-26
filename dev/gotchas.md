@@ -48,17 +48,8 @@ When you fix a bug, add it here to prevent re-investigation.
 | Transcript empty | Video unavailable/private | Check video accessibility | 2026-02 |
 | JSON parse error in response | LLM output malformed | Add response validation, retry | 2026-02 |
 | Memory spike | Large transcript in memory | Stream processing, chunk | 2026-02 |
-
----
-
-## vie-explainer (Python/FastAPI/MCP)
-
-| Symptom | Cause | Fix | Added |
-|---------|-------|-----|-------|
-| MCP connection fails | Stdio transport issue | Check subprocess spawn | 2026-02 |
-| Tool not found | Tool not registered | Check MCP tool registration | 2026-02 |
-| Slow responses | No caching | Check MongoDB cache hits | 2026-02 |
-| Context too large | VideoContext bloated | Trim unnecessary fields | 2026-02 |
+| yt-dlp 403 on video download / stream-URL seeks | YouTube 403s the **web client's** download URLs from some environments (client-bound googlevideo CDN) | Set `YTDLP_PLAYER_CLIENTS=android` (the default). **Never** use `android,default` — the merged format list lets bestvideo pick a blocked web DASH format. android caps at 640×360 (PO-token wall); the hires pass falls back to a local ≤720p download. Low-res cached runs self-heal via the manifest `hiresCount==0` gate | 2026-08 |
+| Frames silently stale after quality changes | `scenes-v3` keys overwrite in place — old docs get new frames but stale metadata | Bump `SCENE_S3_PREFIX` on frame-quality changes, or `?bypassCache=true` per video | 2026-08 |
 
 ---
 

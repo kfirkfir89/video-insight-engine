@@ -7,7 +7,10 @@ import {
   useDroppable,
   useSensor,
   useSensors,
+  type Active,
+  type Announcements,
   type DragEndEvent,
+  type ScreenReaderInstructions,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, RotateCcw, Trophy } from 'lucide-react';
@@ -54,6 +57,16 @@ const TIER_STYLE: Record<TierRank, TierStyle> = {
   B: { bg: 'oklch(from var(--vie-accent) l c h / 0.6)', fg: 'var(--foreground)' },
   C: { bg: 'oklch(from var(--vie-accent) l c h / 0.4)', fg: 'var(--foreground)' },
   D: { bg: 'oklch(from var(--vie-accent) l c h / 0.25)', fg: 'var(--foreground)' },
+};
+
+/** Human-readable slot name for screen-reader announcements. */
+function slotName(slot: string): string {
+  return slot === UNRANKED ? 'the unranked bench' : `tier ${slot}`;
+}
+
+const SCREEN_READER_INSTRUCTIONS: ScreenReaderInstructions = {
+  draggable:
+    'To pick up a rankable item, press space or enter. Use the arrow keys to move it over a tier row, then press space or enter again to drop it there. Press escape to cancel.',
 };
 
 function storageKey(videoId: string | undefined, tabId: string | undefined): string | null {
@@ -132,7 +145,8 @@ function TierChip({ index, item }: ChipProps) {
       {...attributes}
       role="button"
       tabIndex={0}
-      aria-label={`Drag ${item.item}`}
+      aria-label={item.reason ? `Drag ${item.item}: ${item.reason}` : `Drag ${item.item}`}
+      title={item.reason}
       className={cn(
         'inline-flex cursor-grab touch-none items-center gap-1.5 rounded-full',
         'border border-border/60 bg-card px-2.5 py-1 text-xs font-medium',
@@ -146,7 +160,7 @@ function TierChip({ index, item }: ChipProps) {
           {item.emoji}
         </span>
       ) : null}
-      <span className="truncate">{item.item}</span>
+      <span className="min-w-0 max-w-[14rem] truncate">{item.item}</span>
     </div>
   );
 }
@@ -165,7 +179,7 @@ function TierRow({ slot, label, accent, indices, items }: RowProps) {
   return (
     <div className="flex items-stretch gap-2">
       <div
-        className="flex w-12 shrink-0 items-center justify-center rounded-lg text-sm font-bold"
+        className="flex w-14 shrink-0 items-center justify-center rounded-lg text-xl font-extrabold"
         style={
           accent
             ? { backgroundColor: accent.bg, color: accent.fg }
@@ -248,12 +262,55 @@ export const TierList = memo(function TierList({ items, videoId, tabId }: TierLi
     setPlacement(initialPlacement(items));
   }, [items]);
 
+  // Creator rationales, ordered by suggested tier (S→D, then unranked). The
+  // reasons explain the CREATOR's placement, so this list stays stable while
+  // the viewer drags items around.
+  const reasoned = useMemo(
+    () =>
+      items
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => Boolean(item.reason))
+        .sort(
+          (a, b) =>
+            (a.item.tier ? TIERS.indexOf(a.item.tier) : TIERS.length) -
+            (b.item.tier ? TIERS.indexOf(b.item.tier) : TIERS.length),
+        ),
+    [items],
+  );
+
+  const announcements = useMemo<Announcements>(() => {
+    const nameOf = (active: Active): string => {
+      const index = active.data.current?.index;
+      return typeof index === 'number' ? (items[index]?.item ?? 'item') : 'item';
+    };
+    return {
+      onDragStart({ active }) {
+        return `Picked up ${nameOf(active)}.`;
+      },
+      onDragOver({ active, over }) {
+        return over ? `${nameOf(active)} is over ${slotName(String(over.id))}.` : undefined;
+      },
+      onDragEnd({ active, over }) {
+        return over
+          ? `${nameOf(active)} was dropped into ${slotName(String(over.id))}.`
+          : `${nameOf(active)} was dropped.`;
+      },
+      onDragCancel({ active }) {
+        return `Dragging ${nameOf(active)} was cancelled.`;
+      },
+    };
+  }, [items]);
+
   if (items.length === 0) {
     return <EmptyTabState message="No items to rank for this video." icon={Trophy} />;
   }
 
   return (
-    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+    <DndContext
+      sensors={sensors}
+      onDragEnd={handleDragEnd}
+      accessibility={{ announcements, screenReaderInstructions: SCREEN_READER_INSTRUCTIONS }}
+    >
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <p className="text-xs text-muted-foreground">
@@ -295,6 +352,45 @@ export const TierList = memo(function TierList({ items, videoId, tabId }: TierLi
             items={items}
           />
         </div>
+
+        {/* Creator rationale — surfaces the extracted `reason` field that the
+            drag chips can only hint at via title/aria-label. */}
+        {reasoned.length > 0 && (
+          <div>
+            <h4 className="mb-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Why these rankings
+            </h4>
+            <ul className="space-y-1.5">
+              {reasoned.map(({ item, index }) => (
+                <li key={index} className="flex items-start gap-2.5">
+                  <span
+                    className="flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-bold"
+                    style={
+                      item.tier
+                        ? {
+                            backgroundColor: TIER_STYLE[item.tier].bg,
+                            color: TIER_STYLE[item.tier].fg,
+                          }
+                        : { color: 'var(--foreground)' }
+                    }
+                  >
+                    {/* aria-label is unreliable on non-interactive spans —
+                        expose the tier via visually-hidden text instead. */}
+                    <span aria-hidden="true">{item.tier ?? '—'}</span>
+                    <span className="sr-only">{item.tier ? `Tier ${item.tier}` : 'Unranked'}</span>
+                  </span>
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium">
+                      {item.emoji ? <span aria-hidden="true">{item.emoji} </span> : null}
+                      {item.item}
+                    </span>
+                    <p className="text-sm text-muted-foreground">{item.reason}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </DndContext>
   );

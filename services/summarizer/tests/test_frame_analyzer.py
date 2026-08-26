@@ -26,15 +26,34 @@ class TestParseVisionResponse:
 
     def _metadata(self, count: int = 3) -> list[dict]:
         return [
-            {"index": i, "timestamp_sec": i * 60.0, "s3_url": f"https://s3/frame_{i}.jpg", "original_index": i}
+            {
+                "index": i,
+                "timestamp_sec": i * 60.0,
+                "s3_url": f"https://s3/frame_{i}.jpg",
+                "original_index": i,
+            }
             for i in range(count)
         ]
 
     def test_valid_json_array(self):
-        raw = json.dumps([
-            {"frame_index": 0, "scene_type": "code", "content": "Python function", "text_visible": "def foo():", "educational_value": "Shows impl"},
-            {"frame_index": 1, "scene_type": "slide", "content": "Architecture diagram", "text_visible": "", "educational_value": "System overview"},
-        ])
+        raw = json.dumps(
+            [
+                {
+                    "frame_index": 0,
+                    "scene_type": "code",
+                    "content": "Python function",
+                    "text_visible": "def foo():",
+                    "educational_value": "Shows impl",
+                },
+                {
+                    "frame_index": 1,
+                    "scene_type": "slide",
+                    "content": "Architecture diagram",
+                    "text_visible": "",
+                    "educational_value": "System overview",
+                },
+            ]
+        )
         results = parse_vision_response(raw, self._metadata(2))
 
         assert len(results) == 2
@@ -47,18 +66,42 @@ class TestParseVisionResponse:
         assert results[1]["timestamp_sec"] == 60.0
 
     def test_fenced_json(self):
-        raw = "```json\n" + json.dumps([
-            {"frame_index": 0, "scene_type": "diagram", "content": "ER diagram", "text_visible": "", "educational_value": "DB schema"},
-        ]) + "\n```"
+        raw = (
+            "```json\n"
+            + json.dumps(
+                [
+                    {
+                        "frame_index": 0,
+                        "scene_type": "diagram",
+                        "content": "ER diagram",
+                        "text_visible": "",
+                        "educational_value": "DB schema",
+                    },
+                ]
+            )
+            + "\n```"
+        )
         results = parse_vision_response(raw, self._metadata(1))
 
         assert len(results) == 1
         assert results[0]["scene_type"] == "diagram"
 
     def test_fenced_without_lang(self):
-        raw = "```\n" + json.dumps([
-            {"frame_index": 0, "scene_type": "table", "content": "Comparison table", "text_visible": "", "educational_value": "Feature comparison"},
-        ]) + "\n```"
+        raw = (
+            "```\n"
+            + json.dumps(
+                [
+                    {
+                        "frame_index": 0,
+                        "scene_type": "table",
+                        "content": "Comparison table",
+                        "text_visible": "",
+                        "educational_value": "Feature comparison",
+                    },
+                ]
+            )
+            + "\n```"
+        )
         results = parse_vision_response(raw, self._metadata(1))
 
         assert len(results) == 1
@@ -98,11 +141,13 @@ class TestParseVisionResponse:
         assert results[0]["s3_url"] == ""
 
     def test_non_dict_items_skipped(self):
-        raw = json.dumps([
-            "not a dict",
-            {"frame_index": 0, "scene_type": "code", "content": "test"},
-            42,
-        ])
+        raw = json.dumps(
+            [
+                "not a dict",
+                {"frame_index": 0, "scene_type": "code", "content": "test"},
+                42,
+            ]
+        )
         results = parse_vision_response(raw, self._metadata(1))
         assert len(results) == 1
 
@@ -154,8 +199,7 @@ class TestSelectTopFrames:
                 paths.append(p)
 
             frames = [
-                {"path": paths[i], "total_score": (i + 1) * 0.1, "index": i}
-                for i in range(5)
+                {"path": paths[i], "total_score": (i + 1) * 0.1, "index": i} for i in range(5)
             ]
             result = _select_top_frames(frames, 3)
 
@@ -224,9 +268,17 @@ class TestAnalyzeFramesWithVision:
 
     @pytest.mark.asyncio
     async def test_successful_analysis(self):
-        response_json = json.dumps([
-            {"frame_index": 0, "scene_type": "code", "content": "Binary search impl", "text_visible": "def search():", "educational_value": "Core algorithm"},
-        ])
+        response_json = json.dumps(
+            [
+                {
+                    "frame_index": 0,
+                    "scene_type": "code",
+                    "content": "Binary search impl",
+                    "text_visible": "def search():",
+                    "educational_value": "Core algorithm",
+                },
+            ]
+        )
         provider = MagicMock()
         provider.complete_with_messages = AsyncMock(return_value=response_json)
 
@@ -254,7 +306,9 @@ class TestAnalyzeFramesWithVision:
                 path = os.path.join(d, f"frame_{i}.jpg")
                 with open(path, "wb") as f:
                     f.write(b"\xff\xd8\xff\xe0" + b"\x00" * 100)
-                frames.append({"path": path, "total_score": i * 0.05, "index": i, "timestamp": i * 10})
+                frames.append(
+                    {"path": path, "total_score": i * 0.05, "index": i, "timestamp": i * 10}
+                )
 
             await analyze_frames_with_vision(frames, provider, max_frames=5)
 
@@ -287,3 +341,51 @@ class TestAnalyzeFramesWithVision:
 
             kwargs = provider.complete_with_messages.call_args.kwargs
             assert kwargs.get("use_fast_model") is False
+
+
+class TestVisualSubject:
+    def test_parse_passes_visual_subject_through(self):
+        from src.services.media.frame_analyzer import parse_vision_response
+
+        raw = (
+            '[{"frame_index": 0, "scene_type": "card_reveal", "content": "Card", '
+            '"text_visible": "", "educational_value": "chase pull", '
+            '"visual_subject": "content"}]'
+        )
+        meta = [{"index": 0, "timestamp_sec": 12.0, "s3_url": "u", "original_index": 3}]
+
+        out = parse_vision_response(raw, meta)
+
+        assert out[0]["visual_subject"] == "content"
+        assert out[0]["scene_type"] == "card_reveal"
+
+    def test_missing_visual_subject_defaults_empty(self):
+        from src.services.media.frame_analyzer import parse_vision_response
+
+        raw = '[{"frame_index": 0, "scene_type": "other", "content": "x", "text_visible": ""}]'
+        out = parse_vision_response(raw, [{"index": 0, "timestamp_sec": 0, "s3_url": ""}])
+
+        assert out[0]["visual_subject"] == ""
+
+
+class TestMaxTokensScaling:
+    async def test_max_tokens_scales_with_batch(self, tmp_path):
+        from unittest.mock import AsyncMock, MagicMock
+
+        from PIL import Image
+
+        from src.services.media.frame_analyzer import analyze_frames_with_vision
+
+        frames = []
+        for i in range(30):
+            p = tmp_path / f"f{i:02d}.jpg"
+            Image.new("RGB", (8, 8), (i * 8, 0, 0)).save(p, "JPEG")
+            frames.append({"path": str(p), "total_score": 0.5, "timestamp": i * 10, "index": i})
+
+        provider = MagicMock()
+        provider.complete_with_messages = AsyncMock(return_value="[]")
+
+        await analyze_frames_with_vision(frames, provider, max_frames=30)
+
+        kwargs = provider.complete_with_messages.await_args.kwargs
+        assert kwargs["max_tokens"] == 250 * 30

@@ -29,25 +29,33 @@ export type StreamPhase =
   | "idle"
   | "connecting"
   | "metadata"
-  // Pipeline output phases
-  | "triage"
+  | "transcript"
   | "extraction"
-  | "enrichment"
-  | "synthesis"
+  | "building"
+  | "translation"
   | "done"
   | "cancelled"
   | "error";
+
+/** Sub-phase flavor for stages that take multiple backend forms. The raw SSE
+ *  phase vocabulary is finer-grained than the UI timeline (whisper vs cached
+ *  captions vs no-captions fallback all live inside "transcript"); the
+ *  processor collapses raw phases to StreamPhase and preserves the flavor
+ *  here so the UI can explain the wait without a nine-step display. */
+export type StreamPhaseDetail =
+  | "captions-cached"
+  | "audio-transcription"
+  | "metadata-only";
 
 /** User-facing labels for each streaming phase. Plain verbs, no service jargon. */
 export const STREAM_PHASE_LABELS: Record<StreamPhase, string> = {
   idle: "Getting ready…",
   connecting: "Connecting…",
   metadata: "Reading the video…",
-  // Pipeline output phases
-  triage: "Understanding the topic…",
-  extraction: "Pulling out the key info…",
-  enrichment: "Building study tools…",
-  synthesis: "Writing your summary…",
+  transcript: "Getting the transcript…",
+  extraction: "Extracting the knowledge…",
+  building: "Building your tabs…",
+  translation: "Translating…",
   done: "Done.",
   cancelled: "Cancelled.",
   error: "Something went wrong.",
@@ -86,6 +94,7 @@ export interface VideoMetadata {
 
 export interface StreamState {
   phase: StreamPhase;
+  phaseDetail: StreamPhaseDetail | null;
   metadata: VideoMetadata | null;
   duration: number | null;
   error: string | null;
@@ -123,6 +132,7 @@ interface UseSummaryStreamOptions {
 
 const initialState: StreamState = {
   phase: "idle",
+  phaseDetail: null,
   metadata: null,
   duration: null,
   error: null,

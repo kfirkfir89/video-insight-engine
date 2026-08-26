@@ -1,7 +1,7 @@
 # Claude Infrastructure Overhaul — Tasks
 
-Last Updated: 2026-07-16
-Progress: 34/34 — ALL PHASES COMPLETE (except 0.1a key rotation, a user-only action). Hooks suite 104/104 green. NOT committed (per user instruction).
+Last Updated: 2026-08-25
+Progress: 34/34 — ALL PHASES COMPLETE (except 0.1a key rotation, a user-only action). Hooks suite 104/104 green. Committed 2026-08-02 as `b30559d` (chore(claude): infra overhaul). Only 0.1a (rotate GitHub PAT + Figma key) remains open.
 
 > **Reconciliation (2026-07-14, project-score-9 Phase 7):** 0.2, git-safety-guard base,
 > partial 1.2, and auto-save-context fix (2.2) were delivered under project-score-9.

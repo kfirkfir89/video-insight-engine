@@ -39,7 +39,7 @@ import logging
 import os
 import sys
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -100,6 +100,10 @@ class EvalResult:
     content_coverage: float
     empty_tab_count: int
     overall: float
+    # 1.0 when no forbiddenComponents appeared; 0.0 on ANY hit. A forbidden
+    # component (e.g. quiz_arena on an unboxing) is a hard product bug, so it
+    # carries its own weight in `overall` rather than diluting coverage.
+    forbidden_ok: float = 1.0
     notes: str = ""
 
 
@@ -126,6 +130,7 @@ def score_entry(expected: dict[str, Any], actual: dict[str, Any]) -> EvalResult:
     expected_tabs: list[str] = expected.get("expectedTabs") or []
     expected_components: list[str] = expected.get("requiredComponents") or []
     expected_content: list[str] = expected.get("keyContent") or []
+    forbidden_components: list[str] = expected.get("forbiddenComponents") or []
 
     # 1) Tab count within ±1
     expected_count = len(expected_tabs)
@@ -162,11 +167,16 @@ def score_entry(expected: dict[str, Any], actual: dict[str, Any]) -> EvalResult:
                 empty += 1
                 break
 
+    # 5) Forbidden components — any hit zeroes the term (hard product bug)
+    forbidden_hits = [c for c in forbidden_components if c.lower() in actual_components]
+    forbidden_ok = 0.0 if forbidden_hits else 1.0
+
     overall = round(
-        (tab_count_score * 0.2)
-        + (component_coverage * 0.4)
-        + (content_coverage * 0.3)
-        + (max(0.0, 1.0 - 0.1 * empty) * 0.1),
+        (tab_count_score * 0.15)
+        + (component_coverage * 0.35)
+        + (content_coverage * 0.25)
+        + (max(0.0, 1.0 - 0.1 * empty) * 0.10)
+        + (forbidden_ok * 0.15),
         3,
     )
 
@@ -180,6 +190,8 @@ def score_entry(expected: dict[str, Any], actual: dict[str, Any]) -> EvalResult:
         content_coverage=round(content_coverage, 3),
         empty_tab_count=empty,
         overall=overall,
+        forbidden_ok=forbidden_ok,
+        notes=f"forbidden: {', '.join(forbidden_hits)}" if forbidden_hits else "",
     )
 
 
@@ -249,17 +261,22 @@ async def authenticate(api_url: str) -> str:
 
 
 # ─── Pipeline invocation ───────────────────────────────────────────────
-async def run_pipeline(api_url: str, url: str, token: str) -> dict[str, Any]:
+async def run_pipeline(
+    api_url: str, url: str, token: str, bypass_cache: bool = False
+) -> dict[str, Any]:
     """POST to the local vie-api and consume the SSE stream until ``complete``.
 
     Returns the assembled response dict (``meta`` + ``tabs``). Raises on
     HTTP errors so the caller can short-circuit the eval row.
+    ``bypass_cache=True`` forces a fresh pipeline run (used by --stability).
     """
     import httpx
 
     headers = {"Authorization": f"Bearer {token}"}
     async with httpx.AsyncClient(timeout=600.0, headers=headers) as client:
-        resp = await client.post(f"{api_url}/api/videos", json={"url": url})
+        resp = await client.post(
+            f"{api_url}/api/videos", json={"url": url, "bypassCache": bypass_cache}
+        )
         resp.raise_for_status()
         body = resp.json()
         # POST /api/videos returns {"video": {"id", "videoSummaryId", ...}, "cached": bool}.
@@ -347,14 +364,21 @@ def _stub_actual(expected: dict[str, Any]) -> dict[str, Any]:
 
 
 # ─── Reporting ─────────────────────────────────────────────────────────
-def write_reports(results: list[EvalResult], out_dir: Path) -> tuple[Path, Path]:
+def write_reports(
+    results: list[EvalResult],
+    out_dir: Path,
+    stability_scores: list[float] | None = None,
+) -> tuple[Path, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     ts = time.strftime("%Y%m%d-%H%M%S")
     csv_path = out_dir / f"eval-{ts}.csv"
     md_path = out_dir / f"eval-{ts}.md"
 
+    if not results:
+        logger.warning("No results to report — writing header-only report files")
+
     with csv_path.open("w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(asdict(results[0]).keys()))
+        writer = csv.DictWriter(fh, fieldnames=[f.name for f in fields(EvalResult)])
         writer.writeheader()
         for r in results:
             writer.writerow(asdict(r))
@@ -365,16 +389,27 @@ def write_reports(results: list[EvalResult], out_dir: Path) -> tuple[Path, Path]
         "",
         f"**Average overall:** {avg:.3f} (n={len(results)})",
         "",
-        "| id | domain | tabs (got/exp) | components | content | empty | overall |",
-        "|---|---|---|---|---|---|---|",
+        "| id | domain | tabs (got/exp) | components | content | empty | forbidden | overall |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for r in sorted(results, key=lambda x: x.overall):
+        # Rows that never produced tabs (rejected URL, pipeline failure) carry
+        # the default forbidden_ok=1.0 — render "not measured", not a pass.
+        forbidden_cell = "—" if r.tab_count == 0 else ("OK" if r.forbidden_ok == 1.0 else "HIT")
         md_lines.append(
             f"| {r.id} | {r.domain} | {r.tab_count}/{r.expected_tab_count} | "
             f"{r.component_coverage:.2f} | {r.content_coverage:.2f} | "
-            f"{r.empty_tab_count} | **{r.overall:.3f}** |"
+            f"{r.empty_tab_count} | {forbidden_cell} | "
+            f"**{r.overall:.3f}** |"
         )
-    md_path.write_text("\n".join(md_lines), encoding="utf-8")
+    if stability_scores:
+        avg_stab = sum(stability_scores) / len(stability_scores)
+        md_lines += [
+            "",
+            f"**Layout stability:** avg {avg_stab:.3f} (n={len(stability_scores)}) — "
+            "reported, not gated; source for baseline.json layoutStability",
+        ]
+    md_path.write_text("\n".join(md_lines) + "\n", encoding="utf-8")
     return csv_path, md_path
 
 
@@ -426,6 +461,7 @@ async def _run_all(args) -> int:
         token = await authenticate(args.api_url)
 
     results: list[EvalResult] = []
+    actuals_by_id: dict[str, dict[str, Any]] = {}
     for rec in records:
         rid = rec.get("id", "?")
         url = rec.get("url", "")
@@ -482,9 +518,65 @@ async def _run_all(args) -> int:
                 )
             )
             continue
+        actuals_by_id[rec.get("id", "?")] = actual
         results.append(score_entry(rec, actual))
+        # Politeness gap so cache-hit bursts don't trip the API's IP limiter.
+        if not args.dry_run:
+            await asyncio.sleep(1.0)
 
-    csv_path, md_path = write_reports(results, Path(args.output))
+    # Layout-stability probe (reported, not gated): re-run the first N entries
+    # with bypassCache and compare tab-component multisets (Jaccard). Measures
+    # how deterministic the planner+assembly layout is for the same video.
+    # NOTE: run 1 may have served from cache (an older stored layout), so this
+    # blends stochastic drift with version drift — treat as a trend signal.
+    stability_scores: list[float] = []
+    if args.stability and not args.dry_run:
+        import collections
+
+        import httpx
+
+        for rec in records[: args.stability]:
+            rid = rec.get("id", "?")
+            base_actual = actuals_by_id.get(rid)
+            if not base_actual or not base_actual.get("tabs"):
+                continue
+            try:
+                rerun = await run_pipeline(args.api_url, rec["url"], token or "", bypass_cache=True)
+            except httpx.HTTPStatusError as exc:
+                # The probe runs after the whole primary pass — the token is at
+                # its most expired here. Mirror the main loop's 401 recovery.
+                if exc.response.status_code != 401:
+                    logger.warning("Stability re-run failed for %s: %s", rid, exc)
+                    continue
+                logger.info("Token expired — re-authenticating, retrying stability %s", rid)
+                try:
+                    token = await authenticate(args.api_url)
+                    rerun = await run_pipeline(args.api_url, rec["url"], token, bypass_cache=True)
+                except Exception as retry_exc:  # noqa: BLE001
+                    logger.warning("Stability re-run failed for %s: %s", rid, retry_exc)
+                    continue
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Stability re-run failed for %s: %s", rid, exc)
+                continue
+            base = collections.Counter(
+                str(t.get("component", "")).lower() for t in base_actual["tabs"]
+            )
+            redo = collections.Counter(
+                str(t.get("component", "")).lower() for t in rerun.get("tabs", [])
+            )
+            inter = sum((base & redo).values())
+            union = sum((base | redo).values())
+            score = inter / union if union else 1.0
+            stability_scores.append(score)
+            logger.info("Stability %s: %.3f (%s vs %s)", rid, score, dict(base), dict(redo))
+        if stability_scores:
+            logger.info(
+                "Layout stability (n=%d): avg %.3f",
+                len(stability_scores),
+                sum(stability_scores) / len(stability_scores),
+            )
+
+    csv_path, md_path = write_reports(results, Path(args.output), stability_scores)
     avg = sum(r.overall for r in results) / max(1, len(results))
     logger.info("Wrote %s and %s (avg=%.3f)", csv_path, md_path, avg)
 
@@ -505,6 +597,13 @@ def main() -> int:
     parser.add_argument("--filter", default="")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--fail-under", type=float, default=0.0)
+    parser.add_argument(
+        "--stability",
+        type=int,
+        default=0,
+        help="Re-run the first N entries with bypassCache and report layout "
+        "stability (Jaccard of tab-component multisets). Reported, not gated.",
+    )
     parser.add_argument("--dataset-name", default="vie-golden-v1")
     parser.add_argument(
         "--publish-run", default="", help="Run name to publish to Langfuse (empty = skip)."

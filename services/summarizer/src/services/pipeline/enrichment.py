@@ -1,4 +1,5 @@
 """Enrichment — quiz, flashcards, cheat sheet generation for eligible output types."""
+
 from __future__ import annotations
 
 import json
@@ -8,10 +9,11 @@ from typing import TYPE_CHECKING, Any
 
 from ...config import settings
 from ...models.pipeline_types import EnrichmentData
+from ...shared_config.domain_config import effective_requirements
 from ...utils.json_parsing import parse_json_response
 from ...utils.language_utils import ENGLISH_OUTPUT_DIRECTIVE
 from ...utils.llm_retry import call_llm_with_retry
-from .pipeline_helpers import truncate_json_safely, sanitize_for_prompt
+from .pipeline_helpers import sanitize_for_prompt, truncate_json_safely
 from .prompt_builder import load_prompt_text
 
 if TYPE_CHECKING:
@@ -48,6 +50,7 @@ def _load_prompt(prompt_path: str) -> str | None:
         return None
     return load_prompt_text(p)
 
+
 # Loaded from domains.json["enrichment"] — maps content tag → prompt filename.
 # Only tags listed there trigger the enrichment stage.
 ENRICHMENT_MAP: dict[str, str] = get_enrichment_map()
@@ -80,10 +83,14 @@ def _apply_output_caps(data: EnrichmentData) -> None:
         logger.info("Enrichment: capping quiz from %d → %d", len(data.quiz), _MAX_QUIZ_QUESTIONS)
         data.quiz = data.quiz[:_MAX_QUIZ_QUESTIONS]
     if data.flashcards and len(data.flashcards) > _MAX_FLASHCARDS:
-        logger.info("Enrichment: capping flashcards from %d → %d", len(data.flashcards), _MAX_FLASHCARDS)
+        logger.info(
+            "Enrichment: capping flashcards from %d → %d", len(data.flashcards), _MAX_FLASHCARDS
+        )
         data.flashcards = data.flashcards[:_MAX_FLASHCARDS]
     if data.scenarios and len(data.scenarios) > _MAX_SCENARIOS:
-        logger.info("Enrichment: capping scenarios from %d → %d", len(data.scenarios), _MAX_SCENARIOS)
+        logger.info(
+            "Enrichment: capping scenarios from %d → %d", len(data.scenarios), _MAX_SCENARIOS
+        )
         data.scenarios = data.scenarios[:_MAX_SCENARIOS]
 
 
@@ -96,6 +103,7 @@ async def enrich(
     synthesis_data: dict | None = None,
     video_context: str = "",
     tab_goals: str = "",
+    content_format: str | None = None,
 ) -> EnrichmentData | None:
     """Generate enrichment content based on primary content tag.
 
@@ -103,13 +111,19 @@ async def enrich(
     When extraction_data is empty, uses synthesis_data as context fallback.
     Returns None for content tags that don't support enrichment.
     Returns None on failure (enrichment is non-critical).
+
+    Domains where quiz_arena is forbidden get quiz/scenarios stripped from the
+    parsed result regardless of what the prompt produced (code guardrail —
+    the prompt map already steers those domains to flashcards-only prompts).
     """
     prompt_file_name = ENRICHMENT_MAP.get(primary_tag)
     if not prompt_file_name and content_tags:
         for tag in content_tags:
             prompt_file_name = ENRICHMENT_MAP.get(tag)
             if prompt_file_name:
-                logger.info("Enrichment: primary_tag=%r has no mapping; using tag=%r", primary_tag, tag)
+                logger.info(
+                    "Enrichment: primary_tag=%r has no mapping; using tag=%r", primary_tag, tag
+                )
                 break
     if not prompt_file_name:
         return None
@@ -121,35 +135,45 @@ async def enrich(
         return None
 
     try:
-
         # Build context: prefer extraction data, fall back to synthesis
         if _has_meaningful_data(extraction_data):
             context = truncate_json_safely(extraction_data, 8000)
         else:
             logger.warning("Extraction data is empty — using synthesis as enrichment context")
             if synthesis_data:
-                context = json.dumps({
-                    "title": title,
-                    "summary": synthesis_data.get("masterSummary", ""),
-                    "keyTakeaways": synthesis_data.get("keyTakeaways", []),
-                    "tldr": synthesis_data.get("tldr", ""),
-                }, indent=2)
+                context = json.dumps(
+                    {
+                        "title": title,
+                        "summary": synthesis_data.get("masterSummary", ""),
+                        "keyTakeaways": synthesis_data.get("keyTakeaways", []),
+                        "tldr": synthesis_data.get("tldr", ""),
+                    },
+                    indent=2,
+                )
             else:
                 logger.warning("No synthesis data either — enrichment will have minimal context")
                 context = json.dumps({"title": title})
 
-        prompt = ENGLISH_OUTPUT_DIRECTIVE + "\n\n" + (
-            prompt_template
-            .replace("{title}", sanitize_for_prompt(title))
-            .replace("{extraction_data}", context)
-            .replace("{video_context}", video_context or "Not available")
-            .replace("{tab_goals}", tab_goals or "Not specified")
+        prompt = (
+            ENGLISH_OUTPUT_DIRECTIVE
+            + "\n\n"
+            + (
+                prompt_template.replace("{title}", sanitize_for_prompt(title))
+                .replace("{extraction_data}", context)
+                .replace("{video_context}", video_context or "Not available")
+                .replace("{tab_goals}", tab_goals or "Not specified")
+            )
         )
 
         raw = await call_llm_with_retry(
-            llm_service, prompt,
-            max_tokens=16384, timeout=90.0, max_retries=2, stage_name="enrichment",
-            json_mode=True, use_fast_model=True,
+            llm_service,
+            prompt,
+            max_tokens=16384,
+            timeout=90.0,
+            max_retries=2,
+            stage_name="enrichment",
+            json_mode=True,
+            use_fast_model=True,
             model_override=settings.get_stage_model("enrichment"),
         )
         if not raw:
@@ -163,6 +187,19 @@ async def enrich(
             return None
 
         result = EnrichmentData.model_validate(data)
+
+        # Code guardrail: a domain that forbids quiz_arena must never carry
+        # quiz/scenario data — even if the (possibly cached/registry) prompt
+        # still produced them.
+        forbidden = effective_requirements(primary_tag, content_format)["forbidden"]
+        if "quiz_arena" in forbidden and (result.quiz or result.scenarios):
+            logger.info(
+                "Enrichment: stripping quiz/scenarios for %s (quiz_arena forbidden)",
+                primary_tag,
+            )
+            result.quiz = []
+            result.scenarios = []
+
         _apply_output_caps(result)
         return result
 

@@ -93,7 +93,11 @@ class IntersectionObserverMock {
   takeRecords = vi.fn().mockReturnValue([]);
 }
 
+// writable+configurable so individual tests (e.g. use-focus-band) can swap in
+// a controllable observer and restore this inert default afterwards.
 Object.defineProperty(window, "IntersectionObserver", {
+  writable: true,
+  configurable: true,
   value: IntersectionObserverMock,
 });
 
@@ -101,6 +105,11 @@ Object.defineProperty(window, "IntersectionObserver", {
 Object.defineProperty(window, "scrollTo", {
   value: vi.fn(),
 });
+
+// jsdom does not implement scrollIntoView; VideoPlayerContext.seekTo calls it
+// on the registered player anchor, so any test rendering a player consumer
+// would otherwise throw on seek.
+Element.prototype.scrollIntoView = vi.fn();
 
 // Reset localStorage mock and matchMedia override before each test
 afterEach(async () => {

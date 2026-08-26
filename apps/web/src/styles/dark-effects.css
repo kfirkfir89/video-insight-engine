@@ -54,7 +54,6 @@
   contain: layout style paint;
 }
 
-.vie-stream-backdrop {
+.vie-stream-halo {
   contain: paint;
-  content-visibility: auto;
 }

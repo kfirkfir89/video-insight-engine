@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, AsyncGenerator
 from llm_common.context import llm_feature_var
 
 from src.config import settings
-from src.models.schemas import ProcessingStatus, ErrorCode
+from src.models.schemas import ErrorCode, ProcessingStatus
 from src.services.pipeline.extraction_quality import (
     build_synthesis_fed_retry_prompt,
     check_extraction_quality,
@@ -17,14 +17,18 @@ from src.services.pipeline.extraction_quality import (
     merge_retry_fields,
 )
 from src.services.pipeline.extractor import extract
-from src.services.pipeline.pipeline_helpers import normalize_segments, sse_event, truncate_json_safely
-from src.services.pipeline.prompt_builder import format_gallery_frames_for_extraction
+from src.services.pipeline.pipeline_helpers import (
+    normalize_segments,
+    sse_event,
+    truncate_json_safely,
+)
 from src.services.pipeline.post_processor import (
     COVERAGE_CRITICAL_RATIO,
     COVERAGE_GATE_RATIO,
     compute_extraction_coverage,
     validate_extraction_counts,
 )
+from src.services.pipeline.prompt_builder import format_gallery_frames_for_extraction
 from src.services.pipeline.synthesis import synthesize
 
 if TYPE_CHECKING:
@@ -65,23 +69,29 @@ def _record_extraction_coverage(
 
     dropped = coverage.get("batchesDropped", 0)
     if is_critical:
-        logger.error("pipeline.extraction_coverage_critical", extra={
-            "video_id": ctx.video_summary_id,
-            "max_timestamp": coverage["maxTimestamp"],
-            "duration": coverage["duration"],
-            "ratio": coverage["ratio"],
-            "tail_missing_seconds": coverage["tailMissingSeconds"],
-            "batches_dropped": dropped,
-        })
+        logger.error(
+            "pipeline.extraction_coverage_critical",
+            extra={
+                "video_id": ctx.video_summary_id,
+                "max_timestamp": coverage["maxTimestamp"],
+                "duration": coverage["duration"],
+                "ratio": coverage["ratio"],
+                "tail_missing_seconds": coverage["tailMissingSeconds"],
+                "batches_dropped": dropped,
+            },
+        )
     elif coverage["ratio"] < COVERAGE_GATE_RATIO or dropped:
-        logger.warning("pipeline.extraction_coverage", extra={
-            "video_id": ctx.video_summary_id,
-            "max_timestamp": coverage["maxTimestamp"],
-            "duration": coverage["duration"],
-            "ratio": coverage["ratio"],
-            "tail_missing_seconds": coverage["tailMissingSeconds"],
-            "batches_dropped": dropped,
-        })
+        logger.warning(
+            "pipeline.extraction_coverage",
+            extra={
+                "video_id": ctx.video_summary_id,
+                "max_timestamp": coverage["maxTimestamp"],
+                "duration": coverage["duration"],
+                "ratio": coverage["ratio"],
+                "tail_missing_seconds": coverage["tailMissingSeconds"],
+                "batches_dropped": dropped,
+            },
+        )
 
 
 async def _attempt_synthesis_fed_retry(
@@ -117,7 +127,8 @@ async def _attempt_synthesis_fed_retry(
 
     fields_for_prompt = retry_fields if retry_fields else quality.empty_fields
     retry_prompt = build_synthesis_fed_retry_prompt(
-        fields_for_prompt, ctx.synthesis_dict,
+        fields_for_prompt,
+        ctx.synthesis_dict,
     )
 
     retry_data = None
@@ -125,8 +136,12 @@ async def _attempt_synthesis_fed_retry(
     # EXTRACTION_USE_FAST_FIRST is on. The first pass already proved the fast
     # model under-extracted; doubling down on it just burns tokens.
     async for evt in extract(
-        ctx.llm_service, ctx.triage, ctx.clean_text, video_info,
-        chapters=chapters, video_context=ctx.video_dna_compact,
+        ctx.llm_service,
+        ctx.triage,
+        ctx.clean_text,
+        video_info,
+        chapters=chapters,
+        video_context=ctx.video_dna_compact,
         extra_instruction=retry_prompt,
         force_primary_model=True,
     ):
@@ -139,12 +154,14 @@ async def _attempt_synthesis_fed_retry(
             ctx.extraction_data = retry_data
             logger.info(
                 "[pipeline] Extraction retry improved quality: %.2f → %.2f",
-                quality.score, retry_quality.score,
+                quality.score,
+                retry_quality.score,
             )
         else:
             logger.info(
                 "[pipeline] Extraction retry did not improve quality (%.2f vs %.2f), keeping original",
-                retry_quality.score, quality.score,
+                retry_quality.score,
+                quality.score,
             )
 
 
@@ -167,7 +184,10 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
     if duration > settings.CHUNKED_EXTRACTION_THRESHOLD and ctx.transcript_data:
         try:
             from src.services.transcription.transcript_chunker import split_transcript_into_chapters
-            raw_segments = ctx.transcript_data.segments if hasattr(ctx.transcript_data, "segments") else []
+
+            raw_segments = (
+                ctx.transcript_data.segments if hasattr(ctx.transcript_data, "segments") else []
+            )
             # Convert TranscriptSegment objects to dicts, then normalize to startMs/endMs
             seg_as_dicts = []
             for seg in raw_segments:
@@ -203,19 +223,31 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
             ctx.chapters = chapters
             logger.info("Prepared %d chapters for chunked extraction", len(chapters))
         except Exception as e:
-            logger.warning("Chapter splitting failed (non-critical): %s — falling back to standard extraction", e)
+            logger.warning(
+                "Chapter splitting failed (non-critical): %s — falling back to standard extraction",
+                e,
+            )
             chapters = None
 
     # Frames (stage 2b) are ready before extraction (stage 4) — fold their
     # captions into the prompt so the LLM can ground visual claims and warrant a
     # filmstrip/diagram. Bounded to 12 captioned frames to cap token cost.
     frame_context = format_gallery_frames_for_extraction(
-        ctx.scene_frames_gallery, ctx.frame_descriptions,
+        ctx.scene_frames_gallery,
+        ctx.frame_descriptions,
     )
     batches_total: int | None = None
     batches_succeeded: int | None = None
     try:
-        async for evt in extract(ctx.llm_service, ctx.triage, ctx.clean_text, video_info, chapters=chapters, video_context=ctx.video_dna_compact, frame_context=frame_context):
+        async for evt in extract(
+            ctx.llm_service,
+            ctx.triage,
+            ctx.clean_text,
+            video_info,
+            chapters=chapters,
+            video_context=ctx.video_dna_compact,
+            frame_context=frame_context,
+        ):
             event_name = evt["event"]
             yield sse_event(event_name, {k: v for k, v in evt.items() if k != "event"})
             if event_name == "extraction_complete":
@@ -223,22 +255,44 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
                 batches_total = evt.get("batches_total")
                 batches_succeeded = evt.get("batches_succeeded")
     except (ValueError, asyncio.TimeoutError) as e:
-        logger.warning("[pipeline] Extraction raised %s for video_id=%s: %s — continuing with empty extraction", type(e).__name__, ctx.video_summary_id, e)
+        logger.warning(
+            "[pipeline] Extraction raised %s for video_id=%s: %s — continuing with empty extraction",
+            type(e).__name__,
+            ctx.video_summary_id,
+            e,
+        )
 
     if not ctx.extraction_data:
         logger.error("[pipeline] Extraction produced no data for video_id=%s", ctx.video_summary_id)
-        await asyncio.to_thread(ctx.repository.update_status, ctx.video_summary_id, ProcessingStatus.FAILED, "Extraction failed", ErrorCode.LLM_ERROR)
-        yield sse_event("error", {"message": "Extraction failed to produce data", "code": ErrorCode.LLM_ERROR.value})
+        await asyncio.to_thread(
+            ctx.repository.update_status,
+            ctx.video_summary_id,
+            ProcessingStatus.FAILED,
+            "Extraction failed",
+            ErrorCode.LLM_ERROR,
+        )
+        yield sse_event(
+            "error",
+            {"message": "Extraction failed to produce data", "code": ErrorCode.LLM_ERROR.value},
+        )
         return
 
-    logger.info("pipeline.extraction", extra={
-        "video_id": ctx.video_summary_id,
-        "domains_extracted": list(ctx.extraction_data.keys()) if isinstance(ctx.extraction_data, dict) else [],
-        "items_per_domain": {
-            k: sum(1 for v in d.values() if isinstance(v, list) and len(v) > 0)
-            for k, d in ctx.extraction_data.items() if isinstance(d, dict)
-        } if isinstance(ctx.extraction_data, dict) else {},
-    })
+    logger.info(
+        "pipeline.extraction",
+        extra={
+            "video_id": ctx.video_summary_id,
+            "domains_extracted": list(ctx.extraction_data.keys())
+            if isinstance(ctx.extraction_data, dict)
+            else [],
+            "items_per_domain": {
+                k: sum(1 for v in d.values() if isinstance(v, list) and len(v) > 0)
+                for k, d in ctx.extraction_data.items()
+                if isinstance(d, dict)
+            }
+            if isinstance(ctx.extraction_data, dict)
+            else {},
+        },
+    )
 
     _record_extraction_coverage(ctx, batches_total, batches_succeeded)
 
@@ -249,7 +303,11 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
     if ctx.extraction_data and ctx.triage is not None and ctx.plan_result is not None:
         plan_tabs = ctx.plan_result.tabs
         quality = check_extraction_quality(plan_tabs, ctx.extraction_data)
-        count_warnings = validate_extraction_counts(ctx.plan_result, ctx.extraction_data)
+        count_warnings = validate_extraction_counts(
+            ctx.plan_result,
+            ctx.extraction_data,
+            content_tags=ctx.plan_result.content_tags,
+        )
         retry_decision = decide_extraction_retry(
             quality,
             count_warnings,
@@ -274,7 +332,8 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
         if retry_decision.should_retry:
             logger.warning(
                 "[pipeline] Extraction retry triggered (%s) for video_id=%s — attempting synthesis-fed retry",
-                retry_decision.reason, ctx.video_summary_id,
+                retry_decision.reason,
+                ctx.video_summary_id,
             )
             retry_fields = merge_retry_fields(
                 quality.empty_fields,
@@ -283,7 +342,11 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
             )
             try:
                 await _attempt_synthesis_fed_retry(
-                    ctx, plan_tabs, quality, video_info, chapters,
+                    ctx,
+                    plan_tabs,
+                    quality,
+                    video_info,
+                    chapters,
                     retry_fields=retry_fields,
                 )
             except Exception as e:
@@ -291,5 +354,6 @@ async def run_phase_extraction(ctx: PipelineContext) -> AsyncGenerator[str, None
         elif count_warnings:
             logger.warning(
                 "[pipeline] Extraction count mismatch (not retried) for video_id=%s: %s",
-                ctx.video_summary_id, count_warnings,
+                ctx.video_summary_id,
+                count_warnings,
             )

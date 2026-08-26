@@ -1,5 +1,6 @@
 import { memo, useCallback } from 'react';
 import { Film } from 'lucide-react';
+import { EvidenceImage } from '@/components/vie';
 import { cn } from '@/lib/utils';
 import { EmptyTabState } from './EmptyTabState';
 
@@ -27,12 +28,15 @@ function formatTimestamp(seconds: number): string {
 }
 
 /**
- * Horizontal scrubber of video frames. `mode='tab'` shows full labels for
- * standalone tab use; `mode='overlay'` (default) renders a thin strip
- * suitable for inline placement above other components.
+ * Horizontal scrubber of video frames — the "move through the video"
+ * browser. `mode='tab'` is information-rich: every cell carries a visible
+ * one-line caption (what's on screen at that point) under the frame, with
+ * the full caption + OCR in the hover tooltip. `mode='overlay'` (default)
+ * stays a thin image-only strip for inline placement.
  *
- * Frames within ±5s of `currentTime` get a highlighted ring as the playhead
- * indicator. Hover reveals a larger preview + caption tooltip.
+ * Whole-cell click seeks — that IS the scrubber's job (unlike MomentTrack,
+ * where clicking shows the image). Frames within ±5s of `currentTime` get a
+ * highlighted ring as the playhead indicator.
  */
 export const VideoFilmstrip = memo(function VideoFilmstrip({
   frames,
@@ -50,7 +54,8 @@ export const VideoFilmstrip = memo(function VideoFilmstrip({
   if (frames.length === 0) return mode === 'overlay' ? null : <EmptyTabState message="No frames were captured for this video." icon={Film} />;
 
   const isTabMode = mode === 'tab';
-  const cellWidth = isTabMode ? 'w-[120px]' : 'w-[88px]';
+  // Tab cells are wider so the visible caption line stays legible.
+  const cellWidth = isTabMode ? 'w-[160px]' : 'w-[88px]';
 
   return (
     <div
@@ -88,11 +93,10 @@ export const VideoFilmstrip = memo(function VideoFilmstrip({
                   : 'border-border/40 hover:border-border',
               )}
             >
-              <img
+              <EvidenceImage
                 src={frame.thumbnailUrl}
                 alt={frame.caption ?? `Frame at ${stampLabel}`}
-                loading="lazy"
-                className="h-full w-full object-cover"
+                className="rounded-none border-0"
               />
               <span
                 className={cn(
@@ -126,17 +130,20 @@ export const VideoFilmstrip = memo(function VideoFilmstrip({
             </button>
 
             {isTabMode && (
-              <div className="mt-1 text-center">
+              <div className="mt-1 space-y-0.5">
                 <span
-                  className="text-[10px] font-mono tabular-nums text-muted-foreground"
+                  className="block text-center text-[10px] font-mono tabular-nums text-muted-foreground"
                   dir="ltr"
                 >
                   {stampLabel}
                 </span>
-                {frame.sceneType && (
-                  <span className="ms-1 text-[10px] capitalize text-muted-foreground/60">
-                    {frame.sceneType.replace(/_/g, ' ')}
-                  </span>
+                {frame.caption && (
+                  <p
+                    className="text-start text-[11px] leading-snug text-muted-foreground line-clamp-2"
+                    title={frame.caption}
+                  >
+                    {frame.caption}
+                  </p>
                 )}
               </div>
             )}

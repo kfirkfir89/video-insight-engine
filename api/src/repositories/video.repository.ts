@@ -24,6 +24,12 @@ export interface VideoSummaryCacheDocument {
    *  Legacy rows pre-Step-1 lack this field; the unique index is partial on
    *  `{$exists: true}` so they coexist until the backfill catches them. */
   dedupKey?: string;
+  /** Set on bypassCache version bumps — consumed by the summarizer, which
+   *  skips its youtubeId-keyed response cache when the flag is present.
+   *  Cleared by an explicit $unset in the summarizer's final save
+   *  (mongodb_repository.py) — that save is a $set merge, NOT a document
+   *  replace, so the unset is load-bearing. */
+  forceRefresh?: boolean;
   retryCount: number;
   errorCode?: string;
   errorMessage?: string;
@@ -97,6 +103,10 @@ export interface CreateVideoSummaryData {
   /** Optional on the input shape so legacy callers compile during migration.
    *  Required for `upsertCacheByDedupKey` (enforced at the method signature). */
   dedupKey?: string;
+  /** Set on bypassCache version bumps — tells the summarizer to skip its
+   *  youtubeId-keyed response cache so the fresh row gets a real pipeline run
+   *  regardless of which producer (worker or SSE client) wins the lock. */
+  forceRefresh?: boolean;
 }
 
 export interface CreateUserVideoData {

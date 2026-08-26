@@ -314,13 +314,15 @@ def assemble_lyrics_player(
     sections: list[dict] = []
     lyric_lines = []
     if isinstance(lyrics, list):
+        # Extraction emits {"line": ...}; the frontend LyricsKaraokeLine
+        # contract wants {"text": ...} — translate here at assembly.
         lyric_lines = [
             {
-                "line": item.get("line", item.get("text", str(item))),
+                "text": item.get("line", item.get("text", str(item))),
                 "timestamp": item.get("timestamp"),
             }
             if isinstance(item, dict)
-            else {"line": str(item)}
+            else {"text": str(item)}
             for item in lyrics
         ]
 
@@ -344,7 +346,7 @@ def assemble_lyrics_player(
                 {
                     "name": seg.get("name", f"Section {i + 1}"),
                     "timestamp": seg_start,
-                    "lines": seg_lines if seg_lines else [{"line": seg.get("description", "")}],
+                    "lines": seg_lines if seg_lines else [{"text": seg.get("description", "")}],
                     "analysis": seg.get("description", ""),
                 }
             )

@@ -1250,16 +1250,21 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
 | Event | Phase | Description |
 |-------|-------|-------------|
 | `phase` | All | Indicates which processing phase started |
+| `cached` | 0 | Cache hit — a fast replay follows (`metadata`, `triage_complete`, `meta`, `tab_ready[]`, `synthesis_complete`, `done`) |
 | `metadata` | 1 | Video metadata (title, channel, duration, context) |
 | `chapters` | 1 | Creator chapters if available |
 | `sponsor_segments` | 1 | SponsorBlock segments |
-| `transcript_ready` | 1 | Transcript extraction complete |
+| `transcript_ready` | 1 | Transcript extraction complete (authoritative `duration`) |
 | `description_analysis` | 2 | Links, resources extracted from description |
 | `triage_complete` | 3 | Content tags, tab layout, confidence from plan stage |
+| `extraction_progress` | 4 | Chunked-extraction progress for long videos |
 | `extraction_complete` | 4 | Domain extraction finished |
+| `frames` | 5 | Extracted frame set (presigned URLs) |
 | `meta` | 5 | VIEResponseMeta with videoId, contentTags, tldr, etc. |
-| `tab_ready` | 5 | Individual assembled tab with component and props |
+| `tab_ready` | 5 | Individual assembled tab with component, props, and `position` (may arrive out of natural order — slot by `position`, see below) |
+| `enrichment_complete` | 5 | Enrichment (quiz/flashcards) finished |
 | `synthesis_complete` | 5 | TLDR and key takeaways |
+| `heartbeat` | Any | Keep-alive during long-running steps (e.g. moment frame fill) — carries `ts`, safe to ignore |
 | `complete` | 6 | Processing complete with tab count and timing |
 | `done` | 6 | Final event, closes stream |
 
@@ -1323,9 +1328,11 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
 │  PHASE 5: ENRICHMENT + SYNTHESIS + ASSEMBLY (parallel where possible)      │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │  Enrichment (quiz/flashcards, fast model) runs if domain supports   │   │
-│  │  Synthesis (fast model) + Assembly (pure code) run in parallel      │   │
+│  │  Synthesis (fast model) + Assembly (code, no LLM calls) in parallel │   │
 │  │                                                                      │   │
-│  │  Output events: meta, tab_ready[] (one per tab),                    │   │
+│  │  Output events: frames, meta, tab_ready[] (one per tab, carries     │   │
+│  │                 `position`; moment_track tabs held back for frame   │   │
+│  │                 fill + streamed last, with heartbeats),             │   │
 │  │                 synthesis_complete                                   │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
@@ -1347,8 +1354,15 @@ The summarization pipeline uses SSE to stream results progressively, allowing th
 ### phase
 
 ```json
-{ "event": "phase", "phase": "metadata" | "transcript" | "transcript_cached" | "audio_transcription" | "whisper_transcription" | "metadata_fallback" | "frames" | "visual_injection" | "classify" | "plan" | "extraction" | "enrichment" | "synthesis" | "assembly" }
+{ "event": "phase", "phase": "transcript" | "transcript_cached" | "audio_transcription" | "whisper_transcription" | "metadata_fallback" | "translation" }
 ```
+
+Only the transcript-source phases and `translation` are emitted as explicit
+`phase` events. All other UI phases (metadata, extraction, building, …) are
+**derived by the client** from milestone events (`metadata`, `triage_complete`,
+`extraction_complete`, `meta`, …) — see `SSE_PHASE_MAP` in
+`apps/web/src/features/video-output/lib/streaming/stream-event-processor.ts`
+and `VALID_SSE_PHASES` in `sse-validators.ts`.
 
 **Transcript sub-phases** (emitted within Phase 1 based on transcript source):
 
@@ -1428,15 +1442,30 @@ Individual assembled tab, emitted once per tab. Each tab is self-contained with 
   "label": "Overview",
   "emoji": "📋",
   "component": "overview",
+  "position": 0,
   "props": {
     "sections": [...],
     "stats": [...]
   },
   "crossTabLinks": [
     { "targetTab": "code", "label": "See code examples" }
-  ]
+  ],
+  "attachments": [
+    { "component": "tip_callout", "props": { "text": "..." } }
+  ],
+  "degradedFrom": "step_player"
 }
 ```
+
+- **`position`** (optional, ≥0): index in the persisted tab order. Tabs may
+  arrive **out of natural order** — `moment_track` tabs are held back while
+  exact-timestamp frames are filled and stream **last**. Clients must slot
+  each tab at `position`, never append.
+- **`attachments`** (optional): secondary components rendered around the
+  primary (`stat_banner`, `tip_callout`, `summary_header`, `diagram_card`,
+  `frame_strip`, `quick_quiz`).
+- **`degradedFrom`** (optional): original component name when the assembly
+  demote ladder downgraded the tab (e.g. `step_player` → `checklist`).
 
 ### complete
 
@@ -1447,6 +1476,15 @@ Individual assembled tab, emitted once per tab. Each tab is self-contained with 
   "processingTimeMs": 25432
 }
 ```
+
+### Frame URLs (presigned, re-signed on serve)
+
+Frame images in `frames` events and tab props are **presigned S3 URLs** with a
+limited TTL. Persisted tabs also carry the stable `s3Key` per frame
+(`FrameEvidence.s3Key`), and the api gateway re-signs expired URLs on every
+serve via `api/src/utils/refresh-frame-urls.ts` (`FRAME_URL_TTL_SECONDS`,
+default 21600 = 6h; the summarizer's `S3_PRESIGNED_URL_EXPIRY` must be ≥ this).
+Clients should not cache frame URLs beyond a session.
 
 ### chapters
 
@@ -1550,12 +1588,17 @@ export function useSummaryStream(videoSummaryId: string | null) {
           setState(s => ({ ...s, meta: data }));
           break;
 
-        case 'tab_ready':
-          setState(s => ({
-            ...s,
-            tabs: [...(s.tabs || []), data]
-          }));
+        case 'tab_ready': {
+          // Slot by `position`, never append — moment_track tabs are held
+          // back server-side and stream last, out of natural order.
+          setState(s => {
+            const tabs = [...(s.tabs || [])];
+            const idx = typeof data.position === 'number' ? data.position : tabs.length;
+            tabs[idx] = data;
+            return { ...s, tabs };
+          });
           break;
+        }
 
         case 'complete':
           setState(s => ({ ...s, phase: 'complete', tabCount: data.tabCount }));
@@ -1592,6 +1635,6 @@ For a typical video (v2 pipeline):
 | Extraction | Sonnet | 1-N (chunked for long videos) | Batched |
 | Enrichment | Fast (Haiku) | 1 (if domain supports it) | No |
 | Synthesis | Fast (Haiku) | 1 | Yes (with Assembly) |
-| Assembly | None (pure code) | 0 | Yes (with Synthesis) |
+| Assembly | None (0 LLM calls; no longer instant — may run exact-timestamp moment frame extraction with SSE heartbeats) | 0 | Yes (with Synthesis) |
 
 **Total: ~4-6 LLM calls, ~15-40 seconds** (varies with video length and chunking)

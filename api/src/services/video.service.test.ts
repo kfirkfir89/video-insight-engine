@@ -870,6 +870,37 @@ describe('VideoService', () => {
         expect(cacheArg.version).toBe(2);
         expect(cacheArg.dedupKey).toBe('content-key-v2');
       });
+
+      it('should stamp forceRefresh on the fresh version row', async () => {
+        // The summarizer reads this flag to skip its youtubeId-keyed response
+        // cache — without it a bypassCache run is instantly re-fed the stale
+        // cached payload whenever the SSE client wins the producer lock.
+        const youtubeId = 'dQw4w9WgXcQ';
+        mockVideoRepository.markPreviousVersionsNotLatest.mockResolvedValue({
+          _id: 'prev-id',
+          youtubeId,
+          version: 1,
+        });
+        mockIdempotencyService.computeContentKey.mockReturnValue('content-key-v2');
+        mockVideoRepository.createCacheEntry.mockResolvedValue({
+          _id: { toString: () => 'new-cache-id' },
+          youtubeId,
+          version: 2,
+        });
+        mockVideoRepository.deleteUserVideoByYoutubeId.mockResolvedValue(undefined);
+        mockVideoRepository.createUserVideo.mockResolvedValue({
+          _id: { toString: () => 'new-user-video-id' },
+        });
+
+        await videoService.createVideo(
+          'user-1',
+          'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          { tier: 'free', bypassCache: true },
+        );
+
+        const cacheArg = mockVideoRepository.createCacheEntry.mock.calls[0][0];
+        expect(cacheArg.forceRefresh).toBe(true);
+      });
     });
 
     describe('pipelineVersion serve/regen gate (project-score-9 4.3)', () => {

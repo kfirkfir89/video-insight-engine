@@ -89,22 +89,48 @@
     "tier_list": 30,
     "formation_diagram": 23
   },
-  "domainRequirementsNote": "Per-domain assembled-output validation (_validate_domain_requirements in assembly/core.py): `required` components are backfilled from defaultTabs when the planner drops them (promotion equivalents count, e.g. comparison_radar satisfies comparison); `max` caps per-component tab counts. Every domain must have an entry — an empty `required` is a deliberate decision (music: lyrics_karaoke optional so videos without per-line timing don't fail; podcast: moment_track segments are the spine; news: claims_tracker is the signature accountability surface; gaming: tier_list; sport: formation_diagram).",
+  "domainRequirementsNote": "Per-domain assembled-output validation (_validate_domain_requirements in assembly/core.py): `required` components are backfilled from defaultTabs when the planner drops them (promotion equivalents count, e.g. comparison_radar satisfies comparison); `max` caps per-component tab counts; `forbidden` components are stripped at plan post-validation (before extraction burns tokens) AND again at assembly as a backstop — a forbidden component is never rendered for that domain regardless of what the planner emits. quiz_arena is educational-only (learning/language/tech/science). Every domain must have an entry — an empty `required` is a deliberate decision (music: lyrics_karaoke optional so videos without per-line timing don't fail; podcast: moment_track segments are the spine; news: claims_tracker is the signature accountability surface; gaming: tier_list; sport: formation_diagram).",
   "domainRequirements": {
-    "food": { "required": ["step_player", "checklist"], "max": { "flash_deck": 1 } },
-    "project": { "required": ["step_player", "checklist"], "max": { "flash_deck": 1 } },
-    "review": { "required": ["comparison"], "max": { "flash_deck": 1 } },
-    "fitness": { "required": ["workout_room"], "max": { "flash_deck": 1 } },
+    "food": { "required": ["step_player", "checklist"], "max": { "flash_deck": 1 }, "forbidden": ["quiz_arena"] },
+    "project": { "required": ["step_player", "checklist"], "max": { "flash_deck": 1 }, "forbidden": ["quiz_arena"] },
+    "review": { "required": ["comparison"], "max": { "flash_deck": 1 }, "forbidden": ["quiz_arena"] },
+    "fitness": { "required": ["workout_room"], "max": { "flash_deck": 1 }, "forbidden": ["quiz_arena"] },
     "tech": { "required": ["code_playground"], "max": { "flash_deck": 1, "quiz_arena": 1 } },
-    "travel": { "required": ["spot_explorer"], "max": { "flash_deck": 1 } },
-    "music": { "required": [], "max": { "flash_deck": 1 } },
+    "travel": { "required": ["spot_explorer"], "max": { "flash_deck": 1 }, "forbidden": ["quiz_arena"] },
+    "music": { "required": [], "max": { "flash_deck": 1 }, "forbidden": ["quiz_arena"] },
     "learning": { "required": [], "max": { "flash_deck": 1, "quiz_arena": 1 } },
-    "language": { "required": ["spot_explorer"], "max": { "flash_deck": 1 } },
+    "language": { "required": ["spot_explorer"], "max": { "flash_deck": 1, "quiz_arena": 1 } },
     "science": { "required": ["spot_explorer"], "max": { "flash_deck": 1, "quiz_arena": 1 } },
-    "podcast": { "required": ["moment_track"], "max": { "flash_deck": 1, "quiz_arena": 1 } },
-    "news": { "required": ["claims_tracker"], "max": { "flash_deck": 1 } },
-    "gaming": { "required": ["tier_list"], "max": { "flash_deck": 1, "quiz_arena": 1 } },
-    "sport": { "required": ["formation_diagram"], "max": { "flash_deck": 1 } }
+    "podcast": { "required": ["moment_track"], "max": { "flash_deck": 1 }, "forbidden": ["quiz_arena"] },
+    "news": { "required": ["claims_tracker"], "max": { "flash_deck": 1 }, "forbidden": ["quiz_arena"] },
+    "gaming": { "required": ["tier_list"], "max": { "flash_deck": 1 }, "forbidden": ["quiz_arena"] },
+    "sport": { "required": ["formation_diagram"], "max": { "flash_deck": 1 }, "forbidden": ["quiz_arena"] }
+  },
+  "playbooksNote": "Video-subtype layout playbooks keyed '<domain>:<format>' (format from the classifier). Semantics: `forbidden` is a UNION with the domain's forbidden list; `required` OVERRIDES the domain's required list when present; `preferred` and `planGuidance` are rendered into the plan prompt's dynamic block so the LLM designs within the contract it will be held to. Enforcement lives in effective_requirements() (summarizer shared_config/domain_config.py) — consumed by plan post-validation and the assembly backstop.",
+  "playbooks": {
+    "gaming:unboxing": {
+      "required": ["tier_list"],
+      "preferred": ["moment_track", "info_grid", "checklist"],
+      "forbidden": ["quiz_arena", "code_playground", "workout_room", "claims_tracker"],
+      "planGuidance": "Box-opening / TCG pack-opening video: the pulls ARE the content. Rankings = the pulled cards (rarity or market-value bracket as tier, why it matters as reason). Highlights = the pull moments with timestamps. Never quiz the viewer on an unboxing."
+    },
+    "review:unboxing": {
+      "required": [],
+      "preferred": ["comparison", "info_grid", "moment_track"],
+      "forbidden": ["quiz_arena", "code_playground", "workout_room", "claims_tracker"],
+      "planGuidance": "Product unboxing: lead with what was revealed and first impressions. Specs and contents as info_grid, reveal moments as moment_track. Never quiz the viewer on an unboxing."
+    }
+  },
+  "visualCriticalityNote": "Adaptive frame-pipeline effort (derive_tier in media/visual_tier.py). HIGH: the visuals are the content (unboxings, travel, food) — over-select candidates and vision-describe them all so subject-matter frames win over presenter shots. LOW: talky formats where frames are decoration — skip vision. Everything else STANDARD. Derived from metadata (category/title keywords) because classification runs after the frames phase.",
+  "visualCriticality": {
+    "tiers": {
+      "high": { "overselect": 40, "visionMax": 40, "keep": 25 },
+      "standard": { "visionMax": 8 },
+      "low": { "visionMax": 0 }
+    },
+    "highDomains": ["travel", "food", "fitness", "project", "sport"],
+    "lowDomains": ["podcast", "news"],
+    "highTitleKeywords": ["unboxing", "opening", "pulls", "box break", "haul", "asmr", "makeup", "grwm"]
   },
   "domains": {
     "learning": {
@@ -277,8 +303,8 @@
     "project": "enrich/enrich_project.txt",
     "language": "enrich/enrich_language.txt",
     "science": "enrich/enrich_science.txt",
-    "podcast": "enrich/enrich_study.txt",
-    "gaming": "enrich/enrich_study.txt"
+    "podcast": "enrich/enrich_recall.txt",
+    "gaming": "enrich/enrich_recall.txt"
   },
   "categoryMap": {
     "cooking": "food",

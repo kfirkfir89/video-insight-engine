@@ -26,23 +26,31 @@ logger = logging.getLogger(__name__)
 VISION_ANALYSIS_PROMPT = """\
 Analyze these video keyframes. For each frame, provide:
 - scene_type: one of slide, code, diagram, whiteboard, talking_head, \
-product_demo, food_cooking, location, screen_recording, equipment, chart, table, other
+product_demo, card_reveal, product_closeup, collectible_display, food_cooking, location, \
+screen_recording, equipment, chart, table, intro, outro, other
 - content: 1-sentence description of what's shown (be specific — names, labels, code snippets)
 - text_visible: any text you can read on screen (exact transcription, empty string if none)
-- educational_value: why this frame matters for understanding the video (null if talking_head \
-with no visual aids)
+- educational_value: why this frame matters for understanding the video (null when the frame \
+shows nothing beyond a person talking)
+- visual_subject: "content" when the subject matter (card, product, screen, dish, place) \
+dominates the frame; "presenter" when a person dominates with no subject matter shown; \
+"mixed" when both share the frame
+
+IMPORTANT: a hand holding a card, product, or object up to the camera is card_reveal / \
+product_closeup / product_demo with visual_subject "content" — NOT talking_head — even when \
+the presenter is partly visible. Use talking_head ONLY when no subject matter is discernible.
 
 Return a JSON array with one object per frame, in the same order as the images.
 Each object must have keys: frame_index (0-based), scene_type, content, text_visible, \
-educational_value.
+educational_value, visual_subject.
 
 Example:
 [
-  {"frame_index": 0, "scene_type": "code", "content": "Python function implementing binary \
-search", "text_visible": "def binary_search(arr, target):", "educational_value": "Shows the \
-exact implementation being discussed"},
+  {"frame_index": 0, "scene_type": "card_reveal", "content": "Alternate-art Shanks card held \
+up to the camera", "text_visible": "Shanks OP17-120", "educational_value": "The chase pull of \
+the box", "visual_subject": "content"},
   {"frame_index": 1, "scene_type": "talking_head", "content": "Presenter speaking to camera", \
-"text_visible": "", "educational_value": null}
+"text_visible": "", "educational_value": null, "visual_subject": "presenter"}
 ]
 
 Return ONLY the JSON array — no markdown fences, no explanation.\
@@ -112,16 +120,20 @@ async def analyze_frames_with_vision(
         mins = int(ts) // 60
         secs = int(ts) % 60
         content.append({"type": "text", "text": f"Frame {i} (at {mins}:{secs:02d}):"})
-        content.append({
-            "type": "image_url",
-            "image_url": {"url": data_uri},
-        })
-        frame_metadata.append({
-            "index": i,
-            "timestamp_sec": ts,
-            "s3_url": frame.get("s3_url", ""),
-            "original_index": frame.get("index"),
-        })
+        content.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": data_uri},
+            }
+        )
+        frame_metadata.append(
+            {
+                "index": i,
+                "timestamp_sec": ts,
+                "s3_url": frame.get("s3_url", ""),
+                "original_index": frame.get("index"),
+            }
+        )
 
     if not frame_metadata:
         return []
@@ -139,24 +151,36 @@ async def analyze_frames_with_vision(
     vision_model = settings.get_stage_model("vision")
     if vision_model:
         from src.services.llm_provider import LLMProvider as _LLMProvider
+
         effective_provider = _LLMProvider(model=vision_model, fast_model=vision_model)
 
     started = time.monotonic()
+    # The deadline must scale with the batch like the token cap does: a
+    # 40-frame HIGH-tier batch generates ~10K output tokens plus 40 base64
+    # images of ingest — a fixed 90s deadline times out routinely, silently
+    # collapsing the adaptive-tier feature to its local-selection fallback.
+    effective_timeout = max(timeout, 4.0 * len(frame_metadata))
     try:
+        # ~250 output tokens per frame description; a fixed cap silently
+        # truncates larger batches → JSONDecodeError → total loss of ALL
+        # descriptions. Scale with the batch.
         raw = await asyncio.wait_for(
             effective_provider.complete_with_messages(
-                messages, max_tokens=2000, timeout=timeout, use_fast_model=False,
+                messages,
+                max_tokens=max(2000, 250 * len(frame_metadata)),
+                timeout=effective_timeout,
+                use_fast_model=False,
                 span_name="frame_vision",
                 span_metadata={"frameCount": len(frame_metadata)},
             ),
-            timeout=timeout + 5,  # outer safety net
+            timeout=effective_timeout + 5,  # outer safety net
         )
         logger.info(
             "frame_vision.complete",
             extra={
                 "elapsed_ms": int((time.monotonic() - started) * 1000),
                 "frames": len(frame_metadata),
-                "timeout_s": timeout,
+                "timeout_s": effective_timeout,
             },
         )
         return parse_vision_response(raw, frame_metadata)
@@ -165,14 +189,15 @@ async def analyze_frames_with_vision(
             "Vision analysis timed out",
             extra={
                 "elapsed_ms": int((time.monotonic() - started) * 1000),
-                "timeout_s": timeout,
+                "timeout_s": effective_timeout,
                 "frames": len(frame_metadata),
             },
         )
         return []
     except Exception as e:
         logger.warning(
-            "Vision analysis failed (non-critical): %s", e,
+            "Vision analysis failed (non-critical): %s",
+            e,
             extra={
                 "elapsed_ms": int((time.monotonic() - started) * 1000),
                 "frames": len(frame_metadata),
@@ -224,16 +249,19 @@ def parse_vision_response(raw_text: str, frame_metadata: list[dict]) -> list[dic
         else:
             meta = frame_metadata[frame_idx]
 
-        results.append({
-            "frame_index": frame_idx,
-            "scene_type": item.get("scene_type", "other"),
-            "content": item.get("content", ""),
-            "text_visible": item.get("text_visible", ""),
-            "educational_value": item.get("educational_value"),
-            "timestamp_sec": meta.get("timestamp_sec", 0),
-            "s3_url": meta.get("s3_url", ""),
-            "original_index": meta.get("original_index"),
-        })
+        results.append(
+            {
+                "frame_index": frame_idx,
+                "scene_type": item.get("scene_type", "other"),
+                "content": item.get("content", ""),
+                "text_visible": item.get("text_visible", ""),
+                "educational_value": item.get("educational_value"),
+                "visual_subject": item.get("visual_subject", ""),
+                "timestamp_sec": meta.get("timestamp_sec", 0),
+                "s3_url": meta.get("s3_url", ""),
+                "original_index": meta.get("original_index"),
+            }
+        )
 
     return results
 

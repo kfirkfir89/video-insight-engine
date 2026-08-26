@@ -39,6 +39,7 @@ class TravelSpot(BaseModel):
     booking_search: str | None = Field(None, alias="bookingSearch")
     tips: str | None = None
     specs: str | None = None
+    pronunciation: str | None = None
     rating: float | None = None
     thumbnail_url: str | None = Field(None, alias="thumbnailUrl")
 

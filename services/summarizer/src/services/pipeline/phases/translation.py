@@ -20,6 +20,7 @@ from src.models.schemas import ProcessingStatus
 from src.services.cache.response_cache import response_cache
 from src.services.pipeline.pipeline_helpers import sse_event
 from src.services.pipeline.translation import translate_text, translate_to_source
+from src.services.status_callback import send_video_status_background
 
 if TYPE_CHECKING:
     from src.repositories.mongodb_repository import MongoDBVideoRepository
@@ -79,8 +80,11 @@ async def run_phase_translation(
             ctx.source_language_code,
         )
         await asyncio.to_thread(
-            repository.update_status, video_summary_id, ProcessingStatus.COMPLETED,
+            repository.update_status,
+            video_summary_id,
+            ProcessingStatus.COMPLETED,
         )
+        send_video_status_background(video_summary_id, None, "completed")
         return
 
     ctx.source_language = result["sourceLanguage"]
@@ -103,6 +107,7 @@ async def run_phase_translation(
             "status": "completed",
         },
     )
+    send_video_status_background(video_summary_id, None, "completed")
 
     logger.info(
         "[pipeline] Translation complete: built %s sourceLanguage block",
@@ -115,19 +120,22 @@ async def run_phase_translation(
     # the cache for the full TTL and ensures FE cache hits see the toggle.
     if settings.REDIS_ENABLED:
         from src.routes.cached_response import build_frontend_response
-        frontend_response = build_frontend_response({
-            "status": "completed",
-            "youtubeId": ctx.youtube_id,
-            "title": ctx.video_data.title if ctx.video_data else None,
-            "creator": ctx.video_data.channel if ctx.video_data else None,
-            "duration": ctx.video_data.duration if ctx.video_data else None,
-            "thumbnailUrl": ctx.video_data.thumbnail_url if ctx.video_data else None,
-            "meta": ctx.assembled_meta,
-            "tabs": ctx.assembled_tabs,
-            "sourceLanguage": ctx.source_language,
-            "language": "en",
-            "isRTL": False,
-        })
+
+        frontend_response = build_frontend_response(
+            {
+                "status": "completed",
+                "youtubeId": ctx.youtube_id,
+                "title": ctx.video_data.title if ctx.video_data else None,
+                "creator": ctx.video_data.channel if ctx.video_data else None,
+                "duration": ctx.video_data.duration if ctx.video_data else None,
+                "thumbnailUrl": ctx.video_data.thumbnail_url if ctx.video_data else None,
+                "meta": ctx.assembled_meta,
+                "tabs": ctx.assembled_tabs,
+                "sourceLanguage": ctx.source_language,
+                "language": "en",
+                "isRTL": False,
+            }
+        )
         try:
             await response_cache.set_response(ctx.youtube_id, frontend_response)
         except (OSError, ConnectionError) as e:

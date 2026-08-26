@@ -287,6 +287,9 @@ AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
 AWS_ENDPOINT_URL=              # Optional: LocalStack for local dev
+# Presigned URL TTL. Must be ≥ the api's FRAME_URL_TTL_SECONDS (21600)
+# or SSE frame URLs 403 mid-session.
+S3_PRESIGNED_URL_EXPIRY=21600
 
 # ────────────────────────────────────────────────────
 # Admin Panel
@@ -299,6 +302,26 @@ ADMIN_API_KEY=change-this-admin-key
 # VITE_API_URL=https://api.yourdomain.com/api
 # VITE_WS_URL=wss://api.yourdomain.com/ws
 ```
+
+> This block is a condensed copy — **`.env.example` at the repo root is authoritative** and carries the full commented list (Sentry, eval account, tuning knobs).
+
+### Frame pipeline & summarizer tuning (2026-08)
+
+New/changed vars introduced by the yt-dlp-403 fix and the two-pass frame pipeline. All are passed through the compose `x-summarizer-env` block (both `docker-compose.yml` and `docker-compose.prod.yml`):
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `YTDLP_PLAYER_CLIENTS` | `android` | yt-dlp player clients for all video/audio downloads. YouTube 403s the web client's URLs from some environments. **Never mix in `default`** — a merged format list lets bestvideo pick a 403ing web DASH format. Metadata/subtitle extraction deliberately doesn't use it. |
+| `SCENE_HIRES_ENABLED` | `true` | Pass-2 720p refinement of selected frames |
+| `SCENE_S3_PREFIX` | `scenes-v3` | Versioned frame-cache prefix — bump to invalidate the S3 frame cache |
+| `SCENE_HIRES_TIMEOUT` | `90` | Stream-URL refinement budget (s) |
+| `SCENE_HIRES_FALLBACK_TIMEOUT` | `180` | Local ≤720p download fallback budget (s) |
+| `FRAME_TIER_ENABLED` | `true` | Adaptive visual tiers (high/standard/low from `domains.json` `visualCriticality`) |
+| `TRANSCRIPT_CLEANING_TIMEOUT` | `30` | Transcript-cleaning LLM call timeout (was hardcoded) |
+| `HF_TOKEN` | empty | Optional Hugging Face Hub token for SentenceTransformer pulls |
+| `S3_PRESIGNED_URL_EXPIRY` | `21600` (was 3600) | Must stay ≥ api `FRAME_URL_TTL_SECONDS` |
+| `EVAL_USER_EMAIL` / `EVAL_USER_PASSWORD` | `eval@vie.local` / none | Eval-runner local account — auto-registered on first run; no default password by design (also a CI secret) |
+| `SENTRY_DSN` / `SENTRY_ENVIRONMENT` / `SENTRY_RELEASE` | empty | Optional Sentry error reporting (see [OBSERVABILITY.md](./OBSERVABILITY.md)) |
 
 ---
 

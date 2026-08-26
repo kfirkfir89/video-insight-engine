@@ -431,6 +431,14 @@
   --vie-accent-foreground: oklch(
     from var(--vie-accent) calc(0.18 + 0.8 * clamp(0, (0.62 - l) * 100, 1)) 0.015 280
   );
+  /* Contrast-safe accent TEXT color (vs -foreground, which is text ON a solid
+     accent fill): caps lightness so accent-colored copy stays readable on the
+     page surface — light themes pull bright accents down, dark themes lift dim
+     accents up (see the [data-theme] overrides of --vie-accent-ink-l).
+     accentStyle() re-emits --vie-accent-ink per wrapper so it tracks domain
+     accent overrides; this :root value is the no-wrapper default. */
+  --vie-accent-ink-l: min(l, 0.52);
+  --vie-accent-ink: oklch(from var(--vie-accent) var(--vie-accent-ink-l) c h);
 
   /* ─────────────────────────────────────────────
      TYPOGRAPHY SYSTEM
@@ -516,6 +524,9 @@
 }
 
 [data-theme="dark"] {
+  /* Dark canvas inverts the ink clamp — lift dim accents instead of capping. */
+  --vie-accent-ink-l: max(l, 0.74);
+
   --vie-coral: oklch(75% 0.16 25);
   --vie-plum: oklch(62% 0.18 310);
   --vie-sky: oklch(75% 0.12 230);
@@ -601,6 +612,9 @@
 }
 
 [data-theme="lagoon"] {
+  /* Dark-family theme — same ink lift as dark. */
+  --vie-accent-ink-l: max(l, 0.74);
+
   /* Warm accents stay vivid — they are the "pops" against the cool canvas */
   --vie-coral: oklch(74% 0.17 30);
   --vie-plum: oklch(64% 0.17 310);
@@ -805,6 +819,18 @@
   --animate-fade-up-spring: fadeUp 0.4s var(--ease-out-quint) both;
   --animate-pop-in: popIn 0.35s var(--ease-out-quint) both;
   --animate-pulse-slow: pulse 2s ease-in-out infinite;
+  /* One-shot accent ring pulse — MomentTrack fires it (650ms pulseKey window)
+     on the timeline row marker when playback reaches a new moment. */
+  --animate-pulse-once: pulse-once 0.6s var(--ease-out-expo) both;
+}
+
+@keyframes pulse-once {
+  0% {
+    box-shadow: 0 0 0 0 var(--vie-accent);
+  }
+  100% {
+    box-shadow: 0 0 0 10px transparent;
+  }
 }
 
 /* ═══════════════════════════════════════════════════

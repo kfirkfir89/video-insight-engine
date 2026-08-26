@@ -73,3 +73,27 @@ class TestStepPassthrough:
         step = _normalize_step({"number": 1, "title": "Cut the boards"}, 0)
         assert step["instruction"] == "Cut the boards"
         assert "title" not in step
+
+
+class TestSpotKeyValueMapping:
+    """Regression: ReviewSpec {key, value} rows (review.specs routed to
+    spot_explorer by the planner) previously normalized to None and dropped
+    the whole tab. promotion.py already knew this mapping; the normalizer
+    must too."""
+
+    def test_key_value_maps_to_name_description(self):
+        spot = _normalize_to_spot({"key": "Box price", "value": "$420 at purchase"})
+        assert spot is not None
+        assert spot["name"] == "Box price"
+        assert spot["description"] == "$420 at purchase"
+
+    def test_named_fields_win_over_key_value(self):
+        spot = _normalize_to_spot(
+            {"name": "Luffy SR", "key": "ignored", "description": "Secret rare", "value": "x"}
+        )
+        assert spot is not None
+        assert spot["name"] == "Luffy SR"
+        assert spot["description"] == "Secret rare"
+
+    def test_key_without_any_content_still_dropped(self):
+        assert _normalize_to_spot({"key": "Lone key"}) is None

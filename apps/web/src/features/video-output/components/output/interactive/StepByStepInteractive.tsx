@@ -213,15 +213,9 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
                     <p className={cn(
                       'text-sm text-muted-foreground',
                       isDone && 'line-through',
-                      !isActive && 'line-clamp-2',
                     )}>
                       {step.instruction}
                     </p>
-
-                    {/* Show more toggle for collapsed steps */}
-                    {!isActive && step.instruction && step.instruction.length > 100 && (
-                      <span className="text-xs text-[color:var(--vie-accent)]">{t.showMore}</span>
-                    )}
 
                     <div className="flex items-center gap-3 flex-wrap">
                       {step.duration && (
@@ -244,13 +238,13 @@ export const StepByStepInteractive = memo(function StepByStepInteractive({
                       />
                     )}
 
-                    {step.tips && isActive && (
+                    {step.tips && (
                       <TextBlock intent="tip" icon={<Lightbulb />} className="mt-1">
                         {step.tips}
                       </TextBlock>
                     )}
 
-                    {step.safetyNote && isActive && (
+                    {step.safetyNote && (
                       <TextBlock intent="warning" icon={<AlertTriangle />} className="mt-1">
                         {step.safetyNote}
                       </TextBlock>

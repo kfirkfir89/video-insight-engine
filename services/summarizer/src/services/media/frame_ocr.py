@@ -44,9 +44,19 @@ def estimate_text_density(image_path: str) -> float:
     """
     cv2 = _get_cv2()
     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    if img is None:
+    return estimate_text_density_from_gray(img)
+
+
+def estimate_text_density_from_gray(gray) -> float:
+    """Estimate text density from an already-decoded grayscale ndarray.
+
+    Lets batch scorers (frame_scorer.score_frame) decode each frame once
+    instead of re-reading the file per signal.
+    """
+    if gray is None:
         return 0.0
-    edges = cv2.Canny(img, 50, 150)
+    cv2 = _get_cv2()
+    edges = cv2.Canny(gray, 50, 150)
     return float(np.count_nonzero(edges)) / edges.size
 
 
@@ -55,10 +65,7 @@ def estimate_text_density_from_bytes(frame_bytes: bytes) -> float:
     cv2 = _get_cv2()
     nparr = np.frombuffer(frame_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
-    if img is None:
-        return 0.0
-    edges = cv2.Canny(img, 50, 150)
-    return float(np.count_nonzero(edges)) / edges.size
+    return estimate_text_density_from_gray(img)
 
 
 def preprocess_for_ocr(image_path: str) -> np.ndarray:
@@ -77,7 +84,12 @@ def preprocess_for_ocr(image_path: str) -> np.ndarray:
 
     # Adaptive threshold for binarization
     binary = cv2.adaptiveThreshold(
-        enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2,
+        enhanced,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        11,
+        2,
     )
     return binary
 
@@ -122,21 +134,26 @@ def extract_text_from_frames(
 
         text = run_ocr(path)
         if text and len(text) > 10:
-            results.append({
-                **frame,
-                "text_density": density,
-                "ocr_text": text,
-            })
+            results.append(
+                {
+                    **frame,
+                    "text_density": density,
+                    "ocr_text": text,
+                }
+            )
 
     logger.info(
         "OCR: %d/%d frames had text (threshold=%.2f)",
-        len(results), len(frames), density_threshold,
+        len(results),
+        len(frames),
+        density_threshold,
     )
     return results
 
 
 def enrich_transcript_with_ocr(
-    transcript: str, ocr_results: list[dict],
+    transcript: str,
+    ocr_results: list[dict],
 ) -> str:
     """Append OCR-detected text to transcript for LLM context.
 

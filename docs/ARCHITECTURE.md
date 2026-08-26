@@ -9,7 +9,7 @@ System overview and data flows.
 ```
 ┌───────────────────────────────────────────────────────────────────┐
 │                         vie-web (React 19)                         │
-│  Tailwind v4 · shadcn/ui · 36 UI components · 16 interactives    │
+│  Tailwind v4 · shadcn/ui · 29 registered interactive renderers    │
 │  ComposableOutput → COMPONENT_REGISTRY[tab.component] → render    │
 │  VideoPlayerContext (seekTo) · SSE stream consumer                 │
 └──────────────────────────┬────────────────────────────────────────┘
@@ -172,7 +172,9 @@ Content type is determined by a **plan phase** that runs a classifier (fast mode
 │                                                                             │
 │  2. TRANSCRIPT + FRAMES (parallel, ~10-30s)                                │
 │     ├── Transcript: S3 cache → yt-dlp → API → Gemini → Whisper           │
-│     └── Frames: FFmpeg scene detect → score → select ~25 → S3 upload      │
+│     └── Frames: two-pass — worst-quality detect/score → select ~25 →      │
+│         720p hi-res refine (local-download fallback) → S3 (scenes-v3      │
+│         manifest-v2 cache); adaptive visual tier (high/standard/low)      │
 │                                                                             │
 │  2.5 VISUAL CONTEXT INJECTION (~0-1s)                                      │
 │     └── [VISUAL at M:SS] annotations injected into transcript              │
@@ -180,9 +182,11 @@ Content type is determined by a **plan phase** that runs a classifier (fast mode
 │  3. CLASSIFIER + PLAN (concurrent, ~2-5s)                                  │
 │     ├── Classifier: fast model, domain + format detection (non-blocking)   │
 │     └── Plan: Sonnet call → contentTags, tab layout, extractionGuidance   │
-│     ├── 10 primary tags: learning, tech, fitness, food, music, travel,    │
-│     │   review, project, language, science                                 │
+│     ├── 14 primary tags: learning, tech, fitness, food, music, travel,    │
+│     │   review, project, language, science, gaming, news, podcast, sport  │
 │     ├── 2 modifier tags: narrative, finance                                │
+│     ├── Domain playbooks ("<domain>:<format>") injected into the prompt;  │
+│     │   post-validation strips `forbidden` components before extraction    │
 │     └── Classifier overrides category_hint when confidence > 0.6          │
 │                                                                             │
 │  4. EXTRACTION (1-5+ LLM calls, ~10-60s)                                  │
@@ -197,10 +201,11 @@ Content type is determined by a **plan phase** that runs a classifier (fast mode
 │  6. ENRICHMENT (0-1 LLM call, ~5-10s)                                     │
 │     └── Quiz + flashcards + scenarios (domains with enrichment mapping)    │
 │                                                                             │
-│  7. ASSEMBLY (pure code, <10ms)                                            │
-│     ├── 17 assemblers in ASSEMBLER_REGISTRY                                │
+│  7. ASSEMBLY (code, 0 LLM calls — may run moment frame fill I/O)          │
+│     ├── 29 assemblers in ASSEMBLER_REGISTRY                                │
 │     ├── Extraction → TabEntry[] with component-addressed props             │
-│     ├── Frame thumbnail injection                                          │
+│     ├── Domain forbidden/max policy + degrade-never-drop demote ladder     │
+│     ├── Frame thumbnail injection (+ ±15s backfill, exact-ts moment fill)  │
 │     └── Cross-tab link resolution                                          │
 │                                                                             │
 │  8. TRANSLATION (conditional — non-English only, 1-2 LLM calls)           │
@@ -213,7 +218,8 @@ Content type is determined by a **plan phase** that runs a classifier (fast mode
 │     └── English Qdrant embeddings for cross-language RAG search            │
 │                                                                             │
 │  9. SAVE + STREAM COMPLETE                                                 │
-│     ├── SSE: tab_ready events (progressive rendering)                      │
+│     ├── SSE: tab_ready events (progressive; each carries `position` —     │
+│     │   moment_track tabs held back for frame fill and streamed last)     │
 │     ├── Store to MongoDB (meta + tabs + language + isRTL + sourceLanguage) │
 │     ├── Store to Redis — English videos: written in this phase;            │
 │     │   non-English: written in the translation phase above                │
@@ -236,6 +242,10 @@ Content type is determined by a **plan phase** that runs a classifier (fast mode
 | `project` | `schemas/project.txt` | overview, materials, tools, steps |
 | `language` | `schemas/language.txt` | phrases, rules, drills, vocabulary |
 | `science` | `schemas/science.txt` | concepts, key_facts, experiments |
+| `gaming` | `schemas/gaming.txt` | highlights, builds/loadouts, tier_list |
+| `news` | `schemas/news.txt` | events, claims_tracker, key_facts |
+| `podcast` | `schemas/podcast.txt` | guests, key_quotes, moments |
+| `sport` | `schemas/sport.txt` | match events, formation_diagram, stats |
 
 ---
 
@@ -272,9 +282,11 @@ The pipeline uses Server-Sent Events (SSE) to stream results progressively with 
 │  PHASE 6: ENRICHMENT (0-1 LLM call, ~5-10s)                               │
 │    Events: enrichment_complete (if applicable)                               │
 │                                                                             │
-│  PHASE 7: ASSEMBLY (pure code, <10ms)                                      │
-│    Events: meta, tab_ready[] (progressive)                                   │
-│    → Each tab_ready event renders one tab immediately                       │
+│  PHASE 7: ASSEMBLY (code, 0 LLM calls; may run moment frame fill I/O)      │
+│    Events: meta, tab_ready[] (progressive, each with `position`)             │
+│    → Each tab_ready event renders one tab immediately, slotted by position  │
+│    → moment_track tabs held back for exact-timestamp frame fill             │
+│      (heartbeats keep the stream alive), then stream last                   │
 │                                                                             │
 │  PHASE 7.5: TRANSLATION (non-English only, ~5-15s)                         │
 │    → Translates tabs + synthesis to English for bilingual storage           │
@@ -307,7 +319,7 @@ For a typical video (< 30 min):
 | Extraction | Sonnet | 1-2 | 240s |
 | Synthesis | Fast (Haiku/mini/flash-lite) | 1 | 30s |
 | Enrichment | Fast (Haiku/mini/flash-lite) | 0-1 | 90s |
-| Assembly | None (pure code) | 0 | <10ms |
+| Assembly | None (code only) | 0 | instant, unless moment frame fill runs (60s + 150s budgets) |
 
 **Total: 4-6 LLM calls, ~20-50 seconds, ~$0.09/video**
 

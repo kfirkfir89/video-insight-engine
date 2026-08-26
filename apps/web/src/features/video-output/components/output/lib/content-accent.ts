@@ -32,15 +32,18 @@ export function getAccentForTag(contentTag?: string): string {
  * their root wrapper so child selectors like `text-[var(--vie-accent)]` and
  * `text-[var(--vie-accent-foreground)]` pick up the domain color.
  *
- * `--vie-accent-foreground` is re-emitted here (not just inherited from :root)
- * so the `oklch(from var(--vie-accent) …)` computation runs against THIS
- * wrapper's overridden accent, yielding tinted-ink on light domains
- * (honey/mint/sky) and tinted-frost on dark ones (plum/primary).
+ * `--vie-accent-foreground` and `--vie-accent-ink` are re-emitted here (not
+ * just inherited from :root) so the `oklch(from var(--vie-accent) …)`
+ * computation runs against THIS wrapper's overridden accent. `-foreground` is
+ * text ON a solid accent fill; `-ink` is accent-colored text on the page
+ * surface (its lightness clamp, `--vie-accent-ink-l`, stays theme-owned in
+ * index.css so light and dark resolve differently).
  */
 export function accentStyle(contentTag?: string): CSSProperties {
   return {
     '--vie-accent': getAccentForTag(contentTag),
     '--vie-accent-foreground':
       'oklch(from var(--vie-accent) calc(0.18 + 0.8 * clamp(0, (0.62 - l) * 100, 1)) 0.015 280)',
+    '--vie-accent-ink': 'oklch(from var(--vie-accent) var(--vie-accent-ink-l) c h)',
   } as CSSProperties;
 }

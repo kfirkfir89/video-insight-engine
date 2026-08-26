@@ -9,7 +9,6 @@ dev/
 ├── README.md            # This file (evergreen — no task-specific content)
 ├── gotchas.md           # Bug knowledge base: check BEFORE debugging
 ├── scratchpad.md        # Quick notes, current context
-├── CODE-REVIEW-FIXES.md # Review-finding dispositions
 ├── golden-dataset/      # Eval dataset (videos.yaml) for scripts/run_eval.py
 ├── diagnostics/         # Ad-hoc investigation artifacts
 ├── research/            # Longer-lived research notes

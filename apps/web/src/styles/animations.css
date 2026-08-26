@@ -125,18 +125,6 @@
     }
   }
 
-  @keyframes emoji-breathe {
-    0%,
-    100% {
-      opacity: 0.3;
-      transform: scale(1);
-    }
-    50% {
-      opacity: 0.5;
-      transform: scale(1.06);
-    }
-  }
-
   @keyframes stagger-rise {
     from {
       opacity: 0;
@@ -160,6 +148,15 @@
 
   .skeleton-breathe {
     animation: skeleton-breathe 1.6s ease-in-out infinite;
+  }
+
+  /* ─── Streaming stage-timeline active dot ────────────────
+     Scale + opacity pulse on the active stage marker. Used
+     via animate-[stage-pulse_…] with an inline
+     motion-reduce:animate-none escape. */
+  @keyframes stage-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.45; transform: scale(0.7); }
   }
 
   /* ─── Streaming progress shimmer ─────────────────────────
@@ -287,12 +284,6 @@
   }
   .vignette-typing::after {
     content: "https://youtu.be/dQw...";
-  }
-
-  /* Explicit override for gentle infinite glow */
-  .animate-\[emoji-breathe_3s_ease-in-out_infinite\],
-  [style*="emoji-breathe"] {
-    animation: none !important;
   }
 
   /* Streaming skeleton + shimmer: drop the loops, hold a

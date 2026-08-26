@@ -13,18 +13,18 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .normalizers import (
-    _normalize_quiz_question,
-    _normalize_scenario_item,
+from .assemblers_learning import (
+    assemble_exercise_tracker,
+    assemble_lyrics_player,
 )
 from .assemblers_primary import (
     assemble_code_explorer,
     assemble_comparison,
     assemble_step_player,
 )
-from .assemblers_learning import (
-    assemble_exercise_tracker,
-    assemble_lyrics_player,
+from .normalizers import (
+    _normalize_quiz_question,
+    _normalize_scenario_item,
 )
 
 logger = logging.getLogger(__name__)
@@ -399,13 +399,16 @@ def _normalize_filmstrip_frame(item: Any) -> dict | None:
     """Coerce a frame item to {thumbnailUrl, timestamp, caption?, ocr?, sceneType?}."""
     if not isinstance(item, dict):
         return None
-    thumb = item.get("thumbnailUrl") or item.get("url")
+    thumb = item.get("thumbnailUrl") or item.get("url") or item.get("s3_url")
     if not isinstance(thumb, str) or not thumb.strip():
         return None
     timestamp = item.get("timestamp") or item.get("seconds") or 0
     if not isinstance(timestamp, (int, float)):
         return None
     result: dict[str, Any] = {"thumbnailUrl": thumb, "timestamp": int(timestamp)}
+    s3_key = item.get("s3Key") or item.get("s3_key")
+    if isinstance(s3_key, str) and s3_key.strip():
+        result["s3Key"] = s3_key.strip()
     caption = item.get("caption") or item.get("frameCaption") or item.get("description")
     if isinstance(caption, str) and caption.strip():
         result["caption"] = caption.strip()

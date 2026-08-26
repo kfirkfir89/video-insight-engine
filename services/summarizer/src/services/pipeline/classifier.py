@@ -26,22 +26,53 @@ logger = logging.getLogger(__name__)
 PROMPT_PATH = Path(__file__).parent.parent.parent / "prompts" / "classify.txt"
 CLASSIFIER_CONFIDENCE_THRESHOLD = 0.6
 
-VALID_DOMAINS: frozenset[str] = frozenset([
-    "learning", "tech", "food", "travel", "fitness", "music", "review", "project",
-    "language", "science", "podcast", "news", "gaming", "sport",
-])
+VALID_DOMAINS: frozenset[str] = frozenset(
+    [
+        "learning",
+        "tech",
+        "food",
+        "travel",
+        "fitness",
+        "music",
+        "review",
+        "project",
+        "language",
+        "science",
+        "podcast",
+        "news",
+        "gaming",
+        "sport",
+    ]
+)
 
-VALID_FORMATS: frozenset[str] = frozenset([
-    "tutorial", "commentary", "reaction", "opinion_rant", "motivational",
-    "interview", "lecture", "vlog", "documentary", "walkthrough",
-    "podcast", "news", "news_commentary", "entertainment",
-    "performance", "comparison", "story",
-])
+VALID_FORMATS: frozenset[str] = frozenset(
+    [
+        "tutorial",
+        "commentary",
+        "reaction",
+        "opinion_rant",
+        "motivational",
+        "interview",
+        "lecture",
+        "vlog",
+        "documentary",
+        "walkthrough",
+        "podcast",
+        "news",
+        "news_commentary",
+        "entertainment",
+        "performance",
+        "comparison",
+        "story",
+        "unboxing",
+    ]
+)
 
 
 @dataclass
 class ContentTraits:
     """Structural traits detected in video content."""
+
     has_steps: bool = False
     has_drills: bool = False
     has_comparison: bool = False
@@ -70,9 +101,16 @@ class ContentTraits:
     def active_traits(self) -> list[str]:
         """Return list of trait names that are True."""
         return [
-            name for name in [
-                "has_steps", "has_drills", "has_comparison", "has_narrative",
-                "has_code", "has_visual_demo", "is_opinionated", "is_list",
+            name
+            for name in [
+                "has_steps",
+                "has_drills",
+                "has_comparison",
+                "has_narrative",
+                "has_code",
+                "has_visual_demo",
+                "is_opinionated",
+                "is_list",
             ]
             if getattr(self, name)
         ]
@@ -125,18 +163,23 @@ async def classify_domain_format(
     duration_minutes = str(round(duration / 60)) if duration > 0 else "unknown"
 
     prompt = (
-        prompt_template
-        .replace("{title}", sanitize_for_prompt(title[:200]))
+        prompt_template.replace("{title}", sanitize_for_prompt(title[:200]))
         .replace("{channel}", sanitize_for_prompt(channel[:100] if channel else "Unknown"))
         .replace("{duration_minutes}", duration_minutes)
         .replace("{tags}", sanitize_for_prompt(tags_str, max_len=500))
-        .replace("{transcript_preview}", sanitize_for_prompt(transcript_preview[:2000], max_len=2000))
+        .replace(
+            "{transcript_preview}", sanitize_for_prompt(transcript_preview[:2000], max_len=2000)
+        )
     )
 
     raw = await call_llm_with_retry(
-        llm_service, prompt,
-        max_tokens=250, timeout=10.0, max_retries=1,
-        stage_name="classifier", json_mode=True,
+        llm_service,
+        prompt,
+        max_tokens=250,
+        timeout=10.0,
+        max_retries=1,
+        stage_name="classifier",
+        json_mode=True,
         use_fast_model=True,
         model_override=settings.get_stage_model("classifier"),
     )

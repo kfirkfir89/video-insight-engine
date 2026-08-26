@@ -157,6 +157,22 @@ describe('tab-prop-schemas', () => {
       ).toBe(true);
     });
 
+    it('info_grid — accepts value-less headline items without remapping the tab', () => {
+      // The assembler legitimately emits `""`, null, or no value at all for
+      // key-only "headline chips"; one such row must not downgrade the whole
+      // tab to display_section.
+      expect(
+        parses('info_grid', {
+          items: [
+            { key: 'Headline chip', value: '' },
+            { key: 'Missing value' },
+            { key: 'Null value', value: null },
+            { key: 'Real row', value: 'substance' },
+          ],
+        }),
+      ).toBe(true);
+    });
+
     it('code_playground — snippets with null filename', () => {
       expect(
         parses('code_playground', {

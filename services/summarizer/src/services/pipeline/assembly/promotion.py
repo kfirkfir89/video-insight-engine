@@ -160,3 +160,82 @@ def promote_component(
     new_component, new_props = result
     logger.info("[assembly] promoted %s -> %s", component, new_component)
     return new_component, new_props
+
+
+# ─────────────────────────────────────────────────────
+# Demotion — degrade, never drop
+# ─────────────────────────────────────────────────────
+
+# When a rich assembler can't build its component from non-empty data (shape
+# mismatch, min-item gate), walk DOWN this ladder instead of dropping the tab.
+# Each rung calls the target assembler (never a bare rename — the promotion
+# contract) and the caller re-validates. display_section accepts anything
+# non-None, so it is the terminal rung; only truly empty data still drops.
+_DEMOTE_LADDER: dict[str, tuple[str, ...]] = {
+    "step_player": ("checklist", "display_section"),
+    "step_flow_canvas": ("checklist", "display_section"),
+    "spot_explorer": ("info_grid", "checklist", "display_section"),
+    "info_grid": ("checklist", "display_section"),
+    "tier_list": ("info_grid", "display_section"),
+    "comparison": ("info_grid", "display_section"),
+    "comparison_radar": ("info_grid", "display_section"),
+    "concept_canvas": ("flash_deck", "info_grid", "display_section"),
+    "connect_canvas": ("flash_deck", "info_grid", "display_section"),
+    "claims_tracker": ("info_grid", "display_section"),
+    "packing_mission": ("checklist", "display_section"),
+    "code_playground": ("display_section",),
+    "formation_diagram": ("info_grid", "display_section"),
+    "diagram_card": ("info_grid", "display_section"),
+    "workout_room": ("checklist", "display_section"),
+    # Deliberately non-demotable: their data shapes (quiz questions, frame
+    # dicts, lyric lines) render as garbage in generic components — an
+    # invalid quiz is better dropped than dumped.
+    "quiz_arena": (),
+    "video_filmstrip": (),
+    "lyrics_karaoke": (),
+    "frame_strip": (),
+}
+_DEMOTE_DEFAULT: tuple[str, ...] = ("display_section",)
+
+
+def demote_component(
+    component: str,
+    tab: dict,
+    data: Any,
+    extraction: dict | None,
+    enrichment: dict | None,
+) -> tuple[str, dict] | None:
+    """Walk the demote ladder for a component whose assembler returned None.
+
+    Returns ``(simpler_component, props)`` from the first rung whose assembler
+    produces validating props, or None when every rung fails (which for the
+    display_section terminal only happens on data that is truly None).
+    """
+    from .core import _validate_assembled_props  # local import avoids cycle
+    from .density import enforce_density
+    from .registry import ASSEMBLER_REGISTRY
+
+    for target in _DEMOTE_LADDER.get(component, _DEMOTE_DEFAULT):
+        assembler = ASSEMBLER_REGISTRY.get(target)
+        if assembler is None:
+            continue
+        try:
+            props = assembler(tab, data, extraction or {}, enrichment)
+        except Exception as e:  # noqa: BLE001 — a rung failure is not fatal
+            # WARNING, not debug: a systematically broken rung assembler would
+            # otherwise silently degrade every affected video to the terminal
+            # rung with no prod-visible signal.
+            logger.warning(
+                "Demote rung %s -> %s raised: %s: %s", component, target, type(e).__name__, e
+            )
+            continue
+        if props is None:
+            continue
+        # Same density pass the main path applies to planned tabs — a demoted
+        # info_grid must obey the identical text caps and min-item folding.
+        props = enforce_density(target, props)
+        if props is None or not _validate_assembled_props(target, props):
+            continue
+        logger.info("[assembly] TAB DEGRADED: %s -> %s", component, target)
+        return target, props
+    return None

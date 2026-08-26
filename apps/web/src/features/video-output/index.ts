@@ -14,7 +14,7 @@ export { TabStateProvider, useTabState } from './contexts/TabStateContext';
 
 // Components
 export { OutputRouter } from './components/OutputRouter';
-export { CollapsibleVideoPlayer } from './components/CollapsibleVideoPlayer';
+export { StreamingPlaceholder, StreamErrorCard } from './components/StreamingPlaceholder';
 
 // Utilities
 export { OUTPUT_TYPE_CONFIG, getOutputTypeConfig } from './lib/output-type-config';

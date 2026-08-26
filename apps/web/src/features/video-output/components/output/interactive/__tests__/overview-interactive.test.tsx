@@ -74,7 +74,7 @@ describe('OverviewInteractive', () => {
       />,
     );
     expect(screen.getByText('More takeaways')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('More takeaways'));
+    // Extra takeaways are visible by default — no expand click required.
     expect(screen.getByText('Extra 1')).toBeInTheDocument();
     expect(screen.getByText('Extra 2')).toBeInTheDocument();
   });
@@ -97,16 +97,16 @@ describe('OverviewInteractive', () => {
     );
     expect(screen.getByText('Highlights')).toBeInTheDocument();
     expect(screen.queryByText('More takeaways')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText('Highlights'));
+    // Highlights are visible by default — no expand click required.
     expect(screen.getByText('Curated highlight one')).toBeInTheDocument();
     // The fallback content should not leak through when curated highlights win.
     expect(screen.queryByText('Extra fallback only')).not.toBeInTheDocument();
   });
 
-  it('should render tips (collapsed by default; expand to view)', () => {
+  it('should render tips visible by default', () => {
     render(<OverviewInteractive tips={['Book early', 'Learn basic phrases']} />);
     expect(screen.getByText('Tips')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Tips'));
+    // Tips content is expanded by default — no click needed to read it.
     expect(screen.getByText('Book early')).toBeInTheDocument();
   });
 

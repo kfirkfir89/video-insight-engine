@@ -19,8 +19,8 @@ Complete guide for vie-web frontend development: React, TypeScript, Tailwind v4,
 | React Query     | 5.x     | Server state      |
 | Zustand         | 5.x     | Client state      |
 | React Router    | 7.x     | Routing           |
-| React Hook Form | 7.x     | Forms             |
-| Vercel AI SDK   | latest  | LLM streaming     |
+
+> Not installed (removed 2026-07 dead-deps cleanup): React Hook Form, Vercel AI SDK. Forms use controlled inputs + Zod; LLM streaming is hand-rolled SSE (`lib/streaming/`).
 
 ### Environment Variables
 
@@ -46,14 +46,14 @@ apps/web/src/
 │   ├── GeneratePage.tsx            # URL intake + first-run onboarding (value-prop chips, example disclosure, sample URL)
 │   ├── VideoDetailPage.tsx         # Video detail + output rendering
 │   ├── SharePage.tsx               # Public share view (/s/:slug)
-│   └── dev/DesignSystemPage.tsx
+│   └── dev/                        # DesignSystemPage, StreamingPreviewPage (/dev/streaming-preview, DEV-only)
 │
 ├── components/                     # SHARED components
-│   ├── ui/                         # shadcn/ui primitives
+│   ├── ui/                         # shadcn/ui primitives + Lightbox (frame viewer, capture-phase Escape)
 │   ├── vie/                        # VIE Component Library
 │   │   ├── index.ts                # Barrel — import from '@/components/vie'
-│   │   ├── cards/                  # GlassCard, ExpandableCard, HeroCard, VideoHero
-│   │   ├── data/                   # ScoreRing, StatPill, Badge, Timer, Timestamp
+│   │   ├── cards/                  # GlassCard, ExpandableCard, HeroCard, VideoHero (+ domain-meta.ts)
+│   │   ├── data/                   # ScoreRing, StatPill, Badge, Timer, Timestamp, VisualEvidence/EvidenceImage, CostDisplay, KeyValue
 │   │   ├── content/                # TextBlock, CodeSnippet, QuoteBlock, TableView
 │   │   ├── navigation/            # TabBar, ProgressBar, SectionNav, Stepper
 │   │   ├── interactive/           # CheckItem, FlipCard, OptionGrid, ActionButton
@@ -85,19 +85,22 @@ apps/web/src/
 │   │
 │   └── video-output/               # Video output rendering (40+ files)
 │       ├── components/
-│       │   ├── OutputRouter.tsx     # Routes v2 (assembledTabs) or v1 fallback
-│       │   ├── CollapsibleVideoPlayer.tsx
+│       │   ├── OutputRouter.tsx     # Routes v2 (assembledTabs) or v1 fallback; filmstrip-tab suppression
+│       │   ├── StreamingPlaceholder.tsx  # StreamingPlaceholder + StreamErrorCard (pre-tab states)
 │       │   └── output/
 │       │       ├── ComposableOutput.tsx, ComposableOutputV1.tsx
-│       │       ├── DisplaySection.tsx, TabLayout.tsx, CrossTabLink.tsx
-│       │       ├── RecipePlayer.tsx, RecipeStepView.tsx, RecipeIngredientPanel.tsx
-│       │       ├── interactive/    # 17+ interactive renderers (Quiz, FlashDeck, etc.)
-│       │       ├── skeletons/      # Loading skeletons
+│       │       ├── component-registry.tsx  # COMPONENT_REGISTRY (29 renderers)
+│       │       ├── DisplaySection.tsx, TabLayout.tsx, CrossTabLink.tsx, TabIntro.tsx
+│       │       ├── TabCoordinationContext.tsx  # Cross-tab state coordination
+│       │       ├── FlowPlayer.tsx, flow-modes.tsx, RecipePlayer.tsx, RecipeStepView.tsx
+│       │       ├── interactive/    # Interactive renderers (+ MomentGalleryCard,
+│       │       │                   #   MomentTimelineRow, moment-utils)
 │       │       └── lib/            # tab-data-resolver, format-utils, ingredient-step-matcher
-│       ├── hooks/                  # use-summary-stream, use-processing-manager
+│       ├── hooks/                  # use-summary-stream, use-processing-manager, use-focus-band
 │       ├── stores/                 # processing-store
 │       ├── contexts/               # TabStateContext, VideoPlayerContext
-│       └── lib/                    # streaming/ (SSE pipeline), synthesis-utils, output-type-config
+│       └── lib/                    # streaming/ (SSE pipeline incl. resolve-display-tabs),
+│                                   #   synthesis-utils, output-type-config, tab-prop-schemas (Zod boundary)
 │
 ├── contexts/                       # App-level React contexts
 │   └── DirectionContext.tsx        # RTL/LTR direction + language provider
@@ -523,7 +526,7 @@ The app uses `babel-plugin-react-compiler` for automatic memoization. This elimi
 | **Remote State** | User data, videos, folders | React Query     | API cache    |
 | **Local State**  | Auth tokens, theme         | Zustand         | localStorage |
 | **UI State**     | Modal open, loading        | useState        | Ephemeral    |
-| **Form State**   | Input values, validation   | React Hook Form | Ephemeral    |
+| **Form State**   | Input values, validation   | Controlled inputs + Zod | Ephemeral |
 | **URL State**    | Filters, pagination        | URL params      | Shareable    |
 
 ## Remote State (React Query)
@@ -614,45 +617,37 @@ const logout = useAuthStore((state) => state.logout);
 const { user, accessToken, logout } = useAuthStore(); // Re-renders on ANY change
 ```
 
-## Form State (React Hook Form)
+## Form State (Controlled Inputs)
+
+React Hook Form is **not installed** (removed in the 2026-07 dead-deps cleanup). Forms are plain controlled inputs with `useState` + explicit validation on submit — see `features/video-output/components/VideoIntakeForm.tsx` for the canonical pattern:
 
 ```tsx
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-
-const schema = z.object({
-  url: z.string().url().refine(
-    (url) => url.includes("youtube.com") || url.includes("youtu.be"),
-    "Must be a YouTube URL"
-  ),
-});
-
 function AddVideoForm() {
-  const form = useForm({ resolver: zodResolver(schema), defaultValues: { url: "" } });
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!isValidYouTubeUrl(url)) {
+      setError("Must be a YouTube URL");
+      return;
+    }
+    setError(null);
+    onSubmit(url);
+  };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)}>
-        <FormField
-          control={form.control}
-          name="url"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>YouTube URL</FormLabel>
-              <FormControl>
-                <Input placeholder="https://youtube.com/watch?v=..." {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <Button type="submit">Submit</Button>
-      </form>
-    </Form>
+    <form onSubmit={handleSubmit}>
+      <Input value={url} onChange={(e) => setUrl(e.target.value)}
+             placeholder="https://youtube.com/watch?v=..." />
+      {error && <p className="text-destructive text-sm">{error}</p>}
+      <Button type="submit">Submit</Button>
+    </form>
   );
 }
 ```
+
+Zod is used at data boundaries (SSE payloads via `sse-validators.ts`, tab props via `tab-prop-schemas.ts`), not for form state.
 
 ---
 
@@ -666,19 +661,21 @@ The output system renders video summaries using component-addressed tabs assembl
 Backend Assembly → TabEntry[] → SSE tab_ready events
                                       ↓
 OutputRouter → ComposableOutput → COMPONENT_REGISTRY → Interactive Renderers
-              (v2 path)                                  (21 components)
+              (v2 path)                                  (29 components)
                                       or
               ComposableOutputV1 → resolveTabData → renderInteractive
               (v1 fallback)
 ```
 
+`COMPONENT_REGISTRY` lives in `output/component-registry.tsx` (`ComposableOutput.tsx` re-exports `REGISTERED_COMPONENT_NAMES` for back-compat).
+
 ## Component Layer Model
 
 ```
-Layer 1: shadcn/ui    (components/ui/)        — Accessible primitives (Button, Dialog, etc.)
-Layer 2: VIE Library  (components/vie/)       — Domain-free, reusable presentation components
-Layer 3: Interactives (output/interactive/)   — Self-contained mini-apps with state
-Layer 4: Shell        (video-detail/shell/)   — State coordination (TabCoordinationContext)
+Layer 1: shadcn/ui    (components/ui/)                    — Accessible primitives (Button, Dialog, etc.)
+Layer 2: VIE Library  (components/vie/)                   — Domain-free, reusable presentation components
+Layer 3: Interactives (output/interactive/)               — Self-contained mini-apps with state
+Layer 4: Shell        (features/video-output/components/output/) — State coordination (TabCoordinationContext)
 ```
 
 **Rules:**
@@ -698,39 +695,56 @@ Layer 4: Shell        (video-detail/shell/)   — State coordination (TabCoordin
 | `TabLayout` | Tab shell with navigation, progress, celebrations |
 | `TabCoordinationContext` | Cross-tab state (activeTab, completedTabs) |
 | `CrossTabLink` | Navigates between related tabs |
-| `CollapsibleVideoPlayer` | CSS-hidden YouTube player with `seekTo` support |
+| `VideoHero` (+ `VideoPlayerContext`) | Hosts the **inline** YouTube player (the old `CollapsibleVideoPlayer` was deleted). Context exposes `seekTo`, `registerPlayerAnchor` (scroll-into-view on seek), a `hasEngaged` latch, and Escape-to-close (capture-aware, skips typing targets). |
+| `StreamingPlaceholder` / `StreamErrorCard` | Pre-tab streaming states and stream-failure card with retry (replaced `OutputSkeleton`) |
 | `RecipePlayer` | Cooking mode: ingredient panel + step-by-step player |
 
-### COMPONENT_REGISTRY (21 Interactive Renderers)
+### COMPONENT_REGISTRY (29 Renderers)
 
-Each tab's `component` field maps to a renderer in `ComposableOutput.tsx`:
+Each tab's `component` field maps to a renderer in `output/component-registry.tsx`. Legacy v1 keys (`quiz`, `code_explorer`, `exercise_tracker`, `scenario`, `verdict`, `gallery`, `lyrics_player`, `timeline`, `clip_player`) were retired in interactive-overhaul-v2 — cached rows with those keys fall through to `display_section`.
+
+**Primary tab renderers (23):**
 
 | Component Name | Renderer | Description |
 |---------------|----------|-------------|
-| `overview` | OverviewInteractive | Collapsible sections, stat pills, bookmarking |
-| `info_grid` | InfoGridInteractive | Search/filter, click-to-copy, expandable rows, sort |
+| `overview` | OverviewInteractive | Takeaways, highlights, tips, sibling-tab nav grid |
+| `info_grid` | InfoGridInteractive | Key/value grid with sections, per-item frame evidence, headline chips |
 | `checklist` | ChecklistInteractive | Checkbox items, serving scaler, grouped items |
 | `step_player` | StepByStepInteractive | Progress tracking, timers, video sync |
-| `comparison` | ComparisonInteractive | Per-row winner highlighting, verdict ScoreRing, pros/cons |
-| `quiz` | QuizInteractive | Streak counter, end summary, retry, celebration |
+| `comparison` | ComparisonInteractive | Per-row winner highlighting, verdict ScoreRing, pros/cons (with counts) |
+| `comparison_radar` | ComparisonInteractive (`view="radar"`) | Same renderer with the radar hero forced on |
 | `flash_deck` | FlashDeckInteractive | Keyboard + touch swipe, shuffleable |
-| `scenario` | ScenarioInteractive | Scenario-based learning exercises |
-| `code_explorer` | CodeExplorer | Code snippets with navigate/showAll modes |
-| `spot_explorer` | SpotExplorer | Location spots with sections |
-| `exercise_tracker` | ExerciseInteractive | Sets/reps, warmup/cooldown, difficulty |
-| `verdict` | VerdictInteractive | Sub-category ScoreRings, agree/disagree poll, expandable |
+| `spot_explorer` | SpotExplorer | Location spots with sections, "All" pill, grid mode (>8 spots with frames), pronunciation |
 | `budget` | BudgetInteractive | Editable amounts, SVG donut chart, savings calculator |
-| `moment_track` | MomentTrack | Unified track for navigation points + replayable highlight spans, mood/type filters, live progress on active clip, share-link with `#t=start[,end]` |
-| `gallery` | GalleryInteractive | Grid/carousel/hero_stack layouts, seek |
-| `lyrics_player` | LyricsPlayerInteractive | Synced lyrics sections with seek |
-| `display_section` | DisplaySection | Generic data-driven fallback renderer |
+| `moment_track` | MomentTrack | **Value gallery** (not a nav strip): grid/timeline view toggle persisted at `localStorage['vie-moment-view']` (default grid). Clicking a card opens the `Lightbox` (never seeks); the explicit **Jump** pill seeks. Timeline mode uses the `use-focus-band` scroll focus band. Split into `MomentGalleryCard` / `MomentTimelineRow` / `moment-utils`. |
+| `video_filmstrip` | VideoFilmstrip (`mode="tab"`) | Enriched scrubber: wide cells, visible captions, whole-cell seek. The filmstrip tab is **suppressed by OutputRouter** when a `moment_track` tab has ≥8 frame-backed items. |
+| `code_playground` | CodePlayground | Tech snippets with run/navigate modes |
+| `quiz_arena` | QuizArena | Quiz flow (educational domains only — see `domains.json` `forbidden`) |
+| `packing_mission` | PackingMission | Gamified packing checklist |
+| `workout_room` | WorkoutRoom | Exercises + warmup/cooldown with seek |
+| `lyrics_karaoke` | LyricsKaraoke | Per-line synced karaoke view |
+| `claims_tracker` | ClaimsTracker | News claims with evidence citations |
+| `tier_list` | TierList | Ranked tiers (single-hue ramp) |
+| `formation_diagram` | FormationDiagram | Read-only React Flow pitch (lazy-loaded) |
 | `concept_canvas` | ConceptCanvas | Dagre-laid grouped lanes + docked inspector; typed edge relations (lazy-loaded) |
 | `step_flow_canvas` | StepFlowCanvas | Step graph laid out via the shared canvas layout (lazy-loaded) |
 | `connect_canvas` | ConnectCanvas | Graded match-the-pairs canvas (lazy-loaded) |
-| `lyrics_karaoke` | LyricsKaraoke | Per-line synced karaoke view |
+| `display_section` | DisplaySection | Generic data-driven fallback renderer |
 
-> The canvas renderers (`concept_canvas`, `step_flow_canvas`, `connect_canvas`)
-> are `React.lazy`-loaded and built on the shared Canvas System below.
+**Secondary / attachment renderers (6)** — rendered by `TabAttachments` around a primary, never as standalone tabs:
+
+| Component Name | Renderer | Description |
+|---------------|----------|-------------|
+| `stat_banner` | StatBanner | Stat pill row |
+| `tip_callout` | TipCallout | Tip/warning/note callout |
+| `summary_header` | SummaryHeader | Section summary header |
+| `diagram_card` | DiagramCard | Small node/edge diagram (lazy-loaded) |
+| `frame_strip` | VideoFilmstrip (`mode="overlay"`) | Thin frame strip overlay |
+| `quick_quiz` | QuizArena (single question) | One-question quiz attachment |
+
+> The canvas renderers (`concept_canvas`, `step_flow_canvas`, `connect_canvas`,
+> `formation_diagram`, `diagram_card`) are `React.lazy`-loaded and built on the
+> shared Canvas System below.
 
 ### Canvas System (React Flow)
 
@@ -751,10 +765,16 @@ renderers. Dependency: `@dagrejs/dagre` (^3.0.0).
 ### Data Flow
 
 ```
-1. SSE triage_complete → tabs skeleton appears
-2. SSE tab_ready[]     → each tab rendered progressively
+1. SSE triage_complete → domain accent binds, pending-tab strip appears (VideoHero)
+2. SSE tab_ready[]     → each tab rendered progressively, spliced by `position`
+                         (moment_track tabs are held back server-side while
+                         exact-timestamp frames are filled, then stream last)
 3. SSE complete        → celebration, final state
 ```
+
+On page load, `lib/streaming/resolve-display-tabs.ts` decides between the DB
+document and the live stream: a **completed DB doc beats a partial streamed
+set**; the stream only wins on a completed video if it holds more tabs.
 
 ### Tab Coordination
 
@@ -846,35 +866,11 @@ This activates `prose prose-sm dark:prose-invert` classes used by MarkdownConten
 
 # AI Integration
 
-## Vercel AI SDK for Streaming
+## Assistant Chat Streaming
 
-```tsx
-import { useVideoChat } from "@/hooks/use-streaming-chat";
-import { StreamingText } from "@/components/ui/streaming-text";
+The Vercel AI SDK is **not used** (removed with the dead-deps cleanup). Assistant chat is hand-rolled streaming in `features/sidebar/hooks/use-sidebar-chat.ts`: every message (single-video or library mode) goes through a streamed fetch to the assistant service, with a streaming assistant-message placeholder, tool-call step lines, and one folder/video tree refetch per turn on the chat `done` event. UI panels live in `components/rag/` (`RAGChatPanel`, `RAGSourceCard`).
 
-function ChatComponent({ videoSummaryId }) {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } =
-    useVideoChat({ videoSummaryId });
-
-  return (
-    <div>
-      {messages.map((m) => (
-        <div key={m.id}>
-          {m.role === "assistant" ? (
-            <StreamingText content={m.content} isLoading={isLoading} />
-          ) : (
-            m.content
-          )}
-        </div>
-      ))}
-      <form onSubmit={handleSubmit}>
-        <input value={input} onChange={handleInputChange} />
-        <button type="submit">Send</button>
-      </form>
-    </div>
-  );
-}
-```
+Summary streaming (the pipeline SSE) is separate — see `features/video-output/lib/streaming/` and the Processing Store State section below.
 
 ## WebSocket Connection
 
@@ -952,8 +948,11 @@ function AppRoutes() {
 ```typescript
 interface ProcessingStreamState {
   phase: StreamPhase;
-  // StreamPhase = "idle" | "connecting" | "metadata" | "triage" | "extraction"
-  //             | "enrichment" | "synthesis" | "done" | "cancelled" | "error"
+  // StreamPhase = "idle" | "connecting" | "metadata" | "transcript" | "extraction"
+  //             | "building" | "translation" | "done" | "cancelled" | "error"
+  // Raw SSE phases (transcript_cached, whisper_transcription, translation, …)
+  // are collapsed to this UI vocabulary in stream-event-processor.ts
+  // (SSE_PHASE_MAP), with the flavor preserved in StreamState.phaseDetail.
   metadata: {
     title?: string;
     channel?: string;
@@ -1064,6 +1063,12 @@ Living style guide for all design tokens and components.
 | `components/dev/design-system/UIShowcase.tsx` | UI primitives showcase |
 | `components/dev/design-system/VIELibraryShowcase.tsx` | VIE component library showcase |
 | `lib/dev/mock-interactive-blocks.ts` | Mock data for interactive components |
+
+## Streaming Preview Page (`/dev/streaming-preview`)
+
+DEV-only harness (`pages/dev/StreamingPreviewPage.tsx`, lazy-loaded) that drives
+`StreamingPlaceholder`, `StreamErrorCard`, and `VideoHero` through canned
+streaming states — useful for iterating on pre-tab UI without running the pipeline.
 
 ### Production Safety
 

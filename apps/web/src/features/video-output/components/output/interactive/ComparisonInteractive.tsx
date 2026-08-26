@@ -1,5 +1,5 @@
 import { memo, useState, useMemo } from 'react';
-import { Check, X, ChevronDown, ChevronUp, Scale } from 'lucide-react';
+import { Check, X, Scale } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GlassCard, FadeIn, Badge, ScoreRing } from '@/components/vie';
 import { useMediaQuery } from '@/hooks/use-media-query';
@@ -48,8 +48,6 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
 }: ComparisonInteractiveProps) {
   const t = useLabels();
   const [activeRow, setActiveRow] = useState(0);
-  const [prosExpanded, setProsExpanded] = useState(true);
-  const [consExpanded, setConsExpanded] = useState(true);
 
   // Radar and table are mutually exclusive views, not a stacked pair. Mobile
   // opens on the table (the radar is cramped under ~340px); desktop opens on
@@ -178,60 +176,38 @@ export const ComparisonInteractive = memo(function ComparisonInteractive({
           {hasPros && (
             <FadeIn>
               <GlassCard variant="outlined" className="space-y-2">
-                <button
-                  onClick={() => setProsExpanded((p) => !p)}
-                  className="w-full flex items-center justify-between"
-                >
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-success flex items-center gap-1.5">
-                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                    {t.goForIt}
-                    <Badge variant="success" className="text-xs font-semibold tabular-nums">{pros.length}</Badge>
-                  </h4>
-                  {prosExpanded
-                    ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
-                    : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                  }
-                </button>
-                {prosExpanded && (
-                  <ul className="space-y-1.5">
-                    {pros.map((pro, i) => (
-                      <li key={i} className="flex items-baseline gap-2 text-sm leading-relaxed text-muted-foreground">
-                        <span className="w-1 h-1 rounded-full bg-success/70 shrink-0 translate-y-1.5" />
-                        {pro}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-success flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                  {t.goForIt}
+                  <Badge variant="success" className="text-xs font-semibold tabular-nums">{pros.length}</Badge>
+                </h4>
+                <ul className="space-y-1.5">
+                  {pros.map((pro, i) => (
+                    <li key={i} className="flex items-baseline gap-2 text-sm leading-relaxed text-muted-foreground">
+                      <span className="w-1 h-1 rounded-full bg-success/70 shrink-0 translate-y-1.5" />
+                      {pro}
+                    </li>
+                  ))}
+                </ul>
               </GlassCard>
             </FadeIn>
           )}
           {hasCons && (
             <FadeIn>
               <GlassCard variant="outlined" className="space-y-2">
-                <button
-                  onClick={() => setConsExpanded((p) => !p)}
-                  className="w-full flex items-center justify-between"
-                >
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-destructive flex items-center gap-1.5">
-                    <X className="h-3.5 w-3.5" aria-hidden="true" />
-                    Skip it if...
-                    <Badge variant="destructive" className="text-xs font-semibold tabular-nums">{cons.length}</Badge>
-                  </h4>
-                  {consExpanded
-                    ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
-                    : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                  }
-                </button>
-                {consExpanded && (
-                  <ul className="space-y-1.5">
-                    {cons.map((con, i) => (
-                      <li key={i} className="flex items-baseline gap-2 text-sm leading-relaxed text-muted-foreground">
-                        <span className="w-1 h-1 rounded-full bg-destructive/70 shrink-0 translate-y-1.5" />
-                        {con}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-destructive flex items-center gap-1.5">
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                  Skip it if...
+                  <Badge variant="destructive" className="text-xs font-semibold tabular-nums">{cons.length}</Badge>
+                </h4>
+                <ul className="space-y-1.5">
+                  {cons.map((con, i) => (
+                    <li key={i} className="flex items-baseline gap-2 text-sm leading-relaxed text-muted-foreground">
+                      <span className="w-1 h-1 rounded-full bg-destructive/70 shrink-0 translate-y-1.5" />
+                      {con}
+                    </li>
+                  ))}
+                </ul>
               </GlassCard>
             </FadeIn>
           )}
