@@ -22,16 +22,17 @@ Stores: MongoDB 7 (records), Redis 7 (cache + locks), Qdrant (RAG vectors), Rabb
 metadata → [transcript ‖ frames] → visual injection
 → classifier(fast) ‖ plan(Sonnet)   ← "Plan" stage (replaced Manifest+Triage; SSE event still triage_complete)
 → extraction (chunked for >15min) → quality check (retry if <0.6 coverage)
-→ [synthesis ‖ assembly] → enrichment (learning/tech only) → assembly (pure code, no LLM)
+→ [synthesis ‖ assembly] → enrichment (per-domain prompt map) → assembly (code, no LLM calls;
+   holds back moment tabs for exact-timestamp frame fill, then streams them last)
 → [translation] (non-English only) → save + complete
 ```
-- **14 domains** (fitness, food, gaming, language, learning, music, news, podcast, project, review, science, sport, tech, travel — see `domains.json`, the single source) + **2 modifiers** (narrative, finance). 8 `ContentTraits` booleans route components.
-- **16 interactive components** (MomentTrack, StepPlayer, CodeExplorer, SpotExplorer, FlashDeck, Checklist, Gallery, LyricsPlayer, ComparisonTable, ProConList, RatingBreakdown, BudgetCalculator, GearList, QuizChallenge, ScenarioExplorer, ResourceHub).
-- **Frames:** yt-dlp 360p → FFmpeg scene-detect (~200) → OpenCV scoring → ~25 to S3 → Tesseract OCR + Sonnet vision → `[VISUAL at M:SS]` injected into transcript.
+- **14 domains** (fitness, food, gaming, language, learning, music, news, podcast, project, review, science, sport, tech, travel — see `domains.json`, the single source) + **2 modifiers** (narrative, finance). 8 `ContentTraits` booleans route components. `domains.json` also carries per-domain **forbidden** components (quiz_arena = educational-only), format **playbooks** (`gaming:unboxing`, `review:unboxing`), and **visualCriticality** tiers for the frame pipeline.
+- **29 registered components** (snake_case, same set in the TS `COMPONENT_REGISTRY` and Python `ASSEMBLER_REGISTRY`): moment_track, step_player, spot_explorer, flash_deck, checklist, info_grid, overview, comparison(+_radar), budget, code_playground, quiz_arena, packing_mission, workout_room, lyrics_karaoke, video_filmstrip, claims_tracker, tier_list, formation_diagram, 3 canvases, display_section + 6 attachments (stat_banner, tip_callout, summary_header, diagram_card, frame_strip, quick_quiz).
+- **Frames:** two-pass — yt-dlp worst-quality (player client `android`) → FFmpeg scene-detect (~200) → OpenCV 6-signal scoring → adaptive visual tier → ~25 winners re-extracted at **720p** (local-download fallback) → S3 `scenes-v3/` + manifest v2 (persists vision descriptions; `hiresCount==0` = cache miss) → Tesseract OCR + fast-tier vision → `[VISUAL at M:SS]` injected into transcript.
 - **LLM:** LiteLLM multi-provider (default Sonnet 4.6 / fast Haiku 4.5). Anthropic prompt caching on static prompt halves.
 
 ## Output shape
-`VIEResponse = { meta, tabs[] }`. Each tab = `{ id, label, emoji, component, props, crossTabLinks? }`. Frontend does `COMPONENT_REGISTRY[tab.component]` → render. Every timestamp is clickable → seeks a collapsible YouTube player. Tabs stream in progressively (`tab_ready` events).
+`VIEResponse = { meta, tabs[] }`. Each tab = `{ id, label, emoji, component, props, crossTabLinks?, attachments?, degradedFrom? }`. Frontend does `COMPONENT_REGISTRY[tab.component]` → render. Timestamps seek an **inline** YouTube player in the video hero (moment cards open a frame Lightbox instead; the explicit Jump button seeks). Tabs stream in progressively (`tab_ready` events, each with a `position` to slot by — moment tabs arrive last).
 
 ## Caching & "never pay twice" (the defining concern)
 - **3 dedup layers:** per-user idempotency hash → cross-user content-addressed `dedupKey` (no userId) → Redis dispatch guard. Backstop = summarizer pipeline lock.

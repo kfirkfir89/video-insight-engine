@@ -243,23 +243,28 @@ The frontend checks for `assembledTabs` first (v2 path). If absent, it falls bac
 
 ### Assembly Stage as Cross-Cutting Concern
 
-The assembly stage (`services/summarizer/src/services/pipeline/assembly.py`) produces `TabEntry[]` that must be understood by both:
+The assembly stage (`services/summarizer/src/services/pipeline/assembly/`, entry `core.py`) produces `TabEntry[]` that must be understood by both:
 
-- **Python (summarizer)**: Produces and stores the assembled tabs
-- **TypeScript (web)**: Renders tabs via `COMPONENT_REGISTRY` in `ComposableOutput.tsx`
+- **Python (summarizer)**: Produces and stores the assembled tabs (`assembly/registry.py` — `ASSEMBLER_REGISTRY`, 29 assemblers)
+- **TypeScript (web)**: Renders tabs via `COMPONENT_REGISTRY` in `features/video-output/components/output/component-registry.tsx`
 
-Each `TabEntry` has: `{ id, label, emoji, component, props, crossTabLinks? }`
+Each `TabEntry` has: `{ id, label, emoji, component, props, crossTabLinks?, attachments?, degradedFrom? }`
 
-The `component` field maps to a React renderer. Adding a new component requires updates in both the Python assembler registry and the TypeScript component registry.
+The `component` field maps to a React renderer. Adding a new component requires updates in:
+
+1. the Python assembler registry (`assembly/registry.py`),
+2. the TypeScript component registry (`component-registry.tsx`),
+3. `packages/shared/src/config/domains.json` (`components` list, `densityGates`, per-domain `domainRequirements`, and a `playbooks` entry if format-specific), and
+4. the frontend Zod prop boundary in `apps/web/src/features/video-output/lib/tab-prop-schemas.ts`.
 
 ### Type Sync Checklist
 
 When adding a new type:
 - [ ] Define in `packages/types` (TypeScript)
-- [ ] Define in Python service schemas
+- [ ] Define in Python service schemas (`domain_types.py` — undeclared fields silently drop on `model_dump`)
 - [ ] Update API docs with examples
 - [ ] Verify JSON serialization matches
-- [ ] If TabEntry-related: update both assembly.py and ComposableOutput.tsx
+- [ ] If TabEntry-related: update the assembly package, `component-registry.tsx`, and `tab-prop-schemas.ts`
 
 ---
 

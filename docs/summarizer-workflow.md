@@ -44,7 +44,7 @@ The producer calls **`stream_summarization()`** (`routes/pipeline_runner.py:264`
 1. Reads `youtubeId` + `userId` + `requestId` from the Mongo `entry` and structlog contextvars.
 2. Sets LLM cost-tracking contextvars (`llm_video_id_var`, `llm_user_id_var`, `llm_request_id_var`, `llm_video_summary_id_var`) — so every `llm_usage` row this run writes is attributable to user/video/run/request.
 3. Opens the **Langfuse parent trace** (`pipeline_trace`) — opened *before* the cache lookup so even cache hits are observable.
-4. **Redis cache check**: if `response_cache.get_response(youtube_id)` returns a completed payload → stream it instantly (`$0.00`, the "same video = instant serve") and return. (Skipped when `force_refresh=True`, used by the dev provider-override flow.)
+4. **Redis cache check**: if `response_cache.get_response(youtube_id)` returns a completed payload → stream it instantly (`$0.00`, the "same video = instant serve") and return. (Skipped when `force_refresh=True` — set by the dev provider-override flow, by `bypassCache=true` submissions via the worker payload, or by the `forceRefresh` flag the api stamps on the version row.)
 5. On miss → sets Mongo status `PROCESSING`, builds the **`PipelineContext`**, and calls **`_run_pipeline_phases()`** (`routes/pipeline_runner.py:143`).
 
 ---
@@ -131,9 +131,9 @@ connection at its 300s body timeout.
 
 ### Phase 2b — Frames · `phases/frames.py`
 
-- **Calls:** `scene_extractor.extract_scene_keyframes()` (yt-dlp lowest-quality download + FFmpeg scene detection + local frame scoring), then **in parallel**:
+- **Calls:** `scene_extractor.extract_scene_keyframes()` — manifest-v2 S3 cache check first (`scenes-v3/manifest.json`; `hiresCount == 0` counts as a miss so 403-era low-res runs self-heal); on miss: yt-dlp worst-quality download + FFmpeg scene detection + local frame scoring (pass 1), adaptive visual tier (`visual_tier.py`), then a 720p hi-res re-extraction of the selected frames (`hires_refiner.py`, with `local_video.py` download fallback) — then **in parallel**:
   - `scene_frames.process_scene_frames()` — OCR + S3 presigned URLs,
-  - `_run_vision_analysis()` → `frame_analyzer.analyze_frames_with_vision()`.
+  - `_run_vision_analysis()` → `frame_analyzer.analyze_frames_with_vision()` (descriptions persisted back into the manifest).
 - **Prompt:** vision prompt inside `frame_analyzer` (vision model — Haiku-4.5), gated by `FRAME_VISION_ENABLED`.
 - **Out:** `ctx.scene_frames_all`, `ctx.scene_frames_gallery`, `ctx.scene_frames_for_assembly`, `ctx.frame_descriptions` (`[VISUAL at M:SS]` captions).
 - **Non-critical:** any failure logs a warning and the pipeline continues without frames.

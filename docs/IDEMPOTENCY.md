@@ -116,10 +116,12 @@ Do **NOT** bump for:
 
 ### Procedure
 
-1. Pick a new version string. Convention: `v{N}` (e.g. `v6` → `v7`). Date-suffixed (`v7-2026-07-08`) is also fine for traceability.
+1. Pick a new version string. Convention: `v{N}` (e.g. `v8` → `v9`). Date-suffixed (`v9-2026-08-25`) is also fine for traceability.
 2. Edit `version` in `packages/shared/src/config/pipeline-version.json` — the single source for the api AND the summarizer.
 3. Restart both services (compose mounts the JSON read-only into both containers; both log `pipeline_version` at boot — the two lines must match).
 4. Old keys remain in `idempotencyKeys` until their TTL expires; they just no longer match new submissions. Old cache rows keep serving to users who already own them until they resubmit (stamped-stale docs then regen on the same row).
+
+**Current version: `v8`** (2026-08: v6→v7 consistency overhaul — playbooks/forbidden, adaptive vision tiers; v7→v8 moment redesign + exact-timestamp frame fill + hi-res frame pipeline).
 
 ### Unification note (2026-07-08)
 
@@ -128,6 +130,13 @@ Before single-sourcing, the api hardcoded `v2` while the summarizer hardcoded `v
 ## Bypass for power users
 
 `POST /api/videos?bypassCache=true` skips the idempotency gate entirely. Use when a user explicitly wants a fresh run (admin tool, paid feature). The route's existing `bypassCache` flag handles this.
+
+Beyond the gate, `bypassCache` also has to defeat the summarizer's **Redis response cache** (keyed by youtubeId + PIPELINE_VERSION, so a version bump alone doesn't help a same-version refresh). Two channels carry the signal, because either side can win the producer race:
+
+1. The api stamps `forceRefresh: true` on the fresh `videoSummaryCache` version row; `pipeline_runner.stream_summarization` reads it (`force_refresh or entry.forceRefresh`) and the repository `$unset`s it on completion.
+2. Queue submissions pass `force_refresh` in the worker payload (`drive_pipeline` → `produce_to_broker(force_refresh=…)`).
+
+Either one makes the summarizer skip the Redis response cache and run the pipeline fresh.
 
 ## Collection schema
 

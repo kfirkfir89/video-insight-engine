@@ -16,7 +16,7 @@ Personal video knowledge management system — YouTube URL to interactive knowle
 | Service | Tech | Port |
 |---------|------|------|
 | vie-api | Node.js + Fastify + TypeScript | 3000 |
-| vie-web | React 19 + Vite + TypeScript + AI SDK | 5173 |
+| vie-web | React 19 + Vite + TypeScript | 5173 |
 | vie-summarizer | Python + FastAPI + LiteLLM | 8000 |
 | vie-assistant | Python + FastAPI + LiteLLM + Qdrant | 8001 |
 | vie-admin | Python + FastAPI + React + Recharts | 8002 |
@@ -43,6 +43,9 @@ Personal video knowledge management system — YouTube URL to interactive knowle
 | `/test {file}` | Generate tests |
 | `/ship` | Pre-deploy checklist |
 | `/security-check` | Security audit |
+| `/list-tasks` | List active tasks in `dev/active/` |
+| `/task-plan-update` | Update task docs before context compaction |
+| `/audit-infra` | Audit `.claude/` infra for drift |
 
 ## Project Structure
 
@@ -68,7 +71,10 @@ video-insight-engine/
 | Multi-service contracts | [docs/CROSS-CUTTING.md](./docs/CROSS-CUTTING.md) |
 | System architecture | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) |
 | API contracts | [docs/API-REFERENCE.md](./docs/API-REFERENCE.md) |
-| Service docs | [docs/SERVICE-API.md](./docs/SERVICE-API.md), [SERVICE-SUMMARIZER.md](./docs/SERVICE-SUMMARIZER.md), [SERVICE-ASSISTANT.md](./docs/SERVICE-ASSISTANT.md) |
+| Service docs | [docs/SERVICE-API.md](./docs/SERVICE-API.md), [SERVICE-SUMMARIZER.md](./docs/SERVICE-SUMMARIZER.md), [SERVICE-ASSISTANT.md](./docs/SERVICE-ASSISTANT.md), [SERVICE-ADMIN.md](./docs/SERVICE-ADMIN.md) |
+| Pipeline call-order walkthrough | [docs/summarizer-workflow.md](./docs/summarizer-workflow.md) |
+| Compose, env vars, backup/restore, prod deploy | [docs/INFRASTRUCTURE.md](./docs/INFRASTRUCTURE.md) |
+| July 2026 audit scorecard (historical) | [docs/AUDIT-2026-07.md](./docs/AUDIT-2026-07.md) |
 | Frontend patterns | [docs/FRONTEND.md](./docs/FRONTEND.md) |
 | LLM cost & cache crediting | [docs/llm-cost-model.md](./docs/llm-cost-model.md) |
 | LLM tracing, prompt registry, faithfulness, request-id, Sentry | [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md) |
@@ -85,4 +91,4 @@ curl http://localhost:3000/health && curl http://localhost:8000/health
 open http://localhost:5173
 ```
 
-This is a monorepo with 4 services (api, web, summarizer, assistant), shared packages (@vie/types, @vie/shared, llm-common), Redis+MongoDB caching (same video = instant serve at $0.00), and Qdrant for RAG-powered video chat. When the skill activation hook fires, always read SKILL.md and all suggested resources before writing any code — this is mandatory with no exceptions. Follow conventional commits, never commit to main directly, and validate all user input at system boundaries.
+This is a monorepo with 5 services (api, web, summarizer, assistant, admin), shared packages (@vie/types, @vie/shared, llm-common), Redis+MongoDB caching (same video = instant serve at $0.00), and Qdrant for RAG-powered video chat. When the skill activation hook fires, always read SKILL.md and all suggested resources before writing any code — this is mandatory with no exceptions. Follow conventional commits, never commit to main directly, and validate all user input at system boundaries.

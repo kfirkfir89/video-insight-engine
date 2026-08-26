@@ -53,16 +53,28 @@ services/summarizer/
     │   ├── pipeline/             # Plan-based summarization pipeline
     │   │   ├── classifier.py         # LLM domain+format+traits classifier (fast model, concurrent)
     │   │   ├── plan.py               # Plan stage → merged manifest+triage in single Sonnet call
+    │   │   │                         #   (+ _render_playbook, _enforce_domain_policy)
     │   │   ├── triage.py             # Triage validation/fallback (TriageResult model + tab validation)
     │   │   ├── prompt_builder.py     # Schema-injection prompt builder + video_context
     │   │   ├── extractor.py          # Adaptive extraction (single/overflow/chunked) + prompt caching
     │   │   ├── extraction_quality.py # Extraction quality check + synthesis-fed retry
     │   │   ├── extraction_merger.py  # Per-domain merge + dedup for chunked extraction
-    │   │   ├── enrichment.py         # Quiz/flashcards (all domains via enrichment map)
+    │   │   ├── enrichment.py         # Quiz/flashcards (enrichment map; recall-only for podcast/gaming)
     │   │   ├── synthesis.py          # TLDR, takeaways (Sonnet, hierarchical for long)
-    │   │   ├── assembly.py           # Assembly stage (extraction → component props)
-    │   │   ├── post_processor.py     # Tab cleanup, celebrations, count validation
-    │   │   └── pipeline_helpers.py   # SSE events, timer, data classes
+    │   │   ├── translation.py        # Source-language translation (flat-list batched)
+    │   │   ├── faithfulness.py       # Faithfulness sampling
+    │   │   ├── assembly/             # Assembly package (extraction → component props)
+    │   │   │   ├── core.py               # assemble_response + per-tab drop accounting
+    │   │   │   ├── registry.py           # ASSEMBLER_REGISTRY (29 assemblers) + component inference
+    │   │   │   ├── assemblers_*.py       # primary/learning/overhaul/secondary assembler groups
+    │   │   │   ├── promotion.py          # Degrade-never-drop demote ladder (degradedFrom)
+    │   │   │   ├── moment_frame_fill.py  # Exact-timestamp frame fill for frameless moments
+    │   │   │   ├── attachments.py        # Secondary attachments (excluded_kinds dedup)
+    │   │   │   ├── normalizers.py, density.py, cross_tab.py, text_utils.py
+    │   │   ├── phases/               # Phase runners (metadata, transcript, frames, extraction,
+    │   │   │                         #   enrichment, synthesis, assembly, translation)
+    │   │   ├── post_processor.py     # Tab cleanup, celebrations, count validation (tag-aware)
+    │   │   └── pipeline_helpers.py   # SSE events, timer, data classes, run_task_with_heartbeat
     │   │
     │   ├── transcription/        # Transcript fetching & storage
     │   │   ├── transcript.py         # Transcript cleaning & formatting
@@ -73,15 +85,18 @@ services/summarizer/
     │   │   └── whisper_transcriber.py # Whisper fallback
     │   │
     │   ├── media/                # Frame extraction, vision & S3 storage
-    │   │   ├── scene_extractor.py    # Scene keyframe extraction (yt-dlp + FFmpeg) + smart selection
-    │   │   ├── frame_scorer.py       # Frame scoring (visual, face, text, uniqueness) + selection
-    │   │   ├── frame_analyzer.py     # Vision LLM analysis of top frames (scene type, content)
+    │   │   ├── scene_extractor.py    # Scene keyframe extraction (yt-dlp + FFmpeg) + manifest-v2 cache
+    │   │   ├── frame_scorer.py       # Frame scoring (visual, face, skin, center-detail, text, uniqueness)
+    │   │   ├── frame_analyzer.py     # Vision LLM analysis (scene type, visual_subject, content)
+    │   │   ├── visual_tier.py        # Adaptive visual tier (high/standard/low from metadata)
+    │   │   ├── hires_refiner.py      # Pass-2 720p re-extraction of selected frames (stream-URL seek)
+    │   │   ├── local_video.py        # Local ≤720p download fallback when hi-res seeks 403
     │   │   ├── frame_ocr.py          # OCR on text-heavy frames (Tesseract)
     │   │   ├── frame_extractor.py    # Video frame extraction + S3 upload
     │   │   ├── image_dedup.py        # Perceptual hashing for dedup
     │   │   ├── s3_client.py          # Async S3 client
     │   │   ├── stream_url.py         # Stream URL resolution
-    │   │   └── download_utils.py     # Download helpers
+    │   │   └── download_utils.py     # Download helpers + yt-dlp player-client routing
     │   │
     │   └── video/                # YouTube & metadata
     │       ├── youtube.py            # Video metadata (yt-dlp)
@@ -98,22 +113,16 @@ services/summarizer/
     │   ├── triage.txt            # Triage prompt (fallback only, injects component_toolkit.txt)
     │   ├── component_toolkit.txt # Component descriptions + datasource paths (injected into plan/triage). Density table is generated from domains.json `densityGates` via `{density_gates}` placeholder
     │   ├── base_extraction.txt   # Schema-injection extraction template + video_context + prompt caching
-    │   ├── classify.txt          # Domain+format classifier prompt (fast model, 14 domains + 17 formats — domains.json is the source)
+    │   ├── classify.txt          # Domain+format classifier prompt (fast model, 14 domains + 18 formats incl. unboxing — domains.json is the source)
     │   ├── chapter_detect.txt    # AI chapter detection prompt (fast model)
     │   ├── quality_rules.txt     # JSON extraction quality rules
     │   ├── enrich/               # Per-domain enrichment prompts (+ video_context + tab_goals)
+    │   │                         #   incl. enrich_recall.txt (flashcards-only: podcast, gaming)
     │   ├── synthesis.txt         # Synthesis prompt (+ video_context + tone matching)
     │   └── schemas/              # Domain schemas (injected into base_extraction)
-    │       ├── learning.txt
-    │       ├── tech.txt
-    │       ├── fitness.txt
-    │       ├── food.txt
-    │       ├── music.txt
-    │       ├── travel.txt
-    │       ├── review.txt
-    │       ├── project.txt
-    │       ├── language.txt
-    │       ├── science.txt
+    │       ├── learning.txt, tech.txt, fitness.txt, food.txt, music.txt, travel.txt
+    │       ├── review.txt, project.txt, language.txt, science.txt
+    │       ├── gaming.txt, news.txt, podcast.txt, sport.txt
     │       ├── narrative.txt     # Modifier
     │       └── finance.txt       # Modifier
     │
@@ -162,7 +171,7 @@ GOOGLE_API_KEY=                 # Required if using Gemini as LLM provider
 
 # S3 Media Storage (transcripts, frames, audio)
 S3_BUCKET=vie-transcripts
-S3_PRESIGNED_URL_EXPIRY=3600    # Presigned URL validity (seconds)
+S3_PRESIGNED_URL_EXPIRY=21600   # Presigned URL validity (seconds); >= api FRAME_URL_TTL_SECONDS
 AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=your-key      # AWS credentials
 AWS_SECRET_ACCESS_KEY=your-secret
@@ -180,6 +189,15 @@ WHISPER_MAX_DURATION_MINUTES=600
 WHISPER_CLIENT_TIMEOUT_SECONDS=300.0   # Per-request HTTP timeout for one chunk (bounds a stalled upload)
 WHISPER_MAX_RETRIES=1                  # Retries per chunk (SDK default is 2 — capped to bound worst-case latency)
 WHISPER_CHUNK_CONCURRENCY=3            # Concurrent chunk transcription (respects OpenAI per-key rate limits)
+
+# Frame pipeline (media/)
+SCENE_EXTRACTION_ENABLED=true
+SCENE_S3_PREFIX=scenes-v3              # Versioned frame/manifest prefix — bump to invalidate the frame cache
+SCENE_HIRES_ENABLED=true               # Pass-2 720p refinement of the selected frames
+SCENE_HIRES_TIMEOUT=90.0               # Stream-URL refinement budget; 0/N upgraded → local-download fallback
+SCENE_HIRES_FALLBACK_TIMEOUT=180.0     # Local 720p download + local seeks budget (media/local_video.py)
+YTDLP_PLAYER_CLIENTS=android           # yt-dlp player clients for ALL video/audio downloads; empty = yt-dlp defaults
+FRAME_TIER_ENABLED=true                # Adaptive visual tiers (HIGH: overselect + vision reselect before hires)
 
 # SSE streaming
 SSE_HEARTBEAT_SECONDS=12.0             # Keepalive cadence during silent phases — must stay under the gateway's 300s undici timeout
@@ -259,18 +277,50 @@ The pipeline uses 3-6 LLM calls with a plan-first architecture:
     │        Langfuse generation via transcription/usage.py; see llm-cost-model.md)
     │   └─▶ SSE: transcript_ready event
     │
-    └─▶ FRAMES (smart frame selection, non-critical)
-        └─▶ S3 cache check: skip extraction if frames already exist for this video
+    └─▶ FRAMES (smart frame selection, two-pass, non-critical)
+        └─▶ S3 cache check — MANIFEST-only: `videos/{id}/{SCENE_S3_PREFIX}/manifest.json`
+        │   (v2) carries per-frame timestamps, galleryIndices, hiresCount and the
+        │   persisted visionDescriptions. A hit skips extraction AND restores the
+        │   vision descriptions (cached frames have no local file, so vision can't
+        │   re-run); `hiresCount == 0` (every hi-res seek failed) is treated as a
+        │   MISS so a 403-era low-res run self-heals on the next reprocess.
+        │   (prefix is versioned via SCENE_S3_PREFIX, default "scenes-v3" — bump to
+        │    invalidate after quality changes; "scenes" holds pre-hires low-res
+        │    frames, "scenes-v2" pre-adaptive-vision frames. NOTE: scene_NNNN keys
+        │    are overwritten in place per run.)
         └─▶ Per-video asyncio.Lock prevents duplicate concurrent extractions
-        └─▶ yt-dlp downloads worst-quality video to temp file (~15-20s)
-        └─▶ FFmpeg scene detection on local file (~10-15s, 20-50x realtime)
-        └─▶ Smart scoring (CPU only, ~2-3s): visual interest, face detection, text density, uniqueness
+        └─▶ Adaptive visual tier (media/visual_tier.py, domains.json visualCriticality,
+        │   FRAME_TIER_ENABLED): HIGH over-selects FRAME_OVERSELECT_COUNT candidates and
+        │   vision-describes them BEFORE hires refinement so subject-matter frames beat
+        │   presenter shots (floor FRAME_RESELECT_FLOOR); LOW skips vision; STANDARD = top-8.
+        └─▶ Pass 1 — detection: yt-dlp downloads WORST-quality video to temp file
+        │   (~15-20s; 144p is plenty for scene detection + scoring, keeps download fast).
+        │   All yt-dlp VIDEO/AUDIO downloads (detection, stream URL, local 720p fallback,
+        │   whisper audio) route through YTDLP_PLAYER_CLIENTS (default "android" — YouTube
+        │   403s the web client's download URLs from some environments; never mix in
+        │   "default": merged format lists let bestvideo pick a 403ing web DASH format).
+        │   Metadata/subtitle extraction deliberately does NOT use it (android lacks subs).
+        └─▶ FFmpeg scene detection on local file (~10-15s, 20-50x realtime;
+        │   scale/quality via SCENE_DETECT_SCALE_WIDTH / SCENE_JPEG_QUALITY)
+        └─▶ Smart scoring (CPU only, ~2-3s, 6 signals): visual interest (0.20), face (0.10),
+        │   skin fraction inverted (0.15), center-crop detail (0.20), text density (0.15),
+        │   uniqueness (0.20) — single image decode per frame; Haar failure caches as
+        │   disabled and returns neutral 0.5
         └─▶ Time-slot selection: ~25 frames evenly distributed across video duration
         └─▶ Gallery classification: top ~12 frames by score for Visual Moments tab
-        └─▶ Batch parallel S3 upload (8 concurrent, only selected frames — not all detected)
+        └─▶ Pass 2 — hi-res refinement (hires_refiner.py, SCENE_HIRES_ENABLED):
+        │   re-extracts only the SELECTED frames at 720p via stream-URL seek
+        │   (no full download; ~1-3s/frame, SCENE_HIRES_CONCURRENCY parallel,
+        │    SCENE_HIRES_TIMEOUT total budget; per-frame fallback to low-res on failure).
+        │   0/N upgraded (or timeout with 0) = the CDN 403s plain-ffmpeg seeks (client-bound
+        │   googlevideo URLs) → local-download fallback: media/local_video.py downloads one
+        │   ≤720p rendition via yt-dlp and seeks the local file (SCENE_HIRES_FALLBACK_TIMEOUT).
+        │   Swaps frame paths in place → S3 upload, vision, and OCR all get the best available.
+        └─▶ Batch parallel S3 upload (only selected frames — not all detected) + manifest write
         └─▶ OCR + Vision LLM analysis run in parallel:
             ├─▶ OCR: Tesseract on text-heavy frames
-            └─▶ Vision: top 8 frames → Sonnet (scene_type, content, text_visible) ~$0.02-0.03
+            └─▶ Vision: top 8 frames → fast tier (scene_type, visual_subject, content) ~$0.02-0.03;
+                descriptions are persisted into the manifest for future cache hits
         └─▶ SSE: frames event (selected frames only — timestamps, presigned URLs, OCR text)
         └─▶ Graceful degradation: failure returns empty result, pipeline continues
 
@@ -283,7 +333,8 @@ The pipeline uses 3-6 LLM calls with a plan-first architecture:
     └─▶ Toggle: FRAME_VISION_ENABLED=false skips vision (OCR-only like before)
 
  4. CLASSIFIER + PLAN (1-2 LLM calls)
-    └─▶ Classifier (fast model): domain + format + traits classification (14 domains, 17 formats)
+    └─▶ Classifier (fast model): domain + format + traits classification (14 domains, 18 formats
+    │   incl. `unboxing` — TCG box openings route gaming+unboxing, consumer products review+unboxing)
     │   └─▶ 10s timeout, 1 retry, ~$0.001 per video, json_mode
     │   └─▶ Overrides rule-based category_hint when confidence > 0.6
     │   └─▶ Sets content_format on PipelineContext (tutorial, commentary, reaction, etc.)
@@ -299,9 +350,18 @@ The pipeline uses 3-6 LLM calls with a plan-first architecture:
             `render_density_gate_table` in `shared_config/domain_config.py`, injected at plan time) —
             edit `components` in domains.json to change what the planner can pick. `densityGates`
             is **advisory LLM-steering only**; the assembler's per-component hard caps are independent.
+        └─▶ Domain playbooks (domains.json `playbooks`, keyed "<domain>:<format>", currently
+        │   gaming:unboxing + review:unboxing): `_render_playbook()` injects required/preferred/
+        │   forbidden components + planGuidance into the prompt. Merge semantics via
+        │   effective_requirements(): forbidden = UNION, required = playbook overrides domain,
+        │   max always from domain.
+        └─▶ Post-validation `_enforce_domain_policy()`: strips forbidden components from the
+        │   validated tab plan BEFORE extraction burns tokens (quiz_arena is educational-only —
+        │   allowed for learning/language/tech/science, forbidden elsewhere)
         └─▶ Item counts for extraction quality validation
         └─▶ video_context flows to all downstream phases (compact ~300 chars)
-        └─▶ 10 primary tags: learning, tech, fitness, food, music, travel, review, project, language, science
+        └─▶ 14 primary tags (domains.json): learning, tech, fitness, food, music, travel, review,
+        │   project, language, science, gaming, news, podcast, sport
         └─▶ 2 modifier tags: narrative, finance
         └─▶ Fallback: category-based mapping if confidence < 0.6
         └─▶ SSE: triage_complete, meta events
@@ -336,8 +396,11 @@ The pipeline uses 3-6 LLM calls with a plan-first architecture:
     └─▶ Exception-safe: validation failure is non-blocking
 
  7. ENRICHMENT (0-1 LLM calls, 45s timeout, 2 retries)
-    └─▶ All domains with enrichment mapping get quiz + flashcards + scenarios
-    └─▶ Domain gate via domains.json enrichment map (dynamic, not hardcoded)
+    └─▶ Domains with enrichment mapping get quiz + flashcards + scenarios
+    └─▶ Domain gate via domains.json enrichment map (dynamic, not hardcoded);
+    │   podcast + gaming route to enrich/enrich_recall.txt (flashcards only, no quiz/scenarios)
+    └─▶ enrich() takes content_format; quiz/scenarios are code-stripped when quiz_arena is
+    │   forbidden for the domain (guardrail on top of the prompt routing)
     └─▶ Non-critical: failure returns None gracefully
     └─▶ SSE: enrichment_complete event (if applicable)
 
@@ -348,13 +411,39 @@ The pipeline uses 3-6 LLM calls with a plan-first architecture:
     └─▶ SSE: synthesis_complete event
 
  9. ASSEMBLY + SAVE + COMPLETE
-    └─▶ Assembly: pure code (<10ms) — transforms extraction → component-addressed TabEntry[]
-    └─▶ 17 assemblers in ASSEMBLER_REGISTRY (spot_explorer, moment_track, code_explorer, etc.)
-    └─▶ Frame thumbnail injection: items with timestamps get thumbnailUrl from nearest S3 frame
+    └─▶ Assembly: code, 0 LLM calls — transforms extraction → component-addressed TabEntry[]
+    │   (no longer <10ms: moment_frame_fill below may run frame I/O with heartbeats)
+    └─▶ 29 assemblers in ASSEMBLER_REGISTRY (assembly/registry.py — spot_explorer, moment_track,
+    │   code_playground, quiz_arena, tier_list, claims_tracker, … + secondary/attachment assemblers)
+    └─▶ Domain policy: components in effective_requirements(domain, format).forbidden are dropped
+    │   (reason `domain_forbidden`); per-domain max caps enforced (reason `domain_max_cap`)
+    └─▶ Degrade-never-drop ladder (assembly/promotion.py): a tab failing its primary component's
+    │   validation demotes down _DEMOTE_LADDER (e.g. step_player → checklist → display_section,
+    │   tier_list → info_grid → display_section) instead of dropping; demoted tabs are stamped
+    │   `degradedFrom` and re-pass enforce_density. Non-demotable by design: quiz_arena,
+    │   video_filmstrip, lyrics_karaoke, frame_strip.
+    └─▶ Per-tab drop accounting: assemble_response returns {"meta", "tabs", "dropped"} — drop
+    │   reasons: assembler_raised, validation_empty_list, assembler_returned_none,
+    │   domain_forbidden, domain_max_cap, all_timestamps_impossible (feeds tabsDropped/droppedTabs
+    │   telemetry instead of the old designed−assembled subtraction)
+    └─▶ Frame thumbnail injection: items with timestamps get thumbnailUrl from nearest S3 frame;
+    │   a relaxed second pass (±15s window) backfills still-thumbless moment items
+    └─▶ Timestamp hygiene: moment_track items beyond video duration (+10s) are dropped;
+    │   a tab emptied by that drop is removed (dropped reason `all_timestamps_impossible`)
     └─▶ Gallery tab: ~12 curated frames from gallery_frames (not all uploaded frames)
     └─▶ Cross-tab links resolved from static LINK_RULES
-    └─▶ SSE: tab_ready events (progressive rendering)
-    └─▶ Store result to MongoDB + Redis cache (if enabled)
+    └─▶ SSE: tab_ready events (progressive rendering), each with `position` = index in the
+    │   persisted tab order. moment_track tabs are HELD BACK: assembly/moment_frame_fill.py
+    │   extracts a frame AT each still-frameless moment's timestamp (stream-URL seek, then the
+    │   same local-download fallback as hires; cap 12 frames, 60s + 150s budgets), heartbeats
+    │   keep the SSE hop alive meanwhile, then the moment tabs stream WITH their images and the
+    │   client slots them by `position` so streamed order == persisted order
+    └─▶ Store result to MongoDB + Redis cache (if enabled). Redis response-cache keys are
+    │   namespaced by PIPELINE_VERSION (packages/shared/src/config/pipeline-version.json,
+    │   currently v8 — bumped v6→v8 by the frame-quality + moment-redesign work).
+    │   bypassCache=true submissions arrive with force_refresh (worker payload) OR the
+    │   `forceRefresh` flag stamped on the videoSummaryCache version row by the api —
+    │   either skips the Redis response cache; the flag is $unset on completion.
     └─▶ Transcript S3 storage (background, non-blocking)
     └─▶ Qdrant chunks (if enabled): transcript embeddings (background task)
     └─▶ SSE: complete event (tabCount, processingTimeMs)
@@ -535,11 +624,11 @@ list against the model registry.
 | `triage_complete` | `{contentTags, modifiers, primaryTag, tabs, confidence}` |
 | `extraction_progress` | `{section, percent, batch?, of?}` — chunked path emits `batch`/`of` per batch with `section="chunked"`; rate-limited fallback batches use `section="chunked-sequential"` |
 | `extraction_complete` | `{domain-keyed data}` |
-| `enrichment_complete` | `{quiz?, flashcards?, scenarios?}` (learning and tech domains only) |
+| `enrichment_complete` | `{quiz?, flashcards?, scenarios?}` (enrichment-mapped domains; recall-only domains emit flashcards without quiz/scenarios) |
 | `synthesis_complete` | `{tldr, keyTakeaways, masterSummary, seoDescription}` |
 | `frames` | `{videoId, frames: [{index, timestamp, url, s3Key?, ocrText?}]}` (scene frames) |
 | `meta` | `{title, contentTags, modifiers, primaryTag, tabCount, tabLabels, degraded?, ...}` (progressive meta) |
-| `tab_ready` | `{id, label, emoji, component, props, crossTabLinks?}` (progressive tab) |
+| `tab_ready` | `{id, label, emoji, component, props, crossTabLinks?, position?}` (progressive tab; `position` = index in the persisted tab order — held-back moment_track tabs arrive last and are spliced in by it) |
 | `complete` | `{tabCount, processingTimeMs, degraded}` (v2 completion) |
 | `error` | `{message, code?}` — `code` is an `ErrorCode` value (see docs/ERROR-HANDLING.md) |
 | `token` | `{phase, token}` — legacy token streaming; protocol slot kept, no current emitter |
@@ -875,8 +964,13 @@ All media (transcripts, frames, future audio) is stored in a unified S3 bucket (
 vie-transcripts (S3 bucket)
 └── videos/{youtube_id}/
     ├── transcript.json       ← processed transcript
+    ├── scenes-v3/
+    │   └── scene_{idx}.jpg   ← selected scene frames (720p, SCENE_S3_PREFIX-versioned)
+    ├── scenes-v2/, scenes/
+    │   └── scene_{idx}.jpg   ← legacy prefixes: pre-adaptive-vision (v2) and
+    │                           pre-hires low-res (kept for old summaries)
     └── frames/
-        └── {timestamp}.jpg   ← extracted video frames
+        └── {timestamp}.jpg   ← on-demand single-frame extraction (frame_extractor.py)
 ```
 
 ```
@@ -890,14 +984,17 @@ vie-transcripts (S3 bucket)
 │     └─▶ Contains: segments, source, language, fetchedAt│
 │                                                         │
 │  2. Upload Video Frames                                 │
-│     └─▶ S3 key: "videos/{youtubeId}/frames/{ts}.jpg"   │
+│     └─▶ Scene frames: "videos/{id}/scenes-v3/           │
+│         scene_{idx}.jpg" (SCENE_S3_PREFIX-versioned)    │
+│     └─▶ On-demand: "videos/{youtubeId}/frames/{ts}.jpg" │
 │     └─▶ Parallel upload via asyncio.gather              │
 │     └─▶ S3 exists check skips duplicates                │
 │     └─▶ Blocks store s3_key (permanent) in MongoDB     │
 │                                                         │
 │  3. Serve via Presigned URLs                            │
 │     └─▶ Generated at response time (sync, local signing)│
-│     └─▶ Default expiry: 1 hour (S3_PRESIGNED_URL_EXPIRY)│
+│     └─▶ Default expiry: 6h (S3_PRESIGNED_URL_EXPIRY),  │
+│         aligned with api FRAME_URL_TTL_SECONDS=21600    │
 │     └─▶ Cached results refresh URLs before emitting    │
 │                                                         │
 │  4. Track Generation Metadata                           │
