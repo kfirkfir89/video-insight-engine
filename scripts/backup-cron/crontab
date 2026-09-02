@@ -1,0 +1,4 @@
+# Nightly full backup (Mongo archive + Qdrant snapshots) at 03:30 UTC.
+# Output lands in /repo/backups/<UTC-timestamp>/ (bind-mounted from ./backups);
+# vie-admin's backup_stale dead-man's switch reads the manifest from the same dir.
+30 3 * * * cd /repo && QDRANT_URL=http://vie-qdrant:6333 ./scripts/backup.sh >> /repo/backups/backup.log 2>&1

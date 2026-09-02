@@ -87,6 +87,12 @@ x-summarizer-env: &summarizer-env
   SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
   # LLM alert webhook — empty URL = alerts stay Mongo-only (llm_common/alerts.py)
   ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+  # Per-call high-cost alert threshold (llm_common/callback.py); default $0.50
+  ALERT_COST_THRESHOLD_USD: ${ALERT_COST_THRESHOLD_USD:-0.50}
+  # Stall sweeper (HTTP process only; src/services/stall_sweeper.py)
+  STALL_SWEEP_ENABLED: ${STALL_SWEEP_ENABLED:-true}
+  STALL_SWEEP_INTERVAL_SECONDS: ${STALL_SWEEP_INTERVAL_SECONDS:-300}
+  STALL_THRESHOLD_MINUTES: ${STALL_THRESHOLD_MINUTES:-30}
 
 x-assistant-env: &assistant-env
   PYTHONUNBUFFERED: "1"
@@ -113,6 +119,8 @@ x-assistant-env: &assistant-env
   SENTRY_RELEASE: ${SENTRY_RELEASE:-}
   SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
   ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+  # Per-call high-cost alert threshold (llm_common/callback.py); default $0.50
+  ALERT_COST_THRESHOLD_USD: ${ALERT_COST_THRESHOLD_USD:-0.50}
 
 # ----------------------------------------
 # Container log rotation (YAML anchor)
@@ -169,7 +177,10 @@ services:
     networks:
       - vie-network
     healthcheck:
-      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/6333"]
+      # Real readiness (/readyz = "all shards are ready"), not a bare TCP
+      # connect. The image has bash but no curl/wget, so the request is
+      # hand-written over /dev/tcp.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333; printf 'GET /readyz HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3; head -c 300 <&3 | grep -q '200 OK'"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -279,8 +290,10 @@ services:
       vie-rabbitmq:
         condition: service_healthy
     healthcheck:
-      # Liveness only — gate load-balancer traffic on GET /ready instead.
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      # Readiness, not liveness: /ready pings Mongo + Redis + RabbitMQ (2s each)
+      # so `depends_on: service_healthy` and `docker compose ps` reflect whether
+      # the API can actually serve, not just that the process is up.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/ready"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -366,6 +379,8 @@ services:
       RABBITMQ_URL: *rabbitmq-url
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
       WORKER_MAX_RETRIES: ${WORKER_MAX_RETRIES:-3}
+      # Base retry delay, doubled per attempt (5 → 10 → 20 s), capped at 120 s
+      WORKER_RETRY_BACKOFF_SECONDS: ${WORKER_RETRY_BACKOFF_SECONDS:-5}
     networks:
       - vie-network
     depends_on:
@@ -438,6 +453,7 @@ services:
       VIE_API_URL: http://vie-api:3000
       VIE_SUMMARIZER_URL: http://vie-summarizer:8000
       VIE_ASSISTANT_URL: http://vie-assistant:8001
+      QDRANT_URL: http://vie-qdrant:6333
       ALERT_COST_THRESHOLD_USD: ${ALERT_COST_THRESHOLD_USD:-0.50}
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
       # Backup dead-man's switch — newest manifest under BACKUP_DIR older than
@@ -487,13 +503,49 @@ services:
     networks:
       - vie-network
     depends_on:
-      - vie-api
+      vie-api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5173/"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  # ----------------------------------------
+  # Backup scheduler (opt-in: `docker compose --profile backup up -d`)
+  # ----------------------------------------
+  # Runs scripts/backup.sh nightly from inside the stack so the schedule is
+  # committed with the repo instead of living in a dev-box crontab. Needs the
+  # docker socket (mongodump runs via `docker exec vie-mongodb`) — root-equivalent
+  # on the host, which is why it is a profile and not on by default.
+  vie-backup-cron:
+    build:
+      context: .
+      dockerfile: ./scripts/backup-cron/Dockerfile
+    image: vie-backup-cron:latest
+    container_name: vie-backup-cron
+    # busybox crond as PID 1 ignores SIGTERM; tini forwards it so
+    # `docker stop` doesn't wait 10s and SIGKILL a backup mid-write.
+    init: true
+    restart: unless-stopped
+    logging: *default-logging
+    profiles: ["backup"]
+    environment:
+      TZ: UTC
+      MONGO_CONTAINER: vie-mongodb
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./scripts:/repo/scripts:ro
+      - ./backups:/repo/backups
+    networks:
+      - vie-network
+    depends_on:
+      vie-mongodb:
+        condition: service_healthy
+      vie-qdrant:
+        condition: service_healthy
 
 # ----------------------------------------
 # Networks
