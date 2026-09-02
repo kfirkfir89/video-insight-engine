@@ -41,11 +41,11 @@ Trace: pipeline:{videoSummaryId}
 └── (assembly has no generations — pure code)
 ```
 
-For the assistant, one chat session = one trace named `chat:{videoId}` keyed by `userId`/`sessionId`. Tool runs attach as named spans (`tool:concept_explain`, `tool:quiz_generator`, …) and the RAG generation is a `rag_generation` span. `/action` dispatch opens its own session trace with an `action:{action}` span. The tool router owns the per-tool `llm_feature_var` (`assistant:tool:<name>`, set/reset around dispatch so siblings aren't mislabelled); endpoints set `assistant:rag_chat` / `assistant:library_chat` / `assistant:action:<action>` plus `user_id` / `video_id` / `request_id` so assistant `llm_usage` rows are attributable.
+For the assistant, one chat session = one trace named `chat:{videoId}` keyed by `userId`/`sessionId`. Tool runs attach as named spans (`tool:concept_explain`, `tool:quiz_generator`, …); the agentic loop's LLM calls are `library_generation` (answer) and `library_agent` (tool-selection) spans/generations — the same names for single-video RAG chat and library chat, since both run `run_agentic_loop`. Query translation logs as `query_translate`. `/action` dispatch opens its own session trace with an `action:{action}` span. The tool router owns the per-tool `llm_feature_var` (`assistant:tool:<name>`, set/reset around dispatch so siblings aren't mislabelled); endpoints set `assistant:rag_chat` / `assistant:library_chat` / `assistant:action:<action>` plus `user_id` / `video_id` / `request_id` so assistant `llm_usage` rows are attributable.
 
 ### Admin "Open in Langfuse" deep-link
 
-The vie-admin **backend** resolves each pipeline-run's trace and returns a direct URL — the admin UI just renders it. `services/admin/src/services/langfuse.py` resolves the Langfuse project id from the `LANGFUSE_*` keys (auto-resolved via `/api/public/projects`, cached; or pinned with `LANGFUSE_PROJECT_ID`), then maps each run's `request_id` → its trace id by scanning recent traces' `requestId:<id>` tags in one batched `/api/public/traces` call, building `{LANGFUSE_BASE_URL}/project/{projectId}/traces/{traceId}`. `GET /usage/by-run` returns this as `langfuse_url` per run (null when unconfigured/unresolvable — e.g. assistant chat traces aren't `requestId`-tagged). The layer is best-effort: keys-missing or a timeout yields no link, never an error (read budget 9s; whole `/usage/by-run` response cached 30s).
+The vie-admin **backend** resolves each pipeline-run's trace and returns a direct URL — the admin UI just renders it. `services/admin/src/services/langfuse.py` resolves the Langfuse project id from the `LANGFUSE_*` keys (auto-resolved via `/api/public/projects`, cached; or pinned with `LANGFUSE_PROJECT_ID`), then maps each run's `request_id` → its trace id with one tag-filtered lookup per run (`/api/public/traces?tags=requestId:<id>&limit=1`, 8 concurrent, 4 s each — an unfiltered 100-trace scan took ~10 s on cloud.langfuse.com), building `{LANGFUSE_BASE_URL}/project/{projectId}/traces/{traceId}`. `GET /usage/by-run` returns this as `langfuse_url` per run (null when unconfigured/unresolvable — e.g. assistant chat traces aren't `requestId`-tagged). The layer is best-effort: keys-missing, a timeout, or any exception inside one lookup yields no link for that run, never an error. The whole batch is bounded by an 8 s deadline (`_TOTAL_BUDGET_SECONDS`): lookups still pending at the deadline are cancelled and their runs get `null`, so a degraded Langfuse cannot hold `/usage/by-run` for the sum of per-call timeouts. Whole `/usage/by-run` response cached 30 s.
 
 `PipelineRunsPanel` renders `run.langfuse_url` and falls back to the build-time `buildLangfuseTraceUrl` helper (`services/admin/ui/src/lib/langfuse.ts`, `VITE_LANGFUSE_*`) only when the backend returns nothing — the backend resolver is the primary path and needs no browser-exposed config.
 
@@ -253,9 +253,27 @@ The shared `llm_common.sentry_init` module hosts the Python init + `before_send`
 
 The `X-Request-ID` header is validated on both sides — `^[A-Za-z0-9_-]{8,128}$`. Forged headers (newline injection, control chars, semicolons) fall through to a fresh UUID so they cannot pollute log lines or Sentry tag space.
 
-Worker DLQ failures fire one Sentry event per dead-lettered job — retries don't (alert noise).
+Worker DLQ failures fire one Sentry event per dead-lettered job — retries don't (alert noise). Independently, an **unclassified** pipeline exception (the generic `except Exception` in `pipeline_runner.stream_summarization` — the branch where real bugs land) is captured at the source with the real traceback, tagged `outcome=pipeline_failed`, `errorRef=<ref shown to the user>`, `path=worker|sse-direct` (+ `attempt` under the worker). Before this the SSE-direct path (dev override, or an SSE client winning the producer lock) had no capture point at all. Classified failures (transcript, rate-limit, timeout, provider error) stay log-only.
+
+Browser errors go to a **separate** Sentry project via `VITE_SENTRY_DSN` (+ `VITE_SENTRY_RELEASE`), baked in at build time (`apps/web/src/main.tsx`; compose build args). Empty DSN = no-op.
 
 The API's `onError` hook only captures errors whose effective status is ≥500. Status is resolved via `effectiveStatusCode` across three shapes: Fastify-native `.statusCode` (rate limit, schema validation), project `AppError` subclasses (`NotFoundError`, `ValidationError`, etc.) via `.status`, and `ZodError` thrown by route-boundary `.parse()` calls (always 400). Without all three checks, expected client outcomes would land in Sentry as 500-class noise.
+
+### 4xx logging + stdout redaction (API)
+
+Every error funneled through the global handler is logged: 5xx at `error` with the stack, everything else at `warn` as `request rejected` with `statusCode`, `errorCode`, `errMessage` (the client-facing message, not the raw error), `method`, `route`, `userId` (when authenticated), and the request's `requestId`. Previously 4xx branches returned before any log call, so a client-reported 400/401/429 was undiagnosable without reproducing it. The status→envelope mapping is the pure `resolveErrorEnvelope()` in `api/src/utils/error-envelope.ts`.
+
+pino `redact` (`LOG_REDACT_PATHS` in `api/src/app.ts`) is built from the **same header list the Sentry scrubber uses** — `authorization`, `cookie`, `set-cookie`, `x-internal-secret`, `x-admin-key`, `x-csrf-token`, `x-api-key`, `proxy-authorization` — matched under Fastify's `req.headers` serializer *and* a bare `headers` object logged by hand, plus `password` / `token` / `accessToken` / `refreshToken` / `apiKey` both top-level and one level deep (pino's `*` matches exactly one level). `defaultLoggerOptions()` is exported so the redaction test runs against the real production logger config rather than a copy.
+
+## Alerts & self-healing
+
+| Signal | Where it runs | What it does |
+|--------|---------------|--------------|
+| `high_cost_call`, `daily_spend_spike`, `high_failure_rate`, `backup_stale` | llm-common callback (inline) / admin `alert_evaluator` (5 min) | Mongo `llm_alerts` + POST to `ALERT_WEBHOOK_URL`. Thresholds: [ERROR-HANDLING.md](./ERROR-HANDLING.md#alert-thresholds) |
+| `pipeline_stalled` | summarizer stall sweeper (`src/services/stall_sweeper.py`, HTTP process, 5 min) | `processing` row idle > 30 min **and** producer lock gone → `failed` + status callback + alert. The flip is a compare-and-set (`mark_stalled_failed`: still `processing` and still stale), so a run revived between find and write is skipped with no side effects. Lock check fails open on Redis errors |
+| worker retry backoff | `worker/runner.py` | 5 → 10 → 20 s (×2 per attempt, cap 120 s) before republish; message stays unacked during the wait |
+
+**Nothing is delivered until `ALERT_WEBHOOK_URL` is set** — the evaluators run regardless, but alerts land only in Mongo. Any HTTP(S) JSON receiver works (Slack incoming webhook, Discord webhook, ntfy topic).
 
 ## Related docs
 
