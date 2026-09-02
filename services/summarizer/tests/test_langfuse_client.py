@@ -108,7 +108,10 @@ async def test_pipeline_trace_swallows_trace_creation_errors(monkeypatch):
 def test_log_generation_no_op_when_no_trace():
     """No current trace → log_generation is a silent no-op."""
     lc.log_generation(
-        name="extraction", model="m", input_payload="hi", output_payload="out",
+        name="extraction",
+        model="m",
+        input_payload="hi",
+        output_payload="out",
     )  # must not raise
 
 
@@ -160,7 +163,9 @@ async def test_log_score_attaches_to_current_trace(monkeypatch):
         lc.log_score("faithfulness", 0.75, comment="sampled 20%")
 
     fake_trace.score.assert_called_once_with(
-        name="faithfulness", value=0.75, comment="sampled 20%",
+        name="faithfulness",
+        value=0.75,
+        comment="sampled 20%",
     )
 
 
@@ -211,31 +216,13 @@ async def test_log_generation_swallows_sdk_errors(monkeypatch):
 
     async with lc.pipeline_trace("vid"):
         lc.log_generation(
-            name="extraction", model="m", input_payload="i", output_payload="o",
+            name="extraction",
+            model="m",
+            input_payload="i",
+            output_payload="o",
         )  # must not raise
 
 
-def test_fetch_prompt_returns_none_when_disabled():
-    assert lc.fetch_prompt("any") is None
-
-
-def test_fetch_prompt_returns_text(monkeypatch):
-    _install_fake_sdk(monkeypatch)
-    lc.init_langfuse()
-    obj = MagicMock()
-    obj.prompt = "Hello {{name}}"
-    lc._client.get_prompt.return_value = obj
-    assert lc.fetch_prompt("greeting") == "Hello {{name}}"
-
-
-def test_fetch_prompt_swallows_errors(monkeypatch):
-    _install_fake_sdk(monkeypatch)
-    lc.init_langfuse()
-    lc._client.get_prompt.side_effect = RuntimeError("not found")
-    assert lc.fetch_prompt("missing") is None
-
-
-# ─── Secret-token redaction (added 2026-05-20 sign-off) ─────────────────
 def test_redact_pii_strips_jwt():
     jwt = (
         "eyJhbGciOiJIUzI1NiJ9"
@@ -310,6 +297,7 @@ def test_init_warns_when_hash_mode_with_empty_salt(monkeypatch, caplog):
     monkeypatch.setattr(lc.settings, "LANGFUSE_USER_ID_MODE", "hash", raising=False)
     monkeypatch.setattr(lc.settings, "LANGFUSE_USER_ID_HASH_SALT", "", raising=False)
     import logging
+
     with caplog.at_level(logging.WARNING):
         lc.init_langfuse()
     assert any("HASH_SALT is empty" in r.message for r in caplog.records)
@@ -320,6 +308,7 @@ def test_init_does_not_warn_when_hash_mode_with_salt(monkeypatch, caplog):
     monkeypatch.setattr(lc.settings, "LANGFUSE_USER_ID_MODE", "hash", raising=False)
     monkeypatch.setattr(lc.settings, "LANGFUSE_USER_ID_HASH_SALT", "p3pper", raising=False)
     import logging
+
     with caplog.at_level(logging.WARNING):
         lc.init_langfuse()
     assert not any("HASH_SALT is empty" in r.message for r in caplog.records)
@@ -345,7 +334,10 @@ async def test_structured_content_blocks_are_redacted(monkeypatch):
     ]
     async with lc.pipeline_trace("vid"):
         lc.log_generation(
-            name="frame_vision", model="m", input_payload=messages, output_payload="",
+            name="frame_vision",
+            model="m",
+            input_payload=messages,
+            output_payload="",
         )
     sent = fake_trace.generation.call_args.kwargs["input"]
     text_block = sent[0]["content"][0]
@@ -356,25 +348,6 @@ async def test_structured_content_blocks_are_redacted(monkeypatch):
 
 
 # ─── Prompt-version recording on the active trace ───────────────────────
-@pytest.mark.asyncio
-async def test_fetch_prompt_is_pure_no_side_effects(monkeypatch):
-    """fetch_prompt is pure — calling it never mutates the active map."""
-    _install_fake_sdk(monkeypatch)
-    lc.init_langfuse()
-    fake_trace = MagicMock()
-    lc._client.trace.return_value = fake_trace
-    obj = MagicMock()
-    obj.prompt = "PROMPT_BODY"
-    obj.version = 42
-    lc._client.get_prompt.return_value = obj
-
-    async with lc.pipeline_trace("vid"):
-        body = lc.fetch_prompt("summarizer:plan")
-        assert body == "PROMPT_BODY"
-        # Pure fetch — no recording. The explicit API is record_active_prompt.
-        assert lc.get_active_prompts() == {}
-
-
 @pytest.mark.asyncio
 async def test_record_active_prompt_populates_metadata(monkeypatch):
     """Explicit record_active_prompt + log_generation pipeline."""
@@ -393,7 +366,10 @@ async def test_record_active_prompt_populates_metadata(monkeypatch):
         lc.record_active_prompt("summarizer:plan", prompt_obj)
         assert lc.get_active_prompts() == {"summarizer:plan": "42"}
         lc.log_generation(
-            name="plan", model="m", input_payload="i", output_payload="o",
+            name="plan",
+            model="m",
+            input_payload="i",
+            output_payload="o",
         )
     md = fake_trace.generation.call_args.kwargs["metadata"]
     assert md["promptVersions"] == {"summarizer:plan": "42"}

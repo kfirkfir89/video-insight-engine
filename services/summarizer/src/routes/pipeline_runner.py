@@ -33,6 +33,7 @@ from llm_common.context import (  # noqa: F401 — llm_feature_var used in phase
     llm_video_id_var,
     llm_video_summary_id_var,
 )
+from llm_common.sentry_init import capture_exception_with_context
 
 from src.config import settings
 from src.exceptions import TranscriptError
@@ -73,6 +74,46 @@ from src.routes.pipeline_faithfulness import (  # noqa: E402
     _drain_faithfulness,
     _launch_faithfulness_check,
 )
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Failure reporting
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _report_unexpected_failure(exc: Exception, video_summary_id: str, elapsed: float) -> str:
+    """Log + Sentry-capture an unclassified pipeline exception; return its ref.
+
+    The classified branches (transcript, rate-limit, timeout, provider error)
+    are operational and stay log-only. This branch is where real bugs land —
+    and until now it was the one place they were swallowed into an SSE
+    ``error`` frame with no exception reaching Sentry. The SSE-direct path
+    (dev override / SSE client winning the producer lock) has no other
+    capture point; under the worker the DLQ capture in ``runner.py`` only
+    sees a synthetic RuntimeError, so this is also where the real traceback
+    comes from. ``attempt`` is bound by the worker only, so its presence
+    tells the two paths apart in Sentry.
+    """
+    error_ref = str(uuid.uuid4())[:8]
+    logger.error(
+        "[pipeline] FAILED video_id=%s error=%s ref=%s total=%.1fs",
+        video_summary_id,
+        type(exc).__name__,
+        error_ref,
+        elapsed,
+        exc_info=True,
+    )
+    bound = structlog.contextvars.get_contextvars()
+    attempt = bound.get("attempt") if isinstance(bound, dict) else None
+    capture_exception_with_context(
+        exc,
+        videoSummaryId=video_summary_id,
+        errorRef=error_ref,
+        outcome="pipeline_failed",
+        path="worker" if attempt is not None else "sse-direct",
+        attempt=str(attempt) if attempt is not None else None,
+    )
+    return error_ref
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Pipeline phase orchestration
@@ -449,15 +490,7 @@ async def stream_summarization(
         )
 
     except Exception as e:
-        error_ref = str(uuid.uuid4())[:8]
-        logger.error(
-            "[pipeline] FAILED video_id=%s error=%s ref=%s total=%.1fs",
-            video_summary_id,
-            type(e).__name__,
-            error_ref,
-            timer.elapsed(),
-            exc_info=True,
-        )
+        error_ref = _report_unexpected_failure(e, video_summary_id, timer.elapsed())
         await asyncio.to_thread(
             repository.update_status,
             video_summary_id,

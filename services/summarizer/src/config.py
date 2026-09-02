@@ -212,6 +212,16 @@ class Settings(BaseSettings):
     # Lock TTL must outlive the longest realistic pipeline run; stream TTL
     # gives late joiners a chance to drain after the producer finishes.
     PIPELINE_LOCK_TTL_SECONDS: int = 600  # 10 min — auto-expire if producer crashes
+
+    # Stall sweeper (src/services/stall_sweeper.py) — runs in the HTTP process
+    # only. A ``processing`` row whose ``updatedAt`` is older than the threshold
+    # AND whose producer lock has expired is flipped to ``failed`` (so attachers
+    # stop waiting and the user can retry) and a ``pipeline_stalled`` alert is
+    # written + delivered. Threshold mirrors the API's lazy re-dispatch guard
+    # (api/src/services/video.service.ts PIPELINE_STALL_THRESHOLD_MS).
+    STALL_SWEEP_ENABLED: bool = True
+    STALL_SWEEP_INTERVAL_SECONDS: int = 300
+    STALL_THRESHOLD_MINUTES: int = 30
     PIPELINE_STREAM_TTL_SECONDS: int = 120  # 2 min retention after DONE
     PIPELINE_STREAM_MAXLEN: int = 2000  # MAXLEN ~ for XADD ring-buffer
     # Keepalive cadence while a phase runs silently (e.g. multi-minute Whisper).

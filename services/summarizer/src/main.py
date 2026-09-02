@@ -42,6 +42,29 @@ def _init_sentry_from_settings() -> bool:
 _usage_callback = None
 
 
+def _start_stall_sweeper() -> asyncio.Task | None:
+    """Launch the stall sweeper loop (HTTP process only; the worker never imports main).
+
+    Best-effort: a wiring failure logs and leaves the app serving — sweeping
+    is self-healing, not a dependency of the request path.
+    """
+    if not settings.STALL_SWEEP_ENABLED:
+        logger.info("stall_sweeper_disabled")
+        return None
+    try:
+        from src.services.stall_sweeper import build_default_sweeper, stall_sweeper_loop
+
+        repository = MongoDBVideoRepository(get_mongo_client().get_default_database())
+        sweeper = build_default_sweeper(repository, settings.STALL_THRESHOLD_MINUTES)
+        return asyncio.create_task(
+            stall_sweeper_loop(sweeper, settings.STALL_SWEEP_INTERVAL_SECONDS),
+            name="stall-sweeper",
+        )
+    except Exception as e:
+        logger.warning("stall_sweeper_start_failed", error=str(e))
+        return None
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan: register LLM usage tracking callback and preload models."""
@@ -111,7 +134,16 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         logger.warning("langfuse_init_failed", error=str(e))
 
+    sweeper_task = _start_stall_sweeper()
+
     yield
+
+    if sweeper_task is not None:
+        sweeper_task.cancel()
+        try:
+            await sweeper_task
+        except asyncio.CancelledError:
+            pass
 
     # Shutdown worker pool
     try:

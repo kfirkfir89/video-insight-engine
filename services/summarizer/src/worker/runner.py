@@ -14,6 +14,7 @@ Retry policy (matches docs/INFRASTRUCTURE.md):
 
 from __future__ import annotations
 
+import asyncio
 import enum
 import json
 import logging
@@ -21,12 +22,11 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import structlog
-from pydantic import ValidationError
-
 from llm_common.sentry_init import (
     capture_exception_with_context,
     pipeline_stage_transaction,
 )
+from pydantic import ValidationError
 
 from src.worker.payload import VideoJobPayload
 
@@ -43,6 +43,24 @@ class JobOutcome(enum.Enum):
 
 PipelineDriver = Callable[[VideoJobPayload], Awaitable[None]]
 RepublishHook = Callable[[VideoJobPayload], Awaitable[None]]
+SleepHook = Callable[[float], Awaitable[None]]
+
+# Ceiling on one retry delay so a misconfigured base can't park a consumer
+# slot for minutes (the message stays unacked — and thus redeliverable —
+# for the whole wait).
+MAX_RETRY_BACKOFF_SECONDS = 120.0
+
+
+def retry_backoff_seconds(base_seconds: float, attempt: int) -> float:
+    """Exponential delay before republishing: base × 2^(attempt-1), capped.
+
+    ``attempt`` is the attempt that just failed (1-based), so the first retry
+    waits ``base``, the second ``2·base``, … Zero/negative base disables
+    the wait entirely.
+    """
+    if base_seconds <= 0:
+        return 0.0
+    return min(base_seconds * (2 ** max(attempt - 1, 0)), MAX_RETRY_BACKOFF_SECONDS)
 
 
 class WorkerRunner:
@@ -53,10 +71,14 @@ class WorkerRunner:
         run_pipeline: PipelineDriver,
         republish: RepublishHook,
         max_retries: int,
+        retry_backoff_seconds: float = 0.0,
+        sleep: SleepHook = asyncio.sleep,
     ) -> None:
         self._run_pipeline = run_pipeline
         self._republish = republish
         self._max_retries = max_retries
+        self._retry_backoff_seconds = retry_backoff_seconds
+        self._sleep = sleep
 
     async def process_message(self, message: Any) -> JobOutcome:
         """Handle a single aio-pika IncomingMessage.
@@ -155,13 +177,20 @@ class WorkerRunner:
             return JobOutcome.PERMANENT_FAILURE
 
         retry_payload = payload.model_copy(update={"attempt": payload.attempt + 1})
+        delay = retry_backoff_seconds(self._retry_backoff_seconds, payload.attempt)
         logger.warning(
-            "worker_job_retry video=%s attempt=%d->next=%d error=%s",
+            "worker_job_retry video=%s attempt=%d->next=%d backoff_s=%.1f error=%s",
             payload.video_summary_id,
             payload.attempt,
             retry_payload.attempt,
+            delay,
             exc,
         )
+        # Wait BEFORE republishing, with the original still unacked: a worker
+        # that dies mid-wait loses nothing (the broker redelivers), and an
+        # upstream outage gets breathing room instead of 3 instant hits.
+        if delay > 0:
+            await self._sleep(delay)
         await self._republish(retry_payload)
         await message.ack()
         return JobOutcome.RETRIED

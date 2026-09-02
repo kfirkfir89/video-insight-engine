@@ -5,7 +5,6 @@ are unset, so the pipeline runs identically offline and in tests.
 """
 
 from src.services.observability.langfuse_client import (
-    fetch_prompt,
     fetch_prompt_with_obj,
     flush_langfuse,
     get_active_prompts,
@@ -22,7 +21,6 @@ from src.services.observability.langfuse_client import (
 )
 
 __all__ = [
-    "fetch_prompt",
     "fetch_prompt_with_obj",
     "flush_langfuse",
     "get_active_prompts",
