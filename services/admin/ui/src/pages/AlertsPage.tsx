@@ -3,9 +3,11 @@ import { useAlertsRecent, useAlertConfig } from '../hooks/use-admin-api';
 import { Panel } from '../components/Panel';
 import { SkeletonPanel } from '../components/SkeletonPanel';
 import { ErrorState } from '../components/ErrorState';
-import { timeAgo } from '../lib/format';
+import { formatCost, timeAgo } from '../lib/format';
+import { alertCost, describeAlert, getSeverity, severityColor } from '../lib/alerts';
+import type { AlertSeverity } from '../lib/alerts';
 
-type SeverityFilter = 'all' | 'critical' | 'warning' | 'info';
+type SeverityFilter = 'all' | AlertSeverity;
 
 const FILTERS: Array<{ id: SeverityFilter; label: string }> = [
   { id: 'all', label: 'All' },
@@ -13,25 +15,6 @@ const FILTERS: Array<{ id: SeverityFilter; label: string }> = [
   { id: 'warning', label: 'Warning' },
   { id: 'info', label: 'Info' },
 ];
-
-const CRITICAL_MATCH = /(critical|error|failure|exceed|anomal)/i;
-const WARNING_MATCH = /(warn|spike|threshold|degraded)/i;
-const INFO_MATCH = /(info|notice)/i;
-
-function getSeverity(alert: Record<string, unknown>): SeverityFilter {
-  const raw = String(alert.severity ?? alert.level ?? alert.type ?? '').toLowerCase();
-  if (!raw) return 'info';
-  if (raw.includes('critical') || raw.includes('error') || raw.includes('failure') || CRITICAL_MATCH.test(raw)) return 'critical';
-  if (WARNING_MATCH.test(raw)) return 'warning';
-  if (INFO_MATCH.test(raw)) return 'info';
-  return 'info';
-}
-
-function severityColor(sev: SeverityFilter): string {
-  if (sev === 'critical') return 'var(--color-danger)';
-  if (sev === 'warning') return 'var(--color-warning)';
-  return 'var(--color-text-muted)';
-}
 
 interface AlertsPageProps {
   /** Reserved for future filtering. Accepted so routed pages have a uniform signature. */
@@ -114,8 +97,7 @@ export function AlertsPage(_props: AlertsPageProps = {}) {
                   <tr className="border-b border-[var(--color-border)]">
                     <th className="text-left p-2 pl-4 font-medium text-[var(--color-text-muted)]">Severity</th>
                     <th className="text-left p-2 font-medium text-[var(--color-text-muted)]">Type</th>
-                    <th className="text-left p-2 font-medium text-[var(--color-text-muted)]">Model</th>
-                    <th className="text-left p-2 font-medium text-[var(--color-text-muted)]">Feature</th>
+                    <th className="text-left p-2 font-medium text-[var(--color-text-muted)]">Details</th>
                     <th className="text-right p-2 font-medium text-[var(--color-text-muted)]">Cost</th>
                     <th className="text-right p-2 pr-4 font-medium text-[var(--color-text-muted)]">Time</th>
                   </tr>
@@ -123,6 +105,7 @@ export function AlertsPage(_props: AlertsPageProps = {}) {
                 <tbody>
                   {filtered.map((a, i) => {
                     const sev = getSeverity(a);
+                    const cost = alertCost(a);
                     const iso = a.timestamp == null ? null : String(a.timestamp);
                     return (
                       <tr key={String(a._id ?? i)} className="border-b border-[var(--color-border)] last:border-0">
@@ -139,9 +122,10 @@ export function AlertsPage(_props: AlertsPageProps = {}) {
                           </span>
                         </td>
                         <td className="p-2 font-medium text-[var(--color-text)]">{String(a.type ?? '')}</td>
-                        <td className="p-2 font-mono truncate max-w-[160px]">{String(a.model ?? '')}</td>
-                        <td className="p-2">{String(a.feature ?? '')}</td>
-                        <td className="p-2 text-right font-mono">${Number(a.cost_usd ?? 0).toFixed(4)}</td>
+                        <td className="p-2 truncate max-w-[360px]" title={describeAlert(a)}>{describeAlert(a)}</td>
+                        <td className="p-2 text-right font-mono">
+                          {cost == null ? <span className="text-[var(--color-text-faint)]">—</span> : formatCost(cost)}
+                        </td>
                         <td className="p-2 pr-4 text-right text-[var(--color-text-muted)]">
                           {timeAgo(iso)}
                         </td>

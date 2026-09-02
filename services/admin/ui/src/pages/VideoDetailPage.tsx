@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
 import { useVideoDetail } from '../hooks/use-admin-api';
-import { formatCost, formatDuration, timeAgo, formatNumber } from '../lib/format';
+import { formatCost, formatDuration, timeAgo, formatNumber, formatUsageVolume } from '../lib/format';
 import { ArrowLeftIcon, DollarIcon, ZapIcon, HashIcon, ClockIcon } from '../components/icons';
 import { Panel } from '../components/Panel';
 import { StatCard } from '../components/StatCard';
@@ -171,7 +171,7 @@ export function VideoDetailPage() {
                     <td className="p-2 pl-4 font-mono truncate max-w-[180px]">{row.model}</td>
                     <td className="p-2 truncate max-w-[120px]">{row.feature}</td>
                     <td className="p-2 text-right font-mono font-medium text-[var(--color-primary)]">{formatCost(row.cost_usd)}</td>
-                    <td className="p-2 text-right">{row.tokens_in + row.tokens_out}</td>
+                    <td className="p-2 text-right">{formatUsageVolume(row)}</td>
                     <td className="p-2 text-right">{row.duration_ms}ms</td>
                     <td className="p-2 pr-4 text-right text-[var(--color-text-muted)]">
                       {timeAgo(row.timestamp)}

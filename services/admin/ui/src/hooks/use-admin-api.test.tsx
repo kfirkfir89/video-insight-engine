@@ -23,6 +23,10 @@ describe('use-admin-api hooks', () => {
     // New hooks
     expect(typeof hooks.useUsageByRun).toBe('function');
     expect(typeof hooks.useUserActivity).toBe('function');
+    // observability-fix 2.1 — previously unwired endpoints
+    expect(typeof hooks.useUsageAnomalies).toBe('function');
+    expect(typeof hooks.useQueueDlq).toBe('function');
+    expect(typeof hooks.useReplayDlq).toBe('function');
   });
 });
 

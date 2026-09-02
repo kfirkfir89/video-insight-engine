@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUserCosts, useUserCostDetail, useUserActivity } from '../hooks/use-admin-api';
 import { api, type UserCostRow } from '../lib/api';
-import { formatCost, formatNumber, formatDateTime, formatDuration, timeAgo } from '../lib/format';
+import { formatCost, formatNumber, formatDateTime, formatDuration, timeAgo, formatUsageVolume } from '../lib/format';
 import { Panel } from '../components/Panel';
 import { SkeletonPanel } from '../components/SkeletonPanel';
 import { ErrorState } from '../components/ErrorState';
@@ -407,7 +407,7 @@ function AssistantTab({ userId }: AssistantTabProps) {
                 {formatCost(call.costUsd)}
               </td>
               <td className="p-2 text-right hidden sm:table-cell text-[var(--color-text-muted)]">
-                {formatNumber((call.tokensIn ?? 0) + (call.tokensOut ?? 0))}
+                {formatUsageVolume({ unit: call.unit, audio_seconds: call.audioSeconds, tokens_in: call.tokensIn, tokens_out: call.tokensOut })}
               </td>
               <td className="p-2 text-right hidden md:table-cell text-[var(--color-text-faint)] text-[10px]">
                 {formatDateTime(call.timestamp)}

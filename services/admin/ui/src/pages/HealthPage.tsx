@@ -1,5 +1,7 @@
 import { ServiceHealth } from '../components/ServiceHealth';
 import { QueueStats } from '../components/QueueStats';
+import { DlqPanel } from '../components/DlqPanel';
+import { SystemStatusBadge } from '../components/SystemStatusBadge';
 import { useHealthUptime } from '../hooks/use-admin-api';
 import { Panel } from '../components/Panel';
 import { SkeletonPanel } from '../components/SkeletonPanel';
@@ -26,8 +28,10 @@ export function HealthPage() {
 
   return (
     <div className="space-y-6">
+      <SystemStatusBadge />
       <ServiceHealth />
       <QueueStats />
+      <DlqPanel />
       {isError ? (
         <ErrorState error={error} onRetry={() => refetch()} title="Failed to load uptime" />
       ) : isLoading ? (

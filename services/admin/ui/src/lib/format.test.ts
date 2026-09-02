@@ -111,3 +111,16 @@ describe('formatNumber (existing)', () => {
     expect(result).toContain('000');
   });
 });
+
+describe('formatUsageVolume', () => {
+  it('should render transcription rows as minutes of audio', async () => {
+    const { formatUsageVolume } = await import('./format');
+    expect(formatUsageVolume({ unit: 'audio_seconds', audio_seconds: 312, tokens_in: 0, tokens_out: 0 })).toBe('5.2 min audio');
+  });
+
+  it('should sum tokens for token-priced rows', async () => {
+    const { formatUsageVolume } = await import('./format');
+    expect(formatUsageVolume({ unit: 'tokens', tokens_in: 1200, tokens_out: 300 })).toBe('1,500');
+    expect(formatUsageVolume({ tokens_in: 5, tokens_out: null })).toBe('5');
+  });
+});

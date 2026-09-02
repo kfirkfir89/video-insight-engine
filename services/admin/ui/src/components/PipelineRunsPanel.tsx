@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useUsageByRun } from '../hooks/use-admin-api';
 import type { RunSummary, RunCallSummary } from '../lib/api';
-import { formatCost, formatDateTime, formatNumber } from '../lib/format';
+import { formatCost, formatDateTime, formatUsageVolume } from '../lib/format';
 import { buildLangfuseTraceUrl } from '../lib/langfuse';
 import { Panel } from './Panel';
 import { SkeletonPanel } from './SkeletonPanel';
@@ -87,9 +87,7 @@ function RunCallsTable({ calls }: RunCallsTableProps) {
                     {formatCost(call.cost_usd)}
                   </td>
                   <td className="py-1.5 px-3 text-right hidden sm:table-cell">
-                    {call.unit === 'audio_seconds'
-                      ? `${((call.audio_seconds ?? 0) / 60).toFixed(1)} min audio`
-                      : formatNumber((call.tokens_in ?? 0) + (call.tokens_out ?? 0))}
+                    {formatUsageVolume(call)}
                   </td>
                   <td className="py-1.5 px-3 text-right text-[var(--color-text-muted)] hidden md:table-cell">
                     {call.duration_ms != null ? `${call.duration_ms}ms` : '—'}

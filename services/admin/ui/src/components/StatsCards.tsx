@@ -73,11 +73,14 @@ export function StatsCards({ days = 30 }: { days?: number }) {
       tone: 'success',
     },
     {
-      label: 'Avg Duration',
-      value: `${fmt(data.avg_duration_ms ?? 0)}ms`,
+      label: data.p95_duration_ms != null ? 'Duration avg · p95' : 'Avg Duration',
+      value:
+        data.p95_duration_ms != null
+          ? `${fmt(Math.round(data.avg_duration_ms ?? 0))} · ${fmt(Math.round(data.p95_duration_ms))}ms`
+          : `${fmt(data.avg_duration_ms ?? 0)}ms`,
       icon: ClockIcon,
       tone: 'warning',
-      tip: 'Wall-clock time per LLM call from request start to response complete.',
+      tip: 'Wall-clock time per LLM call. p95 = 95% of calls finished within this time — the slow tail the average hides.',
     },
     {
       label: 'Success Rate',

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 
 export function useUsageStats(days = 30) {
@@ -54,6 +54,13 @@ export function useUsageDuplicates(days = 7) {
   return useQuery({ queryKey: ['usage-duplicates', days], queryFn: () => api.usage.duplicates(days) });
 }
 
+export function useUsageAnomalies(thresholdUsd = 0.5, days = 7) {
+  return useQuery({
+    queryKey: ['usage-anomalies', thresholdUsd, days],
+    queryFn: () => api.usage.anomalies(thresholdUsd, days),
+  });
+}
+
 export function useHealthServices() {
   return useQuery({ queryKey: ['health-services'], queryFn: () => api.health.services(), refetchInterval: 15_000 });
 }
@@ -71,6 +78,30 @@ export function useQueueStats() {
     queryKey: ['queue-stats'],
     queryFn: () => api.queue.stats(),
     refetchInterval: 10_000,
+  });
+}
+
+export function useQueueDlq(limit = 20) {
+  return useQuery({
+    queryKey: ['queue-dlq', limit],
+    queryFn: () => api.queue.dlq(limit),
+    refetchInterval: 15_000,
+  });
+}
+
+/**
+ * Replay DLQ messages; refreshes the queue counters and the DLQ peek once the
+ * call settles. Settled, not success: vie-api drains with per-message confirms,
+ * so a timeout or 502 can land after part of the batch was already re-published.
+ */
+export function useReplayDlq() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (max: number) => api.queue.replay(max),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['queue-stats'] });
+      void queryClient.invalidateQueries({ queryKey: ['queue-dlq'] });
+    },
   });
 }
 
