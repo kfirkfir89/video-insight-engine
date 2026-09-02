@@ -16,6 +16,7 @@ Usage:
 
 import asyncio
 import hashlib
+import os
 from datetime import UTC, datetime
 
 import litellm
@@ -52,6 +53,28 @@ def _safe_int(obj: object, attr: str) -> int:
 logger = structlog.get_logger(__name__)
 
 DEFAULT_COST_THRESHOLD = 0.50
+
+
+def cost_threshold_from_env() -> float:
+    """Per-call high-cost alert threshold: ``ALERT_COST_THRESHOLD_USD`` or the default.
+
+    Read at construction (not import) so a service's settings and tests can
+    override it. A malformed value falls back to the default with a warning
+    rather than breaking LLM usage tracking at boot.
+    """
+    raw = os.environ.get("ALERT_COST_THRESHOLD_USD", "").strip()
+    if not raw:
+        return DEFAULT_COST_THRESHOLD
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning("alert_cost_threshold_invalid", value=raw, default=DEFAULT_COST_THRESHOLD)
+        return DEFAULT_COST_THRESHOLD
+    if value < 0:
+        logger.warning("alert_cost_threshold_negative", value=value, default=DEFAULT_COST_THRESHOLD)
+        return DEFAULT_COST_THRESHOLD
+    return value
+
 
 # Process-wide handle to the active usage buffer. Lets out-of-band emitters
 # (transcription calls provider SDKs directly, bypassing LiteLLM's callback)
@@ -125,11 +148,13 @@ class MongoDBUsageCallback(CustomLogger):
         database,
         service: str = "unknown",
         mode: str = "sync",
-        cost_threshold: float = DEFAULT_COST_THRESHOLD,
+        cost_threshold: float | None = None,
     ):
         self._service = service
         self._mode = mode
-        self._cost_threshold = cost_threshold
+        self._cost_threshold = (
+            cost_threshold if cost_threshold is not None else cost_threshold_from_env()
+        )
         self._usage_col = database["llm_usage"]
         self._alerts_col = database["llm_alerts"]
 
