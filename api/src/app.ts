@@ -1,8 +1,7 @@
 import Fastify from 'fastify';
-import type { FastifyInstance, FastifyServerOptions } from 'fastify';
-import { ZodError } from 'zod';
+import type { FastifyBaseLogger, FastifyInstance, FastifyServerOptions } from 'fastify';
 import { config } from './config.js';
-import { AppError, DailyLimitReachedError } from './utils/errors.js';
+import { resolveErrorEnvelope } from './utils/error-envelope.js';
 import { createContainer, Container } from './container.js';
 
 // Plugins
@@ -38,6 +37,62 @@ import { adminQueueRoutes } from './routes/admin/queue.routes.js';
 import { userMeRoutes, adminUsersRoutes } from './routes/users.routes.js';
 import { healthRoutes } from './routes/health.routes.js';
 
+/** The object form of Fastify's `logger` option (pino options + Fastify extras). */
+type LoggerConfig = Exclude<FastifyServerOptions['logger'], boolean | undefined | FastifyBaseLogger>;
+
+// Header names that may carry credentials — kept in step with the Sentry
+// plugin's SENSITIVE_HEADERS so stdout and Sentry scrub the same set.
+const SECRET_HEADER_NAMES = [
+  'authorization',
+  'cookie',
+  'set-cookie',
+  'x-internal-secret',
+  'x-admin-key',
+  'x-csrf-token',
+  'x-api-key',
+  'proxy-authorization',
+];
+
+// Body/field names that may carry credentials wherever they appear.
+const SECRET_FIELD_NAMES = ['password', 'token', 'accessToken', 'refreshToken', 'apiKey'];
+
+/**
+ * pino redact paths. `req.headers` is Fastify's request serializer; bare
+ * `headers` covers a leaked header set logged by hand. pino's `*` matches
+ * exactly one level, so each field is listed both top-level and nested.
+ * Exported for the log-shape test.
+ */
+export const LOG_REDACT_PATHS = [
+  ...SECRET_HEADER_NAMES.flatMap((name) => [`req.headers["${name}"]`, `headers["${name}"]`]),
+  ...SECRET_FIELD_NAMES.flatMap((name) => [name, `*.${name}`]),
+];
+
+/**
+ * Default logger config for `buildApp`. Exported so tests can wire a capture
+ * stream on top of the real production config instead of re-declaring it.
+ */
+export function defaultLoggerOptions(isDev: boolean): LoggerConfig {
+  return {
+    level: isDev ? 'debug' : 'info',
+    base: { service: 'vie-api' },
+    // Sentry output is scrubbed by the plugin; stdout was not. Credentials
+    // that reach a log line (a logged request, an error carrying its
+    // request config, a payload echoed in a warn) get censored here.
+    redact: { paths: LOG_REDACT_PATHS, censor: '[Redacted]' },
+    ...(isDev && {
+      transport: {
+        target: 'pino-pretty',
+        options: {
+          colorize: true,
+          singleLine: true,
+          translateTime: 'SYS:HH:MM:ss',
+          ignore: 'pid,hostname',
+        },
+      },
+    }),
+  };
+}
+
 export interface BuildAppOptions {
   logger?: FastifyServerOptions['logger'];
   /** Optional partial container override for testing */
@@ -45,10 +100,6 @@ export interface BuildAppOptions {
 }
 
 export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstance> {
-  // TODO: v1.5 — Initialize PostHog analytics when POSTHOG_API_KEY is set
-  // npm install posthog-node, then: new PostHog(config.POSTHOG_API_KEY)
-  // Track: output_created, output_shared, output_viewed, paywall_shown, paywall_converted
-
   const isDev = config.NODE_ENV === 'development';
 
   const fastify = Fastify({
@@ -69,21 +120,7 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
     // disableSocketInactivityTimeout(); see config.ts for the full rationale.
     requestTimeout: config.HTTP_REQUEST_TIMEOUT_MS,
     connectionTimeout: config.HTTP_CONNECTION_TIMEOUT_MS,
-    logger: options?.logger ?? {
-      level: isDev ? 'debug' : 'info',
-      base: { service: 'vie-api' },
-      ...(isDev && {
-        transport: {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-            singleLine: true,
-            translateTime: 'SYS:HH:MM:ss',
-            ignore: 'pid,hostname',
-          },
-        },
-      }),
-    },
+    logger: options?.logger ?? defaultLoggerOptions(isDev),
     disableRequestLogging: isDev,
   });
 
@@ -91,12 +128,14 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   // Skips health check endpoints to reduce noise from Docker/admin polling
   if (isDev) {
     fastify.addHook('onResponse', (req, reply, done) => {
-      if (req.url === '/health' || req.url === '/healthz') {
+      if (req.url === '/health' || req.url === '/ready') {
         done();
         return;
       }
       const ms = reply.elapsedTime.toFixed(0);
-      fastify.log.info(`${req.method} ${req.url} ${reply.statusCode} (${ms}ms)`);
+      // Carry the request id so dev logs are greppable by x-request-id too
+      // (prod uses Fastify's structured request logging, which binds it).
+      req.log.info(`${req.method} ${req.url} ${reply.statusCode} (${ms}ms)`);
       done();
     });
   }
@@ -142,88 +181,31 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   // Tier middleware (after JWT, uses container)
   await fastify.register(tierPlugin);
 
-  // Global error handler — every branch emits the documented envelope
-  // `{ error, message, statusCode }` (docs/ERROR-HANDLING.md), plus
-  // `details` when structured context exists (Zod issue list) and the
-  // documented `resetAt`/`limitUsd` extras for the daily cost cap.
+  // Global error handler. The status/envelope mapping lives in
+  // utils/error-envelope.ts so this stays a thin log-then-send: 5xx at
+  // error with the stack, everything else at warn. 4xx were previously
+  // never logged at all — a client-reported 400/401/429 could only be
+  // diagnosed by reproducing it.
   fastify.setErrorHandler((error, request, reply) => {
-    // Zod validation errors
-    if (error instanceof ZodError) {
-      return reply.status(400).send({
-        error: 'VALIDATION_ERROR',
-        message: error.errors[0]?.message || 'Invalid input',
-        statusCode: 400,
-        details: {
-          issues: error.errors.map((issue) => ({
-            path: issue.path.join('.'),
-            message: issue.message,
-          })),
+    const { statusCode, body } = resolveErrorEnvelope(error);
+    if (statusCode >= 500) {
+      request.log.error(error);
+    } else {
+      request.log.warn(
+        {
+          statusCode,
+          errorCode: body.error,
+          // body.message is the client-facing text (first Zod issue for
+          // VALIDATION_ERROR) — error.message for a ZodError is a JSON dump.
+          errMessage: body.message,
+          method: request.method,
+          route: request.routeOptions?.url,
+          userId: request.user?.userId,
         },
-      });
+        'request rejected',
+      );
     }
-
-    // Daily cost limit reached — surface resetAt for the UI countdown
-    if (error instanceof DailyLimitReachedError) {
-      return reply.status(error.status).send({
-        error: error.code,
-        message: error.message,
-        statusCode: error.status,
-        resetAt: error.resetAt,
-        limitUsd: error.limitUsd,
-      });
-    }
-
-    // Application errors (AppError and subclasses)
-    if (error instanceof AppError) {
-      return reply.status(error.status).send({
-        error: error.code,
-        message: error.message,
-        statusCode: error.status,
-      });
-    }
-
-    // MongoDB BSONError (invalid ObjectId format)
-    if (error.name === 'BSONError') {
-      return reply.status(400).send({
-        error: 'INVALID_ID_FORMAT',
-        message: 'Invalid ID format',
-        statusCode: 400,
-      });
-    }
-
-    // Fastify plugin errors (rate-limit, auth, etc.) — respect their statusCode
-    if (typeof error.statusCode === 'number' && error.statusCode !== 500) {
-      // @fastify/rate-limit THROWS its errorResponseBuilder result, so the
-      // documented envelope arrives here as `{ error, message, statusCode }`.
-      // Prefer that `error` string over the generic fallback — without this,
-      // every 429 left the API as `error: 'ERROR'` and broke client-side
-      // error-code maps expecting RATE_LIMITED (docs/ERROR-HANDLING.md).
-      const envelopeCode =
-        'error' in error && typeof (error as { error?: unknown }).error === 'string'
-          ? (error as { error: string }).error
-          : undefined;
-      const errorCode =
-        envelopeCode ?? ('code' in error && typeof error.code === 'string' ? error.code : 'ERROR');
-      return reply.status(error.statusCode).send({
-        error: errorCode,
-        message: error.message,
-        statusCode: error.statusCode,
-      });
-    }
-
-    // Log unexpected errors
-    request.log.error(error);
-
-    // Don't expose internal error details in production
-    const message = config.NODE_ENV === 'production'
-      ? 'Internal server error'
-      : error.message;
-
-    return reply.status(500).send({
-      error: 'INTERNAL_ERROR',
-      message,
-      statusCode: 500,
-    });
+    return reply.status(statusCode).send(body);
   });
 
   // Register routes

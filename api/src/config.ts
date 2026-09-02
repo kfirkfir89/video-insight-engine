@@ -87,13 +87,10 @@ const envSchema = z.object({
   PADDLE_TEAM_PRICE_ID: z.string().default(''),
   // Cost monitoring
   COST_DAILY_LIMIT: z.string().default('50').transform(Number),
-  COST_ALERT_SLACK_WEBHOOK: z.string().optional(),
   // Per-user daily cost limits in USD (0 disables the limit; -1 means unlimited)
   USER_COST_LIMIT_FREE: z.string().default('2').transform(Number),
   USER_COST_LIMIT_PRO: z.string().default('20').transform(Number),
   USER_COST_LIMIT_TEAM: z.string().default('-1').transform(Number),
-  // Analytics (PostHog)
-  POSTHOG_API_KEY: z.string().optional(),
   // ─── RabbitMQ job queue ─────────────────────────────────────────────
   // amqplib connection URL. The credentials are supplied via docker-compose env
   // (RABBITMQ_DEFAULT_USER / PASS) so this default works in the dev compose.

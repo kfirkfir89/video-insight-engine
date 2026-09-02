@@ -1,5 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
-import { buildApp } from './app.js';
+import { buildApp, defaultLoggerOptions } from './app.js';
+
+/** A pino destination that keeps every emitted line for assertions. */
+function captureLogs() {
+  const lines: Array<Record<string, unknown>> = [];
+  const stream = {
+    write(chunk: string) {
+      lines.push(JSON.parse(chunk) as Record<string, unknown>);
+    },
+  };
+  return { lines, stream };
+}
 
 describe('buildApp', () => {
   describe('with container override', () => {
@@ -194,6 +205,95 @@ describe('buildApp', () => {
         message: 'kaboom', // non-production echoes the message
         statusCode: 500,
       });
+
+      await app.close();
+    });
+  });
+
+  describe('error logging (observability-fix 1.4)', () => {
+    // Every 4xx branch used to `return` before any log call — a client-
+    // reported 400/401/429 could only be diagnosed by reproducing it.
+    it('should log 4xx responses at warn with code, status and requestId', async () => {
+      const { lines, stream } = captureLogs();
+      const app = await buildApp({ logger: { level: 'warn', stream } });
+      const { NotFoundError } = await import('./utils/errors.js');
+      app.get('/boom-404', async () => {
+        throw new NotFoundError('Video');
+      });
+      await app.ready();
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/boom-404',
+        headers: { 'x-request-id': '11111111-1111-4111-8111-111111111111' },
+      });
+
+      expect(response.statusCode).toBe(404);
+      const rejected = lines.find((l) => l.msg === 'request rejected');
+      expect(rejected).toMatchObject({
+        level: 40,
+        statusCode: 404,
+        errorCode: 'NOT_FOUND',
+        errMessage: 'Video not found',
+        method: 'GET',
+        route: '/boom-404',
+        requestId: '11111111-1111-4111-8111-111111111111',
+      });
+
+      await app.close();
+    });
+
+    it('should log unexpected 500s at error, not as a rejection', async () => {
+      const { lines, stream } = captureLogs();
+      const app = await buildApp({ logger: { level: 'warn', stream } });
+      app.get('/boom-500', async () => {
+        throw new Error('kaboom');
+      });
+      await app.ready();
+
+      await app.inject({ method: 'GET', url: '/boom-500' });
+
+      expect(lines.some((l) => l.msg === 'request rejected')).toBe(false);
+      expect(lines.some((l) => l.level === 50 && l.msg === 'kaboom')).toBe(true);
+
+      await app.close();
+    });
+
+    it('should redact credentials that reach a log line', async () => {
+      const { lines, stream } = captureLogs();
+      // Real production logger config + a capture stream, so this fails if
+      // the redact wiring is ever dropped from buildApp's defaults.
+      const app = await buildApp({ logger: { ...defaultLoggerOptions(false), stream } });
+      await app.ready();
+
+      // `req` is reserved for Fastify's request serializer, so a leaked header
+      // set shows up under a plain `headers` key (or inside an error's config).
+      app.log.info(
+        {
+          headers: {
+            authorization: 'Bearer secret-jwt',
+            cookie: 'sid=abc',
+            'x-internal-secret': 'internal-1',
+            host: 'x',
+          },
+          body: { password: 'hunter2', refreshToken: 'rt-1' },
+          token: 'top-level-jwt',
+        },
+        'shape',
+      );
+
+      const line = lines.find((l) => l.msg === 'shape') as {
+        headers: Record<string, string>;
+        body: Record<string, string>;
+        token: string;
+      };
+      expect(line.headers.authorization).toBe('[Redacted]');
+      expect(line.headers.cookie).toBe('[Redacted]');
+      expect(line.headers['x-internal-secret']).toBe('[Redacted]');
+      expect(line.headers.host).toBe('x');
+      expect(line.body.password).toBe('[Redacted]');
+      expect(line.body.refreshToken).toBe('[Redacted]');
+      expect(line.token).toBe('[Redacted]');
 
       await app.close();
     });
