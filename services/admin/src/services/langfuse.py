@@ -14,6 +14,7 @@ hot path of the usage endpoints.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import httpx
@@ -66,9 +67,7 @@ def _trace_url(project_id: str, trace_id: str) -> str:
     return f"{_base_url()}/project/{project_id}/traces/{trace_id}"
 
 
-def _build_url_map(
-    traces: list[dict], project_id: str, wanted: set[str]
-) -> dict[str, str]:
+def _build_url_map(traces: list[dict], project_id: str, wanted: set[str]) -> dict[str, str]:
     """Map each wanted ``request_id`` to a trace URL by scanning trace tags.
 
     Pure (no I/O) so it can be unit-tested. The summarizer tags pipeline traces
@@ -89,15 +88,75 @@ def _build_url_map(
     return urls
 
 
+# Parallel tag lookups per run: a filtered ``tags=requestId:<id>`` query is
+# small and fast, whereas the unfiltered 100-trace listing (~10 s on
+# cloud.langfuse.com) blew the read budget and every run rendered without a link.
+_LOOKUP_CONCURRENCY = 8
+# Wall-clock cap for the whole batch. A page can carry 100 runs; at 8-wide with
+# a 4 s per-call timeout a degraded Langfuse would otherwise hold /usage/by-run
+# for ~50 s. Lookups still pending at the deadline are dropped (no link).
+_TOTAL_BUDGET_SECONDS = 8.0
+
+
+async def _lookup_trace_url(
+    client: httpx.AsyncClient, project_id: str, request_id: str, sem: asyncio.Semaphore
+) -> tuple[str, str | None]:
+    async with sem:
+        try:
+            resp = await client.get(
+                f"{_base_url()}/api/public/traces",
+                auth=_auth(),
+                params={"tags": f"requestId:{request_id}", "limit": 1, "fields": "core"},
+            )
+            resp.raise_for_status()
+            traces = resp.json().get("data", [])
+        except (httpx.HTTPError, KeyError, ValueError) as exc:
+            logger.warning("langfuse_deeplink_lookup_failed request_id=%s: %s", request_id, exc)
+            return request_id, None
+    urls = _build_url_map(traces, project_id, {request_id})
+    return request_id, urls.get(request_id)
+
+
+async def _lookup_all(
+    client: httpx.AsyncClient, project_id: str, wanted: list[str]
+) -> dict[str, str]:
+    """Run every lookup under one wall-clock budget; keep whatever finished.
+
+    A lookup that raises something unexpected (malformed JSON shape, etc.)
+    costs only its own link — it must never turn into a 500 on the run list.
+    """
+    sem = asyncio.Semaphore(_LOOKUP_CONCURRENCY)
+    tasks = [asyncio.create_task(_lookup_trace_url(client, project_id, rid, sem)) for rid in wanted]
+    done, pending = await asyncio.wait(tasks, timeout=_TOTAL_BUDGET_SECONDS)
+    if pending:
+        logger.warning(
+            "langfuse_deeplink_budget_exhausted pending=%d total=%d", len(pending), len(tasks)
+        )
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+
+    urls: dict[str, str] = {}
+    for task in done:
+        exc = task.exception()
+        if exc is not None:
+            logger.warning("langfuse_deeplink_lookup_crashed: %r", exc)
+            continue
+        rid, url = task.result()
+        if url:
+            urls[rid] = url
+    return urls
+
+
 async def map_request_ids_to_urls(request_ids: list[str]) -> dict[str, str]:
     """Resolve each ``request_id`` to its Langfuse trace URL.
 
-    Fetches recent traces once and maps them by their ``requestId:<id>`` tag, so
-    a page of runs costs a single Langfuse call regardless of run count. Runs
-    whose trace is older than the fetched window simply get no link. Returns an
-    empty dict (no links) on any error or when Langfuse is not configured.
+    One tag-filtered lookup per run, ``_LOOKUP_CONCURRENCY`` at a time, all
+    within ``_TOTAL_BUDGET_SECONDS``. Runs whose lookup fails, times out or
+    finds no trace simply get no link. Returns an empty dict on any
+    project-resolution error or when Langfuse is not configured.
     """
-    wanted = {rid for rid in request_ids if rid}
+    wanted = [rid for rid in dict.fromkeys(request_ids) if rid]
     if not wanted or not is_enabled():
         return {}
 
@@ -106,16 +165,7 @@ async def map_request_ids_to_urls(request_ids: list[str]) -> dict[str, str]:
             project_id = await _resolve_project_id(client)
             if not project_id:
                 return {}
-
-            resp = await client.get(
-                f"{_base_url()}/api/public/traces",
-                auth=_auth(),
-                params={"limit": 100},
-            )
-            resp.raise_for_status()
-            traces = resp.json().get("data", [])
+            return await _lookup_all(client, project_id, wanted)
     except (httpx.HTTPError, KeyError, ValueError) as exc:
         logger.warning("langfuse_deeplink_resolve_failed: %s", exc)
         return {}
-
-    return _build_url_map(traces, project_id, wanted)

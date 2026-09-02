@@ -59,6 +59,8 @@ COOLDOWNS = {
     "backup_stale": timedelta(hours=6),
 }
 
+# ``severity`` is set explicitly on every alert (warning|critical) so the admin
+# Alerts page files it correctly instead of regex-guessing from ``type``.
 # Mirrors the defaults served by GET /alerts/config when no doc exists.
 DEFAULT_CONFIG = {
     "cost_threshold_usd": 0.50,
@@ -94,6 +96,7 @@ def build_spike_alert(
         return None
     return {
         "type": "daily_spend_spike",
+        "severity": "warning",
         "cost_usd": round(today_usd, 4),
         "baseline_daily_usd": round(baseline_daily_usd, 4),
         "day_fraction": round(fraction, 3),
@@ -112,6 +115,7 @@ def build_failure_alert(failures: int, total: int, threshold: float, now: dateti
         return None
     return {
         "type": "high_failure_rate",
+        "severity": "critical",
         "failure_rate": round(rate, 3),
         "sample_size": total,
         "window_minutes": FAILURE_WINDOW_MINUTES,
@@ -137,6 +141,7 @@ def build_backup_stale_alert(
             return None
     return {
         "type": "backup_stale",
+        "severity": "critical",
         "latest_backup": latest_backup,
         "age_hours": round(age_hours, 1) if age_hours is not None else None,
         "max_age_hours": max_age_hours,

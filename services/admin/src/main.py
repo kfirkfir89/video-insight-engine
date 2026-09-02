@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import structlog
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -22,7 +22,6 @@ from src.routes.shares import router as shares_router
 from src.routes.tiers import router as tiers_router
 from src.routes.usage import router as usage_router
 from src.routes.users import router as users_router
-from src.services.aggregator import aggregate_daily
 from src.services.alert_evaluator import alert_evaluator_loop
 from src.services.health_checker import health_poller_loop
 
@@ -163,14 +162,6 @@ app.include_router(queue_router)
 @app.get("/health")
 async def root_health():
     return {"status": "healthy", "service": "vie-admin"}
-
-
-@app.post("/admin/aggregate-daily")
-async def trigger_aggregation(target_date: str | None = Query(None)):
-    try:
-        return await aggregate_daily(target_date)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
 
 
 # Mount static files for React UI (if built)
