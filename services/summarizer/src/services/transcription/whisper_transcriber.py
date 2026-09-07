@@ -19,12 +19,12 @@ from openai import OpenAI
 from pydub import AudioSegment
 
 from src.config import settings
-from src.models.schemas import (
-    TranscriptSegment,
-    NormalizedTranscript,
-    ErrorCode,
-)
 from src.exceptions import TranscriptError
+from src.models.schemas import (
+    ErrorCode,
+    NormalizedTranscript,
+    TranscriptSegment,
+)
 from src.services.media.download_utils import download_youtube_audio
 from src.services.transcription.usage import emit_transcription_usage
 from src.utils.language_utils import normalize_language_code
@@ -94,7 +94,10 @@ def _download_audio_sync(video_id: str) -> Path:
     output_path = TEMP_DIR / f"{file_stem}.%(ext)s"
 
     ydl_opts = {
-        "format": "bestaudio",
+        # bestaudio has no match when YouTube's SABR experiment strips audio-only
+        # format URLs from the android client (2026-09) — /best falls back to a
+        # progressive muxed stream, which FFmpegExtractAudio demuxes to mp3.
+        "format": "bestaudio/best",
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -167,8 +170,7 @@ def _transcribe_sync(
             }
             if is_music:
                 whisper_kwargs["prompt"] = (
-                    "Transcribe all lyrics and singing accurately. "
-                    "Include all vocal content."
+                    "Transcribe all lyrics and singing accurately. Include all vocal content."
                 )
             response = client.audio.transcriptions.create(**whisper_kwargs)
 
@@ -176,7 +178,8 @@ def _transcribe_sync(
         detected_language = getattr(response, "language", None)
         logger.info(
             "Whisper transcription complete: %d chars, language=%s",
-            len(response.text), detected_language,
+            len(response.text),
+            detected_language,
         )
         # Convert Pydantic TranscriptionSegment objects to plain dicts
         # so downstream code can use .get() safely
@@ -244,7 +247,9 @@ def _split_audio_chunks(audio_path: Path) -> list[tuple[Path, int]]:
 
     logger.info(
         "Split %s into %d chunks (%.0fs each)",
-        audio_path.name, len(chunks), chunk_duration_ms / 1000,
+        audio_path.name,
+        len(chunks),
+        chunk_duration_ms / 1000,
     )
     return chunks
 
@@ -278,17 +283,18 @@ def _merge_chunk_results(results: list[tuple[int, dict]]) -> dict:
 
         offset_sec = offset_ms / 1000.0
         for seg in result.get("segments", []):
-            all_segments.append({
-                "text": seg.get("text", ""),
-                "start": seg.get("start", 0) + offset_sec,
-                "end": seg.get("end", 0) + offset_sec,
-            })
+            all_segments.append(
+                {
+                    "text": seg.get("text", ""),
+                    "start": seg.get("start", 0) + offset_sec,
+                    "end": seg.get("end", 0) + offset_sec,
+                }
+            )
 
     combined_language = (
-        normalize_language_code(
-            Counter(detected_languages).most_common(1)[0][0]
-        )
-        if detected_languages else None
+        normalize_language_code(Counter(detected_languages).most_common(1)[0][0])
+        if detected_languages
+        else None
     )
 
     return {
@@ -338,20 +344,24 @@ async def _transcribe_chunks_parallel(
             if deadline is not None and index > 0 and time.monotonic() >= deadline:
                 logger.warning(
                     "Whisper deadline reached before chunk %d/%d; skipping (partial transcript)",
-                    index + 1, total,
+                    index + 1,
+                    total,
                 )
                 return None
             logger.info(
                 "Whisper chunk %d/%d starting (offset=%.0fs)",
-                index + 1, total, offset_ms / 1000.0,
+                index + 1,
+                total,
+                offset_ms / 1000.0,
             )
             chunk_start = time.monotonic()
-            result = await asyncio.to_thread(
-                _transcribe_sync, chunk_path, is_music, client
-            )
+            result = await asyncio.to_thread(_transcribe_sync, chunk_path, is_music, client)
             logger.info(
                 "Whisper chunk %d/%d done in %.1fs (%d chars)",
-                index + 1, total, time.monotonic() - chunk_start, len(result["text"]),
+                index + 1,
+                total,
+                time.monotonic() - chunk_start,
+                len(result["text"]),
             )
             return result
 
@@ -365,7 +375,8 @@ async def _transcribe_chunks_parallel(
         if isinstance(outcome, BaseException):
             logger.warning(
                 "Whisper chunk at offset %.0fs failed, dropping: %s",
-                offset_ms / 1000.0, outcome,
+                offset_ms / 1000.0,
+                outcome,
             )
             continue
         if outcome is None:
@@ -373,9 +384,7 @@ async def _transcribe_chunks_parallel(
         merge_inputs.append((offset_ms, outcome))
 
     if not merge_inputs:
-        raise TranscriptError(
-            "All Whisper chunks failed", ErrorCode.UNKNOWN_ERROR
-        )
+        raise TranscriptError("All Whisper chunks failed", ErrorCode.UNKNOWN_ERROR)
 
     return _merge_chunk_results(merge_inputs)
 
@@ -498,7 +507,8 @@ async def translate_audio_to_english(
 
         logger.info(
             "Whisper translate complete for %s: %d chars",
-            video_id, len(result["text"]),
+            video_id,
+            len(result["text"]),
         )
         return result["text"]
     except Exception as e:
@@ -557,7 +567,8 @@ async def transcribe_with_whisper(
         if file_size_mb > CHUNK_TARGET_SIZE_MB:
             logger.info(
                 "Audio %.1fMB exceeds %dMB, chunking",
-                file_size_mb, CHUNK_TARGET_SIZE_MB,
+                file_size_mb,
+                CHUNK_TARGET_SIZE_MB,
             )
             try:
                 chunks = await asyncio.to_thread(_split_audio_chunks, audio_path)
@@ -594,7 +605,9 @@ async def transcribe_with_whisper(
         detected_language = result.get("language")
         logger.info(
             "Whisper fallback complete: %d chars, %d segments, language=%s",
-            len(result["text"]), len(segments), detected_language,
+            len(result["text"]),
+            len(segments),
+            detected_language,
         )
 
         # Cache audio for non-English so translate_audio_to_english can reuse it
@@ -602,6 +615,7 @@ async def transcribe_with_whisper(
             cached = _cached_audio_path(video_id)
             try:
                 import shutil
+
                 shutil.move(str(audio_path), str(cached))
                 audio_path = None  # Prevent finally cleanup
                 logger.debug("Cached audio for translation reuse: %s", cached)

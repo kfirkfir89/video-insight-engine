@@ -28,8 +28,8 @@ import tenacity
 import yt_dlp  # type: ignore[import-untyped]
 
 from src.config import settings
-from src.models.schemas import ErrorCode
 from src.exceptions import TranscriptError
+from src.models.schemas import ErrorCode
 from src.utils.language_utils import (
     detect_language_by_script,
     normalize_language_code,
@@ -41,10 +41,21 @@ logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
 
 # Valid category values (matches frontend VideoCategory)
-VALID_CATEGORIES: frozenset[str] = frozenset([
-    'cooking', 'coding', 'fitness', 'travel', 'education',
-    'podcast', 'reviews', 'gaming', 'diy', 'music', 'standard'
-])
+VALID_CATEGORIES: frozenset[str] = frozenset(
+    [
+        "cooking",
+        "coding",
+        "fitness",
+        "travel",
+        "education",
+        "podcast",
+        "reviews",
+        "gaming",
+        "diy",
+        "music",
+        "standard",
+    ]
+)
 
 
 # -----------------------------------------------------------------------------
@@ -52,18 +63,21 @@ VALID_CATEGORIES: frozenset[str] = frozenset([
 # -----------------------------------------------------------------------------
 class CategoryKeywords(TypedDict):
     """Keywords config for category detection."""
+
     primary: list[str]
     secondary: list[str]
 
 
 class YouTubeCategories(TypedDict):
     """YouTube categories config for category detection."""
+
     primary: list[str]
     secondary: list[str]
 
 
 class CategoryConfig(TypedDict):
     """Configuration for a single category detection rule."""
+
     keywords: CategoryKeywords
     youtube_categories: YouTubeCategories
     channel_patterns: list[str]
@@ -72,12 +86,14 @@ class CategoryConfig(TypedDict):
 
 class DetectionConfig(TypedDict):
     """Detection configuration."""
+
     llm_fallback_threshold: float
     weights: dict[str, float]
 
 
 class CategoryRules(TypedDict):
     """Structure of category_rules.json."""
+
     version: str
     detection_config: DetectionConfig
     categories: dict[str, CategoryConfig]
@@ -133,6 +149,7 @@ class VideoContext:
         display_tags: Cleaned, deduplicated tags for UI display (max 6)
         category_confidence: Confidence score from detection (0.0-1.0)
     """
+
     youtube_category: str | None
     category: str  # "cooking", "coding", "travel", etc.
     tags: list[str]
@@ -151,7 +168,7 @@ def _extract_hashtags(description: str) -> list[str]:
     """
     if not description:
         return []
-    return re.findall(r'#(\w+)', description.lower())
+    return re.findall(r"#(\w+)", description.lower())
 
 
 def _detect_category(
@@ -211,7 +228,11 @@ def _detect_category(
 
         if primary_keywords or secondary_keywords:
             max_possible = len(primary_keywords) + len(secondary_keywords) * 0.5
-            keyword_score = (primary_matches + secondary_matches * 0.5) / max_possible if max_possible > 0 else 0
+            keyword_score = (
+                (primary_matches + secondary_matches * 0.5) / max_possible
+                if max_possible > 0
+                else 0
+            )
             score += min(keyword_score, 1.0) * keyword_weight
 
         # 2. YouTube category scoring (weight: 0.30)
@@ -328,20 +349,20 @@ def extract_video_context(
         VideoContext with category, persona, and tags
     """
     # Extract category (yt-dlp returns categories as a list)
-    categories = info.get('categories', [])
+    categories = info.get("categories", [])
     youtube_category = categories[0] if categories else None
 
     # Extract tags
-    tags = info.get('tags', []) or []
+    tags = info.get("tags", []) or []
 
     # Extract hashtags from description
     hashtags = _extract_hashtags(description)
 
     # Get channel and title from info if not provided
     if channel is None:
-        channel = info.get('uploader') or info.get('channel')
+        channel = info.get("uploader") or info.get("channel")
     if title is None:
-        title = info.get('title')
+        title = info.get("title")
 
     # Detect category using weighted scoring (NEW)
     category, confidence = _detect_category(
@@ -357,7 +378,11 @@ def extract_video_context(
 
     logger.info(
         "Video context: category=%s (confidence=%.2f), youtube_category=%s, tags=%d, hashtags=%d",
-        category, confidence, youtube_category, len(tags), len(hashtags),
+        category,
+        confidence,
+        youtube_category,
+        len(tags),
+        len(hashtags),
     )
 
     return VideoContext(
@@ -373,20 +398,23 @@ def extract_video_context(
 # Video Data Classes
 # -----------------------------------------------------------------------------
 
+
 @dataclass
 class Chapter:
     """A chapter/section from the video."""
+
     start_time: float  # seconds
-    end_time: float    # seconds
+    end_time: float  # seconds
     title: str
 
 
 @dataclass
 class SubtitleSegment:
     """A single subtitle/caption segment."""
+
     text: str
-    start: float      # seconds
-    duration: float   # seconds
+    start: float  # seconds
+    duration: float  # seconds
 
 
 @dataclass
@@ -405,20 +433,25 @@ class VideoData:
         upload_date: Upload date in YYYYMMDD format
         context: Video context with category, persona, and tags
     """
+
     video_id: str
     title: str
     channel: str
-    duration: int                            # exact seconds
+    duration: int  # exact seconds
     thumbnail_url: str | None
     description: str
     chapters: list[Chapter] = field(default_factory=list)
     subtitles: list[SubtitleSegment] = field(default_factory=list)
-    upload_date: str | None = None           # YYYYMMDD format
-    context: VideoContext | None = None      # Phase 1: Video context extraction
+    upload_date: str | None = None  # YYYYMMDD format
+    context: VideoContext | None = None  # Phase 1: Video context extraction
     # Detected primary language (ISO 639-1) — resolved from yt-dlp's audio-lang
     # tag, title/description script, or available caption track keys. ``None``
     # means "no signal" and downstream falls back to English.
     language: str | None = None
+    # True when the timedtext subtitle fetch was HTTP-429 rate-limited. The
+    # transcript fetcher uses this to negative-cache the caption endpoints
+    # (further caption calls in the window are doomed for the whole IP).
+    captions_rate_limited: bool = False
 
     @property
     def has_chapters(self) -> bool:
@@ -437,8 +470,7 @@ class VideoData:
 
         chapter = self.chapters[chapter_index]
         segments = [
-            seg for seg in self.subtitles
-            if chapter.start_time <= seg.start < chapter.end_time
+            seg for seg in self.subtitles if chapter.start_time <= seg.start < chapter.end_time
         ]
         return " ".join(seg.text for seg in segments)
 
@@ -450,24 +482,46 @@ def _build_yt_dlp_opts(use_proxy: bool = False) -> dict[str, Any]:
         use_proxy: Whether to use Webshare proxy (default False for direct connection)
     """
     opts: dict[str, Any] = {
-        'skip_download': True,
-        'quiet': True,
-        'no_warnings': True,
-        'extract_flat': False,
+        "skip_download": True,
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": False,
         # Subtitle options — request common languages (not 'all', which downloads 50+ tracks).
         # The pipeline detects language from the subtitle content.
-        'writesubtitles': True,
-        'writeautomaticsub': True,
-        'subtitleslangs': [
-            'en', 'en-US', 'en-GB',
-            'he', 'ar', 'fa', 'ur',           # RTL
-            'es', 'fr', 'de', 'it', 'pt',     # Western European
-            'ru', 'uk', 'pl', 'cs',            # Slavic
-            'ja', 'ko', 'zh', 'zh-Hans', 'zh-Hant',  # East Asian
-            'hi', 'bn', 'ta', 'te',            # South Asian
-            'tr', 'th', 'vi', 'id',            # Other major
+        "writesubtitles": True,
+        "writeautomaticsub": True,
+        "subtitleslangs": [
+            "en",
+            "en-US",
+            "en-GB",
+            "he",
+            "ar",
+            "fa",
+            "ur",  # RTL
+            "es",
+            "fr",
+            "de",
+            "it",
+            "pt",  # Western European
+            "ru",
+            "uk",
+            "pl",
+            "cs",  # Slavic
+            "ja",
+            "ko",
+            "zh",
+            "zh-Hans",
+            "zh-Hant",  # East Asian
+            "hi",
+            "bn",
+            "ta",
+            "te",  # South Asian
+            "tr",
+            "th",
+            "vi",
+            "id",  # Other major
         ],
-        'subtitlesformat': 'json3',  # Best format for parsing
+        "subtitlesformat": "json3",  # Best format for parsing
     }
 
     # Configure Webshare proxy only if requested and credentials available
@@ -476,7 +530,7 @@ def _build_yt_dlp_opts(use_proxy: bool = False) -> dict[str, Any]:
             f"http://{settings.WEBSHARE_PROXY_USERNAME}:"
             f"{settings.WEBSHARE_PROXY_PASSWORD}@p.webshare.io:80"
         )
-        opts['proxy'] = proxy_url
+        opts["proxy"] = proxy_url
         logger.debug("Using Webshare proxy for yt-dlp")
 
     return opts
@@ -485,27 +539,32 @@ def _build_yt_dlp_opts(use_proxy: bool = False) -> dict[str, Any]:
 def _parse_chapters(info: dict[str, Any]) -> list[Chapter]:
     """Parse chapters from yt-dlp info dict."""
     chapters = []
-    raw_chapters = info.get('chapters') or []
+    raw_chapters = info.get("chapters") or []
 
     for ch in raw_chapters:
-        start = ch.get('start_time', 0)
-        end = ch.get('end_time', start)
-        title = ch.get('title', 'Untitled')
+        start = ch.get("start_time", 0)
+        end = ch.get("end_time", start)
+        title = ch.get("title", "Untitled")
 
-        chapters.append(Chapter(
-            start_time=float(start),
-            end_time=float(end),
-            title=title.strip(),
-        ))
+        chapters.append(
+            Chapter(
+                start_time=float(start),
+                end_time=float(end),
+                title=title.strip(),
+            )
+        )
 
     return chapters
+
 
 @tenacity.retry(
     stop=tenacity.stop_after_attempt(2),
     wait=tenacity.wait_fixed(2),
     retry=tenacity.retry_if_exception_type(requests.exceptions.HTTPError),
     before_sleep=lambda retry_state: logger.warning(
-        "Subtitle fetch retry %d after error: %s", retry_state.attempt_number, retry_state.outcome.exception()
+        "Subtitle fetch retry %d after error: %s",
+        retry_state.attempt_number,
+        retry_state.outcome.exception(),
     ),
 )
 def _fetch_subtitle_data_sync(url: str, max_bytes: int = 10 * 1024 * 1024) -> dict:
@@ -518,7 +577,10 @@ def _fetch_subtitle_data_sync(url: str, max_bytes: int = 10 * 1024 * 1024) -> di
         max_bytes: Maximum response body size (default 10 MB).
     """
     response = requests.get(
-        url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=30, stream=True,
+        url,
+        headers={"User-Agent": "Mozilla/5.0"},
+        timeout=30,
+        stream=True,
     )
     response.raise_for_status()
     # Read with size limit to prevent memory exhaustion from oversized responses
@@ -531,13 +593,30 @@ def _fetch_subtitle_data_sync(url: str, max_bytes: int = 10 * 1024 * 1024) -> di
             raise ValueError(f"Subtitle response exceeds {max_bytes} bytes limit")
         chunks.append(chunk)
     import json as _json
+
     return _json.loads(b"".join(chunks))
 
 
-def _fetch_subtitles_from_url_sync(url: str) -> list[SubtitleSegment]:
+def _is_rate_limit_error(exc: BaseException | None) -> bool:
+    """True when an exception (possibly tenacity-wrapped) is an HTTP 429."""
+    if isinstance(exc, tenacity.RetryError):
+        exc = exc.last_attempt.exception()
+    return (
+        isinstance(exc, requests.exceptions.HTTPError)
+        and exc.response is not None
+        and exc.response.status_code == 429
+    )
+
+
+def _fetch_subtitles_from_url_sync(url: str) -> tuple[list[SubtitleSegment], bool]:
     """Fetch and parse subtitles from a URL (json3 format).
 
     SYNC — must be called from asyncio.to_thread (via _extract_video_data_sync).
+
+    Returns:
+        (segments, rate_limited) — ``rate_limited`` is True when the fetch
+        failed with HTTP 429, so the caller can flag the caption endpoints as
+        throttled for this egress IP.
     """
     segments: list[SubtitleSegment] = []
 
@@ -546,54 +625,60 @@ def _fetch_subtitles_from_url_sync(url: str) -> list[SubtitleSegment]:
         data = _fetch_subtitle_data_sync(url)
     except requests.exceptions.HTTPError as e:
         logger.warning("Subtitle fetch HTTP error: %s", e)
+        if _is_rate_limit_error(e):
+            return segments, True
     except Exception as e:
         logger.warning("Subtitle fetch error: %s", e)
+        if _is_rate_limit_error(e):
+            return segments, True
 
     if not data:
-        return segments
+        return segments, False
 
     try:
         # json3 format has 'events' array
-        events = data.get('events', [])
+        events = data.get("events", [])
 
         for event in events:
             # Skip non-speech events
-            if 'segs' not in event:
+            if "segs" not in event:
                 continue
 
-            start_ms = event.get('tStartMs', 0)
-            duration_ms = event.get('dDurationMs', 0)
+            start_ms = event.get("tStartMs", 0)
+            duration_ms = event.get("dDurationMs", 0)
 
             # Combine segment texts
             text_parts = []
-            for seg in event.get('segs', []):
-                if 'utf8' in seg:
-                    text_parts.append(seg['utf8'])
+            for seg in event.get("segs", []):
+                if "utf8" in seg:
+                    text_parts.append(seg["utf8"])
 
-            text = ''.join(text_parts).strip()
-            if text and text != '\n':
-                segments.append(SubtitleSegment(
-                    text=text,
-                    start=start_ms / 1000.0,
-                    duration=duration_ms / 1000.0,
-                ))
+            text = "".join(text_parts).strip()
+            if text and text != "\n":
+                segments.append(
+                    SubtitleSegment(
+                        text=text,
+                        start=start_ms / 1000.0,
+                        duration=duration_ms / 1000.0,
+                    )
+                )
 
     except Exception as e:
         logger.warning("Failed to parse subtitles: %s", e)
 
-    return segments
+    return segments, False
 
 
 def _clean_subtitle_text(text: str) -> str:
     """Clean subtitle text by removing artifacts."""
     # Remove common artifacts
-    text = re.sub(r'\[Music\]', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'\[Applause\]', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'\[Laughter\]', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'♪.*?♪', '', text)  # Music notes
+    text = re.sub(r"\[Music\]", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\[Applause\]", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\[Laughter\]", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"♪.*?♪", "", text)  # Music notes
 
     # Normalize whitespace
-    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r"\s+", " ", text)
 
     return text.strip()
 
@@ -604,7 +689,9 @@ def _clean_subtitle_text(text: str) -> str:
     wait=tenacity.wait_exponential(multiplier=1, min=2, max=10),
     retry=tenacity.retry_if_exception_type((ConnectionError, TimeoutError, OSError)),
     before_sleep=lambda retry_state: logger.warning(
-        "yt-dlp extraction retry %d after error: %s", retry_state.attempt_number, retry_state.outcome.exception()
+        "yt-dlp extraction retry %d after error: %s",
+        retry_state.attempt_number,
+        retry_state.outcome.exception(),
     ),
 )
 def _extract_with_retry(url: str, opts: dict[str, Any]) -> dict[str, Any] | None:
@@ -652,27 +739,24 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
         )
 
     # Check for live streams
-    if info.get('is_live'):
-        raise TranscriptError(
-            "Live streams are not supported",
-            ErrorCode.LIVE_STREAM
-        )
+    if info.get("is_live"):
+        raise TranscriptError("Live streams are not supported", ErrorCode.LIVE_STREAM)
 
     # Extract basic metadata
-    title = info.get('title', 'Unknown Title')
-    channel = info.get('uploader') or info.get('channel') or 'Unknown Channel'
-    duration = int(info.get('duration') or 0)
-    description = info.get('description') or ''
-    upload_date = info.get('upload_date')
+    title = info.get("title", "Unknown Title")
+    channel = info.get("uploader") or info.get("channel") or "Unknown Channel"
+    duration = int(info.get("duration") or 0)
+    description = info.get("description") or ""
+    upload_date = info.get("upload_date")
 
     # Get best thumbnail
-    thumbnails = info.get('thumbnails', [])
+    thumbnails = info.get("thumbnails", [])
     thumbnail_url = None
     if thumbnails:
         # Prefer maxresdefault or high quality
         for thumb in reversed(thumbnails):  # Usually sorted by quality
-            if thumb.get('url'):
-                thumbnail_url = thumb['url']
+            if thumb.get("url"):
+                thumbnail_url = thumb["url"]
                 break
 
     # If no thumbnail found, use standard YouTube thumbnail URL
@@ -685,8 +769,8 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
 
     # Parse subtitles - try to get from json3 format
     subtitles: list[SubtitleSegment] = []
-    auto_captions = info.get('automatic_captions', {})
-    manual_captions = info.get('subtitles', {})
+    auto_captions = info.get("automatic_captions", {})
+    manual_captions = info.get("subtitles", {})
 
     # Resolve the video's primary language *before* picking subtitles. yt-dlp
     # also offers English auto-translations for every foreign-language video;
@@ -695,21 +779,26 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
 
     subtitle_url = _pick_subtitle_url(detected_language, manual_captions, auto_captions)
 
+    captions_rate_limited = False
     if subtitle_url:
-        subtitles = _fetch_subtitles_from_url_sync(subtitle_url)
+        subtitles, captions_rate_limited = _fetch_subtitles_from_url_sync(subtitle_url)
         # Clean subtitle text
         for seg in subtitles:
             seg.text = _clean_subtitle_text(seg.text)
         logger.info(
             "Video %s: extracted %d subtitle segments (lang=%s)",
-            video_id, len(subtitles), detected_language or "unknown",
+            video_id,
+            len(subtitles),
+            detected_language or "unknown",
         )
     else:
         logger.warning("Video %s: no subtitles URL found", video_id)
 
     # Phase 1: Extract video context (category, persona, tags)
     context = extract_video_context(info, description)
-    logger.info("Video %s: category=%s, tags=%d", video_id, context.category, len(context.display_tags))
+    logger.info(
+        "Video %s: category=%s, tags=%d", video_id, context.category, len(context.display_tags)
+    )
 
     return VideoData(
         video_id=video_id,
@@ -723,6 +812,7 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
         upload_date=upload_date,
         context=context,
         language=detected_language,
+        captions_rate_limited=captions_rate_limited,
     )
 
 

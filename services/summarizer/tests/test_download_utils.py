@@ -63,6 +63,21 @@ class TestApiOpts:
         assert download_utils.ytdlp_client_api_opts() == {}
 
 
+class TestDefaultClients:
+    def test_default_setting_is_android_only(self):
+        """Pin the default client (guards accidental "fixes").
+
+        android ONLY. "default"/web DASH URLs 403 from this environment
+        (2026-08), and android_vr formats are PO-token-gated — downloads 403
+        even when format listings look fine (verified 2026-09-03). SABR gaps
+        in android's audio-only formats are handled by the ``bestaudio/best``
+        selector, not by adding clients.
+        """
+        from src.config import Settings
+
+        assert Settings.model_fields["YTDLP_PLAYER_CLIENTS"].default == "android"
+
+
 class TestDownloadYoutubeAudioClientOpts:
     def _run(self, ydl_opts: dict, tmp_path: Path) -> dict:
         """Run one successful download and return the opts YoutubeDL received."""

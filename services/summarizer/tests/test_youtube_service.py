@@ -3,26 +3,25 @@
 Tests video data extraction, category detection, and error handling.
 """
 
-import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch
 
+import pytest
+
+from src.exceptions import TranscriptError
+from src.models.schemas import ErrorCode
 from src.services.video.youtube import (
     VALID_CATEGORIES,
-    VideoData,
-    VideoContext,
     Chapter,
     SubtitleSegment,
-    extract_video_data,
-    extract_video_context,
-    _extract_hashtags,
+    VideoData,
     _build_display_tags,
-    _parse_chapters,
     _clean_subtitle_text,
     _detect_category,
-    _load_category_rules,
+    _extract_hashtags,
+    _parse_chapters,
+    extract_video_context,
+    extract_video_data,
 )
-from src.models.schemas import ErrorCode
-from src.exceptions import TranscriptError
 
 
 class TestExtractHashtags:
@@ -446,6 +445,55 @@ class TestRateLimitHandling:
 
         assert exc_info.value.code == ErrorCode.VIDEO_UNAVAILABLE
         assert "Connection failed" in str(exc_info.value)
+
+
+class TestSubtitleRateLimitFlag:
+    """A timedtext HTTP 429 must surface as (no segments, rate_limited=True)."""
+
+    def _http_429(self):
+        import requests
+
+        response = requests.models.Response()
+        response.status_code = 429
+        return requests.exceptions.HTTPError("429 Too Many Requests", response=response)
+
+    @patch("src.services.video.youtube._fetch_subtitle_data_sync")
+    def test_direct_429_sets_flag(self, mock_fetch):
+        from src.services.video.youtube import _fetch_subtitles_from_url_sync
+
+        mock_fetch.side_effect = self._http_429()
+
+        segments, rate_limited = _fetch_subtitles_from_url_sync("http://example/timedtext")
+
+        assert segments == []
+        assert rate_limited is True
+
+    @patch("src.services.video.youtube._fetch_subtitle_data_sync")
+    def test_tenacity_wrapped_429_sets_flag(self, mock_fetch):
+        """Real failures arrive as tenacity RetryError wrapping the HTTPError."""
+        import tenacity
+
+        from src.services.video.youtube import _fetch_subtitles_from_url_sync
+
+        attempt = tenacity.Future(attempt_number=2)
+        attempt.set_exception(self._http_429())
+        mock_fetch.side_effect = tenacity.RetryError(attempt)
+
+        segments, rate_limited = _fetch_subtitles_from_url_sync("http://example/timedtext")
+
+        assert segments == []
+        assert rate_limited is True
+
+    @patch("src.services.video.youtube._fetch_subtitle_data_sync")
+    def test_non_429_error_does_not_set_flag(self, mock_fetch):
+        from src.services.video.youtube import _fetch_subtitles_from_url_sync
+
+        mock_fetch.side_effect = ValueError("bad json")
+
+        segments, rate_limited = _fetch_subtitles_from_url_sync("http://example/timedtext")
+
+        assert segments == []
+        assert rate_limited is False
 
 
 class TestDetectCategory:
