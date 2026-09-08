@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import TYPE_CHECKING, AsyncGenerator
 
 from llm_common.context import llm_feature_var
@@ -12,6 +13,7 @@ from src.config import settings
 from src.exceptions import TranscriptError
 from src.models.schemas import ErrorCode
 from src.services.pipeline.pipeline_helpers import (
+    TranscriptTrail,
     normalize_segments,
     sse_event,
 )
@@ -23,8 +25,47 @@ from src.utils.worker_pool import run_in_pool
 
 if TYPE_CHECKING:
     from src.services.pipeline.context import PipelineContext
+    from src.services.pipeline.pipeline_helpers import TranscriptData
+    from src.services.video.youtube import VideoData
 
 logger = logging.getLogger(__name__)
+
+
+async def _fetch_with_trail(
+    ctx: PipelineContext, video_data: VideoData, is_music: bool, trail: TranscriptTrail
+) -> AsyncGenerator[str | TranscriptData, None]:
+    """Run the fetch chain, stamping wall time + outcome on ``trail`` whatever happens.
+
+    The trail is hung on ``ctx`` in a ``finally`` so the runner can persist
+    provenance for failed runs too — which layers were tried before the chain
+    gave up is the whole point of the record. Raises NO_TRANSCRIPT when the
+    chain finishes without ever yielding a ``TranscriptData``.
+    """
+    started = time.monotonic()
+    got_transcript = False
+    try:
+        async for item in fetch_transcript(
+            ctx.youtube_id, video_data, video_data.duration, is_music=is_music, trail=trail
+        ):
+            if not isinstance(item, str):
+                got_transcript = True
+            yield item
+        if not got_transcript:
+            raise TranscriptError("Failed to fetch transcript", ErrorCode.NO_TRANSCRIPT)
+    except asyncio.CancelledError:
+        # Producer torn down mid-fetch (worker restart, sibling-phase failure):
+        # keep the persisted block self-describing instead of a null code.
+        trail.error_code = "CANCELLED"
+        raise
+    except TranscriptError as e:
+        trail.error_code = e.code.value
+        raise
+    except Exception:
+        trail.error_code = ErrorCode.UNKNOWN_ERROR.value
+        raise
+    finally:
+        trail.fetch_wall_ms = int((time.monotonic() - started) * 1000)
+        ctx.transcript_trail = trail
 
 
 async def run_phase_transcript(ctx: PipelineContext) -> AsyncGenerator[str, None]:
@@ -36,17 +77,16 @@ async def run_phase_transcript(ctx: PipelineContext) -> AsyncGenerator[str, None
     is_music = (video_data.context.category == "music") if video_data.context else False
 
     # Fetch transcript
-    transcript_data = None
-    async for item in fetch_transcript(
-        ctx.youtube_id, video_data, video_data.duration, is_music=is_music
-    ):
+    trail = TranscriptTrail()
+    transcript_data: TranscriptData | None = None
+    async for item in _fetch_with_trail(ctx, video_data, is_music, trail):
         if isinstance(item, str):
             yield item
         else:
             transcript_data = item
 
-    if not transcript_data:
-        raise TranscriptError("Failed to fetch transcript", ErrorCode.NO_TRANSCRIPT)
+    # _fetch_with_trail raises NO_TRANSCRIPT before we get here without data.
+    assert transcript_data is not None
 
     ctx.transcript_data = transcript_data
 

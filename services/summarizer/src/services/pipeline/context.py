@@ -16,7 +16,11 @@ if TYPE_CHECKING:
     from src.repositories.mongodb_repository import MongoDBVideoRepository
     from src.services.llm import LLMService
     from src.services.pipeline.classifier import ContentTraits
-    from src.services.pipeline.pipeline_helpers import PipelineTimer, TranscriptData
+    from src.services.pipeline.pipeline_helpers import (
+        PipelineTimer,
+        TranscriptData,
+        TranscriptTrail,
+    )
     from src.services.pipeline.triage import TriageResult
     from src.services.video.description_analyzer import DescriptionAnalysis
     from src.services.video.youtube import VideoData
@@ -41,12 +45,18 @@ class PipelineContext:
     # ── Phase outputs (set by phase functions) ───────────────────────────
     video_data: VideoData | None = None
     transcript_data: TranscriptData | None = None
+    # Provenance of the transcript fetch. The transcript phase sets it in a
+    # ``finally`` so it exists for failed runs too; the runner persists it
+    # as ``transcriptMeta``.
+    transcript_trail: TranscriptTrail | None = None
     clean_text: str = ""
 
     # Scene extraction
     scene_task: asyncio.Task | None = None
     scene_frames_for_assembly: list[dict] = field(default_factory=list)
-    scene_frames_all: list[dict] = field(default_factory=list)  # All frames (for thumbnail matching)
+    scene_frames_all: list[dict] = field(
+        default_factory=list
+    )  # All frames (for thumbnail matching)
     scene_frames_gallery: list[dict] = field(default_factory=list)  # Gallery subset
 
     # Vision LLM frame descriptions (from frame_analyzer)
@@ -59,7 +69,9 @@ class PipelineContext:
     # Plan inputs
     override: dict | None = None
     category_hint: str | None = None
-    content_format: str | None = None  # Presentation format from classifier (tutorial, commentary, etc.)
+    content_format: str | None = (
+        None  # Presentation format from classifier (tutorial, commentary, etc.)
+    )
     content_traits: ContentTraits | None = None  # Structural traits from classifier
     plan_result: PlanResult | None = None  # Merged plan result (replaces manifest + triage)
     description_analysis: DescriptionAnalysis | None = None
@@ -69,7 +81,9 @@ class PipelineContext:
     triage_dict: dict[str, Any] = field(default_factory=dict)
 
     # Chapter splitting (populated by extraction phase for long videos)
-    chapters: list[Any] | None = None  # list[ChapterChunk] — loose coupling to avoid circular imports
+    chapters: list[Any] | None = (
+        None  # list[ChapterChunk] — loose coupling to avoid circular imports
+    )
 
     # Extraction / synthesis / enrichment outputs
     extraction_data: dict[str, Any] | None = None

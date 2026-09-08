@@ -8,6 +8,7 @@ language toggle. The fix detects language from the Gemini transcript text.
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -104,8 +105,13 @@ def _video_data_without_captions() -> MagicMock:
     video_data = MagicMock()
     video_data.subtitles = []
     # MagicMock attrs are truthy by default — an unset flag would read as
-    # "rate limited" and spuriously write the 429 negative-cache marker.
+    # "rate limited" and spuriously write the 429 negative-cache marker, and
+    # unset caption fields would not be the None a real captionless VideoData
+    # carries (the trail keys off them).
     video_data.captions_rate_limited = False
+    video_data.caption_track = None
+    video_data.caption_lang = None
+    video_data.caption_fetch_error = None
     return video_data
 
 
@@ -419,7 +425,6 @@ class TestDecoupledAudioGates:
         """A caption-API timeout still reaches Gemini when Whisper is off."""
 
         async def _hang(_youtube_id):
-            import asyncio
 
             await asyncio.sleep(5)
 

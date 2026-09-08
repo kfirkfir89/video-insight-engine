@@ -417,6 +417,21 @@ class SubtitleSegment:
     duration: float  # seconds
 
 
+@dataclass(frozen=True)
+class SubtitleTrack:
+    """A json3 caption track chosen by ``_pick_subtitle_url``.
+
+    Carries provenance alongside the URL: ``kind`` is the yt-dlp bucket the
+    track came from ("manual" for creator uploads, "auto-generated" for ASR)
+    and ``lang`` the caption key that matched (e.g. ``"ar-SA"``), so the
+    transcript trail can say exactly which track was tried.
+    """
+
+    url: str
+    kind: str  # "manual" | "auto-generated"
+    lang: str
+
+
 @dataclass
 class VideoData:
     """Complete video data extracted from yt-dlp.
@@ -432,6 +447,11 @@ class VideoData:
         subtitles: Subtitle segments with timestamps
         upload_date: Upload date in YYYYMMDD format
         context: Video context with category, persona, and tags
+        language: Detected primary language (ISO 639-1) or None
+        captions_rate_limited: True when the timedtext fetch was HTTP 429
+        caption_track: "manual" | "auto-generated" | None (no track picked)
+        caption_lang: Caption key of the picked track (e.g. "ar-SA") or None
+        caption_fetch_error: "http_<n>" | "request" | "parse" | "empty" | None
     """
 
     video_id: str
@@ -452,6 +472,13 @@ class VideoData:
     # transcript fetcher uses this to negative-cache the caption endpoints
     # (further caption calls in the window are doomed for the whole IP).
     captions_rate_limited: bool = False
+    # Which caption track was picked and how its fetch went. Kept apart from
+    # ``subtitles`` because an empty list is ambiguous — "no track offered",
+    # "track offered but the fetch failed" and "track fetched but held no
+    # speech" need different fallbacks and different transcriptMeta.
+    caption_track: str | None = None  # "manual" | "auto-generated"
+    caption_lang: str | None = None  # matched caption key, e.g. "ar-SA"
+    caption_fetch_error: str | None = None  # "http_<n>" | "request" | "parse" | "empty"
 
     @property
     def has_chapters(self) -> bool:
@@ -597,76 +624,74 @@ def _fetch_subtitle_data_sync(url: str, max_bytes: int = 10 * 1024 * 1024) -> di
     return _json.loads(b"".join(chunks))
 
 
-def _is_rate_limit_error(exc: BaseException | None) -> bool:
-    """True when an exception (possibly tenacity-wrapped) is an HTTP 429."""
+def _http_status_of(exc: BaseException | None) -> int | None:
+    """HTTP status carried by a requests HTTPError, unwrapping tenacity's RetryError.
+
+    ``None`` when the exception is not an HTTP error or has no response attached.
+    """
     if isinstance(exc, tenacity.RetryError):
         exc = exc.last_attempt.exception()
-    return (
-        isinstance(exc, requests.exceptions.HTTPError)
-        and exc.response is not None
-        and exc.response.status_code == 429
-    )
+    if isinstance(exc, requests.exceptions.HTTPError) and exc.response is not None:
+        return exc.response.status_code
+    return None
 
 
-def _fetch_subtitles_from_url_sync(url: str) -> tuple[list[SubtitleSegment], bool]:
+def _parse_json3_events(data: dict) -> list[SubtitleSegment]:
+    """Turn a timedtext json3 body into segments, skipping non-speech events."""
+    segments: list[SubtitleSegment] = []
+    for event in data.get("events", []):
+        if "segs" not in event:
+            continue
+        text = "".join(seg["utf8"] for seg in event.get("segs", []) if "utf8" in seg).strip()
+        if text and text != "\n":
+            segments.append(
+                SubtitleSegment(
+                    text=text,
+                    start=event.get("tStartMs", 0) / 1000.0,
+                    duration=event.get("dDurationMs", 0) / 1000.0,
+                )
+            )
+    return segments
+
+
+def _fetch_subtitles_from_url_sync(url: str) -> tuple[list[SubtitleSegment], str | None]:
     """Fetch and parse subtitles from a URL (json3 format).
 
     SYNC — must be called from asyncio.to_thread (via _extract_video_data_sync).
 
     Returns:
-        (segments, rate_limited) — ``rate_limited`` is True when the fetch
-        failed with HTTP 429, so the caller can flag the caption endpoints as
-        throttled for this egress IP.
+        (segments, error_code) — ``error_code`` is classified here, at the
+        except site, so callers never re-inspect exception types:
+        ``"http_<status>"`` for an HTTP failure (tenacity wrapper unwrapped),
+        ``"request"`` for any other transport failure, ``"parse"`` when the
+        body could not be decoded, ``None`` when the fetch itself succeeded.
+        Zero segments with no error is NOT an error here — the caller knows
+        whether a track was actually offered and labels that ``"empty"``.
     """
-    segments: list[SubtitleSegment] = []
-
-    data = None
     try:
         data = _fetch_subtitle_data_sync(url)
-    except requests.exceptions.HTTPError as e:
-        logger.warning("Subtitle fetch HTTP error: %s", e)
-        if _is_rate_limit_error(e):
-            return segments, True
+    except (requests.exceptions.HTTPError, tenacity.RetryError) as e:
+        status = _http_status_of(e)
+        code = f"http_{status}" if status is not None else "request"
+        logger.warning("Subtitle fetch HTTP error (%s): %s", code, e)
+        return [], code
+    except ValueError as e:
+        # json.JSONDecodeError is a ValueError; the size guard in
+        # _fetch_subtitle_data_sync raises a plain one.
+        logger.warning("Subtitle fetch parse error: %s", e)
+        return [], "parse"
     except Exception as e:
-        logger.warning("Subtitle fetch error: %s", e)
-        if _is_rate_limit_error(e):
-            return segments, True
+        logger.warning("Subtitle fetch error (request): %s", e)
+        return [], "request"
 
     if not data:
-        return segments, False
+        return [], None
 
     try:
-        # json3 format has 'events' array
-        events = data.get("events", [])
-
-        for event in events:
-            # Skip non-speech events
-            if "segs" not in event:
-                continue
-
-            start_ms = event.get("tStartMs", 0)
-            duration_ms = event.get("dDurationMs", 0)
-
-            # Combine segment texts
-            text_parts = []
-            for seg in event.get("segs", []):
-                if "utf8" in seg:
-                    text_parts.append(seg["utf8"])
-
-            text = "".join(text_parts).strip()
-            if text and text != "\n":
-                segments.append(
-                    SubtitleSegment(
-                        text=text,
-                        start=start_ms / 1000.0,
-                        duration=duration_ms / 1000.0,
-                    )
-                )
-
+        return _parse_json3_events(data), None
     except Exception as e:
         logger.warning("Failed to parse subtitles: %s", e)
-
-    return segments, False
+        return [], "parse"
 
 
 def _clean_subtitle_text(text: str) -> str:
@@ -768,7 +793,6 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
     logger.info("Video %s: found %d chapters", video_id, len(chapters))
 
     # Parse subtitles - try to get from json3 format
-    subtitles: list[SubtitleSegment] = []
     auto_captions = info.get("automatic_captions", {})
     manual_captions = info.get("subtitles", {})
 
@@ -777,22 +801,8 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
     # picking those would silently mislabel the audio as English.
     detected_language = resolve_video_language(info, manual_captions, auto_captions)
 
-    subtitle_url = _pick_subtitle_url(detected_language, manual_captions, auto_captions)
-
-    captions_rate_limited = False
-    if subtitle_url:
-        subtitles, captions_rate_limited = _fetch_subtitles_from_url_sync(subtitle_url)
-        # Clean subtitle text
-        for seg in subtitles:
-            seg.text = _clean_subtitle_text(seg.text)
-        logger.info(
-            "Video %s: extracted %d subtitle segments (lang=%s)",
-            video_id,
-            len(subtitles),
-            detected_language or "unknown",
-        )
-    else:
-        logger.warning("Video %s: no subtitles URL found", video_id)
+    track = _pick_subtitle_url(detected_language, manual_captions, auto_captions)
+    subtitles, caption_fetch_error = _fetch_picked_track(video_id, track, detected_language)
 
     # Phase 1: Extract video context (category, persona, tags)
     context = extract_video_context(info, description)
@@ -812,8 +822,44 @@ def _extract_video_data_sync(video_id: str) -> VideoData:
         upload_date=upload_date,
         context=context,
         language=detected_language,
-        captions_rate_limited=captions_rate_limited,
+        captions_rate_limited=caption_fetch_error == "http_429",
+        caption_track=track.kind if track else None,
+        caption_lang=track.lang if track else None,
+        caption_fetch_error=caption_fetch_error,
     )
+
+
+def _fetch_picked_track(
+    video_id: str,
+    track: SubtitleTrack | None,
+    detected_language: str | None,
+) -> tuple[list[SubtitleSegment], str | None]:
+    """Fetch and clean the picked caption track.
+
+    Returns ``(segments, caption_fetch_error)``. A track that was offered but
+    came back with zero segments and no transport/parse error is labelled
+    ``"empty"`` here rather than in the fetch helper — only this layer knows
+    whether a track existed at all.
+    """
+    if track is None:
+        logger.warning("Video %s: no subtitles URL found", video_id)
+        return [], None
+
+    subtitles, error = _fetch_subtitles_from_url_sync(track.url)
+    for seg in subtitles:
+        seg.text = _clean_subtitle_text(seg.text)
+    if error is None and not subtitles:
+        error = "empty"
+    logger.info(
+        "Video %s: extracted %d subtitle segments (lang=%s, track=%s/%s, error=%s)",
+        video_id,
+        len(subtitles),
+        detected_language or "unknown",
+        track.kind,
+        track.lang,
+        error,
+    )
+    return subtitles, error
 
 
 def resolve_video_language(
@@ -889,17 +935,29 @@ def resolve_video_language(
     return None
 
 
+def _json3_url(fmts: list[dict[str, Any]]) -> str | None:
+    """URL of the json3 variant in a caption format list, if any."""
+    for fmt in fmts:
+        if fmt.get("ext") == "json3" and fmt.get("url"):
+            return fmt["url"]
+    return None
+
+
 def _pick_subtitle_url(
     detected_language: str | None,
     manual_captions: dict[str, Any],
     auto_captions: dict[str, Any],
-) -> str | None:
-    """Pick a json3 subtitle URL preferring the detected language.
+) -> SubtitleTrack | None:
+    """Pick a json3 subtitle track preferring the detected language.
 
     Order: manual[detected] → auto[detected] → manual[en] → auto[en].
     YouTube auto-translates every foreign video to English on demand; without
     this preference the pipeline would grab the auto-EN track and pretend
     the audio was English.
+
+    The returned track records which bucket it came from and the exact caption
+    key that matched (``"ar-SA"`` for detected ``"ar"``), so a later fallback
+    can be attributed to the specific track that failed.
     """
     pref_langs: list[str] = []
     if detected_language and detected_language != "en":
@@ -907,13 +965,15 @@ def _pick_subtitle_url(
     pref_langs += ["en", "en-US", "en-GB"]
     pref_langs = list(dict.fromkeys(pref_langs))
 
+    sources = (("manual", manual_captions), ("auto-generated", auto_captions))
     for lang_code in pref_langs:
-        for source in (manual_captions, auto_captions):
-            for key, fmts in source.items():
-                if key == lang_code or key.startswith(lang_code + "-"):
-                    for fmt in fmts:
-                        if fmt.get("ext") == "json3" and fmt.get("url"):
-                            return fmt["url"]
+        for kind, captions in sources:
+            for key, fmts in captions.items():
+                if key != lang_code and not key.startswith(lang_code + "-"):
+                    continue
+                url = _json3_url(fmts)
+                if url:
+                    return SubtitleTrack(url=url, kind=kind, lang=key)
     return None
 
 

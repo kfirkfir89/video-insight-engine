@@ -8,7 +8,6 @@ from unittest.mock import patch, MagicMock, AsyncMock
 
 from src.services.transcription.transcript import (
     get_transcript,
-    get_normalized_transcript,
     clean_transcript,
     format_transcript_with_timestamps,
     normalize_segments,
@@ -288,7 +287,9 @@ class TestFetchTranscriptSync:
         ]
 
         mock_transcript.fetch.return_value = mock_fetched
-        mock_transcript_list.find_manually_created_transcript.side_effect = NoTranscriptFound("test", [], "")
+        mock_transcript_list.find_manually_created_transcript.side_effect = NoTranscriptFound(
+            "test", [], ""
+        )
         mock_transcript_list.find_generated_transcript.return_value = mock_transcript
         mock_api.list.return_value = mock_transcript_list
 
@@ -296,6 +297,49 @@ class TestFetchTranscriptSync:
 
         assert transcript_type == "auto-generated"
         assert full_text == "Auto text"
+
+    @staticmethod
+    def _install_any_language_track(
+        mock_api_class: MagicMock, *, is_generated: bool, language_code: str
+    ) -> None:
+        """Make both English finders fail so only list iteration yields a track."""
+        from youtube_transcript_api._errors import NoTranscriptFound
+
+        mock_track = MagicMock()
+        mock_track.is_generated = is_generated
+        mock_track.language_code = language_code
+        mock_fetched = MagicMock()
+        mock_fetched.to_raw_data.return_value = [{"text": "Shalom", "start": 0.0, "duration": 1.0}]
+        mock_track.fetch.return_value = mock_fetched
+
+        mock_transcript_list = MagicMock()
+        mock_transcript_list.find_manually_created_transcript.side_effect = NoTranscriptFound(
+            "test", [], ""
+        )
+        mock_transcript_list.find_generated_transcript.side_effect = NoTranscriptFound(
+            "test", [], ""
+        )
+        mock_transcript_list.__iter__.return_value = iter([mock_track])
+        mock_api_class.return_value.list.return_value = mock_transcript_list
+
+    @patch("src.services.transcription.transcript.YouTubeTranscriptApi")
+    def test_labels_manual_track_from_any_language_fallback(self, mock_api_class):
+        """Test any-language fallback labels a creator-uploaded track as manual."""
+        self._install_any_language_track(mock_api_class, is_generated=False, language_code="he")
+
+        _segments, _full_text, transcript_type, lang = _fetch_transcript_sync("test_video_id")
+
+        assert transcript_type == "manual"
+        assert lang == "he"
+
+    @patch("src.services.transcription.transcript.YouTubeTranscriptApi")
+    def test_labels_generated_track_from_any_language_fallback(self, mock_api_class):
+        """Test any-language fallback labels an auto-generated track as such."""
+        self._install_any_language_track(mock_api_class, is_generated=True, language_code="he")
+
+        _segments, _full_text, transcript_type, _lang = _fetch_transcript_sync("test_video_id")
+
+        assert transcript_type == "auto-generated"
 
     @patch("src.services.transcription.transcript.YouTubeTranscriptApi")
     def test_raises_error_on_disabled_captions(self, mock_api_class):
@@ -367,63 +411,6 @@ class TestGetTranscriptAsync:
             await get_transcript("test123")
 
         assert exc_info.value.code == ErrorCode.NO_TRANSCRIPT
-
-
-class TestGetNormalizedTranscript:
-    """Tests for normalized transcript fetching."""
-
-    @patch("src.services.transcription.transcript.settings")
-    @patch("src.services.transcription.transcript.get_transcript")
-    async def test_returns_normalized_transcript(self, mock_get, mock_settings):
-        """Test returning normalized transcript."""
-        # Ensure no proxy is configured for default source test
-        mock_settings.WEBSHARE_PROXY_USERNAME = None
-        mock_get.return_value = (
-            [
-                {"text": "Hello", "start": 1.5, "duration": 2.0},
-                {"text": "World", "start": 4.0, "duration": 1.5},
-            ],
-            "Hello World",
-            "manual",
-            "en",
-        )
-
-        result = await get_normalized_transcript("test123")
-
-        assert result.text == "Hello World"
-        assert len(result.segments) == 2
-        assert result.segments[0].startMs == 1500
-        assert result.source == "api"  # Default source without proxy
-
-    @patch("src.services.transcription.transcript.settings")
-    @patch("src.services.transcription.transcript.get_transcript")
-    async def test_sets_proxy_source_when_configured(self, mock_get, mock_settings):
-        """Test setting proxy source when proxy is configured."""
-        mock_settings.WEBSHARE_PROXY_USERNAME = "user"
-        mock_get.return_value = (
-            [{"text": "Test", "start": 0, "duration": 1}],
-            "Test",
-            "manual",
-            "en",
-        )
-
-        result = await get_normalized_transcript("test123")
-
-        assert result.source == "proxy"
-
-    @patch("src.services.transcription.transcript.get_transcript")
-    async def test_sets_ytdlp_source(self, mock_get):
-        """Test setting yt-dlp source for yt-dlp transcripts."""
-        mock_get.return_value = (
-            [{"text": "Test", "start": 0, "duration": 1}],
-            "Test",
-            "yt-dlp",
-            None,
-        )
-
-        result = await get_normalized_transcript("test123")
-
-        assert result.source == "ytdlp"
 
 
 class TestTranscriptSegmentationEdgeCases:

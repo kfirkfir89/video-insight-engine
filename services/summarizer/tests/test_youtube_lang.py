@@ -9,10 +9,9 @@ without any network.
 from __future__ import annotations
 
 from src.services.video.youtube import (
-    resolve_video_language,
     _pick_subtitle_url,
+    resolve_video_language,
 )
-
 
 # ─── resolve_video_language ──────────────────────────────────────────────────
 
@@ -148,32 +147,32 @@ class TestPickSubtitleUrl:
         Arabic videos as English."""
         manual = {"ar": self._track("ar-manual")}
         auto = {"en": self._track("en-auto"), "ar": self._track("ar-auto")}
-        assert _pick_subtitle_url("ar", manual, auto) == "ar-manual"
+        assert _pick_subtitle_url("ar", manual, auto).url == "ar-manual"
 
     def test_picks_original_auto_when_no_manual(self):
         """If only auto captions exist, the original-language auto track still
         beats the English-language auto track."""
         manual: dict = {}
         auto = {"en": self._track("en-auto"), "he": self._track("he-auto")}
-        assert _pick_subtitle_url("he", manual, auto) == "he-auto"
+        assert _pick_subtitle_url("he", manual, auto).url == "he-auto"
 
     def test_falls_back_to_english_when_original_absent(self):
         """If the original language has no track at all, English is acceptable."""
         manual = {"en": self._track("en-manual")}
         auto = {"en": self._track("en-auto")}
-        assert _pick_subtitle_url("ar", manual, auto) == "en-manual"
+        assert _pick_subtitle_url("ar", manual, auto).url == "en-manual"
 
     def test_matches_regional_variant(self):
         """``ar`` matches caption keys ``ar`` and ``ar-SA`` alike."""
         manual = {"ar-SA": self._track("ar-SA-track")}
         auto: dict = {}
-        assert _pick_subtitle_url("ar", manual, auto) == "ar-SA-track"
+        assert _pick_subtitle_url("ar", manual, auto).url == "ar-SA-track"
 
     def test_no_detected_language_still_picks_english(self):
         """When language resolution failed, we still want English captions."""
         manual = {"en": self._track("en-track")}
         auto: dict = {}
-        assert _pick_subtitle_url(None, manual, auto) == "en-track"
+        assert _pick_subtitle_url(None, manual, auto).url == "en-track"
 
     def test_returns_none_when_no_json3_track(self):
         """Tracks without a json3 variant aren't usable."""
@@ -185,4 +184,23 @@ class TestPickSubtitleUrl:
         """Detected language 'en' must not produce duplicate work or a None result."""
         manual = {"en": self._track("en-manual")}
         auto: dict = {}
-        assert _pick_subtitle_url("en", manual, auto) == "en-manual"
+        assert _pick_subtitle_url("en", manual, auto).url == "en-manual"
+
+    def test_manual_track_reports_kind_and_matched_key(self):
+        """The picked track carries its bucket and the *matched* caption key —
+        ``ar-SA``, not the detected ``ar`` — so the transcript trail names the
+        exact track that was tried."""
+        manual = {"ar-SA": self._track("ar-SA-track")}
+        auto = {"en": self._track("en-auto")}
+        track = _pick_subtitle_url("ar", manual, auto)
+        assert track is not None
+        assert (track.kind, track.lang) == ("manual", "ar-SA")
+
+    def test_english_auto_fallback_reports_auto_generated_kind(self):
+        """Falling through to YouTube's ASR English track is labelled as such,
+        so downstream can tell a creator upload from an auto-translation."""
+        manual: dict = {}
+        auto = {"en": self._track("en-auto")}
+        track = _pick_subtitle_url("ar", manual, auto)
+        assert track is not None
+        assert (track.kind, track.lang) == ("auto-generated", "en")
