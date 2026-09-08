@@ -1,6 +1,41 @@
 import { Db, ObjectId, Collection } from 'mongodb';
 import { DatabaseError } from '../utils/errors.js';
 
+/**
+ * Transcript-phase provenance, written ONCE per run by the summarizer's
+ * pipeline runner right after the transcript+frames phase — for successful
+ * AND failed runs (failed rows carry `outcome: 'failed'` + `errorCode`).
+ * Mongo-only diagnostics: never copied into Redis payloads or frontend/share
+ * responses. Absent on rows completed via the Redis response-cache fast path
+ * (a completed row with no `transcriptMeta` and no `pipelineVersion` was
+ * Redis-served). The API only reads it; the summarizer owns every write.
+ */
+export interface TranscriptMeta {
+  outcome: 'ok' | 'failed';
+  /** Layer that produced the transcript; null on failure. */
+  source: 's3' | 'ytdlp' | 'api' | 'proxy' | 'whisper' | 'gemini' | 'metadata' | null;
+  type: 'manual' | 'auto-generated' | 'asr' | 'metadata' | 'cached' | null;
+  /** s3 rows only: the layer that originally produced the cached blob; null if unknown. */
+  origin: 'ytdlp' | 'api' | 'proxy' | 'whisper' | 'gemini' | 'metadata' | null;
+  /** Caption track picked by THIS run's metadata phase; null = no usable json3 track. */
+  captionTrack: 'manual' | 'auto-generated' | null;
+  /** Matched caption key (e.g. "ar-SA", "en-en") — differs from the video
+   *  language when YouTube auto-translated. */
+  captionLang: string | null;
+  /** "http_429" | "http_403" | "http_<n>" | "request" | "parse" | "empty" | null. */
+  captionFetchError: string | null;
+  /** youtube-transcript-api skipped because of the Redis caption-429 marker. */
+  captionApiSkipped: boolean;
+  /** Layers that RAN and FAILED before `source`, in order. */
+  attempted: string[];
+  segments: number | null;
+  chars: number | null;
+  /** Transcript-phase wall time (frames run in parallel); present on failed rows too. */
+  fetchWallMs: number | null;
+  /** Failed rows: the TranscriptError code (e.g. NO_TRANSCRIPT, RATE_LIMITED). */
+  errorCode: string | null;
+}
+
 export interface VideoSummaryCacheDocument {
   _id: ObjectId;
   youtubeId: string;
@@ -55,6 +90,10 @@ export interface VideoSummaryCacheDocument {
   // predate stamping — those are treated as current-legacy and served as-is;
   // a mismatching stamp triggers regen in video.service.ts.isStaleVersion.
   pipelineVersion?: string;
+  // Transcript provenance stamped by the summarizer per run (see TranscriptMeta).
+  // Absent on Redis-served rows and on rows predating the field; the API never
+  // writes or forwards it.
+  transcriptMeta?: TranscriptMeta;
   intent?: unknown;
   triage?: unknown;
   output?: unknown;

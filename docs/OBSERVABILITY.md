@@ -53,7 +53,7 @@ The vie-admin **backend** resolves each pipeline-run's trace and returns a direc
 
 In the Langfuse UI:
 
-- **Top of trace**: total cost, total latency, model mix, tags — open this first when triaging. Trace-level `cacheHit` metadata distinguishes Redis-served fast-path runs from full pipeline runs.
+- **Top of trace**: total cost, total latency, model mix, tags — open this first when triaging. Trace-level `cacheHit` metadata distinguishes Redis-served fast-path runs from full pipeline runs. Full runs also carry `transcriptSource`, `transcriptType`, `transcriptAttempted`, and `transcriptOutcome` (set by the runner right after the transcript phase, for failed runs too), so traces can be filtered by which transcript layer won and why paid ASR ran.
 - **Generations panel**: the per-stage breakdown. Sort by latency or cost to find the bottleneck.
 - **Input / Output panels** of a generation: the actual prompt and response, after redaction (emails, phone-shaped runs, plus a short allowlist of token formats — see below) and truncation (50KB cap with `[TRUNCATED]` marker; original length is not encoded, on purpose).
 - **Metadata**: `attempt`, `useFastModel`, `modelOverride`, `finishReason`, `latencyMs`. `attempt>1` means a retry fired. `promptVersions` maps prompt name → registry version for every prompt that was loaded inside the trace.
