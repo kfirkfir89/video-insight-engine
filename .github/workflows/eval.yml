@@ -98,12 +98,14 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: services/summarizer/requirements.txt
+          cache-dependency-path: services/summarizer/requirements.lock
 
-      - run: pip install -r requirements.txt
+      # Lockfile install, same as ci.yml / Dockerfile (unpinned requirements.txt
+      # trips pip's resolution-too-deep cap).
+      - run: pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.lock
 
       - name: Install llm-common package
-        run: pip install -e ../../packages/llm-common
+        run: pip install --no-deps -e ../../packages/llm-common
 
       # The SentenceTransformer weights (~90MB) download on first use; cache
       # them so the job doesn't re-pull the model every run.
