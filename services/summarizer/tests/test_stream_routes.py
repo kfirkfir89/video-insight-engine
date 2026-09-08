@@ -1302,6 +1302,19 @@ class TestBuildFrontendResponse:
         result = build_frontend_response(doc)
         assert result["creator"] == "Fallback Channel"
 
+    def test_transcript_meta_never_reaches_frontend(self):
+        """transcriptMeta is Mongo-only observability — the FE payload must not carry it."""
+        from src.routes.cached_response import build_frontend_response
+
+        doc = {
+            "youtubeId": "abc123",
+            "meta": {"tldr": "Test TLDR"},
+            "tabs": [{"id": "key_points", "label": "Key Points"}],
+            "transcriptMeta": {"outcome": "ok", "source": "ytdlp"},
+        }
+        result = build_frontend_response(doc)
+        assert "transcriptMeta" not in result
+
 
 class TestResolveHelpers:
     """Tests for _resolve_triage_event, _resolve_tabs, _resolve_synthesis."""

@@ -265,7 +265,15 @@ async def run_phase_assembly(ctx: PipelineContext) -> AsyncGenerator[str, None]:
         output_task.add_done_callback(_log_qdrant_error)
 
     # Store raw transcript to S3 (background, non-blocking, best-effort)
-    if S3Client.is_available() and ctx.transcript_data:
+    if (
+        S3Client.is_available()
+        and ctx.transcript_data
+        # An S3-hit run would re-store the blob it just read with source="s3",
+        # decaying the recorded origin (which layer originally produced the
+        # transcript) to "s3" after one regen. The blob is already in S3, so
+        # skipping is lossless.
+        and ctx.transcript_data.source != "s3"
+    ):
 
         async def _store_transcript() -> None:
             try:

@@ -124,6 +124,10 @@ class MongoDBVideoRepository:
             "thumbnailUrl",
             "youtubeId",
             "rawTranscriptRef",
+            # Per-run transcript provenance block. The runner writes it via
+            # set_transcript_meta; allow-listed so a future result-dict writer
+            # is not silently dropped here.
+            "transcriptMeta",
             "generation",
             # Degraded-run flag (dropped extraction batches / critical coverage) —
             # top-level mirror of meta.degraded for admin queries.
@@ -160,6 +164,31 @@ class MongoDBVideoRepository:
         self._collection.update_one(
             {"_id": ObjectId(video_summary_id)},
             {"$set": filtered, "$unset": {"forceRefresh": ""}},
+        )
+
+    def set_transcript_meta(self, video_summary_id: str, meta: dict[str, Any]) -> None:
+        """Persist the per-run transcript provenance block.
+
+        Written MID-run (after the transcript phase, before assembly), so it
+        must not consume the API's bypassCache marker — save_structured_result
+        also ``$unset``s ``forceRefresh`` and cannot be reused here.
+        """
+        self._collection.update_one(
+            {"_id": ObjectId(video_summary_id)},
+            {"$set": {"transcriptMeta": meta, "updatedAt": _utc_now()}},
+        )
+
+    def clear_transcript_meta(self, video_summary_id: str) -> None:
+        """Drop the previous run's transcript provenance block.
+
+        Rows are re-run on the same ``_id`` (regen, failed retry, stall
+        re-dispatch) and may complete via the Redis fast path, so an earlier
+        failed run's block would otherwise survive. No ``updatedAt`` bump:
+        that field is the stall sweeper's liveness signal, and the PROCESSING
+        transition right before this call already bumped it.
+        """
+        self._collection.update_one(
+            {"_id": ObjectId(video_summary_id)}, {"$unset": {"transcriptMeta": ""}}
         )
 
     def increment_retry(self, video_summary_id: str) -> int:
