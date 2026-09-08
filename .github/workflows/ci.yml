@@ -187,12 +187,18 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: services/summarizer/requirements.txt
+          cache-dependency-path: services/summarizer/requirements.lock
 
-      - run: pip install -r requirements.txt
+      # Install from the uv-compiled lockfile, same as the Dockerfile. Resolving
+      # the unpinned requirements.txt (~120 packages, lower bounds only) trips
+      # pip's backtracking depth cap ("resolution-too-deep") and tests a
+      # different dependency set than the one that ships. The CPU extra index
+      # is required for the pinned torch==<ver>+cpu wheel.
+      - run: pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.lock
 
+      # --no-deps: llm-common's tree is already pinned by the lock.
       - name: Install llm-common package
-        run: pip install -e ../../packages/llm-common
+        run: pip install --no-deps -e ../../packages/llm-common
 
       - name: Download spaCy model
         run: python -m spacy download en_core_web_sm
@@ -215,14 +221,21 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          # Match the Dockerfile base image (python:3.12-slim) and the lockfile,
+          # which was compiled for 3.12.
+          python-version: "3.12"
           cache: pip
-          cache-dependency-path: services/assistant/requirements.txt
+          cache-dependency-path: services/assistant/requirements.lock
 
-      - run: pip install -r requirements.txt pytest-cov
+      # Same lockfile install as the Dockerfile (see summarizer job above).
+      - run: pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.lock
+
+      # pytest-cov is CI-only and not in the lock; its only deps are pytest
+      # (pinned) and coverage.
+      - run: pip install pytest-cov
 
       - name: Install llm-common package
-        run: pip install -e ../../packages/llm-common
+        run: pip install --no-deps -e ../../packages/llm-common
 
       - name: Pyright (basic)
         run: npx pyright@1.1.407 --project .

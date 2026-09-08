@@ -47,6 +47,7 @@ class TestResponseCache:
     @pytest.mark.asyncio
     async def test_get_response_connection_error(self, cache, mock_redis):
         import redis.asyncio as aioredis
+
         mock_redis.get.side_effect = aioredis.ConnectionError("Connection refused")
 
         result = await cache.get_response("video123")
@@ -67,6 +68,7 @@ class TestResponseCache:
     @pytest.mark.asyncio
     async def test_set_response_connection_error(self, cache, mock_redis):
         import redis.asyncio as aioredis
+
         mock_redis.set.side_effect = aioredis.ConnectionError("Connection refused")
 
         result = await cache.set_response("video123", {"test": True})
@@ -86,7 +88,13 @@ class TestResponseCache:
             "tabs": [],
             "language": "en",
             "isRTL": False,
-            "sourceLanguage": {"code": "he", "name": "עברית", "isRTL": True, "tabs": [], "meta": {}},
+            "sourceLanguage": {
+                "code": "he",
+                "name": "עברית",
+                "isRTL": True,
+                "tabs": [],
+                "meta": {},
+            },
             "internalDebugField": "should be dropped",
         }
 
@@ -99,6 +107,26 @@ class TestResponseCache:
         assert "sourceLanguage" in cached
         assert cached["sourceLanguage"]["code"] == "he"
         assert "internalDebugField" not in cached
+
+    @pytest.mark.asyncio
+    async def test_set_response_drops_transcript_meta(self, cache, mock_redis):
+        """``transcriptMeta`` is Mongo-only observability.
+
+        The Redis payload is served straight to the FE on a cache hit, so
+        the allowlist must keep dropping it even though the Mongo doc now
+        carries it.
+        """
+        data = {
+            "meta": {"title": "Test"},
+            "tabs": [],
+            "transcriptMeta": {"outcome": "ok", "source": "ytdlp"},
+        }
+
+        await cache.set_response("video123", data)
+
+        cached = json.loads(mock_redis.set.call_args[0][1])
+        assert "transcriptMeta" not in cached
+        assert "meta" in cached
 
     @pytest.mark.asyncio
     async def test_invalidate_success(self, cache, mock_redis):
@@ -122,6 +150,7 @@ class TestResponseCache:
     @pytest.mark.asyncio
     async def test_exists_error_returns_false(self, cache, mock_redis):
         import redis.asyncio as aioredis
+
         mock_redis.exists.side_effect = aioredis.RedisError("Redis down")
 
         assert await cache.exists("video123") is False

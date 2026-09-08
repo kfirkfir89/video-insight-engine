@@ -136,7 +136,7 @@ metadata + description analysis
 1. **Metadata** — `yt-dlp` fetches title, channel, duration, chapters, description, thumbnails, category. A description analysis extracts links/resources/social links.
 
 2. **Transcript** (parallel with frames) — multi-source fallback chain, first success wins:
-   `S3 cache` → `yt-dlp subtitles` → `youtube-transcript-api` (tenacity retry, 3 attempts, exp backoff 4–30s) → `Gemini Flash audio` (~$0.04/26min, ~30–90s) → `OpenAI Whisper` (~$0.16/26min, ~5–15min, max 60min) → `metadata fallback` (**music videos only**; non-music with no transcript raises `NO_TRANSCRIPT`).
+   `S3 cache` → `yt-dlp subtitles` → `youtube-transcript-api` (tenacity retry, 3 attempts, exp backoff 4–30s) → `OpenAI Whisper` (~$0.16/26min, ~5–15min, max 60min) → `Gemini Flash audio` (~$0.04/26min, ~30–90s) → `metadata fallback` (**music videos only**; non-music with no transcript raises `NO_TRANSCRIPT`).
    Cleaned with **spaCy** (filler removal, TF-IDF repetition collapse). Sponsor segments filtered via **SponsorBlock** API.
 
 3. **Frames** (parallel with transcript) — **two-pass with a manifest cache.** Cache check first: `videos/{id}/scenes-v3/manifest.json` (v2 — timestamps, `hiresCount`, persisted vision descriptions; `hiresCount == 0` counts as a MISS so 403-era low-res runs self-heal). On miss, pass 1: yt-dlp downloads **worst-quality** video (~15–20s; all video/audio downloads route through `YTDLP_PLAYER_CLIENTS`, default `android` — never mix in `default`) → **FFmpeg** scene detect @ threshold 0.3 (~200 candidates) → score locally with **OpenCV** on **6 signals** (color saturation HSV, face via Haar, skin fraction inverted, center-crop detail, text density via Canny, perceptual-hash uniqueness) → adaptive **visual tier** (`domains.json` `visualCriticality`: HIGH domains over-select 40 + vision-reselect to drop presenter frames; LOW skips vision; STANDARD = top-8) → select ~25 evenly across duration. Pass 2 (`SCENE_HIRES_ENABLED`): re-extract only the winners at **720p** via stream-URL seek, with a local ≤720p download fallback when the CDN 403s seeks. Then upload winners to S3 + write the manifest → **Tesseract OCR** + **fast-tier vision** in parallel (descriptions persisted into the manifest). A per-video `asyncio.Lock` prevents duplicate concurrent extraction. `FRAME_VISION_ENABLED=false` → OCR-only.
@@ -279,10 +279,10 @@ Legacy v1 events (still emitted): `detection_result`, `chapter_ready`, `concepts
 
 **System cache (shared):** `videoSummaryCache`, `systemExpansionCache`.
 **User data:** `users`, `folders`, `userVideos`.
-**Cost & control:** `userCosts`, `userCostAdjustments`, `idempotencyKeys`, `llm_usage` (+ `llm_usage_daily`, `llm_alerts`, `health_history` for admin), `userDeletions`, `agentNotes`.
+**Cost & control:** `userCosts`, `userCostAdjustments`, `idempotencyKeys`, `llm_usage` (+ `llm_alerts`, `health_history` for admin), `userDeletions`, `agentNotes`.
 
 ### `videoSummaryCache` (one row per YouTube video — central, dual-shaped)
-- **Core:** `_id`, `youtubeId` (unique), `url`, `title`, `channel`, `duration`, `thumbnailUrl`, `language` (always `'en'` post-translation), `isRTL`, `context{category, contentTags[], primaryTag, youtubeCategory, tags[], displayTags[]}`, `status` (`pending|processing|completed|failed`), `errorMessage`, `errorCode`, `retryCount`, `transcript`, `transcriptType`, `transcriptSource`, `transcriptSegments[]`.
+- **Core:** `_id`, `youtubeId` (unique), `url`, `title`, `channel`, `duration`, `thumbnailUrl`, `language` (always `'en'` post-translation), `isRTL`, `context{category, contentTags[], primaryTag, youtubeCategory, tags[], displayTags[]}`, `status` (`pending|processing|completed|failed`), `errorMessage`, `errorCode`, `retryCount`, `transcriptMeta{outcome, source, type, origin, captionTrack, captionLang, captionFetchError, captionApiSkipped, attempted[], segments, chars, fetchWallMs, errorCode}` (per-run transcript provenance, written for ok **and** failed runs, absent on Redis-served rows; `transcript`/`transcriptSegments[]` are legacy and unwritten).
 - **v1 (legacy):** `summary{tldr, keyTakeaways[], chapters[...], concepts[...]}`, `triage{contentTags[], modifiers[], primaryTag, tabs[{id,label,emoji,dataSource}], confidence}`, `output` (domain-keyed extraction), `enrichment`, `synthesis{tldr, keyTakeaways[], masterSummary, seoDescription}`.
 - **v2 (current, used by frontend):**
   - `assembledMeta{videoId, videoTitle, creator, contentTags[], modifiers[], primaryTag, userGoal, tldr, keyTakeaways[], masterSummary, seoDescription, language, isRTL}`
@@ -382,7 +382,7 @@ The `output_chunker.py` walks assembled tabs via a **per-component handler regis
 
 ### Observability (Langfuse) — strictly best-effort, no-ops when keys unset
 - One pipeline run = one trace `pipeline:{videoSummaryId}` (tagged `youtubeId`, `videoSummaryId`, `requestId`). Each LLM call is a child **generation** with usage + metadata (`attempt`, `useFastModel`, `modelOverride`, `latencyMs`, `finishReason`). **Assembly emits no generations** (pure code). Model mix in traces: classifier=fast, plan=sonnet, extraction=sonnet (one generation per chunk), synthesis=fast, enrichment=haiku, `translation_*`.
-- Assistant traces chat as `chat:{videoId}` with tool spans + a `rag_generation` span.
+- Assistant traces chat as `chat:{videoId}` with tool spans + `library_generation` / `library_agent` generations.
 - **Prompt registry:** local `.txt` files under `services/summarizer/src/prompts/**` are the source of truth; `vie-langfuse-init` (run-once service) syncs them to Langfuse under `label='production'`. `load_prompt_text` is registry-first with file fallback, recording the version in the trace.
 - **Faithfulness judge:** after extraction, fire-and-forget, samples `LANGFUSE_FAITHFULNESS_SAMPLE_RATE=0.2` of items (capped 6/video), asks a Haiku-tier LLM if each claim is transcript-supported, logs a `faithfulness` score (~$0.005/video). **Informational only — never blocks**; runs < 0.7 logged at warning.
 - **Golden dataset eval:** 20-video dataset + `run_eval.py --fail-under 0.7` for CI-gradeable scoring (must use `--api-url http://vie-api:3000` from inside the container).
@@ -460,7 +460,7 @@ Scales with length: 15min ≈ $0.02, 2h ≈ $0.05, 9h ≈ $0.12. Typical ~$0.09 
 
 ## 15. Admin service & cost telemetry (vie-admin)
 
-Port 8002, FastAPI + static React/Recharts SPA in one multi-stage container. Auth via shared `ADMIN_API_KEY` Bearer (timing-safe `hmac.compare_digest`). Reads `llm_usage` (90d TTL), `llm_usage_daily` (no TTL), `llm_alerts`, `health_history` (30d TTL); polls `/health` on api/summarizer/assistant.
+Port 8002, FastAPI + static React/Recharts SPA in one multi-stage container. Auth via shared `ADMIN_API_KEY` Bearer (timing-safe `hmac.compare_digest`). Reads `llm_usage` (no TTL — ledger), `llm_alerts`, `health_history` (30d TTL); polls `/health` on api/summarizer/assistant, Mongo, Qdrant `/readyz`, Redis+RabbitMQ via api `/ready`, and worker liveness via queue consumers.
 
 **`packages/llm-common`** (shared Python) auto-tracks every LiteLLM call via a `MongoDBUsageCallback` (LiteLLM `CustomLogger`) → one `UsageRecord` row (23 fields incl. `cache_creation_tokens`, `cache_read_tokens`, `cache_savings_usd`) per call. Registered in summarizer `main.py` (sync buffer) + assistant `server.py` (async buffer). **Single source of truth for cost** — no manual tracking in the hot loop.
 

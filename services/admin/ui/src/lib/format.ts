@@ -103,3 +103,22 @@ export function formatNumber(n: number | null | undefined): string {
   if (n == null) return '0';
   return n.toLocaleString();
 }
+
+export interface UsageVolumeFields {
+  unit?: string | null;
+  audio_seconds?: number | null;
+  tokens_in?: number | null;
+  tokens_out?: number | null;
+}
+
+/**
+ * The "Tokens" cell for an llm_usage row. Transcription rows are priced per
+ * audio second and carry zero tokens — rendering them as "0" made every
+ * Whisper call look free/broken.
+ */
+export function formatUsageVolume(row: UsageVolumeFields): string {
+  if (row.unit === 'audio_seconds') {
+    return `${((row.audio_seconds ?? 0) / 60).toFixed(1)} min audio`;
+  }
+  return formatNumber((row.tokens_in ?? 0) + (row.tokens_out ?? 0));
+}

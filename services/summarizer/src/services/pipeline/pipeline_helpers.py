@@ -14,7 +14,7 @@ import asyncio
 import json
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Callable
 
 if TYPE_CHECKING:
@@ -92,6 +92,35 @@ class PipelineTimer:
 
 
 @dataclass
+class TranscriptTrail:
+    """Provenance of one transcript-fetch run, independent of its outcome.
+
+    The fetcher appends to ``attempted`` as each layer runs and fails, so the
+    list survives a run where every layer failed and no ``TranscriptData``
+    ever existed. The transcript phase stamps ``fetch_wall_ms`` and
+    ``error_code`` in a ``finally`` and hangs the trail on the context; the
+    runner persists it as ``transcriptMeta`` for successful AND failed runs.
+    """
+
+    # Layers that RAN and FAILED before the winning source, in order. Values:
+    # "s3" (lookup raised — a miss is not an attempt), "ytdlp" (a caption
+    # track was picked but the timedtext fetch yielded nothing), "api" /
+    # "proxy" (youtube-transcript-api, labelled by whether Webshare proxying
+    # was actually configured), "whisper", "gemini".
+    attempted: list[str] = field(default_factory=list)
+    # youtube-transcript-api was skipped by the Redis caption-429 marker.
+    caption_api_skipped: bool = False
+    # S3-hit runs only: the ``source`` recorded in the cached blob — the layer
+    # that originally produced the transcript. ``"s3"`` here means the blob
+    # had already decayed before the assembly re-store skip landed.
+    origin: str | None = None
+    # Wall time of the transcript phase's fetch (frames run in parallel).
+    fetch_wall_ms: int | None = None
+    # ``ErrorCode.value`` of the TranscriptError that ended the fetch, if any.
+    error_code: str | None = None
+
+
+@dataclass
 class TranscriptData:
     """Holds transcript data from any source.
 
@@ -101,8 +130,11 @@ class TranscriptData:
     segments: list[dict[str, Any]]
     raw_text: str
     transcript_type: str
-    source: str  # ytdlp, api, proxy, whisper, gemini, metadata
+    source: str  # ytdlp, api, proxy, whisper, gemini, metadata, s3
     language: str | None = None  # ISO 639-1 code (e.g., "en", "he")
+    # Attached by the fetcher AFTER construction (keeps every existing
+    # keyword-only construction site and test-built instance valid).
+    trail: TranscriptTrail | None = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────

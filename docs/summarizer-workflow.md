@@ -87,6 +87,7 @@ Langfuse trace flushes. Each phase is an **async generator** that mutates `ctx` 
 Phase 1   metadata           (sequential — everything needs video_data)
 Phase 2   transcript ║ frames    (PARALLEL — both only need youtube_id + video_data)
 Phase 2.5 visual injection    (folds frame captions into the transcript text)
+          ↳ right after Phase 2 the runner writes `transcriptMeta` (ok AND failed runs)
 Phase 3   plan               ┐
 Phase 4   extraction         │
 Phase 5   synthesis          │  (sequential — each depends on the previous's output)
@@ -127,6 +128,7 @@ connection at its 300s body timeout.
 - Then `clean_transcript()` → `clean_transcript_advanced()` (spaCy + TF-IDF in a process pool, 30s cap) → **SponsorBlock** filtering (`sponsorblock.get_sponsor_segments` + `filter_transcript_segments`).
 - **Language detection:** from the source's own metadata, or `detect_language_from_text` / `detect_language_by_script`. Sets `ctx.source_language_code` (non-English only; **dropped** for sound-only/instrumental music whose "transcript" is hallucinated). **This single field decides whether Phase 8 runs.**
 - **Out:** `ctx.transcript_data` (segments + raw_text + source), `ctx.clean_text`, `ctx.source_language_code`.
+- **Provenance:** the fetcher fills a `TranscriptTrail` (layers that ran and failed — the youtube-transcript-api attempt is labelled `api` or `proxy` by whether Webshare was configured — the caption-429 skip flag, the S3 blob's origin) and attaches it to the yielded `TranscriptData`; the phase times the fetch and stamps `fetch_wall_ms` / `error_code` in a `finally`, so `ctx.transcript_trail` exists even when the chain raises.
 - **SSE:** `transcript_ready` (+ `phase` events for each fallback hop).
 
 ### Phase 2b — Frames · `phases/frames.py`
@@ -218,8 +220,14 @@ Pydantic models.
 - **Caches / indexes (all background, best-effort):**
   - Redis `response_cache.set_response()` — **English only** (non-English waits for translation so the cached payload includes the toggle).
   - Qdrant `store_transcript_chunks()` + `store_default_output_chunks()` — transcript translated to English for embeddings; output tabs are already English.
-  - S3 raw transcript via `transcript_store.store()`, then writes `rawTranscriptRef` back to Mongo.
+  - S3 raw transcript via `transcript_store.store()` — **skipped when the transcript itself came from S3** (`source == "s3"`), so the blob keeps recording which layer originally produced it. The `rawTranscriptRef` write-back that follows is currently a no-op (its filter passes the string id where Mongo stores an `ObjectId`; known side finding, not fixed here).
 - **SSE:** `tab_ready` (one per tab, progressive), `complete`, and for English: `done` + `[DONE]`.
+
+### Transcript provenance write · `routes/pipeline_runner.py`
+
+- Wraps the parallel transcript+frames phase in `try/finally`; the `finally` calls `_record_transcript_outcome()`, which builds the block with `transcription/transcript_meta.build_transcript_meta()` and persists it through `repository.set_transcript_meta()` — a dedicated `$set`-only writer (`save_structured_result` would `$unset` the `forceRefresh` bypass marker mid-run).
+- Runs for successful **and** failed fetches (a `TranscriptError` still propagates afterwards) and lives inside the Langfuse `pipeline_trace`, mirroring `transcriptSource` / `transcriptType` / `transcriptAttempted` / `transcriptOutcome` onto the trace.
+- `clear_transcript_meta()` runs at the `processing` transition and on the Redis fast path, so a row re-run on the same `_id` never keeps a stale block. Field shape: [DATA-MODELS.md](./DATA-MODELS.md).
 
 ### Phase 8 — Translation · `phases/translation.py` → `pipeline/translation.py` *(non-English only)*
 
@@ -445,4 +453,3 @@ is set `FAILED` with the code.
 | Extraction strategies | `services/pipeline/extractor.py` |
 | Assembly orchestrator + assemblers | `services/pipeline/assembly/core.py`, `assemblers.py` |
 | Prompts | `prompts/*.txt`, `prompts/schemas/`, `prompts/enrich/`, `prompts/examples/` |
-```

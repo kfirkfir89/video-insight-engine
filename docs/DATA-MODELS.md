@@ -182,17 +182,35 @@ One entry per YouTube video. Shared across all users.
   errorCode: string | null,       // "NO_TRANSCRIPT", "VIDEO_TOO_LONG", etc.
   retryCount: number,             // Default: 0
 
-  // Content
+  // Legacy, never written by the current pipeline. Transcript text lives in
+  // S3 at the deterministic key videos/<youtubeId>/transcript.json
+  // (rawTranscriptRef is NOT set for pipeline rows — see its comment below).
   transcript: string | null,
-  transcriptType: "manual" | "auto-generated" | null,
-
-  // Transcript system fields
-  transcriptSource: "ytdlp" | "api" | "proxy" | "whisper" | null,
   transcriptSegments: [{
     text: string,
     startMs: number,           // Milliseconds
     endMs: number
   }] | null,
+
+  // Transcript provenance — written ONCE per run by the pipeline runner right
+  // after the transcript+frames phase, for every run that REACHES the transcript
+  // phase — successful and failed fetches alike (a metadata-phase failure, e.g.
+  // VIDEO_TOO_SHORT, carries no block).
+  transcriptMeta: {
+    outcome: "ok" | "failed",
+    source: "s3" | "ytdlp" | "api" | "proxy" | "whisper" | "gemini" | "metadata" | null,  // null on failure
+    type: "manual" | "auto-generated" | "asr" | "metadata" | "cached" | null,
+    origin: "ytdlp" | "api" | "proxy" | "whisper" | "gemini" | "metadata" | null,          // s3 rows only: layer that produced the cached blob
+    captionTrack: "manual" | "auto-generated" | null,   // track THIS run's metadata phase picked (null = no usable json3 track)
+    captionLang: string | null,                          // matched caption key ("ar-SA", "en-en"); differs from the video language on auto-translation
+    captionFetchError: "http_429" | "http_403" | "http_<n>" | "request" | "parse" | "empty" | null,  // "parse" = json3 body unparseable → captions discarded, chain continues
+    captionApiSkipped: boolean,                          // youtube-transcript-api skipped by the Redis caption-429 marker
+    attempted: string[],                                 // layers that RAN and FAILED before `source`, in order: s3 | ytdlp | api | proxy | whisper | gemini
+    segments: number | null,
+    chars: number | null,
+    fetchWallMs: number | null,                          // wall time of the fetch chain inside the transcript phase (frames run in parallel); set on failed rows too
+    errorCode: string | null                             // failed rows: TranscriptError code (NO_TRANSCRIPT, RATE_LIMITED, …), UNKNOWN_ERROR (unexpected exception) or CANCELLED (producer torn down mid-fetch)
+  } | absent,
 
   // Processed summary (legacy v1 format — kept for backward compat,
   // new pipeline populates assembledMeta/assembledTabs instead)
@@ -337,7 +355,10 @@ One entry per YouTube video. Shared across all users.
   totalTokens: number,              // Sum of input + output tokens (v1.4)
 
   // S3 media storage
-  rawTranscriptRef: string | null,  // S3 key: "videos/{youtubeId}/transcript.json"
+  rawTranscriptRef: string | null,  // S3 key "videos/{youtubeId}/transcript.json". Only set by
+                                    // scripts/backfill-transcripts.py / migrate-s3-keys.py: the
+                                    // assembly-phase write-back is a no-op (string _id filter,
+                                    // see summarizer-workflow.md Phase 7). Prefer the deterministic key.
 
   // Generation metadata (for regeneration)
   generation: {
@@ -350,6 +371,16 @@ One entry per YouTube video. Shared across all users.
   updatedAt: Date
 }
 ```
+
+> **`transcriptMeta` caveats.** Written by `pipeline_runner._record_transcript_outcome` via the dedicated `$set`-only `set_transcript_meta` (never through `save_structured_result`, which `$unset`s `forceRefresh`). Cleared (`$unset`) at the `processing` transition of every run and when the Redis fast path completes a row — so a completed row with **no `transcriptMeta` and no `pipelineVersion` was served from the Redis response cache**. `attempted` lists only layers that actually ran and failed: a gated layer (Whisper disabled, over the duration cap, no Gemini key) is not an attempt, and the negative-cache skip of youtube-transcript-api is reported by `captionApiSkipped` instead. `origin` is `null` when the S3 blob's recorded source had already decayed to `"s3"` (regens before the assembly re-store skip). Redis payloads, frontend responses, and public share responses never carry the block. Old rows are not migrated — flush with `scripts/wipe-data.sh` (dry run by default; `--yes` deletes the Mongo video collections, Redis, **and** every `videos/<id>/transcript.json` in the real S3 bucket — irreversible. Pass `--keep-s3` to keep the raw transcripts, in which case reprocessed rows report `source: "s3"`).
+>
+> ```js
+> // which layer wins / how often does paid ASR run
+> db.videoSummaryCache.aggregate([
+>   { $match: { transcriptMeta: { $exists: true } } },
+>   { $group: { _id: "$transcriptMeta.source", n: { $sum: 1 } } },
+> ])
+> ```
 
 **Indexes:**
 ```javascript

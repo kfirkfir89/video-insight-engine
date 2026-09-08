@@ -20,12 +20,12 @@ from google import genai
 from google.genai import types as genai_types
 
 from src.config import settings
-from src.models.schemas import (
-    TranscriptSegment,
-    NormalizedTranscript,
-    ErrorCode,
-)
 from src.exceptions import TranscriptError
+from src.models.schemas import (
+    ErrorCode,
+    NormalizedTranscript,
+    TranscriptSegment,
+)
 from src.services.media.download_utils import download_youtube_audio
 from src.services.transcription.usage import emit_transcription_usage
 from src.utils.language_utils import (
@@ -116,10 +116,12 @@ def _get_mime_type(audio_path: Path) -> str:
 
 
 def _download_audio_raw_sync(video_id: str) -> Path:
-    """Download raw audio from YouTube without FFmpeg conversion.
+    """Download audio from YouTube via stream-copy extraction (no re-encode).
 
-    Unlike Whisper's download which converts to MP3, this keeps the raw
-    format (webm/m4a/ogg) since Gemini accepts them natively.
+    Unlike Whisper's download which re-encodes to MP3, this keeps the source
+    audio codec: FFmpegExtractAudio with ``preferredcodec: "best"`` remuxes
+    (webm/opus → .opus, mp4/aac → .m4a) without transcoding, and Gemini
+    accepts those containers natively.
 
     Args:
         video_id: YouTube video ID
@@ -136,8 +138,14 @@ def _download_audio_raw_sync(video_id: str) -> Path:
     output_path = TEMP_DIR / f"{file_stem}.%(ext)s"
 
     ydl_opts = {
-        "format": "bestaudio",
-        # No postprocessors — keep raw format for Gemini
+        # bestaudio has no match when YouTube's SABR experiment strips audio-only
+        # format URLs from the android client (2026-09) — /best falls back to a
+        # progressive muxed stream.
+        "format": "bestaudio/best",
+        # "best" stream-copies the audio track (no re-encode); a muxed /best
+        # download gets its video track dropped here so Gemini never receives
+        # video bytes.
+        "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "best"}],
         "outtmpl": str(output_path),
         "quiet": True,
         "no_warnings": True,
@@ -151,10 +159,7 @@ def _download_audio_raw_sync(video_id: str) -> Path:
     download_youtube_audio(video_id, ydl_opts, TEMP_DIR, file_stem)
 
     # Find the downloaded file (extension varies by source format)
-    downloaded = [
-        p for p in TEMP_DIR.glob(f"{file_stem}.*")
-        if not p.suffix.endswith(".part")
-    ]
+    downloaded = [p for p in TEMP_DIR.glob(f"{file_stem}.*") if not p.suffix.endswith(".part")]
     if not downloaded:
         raise TranscriptError(
             "Audio download completed but file not found",
@@ -191,9 +196,9 @@ def _recover_truncated_json(text: str, start_idx: int) -> list[dict]:
     # repeated parsing on large responses with many '}' inside text values.
     last_brace = array_content.rfind("}")
     while last_brace > 0:
-        after = array_content[last_brace + 1:last_brace + 3].lstrip()
+        after = array_content[last_brace + 1 : last_brace + 3].lstrip()
         if after == "" or after.startswith(",") or after.startswith("\n"):
-            candidate = array_content[:last_brace + 1] + "]"
+            candidate = array_content[: last_brace + 1] + "]"
             try:
                 result = json.loads(candidate)
                 if isinstance(result, list):
@@ -244,13 +249,9 @@ def _parse_ndjson_response(text: str) -> list[dict]:
             continue
 
     if not segments:
-        raise ValueError(
-            f"No parseable JSON objects in newline-delimited response: {text[:200]}"
-        )
+        raise ValueError(f"No parseable JSON objects in newline-delimited response: {text[:200]}")
 
-    logger.info(
-        "Parsed %d segments from newline-delimited JSON response", len(segments)
-    )
+    logger.info("Parsed %d segments from newline-delimited JSON response", len(segments))
     return segments
 
 
@@ -298,7 +299,7 @@ def _parse_gemini_response(response_text: str) -> list[dict]:
 
         if end_idx != -1 and end_idx > start_idx:
             # Normal case: complete JSON array
-            json_str = text[start_idx:end_idx + 1]
+            json_str = text[start_idx : end_idx + 1]
             try:
                 segments = json.loads(json_str)
             except json.JSONDecodeError as parse_err:
@@ -325,11 +326,13 @@ def _parse_gemini_response(response_text: str) -> list[dict]:
         seg_text = str(seg["text"]).strip()
         if not seg_text:
             continue
-        normalized.append({
-            "text": seg_text,
-            "startMs": int(seg.get("startMs", 0)),
-            "endMs": int(seg.get("endMs", 0)),
-        })
+        normalized.append(
+            {
+                "text": seg_text,
+                "startMs": int(seg.get("startMs", 0)),
+                "endMs": int(seg.get("endMs", 0)),
+            }
+        )
 
     return normalized
 
@@ -343,7 +346,7 @@ def _get_gemini_model() -> str:
     """
     configured = settings.LLM_FAST_MODEL  # explicit override, not the property
     if configured and configured.startswith("gemini/"):
-        return configured[len("gemini/"):]
+        return configured[len("gemini/") :]
     return GEMINI_TRANSCRIPTION_MODEL
 
 
@@ -387,7 +390,8 @@ async def transcribe_with_gemini(
         prompt = MUSIC_TRANSCRIPTION_PROMPT if is_music else TRANSCRIPTION_PROMPT
         logger.info(
             "Starting Gemini transcription for %s (music_mode=%s)",
-            video_id, "ON" if is_music else "OFF",
+            video_id,
+            "ON" if is_music else "OFF",
         )
 
         # Download raw audio (blocking, run in thread)
@@ -397,7 +401,9 @@ async def transcribe_with_gemini(
         file_size = audio_path.stat().st_size
         logger.info(
             "Audio ready: %s (%.1fMB, %s)",
-            audio_path.name, file_size / 1024 / 1024, mime_type,
+            audio_path.name,
+            file_size / 1024 / 1024,
+            mime_type,
         )
 
         # Upload file to Gemini File API
@@ -417,13 +423,15 @@ async def transcribe_with_gemini(
         response = await client.aio.models.generate_content(
             model=model_name,
             contents=[
-                genai_types.Content(parts=[
-                    genai_types.Part.from_text(text=prompt),
-                    genai_types.Part.from_uri(
-                        file_uri=upload_result.uri,
-                        mime_type=mime_type,
-                    ),
-                ]),
+                genai_types.Content(
+                    parts=[
+                        genai_types.Part.from_text(text=prompt),
+                        genai_types.Part.from_uri(
+                            file_uri=upload_result.uri,
+                            mime_type=mime_type,
+                        ),
+                    ]
+                ),
             ],
             config=genai_types.GenerateContentConfig(
                 max_output_tokens=GEMINI_TRANSCRIPTION_MAX_TOKENS,
@@ -450,9 +458,10 @@ async def transcribe_with_gemini(
             if hasattr(response, "prompt_feedback"):
                 block_reason = getattr(response.prompt_feedback, "block_reason", None)
             logger.error(
-                "Gemini returned empty response for %s "
-                "(block_reason=%s, finish_reason=%s)",
-                video_id, block_reason, finish_reason,
+                "Gemini returned empty response for %s (block_reason=%s, finish_reason=%s)",
+                video_id,
+                block_reason,
+                finish_reason,
             )
             raise TranscriptError(
                 f"Gemini returned no transcription (block_reason={block_reason}, "
@@ -473,10 +482,13 @@ async def transcribe_with_gemini(
         try:
             raw_segments = _parse_gemini_response(response_text)
         except (ValueError, json.JSONDecodeError) as e:
-            appears_truncated = "]" not in response_text[response_text.find("["):] if "[" in response_text else True
+            appears_truncated = (
+                "]" not in response_text[response_text.find("[") :]
+                if "[" in response_text
+                else True
+            )
             logger.error(
-                "Failed to parse Gemini response: %s | "
-                "truncated=%s | start=%s | end=%s",
+                "Failed to parse Gemini response: %s | truncated=%s | start=%s | end=%s",
                 e,
                 appears_truncated,
                 repr(response_text[:500]),
@@ -496,11 +508,13 @@ async def transcribe_with_gemini(
         segments = []
         for seg in raw_segments:
             try:
-                segments.append(TranscriptSegment(
-                    text=seg["text"],
-                    startMs=seg["startMs"],
-                    endMs=seg["endMs"],
-                ))
+                segments.append(
+                    TranscriptSegment(
+                        text=seg["text"],
+                        startMs=seg["startMs"],
+                        endMs=seg["endMs"],
+                    )
+                )
             except (KeyError, TypeError) as e:
                 logger.warning("Skipping malformed Gemini segment: %s | %s", e, seg)
 
@@ -520,14 +534,15 @@ async def transcribe_with_gemini(
         # (e.g. Japanese vs Chinese, or any Latin-script non-English language);
         # script detection is the zero-dependency safety net for short or
         # langdetect-unsupported transcripts.
-        detected_language = (
-            detect_language_from_text(raw_text)
-            or detect_language_by_script(raw_text)
+        detected_language = detect_language_from_text(raw_text) or detect_language_by_script(
+            raw_text
         )
 
         logger.info(
             "Gemini transcription complete: %s chars, %s segments (language=%s)",
-            len(raw_text), len(segments), detected_language,
+            len(raw_text),
+            len(segments),
+            detected_language,
         )
 
         emit_transcription_usage(

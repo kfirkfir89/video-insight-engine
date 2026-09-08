@@ -7,7 +7,9 @@ watchfiles>=0.21.0
 
 # YouTube
 youtube-transcript-api>=0.6.2
-yt-dlp>=2024.1.0
+# Keep current: YouTube-side changes (SABR, PO tokens, client gating) are
+# fixed upstream release-by-release; a stale extractor silently loses formats.
+yt-dlp>=2026.7.4
 yt-dlp-ejs>=0.1.0
 
 # LLM (multi-provider via LiteLLM)

@@ -50,6 +50,7 @@ When you fix a bug, add it here to prevent re-investigation.
 | Memory spike | Large transcript in memory | Stream processing, chunk | 2026-02 |
 | yt-dlp 403 on video download / stream-URL seeks | YouTube 403s the **web client's** download URLs from some environments (client-bound googlevideo CDN) | Set `YTDLP_PLAYER_CLIENTS=android` (the default). **Never** use `android,default` — the merged format list lets bestvideo pick a blocked web DASH format. android caps at 640×360 (PO-token wall); the hires pass falls back to a local ≤720p download. Low-res cached runs self-heal via the manifest `hiresCount==0` gate | 2026-08 |
 | Frames silently stale after quality changes | `scenes-v3` keys overwrite in place — old docs get new frames but stale metadata | Bump `SCENE_S3_PREFIX` on frame-quality changes, or `?bypassCache=true` per video | 2026-08 |
+| `test_stream_routes` error tests get a `cached` event instead of `error` (5 failures, only on this box) | Tests stub the event broker but not `response_cache`, which connects to the **live dev Redis**; it holds `vie:response:v8:dQw4w9WgXcQ` (the fixture's youtubeId) from a real run | `_reset_response_cache` now monkeypatches `get_response`/`set_response`. Any new test that reaches the producer path must stub the response cache — never rely on Redis being empty | 2026-09 |
 
 ---
 

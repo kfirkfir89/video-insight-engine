@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     VIE_API_URL: str = "http://vie-api:3000"
     VIE_SUMMARIZER_URL: str = "http://vie-summarizer:8000"
     VIE_ASSISTANT_URL: str = "http://vie-assistant:8001"
+    # Qdrant readiness probe target (GET /readyz). Redis/RabbitMQ are observed
+    # through vie-api's /ready (what matters is whether the API can reach them).
+    QDRANT_URL: str = "http://vie-qdrant:6333"
 
     # Alert thresholds
     ALERT_COST_THRESHOLD_USD: float = 0.50

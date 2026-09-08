@@ -118,6 +118,9 @@ export interface VideoDetailResponse {
     video_id?: string;
     service?: string;
     success?: boolean;
+    /** "tokens" (default) or "audio_seconds" for transcription rows. */
+    unit?: string | null;
+    audio_seconds?: number | null;
   }>;
 }
 
@@ -259,6 +262,8 @@ export interface UserAssistantCallRow {
   tokensOut: number | null;
   requestId: string | null;
   timestamp: string;
+  unit?: string | null;
+  audioSeconds?: number | null;
 }
 
 export interface UserCostTimelineRow {
@@ -287,19 +292,90 @@ export interface QueueStatsResponse {
   };
 }
 
+/** One dead-lettered job as peeked from RabbitMQ (vie-api /api/admin/queue/dlq). */
+export interface DlqMessage {
+  payload: Record<string, unknown> | null;
+  routingKey: string | null;
+  messageId: string | null;
+  priority: number | null;
+  headers: Record<string, unknown> | null;
+}
+
+export interface QueueDlqResponse {
+  messages: DlqMessage[];
+}
+
+export interface QueueReplayResponse {
+  replayed: number;
+}
+
+export interface FeatureUsageRow {
+  feature: string;
+  calls: number;
+  cost_usd: number;
+  avg_duration_ms?: number | null;
+  p50_duration_ms?: number | null;
+  p95_duration_ms?: number | null;
+}
+
+export interface ModelUsageRow {
+  model: string;
+  calls: number;
+  cost_usd: number;
+  tokens_in?: number;
+  tokens_out?: number;
+  avg_duration_ms?: number | null;
+  p50_duration_ms?: number | null;
+  p95_duration_ms?: number | null;
+}
+
+/** One expensive call from /usage/anomalies (raw llm_usage doc, serialized). */
+export interface AnomalyRow {
+  _id: string;
+  model?: string | null;
+  feature?: string | null;
+  cost_usd?: number;
+  tokens_in?: number;
+  tokens_out?: number;
+  duration_ms?: number;
+  video_id?: string | null;
+  request_id?: string | null;
+  timestamp?: string;
+  unit?: string | null;
+  audio_seconds?: number | null;
+}
+
+/** One duplicate-prompt group from /usage/duplicates. */
+export interface DuplicateRow {
+  prompt_hash: string;
+  count: number;
+  total_cost_usd: number;
+  model?: string | null;
+  feature?: string | null;
+  prompt_preview?: string | null;
+}
+
+export type SystemStatus = 'healthy' | 'degraded' | 'down' | 'unknown';
+
+export interface HealthOverviewResponse {
+  status: SystemStatus;
+  services: Record<string, { status: string; response_ms?: number }>;
+  checked_at: string;
+}
+
 // Usage endpoints
 export const api = {
   usage: {
     stats: (days = 30) => apiFetch<Record<string, number>>(`/usage/stats${qs({ days })}`),
     daily: (days = 30) => apiFetch<Array<{ date: string; calls: number; cost_usd: number }>>(`/usage/daily${qs({ days })}`),
-    byFeature: (days = 30) => apiFetch<Array<{ feature: string; calls: number; cost_usd: number }>>(`/usage/by-feature${qs({ days })}`),
-    byModel: (days = 30) => apiFetch<Array<{ model: string; calls: number; cost_usd: number }>>(`/usage/by-model${qs({ days })}`),
+    byFeature: (days = 30) => apiFetch<FeatureUsageRow[]>(`/usage/by-feature${qs({ days })}`),
+    byModel: (days = 30) => apiFetch<ModelUsageRow[]>(`/usage/by-model${qs({ days })}`),
     byService: (days = 30) => apiFetch<Array<{ service: string; calls: number; cost_usd: number }>>(`/usage/by-service${qs({ days })}`),
     byVideo: (days = 30, limit = 20) => apiFetch<VideoSummaryItem[]>(`/usage/by-video${qs({ days, limit })}`),
     forVideo: (videoId: string) => apiFetch<VideoDetailResponse>(`/usage/video/${encodeURIComponent(videoId)}`),
-    anomalies: (threshold = 0.5, days = 7) => apiFetch<Array<Record<string, unknown>>>(`/usage/anomalies${qs({ threshold_usd: threshold, days })}`),
+    anomalies: (threshold = 0.5, days = 7) => apiFetch<AnomalyRow[]>(`/usage/anomalies${qs({ threshold_usd: threshold, days })}`),
     recent: (limit = 20, beforeId?: string) => apiFetch<Array<Record<string, unknown>>>(`/usage/recent${qs({ limit, before_id: beforeId })}`),
-    duplicates: (days = 7) => apiFetch<Array<Record<string, unknown>>>(`/usage/duplicates${qs({ days })}`),
+    duplicates: (days = 7) => apiFetch<DuplicateRow[]>(`/usage/duplicates${qs({ days })}`),
     byOutputType: (days = 30) => apiFetch<OutputTypeUsage[]>(`/usage/by-output-type${qs({ days })}`),
     byRun: (days = 30, limit = 20, offset = 0) =>
       apiFetch<RunSummary[]>(`/usage/by-run${qs({ days, limit, offset })}`),
@@ -313,7 +389,7 @@ export const api = {
   },
   health: {
     services: () => apiFetch<Record<string, { status: string; response_ms?: number }>>('/health/services'),
-    overview: () => apiFetch<{ status: string; services: Record<string, unknown> }>('/health/overview'),
+    overview: () => apiFetch<HealthOverviewResponse>('/health/overview'),
     history: (hours = 24) => apiFetch<Array<Record<string, unknown>>>(`/health/history${qs({ hours })}`),
     uptime: (days = 7) => apiFetch<Record<string, { uptime_pct: number }>>(`/health/uptime${qs({ days })}`),
   },
@@ -326,10 +402,6 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
       }),
-  },
-  admin: {
-    aggregateDaily: (date?: string) =>
-      apiFetch<Record<string, unknown>>(`/admin/aggregate-daily${qs({ target_date: date })}`, { method: 'POST' }),
   },
   users: {
     costs: (days = 7, limit = 50, offset = 0) =>
@@ -347,5 +419,12 @@ export const api = {
   },
   queue: {
     stats: () => apiFetch<QueueStatsResponse>('/queue/stats'),
+    dlq: (limit = 20) => apiFetch<QueueDlqResponse>(`/queue/dlq${qs({ limit })}`),
+    replay: (max = 100) =>
+      apiFetch<QueueReplayResponse>('/queue/replay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ max }),
+      }),
   },
 };

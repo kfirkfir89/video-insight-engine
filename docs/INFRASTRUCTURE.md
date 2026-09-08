@@ -28,7 +28,7 @@ Process once, reuse forever. Three layers absorb identical work across users so 
 | Layer | Store   | Keyed by              | Holds                                |
 | ----- | ------- | --------------------- | ------------------------------------ |
 | L0    | Redis   | `vie:api:dispatched:<videoSummaryId>` | Dispatch guard (api). SET NX EX, 900s TTL. Released on terminal FAILED (internal.routes.ts) or on dispatch throw (dispatch-guard.service.ts catch). Fail-open on Redis error. See [IDEMPOTENCY.md](./IDEMPOTENCY.md#dispatch-guard-publish-layer). |
-| L1    | Redis   | `vie:response:<youtube_id>` | Full VIEResponse JSON (instant serve). Written by the summarizer; for non-English videos the **translation phase** owns the write (assembly phase intentionally skips Redis when `ctx.language != "en"`). Allowlisted top-level keys only: `youtubeId`, `title`, `creator`, `channel`, `duration`, `thumbnailUrl`, `status`, `meta`, `tabs`, `language`, `isRTL`, `sourceLanguage` (`_SAFE_KEYS` in `services/summarizer/src/services/cache/response_cache.py`). |
+| L1    | Redis   | `vie:response:<PIPELINE_VERSION>:<youtube_id>` | Full VIEResponse JSON (instant serve). Written by the summarizer; for non-English videos the **translation phase** owns the write (assembly phase intentionally skips Redis when `ctx.language != "en"`). Allowlisted top-level keys only: `youtubeId`, `title`, `creator`, `channel`, `duration`, `thumbnailUrl`, `status`, `meta`, `tabs`, `language`, `isRTL`, `sourceLanguage` (`_SAFE_KEYS` in `services/summarizer/src/services/cache/response_cache.py`). |
 | L2    | MongoDB | `youtubeId` field     | Persistent video summary + assembled tabs |
 | L3    | S3      | `youtube_id` prefix   | Extracted scene frames (skip re-extraction) |
 
@@ -322,6 +322,13 @@ New/changed vars introduced by the yt-dlp-403 fix and the two-pass frame pipelin
 | `S3_PRESIGNED_URL_EXPIRY` | `21600` (was 3600) | Must stay ≥ api `FRAME_URL_TTL_SECONDS` |
 | `EVAL_USER_EMAIL` / `EVAL_USER_PASSWORD` | `eval@vie.local` / none | Eval-runner local account — auto-registered on first run; no default password by design (also a CI secret) |
 | `SENTRY_DSN` / `SENTRY_ENVIRONMENT` / `SENTRY_RELEASE` | empty | Optional Sentry error reporting (see [OBSERVABILITY.md](./OBSERVABILITY.md)) |
+| `VITE_SENTRY_DSN` / `VITE_SENTRY_RELEASE` | empty | Browser Sentry — compose **build args**, baked into the web bundle (rebuild `vie-web` after changing) |
+| `ALERT_WEBHOOK_URL` | empty | Every `llm_alerts` row is also POSTed here as JSON (Slack/Discord/ntfy). Empty = Mongo-only, nothing pushes |
+| `ALERT_COST_THRESHOLD_USD` | `0.50` | Per-call `high_cost_call` alert threshold (`llm_common/callback.py`) |
+| `QDRANT_URL` (vie-admin) | `http://vie-qdrant:6333` | Admin health poller's Qdrant `/readyz` probe |
+| `BACKUP_KEEP` / `BACKUP_MAX_AGE_HOURS` | `14` / `26` | Backups retained by `scripts/backup.sh` / the `vie-backup-cron` sidecar; age past which vie-admin's `backup_stale` dead-man's switch trips |
+| `STALL_SWEEP_ENABLED` / `STALL_SWEEP_INTERVAL_SECONDS` / `STALL_THRESHOLD_MINUTES` | `true` / `300` / `30` | Summarizer stall sweeper — fails `processing` rows with no progress + no live producer lock, alerts `pipeline_stalled` |
+| `WORKER_RETRY_BACKOFF_SECONDS` | `5` | Worker retry delay, doubled per attempt (5 → 10 → 20 s), capped at 120 s (worker service env, not `x-summarizer-env`) |
 
 ---
 
@@ -455,7 +462,10 @@ The summarizer pipeline runs from a durable RabbitMQ queue (when `USE_QUEUE_PIPE
 }
 ```
 
-**Retry policy** — on consumer error the worker republishes to the main queue with
+**Retry policy** — on consumer error the worker waits
+`WORKER_RETRY_BACKOFF_SECONDS × 2^(attempt-1)` (default 5 → 10 → 20 s, capped at
+120 s; the original message stays unacked during the wait so a crash mid-wait is
+redelivered, not lost), then republishes to the main queue with
 `attempt = attempt + 1` (up to `WORKER_MAX_RETRIES`, default 3); after the cap the
 message is nacked with `requeue=False`, which the DLX routes into `vie.pipeline.dlq`.
 
@@ -519,23 +529,31 @@ Produces `mongo-video-insight-engine.archive.gz` (mongodump `--archive --gzip`),
 
 Both scripts work unchanged against the auth-enabled prod stack: mongodump/mongorestore auth args are resolved inside the Mongo container from its own `MONGO_INITDB_ROOT_*` env, so no secrets cross the host boundary and the same commands run on the authless dev stack. Pruning deletes only timestamp-named (`YYYYMMDDTHHMMSSZ`) directories under the backup root (newest `BACKUP_KEEP` kept), so unrelated dirs under a custom root are never touched. An unreachable Qdrant aborts with an explicit error; set `QDRANT_SKIP=1` for a deliberate Mongo-only backup (vectors are re-derivable).
 
-### Scheduling (installed 2026-07-14)
+### Scheduling
 
-The dev box runs cron (`cron.service` active under WSL2 systemd), so the
-backup is scheduled via the user crontab — verify with `crontab -l`:
+**Committed scheduler (preferred):** the `vie-backup-cron` sidecar
+(`scripts/backup-cron/Dockerfile` + `crontab`) runs `scripts/backup.sh` at
+03:30 UTC from inside the stack. It is behind a compose profile because it
+mounts the docker socket (root-equivalent on the host — `mongodump` runs via
+`docker exec vie-mongodb`):
 
-```
-30 3 * * * cd /home/kfir/projects/video-insight-engine && ./scripts/backup.sh >> backups/backup.log 2>&1
+```bash
+docker compose --profile backup up -d --build vie-backup-cron   # start the scheduler
+docker compose --profile backup run --rm --no-deps vie-backup-cron \
+  bash -c 'cd /repo && QDRANT_URL=http://vie-qdrant:6333 ./scripts/backup.sh'   # run one now
 ```
 
-**WSL2 caveat:** cron only fires while the WSL2 VM is running. If the distro
-is not kept alive overnight, mirror the schedule from Windows Task Scheduler
-(runs even when no WSL terminal is open):
+Output lands in `./backups/<UTC-timestamp>/` (same bind mount vie-admin's
+dead-man's switch reads), log in `backups/backup.log`. `BACKUP_KEEP` (default
+14) controls pruning. In prod, Qdrant publishes no host port — the sidecar
+reaches it on the compose network, so no `QDRANT_SKIP` is needed. The service
+runs with `init: true` (tini as PID 1): busybox `crond` ignores SIGTERM on its
+own, so without it `docker stop` would wait 10 s and SIGKILL a dump mid-write.
 
-```
-schtasks /Create /TN "VIE Backup" /SC DAILY /ST 03:30 ^
-  /TR "wsl.exe -d Ubuntu -u kfir -- bash -lc 'cd /home/kfir/projects/video-insight-engine && ./scripts/backup.sh >> backups/backup.log 2>&1'"
-```
+**Legacy host crontab (2026-07-14 → 2026-08-26):** the same schedule used to
+live in the dev-box user crontab (`30 3 * * * … ./scripts/backup.sh`) with a
+Windows Task Scheduler mirror for the WSL2-asleep case. Remove it once the
+sidecar is running (`crontab -e`) so the two don't double-back-up.
 
 ### Staleness alarm (dead-man's switch)
 

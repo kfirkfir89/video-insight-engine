@@ -138,3 +138,123 @@ async def test_queue_dlq_forwards_limit_param():
     call_kwargs = instance.get.await_args.kwargs
     assert call_kwargs["params"] == {"limit": 42}
     assert call_kwargs["headers"]["X-Admin-Key"] == settings.ADMIN_API_KEY
+
+
+def _mock_async_client_post(response: MagicMock) -> MagicMock:
+    instance = MagicMock()
+    instance.post = AsyncMock(return_value=response)
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=instance)
+    cm.__aexit__ = AsyncMock(return_value=False)
+    return MagicMock(return_value=cm)
+
+
+@pytest.mark.anyio
+async def test_queue_replay_requires_auth():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post("/queue/replay", json={"max": 5})
+    assert resp.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_queue_replay_forwards_max_and_returns_count():
+    upstream = MagicMock()
+    upstream.status_code = 200
+    upstream.json = MagicMock(return_value={"replayed": 3})
+    client_factory = _mock_async_client_post(upstream)
+
+    with patch("src.routes.queue.httpx.AsyncClient", client_factory):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post("/queue/replay", json={"max": 3}, headers=_auth_headers())
+
+    assert resp.status_code == 200
+    assert resp.json() == {"replayed": 3}
+    post = client_factory.return_value.__aenter__.return_value.post
+    assert post.await_args.args[0].endswith("/api/admin/queue/replay")
+    assert post.await_args.kwargs["json"] == {"max": 3}
+    assert post.await_args.kwargs["headers"]["X-Admin-Key"] == settings.ADMIN_API_KEY
+
+
+@pytest.mark.anyio
+async def test_queue_replay_defaults_max_to_100():
+    upstream = MagicMock()
+    upstream.status_code = 200
+    upstream.json = MagicMock(return_value={"replayed": 0})
+    client_factory = _mock_async_client_post(upstream)
+
+    with patch("src.routes.queue.httpx.AsyncClient", client_factory):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post("/queue/replay", json={}, headers=_auth_headers())
+
+    assert resp.status_code == 200
+    post = client_factory.return_value.__aenter__.return_value.post
+    assert post.await_args.kwargs["json"] == {"max": 100}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("bad", [0, 501])
+async def test_queue_replay_validates_max_bounds(bad):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post("/queue/replay", json={"max": bad}, headers=_auth_headers())
+    assert resp.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_queue_replay_passes_through_queue_disabled_503():
+    """vie-api answers 503 QUEUE_DISABLED when USE_QUEUE_PIPELINE is off."""
+    upstream = MagicMock()
+    upstream.status_code = 503
+    upstream.text = '{"error":"QUEUE_DISABLED"}'
+
+    with patch("src.routes.queue.httpx.AsyncClient", _mock_async_client_post(upstream)):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post("/queue/replay", json={"max": 1}, headers=_auth_headers())
+
+    assert resp.status_code == 503
+    assert resp.json()["detail"]["error"] == "QUEUE_DISABLED"
+
+
+@pytest.mark.anyio
+async def test_queue_replay_keeps_partial_count_on_mid_drain_failure():
+    """vie-api's 502 REPLAY_FAILED carries how many messages were already
+    re-published; that count must survive the proxy, not collapse to a status."""
+    upstream = MagicMock()
+    upstream.status_code = 502
+    upstream.text = '{"error":"REPLAY_FAILED","message":"channel closed","replayed":7}'
+
+    with patch("src.routes.queue.httpx.AsyncClient", _mock_async_client_post(upstream)):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post("/queue/replay", json={"max": 50}, headers=_auth_headers())
+
+    assert resp.status_code == 502
+    detail = resp.json()["detail"]
+    assert detail["error"] == "REPLAY_FAILED"
+    assert detail["replayed"] == 7
+
+
+@pytest.mark.anyio
+async def test_queue_stats_does_not_forward_non_json_upstream_error_body():
+    """An HTML/proxy error page from upstream is replaced by a generic line."""
+    upstream = MagicMock()
+    upstream.status_code = 504
+    upstream.text = "<html>gateway timeout</html>"
+
+    with patch("src.routes.queue.httpx.AsyncClient", _mock_async_client(upstream)):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/queue/stats", headers=_auth_headers())
+
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == "vie-api error: 504"
+
+
+@pytest.mark.anyio
+async def test_queue_stats_returns_502_when_upstream_success_body_is_not_json():
+    upstream = MagicMock()
+    upstream.status_code = 200
+    upstream.json = MagicMock(side_effect=ValueError("Expecting value"))
+
+    with patch("src.routes.queue.httpx.AsyncClient", _mock_async_client(upstream)):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/queue/stats", headers=_auth_headers())
+
+    assert resp.status_code == 502

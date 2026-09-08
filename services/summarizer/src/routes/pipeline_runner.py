@@ -33,6 +33,7 @@ from llm_common.context import (  # noqa: F401 — llm_feature_var used in phase
     llm_video_id_var,
     llm_video_summary_id_var,
 )
+from llm_common.sentry_init import capture_exception_with_context
 
 from src.config import settings
 from src.exceptions import TranscriptError
@@ -62,6 +63,7 @@ from src.services.pipeline.pipeline_helpers import (
 )
 from src.services.pipeline.post_processor import coverage_is_degraded
 from src.services.status_callback import send_video_status
+from src.services.transcription.transcript_meta import build_transcript_meta
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +75,108 @@ from src.routes.pipeline_faithfulness import (  # noqa: E402
     _drain_faithfulness,
     _launch_faithfulness_check,
 )
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Failure reporting
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _report_unexpected_failure(exc: Exception, video_summary_id: str, elapsed: float) -> str:
+    """Log + Sentry-capture an unclassified pipeline exception; return its ref.
+
+    The classified branches (transcript, rate-limit, timeout, provider error)
+    are operational and stay log-only. This branch is where real bugs land —
+    and until now it was the one place they were swallowed into an SSE
+    ``error`` frame with no exception reaching Sentry. The SSE-direct path
+    (dev override / SSE client winning the producer lock) has no other
+    capture point; under the worker the DLQ capture in ``runner.py`` only
+    sees a synthetic RuntimeError, so this is also where the real traceback
+    comes from. ``attempt`` is bound by the worker only, so its presence
+    tells the two paths apart in Sentry.
+    """
+    error_ref = str(uuid.uuid4())[:8]
+    logger.error(
+        "[pipeline] FAILED video_id=%s error=%s ref=%s total=%.1fs",
+        video_summary_id,
+        type(exc).__name__,
+        error_ref,
+        elapsed,
+        exc_info=True,
+    )
+    bound = structlog.contextvars.get_contextvars()
+    attempt = bound.get("attempt") if isinstance(bound, dict) else None
+    capture_exception_with_context(
+        exc,
+        videoSummaryId=video_summary_id,
+        errorRef=error_ref,
+        outcome="pipeline_failed",
+        path="worker" if attempt is not None else "sse-direct",
+        attempt=str(attempt) if attempt is not None else None,
+    )
+    return error_ref
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Transcript provenance
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def _record_transcript_outcome(
+    ctx: PipelineContext, repository: MongoDBVideoRepository, video_summary_id: str
+) -> None:
+    """Persist this run's ``transcriptMeta`` — the single write point.
+
+    Called from the ``finally`` around the transcript+frames phase so that
+    successful AND failed fetches are recorded: a TranscriptError from the
+    fallback chain still leaves ``outcome="failed"`` + ``attempted`` +
+    ``errorCode`` on the row, because the phase's own ``finally`` stamped
+    ``ctx.transcript_trail`` before re-raising. It has to live INSIDE the
+    Langfuse ``pipeline_trace``: the ``except TranscriptError`` in
+    ``stream_summarization`` sits outside it, so trace metadata written
+    there would silently no-op. Best-effort — it must never raise, or it
+    would mask the pipeline's own exception in that ``finally``.
+    """
+    transcript_data = getattr(ctx, "transcript_data", None)
+    trail = getattr(ctx, "transcript_trail", None)
+    if transcript_data is None and trail is None:
+        # The transcript phase never ran (e.g. metadata failed first).
+        return
+    try:
+        meta = build_transcript_meta(transcript_data, getattr(ctx, "video_data", None), trail)
+        update_trace_metadata(
+            {
+                "transcriptSource": meta["source"],
+                "transcriptType": meta["type"],
+                "transcriptAttempted": meta["attempted"],
+                "transcriptOutcome": meta["outcome"],
+            }
+        )
+        await asyncio.to_thread(repository.set_transcript_meta, video_summary_id, meta)
+        logger.info(
+            "[pipeline] transcriptMeta youtube_id=%s source=%s outcome=%s attempted=%s",
+            ctx.youtube_id,
+            meta["source"],
+            meta["outcome"],
+            meta["attempted"],
+        )
+    except Exception as exc:
+        logger.warning("[pipeline] transcriptMeta record failed for %s: %s", video_summary_id, exc)
+
+
+def _persist_cache_hit(
+    repository: MongoDBVideoRepository, video_summary_id: str, cached: dict[str, Any]
+) -> None:
+    """Complete a pending row from a Redis-served payload (thread target).
+
+    Such a row never ran the transcript phase in this run, so any
+    ``transcriptMeta`` already on it belongs to a previous — possibly failed —
+    run and is cleared first. Redis-completed rows are identified downstream
+    by "no transcriptMeta AND no pipelineVersion"; a stale block would break
+    that discriminator.
+    """
+    repository.clear_transcript_meta(video_summary_id)
+    repository.save_structured_result(video_summary_id, cached)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Pipeline phase orchestration
@@ -104,10 +208,18 @@ async def _run_pipeline_phases(
         ctx.phase_times["metadata"] = round(time.monotonic() - phase_start, 1)
 
         # Phase 2: Transcript + Frames (parallel — both only need youtube_id + video_data)
+        # ``finally`` so transcriptMeta is recorded whether the phases succeed
+        # or raise (cancellation included): a TranscriptError from the
+        # fallback chain must still leave outcome="failed" + attempted +
+        # errorCode on the row (the phase's own finally already stamped
+        # ctx.transcript_trail by the time it propagates here).
         phase_start = time.monotonic()
-        async for event in run_parallel_phases([run_phase_transcript, run_phase_frames], ctx):
-            yield event
-        ctx.phase_times["transcript_frames"] = round(time.monotonic() - phase_start, 1)
+        try:
+            async for event in run_parallel_phases([run_phase_transcript, run_phase_frames], ctx):
+                yield event
+        finally:
+            ctx.phase_times["transcript_frames"] = round(time.monotonic() - phase_start, 1)
+            await _record_transcript_outcome(ctx, repository, video_summary_id)
 
         # Phase 2.5: Inject visual context into transcript (after both phases complete)
         phase_start = time.monotonic()
@@ -332,7 +444,7 @@ async def stream_summarization(
                             _vid_id = video_summary_id  # capture for lambda
                             task = asyncio.create_task(
                                 asyncio.to_thread(
-                                    repository.save_structured_result, video_summary_id, cached
+                                    _persist_cache_hit, repository, video_summary_id, cached
                                 )
                             )
                             task.add_done_callback(
@@ -357,6 +469,16 @@ async def stream_summarization(
             await asyncio.to_thread(
                 repository.update_status, video_summary_id, ProcessingStatus.PROCESSING
             )
+            # Re-runs (regenerate, failed retry, stall re-dispatch) reuse the
+            # same _id, so a transcriptMeta block left by an earlier failed run
+            # must not survive into this one; the transcript phase re-records it.
+            # Best-effort: an observability-only field must never abort a run.
+            try:
+                await asyncio.to_thread(repository.clear_transcript_meta, video_summary_id)
+            except Exception as exc:
+                logger.warning(
+                    "[pipeline] transcriptMeta clear failed for %s: %s", video_summary_id, exc
+                )
             # Mirror the cache-doc status onto userVideos via the API's
             # /internal/status endpoint (best-effort; also fans out over WS).
             await send_video_status(video_summary_id, None, "processing")
@@ -449,15 +571,7 @@ async def stream_summarization(
         )
 
     except Exception as e:
-        error_ref = str(uuid.uuid4())[:8]
-        logger.error(
-            "[pipeline] FAILED video_id=%s error=%s ref=%s total=%.1fs",
-            video_summary_id,
-            type(e).__name__,
-            error_ref,
-            timer.elapsed(),
-            exc_info=True,
-        )
+        error_ref = _report_unexpected_failure(e, video_summary_id, timer.elapsed())
         await asyncio.to_thread(
             repository.update_status,
             video_summary_id,

@@ -26,11 +26,17 @@ from contextvars import ContextVar
 from typing import Any, AsyncIterator, Protocol
 
 from src.config import settings
+
+# ``name as name`` = explicit re-export (consumed via ``__init__``); plain
+# imports here get stripped as unused by linters.
 from src.services.observability._redaction import (
-    MAX_PAYLOAD_BYTES as _MAX_PAYLOAD_BYTES,
     normalize_input as _normalize_input,
-    redact_pii,
-    truncate_payload,
+)
+from src.services.observability._redaction import (
+    redact_pii as redact_pii,
+)
+from src.services.observability._redaction import (
+    truncate_payload as truncate_payload,
 )
 
 logger = logging.getLogger(__name__)
@@ -64,7 +70,8 @@ class _LangfuseClient(Protocol):
 # ─── Module state ───────────────────────────────────────────────────────
 _client: _LangfuseClient | None = None
 _current_trace: ContextVar[Any | None] = ContextVar(
-    "langfuse_current_trace", default=None,
+    "langfuse_current_trace",
+    default=None,
 )
 # Per-trace map of {prompt_name: Prompt obj}. Populated by explicit calls
 # to :func:`record_active_prompt`; read by :func:`log_generation` so every
@@ -72,14 +79,16 @@ _current_trace: ContextVar[Any | None] = ContextVar(
 # without callers having to thread them through. Reset on trace entry;
 # ``None`` outside a trace means "don't record".
 _active_prompts: ContextVar[dict[str, Any] | None] = ContextVar(
-    "langfuse_active_prompts", default=None,
+    "langfuse_active_prompts",
+    default=None,
 )
 # Most-recently-recorded prompt object. Passed as ``trace.generation(
 # prompt=...)`` so the Langfuse UI surfaces the clickable cross-reference
 # from generation → prompt version. Latest-wins when a stage loads
 # multiple prompts; ``promptVersions`` metadata still records all of them.
 _latest_prompt_obj: ContextVar[Any | None] = ContextVar(
-    "langfuse_latest_prompt_obj", default=None,
+    "langfuse_latest_prompt_obj",
+    default=None,
 )
 
 
@@ -356,22 +365,6 @@ def log_score(
 
 
 # ─── Prompt registry ────────────────────────────────────────────────────
-def fetch_prompt(name: str) -> str | None:
-    """Fetch a prompt template by name. Pure — returns text only.
-
-    Callers that need the version recorded on the active trace should use
-    :func:`fetch_prompt_with_obj` and pass the result to
-    :func:`record_active_prompt` explicitly. Returns ``None`` when the
-    SDK is disabled, the prompt isn't registered, or any SDK error
-    occurs — caller falls back to the local ``.txt`` file.
-    """
-    obj = fetch_prompt_with_obj(name)
-    if obj is None:
-        return None
-    text = getattr(obj, "prompt", None)
-    return text if isinstance(text, str) else None
-
-
 def fetch_prompt_with_obj(name: str) -> Any | None:
     """Fetch the full Langfuse Prompt object for ``name``, or ``None``.
 

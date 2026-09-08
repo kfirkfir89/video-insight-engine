@@ -255,6 +255,7 @@ async def main() -> None:
             run_pipeline=_drive_pipeline,
             republish=republisher,
             max_retries=settings.WORKER_MAX_RETRIES,
+            retry_backoff_seconds=settings.WORKER_RETRY_BACKOFF_SECONDS,
         )
 
         consumers: list[asyncio.Task[None]] = []

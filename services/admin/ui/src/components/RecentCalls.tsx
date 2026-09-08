@@ -2,6 +2,7 @@ import { useUsageRecent } from '../hooks/use-admin-api';
 import { Panel } from './Panel';
 import { SkeletonPanel } from './SkeletonPanel';
 import { ErrorState } from './ErrorState';
+import { formatUsageVolume } from '../lib/format';
 
 export function RecentCalls() {
   const { data, isLoading, isError, error, refetch } = useUsageRecent(15);
@@ -33,7 +34,14 @@ export function RecentCalls() {
                 <td className="p-2 pl-4 font-mono truncate max-w-[180px]">{String(row.model ?? '')}</td>
                 <td className="p-2 truncate max-w-[120px]">{String(row.feature ?? '')}</td>
                 <td className="p-2 text-right font-mono">${Number(row.cost_usd ?? 0).toFixed(4)}</td>
-                <td className="p-2 text-right">{Number(row.tokens_in ?? 0) + Number(row.tokens_out ?? 0)}</td>
+                <td className="p-2 text-right">
+                  {formatUsageVolume({
+                    unit: row.unit == null ? null : String(row.unit),
+                    audio_seconds: Number(row.audio_seconds ?? 0),
+                    tokens_in: Number(row.tokens_in ?? 0),
+                    tokens_out: Number(row.tokens_out ?? 0),
+                  })}
+                </td>
                 <td className="p-2 pr-4 text-right">{Number(row.duration_ms ?? 0)}ms</td>
               </tr>
             ))}

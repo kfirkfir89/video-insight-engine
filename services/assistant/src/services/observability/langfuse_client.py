@@ -45,7 +45,8 @@ class _LangfuseClient(Protocol):
 # ─── Module state ───────────────────────────────────────────────────────
 _client: _LangfuseClient | None = None
 _current_trace: ContextVar[Any | None] = ContextVar(
-    "assistant_langfuse_current_trace", default=None,
+    "assistant_langfuse_current_trace",
+    default=None,
 )
 
 
@@ -338,32 +339,3 @@ def log_generation(
         )
     except Exception as exc:  # noqa: BLE001
         logger.debug("Langfuse generation log failed (name=%s): %s", name, exc)
-
-
-def log_score(
-    name: str,
-    value: float,
-    *,
-    comment: str | None = None,
-    trace: Any | None = None,
-) -> None:
-    target = trace if trace is not None else _current_trace.get()
-    if target is None:
-        return
-    try:
-        target.score(name=name, value=float(value), comment=comment)
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("Langfuse score log failed (name=%s): %s", name, exc)
-
-
-def fetch_prompt(name: str) -> str | None:
-    client = _client
-    if client is None:
-        return None
-    try:
-        prompt_obj = client.get_prompt(name)
-        text = getattr(prompt_obj, "prompt", None)
-        return text if isinstance(text, str) else None
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("Langfuse prompt fetch failed (name=%s): %s", name, exc)
-        return None

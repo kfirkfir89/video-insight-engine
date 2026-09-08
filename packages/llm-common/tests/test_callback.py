@@ -542,3 +542,42 @@ class TestCrossModeCallback:
             )
 
         mock_db["llm_alerts"].insert_one.assert_called_once()
+
+
+class TestCostThresholdFromEnv:
+    """ALERT_COST_THRESHOLD_USD makes the $0.50 high-cost-call alert tunable."""
+
+    def test_should_default_when_unset(self, monkeypatch):
+        from llm_common.callback import DEFAULT_COST_THRESHOLD, cost_threshold_from_env
+
+        monkeypatch.delenv("ALERT_COST_THRESHOLD_USD", raising=False)
+        assert cost_threshold_from_env() == DEFAULT_COST_THRESHOLD
+
+    def test_should_read_env_value(self, monkeypatch):
+        from llm_common.callback import cost_threshold_from_env
+
+        monkeypatch.setenv("ALERT_COST_THRESHOLD_USD", "1.25")
+        assert cost_threshold_from_env() == 1.25
+
+    @pytest.mark.parametrize("bad", ["abc", "-0.5"])
+    def test_should_fall_back_on_invalid_value(self, monkeypatch, bad):
+        from llm_common.callback import DEFAULT_COST_THRESHOLD, cost_threshold_from_env
+
+        monkeypatch.setenv("ALERT_COST_THRESHOLD_USD", bad)
+        assert cost_threshold_from_env() == DEFAULT_COST_THRESHOLD
+
+    def test_callback_should_use_env_threshold_when_not_passed(self, monkeypatch):
+        from llm_common.callback import MongoDBUsageCallback
+
+        monkeypatch.setenv("ALERT_COST_THRESHOLD_USD", "2.0")
+        cb = MongoDBUsageCallback(MagicMock(), service="summarizer", mode="sync")
+        assert cb._cost_threshold == 2.0
+
+    def test_explicit_threshold_should_beat_env(self, monkeypatch):
+        from llm_common.callback import MongoDBUsageCallback
+
+        monkeypatch.setenv("ALERT_COST_THRESHOLD_USD", "2.0")
+        cb = MongoDBUsageCallback(
+            MagicMock(), service="summarizer", mode="sync", cost_threshold=0.1
+        )
+        assert cb._cost_threshold == 0.1

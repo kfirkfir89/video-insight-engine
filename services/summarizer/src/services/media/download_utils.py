@@ -61,6 +61,12 @@ MAX_DOWNLOAD_ATTEMPTS = 3
 def classify_download_error(error_msg: str) -> ErrorCode:
     """Classify a yt-dlp error as VIDEO_UNAVAILABLE or DOWNLOAD_ERROR."""
     msg_lower = error_msg.lower()
+    # "Requested format is not available" would otherwise match the broad
+    # "not available" pattern below — but it means the format *selector*
+    # failed (e.g. SABR stripped audio-only formats), not that the video is
+    # gone. VIDEO_UNAVAILABLE wrongly suppresses audio fallback upstream.
+    if "requested format is not available" in msg_lower:
+        return ErrorCode.DOWNLOAD_ERROR
     if any(p in msg_lower for p in _UNAVAILABLE_PATTERNS):
         return ErrorCode.VIDEO_UNAVAILABLE
     return ErrorCode.DOWNLOAD_ERROR

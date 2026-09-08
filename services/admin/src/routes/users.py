@@ -123,6 +123,10 @@ class UserAssistantCallRow(BaseModel):
     tokensOut: int | None
     requestId: str | None
     timestamp: str
+    # Cost-unit discriminator ("tokens" | "audio_seconds") — lets the UI show
+    # "N min audio" for transcription rows instead of "0 tokens".
+    unit: str | None = None
+    audioSeconds: float | None = None
 
 
 class UserCostTimelineRow(BaseModel):
@@ -385,6 +389,8 @@ def _format_assistant_call(doc: dict) -> UserAssistantCallRow:
         tokensOut=doc.get("tokens_out"),
         requestId=doc.get("request_id"),
         timestamp=ts.isoformat() if isinstance(ts, datetime) else str(ts or ""),
+        unit=doc.get("unit"),
+        audioSeconds=doc.get("audio_seconds"),
     )
 
 

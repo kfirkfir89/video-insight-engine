@@ -2,12 +2,24 @@
 
 Supports two modes:
 - Sync mode (summarizer): background thread flushes every 5s or 50 records
-- Async mode (explainer): asyncio task flushes periodically
+- Async mode (assistant/admin): asyncio task flushes periodically
+
+``llm_usage`` is the financial ledger, so a failed flush keeps its rows for the
+next attempt instead of dropping them. Retention is bounded by
+``MAX_RETAINED_RECORDS`` — during a long Mongo outage the oldest rows are
+shed (and counted in the log line) rather than growing memory without limit.
+
+After a failed flush the retained rows exceed ``FLUSH_BATCH_SIZE``, so without
+a gate every subsequent ``add()`` would re-run the failing insert inline in the
+caller (each blocking for the driver's server-selection timeout). Size-triggered
+flushes are therefore suppressed for ``FLUSH_INTERVAL_SECONDS`` after a
+failure; the periodic flush keeps retrying on its own cadence.
 """
 
 import asyncio
 import atexit
 import threading
+import time
 
 import structlog
 
@@ -15,6 +27,30 @@ logger = structlog.get_logger(__name__)
 
 FLUSH_INTERVAL_SECONDS = 5
 FLUSH_BATCH_SIZE = 50
+# Rows kept across failed flushes before the oldest are shed (~10 batches).
+MAX_RETAINED_RECORDS = 500
+
+
+def _retain_after_failure(buffer: list[dict], failed_batch: list[dict], error: Exception) -> float:
+    """Put a failed batch back at the head of ``buffer`` (bounded), logging what was shed.
+
+    Returns the monotonic time before which size-triggered flushes should stay
+    suppressed.
+    """
+    combined = failed_batch + buffer
+    shed = max(0, len(combined) - MAX_RETAINED_RECORDS)
+    buffer[:] = combined[shed:]
+    logger.error(
+        "buffer_flush_failed",
+        error=str(error),
+        retained_records=len(buffer),
+        dropped_records=shed,
+    )
+    return time.monotonic() + FLUSH_INTERVAL_SECONDS
+
+
+def _size_flush_due(buffer: list[dict], retry_after: float) -> bool:
+    return len(buffer) >= FLUSH_BATCH_SIZE and time.monotonic() >= retry_after
 
 
 class SyncBuffer:
@@ -24,6 +60,7 @@ class SyncBuffer:
         self._collection = collection
         self._buffer: list[dict] = []
         self._lock = threading.Lock()
+        self._retry_after = 0.0
         self._running = True
         self._timer: threading.Timer | None = None
         self._start_timer()
@@ -42,7 +79,7 @@ class SyncBuffer:
     def add(self, record: dict) -> None:
         with self._lock:
             self._buffer.append(record)
-            if len(self._buffer) >= FLUSH_BATCH_SIZE:
+            if _size_flush_due(self._buffer, self._retry_after):
                 self._flush_locked()
 
     def flush(self) -> None:
@@ -58,7 +95,7 @@ class SyncBuffer:
             self._collection.insert_many(batch, ordered=False)
             logger.debug("buffer_flushed", count=len(batch))
         except Exception as e:
-            logger.error("buffer_flush_failed", error=str(e), lost_records=len(batch))
+            self._retry_after = _retain_after_failure(self._buffer, batch, e)
 
     def shutdown(self) -> None:
         self._running = False
@@ -74,6 +111,7 @@ class AsyncBuffer:
         self._collection = collection
         self._buffer: list[dict] = []
         self._lock = asyncio.Lock()
+        self._retry_after = 0.0
         self._task: asyncio.Task | None = None
 
     async def start(self) -> None:
@@ -87,7 +125,7 @@ class AsyncBuffer:
     async def add(self, record: dict) -> None:
         async with self._lock:
             self._buffer.append(record)
-            if len(self._buffer) >= FLUSH_BATCH_SIZE:
+            if _size_flush_due(self._buffer, self._retry_after):
                 await self._flush_locked()
 
     async def flush(self) -> None:
@@ -103,7 +141,7 @@ class AsyncBuffer:
             await self._collection.insert_many(batch, ordered=False)
             logger.debug("buffer_flushed", count=len(batch))
         except Exception as e:
-            logger.error("buffer_flush_failed", error=str(e), lost_records=len(batch))
+            self._retry_after = _retain_after_failure(self._buffer, batch, e)
 
     async def shutdown(self) -> None:
         if self._task:

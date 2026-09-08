@@ -42,6 +42,23 @@ def _serialize_doc(doc: dict) -> dict:
 
 router = APIRouter(prefix="/usage", tags=["usage"])
 
+# Latency percentiles on llm_usage.duration_ms. ``$percentile`` needs MongoDB 7+
+# (the stack pins mongo:7); ``approximate`` is the only method Mongo offers and
+# is exact enough for an ops dashboard.
+LATENCY_PERCENTILES = [0.5, 0.95]
+LATENCY_PERCENTILE_STAGE = {
+    "$percentile": {"input": "$duration_ms", "p": LATENCY_PERCENTILES, "method": "approximate"}
+}
+
+
+def _unpack_latency(row: dict) -> dict:
+    """Turn the ``latency_percentiles`` array into ``p50_duration_ms``/``p95_duration_ms``."""
+    values = row.pop("latency_percentiles", None) or []
+    for pct, value in zip(LATENCY_PERCENTILES, values, strict=False):
+        row[f"p{int(pct * 100)}_duration_ms"] = value
+    return row
+
+
 # 30-second cache for expensive aggregations
 _cache = TTLCache(maxsize=64, ttl=30)
 
@@ -119,12 +136,15 @@ async def usage_stats(
                 "total_tokens_out": {"$sum": "$tokens_out"},
                 "total_cost_usd": {"$sum": "$cost_usd"},
                 "avg_duration_ms": {"$avg": "$duration_ms"},
+                "latency_percentiles": LATENCY_PERCENTILE_STAGE,
                 "success_count": {"$sum": {"$cond": ["$success", 1, 0]}},
                 "failure_count": {"$sum": {"$cond": ["$success", 0, 1]}},
             }
         },
     ]
     results = await db.llm_usage.aggregate(pipeline).to_list(1)
+    if results:
+        _unpack_latency(results[0])
     data = (
         results[0]
         if results
@@ -245,12 +265,16 @@ async def usage_by_feature(days: int = Query(30, ge=1, le=MAX_DAYS)):
                 "calls": {"$sum": 1},
                 "cost_usd": {"$sum": "$cost_usd"},
                 "avg_duration_ms": {"$avg": "$duration_ms"},
+                "latency_percentiles": LATENCY_PERCENTILE_STAGE,
             }
         },
         {"$sort": {"cost_usd": -1}},
     ]
     results = await db.llm_usage.aggregate(pipeline).to_list(50)
-    data = [{"feature": r["_id"], **{k: v for k, v in r.items() if k != "_id"}} for r in results]
+    data = [
+        {"feature": r["_id"], **{k: v for k, v in _unpack_latency(r).items() if k != "_id"}}
+        for r in results
+    ]
     _cache[cache_key] = data
     return data
 
@@ -272,12 +296,17 @@ async def usage_by_model(days: int = Query(30, ge=1, le=MAX_DAYS)):
                 "cost_usd": {"$sum": "$cost_usd"},
                 "tokens_in": {"$sum": "$tokens_in"},
                 "tokens_out": {"$sum": "$tokens_out"},
+                "avg_duration_ms": {"$avg": "$duration_ms"},
+                "latency_percentiles": LATENCY_PERCENTILE_STAGE,
             }
         },
         {"$sort": {"cost_usd": -1}},
     ]
     results = await db.llm_usage.aggregate(pipeline).to_list(50)
-    data = [{"model": r["_id"], **{k: v for k, v in r.items() if k != "_id"}} for r in results]
+    data = [
+        {"model": r["_id"], **{k: v for k, v in _unpack_latency(r).items() if k != "_id"}}
+        for r in results
+    ]
     _cache[cache_key] = data
     return data
 
@@ -307,10 +336,29 @@ async def usage_by_service(days: int = Query(30, ge=1, le=MAX_DAYS)):
     return data
 
 
+# videoSummaryCache fields the usage endpoints read. Shared by the by-video
+# $lookup and the per-video find_one so the two projections cannot drift.
+# transcriptMeta is stamped by the summarizer for every run that reached the
+# transcript phase; rows served from the Redis response cache lack it.
+_VIDEO_METADATA_PROJECTION: dict[str, int] = {
+    "title": 1,
+    "channel": 1,
+    "duration": 1,
+    "thumbnailUrl": 1,
+    "status": 1,
+    "context.category": 1,
+    "processedAt": 1,
+    "transcriptMeta.source": 1,
+    "transcriptMeta.type": 1,
+    "transcriptMeta.outcome": 1,
+}
+
+
 def _format_video_metadata(doc: dict | None) -> dict | None:
     """Format a videoSummaryCache document into API-friendly metadata."""
     if not doc:
         return None
+    transcript = doc.get("transcriptMeta") or {}
     return {
         "title": doc.get("title"),
         "channel": doc.get("channel"),
@@ -319,6 +367,9 @@ def _format_video_metadata(doc: dict | None) -> dict | None:
         "status": doc.get("status"),
         "category": (doc.get("context") or {}).get("category"),
         "processed_at": doc["processedAt"].isoformat() if doc.get("processedAt") else None,
+        "transcript_source": transcript.get("source"),
+        "transcript_type": transcript.get("type"),
+        "transcript_outcome": transcript.get("outcome"),
     }
 
 
@@ -351,17 +402,7 @@ _VIDEO_LOOKUP_STAGE: list[dict] = [
             # when multiple versioned cache docs exist (cross-user dedup).
             "pipeline": [
                 {"$match": {"isLatest": True}},
-                {
-                    "$project": {
-                        "title": 1,
-                        "channel": 1,
-                        "duration": 1,
-                        "thumbnailUrl": 1,
-                        "status": 1,
-                        "context.category": 1,
-                        "processedAt": 1,
-                    }
-                },
+                {"$project": _VIDEO_METADATA_PROJECTION},
                 {"$limit": 1},
             ],
         }
@@ -468,17 +509,11 @@ async def usage_for_video(video_id: str = Path(..., min_length=1, max_length=64)
     ]
 
     video_doc, summary_results, feature_results, raw_calls = await asyncio.gather(
+        # isLatest mirrors _VIDEO_LOOKUP_STAGE — without it Mongo may hand back
+        # an older version row for a youtubeId that was regenerated.
         db.videoSummaryCache.find_one(
-            {"youtubeId": video_id},
-            {
-                "title": 1,
-                "channel": 1,
-                "duration": 1,
-                "thumbnailUrl": 1,
-                "status": 1,
-                "context.category": 1,
-                "processedAt": 1,
-            },
+            {"youtubeId": video_id, "isLatest": True},
+            _VIDEO_METADATA_PROJECTION,
         ),
         db.llm_usage.aggregate(summary_pipeline).to_list(1),
         db.llm_usage.aggregate(feature_pipeline).to_list(50),

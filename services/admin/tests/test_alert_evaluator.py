@@ -287,3 +287,19 @@ class TestDeliverWebhook:
         assert ok is True
         assert client.post.call_args[0][0] == "http://catcher.local/hook"
         assert b"daily_spend_spike" in client.post.call_args.kwargs["content"]
+
+
+class TestAlertSeverity:
+    """Every evaluator alert carries an explicit severity (admin UI files by it)."""
+
+    def test_spike_should_be_warning(self):
+        alert = ev.build_spike_alert(today_usd=5.0, baseline_daily_usd=2.0, multiplier=2.0, now=NOW)
+        assert alert["severity"] == "warning"
+
+    def test_failure_rate_should_be_critical(self):
+        alert = ev.build_failure_alert(failures=5, total=10, threshold=0.2, now=NOW)
+        assert alert["severity"] == "critical"
+
+    def test_backup_stale_should_be_critical(self):
+        alert = ev.build_backup_stale_alert(None, 26.0, NOW)
+        assert alert["severity"] == "critical"

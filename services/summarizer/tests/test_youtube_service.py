@@ -3,26 +3,25 @@
 Tests video data extraction, category detection, and error handling.
 """
 
-import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch
 
+import pytest
+
+from src.exceptions import TranscriptError
+from src.models.schemas import ErrorCode
 from src.services.video.youtube import (
     VALID_CATEGORIES,
-    VideoData,
-    VideoContext,
     Chapter,
     SubtitleSegment,
-    extract_video_data,
-    extract_video_context,
-    _extract_hashtags,
+    VideoData,
     _build_display_tags,
-    _parse_chapters,
     _clean_subtitle_text,
     _detect_category,
-    _load_category_rules,
+    _extract_hashtags,
+    _parse_chapters,
+    extract_video_context,
+    extract_video_data,
 )
-from src.models.schemas import ErrorCode
-from src.exceptions import TranscriptError
 
 
 class TestExtractHashtags:
@@ -446,6 +445,166 @@ class TestRateLimitHandling:
 
         assert exc_info.value.code == ErrorCode.VIDEO_UNAVAILABLE
         assert "Connection failed" in str(exc_info.value)
+
+
+class TestSubtitleFetchErrorCode:
+    """The timedtext fetch classifies its failure into a caption_fetch_error
+    code at the except site, so callers never re-inspect exception types."""
+
+    def _http_error(self, status: int):
+        import requests
+
+        response = requests.models.Response()
+        response.status_code = status
+        return requests.exceptions.HTTPError(f"{status} error", response=response)
+
+    @patch("src.services.video.youtube._fetch_subtitle_data_sync")
+    def test_direct_429_reports_http_429(self, mock_fetch):
+        from src.services.video.youtube import _fetch_subtitles_from_url_sync
+
+        mock_fetch.side_effect = self._http_error(429)
+
+        assert _fetch_subtitles_from_url_sync("http://example/timedtext") == ([], "http_429")
+
+    @patch("src.services.video.youtube._fetch_subtitle_data_sync")
+    def test_tenacity_wrapped_429_reports_http_429(self, mock_fetch):
+        """Real failures arrive as tenacity RetryError wrapping the HTTPError."""
+        import tenacity
+
+        from src.services.video.youtube import _fetch_subtitles_from_url_sync
+
+        attempt = tenacity.Future(attempt_number=2)
+        attempt.set_exception(self._http_error(429))
+        mock_fetch.side_effect = tenacity.RetryError(attempt)
+
+        assert _fetch_subtitles_from_url_sync("http://example/timedtext") == ([], "http_429")
+
+    @patch("src.services.video.youtube._fetch_subtitle_data_sync")
+    def test_403_reports_http_403(self, mock_fetch):
+        """Non-429 HTTP failures keep their status so a 403 wall is distinguishable
+        from throttling and never trips the rate-limit negative cache."""
+        from src.services.video.youtube import _fetch_subtitles_from_url_sync
+
+        mock_fetch.side_effect = self._http_error(403)
+
+        assert _fetch_subtitles_from_url_sync("http://example/timedtext") == ([], "http_403")
+
+    @patch("src.services.video.youtube._fetch_subtitle_data_sync")
+    def test_connection_error_reports_request(self, mock_fetch):
+        import requests
+
+        from src.services.video.youtube import _fetch_subtitles_from_url_sync
+
+        mock_fetch.side_effect = requests.exceptions.ConnectionError("reset by peer")
+
+        assert _fetch_subtitles_from_url_sync("http://example/timedtext") == ([], "request")
+
+    @patch("src.services.video.youtube._fetch_subtitle_data_sync")
+    def test_value_error_reports_parse(self, mock_fetch):
+        """Undecodable or oversized bodies surface as a parse failure."""
+        from src.services.video.youtube import _fetch_subtitles_from_url_sync
+
+        mock_fetch.side_effect = ValueError("bad json")
+
+        assert _fetch_subtitles_from_url_sync("http://example/timedtext") == ([], "parse")
+
+    @patch("src.services.video.youtube._fetch_subtitle_data_sync")
+    def test_body_without_events_reports_no_error(self, mock_fetch):
+        """A well-formed body with no speech is not a fetch error — the caller
+        decides whether that means 'empty'."""
+        from src.services.video.youtube import _fetch_subtitles_from_url_sync
+
+        mock_fetch.return_value = {"wireMagic": "pb3"}
+
+        assert _fetch_subtitles_from_url_sync("http://example/timedtext") == ([], None)
+
+
+class TestCaptionTrackFields:
+    """``_extract_video_data_sync`` records which caption track was picked and
+    how its fetch went, so an empty ``subtitles`` list is explainable."""
+
+    @pytest.fixture
+    def info_with_track(self):
+        """Minimal yt-dlp info dict with a single manual Arabic (regional) track."""
+        return {
+            "id": "test123",
+            "title": "Test Video",
+            "uploader": "Test Channel",
+            "duration": 300,
+            "description": "",
+            "thumbnails": [],
+            "chapters": [],
+            "automatic_captions": {},
+            "subtitles": {"ar-SA": [{"ext": "json3", "url": "http://example/timedtext"}]},
+        }
+
+    @patch("src.services.video.youtube._fetch_subtitles_from_url_sync")
+    @patch("src.services.video.youtube._extract_with_retry")
+    def test_manual_track_with_segments_records_track_and_no_error(
+        self, mock_extract, mock_fetch, info_with_track
+    ):
+        from src.services.video.youtube import _extract_video_data_sync
+
+        mock_extract.return_value = info_with_track
+        mock_fetch.return_value = ([SubtitleSegment(text="hi", start=0.0, duration=1.0)], None)
+
+        result = _extract_video_data_sync("test123")
+
+        assert result.caption_track == "manual"
+        assert result.caption_lang == "ar-SA"
+        assert result.caption_fetch_error is None
+        assert result.captions_rate_limited is False
+
+    @patch("src.services.video.youtube._fetch_subtitles_from_url_sync")
+    @patch("src.services.video.youtube._extract_with_retry")
+    def test_http_429_sets_error_and_rate_limited_flag(
+        self, mock_extract, mock_fetch, info_with_track
+    ):
+        """The legacy rate-limit flag is derived from the error code so the two
+        can never disagree."""
+        from src.services.video.youtube import _extract_video_data_sync
+
+        mock_extract.return_value = info_with_track
+        mock_fetch.return_value = ([], "http_429")
+
+        result = _extract_video_data_sync("test123")
+
+        assert result.caption_fetch_error == "http_429"
+        assert result.captions_rate_limited is True
+
+    @patch("src.services.video.youtube._fetch_subtitles_from_url_sync")
+    @patch("src.services.video.youtube._extract_with_retry")
+    def test_picked_track_with_no_segments_is_labelled_empty(
+        self, mock_extract, mock_fetch, info_with_track
+    ):
+        """A track that was offered but held no speech is 'empty' — distinct
+        from 'no track' and from a transport failure."""
+        from src.services.video.youtube import _extract_video_data_sync
+
+        mock_extract.return_value = info_with_track
+        mock_fetch.return_value = ([], None)
+
+        result = _extract_video_data_sync("test123")
+
+        assert result.caption_fetch_error == "empty"
+        assert result.captions_rate_limited is False
+
+    @patch("src.services.video.youtube._fetch_subtitles_from_url_sync")
+    @patch("src.services.video.youtube._extract_with_retry")
+    def test_no_tracks_leaves_all_caption_fields_none(
+        self, mock_extract, mock_fetch, info_with_track
+    ):
+        from src.services.video.youtube import _extract_video_data_sync
+
+        info_with_track["subtitles"] = {}
+        mock_extract.return_value = info_with_track
+
+        result = _extract_video_data_sync("test123")
+
+        assert result.caption_track is None
+        assert result.caption_lang is None
+        assert result.caption_fetch_error is None
+        mock_fetch.assert_not_called()
 
 
 class TestDetectCategory:

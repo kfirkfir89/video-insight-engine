@@ -1,7 +1,7 @@
 import re
 import asyncio
 import logging
-from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api import Transcript, TranscriptList, YouTubeTranscriptApi
 from youtube_transcript_api.proxies import WebshareProxyConfig
 from youtube_transcript_api._errors import (
     TranscriptsDisabled,
@@ -14,7 +14,6 @@ from src.config import settings
 from src.models.schemas import (
     ErrorCode,
     TranscriptSegment,
-    NormalizedTranscript,
     TranscriptSource,
 )
 from src.exceptions import TranscriptError
@@ -42,6 +41,28 @@ def _log_retry(retry_state: tenacity.RetryCallState) -> None:
     )
 
 
+def _select_track(transcript_list: TranscriptList) -> tuple[Transcript | None, str]:
+    """Pick a track: manual English -> generated English -> any language.
+
+    Returns ``(transcript, transcript_type)``; ``transcript`` is ``None``
+    when the list is empty. The English lookups label the type by which
+    finder succeeded; the any-language fallback reads the track's own
+    ``is_generated`` flag so a manual non-English track is not mislabelled.
+    """
+    try:
+        return transcript_list.find_manually_created_transcript(["en"]), "manual"
+    except (NoTranscriptFound, TranscriptsDisabled):
+        pass
+    try:
+        return transcript_list.find_generated_transcript(["en"]), "auto-generated"
+    except (NoTranscriptFound, TranscriptsDisabled):
+        pass
+    for track in transcript_list:
+        is_manual = getattr(track, "is_generated", None) is False
+        return track, ("manual" if is_manual else "auto-generated")
+    return None, "auto-generated"
+
+
 @tenacity.retry(
     stop=tenacity.stop_after_attempt(3),
     wait=tenacity.wait_exponential(multiplier=2, min=4, max=30),
@@ -52,6 +73,12 @@ def _log_retry(retry_state: tenacity.RetryCallState) -> None:
 def _fetch_transcript_sync(video_id: str) -> tuple[list[dict], str, str, str | None]:
     """
     Fetch transcript from YouTube (synchronous internal function).
+
+    transcript_type is "manual" for a creator-uploaded track and
+    "auto-generated" otherwise. The English lookups label it by which
+    finder succeeded; the any-language fallback labels it from the
+    track's own is_generated flag, so a manual non-English track is
+    not mislabelled.
 
     Returns:
         (segments, full_text, transcript_type, language_code)
@@ -70,23 +97,7 @@ def _fetch_transcript_sync(video_id: str) -> tuple[list[dict], str, str, str | N
     try:
         # New API: use instance method .list() instead of class method .list_transcripts()
         transcript_list = ytt_api.list(video_id)
-
-        # Prefer manual captions
-        transcript = None
-        transcript_type = "auto-generated"
-
-        try:
-            transcript = transcript_list.find_manually_created_transcript(["en"])
-            transcript_type = "manual"
-        except (NoTranscriptFound, TranscriptsDisabled):
-            try:
-                transcript = transcript_list.find_generated_transcript(["en"])
-            except (NoTranscriptFound, TranscriptsDisabled):
-                # Try any available
-                for t in transcript_list:
-                    transcript = t
-                    break
-
+        transcript, transcript_type = _select_track(transcript_list)
         if not transcript:
             raise TranscriptError("No transcript available", ErrorCode.NO_TRANSCRIPT)
 
@@ -96,11 +107,13 @@ def _fetch_transcript_sync(video_id: str) -> tuple[list[dict], str, str, str | N
         # Fetch transcript and convert to dict format
         fetched = transcript.fetch()
         # New API returns FetchedTranscript object, convert to raw data
-        segments = fetched.to_raw_data() if hasattr(fetched, 'to_raw_data') else list(fetched)
+        segments = fetched.to_raw_data() if hasattr(fetched, "to_raw_data") else list(fetched)
 
         # Handle both old dict format and new snippet format
-        if segments and hasattr(segments[0], 'text'):
-            segments = [{"text": s.text, "start": s.start, "duration": s.duration} for s in segments]
+        if segments and hasattr(segments[0], "text"):
+            segments = [
+                {"text": s.text, "start": s.start, "duration": s.duration} for s in segments
+            ]
 
         full_text = " ".join([s["text"] for s in segments])
 
@@ -215,27 +228,33 @@ def normalize_segments(
         # Handle different input formats
         if "startMs" in seg:
             # Already normalized (Whisper format)
-            normalized.append(TranscriptSegment(
-                text=seg["text"],
-                startMs=int(seg["startMs"]),
-                endMs=int(seg["endMs"]),
-            ))
+            normalized.append(
+                TranscriptSegment(
+                    text=seg["text"],
+                    startMs=int(seg["startMs"]),
+                    endMs=int(seg["endMs"]),
+                )
+            )
         elif "end" in seg:
             # Whisper format: start + end (seconds)
-            normalized.append(TranscriptSegment(
-                text=seg["text"],
-                startMs=int(seg["start"] * 1000),
-                endMs=int(seg["end"] * 1000),
-            ))
+            normalized.append(
+                TranscriptSegment(
+                    text=seg["text"],
+                    startMs=int(seg["start"] * 1000),
+                    endMs=int(seg["end"] * 1000),
+                )
+            )
         else:
             # youtube-transcript-api / yt-dlp format: start + duration (seconds)
             start_s = seg.get("start", 0)
             duration_s = seg.get("duration", 0)
-            normalized.append(TranscriptSegment(
-                text=seg["text"],
-                startMs=int(start_s * 1000),
-                endMs=int((start_s + duration_s) * 1000),
-            ))
+            normalized.append(
+                TranscriptSegment(
+                    text=seg["text"],
+                    startMs=int(start_s * 1000),
+                    endMs=int((start_s + duration_s) * 1000),
+                )
+            )
     return normalized
 
 
@@ -256,39 +275,3 @@ async def get_transcript(video_id: str) -> tuple[list[dict], str, str, str | Non
         TranscriptError: If transcript cannot be fetched
     """
     return await asyncio.to_thread(_fetch_transcript_sync, video_id)
-
-
-async def get_normalized_transcript(video_id: str) -> NormalizedTranscript:
-    """
-    Fetch and normalize transcript from YouTube.
-
-    This is the main entry point for transcript fetching with full
-    fallback chain: direct API -> proxy -> (future: Whisper)
-
-    Args:
-        video_id: YouTube video ID
-
-    Returns:
-        NormalizedTranscript with unified format
-
-    Raises:
-        TranscriptError: If transcript cannot be fetched
-    """
-    segments, full_text, transcript_type, language_code = await get_transcript(video_id)
-
-    # Determine source based on transcript_type
-    source: TranscriptSource = "api"
-    if transcript_type == "yt-dlp":
-        source = "ytdlp"
-    elif settings.WEBSHARE_PROXY_USERNAME:
-        source = "proxy"
-
-    # Normalize segments to milliseconds
-    normalized_segments = normalize_segments(segments, source)
-
-    return NormalizedTranscript(
-        text=full_text,
-        segments=normalized_segments,
-        source=source,
-        language=language_code,
-    )

@@ -16,14 +16,30 @@ async def health_services():
     return get_current_health()
 
 
+def rollup_status(health: dict[str, dict]) -> str:
+    """Collapse per-service statuses into one word.
+
+    ``down`` beats ``degraded`` beats ``healthy``; ``timeout`` (a probe that
+    never answered) counts as degraded rather than silently passing. An empty
+    map — the poller hasn't completed a cycle yet — is ``unknown``, not
+    ``healthy`` (``all([])`` is True and used to report a green system at boot).
+    """
+    statuses = [s.get("status") for s in health.values()]
+    if not statuses:
+        return "unknown"
+    if any(s == "down" for s in statuses):
+        return "down"
+    if any(s != "healthy" for s in statuses):
+        return "degraded"
+    return "healthy"
+
+
 @router.get("/overview")
 async def health_overview():
     """Aggregated system status."""
     health = get_current_health()
-    all_healthy = all(s.get("status") == "healthy" for s in health.values())
-    any_down = any(s.get("status") == "down" for s in health.values())
     return {
-        "status": "healthy" if all_healthy else ("degraded" if not any_down else "down"),
+        "status": rollup_status(health),
         "services": health,
         "checked_at": datetime.now(UTC).isoformat(),
     }

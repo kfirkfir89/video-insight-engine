@@ -208,10 +208,26 @@ class Settings(BaseSettings):
     REDIS_ENABLED: bool = True
     REDIS_CACHE_TTL: int = 60 * 60 * 24 * 30  # 30 days
 
+    # YouTube caption-endpoint 429 negative cache: after a rate-limit, later
+    # pipeline runs skip the caption API for this long and go straight to
+    # audio transcription (the 429 is IP-scoped, so retries within the window
+    # are doomed and only amplify the throttle). <= 0 disables the marker.
+    CAPTION_429_NEG_TTL_SECONDS: int = 900  # 15 min
+
     # Pipeline event broker (Redis Streams).
     # Lock TTL must outlive the longest realistic pipeline run; stream TTL
     # gives late joiners a chance to drain after the producer finishes.
     PIPELINE_LOCK_TTL_SECONDS: int = 600  # 10 min — auto-expire if producer crashes
+
+    # Stall sweeper (src/services/stall_sweeper.py) — runs in the HTTP process
+    # only. A ``processing`` row whose ``updatedAt`` is older than the threshold
+    # AND whose producer lock has expired is flipped to ``failed`` (so attachers
+    # stop waiting and the user can retry) and a ``pipeline_stalled`` alert is
+    # written + delivered. Threshold mirrors the API's lazy re-dispatch guard
+    # (api/src/services/video.service.ts PIPELINE_STALL_THRESHOLD_MS).
+    STALL_SWEEP_ENABLED: bool = True
+    STALL_SWEEP_INTERVAL_SECONDS: int = 300
+    STALL_THRESHOLD_MINUTES: int = 30
     PIPELINE_STREAM_TTL_SECONDS: int = 120  # 2 min retention after DONE
     PIPELINE_STREAM_MAXLEN: int = 2000  # MAXLEN ~ for XADD ring-buffer
     # Keepalive cadence while a phase runs silently (e.g. multi-minute Whisper).
@@ -252,11 +268,19 @@ class Settings(BaseSettings):
     SCENE_HIRES_FALLBACK_TIMEOUT: float = 180.0
     # yt-dlp player clients for VIDEO/AUDIO downloads (comma-separated).
     # 2026-08-19: YouTube 403s the web client's download URLs from this
-    # environment while the android client works. android ONLY — mixing in
-    # "default" merges the web client's format list, and `bestvideo` selectors
-    # then pick a web DASH format whose URL 403s (verified live). Empty string
-    # = yt-dlp defaults. Metadata/subtitle extraction deliberately does NOT
-    # use this (android clients can lack subtitle/chapter data).
+    # environment while the android client works. android ONLY —
+    #   * NEVER add "default": merging the web client's format list makes
+    #     `bestvideo` selectors pick a web DASH format whose URL 403s.
+    #   * NEVER add "android_vr": its formats need a GVS PO Token — actual
+    #     downloads 403 (verified 2026-09-03; yt-dlp>=2026.8 skips them with
+    #     a PO-token warning, older versions select them and then fail).
+    # 2026-09-03: YouTube's SABR experiment can strip URLs from android DASH
+    # formats (incl. ALL audio-only ones), so `bestaudio` may match nothing —
+    # audio downloaders therefore use `bestaudio/best` and demux the muxed
+    # progressive stream. When YouTube shifts again: first knob is this env
+    # var, second is a yt-dlp lock bump + rebuild. Empty string = yt-dlp
+    # defaults. Metadata/subtitle extraction deliberately does NOT use this
+    # (android clients can lack subtitle/chapter data).
     YTDLP_PLAYER_CLIENTS: str = "android"
     # Versioned S3 prefix — bumping it defeats the frames-already-exist cache
     # so quality changes take effect for reprocessed videos ("scenes" = pre-hires).

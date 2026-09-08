@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.worker.payload import VideoJobPayload
-from src.worker.runner import JobOutcome, WorkerRunner
-
+from src.worker.runner import (
+    MAX_RETRY_BACKOFF_SECONDS,
+    JobOutcome,
+    WorkerRunner,
+    retry_backoff_seconds,
+)
 
 VALID_PAYLOAD_DICT = {
     "videoSummaryId": "abc123def456789012345678",
@@ -122,7 +126,9 @@ class TestProcessMessage:
         fake_republish.assert_not_called()
         message.reject.assert_awaited_once_with(requeue=False)
 
-    async def test_rejects_garbage_body_without_calling_pipeline(self, fake_pipeline, fake_republish):
+    async def test_rejects_garbage_body_without_calling_pipeline(
+        self, fake_pipeline, fake_republish
+    ):
         runner = WorkerRunner(
             run_pipeline=fake_pipeline,
             republish=fake_republish,
@@ -153,3 +159,84 @@ class TestProcessMessage:
         assert forwarded.priority == 5
         assert forwarded.request_id == "req-keep"
         assert forwarded.attempt == 2
+
+
+def _payload(attempt: int) -> bytes:
+    return json.dumps({**VALID_PAYLOAD_DICT, "attempt": attempt}).encode("utf-8")
+
+
+def _message(body: bytes):
+    return _make_message(body)
+
+
+class TestRetryBackoff:
+    """WORKER_RETRY_BACKOFF_SECONDS was dead config — retries republished instantly."""
+
+    @pytest.mark.parametrize(
+        ("base", "attempt", "expected"),
+        [
+            (5.0, 1, 5.0),
+            (5.0, 2, 10.0),
+            (5.0, 3, 20.0),
+            (0.0, 2, 0.0),
+            (-1.0, 2, 0.0),
+            (100.0, 4, MAX_RETRY_BACKOFF_SECONDS),
+        ],
+    )
+    def test_should_double_per_attempt_and_cap(self, base, attempt, expected):
+        assert retry_backoff_seconds(base, attempt) == expected
+
+    async def test_should_wait_before_republish_on_retry(self, fake_pipeline, fake_republish):
+        fake_pipeline.side_effect = RuntimeError("transient")
+        sleep = AsyncMock()
+        order: list[str] = []
+        sleep.side_effect = lambda s: order.append(f"sleep:{s}")
+        fake_republish.side_effect = lambda _p: order.append("republish")
+        runner = WorkerRunner(
+            run_pipeline=fake_pipeline,
+            republish=fake_republish,
+            max_retries=3,
+            retry_backoff_seconds=5.0,
+            sleep=sleep,
+        )
+        msg = _message(_payload(attempt=2))
+
+        outcome = await runner.process_message(msg)
+
+        assert outcome == JobOutcome.RETRIED
+        assert order == ["sleep:10.0", "republish"]
+        msg.ack.assert_awaited_once()
+
+    async def test_should_not_wait_when_backoff_disabled(self, fake_pipeline, fake_republish):
+        fake_pipeline.side_effect = RuntimeError("transient")
+        sleep = AsyncMock()
+        runner = WorkerRunner(
+            run_pipeline=fake_pipeline,
+            republish=fake_republish,
+            max_retries=3,
+            retry_backoff_seconds=0.0,
+            sleep=sleep,
+        )
+
+        await runner.process_message(_message(_payload(attempt=1)))
+
+        sleep.assert_not_awaited()
+        fake_republish.assert_awaited_once()
+
+    async def test_should_not_wait_before_dlq(self, fake_pipeline, fake_republish):
+        fake_pipeline.side_effect = RuntimeError("permanent")
+        sleep = AsyncMock()
+        runner = WorkerRunner(
+            run_pipeline=fake_pipeline,
+            republish=fake_republish,
+            max_retries=3,
+            retry_backoff_seconds=5.0,
+            sleep=sleep,
+        )
+        msg = _message(_payload(attempt=3))
+
+        outcome = await runner.process_message(msg)
+
+        assert outcome == JobOutcome.PERMANENT_FAILURE
+        sleep.assert_not_awaited()
+        msg.reject.assert_awaited_once_with(requeue=False)

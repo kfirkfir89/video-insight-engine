@@ -6,8 +6,10 @@ Error codes, recovery strategies, and user messages.
 
 ## Error Response Format
 
-All errors follow this structure (emitted by the global error handler in
-`api/src/app.ts` and enforced by the envelope tests in `api/src/app.test.ts`):
+All errors follow this structure (resolved by `resolveErrorEnvelope` in
+`api/src/utils/error-envelope.ts`, emitted by the global error handler in
+`api/src/app.ts`, and enforced by `api/src/utils/error-envelope.test.ts` plus
+the envelope tests in `api/src/app.test.ts`):
 
 ```json
 {
@@ -215,19 +217,36 @@ async def validate_video(youtube_id: str) -> VideoValidation:
 
 ### Automatic Retries (Internal)
 
-```python
-# summarizer retry config
-RETRY_CONFIG = {
-    "max_retries": 3,
-    "backoff": [5, 15, 60],  # seconds
-    "retryable_errors": [
-        "LLM_ERROR",        # Claude API timeout
-        "DATABASE_ERROR",   # MongoDB connection
-        "NETWORK_ERROR",    # Transcript fetch
-        "RATE_LIMITED",     # YouTube 429 (transcript fetch)
-    ],
-}
-```
+Two layers, both real code:
+
+- **LLM calls** — LiteLLM `num_retries` (`LLM_NUM_RETRIES`) with provider fallbacks
+  (see [LLM Error Handling](#llm-error-handling)).
+- **Queue jobs** — `services/summarizer/src/worker/runner.py`: a pipeline exception
+  with `attempt < WORKER_MAX_RETRIES` (3) waits
+  `WORKER_RETRY_BACKOFF_SECONDS × 2^(attempt-1)` (5 → 10 → 20 s, capped 120 s) and
+  republishes with `attempt + 1`; at the cap the message is dead-lettered
+  (`reject(requeue=False)` → DLQ) and one Sentry event fires. Validation errors go
+  straight to the DLQ. Replay via `POST /api/admin/queue/replay`.
+
+### Stalled runs (self-healing)
+
+A producer that dies mid-run leaves the cache row `processing`. Two mechanisms
+recover it:
+
+- **Lazy (API)** — `video.service.ts`: a resubmission of the same video whose row
+  is `pending`/`processing` and untouched for 30 min re-dispatches.
+- **Active (summarizer stall sweeper)** — `src/services/stall_sweeper.py`, every
+  `STALL_SWEEP_INTERVAL_SECONDS` (300): rows `processing` with `updatedAt` older
+  than `STALL_THRESHOLD_MINUTES` (30) **and** no live Redis producer lock are
+  flipped to `failed` (`errorCode: UNKNOWN_ERROR`, message "Pipeline stalled…"),
+  the `video.status` callback runs (userVideos, WS broadcast, dispatch-guard
+  release) and a `pipeline_stalled` alert is written + delivered. The flip is an
+  atomic compare-and-set (`mongodb_repository.mark_stalled_failed`, filtered on
+  `status == processing` **and** the stale `updatedAt`): if a resumed producer or
+  the API's lazy re-dispatch bumped the row between the sweeper's find and its
+  write, the update matches nothing and the live run is left alone — no callback,
+  no alert. The lock check fails open, so a Redis outage pauses sweeping instead
+  of mass-failing live runs.
 
 ### YouTube Transcript Rate Limit Retry
 
@@ -606,12 +625,19 @@ export function logError(error: Error, context: object) {
 
 ### Alert Thresholds
 
-| Metric               | Threshold | Action |
-| -------------------- | --------- | ------ |
-| Error rate > 5%      | 5 min     | Alert  |
-| LLM errors > 10/min  | Immediate | Alert  |
-| Failed jobs > 20%    | 1 hour    | Alert  |
-| Failed jobs > 10/24h | Immediate | Alert  |
+Every alert is a row in Mongo `llm_alerts` (admin UI → Alerts) **and** a JSON POST
+to `ALERT_WEBHOOK_URL` when set. Unset webhook = nobody is told.
+
+| `type` | Source | Trips when | Re-alert cooldown |
+| --- | --- | --- | --- |
+| `high_cost_call` | llm-common usage callback (inline, every service) | one LLM call costs > `ALERT_COST_THRESHOLD_USD` (0.50) | none (per call) |
+| `daily_spend_spike` | admin `alert_evaluator` (5 min) | today's spend > `daily_spike_multiplier` × prorated 7-day baseline (baseline ≥ $0.50/day) | 6 h |
+| `high_failure_rate` | admin `alert_evaluator` (5 min) | failures / calls over the last hour > `failure_rate_threshold`, sample ≥ 10 | 1 h |
+| `backup_stale` | admin `alert_evaluator` (5 min) | newest `backups/*/manifest.json` older than `BACKUP_MAX_AGE_HOURS` (26) | 6 h |
+| `pipeline_stalled` | summarizer stall sweeper (5 min) | `processing` row idle > `STALL_THRESHOLD_MINUTES` with no producer lock | none (row is flipped to `failed`) |
+
+`daily_spike_multiplier` / `failure_rate_threshold` are edited via admin
+`POST /alerts/config`; the per-call threshold is env-only.
 
 ---
 

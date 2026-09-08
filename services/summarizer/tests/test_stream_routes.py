@@ -18,15 +18,26 @@ from src.models.schemas import ErrorCode, ProcessingStatus
 
 
 @pytest.fixture(autouse=True)
-def _reset_response_cache():
-    """Reset the module-level response_cache singleton before each test.
+def _reset_response_cache(monkeypatch):
+    """Reset and stub the module-level response_cache singleton before each test.
 
     Prevents stale Redis connections from other test modules (e.g. test_response_cache)
-    from polluting stream tests with 'Event loop is closed' errors.
+    from polluting stream tests with 'Event loop is closed' errors, and stubs the
+    lookup/store calls so the producer path never touches a live Redis: the dev
+    Redis routinely holds ``vie:response:<ver>:dQw4w9WgXcQ`` from real runs, which
+    otherwise short-circuits every error-handling test into a ``cached`` stream.
     """
     from src.services.cache.response_cache import response_cache
 
+    async def no_hit(video_id: str) -> None:
+        return None
+
+    async def no_store(video_id: str, response: dict, **_: object) -> bool:
+        return False
+
     response_cache._client = None
+    monkeypatch.setattr(response_cache, "get_response", no_hit)
+    monkeypatch.setattr(response_cache, "set_response", no_store)
     yield
     response_cache._client = None
 
@@ -1290,6 +1301,19 @@ class TestBuildFrontendResponse:
         doc = {"channel": "Fallback Channel"}
         result = build_frontend_response(doc)
         assert result["creator"] == "Fallback Channel"
+
+    def test_transcript_meta_never_reaches_frontend(self):
+        """transcriptMeta is Mongo-only observability — the FE payload must not carry it."""
+        from src.routes.cached_response import build_frontend_response
+
+        doc = {
+            "youtubeId": "abc123",
+            "meta": {"tldr": "Test TLDR"},
+            "tabs": [{"id": "key_points", "label": "Key Points"}],
+            "transcriptMeta": {"outcome": "ok", "source": "ytdlp"},
+        }
+        result = build_frontend_response(doc)
+        assert "transcriptMeta" not in result
 
 
 class TestResolveHelpers:

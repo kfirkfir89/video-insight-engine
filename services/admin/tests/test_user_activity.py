@@ -67,9 +67,7 @@ async def test_user_activity_rejects_long_user_id() -> None:
 async def test_user_activity_validates_days_min() -> None:
     """days=0 should return 422."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get(
-            f"/users/{_VALID_USER_ID}/activity?days=0", headers=_auth_headers()
-        )
+        resp = await client.get(f"/users/{_VALID_USER_ID}/activity?days=0", headers=_auth_headers())
     assert resp.status_code == 422
 
 
@@ -203,3 +201,33 @@ class TestFormatAssistantCall:
         assert row.feature is None
         assert row.videoId is None
         assert row.requestId is None
+
+
+class TestFormatAssistantCallUnit:
+    """Transcription rows are audio-priced; the unit must survive the mapping."""
+
+    def test_should_carry_unit_and_audio_seconds(self):
+        from datetime import UTC, datetime
+
+        from bson import ObjectId
+
+        doc = {
+            "_id": ObjectId(),
+            "feature": "summarize:transcript:whisper",
+            "cost_usd": 0.02,
+            "tokens_in": 0,
+            "tokens_out": 0,
+            "unit": "audio_seconds",
+            "audio_seconds": 312.5,
+            "timestamp": datetime(2026, 8, 26, tzinfo=UTC),
+        }
+        row = _format_assistant_call(doc)
+        assert row.unit == "audio_seconds"
+        assert row.audioSeconds == 312.5
+
+    def test_should_default_unit_to_none_for_token_rows(self):
+        from bson import ObjectId
+
+        row = _format_assistant_call({"_id": ObjectId(), "cost_usd": 0.0, "timestamp": None})
+        assert row.unit is None
+        assert row.audioSeconds is None

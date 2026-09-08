@@ -1,23 +1,24 @@
 """Tests for Whisper transcriber service."""
 
 import time
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.services.transcription.whisper_transcriber import (
-    _download_audio_sync,
-    _transcribe_sync,
-    _split_audio_chunks,
-    _merge_chunk_results,
-    _transcribe_chunks_parallel,
-    _create_estimated_segments,
-    transcribe_with_whisper,
-    CHUNK_TARGET_SIZE_MB,
-)
-from src.services.media.download_utils import classify_download_error, MAX_DOWNLOAD_ATTEMPTS
-from src.models.schemas import ErrorCode
+import pytest
+from yt_dlp.utils import DownloadError
+
 from src.exceptions import TranscriptError
+from src.models.schemas import ErrorCode
+from src.services.media.download_utils import MAX_DOWNLOAD_ATTEMPTS, classify_download_error
+from src.services.transcription.whisper_transcriber import (
+    CHUNK_TARGET_SIZE_MB,
+    _create_estimated_segments,
+    _download_audio_sync,
+    _merge_chunk_results,
+    _split_audio_chunks,
+    _transcribe_chunks_parallel,
+    _transcribe_sync,
+    transcribe_with_whisper,
+)
 
 
 class TestDownloadAudioSync:
@@ -41,6 +42,63 @@ class TestDownloadAudioSync:
 
             assert result == mp3_path
             mock_ydl.download.assert_called_once()
+
+    @patch("src.services.transcription.whisper_transcriber.uuid.uuid4")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
+    def test_format_selector_falls_back_to_best(self, mock_ydl_class, mock_uuid, tmp_path):
+        """Selector must be bestaudio/best so muxed-only videos still download."""
+        video_id = "test123"
+        mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
+
+        with patch("src.services.transcription.whisper_transcriber.TEMP_DIR", tmp_path):
+            mp3_path = tmp_path / f"{video_id}_aabbccdd.mp3"
+            mp3_path.write_bytes(b"fake audio content" * 1000)
+
+            mock_ydl = MagicMock()
+            mock_ydl_class.return_value.__enter__.return_value = mock_ydl
+
+            _download_audio_sync(video_id)
+
+            opts = mock_ydl_class.call_args[0][0]
+            assert opts["format"] == "bestaudio/best"
+
+    @patch("src.services.transcription.whisper_transcriber.uuid.uuid4")
+    @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
+    def test_progressive_only_video_downloads_via_best(self, mock_ydl_class, mock_uuid, tmp_path):
+        """Regression: SABR-stripped android leaves only progressive format 18.
+
+        A bare ``bestaudio`` selector raises "Requested format is not
+        available"; the ``/best`` fallback matches the muxed stream. This mock
+        yt-dlp errors for bestaudio-only and succeeds for the chained selector,
+        pinning the 2026-09 BoxubcDHZ_Q failure mode.
+        """
+
+        video_id = "sabr123"
+        mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
+
+        with patch("src.services.transcription.whisper_transcriber.TEMP_DIR", tmp_path):
+            mp3_path = tmp_path / f"{video_id}_aabbccdd.mp3"
+
+            def fake_ydl(opts):
+                ydl = MagicMock()
+                if opts["format"] == "bestaudio":
+                    ydl.download.side_effect = DownloadError(
+                        "ERROR: [youtube] sabr123: Requested format is not available."
+                    )
+                else:
+                    ydl.download.side_effect = lambda urls: mp3_path.write_bytes(
+                        b"fake audio" * 1000
+                    )
+                ctx = MagicMock()
+                ctx.__enter__.return_value = ydl
+                ctx.__exit__.return_value = False
+                return ctx
+
+            mock_ydl_class.side_effect = fake_ydl
+
+            result = _download_audio_sync(video_id)
+
+            assert result == mp3_path
 
     @patch("src.services.media.download_utils.time.sleep")
     @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
@@ -173,9 +231,7 @@ class TestMakeOpenAIClient:
 
         _make_openai_client()
 
-        mock_openai.assert_called_once_with(
-            api_key="test-key", timeout=300.0, max_retries=1
-        )
+        mock_openai.assert_called_once_with(api_key="test-key", timeout=300.0, max_retries=1)
 
 
 class TestSplitAudioChunks:
@@ -273,31 +329,41 @@ class TestMergeChunkResults:
 
     def test_merges_text_from_all_chunks(self):
         """Text from all chunks is merged with space separation, in offset order."""
-        result = _merge_chunk_results([
-            (0, {"text": "Hello from chunk one.", "segments": []}),
-            (300_000, {"text": "Hello from chunk two.", "segments": []}),
-        ])
+        result = _merge_chunk_results(
+            [
+                (0, {"text": "Hello from chunk one.", "segments": []}),
+                (300_000, {"text": "Hello from chunk two.", "segments": []}),
+            ]
+        )
 
         assert result["text"] == "Hello from chunk one. Hello from chunk two."
 
     def test_adjusts_segment_timestamps_by_offset(self):
         """Segment timestamps are shifted by each chunk's offset."""
-        result = _merge_chunk_results([
-            (0, {
-                "text": "First chunk.",
-                "segments": [
-                    {"text": "First", "start": 0.0, "end": 5.0},
-                    {"text": "chunk.", "start": 5.0, "end": 10.0},
-                ],
-            }),
-            (300_000, {  # 300s offset
-                "text": "Second chunk.",
-                "segments": [
-                    {"text": "Second", "start": 0.0, "end": 4.0},
-                    {"text": "chunk.", "start": 4.0, "end": 8.0},
-                ],
-            }),
-        ])
+        result = _merge_chunk_results(
+            [
+                (
+                    0,
+                    {
+                        "text": "First chunk.",
+                        "segments": [
+                            {"text": "First", "start": 0.0, "end": 5.0},
+                            {"text": "chunk.", "start": 5.0, "end": 10.0},
+                        ],
+                    },
+                ),
+                (
+                    300_000,
+                    {  # 300s offset
+                        "text": "Second chunk.",
+                        "segments": [
+                            {"text": "Second", "start": 0.0, "end": 4.0},
+                            {"text": "chunk.", "start": 4.0, "end": 8.0},
+                        ],
+                    },
+                ),
+            ]
+        )
 
         assert len(result["segments"]) == 4
         # First chunk segments: no offset
@@ -310,38 +376,58 @@ class TestMergeChunkResults:
 
     def test_handles_chunks_without_segments(self):
         """Merging tolerates a chunk dict missing the segments key."""
-        result = _merge_chunk_results([
-            (0, {"text": "First chunk.", "segments": [{"text": "First", "start": 0.0, "end": 5.0}]}),
-            (300_000, {"text": "Second chunk."}),  # No segments key
-        ])
+        result = _merge_chunk_results(
+            [
+                (
+                    0,
+                    {
+                        "text": "First chunk.",
+                        "segments": [{"text": "First", "start": 0.0, "end": 5.0}],
+                    },
+                ),
+                (300_000, {"text": "Second chunk."}),  # No segments key
+            ]
+        )
 
         assert result["text"] == "First chunk. Second chunk."
         assert len(result["segments"]) == 1
 
     def test_single_chunk(self):
         """A single chunk merges to the expected result."""
-        result = _merge_chunk_results([
-            (0, {"text": "Only chunk.", "segments": [{"text": "Only chunk.", "start": 0.0, "end": 3.0}]}),
-        ])
+        result = _merge_chunk_results(
+            [
+                (
+                    0,
+                    {
+                        "text": "Only chunk.",
+                        "segments": [{"text": "Only chunk.", "start": 0.0, "end": 3.0}],
+                    },
+                ),
+            ]
+        )
 
         assert result["text"] == "Only chunk."
         assert result["segments"][0]["start"] == 0.0
 
     def test_sums_durations(self):
         """Per-chunk billed durations sum into the combined total."""
-        result = _merge_chunk_results([
-            (0, {"text": "a", "segments": [], "language": "en", "duration": 100.0}),
-            (100_000, {"text": "b", "segments": [], "language": "en", "duration": 50.0}),
-        ])
+        result = _merge_chunk_results(
+            [
+                (0, {"text": "a", "segments": [], "language": "en", "duration": 100.0}),
+                (100_000, {"text": "b", "segments": [], "language": "en", "duration": 50.0}),
+            ]
+        )
 
         assert result["duration"] == 150.0
 
     def test_combines_language_by_majority(self):
         """A language detected by every chunk survives the merge (normalized)."""
-        result = _merge_chunk_results([
-            (0, {"text": "a", "segments": [], "language": "hebrew"}),
-            (100_000, {"text": "b", "segments": [], "language": "hebrew"}),
-        ])
+        result = _merge_chunk_results(
+            [
+                (0, {"text": "a", "segments": [], "language": "hebrew"}),
+                (100_000, {"text": "b", "segments": [], "language": "hebrew"}),
+            ]
+        )
 
         assert result["language"] == "he"
 
@@ -421,7 +507,9 @@ class TestTranscribeChunksParallel:
         assert mock_transcribe.call_count == 1
 
     @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
-    async def test_future_deadline_transcribes_all_chunks(self, mock_transcribe, mock_openai, tmp_path):
+    async def test_future_deadline_transcribes_all_chunks(
+        self, mock_transcribe, mock_openai, tmp_path
+    ):
         """A deadline comfortably in the future does not curtail transcription."""
         chunks = [(tmp_path / "chunk_0.mp3", 0), (tmp_path / "chunk_1.mp3", 300_000)]
         by_name = {
@@ -574,9 +662,7 @@ class TestTranscribeWithWhisper:
 
     @patch("src.services.transcription.whisper_transcriber._transcribe_sync")
     @patch("src.services.transcription.whisper_transcriber._download_audio_sync")
-    async def test_workflow_uses_estimated_segments(
-        self, mock_download, mock_transcribe, tmp_path
-    ):
+    async def test_workflow_uses_estimated_segments(self, mock_download, mock_transcribe, tmp_path):
         """Test fallback to estimated segments when Whisper returns none."""
         video_id = "test123"
         audio_path = tmp_path / f"{video_id}.mp3"
@@ -660,9 +746,7 @@ class TestTranscribeWithWhisper:
     @patch("src.services.transcription.whisper_transcriber._download_audio_sync")
     async def test_download_error_propagates(self, mock_download):
         """Test that download errors propagate correctly."""
-        mock_download.side_effect = TranscriptError(
-            "Download failed", ErrorCode.VIDEO_UNAVAILABLE
-        )
+        mock_download.side_effect = TranscriptError("Download failed", ErrorCode.VIDEO_UNAVAILABLE)
 
         with pytest.raises(TranscriptError) as exc_info:
             await transcribe_with_whisper("test123")
@@ -698,10 +782,12 @@ class TestWhisperUsageEmission:
 
     def test_chunked_sums_durations(self):
         """Chunked transcription sums per-chunk durations for the billed total."""
-        result = _merge_chunk_results([
-            (0, {"text": "a", "segments": [], "language": "en", "duration": 100.0}),
-            (100_000, {"text": "b", "segments": [], "language": "en", "duration": 50.0}),
-        ])
+        result = _merge_chunk_results(
+            [
+                (0, {"text": "a", "segments": [], "language": "en", "duration": 100.0}),
+                (100_000, {"text": "b", "segments": [], "language": "en", "duration": 50.0}),
+            ]
+        )
 
         assert result["duration"] == 150.0
 
@@ -715,7 +801,9 @@ class TestWhisperUsageEmission:
         audio_path.write_bytes(b"fake audio")
         mock_download.return_value = audio_path
         mock_transcribe.return_value = {
-            "text": "hi", "segments": [], "duration": 600.0,
+            "text": "hi",
+            "segments": [],
+            "duration": 600.0,
         }
 
         await transcribe_with_whisper("v")
@@ -729,9 +817,7 @@ class TestWhisperUsageEmission:
 
     @patch("src.services.transcription.whisper_transcriber.emit_transcription_usage")
     @patch("src.services.transcription.whisper_transcriber._download_audio_sync")
-    async def test_emits_failure_row_when_transcription_fails(
-        self, mock_download, mock_emit
-    ):
+    async def test_emits_failure_row_when_transcription_fails(self, mock_download, mock_emit):
         mock_download.side_effect = TranscriptError("boom", ErrorCode.DOWNLOAD_ERROR)
 
         with pytest.raises(TranscriptError):
@@ -751,7 +837,9 @@ class TestWhisperUsageEmission:
         audio_path.write_bytes(b"fake audio")
         mock_download.return_value = audio_path
         mock_translate.return_value = {
-            "text": "english text", "segments": [], "duration": 240.0,
+            "text": "english text",
+            "segments": [],
+            "duration": 240.0,
         }
 
         from src.services.transcription.whisper_transcriber import translate_audio_to_english
@@ -800,6 +888,16 @@ class TestClassifyDownloadError:
     def test_unknown_error_classified_as_download_error(self):
         """Test that unknown errors default to DOWNLOAD_ERROR."""
         assert classify_download_error("Something went wrong") == ErrorCode.DOWNLOAD_ERROR
+
+    def test_requested_format_not_available_is_download_error(self):
+        """Regression: format-selector failures must NOT read as video-gone.
+
+        "Requested format is not available" contains "not available" and used
+        to be misclassified VIDEO_UNAVAILABLE, which suppresses audio fallback
+        upstream (_NO_AUDIO_FALLBACK).
+        """
+        msg = "ERROR: [youtube] X: Requested format is not available. Use --list-formats"
+        assert classify_download_error(msg) == ErrorCode.DOWNLOAD_ERROR
 
 
 class TestDownloadRetryBehavior:
@@ -860,7 +958,9 @@ class TestDownloadRetryBehavior:
         video_id = "test_unavailable"
 
         mock_ydl = MagicMock()
-        mock_ydl.download.side_effect = Exception("Private video. Sign in if you've been granted access")
+        mock_ydl.download.side_effect = Exception(
+            "Private video. Sign in if you've been granted access"
+        )
         mock_ydl_class.return_value.__enter__.return_value = mock_ydl
 
         with pytest.raises(TranscriptError) as exc_info:
@@ -871,7 +971,9 @@ class TestDownloadRetryBehavior:
     @patch("src.services.transcription.whisper_transcriber.uuid.uuid4")
     @patch("src.services.media.download_utils.time.sleep")
     @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
-    def test_no_sleep_on_first_attempt_success(self, mock_ydl_class, mock_sleep, mock_uuid, tmp_path):
+    def test_no_sleep_on_first_attempt_success(
+        self, mock_ydl_class, mock_sleep, mock_uuid, tmp_path
+    ):
         """Test that no backoff sleep happens when first attempt succeeds."""
         video_id = "test_first"
         mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
@@ -890,7 +992,9 @@ class TestDownloadRetryBehavior:
     @patch("src.services.transcription.whisper_transcriber.uuid.uuid4")
     @patch("src.services.media.download_utils.time.sleep")
     @patch("src.services.media.download_utils.yt_dlp.YoutubeDL")
-    def test_ydl_opts_include_resilience_settings(self, mock_ydl_class, mock_sleep, mock_uuid, tmp_path):
+    def test_ydl_opts_include_resilience_settings(
+        self, mock_ydl_class, mock_sleep, mock_uuid, tmp_path
+    ):
         """Test that yt-dlp is configured with retry and timeout options."""
         video_id = "test_opts"
         mock_uuid.return_value = MagicMock(hex="aabbccdd11223344")
@@ -909,5 +1013,5 @@ class TestDownloadRetryBehavior:
             assert opts["fragment_retries"] == 5
             assert opts["socket_timeout"] == 30
             assert opts["continuedl"] is False
-            assert opts["format"] == "bestaudio"
+            assert opts["format"] == "bestaudio/best"
             assert opts["noprogress"] is True

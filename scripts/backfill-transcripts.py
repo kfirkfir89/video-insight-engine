@@ -121,8 +121,15 @@ def run_migration(dry_run: bool = True, batch_size: int | None = None) -> dict[s
             stats["skipped"] += 1
             continue
 
-        # Determine transcript source
-        transcript_source = doc.get("transcriptSource", "api")
+        # Source lives in the per-run transcriptMeta block (the top-level
+        # transcriptSource field was documented but never written).
+        transcript_source = (doc.get("transcriptMeta") or {}).get("source") or "api"
+        if transcript_source == "s3":
+            # The blob is already in S3; re-storing it would record source="s3"
+            # and lose which layer originally produced the transcript.
+            logger.info(f"Document {doc_id} was served from S3, skipping")
+            stats["skipped"] += 1
+            continue
 
         logger.info(
             f"[{stats['processed']}/{limit}] Processing {youtube_id} "
